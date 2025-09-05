@@ -46,9 +46,10 @@ function getReachableCells(fromCell, mp) {
             
             for (var i = 0; i < count(neighbors); i++) {
                 var n = neighbors[i];
-                // Check validity and not blocked by enemy
-                if (n != -1 && !isObstacle(n) && !mapGet(visited, n, false) && n != enemyCell) {
+                // Check validity first (fastest), then obstacles, then visited status
+                if (n != null && n != -1 && !isObstacle(n) && n != enemyCell && !mapGet(visited, n, false)) {
                     push(queue, [n, dist+1]);
+                    visited[n] = true;  // Mark as visited immediately to prevent re-queueing
                 }
             }
         }
@@ -93,9 +94,10 @@ function getEnemyReachable(fromCell, mp) {
             
             for (var i = 0; i < count(ns); i++) {
                 var n = ns[i];
-                // Check validity and not blocked by me
-                if (n != -1 && !isObstacle(n) && n != myCell && !mapGet(visited, n, false)) {
+                // Check validity first (fastest), then obstacles, then visited status
+                if (n != null && n != -1 && !isObstacle(n) && n != myCell && !mapGet(visited, n, false)) {
                     push(queue, [n, d+1]);
+                    visited[n] = true;  // Mark as visited immediately to prevent re-queueing
                 }
             }
         }
