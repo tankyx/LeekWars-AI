@@ -29,42 +29,42 @@ function buildInfluenceMap() {
             debugLog("Processing cell " + i + "/" + cellsToProcess);
         }
         
-        var influence = [:];
-        influence["myDamage"] = 0;      // Damage I can deal from here
-        influence["enemyDamage"] = 0;   // Damage enemy can deal to here
-        influence["myAoE"] = [];        // My AoE coverage from here
-        influence["enemyAoE"] = [];     // Enemy AoE threat to here
-        influence["safety"] = 0;        // Overall safety score
-        influence["control"] = 0;       // Territory control value
+        var cellInfluence = [:];
+        cellInfluence["myDamage"] = 0;      // Damage I can deal from here
+        cellInfluence["enemyDamage"] = 0;   // Damage enemy can deal to here
+        cellInfluence["myAoE"] = [];        // My AoE coverage from here
+        cellInfluence["enemyAoE"] = [];     // Enemy AoE threat to here
+        cellInfluence["safety"] = 0;        // Overall safety score
+        cellInfluence["control"] = 0;       // Territory control value
         
         // Calculate my damage potential from this cell
         debugLog("  Calculating damage from cell " + i);
-        influence["myDamage"] = calculateDamageFrom(cell);
+        cellInfluence["myDamage"] = calculateDamageFrom(cell);
         
         // Calculate enemy threat to this cell  
         debugLog("  Calculating EID for cell " + i);
-        influence["enemyDamage"] = calculateEID(cell);
+        cellInfluence["enemyDamage"] = calculateEID(cell);
         debugLog("  EID complete for cell " + i);
         
         // Calculate AoE zones - RE-ENABLED with limited scope
         // Only calculate AoE for first 20 cells to balance performance
         if (i < 20) {
             debugLog("  Calculating AoE zones for cell " + i);
-            influence["myAoE"] = calculateMyAoEZones(cell);
-            influence["enemyAoE"] = calculateEnemyAoEZones(cell);
+            cellInfluence["myAoE"] = calculateMyAoEZones(cell);
+            cellInfluence["enemyAoE"] = calculateEnemyAoEZones(cell);
         } else {
-            influence["myAoE"] = [];
-            influence["enemyAoE"] = [];
+            cellInfluence["myAoE"] = [];
+            cellInfluence["enemyAoE"] = [];
         }
         
         // Calculate safety score
         var myEHP = calculateEHP(myHP, myAbsShield, myRelShield, 0, myResistance);
-        influence["safety"] = myEHP > 0 ? 1 - (influence["enemyDamage"] / myEHP) : 0;
+        cellInfluence["safety"] = myEHP > 0 ? 1 - (cellInfluence["enemyDamage"] / myEHP) : 0;
         
         // Calculate control value (damage dealt vs taken)
-        influence["control"] = influence["myDamage"] - influence["enemyDamage"];
+        cellInfluence["control"] = cellInfluence["myDamage"] - cellInfluence["enemyDamage"];
         
-        INFLUENCE_MAP[cell] = influence;
+        INFLUENCE_MAP[cell] = cellInfluence;
     }
 }
 
