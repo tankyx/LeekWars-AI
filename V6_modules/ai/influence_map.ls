@@ -214,8 +214,10 @@ function visualizeInfluenceMap() {
     
     for (var cell in INFLUENCE_MAP) {
         var inf = INFLUENCE_MAP[cell];
-        maxDamage = max(maxDamage, inf["myDamage"]);
-        maxSafety = max(maxSafety, inf["safety"]);
+        if (inf != null) {
+            maxDamage = max(maxDamage, inf["myDamage"]);
+            maxSafety = max(maxSafety, inf["safety"]);
+        }
     }
     
     // Visualize based on selected mode
@@ -223,6 +225,8 @@ function visualizeInfluenceMap() {
     
     for (var cell in INFLUENCE_MAP) {
         var inf = INFLUENCE_MAP[cell];
+        if (inf == null) continue;  // Skip null entries
+        
         var color;
         var text = "";
         

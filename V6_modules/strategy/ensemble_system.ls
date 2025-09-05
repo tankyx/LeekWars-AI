@@ -33,6 +33,8 @@ function ensembleDecision() {
     // Collect votes from each strategy
     for (var name in ENSEMBLE_STRATEGIES) {
         var strategy = ENSEMBLE_STRATEGIES[name];
+        if (strategy == null || strategy["function"] == null) continue;
+        
         var result = strategy["function"]();
         
         if (result == null) continue;
