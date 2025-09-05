@@ -89,10 +89,15 @@ if (enemy != null) {
         debugLog("Turn 1 - executing early game sequence");
         executeEarlyGameSequence();
     } else {
-        // Turn 2+ uses standard decision making
-        debugLog("Entering normal combat mode");
+        // Turn 2+ uses standard decision making - ensure proper execution
+        debugLog("Turn " + turn + " - entering normal combat mode");
         makeDecision();
-        debugLog("Returned from makeDecision()");
+        // Fallback in case makeDecision() doesn't execute properly
+        if (myTP >= 3 && enemy != null) {
+            debugLog("Ensuring combat execution for turn " + turn);
+            executeAttack();
+            if (myTP >= 4) executeDefensive();
+        }
     }
 } else {
     debugLog('No enemy found');

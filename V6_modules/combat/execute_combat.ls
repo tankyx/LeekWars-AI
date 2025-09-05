@@ -616,11 +616,13 @@ function executeBuffs() {
 // Function to handle early game sequences and special tactics
 function executeEarlyGameSequence() {
     // This function should ONLY handle turn 1
-    // Turn 2+ should use makeDecision() from V6_main.ls
+    // Turn 2+ should use makeDecision() from ai/decision_making.ls
     
     if (turn != 1) {
-        debugLog("executeEarlyGameSequence called on turn " + turn + " - delegating to makeDecision");
-        makeDecision();
+        debugLog("ERROR: executeEarlyGameSequence called on turn " + turn + " - should not happen!");
+        // Force proper combat execution instead of recursion
+        executeAttack();
+        if (myTP >= 4) executeDefensive();
         return;
     }
     

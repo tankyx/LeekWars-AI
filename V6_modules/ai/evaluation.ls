@@ -62,8 +62,19 @@ function evaluatePosition(cell) {
     var score = damage * WEIGHT_DAMAGE;
     
     // Add life steal bonus - CONSERVATIVE to prevent suicidal rushes
-    // Cap life steal contribution to max 20% of EHP to avoid overvaluation
-    var lifeStealBonus = min(lifeSteal * 0.5, myEHP * 0.2);  // Max 20% of EHP
+    // Consider enemy burst damage potential when valuing life steal
+    var enemyBurstPotential = eid * 1.5;  // Assume enemy can burst 1.5x avg damage
+    var effectiveLifeSteal = lifeSteal;
+    
+    // If enemy can burst us down, life steal won't save us
+    if (enemyBurstPotential >= myHP) {
+        effectiveLifeSteal = lifeSteal * 0.2;  // Heavily reduce value if we can be one-shot
+    } else if (enemyBurstPotential >= myHP * 0.7) {
+        effectiveLifeSteal = lifeSteal * 0.4;  // Reduce value if enemy can nearly kill us
+    }
+    
+    // Cap life steal contribution to max 15% of EHP (reduced from 20%)
+    var lifeStealBonus = min(effectiveLifeSteal * 0.4, myEHP * 0.15);  
     score += lifeStealBonus;
     
     if (debugEnabled && lifeStealBonus > 0) {
