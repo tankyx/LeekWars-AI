@@ -214,6 +214,43 @@ This analyzes all fight log files and identifies patterns in wins/losses.
   - Now properly scales with each leek's core count
 - **Status**: ✅ RESOLVED - Operations budget adapts to leek configuration
 
+### 15. ~~Excessive Weapon Switching~~ (FIXED)
+- **Issue**: AI wasting 2+ TP per turn switching between Magnum and B-Laser repeatedly
+- **Root Cause**: Attack options included multiple viable weapons processed sequentially
+- **Fix Applied**:
+  - Added weapon switching prevention when already dealing damage
+  - Skip weapon switches when insufficient TP for switch + attack
+  - Prioritize using current weapon before considering switches
+- **Status**: ✅ RESOLVED - No more unnecessary weapon switching
+
+### 16. ~~B-Laser Targeting Errors~~ (FIXED)
+- **Issue**: B-Laser consistently failing with result -4 (invalid target/position)
+- **Root Cause**: B-Laser treated as AoE weapon using `useWeaponOnCell()` instead of direct targeting
+- **Fix Applied**:
+  - Removed B-Laser from AoE weapon list
+  - B-Laser now uses direct `useWeapon(enemy)` targeting
+  - Proper line-of-sight validation for direct attacks
+- **Status**: ✅ RESOLVED - B-Laser should work consistently
+
+### 17. ~~Poor Grenade Launcher Usage~~ (FIXED)
+- **Issue**: AI never moved from range 8 to 7 to access grenade launcher (range 4-7)
+- **Root Cause**: Positioning logic blocked movement when in "optimal range" 7-9
+- **Fix Applied**:
+  - Added exception for range 8→7 movement to access grenade launcher
+  - Increased grenade launcher priority when no other weapons available (2000→5000 score)
+  - Fixed positioning logic to consider weapon accessibility, not just range optimality
+- **Status**: ✅ RESOLVED - AI now repositions to use all available weapons
+
+### 18. ~~AoE Splash Over Direct Shots Priority~~ (FIXED)
+- **Issue**: AI using weak AoE splash attacks instead of moving for direct weapon hits
+- **Root Cause**: Immediate fallback to AoE without aggressive line-of-sight seeking
+- **Fix Applied**:
+  - Added aggressive LOS seeking (searches up to 50 reachable cells)
+  - Prioritizes direct weapon hits before AoE fallback
+  - Smart range scoring: Range 4-7 (8000), Range 2-8 (7000), Any LOS (5000)
+  - Direct attacks attempted immediately after finding LOS position
+- **Status**: ✅ RESOLVED - Direct hits prioritized over AoE splash
+
 ## Recent Modifications (Recalibration)
 
 ### Threat Thresholds (in `V6_modules/core/globals.ls`)
@@ -319,11 +356,17 @@ global TP_DEFENSIVE_RATIO = 0.6;     // Was 0.8
 - Test Farmer Account: Virus (ID: 18035)
 
 ---
-*Last Updated: December 8, 2024*
-*Document Version: 1.8*
+*Last Updated: January 27, 2025*
+*Document Version: 1.9*
 *Latest Updates:*
+- *Fixed excessive weapon switching wasting TP by prioritizing current weapon*
+- *Fixed B-Laser targeting issues by using direct useWeapon() instead of useWeaponOnCell()*
+- *Improved repositioning logic to access grenade launcher at range 8→7*
+- *Added aggressive line-of-sight seeking before falling back to AoE splash attacks*
+- *Enhanced movement prioritization over chip usage when better weapon positions available*
+- *Fixed movement logic to reposition when hasLOS=false even at optimal range*
+*Previous Updates:*
 - *Fixed damage_sequences.ls to check equipped weapons before using them*
-- *Fixed B-Laser to use useWeaponOnCell() for proper line targeting*
 - *Added movement logic when out of attack range*
 - *Added teleportation chip equipped verification*
 - *Implemented dynamic operations budget based on core count*

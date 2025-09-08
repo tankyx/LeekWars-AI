@@ -152,12 +152,17 @@ function executeAttack() {
                     potentialDamage = max(potentialDamage, 95);
                     score = max(score, 8000);  // Good alternative
                 }
-                // LAST RESORT: Grenade range
+                // Grenade range - prioritize when other weapons unavailable
                 else if (newDist >= 4 && newDist <= 7 && inArray(myWeapons, WEAPON_GRENADE_LAUNCHER)) {
-                    // Only if we can't reach better positions
                     potentialDamage = max(potentialDamage, 150 + mySTR * 2);
-                    score = max(score, 2000);  // Very low priority
-                    debugLog("  Cell " + cell + ": Grenade range (not preferred)");
+                    // Higher priority when we're currently out of all weapon ranges
+                    if (dist > 8 || (dist == 8 && currentPositionDamage == 0)) {
+                        score = max(score, 5000);  // Better option when no alternatives
+                        debugLog("  Cell " + cell + ": Grenade range (good when out of other ranges)");
+                    } else {
+                        score = max(score, 2000);  // Lower priority when other options exist
+                        debugLog("  Cell " + cell + ": Grenade range (backup option)");
+                    }
                 }
                 
                 // BONUS: Moving from grenade range to rifle range
@@ -174,9 +179,13 @@ function executeAttack() {
                 score = 6000;  // Good damage even without LOS
             }
             
-            // Only consider cells that improve our damage potential
-            if (potentialDamage <= currentPositionDamage && dist >= 7 && dist <= 9) {
-                continue;  // Already in optimal range, don't move
+            // Only consider cells that improve our damage potential OR allow better weapons
+            // Exception: At range 8, grenade launcher is out of range, so moving to 7 is beneficial
+            if (potentialDamage <= currentPositionDamage && !(dist == 8 && newDist == 7)) {
+                // Skip if no improvement, unless we're moving from 8 to 7 to access grenade launcher
+                if (dist >= 7 && dist <= 9 && currentPositionDamage > 0) {
+                    continue;  // Already in good range with attack options
+                }
             }
             
             // Add EID consideration (avoid dangerous positions)
@@ -447,20 +456,48 @@ function executeAttack() {
     // Always log attack options for debugging
     // say("Attack options: " + count(attackOptions)); // Removed - costs 1 TP
     debug("Attack options available: " + count(attackOptions) + " at range " + dist + " with TP=" + myTP);
-    if (count(attackOptions) == 0) {
-        // say("WARNING: No attack options!"); // Removed - costs 1 TP
-        debug("WARNING: No attack options - checking weapons: " + count(getWeapons()));
+    
+    // PRIORITY CHECK: If we only have chip options but could move to weapon range, do that instead
+    var hasWeaponOptions = false;
+    var hasOnlyChipOptions = false;
+    for (var i = 0; i < count(attackOptions); i++) {
+        if (attackOptions[i][0] == "weapon") {
+            hasWeaponOptions = true;
+            break;
+        }
+    }
+    if (count(attackOptions) > 0 && !hasWeaponOptions) {
+        hasOnlyChipOptions = true;  // We have attack options, but they're all chips
+    }
+    
+    if (count(attackOptions) == 0 || (hasOnlyChipOptions && getMP() > 0 && dist > 8)) {
+        if (count(attackOptions) == 0) {
+            debug("WARNING: No attack options - checking weapons: " + count(getWeapons()));
+        } else {
+            debugLog("Only chip options available, but can move to weapon range - prioritizing movement");
+        }
         
-        // If we're out of range, move closer!
-        if (getMP() > 0 && dist > 8) {
-            debugLog("Out of attack range - moving closer");
+        // If we're out of range OR have no line of sight, move closer!
+        if (getMP() > 0 && (dist > 8 || !hasLine)) {
+            if (dist > 8) {
+                debugLog("Out of attack range - moving closer");
+            } else {
+                debugLog("No line of sight - repositioning for better angle");
+            }
             var targetDist = 7;  // Optimal range for most weapons
             moveToward(enemy, min(getMP(), dist - targetDist));
             myMP = getMP();
             myCell = getCell();
             enemyCell = getCell(enemy);
             enemyDistance = getCellDistance(myCell, enemyCell);
-            debugLog("Moved closer - new distance: " + enemyDistance);
+            var newLOS = hasLOS(myCell, enemyCell);
+            debugLog("Repositioned - new distance: " + enemyDistance + ", new LOS: " + newLOS);
+            
+            // Clear chip-only options since we moved - reevaluate next turn
+            if (hasOnlyChipOptions) {
+                debugLog("Clearing chip options after movement - will reevaluate weapons next turn");
+                attackOptions = [];
+            }
         }
     }
     
@@ -491,6 +528,7 @@ function executeAttack() {
     // Execute attacks in order of efficiency
     var tpLeft = myTP;
     var totalDamage = 0;
+    var currentWeapon = getWeapon();  // Track current weapon to avoid switching
     
     // say("Executing " + count(attackOptions) + " attacks"); // Removed - costs 1 TP
     debug("Starting attack execution - " + count(attackOptions) + " options, TP=" + tpLeft);
@@ -519,13 +557,22 @@ function executeAttack() {
         if (option[0] == "weapon") {  // type
             debugLog("  Processing weapon: " + option[6]);
             // Check if we need to swap weapon (costs 1 TP!)
-            if (getWeapon() != option[1]) {
+            var needsSwap = (getWeapon() != option[1]);
+            if (needsSwap) {
+                // Skip weapons that require switching if we've already used the current weapon
+                // This prevents excessive switching between equally viable weapons
+                if (totalDamage > 0 && tpLeft < (option[3] + 1)) {
+                    debugLog("  Skipping " + option[6] + " - would require weapon switch with insufficient TP");
+                    continue;
+                }
                 setWeaponIfNeeded(option[1]);  // This costs 1 TP
                 myTP = getTP();  // Update TP after swap
                 tpLeft = myTP;
+                currentWeapon = option[1];
                 // Recalculate uses after weapon swap!
                 uses = min(floor(tpLeft / option[3]), option[5]);
                 if (uses <= 0) continue;  // Skip if no TP left after swap
+                debugLog("  Switched to " + option[6] + " (1 TP cost)");
             }
             for (var j = 0; j < uses; j++) {
                 debugLog("    Use #" + (j+1) + " of weapon " + option[6]);
@@ -533,7 +580,7 @@ function executeAttack() {
                 var weaponId = option[1];
                 
                 // Check if this is an AoE/line weapon that needs cell targeting
-                if (weaponId == WEAPON_GRENADE_LAUNCHER || weaponId == WEAPON_M_LASER || weaponId == WEAPON_B_LASER) {
+                if (weaponId == WEAPON_GRENADE_LAUNCHER || weaponId == WEAPON_M_LASER) {
                     // Check for multi-hit opportunity
                     var targetCell = enemyCell;
                     
@@ -645,7 +692,94 @@ function executeAttack() {
         myLastTurnDamage = totalDamage;
     }
     
-    // ENHANCED: Try AoE splash through obstacles with proper patterns!
+    // PRIORITY: Try MORE aggressive repositioning for direct shots before AoE fallback
+    if (totalDamage == 0 && myMP > 0 && myTP >= 5 && !hasLine) {
+        debugLog("No direct damage dealt - trying aggressive repositioning for LOS");
+        
+        // More aggressive line-of-sight seeking
+        var reachable = getReachableCells(myCell, myMP);
+        var bestLOSCell = null;
+        var bestLOSScore = -999999;
+        
+        // Search ALL reachable cells for line of sight, not just optimal range
+        for (var i = 0; i < min(50, count(reachable)); i++) {
+            var cell = reachable[i];
+            if (hasLOS(cell, enemyCell)) {
+                var newDist = getCellDistance(cell, enemyCell);
+                var score = 0;
+                
+                // Score based on weapon effectiveness at this range
+                if (newDist >= 1 && newDist <= 8) {  // Magnum/B-Laser range
+                    if (newDist >= 4 && newDist <= 7) {
+                        score = 8000;  // Perfect for grenade with LOS
+                        debugLog("  Found LOS position at range " + newDist + " (grenade range)");
+                    } else if (newDist >= 2 && newDist <= 8) {
+                        score = 7000;  // Good for B-Laser/Magnum
+                        debugLog("  Found LOS position at range " + newDist + " (B-Laser/Magnum range)");
+                    } else {
+                        score = 5000;  // Some LOS is better than none
+                        debugLog("  Found LOS position at range " + newDist + " (basic LOS)");
+                    }
+                    
+                    if (score > bestLOSScore) {
+                        bestLOSScore = score;
+                        bestLOSCell = cell;
+                    }
+                }
+            }
+        }
+        
+        // Move to LOS position if found
+        if (bestLOSCell != null) {
+            debugLog("Moving to LOS position for direct shots instead of AoE");
+            if (moveToCell(bestLOSCell) > 0) {
+                // Update position variables
+                myCell = getCell();
+                enemyCell = getCell(enemy);
+                dist = getCellDistance(myCell, enemyCell);
+                hasLine = hasLOS(myCell, enemyCell);
+                myMP = getMP();
+                debugLog("Repositioned for LOS - new distance: " + dist + ", new LOS: " + hasLine);
+                
+                // Try direct attacks again with new position
+                if (hasLine && myTP >= 5) {
+                    if (dist >= 4 && dist <= 7 && inArray(getWeapons(), WEAPON_GRENADE_LAUNCHER)) {
+                        debugLog("Now in range for DIRECT grenade shot!");
+                        setWeaponIfNeeded(WEAPON_GRENADE_LAUNCHER);
+                        var result = useWeapon(enemy);
+                        if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                            totalDamage += 150 + mySTR * 2;  // Direct grenade damage
+                            myTP -= 6;
+                            debugLog("DIRECT grenade hit successful!");
+                            return;  // Success! Don't fall back to AoE
+                        }
+                    } else if (dist >= 2 && dist <= 8 && inArray(getWeapons(), WEAPON_B_LASER)) {
+                        debugLog("Now in range for B-Laser shot!");
+                        setWeaponIfNeeded(WEAPON_B_LASER);
+                        var result = useWeapon(enemy);
+                        if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                            totalDamage += 55;  // B-Laser damage
+                            myTP -= 5;
+                            debugLog("B-Laser hit successful!");
+                            return;  // Success! Don't fall back to AoE
+                        }
+                    } else if (dist >= 1 && dist <= 8 && inArray(getWeapons(), WEAPON_MAGNUM)) {
+                        debugLog("Now in range for Magnum shot!");
+                        setWeaponIfNeeded(WEAPON_MAGNUM);
+                        var result = useWeapon(enemy);
+                        if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                            totalDamage += 45;  // Magnum damage
+                            myTP -= 5;
+                            debugLog("Magnum hit successful!");
+                            return;  // Success! Don't fall back to AoE
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ENHANCED: Try AoE splash through obstacles with proper patterns! (ONLY as final fallback)
     if (totalDamage == 0 && myTP >= 5) {
         debugLog("Checking for AoE opportunities (including diagonal patterns)...");
         
