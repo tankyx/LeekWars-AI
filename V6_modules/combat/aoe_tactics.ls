@@ -8,38 +8,40 @@ function calculateOptimalAoEDamage(fromCell, dist, tpAvailable) {
     
     var bestDamage = 0;
     
+    // Get all alive enemies for multi-hit calculation
+    enemies = getAliveEnemies();
+    var enemyCells = [];
+    for (var e = 0; e < count(enemies); e++) {
+        push(enemyCells, getCell(enemies[e]));
+    }
+    
     // GRENADE LAUNCHER: AREA_CIRCLE_2 pattern
     // Range 4-7, costs 6 TP, hits in circle radius 2
     // Center: 100%, Ring 1 (4 cells): 80%, Ring 2 (8 cells): 60%
     if (tpAvailable >= 6) {
-        // Can we hit directly?
-        if (dist >= 4 && dist <= 7 && hasLOS(fromCell, enemyCell)) {
-            var grenadeBase = 150 + myStrength * 2;
-            bestDamage = grenadeBase;  // 100% damage on direct hit
-        } 
-        // Can we hit with splash from a nearby position?
-        else if (dist >= 2 && dist <= 9) {
-            // Find cells we can shoot that would splash the enemy
-            var potentialTargets = getCellsInRange(fromCell, 7);
+        // Find best grenade target for multi-hit
+        var potentialTargets = getCellsInRange(fromCell, 7);
+        
+        for (var i = 0; i < min(20, count(potentialTargets)); i++) {
+            var targetCell = potentialTargets[i];
+            var shootDist = getCellDistance(fromCell, targetCell);
             
-            for (var i = 0; i < min(10, count(potentialTargets)); i++) {
-                var targetCell = potentialTargets[i];
-                var shootDist = getCellDistance(fromCell, targetCell);
+            // Can we shoot this cell?
+            if (shootDist >= 4 && shootDist <= 7 && hasLOS(fromCell, targetCell)) {
+                var totalGrenadeDamage = 0;
+                var grenadeBase = 150 + myStrength * 2;
                 
-                // Can we shoot this cell?
-                if (shootDist >= 4 && shootDist <= 7 && hasLOS(fromCell, targetCell)) {
-                    // Will it splash the enemy?
-                    var splashDist = getCellDistance(targetCell, enemyCell);
+                // Calculate damage to all enemies in splash radius
+                for (var j = 0; j < count(enemyCells); j++) {
+                    var splashDist = getCellDistance(targetCell, enemyCells[j]);
                     if (splashDist <= 2) {
                         // Apply correct damage reduction: 1 - 0.2 * distance
                         var damageMultiplier = max(0, 1 - 0.2 * splashDist);
-                        var grenadeBase = 150 + myStrength * 2;
-                        var splashDamage = grenadeBase * damageMultiplier;
-                        
-                        // Distance 0: 100%, Distance 1: 80%, Distance 2: 60%
-                        bestDamage = max(bestDamage, splashDamage);
+                        totalGrenadeDamage += grenadeBase * damageMultiplier;
                     }
                 }
+                
+                bestDamage = max(bestDamage, totalGrenadeDamage);
             }
         }
     }
@@ -49,14 +51,25 @@ function calculateOptimalAoEDamage(fromCell, dist, tpAvailable) {
     // Center: 100%, Diagonals (distance 1): 80% each
     if (tpAvailable >= 5 && dist >= 6 && dist <= 10 && hasLOS(fromCell, enemyCell)) {
         var lightBase = 140 + floor(myStrength * 1.8);
+        var totalLightDamage = lightBase;  // Primary target
         
-        // Direct hit = 100% damage
-        // If enemy is large or we're lucky with positioning, might hit diagonals too
-        // Average case: just the center hit
-        bestDamage = max(bestDamage, lightBase);
+        // Check if other enemies are in diagonal pattern
+        var cx = getCellX(enemyCell);
+        var cy = getCellY(enemyCell);
+        var diagonals = [
+            getCellFromXY(cx-1, cy-1),
+            getCellFromXY(cx-1, cy+1),
+            getCellFromXY(cx+1, cy-1),
+            getCellFromXY(cx+1, cy+1)
+        ];
         
-        // Note: In a real implementation, we'd check if enemy occupies diagonal cells
-        // For now, assume single-cell enemy and just center hit
+        for (var d = 0; d < count(diagonals); d++) {
+            if (inArray(enemyCells, diagonals[d])) {
+                totalLightDamage += lightBase * 0.8;  // 80% damage on diagonals
+            }
+        }
+        
+        bestDamage = max(bestDamage, totalLightDamage);
     }
     
     return bestDamage;
@@ -166,14 +179,15 @@ function getAoEAffectedCells(center, areaType) {
 function calculateAoEDamageAtCell(weapon, targetCell, enemyPositions) {
     var baseDamage = 0;
     var totalDamage = 0;
+    var enemiesHit = 0;
     
     // Calculate base damage for the weapon
     if (weapon == WEAPON_GRENADE_LAUNCHER) {
         baseDamage = 150 + myStrength * 2;
-    } else if (weapon == WEAPON_LIGHTNINGER) {
-        baseDamage = 140 + floor(myStrength * 1.8);
+    } else if (weapon == WEAPON_M_LASER) {
+        baseDamage = 95;  // M-Laser avg damage (90-100)
     } else {
-        return 0;  // Not an AoE weapon
+        return 0;  // Not an AoE/line weapon
     }
     
     // GRENADE LAUNCHER: Circle radius 2
@@ -200,40 +214,65 @@ function calculateAoEDamageAtCell(weapon, targetCell, enemyPositions) {
             for (var j = 0; j < count(enemyPositions); j++) {
                 if (enemyPositions[j] == cell) {
                     totalDamage += baseDamage * damageMultiplier;
+                    enemiesHit++;
                     break;
                 }
             }
         }
+        
+        // Multi-hit bonus: multiply damage if hitting multiple enemies
+        if (enemiesHit > 1) {
+            debugLog("💥 Grenade multi-hit! Hitting " + enemiesHit + " enemies");
+        }
     }
-    // LIGHTNINGER: X pattern (diagonals)
-    else if (weapon == WEAPON_LIGHTNINGER) {
-        var cx = getCellX(targetCell);
-        var cy = getCellY(targetCell);
+    // M-LASER: Line pattern (goes through entities)
+    else if (weapon == WEAPON_M_LASER) {
+        // M-Laser goes through ALL entities in a straight line
+        var myPos = getCell();
         
-        // Center + 4 diagonal cells
-        var diagonalPattern = [
-            targetCell,                   // Center: distance 0 = 100%
-            getCellFromXY(cx-1, cy-1),   // NW: distance 1 = 80%
-            getCellFromXY(cx-1, cy+1),   // SW: distance 1 = 80%
-            getCellFromXY(cx+1, cy-1),   // NE: distance 1 = 80%
-            getCellFromXY(cx+1, cy+1)    // SE: distance 1 = 80%
-        ];
+        // Check if we're aligned with the target
+        if (!isOnSameLine(myPos, targetCell)) {
+            return 0;  // Can't hit with laser if not aligned
+        }
         
-        for (var i = 0; i < count(diagonalPattern); i++) {
-            var cell = diagonalPattern[i];
-            if (cell == null || cell == -1) continue;
-            
-            // Distance is 0 for center, 1 for diagonals
-            var distance = (i == 0) ? 0 : 1;
-            var damageMultiplier = max(0, 1 - 0.2 * distance);
+        // Get all cells in the laser line
+        var fx = getCellX(myPos);
+        var fy = getCellY(myPos);
+        var tx = getCellX(targetCell);
+        var ty = getCellY(targetCell);
+        
+        var dx = 0;
+        var dy = 0;
+        if (tx > fx) dx = 1;
+        else if (tx < fx) dx = -1;
+        if (ty > fy) dy = 1;
+        else if (ty < fy) dy = -1;
+        
+        // Trace the line and check for enemies
+        var currentX = fx + dx;
+        var currentY = fy + dy;
+        var steps = 0;
+        
+        while (steps < 12) {  // M-Laser max range
+            var cell = getCellFromXY(currentX, currentY);
+            if (cell == null || cell == -1) break;
             
             // Check if enemy is in this cell
             for (var j = 0; j < count(enemyPositions); j++) {
                 if (enemyPositions[j] == cell) {
-                    totalDamage += baseDamage * damageMultiplier;
+                    totalDamage += baseDamage;  // Full damage to all enemies in line
+                    enemiesHit++;
                     break;
                 }
             }
+            
+            currentX += dx;
+            currentY += dy;
+            steps++;
+        }
+        
+        if (enemiesHit > 1) {
+            debugLog("⚡ M-Laser multi-hit! Piercing " + enemiesHit + " enemies");
         }
     }
     

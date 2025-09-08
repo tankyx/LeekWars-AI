@@ -4,7 +4,15 @@
 
 // Function: makeDecision
 function makeDecision() {
-    debugLog("makeDecision called - enemy=" + enemy);
+    // Update enemy tracking for multi-enemy support
+    initializeEnemies();
+    
+    // Check if we should switch targets in multi-enemy scenarios
+    if (count(allEnemies) > 1 && shouldSwitchTarget()) {
+        debugLog("Target switched to: " + enemy);
+    }
+    
+    debugLog("makeDecision called - enemy=" + enemy + " (" + count(allEnemies) + " total enemies)");
     if (enemy == null) {
         debugLog("No enemy found");
         return;
@@ -18,8 +26,26 @@ function makeDecision() {
     }
     debugLog("Not in panic mode, continuing...");
     
+    // NEW: Check for aggressive opening with damage sequences (Turn 1-2)
+    if (turn <= 2) {
+        var strategy = getTurn1Strategy(enemy);
+        debugLog("Turn " + turn + " strategy: " + strategy);
+        
+        if (strategy == "all_damage") {
+            // Skip ALL buffs, maximum damage
+            var mySTR = getStrength();
+            var sequence = getBestDamageSequence(myTP, enemyDistance, myHP, mySTR);
+            if (sequence != null) {
+                debugLog("Aggressive opening! Sequence: " + sequence[4] + " for " + sequence[2] + " damage");
+                var dmgDealt = executeDamageSequence(sequence, enemy);
+                debugLog("Damage dealt: " + dmgDealt);
+                return;
+            }
+        }
+    }
+    
     // Emergency check for mid-game turns to avoid timeout
-    if (turn >= 5 && !canSpendOps(2000000)) {
+    if (turn >= 5 && !canSpendOps(4000000)) {
         debugLog("Turn 5+ emergency mode - simplified logic");
         // Just find a decent position and attack
         if (enemyDistance <= 7 && hasLOS(myCell, enemyCell)) {
@@ -38,6 +64,7 @@ function makeDecision() {
             }
             if (bestCell != myCell) {
                 if (moveToCell(bestCell) > 0) {
+                    myCell = getCell();  // Update cached position
                     enemyDistance = getCellDistance(myCell, enemyCell);
                 }
             }
@@ -61,6 +88,76 @@ function makeDecision() {
         return;
     }
     
+    // Check for aggressive teleportation opportunity FIRST
+    if (shouldUseTeleport()) {
+        debugLog("AGGRESSIVE TELEPORT OPPORTUNITY!");
+        var bestTeleportCell = findBestTeleportTarget();
+        debugLog("Best teleport target: " + bestTeleportCell + " (current: " + getCell() + ")");
+        if (bestTeleportCell != getCell()) {
+            if (executeTeleport(bestTeleportCell)) {
+                // After teleporting, MOVE to attack range if needed!
+                var currentDist = getCellDistance(getCell(), getCell(enemy));
+                debugLog("After teleport distance: " + currentDist);
+                
+                // Check if we need to move to attack
+                var canAttack = false;
+                if (hasLOS(getCell(), getCell(enemy))) {
+                    if (currentDist >= 7 && currentDist <= 9) canAttack = true;  // Rifle
+                    else if (currentDist >= 5 && currentDist <= 12 && isOnSameLine(getCell(), getCell(enemy))) canAttack = true;  // M-Laser
+                } else if (currentDist == 1) {
+                    canAttack = true;  // Dark Katana
+                }
+                
+                // Move if we can't attack yet
+                if (!canAttack && getMP() > 0) {
+                    debugLog("Need to move after teleport to attack!");
+                    var reachable = getReachableCells(getCell(), getMP());
+                    var bestMove = getCell();
+                    var bestScore = -999999;
+                    
+                    for (var i = 0; i < min(20, count(reachable)); i++) {
+                        var cell = reachable[i];
+                        var dist = getCellDistance(cell, getCell(enemy));
+                        var score = 0;
+                        
+                        // Prioritize rifle range
+                        if (dist >= 7 && dist <= 9 && hasLOS(cell, getCell(enemy))) {
+                            score = 1000;
+                            if (dist == 8) score = 1200;  // Perfect
+                        }
+                        // Then M-Laser
+                        else if (dist >= 5 && dist <= 12 && hasLOS(cell, getCell(enemy)) && isOnSameLine(cell, getCell(enemy))) {
+                            score = 800;
+                        }
+                        // Dark Katana if close
+                        else if (dist == 1) {
+                            score = 600;
+                        }
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMove = cell;
+                        }
+                    }
+                    
+                    if (bestMove != getCell()) {
+                        moveToCell(bestMove);
+                        debugLog("Moved to range " + getCellDistance(getCell(), getCell(enemy)) + " after teleport");
+                    }
+                }
+                
+                // NOW attack from the correct position
+                executeAttack();
+                if (myTP >= 4) executeDefensive();
+                return;
+            } else {
+                debugLog("Failed to execute teleport!");
+            }
+        } else {
+            debugLog("No valid teleport target found!");
+        }
+    }
+    
     // Update pattern learning and get predictions
     debugLog("Updating pattern learning...");
     var predictions = updatePatternLearning();
@@ -72,12 +169,13 @@ function makeDecision() {
     // Build influence map for tactical awareness (only in OPTIMAL/EFFICIENT modes)
     var currentMode = getOperationLevel();
     debugLog("Current mode: " + currentMode);
-    if ((currentMode == "OPTIMAL" || currentMode == "EFFICIENT") && shouldUseAlgorithm(30000)) {
+    // Build influence map if we have operations budget
+    if ((currentMode == "OPTIMAL" || currentMode == "EFFICIENT") && shouldUseAlgorithm(50000)) {
         debugLog("Building influence map...");
         buildInfluenceMap();
         
         // Visualize in debug mode for early turns
-        if (debugEnabled && turn <= 3) {
+        if (debugEnabled && turn <= 5) {
             visualizeInfluenceMap();
         }
     }
@@ -86,9 +184,9 @@ function makeDecision() {
     var myEHP = calculateEHP(myHP, myAbsShield, myRelShield, 0, myResistance);
     var enemyEHP = calculateEHP(enemyHP, getAbsoluteShield(enemy), getRelativeShield(enemy), 0, getResistance(enemy));
     
-    // Precompute EID for likely positions - INCREASED since we have ops to spare
-    var candidateCells = getReachableCells(myCell, myMP + 2);  // Full movement + buffer
-    var eidCap = turn >= 5 ? 15 : 30;  // Increased from 5/10 to 15/30
+    // Precompute EID for likely positions - Use ops aggressively!
+    var candidateCells = getReachableCells(myCell, myMP);  // Just current movement
+    var eidCap = 30;  // Process many cells for better positioning
     debugLog("Precomputing EID for " + min(eidCap, count(candidateCells)) + " cells...");
     precomputeEID(candidateCells, eidCap);
     debugLog("EID precomputation complete");
@@ -210,6 +308,7 @@ function makeDecision() {
             
             if (bestCell != myCell) {
                 if (moveToCell(bestCell) > 0) {
+                    myCell = getCell();  // Update cached position
                     enemyDistance = getCellDistance(myCell, enemyCell);
                 }
                 // Attack while kiting! (26% life steal helps us survive)
@@ -221,9 +320,9 @@ function makeDecision() {
         return;
     }
     
-    // Stage B: Standard positioning (skip when we have lots of ops for full evaluation)
+    // Stage B: Standard positioning - evaluate damage from different cells
     debugLog("Stage B: Standard positioning check");
-    if (!canSpendOps(200000)) {
+    if (canSpendOps(500000)) {  // Use ops to find best position
         // Find hit cells only
         var hitCells = findHitCells();
         
@@ -235,15 +334,35 @@ function makeDecision() {
             return;
         }
         
-        // Pick best by simple score
+        // ALWAYS evaluate ALL hit cells to find best damage position
         var bestCell = myCell;
         var bestScore = -999999;
+        var currentCellDamage = calculateDamageFrom(myCell);
+        var currentCellEID = eidOf(myCell);
+        var currentScore = currentCellDamage - currentCellEID * 0.5;
         
+        debugLog("Current position damage=" + currentCellDamage + " EID=" + currentCellEID + " score=" + currentScore);
+        
+        // Check if current position is a hit cell
+        var currentIsHitCell = false;
+        for (var i = 0; i < count(hitCells); i++) {
+            if (hitCells[i][0] == myCell) {
+                currentIsHitCell = true;
+                bestScore = currentScore;  // Start with current position as baseline
+                break;
+            }
+        }
+        
+        // Evaluate all hit cells
         for (var i = 0; i < min(20, count(hitCells)); i++) {
             var cell = hitCells[i][0];  // FIX: hitCells returns [cell, weapon, damage] tuples
+            if (cell == myCell) continue;  // Skip current cell (already evaluated)
+            
             var damage = calculateDamageFrom(cell);
             var eid = eidOf(cell);
             var score = damage - eid * 0.5;
+            
+            debugLog("  Cell " + cell + ": damage=" + damage + " EID=" + eid + " score=" + score);
             
             if (score > bestScore) {
                 bestScore = score;
@@ -251,9 +370,14 @@ function makeDecision() {
             }
         }
         
+        // Move only if new position is significantly better (20% improvement) OR we can't attack from current position
         if (bestCell != myCell) {
-            if (moveToCell(bestCell) > 0) {
-                enemyDistance = getCellDistance(myCell, enemyCell);
+            if (!currentIsHitCell || bestScore > currentScore * 1.2) {
+                debugLog("Moving to cell " + bestCell + " (score=" + bestScore + " vs current=" + currentScore + ")");
+                if (moveToCell(bestCell) > 0) {
+                    myCell = getCell();  // Update cached position
+                    enemyDistance = getCellDistance(myCell, enemyCell);
+                }
             }
         }
         executeAttack();
@@ -420,26 +544,30 @@ function makeDecision() {
         if (ENEMY_HAS_BAZOOKA && enemyDistance == 3) {
             debugLog("🦔 BAZOOKA TRAP: Enemy must waste MP to escape!");
             
-            // Exploit with Rhino for massive damage
-            if (inArray(getWeapons(), WEAPON_RHINO) && myTP >= 6) {
-                debugLog("Rhino ready: 3 uses = 600+ damage potential!");
-                setWeaponIfNeeded(WEAPON_RHINO);
+            // Exploit with Dark Katana for massive damage (if health permits)
+            if (inArray(getWeapons(), WEAPON_DARK_KATANA) && myTP >= 7 && myHP > 100) {
+                // Dark Katana damage scales with strength: BaseDamage * (1 + Strength/100)
+                var darkKatanaDamage = 99 * (1 + getStrength() / 100);
+                var darkKatanaSelfDamage = 44 * (1 + getStrength() / 100);
+                debugLog("Dark Katana ready: " + round(darkKatanaDamage) + " damage per hit!");
+                setWeaponIfNeeded(WEAPON_DARK_KATANA);
                 
-                // Use all Rhino shots
-                var rhinoUses = 0;
-                while (rhinoUses < 3 && myTP >= 6) {
+                // Use Dark Katana (max 2 uses, costs 7 TP each)
+                var katanaUses = 0;
+                while (katanaUses < 2 && myTP >= 7 && myHP > darkKatanaSelfDamage) {
                     var result = useWeapon(enemy);
                     if (result == USE_SUCCESS || result == USE_CRITICAL) {
-                        rhinoUses++;
+                        katanaUses++;
                         myTP = getTP();
+                        myHP = getLife();  // Update HP after self-damage
                         if (result == USE_CRITICAL) {
-                            debugLog("CRITICAL Rhino shot!");
+                            debugLog("CRITICAL Dark Katana strike!");
                         }
                     } else {
                         break;
                     }
                 }
-                debugLog("Rhino burst: " + rhinoUses + " shots fired");
+                debugLog("Dark Katana burst: " + katanaUses + " strikes landed");
             }
         }
         
@@ -537,8 +665,8 @@ function makeDecision() {
             // On turns 1-2, just check if we can hit from current position
             var dist = getCellDistance(myCell, enemyCell);
             if (dist >= 2 && dist <= 10 && hasLOS(myCell, enemyCell)) {
-                push(allHitCells, [myCell, WEAPON_LIGHTNINGER, 400]);
-                push(reachableHitCells, [myCell, WEAPON_LIGHTNINGER, 400]);
+                push(allHitCells, [myCell, WEAPON_M_LASER, 400]);
+                push(reachableHitCells, [myCell, WEAPON_M_LASER, 400]);
             }
         } else if (canSpendOps(2000000)) {
             debugLog("Calling findHitCells for standard detection...");
@@ -607,8 +735,8 @@ function makeDecision() {
         if (count(reachableHitCells) == 0) {
             debugLog("No reachable hit cells, need to move into weapon range");
             
-            // Priority: Get into optimal range for best damage/TP ratio
-            var targetDist = 7;  // OPTIMAL for both Grenade AND Lightninger!
+            // Priority: Get into optimal range for RIFLE and M-LASER!
+            var targetDist = 8;  // OPTIMAL for Rifle (7-9) and M-Laser (5-12)
             var reach = getReachableCells(myCell, myMP);
             var bestMove = myCell;
             var bestScore = -999999;
@@ -624,23 +752,28 @@ function makeDecision() {
                 var tpValueOfMP = myTP < 10 ? 50 : 20;  // MP more valuable when low on TP
                 score -= mpCost * tpValueOfMP;
                 
-                // Strongly prefer cells in optimal weapon range
-                // Fix 8: Recognize Rhino as highest DPS at range 3
-                if (dist == 3) score += 4000;  // BEST for Rhino - 3x200 damage!
-                if (dist == 5) score += 3500;  // BEST - Grenade with max AoE flexibility
-                if (dist == 6) score += 3000;  // Great - both weapons work well
-                if (dist == 7) score += 2500;  // Good - both weapons but less AoE
-                if (dist == 4) score += 2000;  // OK - Grenade works
-                if (dist == 2) score += 1500;  // Rhino still works
-                if (dist >= 8 && dist <= 10) score += 1500; // Lightninger only
-                if (dist == 2) score += 500;   // Close range, limited options
+                // STRONGLY prefer RIFLE and M-LASER range over grenade!
+                // Current weapons: Rifle (7-9), M-Laser (5-12 line), Grenade (4-7), Dark Katana (1)
+                if (dist == 8) score += 5000;  // PERFECT for Rifle!
+                if (dist == 7 || dist == 9) score += 4500;  // Great for Rifle
+                if (dist == 10) score += 3000;  // Good for M-Laser
+                if (dist == 11 || dist == 12) score += 2500;  // OK for M-Laser
+                if (dist == 6) score += 2000;  // M-Laser works well
+                if (dist == 5) score += 1500;  // M-Laser minimum range
+                if (dist == 4) score += 500;   // Grenade only - NOT preferred!
+                if (dist == 1) score += 300;   // Dark Katana (self-damage)
+                
+                // HEAVILY penalize grenade-only ranges when we have LOS
+                if (dist >= 4 && dist <= 6 && hasLOS(cell, enemyCell)) {
+                    score -= 1000;  // We want to use Rifle/M-Laser instead!
+                }
                 
                 // Penalize being too close or too far
-                if (dist < 4) score -= 500;  // Too close for main weapons!
-                if (dist > 10) score -= 300; // Too far
+                if (dist < 4 && dist > 1) score -= 800;  // Dead zone - no weapons!
+                if (dist > 12) score -= 500; // Too far for any weapon
                 
-                // Extra bonus for optimal range 7
-                score -= abs(dist - 7) * 150;  // Strong preference for range 7
+                // Extra bonus for optimal Rifle range
+                score -= abs(dist - 8) * 200;  // Strong preference for range 8
                 
                 // Check if we'd have LOS
                 if (hasLOS(cell, enemyCell)) score += 500;
@@ -776,6 +909,7 @@ function makeDecision() {
             
             if (newScore >= currentScore * moveThreshold) {
                 if (moveToCell(bestCell) > 0) {
+                    myCell = getCell();  // Update cached position
                     enemyDistance = getCellDistance(myCell, enemyCell);
                 }
             }
@@ -822,9 +956,7 @@ function makeDecision() {
     // Visualize EID map at end of decision
     debugLog("Checking visualization...");
     if (debugEnabled) {
-        debugLog("Calling visualizeEID...");
         visualizeEID();
-        debugLog("Visualization complete");
     }
     debugLog("makeDecision() complete - exiting");
 }

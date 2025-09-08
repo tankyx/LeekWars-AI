@@ -2,6 +2,9 @@
 // Combat execution
 // Auto-generated from V5.0 script
 
+// Include M-Laser tactics for laser targeting
+include("m_laser_tactics");
+
 // Function: executeAttack
 function executeAttack() {
     // say("executeAttack - TP=" + myTP); // Removed - costs 1 TP
@@ -16,61 +19,169 @@ function executeAttack() {
     // say("Range=" + dist + " LOS=" + hasLine); // Removed - costs 1 TP
     debug("Combat range=" + dist + ", hasLOS=" + hasLine);
     
+    // NEW: Check for optimal damage sequence first
+    var mySTR = getStrength();
+    var darkKatanaSelfDmg = 44 * (1 + mySTR / 100);  // Calculate self-damage once at function level
+    var optimalSequence = getBestDamageSequence(myTP, dist, myHP, mySTR);
+    if (optimalSequence != null && optimalSequence[2] >= getLife(enemy) * 0.5) {
+        // If sequence can deal 50%+ enemy HP, execute it
+        debugLog("Using optimal damage sequence: " + optimalSequence[4]);
+        var dmgDealt = executeDamageSequence(optimalSequence, enemy);
+        if (dmgDealt > 0) {
+            debugLog("Sequence executed for " + dmgDealt + " damage");
+            return;
+        }
+    }
+    
     // SMART ATTACK: Use damage calculation to find best weapon/chip combo!
     // Commented out to prevent log spam: debugLog("Smart attack at range " + dist + ", TP=" + myTP);
     
-    // POSITIONING CHECK: Only reposition if we're COMPLETELY out of attack range
-    // Don't waste MP repositioning if we can already attack!
-    var canAttackFromHere = false;
+    // POSITIONING CHECK: Move to OPTIMAL weapon range, not just ANY attack range
+    // Calculate damage we can do from current position
+    var currentPositionDamage = 0;
+    var shouldReposition = false;  // Declare early since we use it in multiple places
     var myWeapons = getWeapons();
     var myChips = getChips();
     
-    // Check if any weapon can hit from current position
-    for (var i = 0; i < count(myWeapons); i++) {
-        var w = myWeapons[i];
-        if (dist >= getWeaponMinRange(w) && dist <= getWeaponMaxRange(w) && 
-            canUseWeapon(w, enemy) && (!weaponNeedLos(w) || hasLine)) {
-            canAttackFromHere = true;
-            break;
+    // Calculate best damage from current position
+    if (hasLine) {
+        // Rifle check
+        if (dist >= 7 && dist <= 9 && inArray(myWeapons, WEAPON_RIFLE)) {
+            currentPositionDamage = max(currentPositionDamage, 76 * 2);  // ~76 damage, 2 uses
+        }
+        // M-Laser check
+        if (dist >= 5 && dist <= 12 && inArray(myWeapons, WEAPON_M_LASER) && isOnSameLine(myCell, enemyCell)) {
+            currentPositionDamage = max(currentPositionDamage, 95);  // ~95 damage
+        }
+        // Grenade check (lower priority)
+        if (dist >= 4 && dist <= 7 && inArray(myWeapons, WEAPON_GRENADE_LAUNCHER)) {
+            currentPositionDamage = max(currentPositionDamage, 150 + mySTR * 2);
         }
     }
+    // Dark Katana check
+    if (dist == 1 && inArray(myWeapons, WEAPON_DARK_KATANA)) {
+        // Dark Katana damage scales with strength: BaseDamage * (1 + Strength/100)
+        var darkKatanaDamage = 99 * (1 + mySTR / 100);
+        currentPositionDamage = max(currentPositionDamage, darkKatanaDamage * 2);  // 2 uses
+    }
     
-    // Also check damage chips
-    if (!canAttackFromHere) {
-        for (var i = 0; i < count(myChips); i++) {
-            var ch = myChips[i];
-            if (chipHasDamage(ch) && getCooldown(ch) <= 0 &&
-                dist >= getChipMinRange(ch) && dist <= getChipMaxRange(ch) && 
-                canUseChip(ch, enemy) && (!chipNeedLos(ch) || hasLine)) {
-                canAttackFromHere = true;
+    // SPECIAL: If we're at close range (2-4) with Dark Katana, we should move to melee!
+    // Check if we can survive the self-damage (44 base, scales with strength)
+    if (dist >= 2 && dist <= 4 && inArray(myWeapons, WEAPON_DARK_KATANA) && myHP > darkKatanaSelfDmg * 2) {
+        // Can we reach melee this turn?
+        var meleeReachable = false;
+        var reachableCells = getReachableCells(myCell, myMP);
+        for (var i = 0; i < count(reachableCells); i++) {
+            if (getCellDistance(reachableCells[i], enemyCell) == 1) {
+                meleeReachable = true;
                 break;
             }
         }
+        if (meleeReachable) {
+            shouldReposition = true;
+            debugLog("Close range (" + dist + ") - should move to melee for Dark Katana!");
+        }
     }
     
-    // Only reposition if we CAN'T attack from current position
-    if (myMP > 0 && !canAttackFromHere) {
+    // ALWAYS check if we can do MORE damage from a different position
+    // Even if we can attack from here, maybe we can do BETTER damage elsewhere!
+    // shouldReposition already declared above
+    var bestRepositionDamage = currentPositionDamage;
+    
+    // Quick check: Are we in suboptimal weapon range?
+    if (dist >= 4 && dist <= 7 && hasLine) {
+        // We're in grenade range - check if we could use better weapons
+        if (inArray(myWeapons, WEAPON_RIFLE) && (dist < 7 || dist > 9)) {
+            shouldReposition = true;  // Try to get to rifle range (7-9)
+            debugLog("Have rifle but not in range - should reposition from grenade range!");
+        } else if (inArray(myWeapons, WEAPON_M_LASER) && 
+                   (dist < 5 || dist > 12 || !isOnSameLine(myCell, enemyCell))) {
+            shouldReposition = true;  // Try to get to M-Laser range/alignment
+            debugLog("Have M-Laser but not aligned - should reposition!");
+        }
+    }
+    
+    // Also reposition if we're at edge and using grenade
+    if (!shouldReposition && dist >= 4 && dist <= 7) {
+        // Check if we're near map edge (limits positioning options)
+        var cellX = getCellX(myCell);
+        var cellY = getCellY(myCell);
+        var nearEdge = (cellX <= 2 || cellX >= 15 || cellY <= 2 || cellY >= 15);
+        
+        if (nearEdge && inArray(myWeapons, WEAPON_RIFLE)) {
+            shouldReposition = true;
+            debugLog("At map edge with grenade range - repositioning for rifle!");
+        }
+    }
+    
+    // Only reposition if we can't attack OR we're in suboptimal range
+    if (myMP > 0 && (currentPositionDamage == 0 || shouldReposition)) {
         debugLog("Can't attack from range " + dist + ", repositioning...");
-        // Try to get to optimal range 6-7
-        var targetRange = 7;
+        // Try to get to optimal range for our CURRENT weapons
+        // Priority: Rifle (7-9) > M-Laser (5-12) > Grenade (4-7) > Dark Katana (1)
         var reachable = getReachableCells(myCell, myMP);
         var bestCell = myCell;
         var bestScore = -999999;
         
-        for (var i = 0; i < min(20, count(reachable)); i++) {
+        for (var i = 0; i < min(30, count(reachable)); i++) {
             var cell = reachable[i];
             var newDist = getCellDistance(cell, enemyCell);
             var score = 0;
             
-            // Heavily favor dynamically calculated optimal range
-            if (newDist == optimalAttackRange) score = 5000;
-            else if (abs(newDist - optimalAttackRange) == 1) score = 4000;
-            else if (newDist >= 6 && newDist <= 10) score = 2000;  // Lightninger range
-            else if (newDist >= 4 && newDist <= 7) score = 1500;   // Grenade range
-            else score = -abs(newDist - optimalAttackRange) * 500;
+            // Calculate potential damage from this position
+            var potentialDamage = 0;
             
-            // Check LoS
-            if (hasLOS(cell, enemyCell)) score += 1000;
+            // PRIORITY 1: Dark Katana at melee (highest damage per TP!)
+            // Check if we can survive the self-damage
+            if (newDist == 1 && inArray(myWeapons, WEAPON_DARK_KATANA) && myHP > darkKatanaSelfDmg) {
+                // Dark Katana damage scales with strength: BaseDamage * (1 + Strength/100)
+                var darkKatanaDamage = 99 * (1 + mySTR / 100);
+                potentialDamage = darkKatanaDamage * 2;  // Can attack immediately, 2 uses
+                score = 12000;  // HIGHEST priority when healthy!
+                debugLog("  Cell " + cell + ": MELEE position for Dark Katana (" + round(darkKatanaDamage) + " dmg/hit)!");
+            }
+            // PRIORITY 2: Rifle range (consistent, safe)
+            else if (hasLOS(cell, enemyCell)) {
+                if (newDist >= 7 && newDist <= 9 && inArray(myWeapons, WEAPON_RIFLE)) {
+                    potentialDamage = 76 * 2;  // 2 shots
+                    score = 10000;  // High priority
+                    if (newDist == 8) score = 11000;  // Perfect range
+                }
+                // PRIORITY 3: M-Laser range
+                else if (newDist >= 5 && newDist <= 12 && inArray(myWeapons, WEAPON_M_LASER) && isOnSameLine(cell, enemyCell)) {
+                    potentialDamage = max(potentialDamage, 95);
+                    score = max(score, 8000);  // Good alternative
+                }
+                // LAST RESORT: Grenade range
+                else if (newDist >= 4 && newDist <= 7 && inArray(myWeapons, WEAPON_GRENADE_LAUNCHER)) {
+                    // Only if we can't reach better positions
+                    potentialDamage = max(potentialDamage, 150 + mySTR * 2);
+                    score = max(score, 2000);  // Very low priority
+                    debugLog("  Cell " + cell + ": Grenade range (not preferred)");
+                }
+                
+                // BONUS: Moving from grenade range to rifle range
+                if (dist >= 4 && dist <= 6 && newDist >= 7 && newDist <= 9) {
+                    score += 3000;  // Extra incentive to leave grenade range
+                    debugLog("Bonus for moving from grenade to rifle range!");
+                }
+            }
+            // Dark Katana melee range without LOS
+            else if (newDist == 1 && inArray(myWeapons, WEAPON_DARK_KATANA)) {
+                // Dark Katana damage scales with strength: BaseDamage * (1 + Strength/100)
+                var darkKatanaDamage = 99 * (1 + mySTR / 100);
+                potentialDamage = darkKatanaDamage * 2;
+                score = 6000;  // Good damage even without LOS
+            }
+            
+            // Only consider cells that improve our damage potential
+            if (potentialDamage <= currentPositionDamage && dist >= 7 && dist <= 9) {
+                continue;  // Already in optimal range, don't move
+            }
+            
+            // Add EID consideration (avoid dangerous positions)
+            var eid = calculateEID(cell);
+            score -= eid * 0.3;
             
             if (score > bestScore) {
                 bestScore = score;
@@ -78,16 +189,19 @@ function executeAttack() {
             }
         }
         
-        if (bestCell != myCell) {
+        if (bestCell != myCell && bestScore > 0) {
             var newDist = getCellDistance(bestCell, enemyCell);
-            if (newDist >= 6 && newDist <= 7) {
-                debugLog("Repositioning from range " + dist + " to optimal range " + newDist);
-                if (moveToCell(bestCell) > 0) {
-                    dist = getCellDistance(myCell, enemyCell);
-                    hasLine = hasLOS(myCell, enemyCell);
-                    enemyDistance = dist;
-                }
+            debugLog("Moving from range " + dist + " to range " + newDist);
+            if (moveToCell(bestCell) > 0) {
+                // Update all position variables after moving
+                myCell = getCell();
+                dist = getCellDistance(myCell, enemyCell);
+                hasLine = hasLOS(myCell, enemyCell);
+                enemyDistance = dist;
+                myMP = getMP();
             }
+        } else if (bestScore <= 0) {
+            debugLog("No good attack position reachable this turn");
         }
     }
     
@@ -106,8 +220,44 @@ function executeAttack() {
         if (dist >= minR && dist <= maxR && myTP >= cost) {
             // Check LOS separately for better debugging
             if (!weaponNeedLos(w) || hasLine) {
+                // Special check for M-Laser - requires straight line alignment
+                if (w == WEAPON_M_LASER) {
+                    if (!isOnSameLine(myCell, enemyCell)) {
+                        debugLog("    ✗ M-Laser requires straight line alignment");
+                        return acc;  // Skip this weapon
+                    }
+                }
                 debugLog("    ✓ Added weapon: " + getWeaponName(w));
                 var damage = getWeaponDamage(w, myLeek);
+                
+                // Check for multi-hit potential in multi-enemy battles
+                var multiHitBonus = 1.0;
+                if (count(getAliveEnemies()) > 1) {
+                    if (w == WEAPON_M_LASER) {
+                        // Check laser multi-hit
+                        var laserTarget = getBestLaserTarget();
+                        if (laserTarget != null) {
+                            var multiValue = calculateMultiHitValue(w, laserTarget);
+                            if (multiValue > damage) {
+                                damage = multiValue;  // Use multi-hit damage
+                                multiHitBonus = multiValue / getWeaponDamage(w, myLeek);
+                                debugLog("    💥 M-Laser multi-hit potential: x" + round(multiHitBonus * 10) / 10);
+                            }
+                        }
+                    } else if (w == WEAPON_GRENADE_LAUNCHER) {
+                        // Check grenade AoE multi-hit
+                        var aoeTarget = getBestAoETarget(w);
+                        if (aoeTarget != null) {
+                            var multiValue = calculateMultiHitValue(w, aoeTarget);
+                            if (multiValue > damage) {
+                                damage = multiValue;  // Use multi-hit damage
+                                multiHitBonus = multiValue / getWeaponDamage(w, myLeek);
+                                debugLog("    💥 Grenade multi-hit potential: x" + round(multiHitBonus * 10) / 10);
+                            }
+                        }
+                    }
+                }
+                
                 var dptp = damage / cost;  // Damage per TP
                 var maxUses = getWeaponMaxUses(w);
                 var possibleUses = floor(myTP / cost);
@@ -119,45 +269,101 @@ function executeAttack() {
                     possibleUses = min(possibleUses, maxUses);
                 }
                 
-                // Bonus for AOE weapons
-                if (w == WEAPON_LIGHTNINGER) {
-                    // Check if enemy is positioned for diagonal hits
-                    var lightResult = evaluateLightningerPosition(myCell, enemyCell);
-                    if (lightResult != null && lightResult["numHits"] > 0) {
-                        // Bonus for diagonal pattern potential
-                        dptp = dptp * 1.3; // 30% bonus for diagonal pattern
-                    } else {
-                        dptp = dptp * 1.2; // 20% standard AOE bonus
+                // Prioritize our best weapons!
+                if (w == WEAPON_RIFLE) {
+                    // Rifle is reliable, good damage, good range
+                    dptp = dptp * 2.0; // 100% bonus - our BEST consistent weapon
+                    debugLog("    Rifle strongly prioritized - reliable damage");
+                } else if (w == WEAPON_M_LASER) {
+                    // M-Laser has excellent damage and range
+                    dptp = dptp * 1.8; // 80% bonus - high damage line weapon
+                    // Additional bonus for multi-hit
+                    if (multiHitBonus > 1.0) {
+                        dptp = dptp * (1 + (multiHitBonus - 1) * 0.5);  // Scale with multi-hit
+                        debugLog("    M-Laser multi-hit bonus applied!");
                     }
+                    debugLog("    M-Laser prioritized - high damage");
                 } else if (w == WEAPON_GRENADE_LAUNCHER) {
-                    // Use enhanced grenade targeting
-                    var grenadeTarget = findBestGrenadeTarget(myCell);
-                    if (grenadeTarget != null) {
-                        // Calculate actual damage potential with AoE
-                        var actualDamage = grenadeTarget["damage"];
-                        dptp = actualDamage / cost;
-                        
-                        // Bonus for splash damage opportunity
-                        if (!grenadeTarget["directHit"]) {
-                            dptp = dptp * 1.3; // 30% bonus for clever splash positioning
+                    // Grenade should ONLY be used when no LOS or significant multi-hit
+                    // SPECIAL: At close range, prefer moving to melee for Dark Katana!
+                    if (dist <= 3 && inArray(weapons, WEAPON_DARK_KATANA) && myHP > darkKatanaSelfDmg) {
+                        // We're close enough to use Dark Katana instead!
+                        dptp = dptp * 0.1; // 90% penalty - Dark Katana is better
+                        debugLog("    Grenade PENALIZED - close enough for Dark Katana!");
+                    } else if (!hasLine) {
+                        // Major bonus when we can't hit directly
+                        var grenadeTarget = findBestGrenadeTarget(myCell);
+                        if (grenadeTarget != null && !grenadeTarget["directHit"]) {
+                            dptp = dptp * 1.5; // 50% bonus for indirect hits
+                            debugLog("    Grenade useful - no LOS!");
                         }
+                    } else if (multiHitBonus > 1.5) {
+                        // Only prioritize for SIGNIFICANT multi-hit (1.5x+ damage)
+                        dptp = dptp * (1 + (multiHitBonus - 1) * 0.3);  // Reduced scale
+                        debugLog("    Grenade OK for major multi-hit!");
                     } else {
-                        dptp = dptp * 1.2; // 20% standard AOE bonus
+                        // With LOS and no multi-hit, grenade is TERRIBLE
+                        // Check if we can use rifle or M-laser instead
+                        var canUseRifle = (dist >= 7 && dist <= 9 && inArray(weapons, WEAPON_RIFLE));
+                        var canUseMLaser = (dist >= 5 && dist <= 12 && inArray(weapons, WEAPON_M_LASER) && 
+                                           isOnSameLine(myCell, enemyCell));
+                        
+                        if (canUseRifle || canUseMLaser) {
+                            // We have MUCH better weapons available!
+                            dptp = dptp * 0.05; // 95% penalty - almost never use
+                            debugLog("    Grenade SEVERELY penalized - rifle/laser available!");
+                        } else {
+                            // Still bad but maybe our only option
+                            dptp = dptp * 0.3; // 70% penalty
+                            debugLog("    Grenade deprioritized - prefer moving to better range");
+                        }
                     }
                 }
                 
-                // Fix 8: Rhino has 3 uses - HIGHEST DPS at close range!
-                if (w == WEAPON_RHINO && maxUses == 3) {
-                    if (dist >= 2 && dist <= 3) {
-                        dptp = dptp * 1.5; // 50% bonus - best close-range DPS
+                // Dark Katana - HIGH damage but self-damage tradeoff
+                if (w == WEAPON_DARK_KATANA) {
+                    if (dist == 1) {
+                        // Calculate self-damage (scales with strength)
+                        var selfDamage = 44 * (1 + mySTR / 100);
+                        
+                        // At melee range, Dark Katana should be STRONGLY preferred!
+                        if (myHP > selfDamage * 3) {  // Can survive 3+ uses
+                            dptp = dptp * 3.0; // 200% bonus - excellent health
+                            debugLog("    Dark Katana STRONGLY prioritized - can survive 3+ uses");
+                        } else if (myHP > selfDamage * 2) {  // Can survive 2 uses
+                            dptp = dptp * 2.5; // 150% bonus - decent health
+                            debugLog("    Dark Katana prioritized - can survive 2 uses");
+                        } else if (myHP > selfDamage) {  // Can survive 1 use
+                            dptp = dptp * 2.0; // 100% bonus - still worth it
+                            debugLog("    Dark Katana viable - can survive 1 use");
+                        } else {
+                            dptp = dptp * 0.5; // Penalty - would kill us!
+                            debugLog("    Dark Katana too risky - would be fatal!");
+                        }
+                    } else if (dist <= 3) {
+                        // Close range - we can reach melee this turn!
+                        // Don't add to attack options, but note we could move to melee
+                        debugLog("    Dark Katana not in range (dist=" + dist + ") but could move to melee");
+                        // Don't add negative multiplier - just skip it
+                        return acc;  // Skip adding this weapon option
                     } else {
-                        dptp = dptp * 1.2; // 20% bonus for multiple uses
+                        // Too far for Dark Katana
+                        return acc;  // Don't add it as an option
                     }
                 }
                 
-                // Katana bonus for AGI debuff
-                if (w == WEAPON_KATANA && enemyAgility > 200) {
-                    dptp = dptp * 1.15; // 15% bonus vs high AGI
+                // Rifle - EXTRA bonus at optimal range
+                if (w == WEAPON_RIFLE) {
+                    if (dist >= 7 && dist <= 9) {
+                        dptp = dptp * 1.3; // 30% MORE bonus at optimal range
+                        debugLog("    Rifle at perfect range!");
+                    }
+                }
+                
+                // Dark Katana vulnerability reduction bonus
+                if (w == WEAPON_DARK_KATANA && dist == 1) {
+                    dptp = dptp * 1.15; // 15% bonus for -15% vulnerability
+                    debugLog("    Dark Katana reduces incoming damage by 15%");
                 }
                 
                 // Build option array
@@ -169,6 +375,7 @@ function executeAttack() {
                 push(option, dptp);       // dptp at index 4
                 push(option, possibleUses); // maxUses at index 5
                 push(option, getWeaponName(w)); // name at index 6
+                push(option, multiHitBonus); // multiHitBonus at index 7
                 push(acc, option);
             } else {
                 debugLog("    ✗ No LOS for weapon");
@@ -243,6 +450,18 @@ function executeAttack() {
     if (count(attackOptions) == 0) {
         // say("WARNING: No attack options!"); // Removed - costs 1 TP
         debug("WARNING: No attack options - checking weapons: " + count(getWeapons()));
+        
+        // If we're out of range, move closer!
+        if (getMP() > 0 && dist > 8) {
+            debugLog("Out of attack range - moving closer");
+            var targetDist = 7;  // Optimal range for most weapons
+            moveToward(enemy, min(getMP(), dist - targetDist));
+            myMP = getMP();
+            myCell = getCell();
+            enemyCell = getCell(enemy);
+            enemyDistance = getCellDistance(myCell, enemyCell);
+            debugLog("Moved closer - new distance: " + enemyDistance);
+        }
     }
     
     // FALLBACK: If no options but we have TP and are in range, force basic attack
@@ -313,19 +532,38 @@ function executeAttack() {
                 var result;
                 var weaponId = option[1];
                 
-                // Check if this is an AoE weapon that might need cell targeting
-                if (weaponId == WEAPON_GRENADE_LAUNCHER || weaponId == WEAPON_LIGHTNINGER) {
-                    // Try direct first
-                    debugLog("    Attempting useWeapon on enemy...");
-                    result = useWeapon(enemy);
-                    if (result == USE_INVALID_TARGET || result == USE_INVALID_POSITION) {
-                        // Can't hit directly, use AoE on cell
-                        enemyCell = getCell(enemy);
-                        result = useWeaponOnCell(enemyCell);
-                        if (debugEnabled && turn <= 5) {
-                            debugLog("  Using " + option[6] + " on cell " + enemyCell + " (AoE)");
+                // Check if this is an AoE/line weapon that needs cell targeting
+                if (weaponId == WEAPON_GRENADE_LAUNCHER || weaponId == WEAPON_M_LASER || weaponId == WEAPON_B_LASER) {
+                    // Check for multi-hit opportunity
+                    var targetCell = enemyCell;
+                    
+                    // Use multi-hit targeting if available (index 7 has multiHitBonus)
+                    if (count(getAliveEnemies()) > 1 && count(option) > 7 && option[7] > 1.0) {
+                        if (weaponId == WEAPON_M_LASER) {
+                            var bestLaser = getBestLaserTarget();
+                            if (bestLaser != null) {
+                                targetCell = bestLaser;
+                                debugLog("    🎯 M-Laser multi-hit target: " + targetCell);
+                            }
+                        } else if (weaponId == WEAPON_B_LASER) {
+                            var bestBLaser = findBestBLaserTarget();
+                            if (bestBLaser != null && bestBLaser["targetCell"] != null) {
+                                targetCell = bestBLaser["targetCell"];
+                                debugLog("    🎯 B-Laser multi-hit target: " + targetCell);
+                            }
+                        } else if (weaponId == WEAPON_GRENADE_LAUNCHER) {
+                            var bestAoE = getBestAoETarget(weaponId);
+                            if (bestAoE != null) {
+                                targetCell = bestAoE;
+                                debugLog("    🎯 Grenade multi-hit target: " + targetCell);
+                            }
                         }
+                    } else {
+                        targetCell = getCell(enemy);
                     }
+                    
+                    debugLog("    Using " + option[6] + " on cell " + targetCell);
+                    result = useWeaponOnCell(targetCell);
                 } else {
                     debugLog("    Attempting useWeapon on enemy (direct)...");
                     result = useWeapon(enemy);
@@ -420,7 +658,7 @@ function executeAttack() {
             
             for (var i = 0; i < count(splashPositions); i++) {
                 var splash = splashPositions[i];
-                var grenadeBase = 150 + myStrength * 2;
+                var grenadeBase = 150 + mySTR * 2;
                 var damage = grenadeBase * splash["damagePercent"];
                 
                 if (damage > bestDamage) {
@@ -431,28 +669,87 @@ function executeAttack() {
             }
         }
         
-        // IMPROVED: Check Lightninger diagonal pattern optimization
-        if (inArray(getWeapons(), WEAPON_LIGHTNINGER) && myTP >= 5) {
-            var lightningerResult = findBestLightningerTarget(myCell);
+        // IMPROVED: Check M-Laser line pattern optimization
+        if (inArray(getWeapons(), WEAPON_M_LASER) && myTP >= 8) {
+            var laserResult = findBestMLaserTarget();
             
-            if (lightningerResult != null && lightningerResult["damage"] > 0) {
-                // Compare with standard splash detection
-                var standardSplash = findAoESplashPositions(WEAPON_LIGHTNINGER, myCell, enemyCell);
+            if (laserResult != null && laserResult["totalDamage"] > 0) {
+                // Compare with standard line detection
+                var standardLine = findAoESplashPositions(WEAPON_M_LASER, myCell, enemyCell);
                 
                 // Use the better of the two methods
-                if (lightningerResult["damage"] > bestDamage) {
-                    bestDamage = lightningerResult["damage"];
+                if (laserResult["totalDamage"] > bestDamage) {
+                    bestDamage = laserResult["totalDamage"];
                     bestSplash = [:];
-                    bestSplash["target"] = lightningerResult["targetCell"];
-                    bestSplash["weapon"] = WEAPON_LIGHTNINGER;
+                    bestSplash["target"] = laserResult["targetCell"];
+                    bestSplash["weapon"] = WEAPON_M_LASER;
                     bestSplash["damagePercent"] = 1.0;
-                    bestSplash["isIndirect"] = (lightningerResult["targetCell"] != enemyCell);
-                    bestSplash["patternHits"] = lightningerResult["numHits"];
+                    bestSplash["isIndirect"] = (laserResult["targetCell"] != enemyCell);
+                    bestSplash["patternHits"] = laserResult["numHits"];
                     
-                    // Log diagonal pattern detection
-                    if (count(lightningerResult["cellsHit"]) > 1) {
-                        debugLog("Lightninger diagonal pattern: " + count(lightningerResult["cellsHit"]) + " cells hit!");
+                    // Log line pattern detection
+                    if (count(laserResult["cellsHit"]) > 1) {
+                        debugLog("M-Laser line pattern: " + count(laserResult["cellsHit"]) + " cells hit!");
                     }
+                }
+            }
+        }
+        
+        // Check B-Laser if available (dual damage/heal weapon)
+        if (inArray(getWeapons(), WEAPON_B_LASER) && myTP >= B_LASER_COST && bLaserUsesRemaining > 0) {
+            var bLaserResult = findBestBLaserTarget();
+            
+            if (bLaserResult != null) {
+                // B-Laser has both damage and heal value
+                var totalValue = bLaserResult["totalValue"];
+                
+                // Prioritize B-Laser when we need healing
+                if (totalValue > bestDamage || (myHP < myMaxHP * B_LASER_HEAL_THRESHOLD && totalValue > bestDamage * 0.8)) {
+                    bestDamage = totalValue;
+                    bestSplash = [:];
+                    bestSplash["target"] = bLaserResult["targetCell"];
+                    bestSplash["weapon"] = WEAPON_B_LASER;
+                    bestSplash["damagePercent"] = 1.0;
+                    bestSplash["isIndirect"] = false;
+                    bestSplash["isHealCombo"] = (bLaserResult["healValue"] > 0);
+                    
+                    if (bLaserResult["hits"] > 1) {
+                        debugLog("B-Laser multi-hit opportunity: " + bLaserResult["hits"] + " targets!");
+                    }
+                }
+            }
+        }
+        
+        // Check Magnum if available
+        if (inArray(getWeapons(), WEAPON_MAGNUM) && myTP >= MAGNUM_COST && magnumUsesRemaining > 0) {
+            var distMagnum = getCellDistance(myCell, enemyCell);
+            if (distMagnum >= MAGNUM_MIN_RANGE && distMagnum <= MAGNUM_MAX_RANGE && lineOfSight(myCell, enemyCell)) {
+                var magnumDamage = getWeaponDamage(WEAPON_MAGNUM, enemy);
+                if (magnumDamage > bestDamage) {
+                    bestDamage = magnumDamage;
+                    // Use bestSplash for consistency with weapon execution  
+                    bestSplash = [:];
+                    bestSplash["target"] = enemyCell;
+                    bestSplash["weapon"] = WEAPON_MAGNUM;
+                    bestSplash["damagePercent"] = 1.0;
+                    bestSplash["isIndirect"] = false;
+                }
+            }
+        }
+        
+        // Check Destroyer if available  
+        if (inArray(getWeapons(), WEAPON_DESTROYER) && myTP >= DESTROYER_COST && destroyerUsesRemaining > 0) {
+            var distDestroyer = getCellDistance(myCell, enemyCell);
+            if (distDestroyer >= DESTROYER_MIN_RANGE && distDestroyer <= DESTROYER_MAX_RANGE && lineOfSight(myCell, enemyCell)) {
+                var destroyerDamage = getWeaponDamage(WEAPON_DESTROYER, enemy);
+                if (destroyerDamage > bestDamage) {
+                    bestDamage = destroyerDamage;
+                    // Use bestSplash for consistency with weapon execution
+                    bestSplash = [:];
+                    bestSplash["target"] = enemyCell;
+                    bestSplash["weapon"] = WEAPON_DESTROYER;
+                    bestSplash["damagePercent"] = 1.0;
+                    bestSplash["isIndirect"] = false;
                 }
             }
         }
@@ -464,7 +761,26 @@ function executeAttack() {
             
             setWeaponIfNeeded(weapon);
             if (useWeaponOnCell(targetCell)) {
-                var weaponName = (weapon == WEAPON_GRENADE_LAUNCHER) ? "Grenade" : "Lightninger";
+                // Get weapon name for logging and update use counters
+                var weaponName = "Unknown";
+                if (weapon == WEAPON_GRENADE_LAUNCHER) weaponName = "Grenade";
+                else if (weapon == WEAPON_LIGHTNINGER) weaponName = "Lightninger";
+                else if (weapon == WEAPON_M_LASER) weaponName = "M-Laser";
+                else if (weapon == WEAPON_B_LASER) {
+                    weaponName = "B-Laser";
+                    bLaserUsesRemaining--;
+                    if (bestSplash["isHealCombo"]) {
+                        debugLog("B-Laser heal + damage combo!");
+                    }
+                }
+                else if (weapon == WEAPON_MAGNUM) {
+                    weaponName = "Magnum";
+                    magnumUsesRemaining--;
+                }
+                else if (weapon == WEAPON_DESTROYER) {
+                    weaponName = "Destroyer";
+                    destroyerUsesRemaining--;
+                }
                 
                 if (bestSplash["isIndirect"]) {
                     debugLog("INDIRECT " + weaponName + " splash through obstacle!");
@@ -473,12 +789,76 @@ function executeAttack() {
                     debugLog("Direct " + weaponName + " hit!");
                 }
                 
-                debugLog("Splash distance: " + bestSplash["splashDistance"] + 
-                        ", damage: " + round(bestDamage) + 
-                        " (" + round(bestSplash["damagePercent"] * 100) + "%)");
+                if (bestSplash["splashDistance"] != null) {
+                    debugLog("Splash distance: " + bestSplash["splashDistance"] + 
+                            ", damage: " + round(bestDamage) + 
+                            " (" + round(bestSplash["damagePercent"] * 100) + "%)");
+                } else {
+                    debugLog("Damage: " + round(bestDamage));
+                }
                 
                 totalDamage = bestDamage;
                 myLastTurnDamage = bestDamage;
+            }
+        }
+    }
+    
+    // CRITICAL: Reposition after attacking to OPTIMAL weapon range
+    if (getMP() > 0 && enemy != null && getLife(enemy) > 0) {
+        debugLog("Post-attack repositioning with " + getMP() + " MP remaining");
+        
+        // Find best position for next turn (prioritize RIFLE range!)
+        var reachable = getReachableCells(getCell(), getMP());
+        var bestCell = getCell();
+        var bestScore = -999999;
+        var currentEID = calculateEID(getCell());
+        var currentDist = getCellDistance(getCell(), getCell(enemy));
+        
+        for (var i = 0; i < min(20, count(reachable)); i++) {
+            var cell = reachable[i];
+            var cellEID = calculateEID(cell);
+            var cellDist = getCellDistance(cell, getCell(enemy));
+            
+            // Score based on safety (low EID) and OPTIMAL weapon range
+            var score = -cellEID * 2;  // Prioritize safety
+            
+            // STRONGLY prefer RIFLE range for next turn
+            if (cellDist >= 7 && cellDist <= 9 && hasLOS(cell, getCell(enemy))) {
+                score += 1000;  // RIFLE range - best weapon!
+                if (cellDist == 8) score += 200;  // Perfect rifle range
+            }
+            // M-Laser range is good too
+            else if (cellDist >= 10 && cellDist <= 12 && hasLOS(cell, getCell(enemy))) {
+                score += 600;  // M-Laser range
+            }
+            // Penalize grenade-only range
+            else if (cellDist >= 4 && cellDist <= 6 && hasLOS(cell, getCell(enemy))) {
+                score += 200;  // Can attack but not optimal
+            }
+            
+            // BONUS: Moving from grenade range to rifle range
+            if (currentDist >= 4 && currentDist <= 6 && cellDist >= 7 && cellDist <= 9) {
+                score += 500;  // Incentive to improve position
+                debugLog("  Cell " + cell + ": Moving to rifle range!");
+            }
+            
+            // Avoid getting too close
+            if (cellDist < 5) {
+                score -= 1000;
+            }
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestCell = cell;
+            }
+        }
+        
+        if (bestCell != getCell()) {
+            var newEID = calculateEID(bestCell);
+            debugLog("Repositioning to safer position");
+            if (moveToCell(bestCell) > 0) {
+                enemyDistance = getCellDistance(getCell(), getCell(enemy));
+                debugLog("Repositioned to distance " + enemyDistance);
             }
         }
     }
@@ -490,21 +870,23 @@ function executeAttack() {
 // Function: executeDefensive
 function executeDefensive() {
     var hpRatio = myHP / myMaxHP;
-    debugLog("Defensive: HP=" + myHP + "/" + myMaxHP + " (" + round(hpRatio*100) + "%), TP=" + myTP);
+    var myEHP = calculateEHP(myHP, myAbsShield, myRelShield, 0, myResistance);
+    var currentEID = calculateEID(myCell);
+    var threatLevel = myEHP > 0 ? currentEID / myEHP : 1.0;
     
-    // Priority 0: ALWAYS check for Liberation opportunity first!
-    // Much more aggressive Liberation usage
-    if (enemy != null) {
+    debugLog("Defensive: HP=" + round(hpRatio*100) + "%, Threat=" + round(threatLevel*100) + "%, TP=" + myTP);
+    
+    // Priority 0: Liberation if enemy is buffed/shielded
+    if (enemy != null && enemyDistance <= 6) {
         if (useAntiTankStrategy()) {
             debugLog("Liberation successful - enemy buffs/shields stripped!");
         }
     }
     
-    // Priority 1: Check for poison and remove it immediately!
+    // Priority 1: Antidote for poison
     var myEffects = getEffects(myLeek);
     var hasPoisonEffect = false;
     
-    // Check if we have any poison effects (EFFECT_POISON type = 13)
     for (var i = 0; i < count(myEffects); i++) {
         if (myEffects[i][0] == 13) {  // EFFECT_POISON
             hasPoisonEffect = true;
@@ -513,52 +895,89 @@ function executeDefensive() {
     }
     
     if (hasPoisonEffect && getCooldown(CHIP_ANTIDOTE) == 0 && myTP >= 3) {
-        debugLog("POISON DETECTED! Using Antidote!");
         if (tryUseChip(CHIP_ANTIDOTE, myLeek)) {
-            debugLog("Antidote applied - all poisons removed!");
+            debugLog("Antidote applied - poison removed!");
         }
     }
     
-    // Priority 2: Smart healing with phase-aware thresholds
-    var tactics = getPhaseSpecificTactics();
-    var healThreshold = tactics["healThreshold"];
+    // ADAPTIVE DEFENSE STRATEGY based on actual combat situation
     
-    if (hpRatio < healThreshold) {  // Phase-based healing threshold
-        debugLog("HEALING TRIGGERED - HP below " + round(healThreshold * 100) + "% (" + GAME_PHASE + " phase)");
-        
-        // Prioritize multi-turn heals for kiting efficiency
-        // HoT allows us to heal WHILE maintaining distance and attacking
-        var healChips = [
-            CHIP_SERUM,      // 8 TP, 50-55 heal/turn x4 - AOE HoT with 290 WIS!
-            CHIP_VACCINE,    // 6 TP, 38-42 heal/turn x3 - Strong HoT
-            CHIP_CURE,       // 4 TP, 38-46 instant - ~180 HP with WIS!
-            CHIP_ARMORING    // 5 TP, 25-30 max life + heal
-        ];
+    // Critical HP - Always heal first
+    if (hpRatio < 0.3) {
+        debugLog("CRITICAL HP - Emergency healing priority!");
+        var healChips = [CHIP_CURE, CHIP_VACCINE, CHIP_SERUM, CHIP_ARMORING];
         for (var i = 0; i < count(healChips); i++) {
-            var chip = healChips[i];
-            tryUseChip(chip, myLeek);  // tryUseChip handles TP and logging
+            if (getCooldown(healChips[i]) == 0 && myTP >= getChipCost(healChips[i])) {
+                tryUseChip(healChips[i], myLeek);
+            }
         }
     }
-    
-    // Priority 3: Shield if expecting damage (2.5x effectiveness with 150 resistance!)
-    if (myTP >= 3) {
-        // Shield chips are VERY effective with resistance multiplier!
-        // Base 150 RES = 2.5x multiplier (shield * 2.5)
-        // With Solidification: 330-350 RES = 4.3-4.5x multiplier!
-        var shieldChips = [
-            CHIP_FORTRESS,   // 6 TP, 7.5% rel shield -> 18.75% with 150 RES, 32% with Solidification!
-            CHIP_ARMOR,      // 6 TP, 25 abs shield -> 62.5 with 150 RES, 107 with Solidification!
-            CHIP_SHIELD      // 4 TP, 20 abs shield -> 50 with 150 RES, 86 with Solidification!
-        ];
+    // High threat and in combat range - Shield up for trading
+    else if (threatLevel > 0.5 && enemyDistance <= 10 && myTP >= 3) {
+        debugLog("HIGH THREAT TRADING - Shields for damage exchange");
+        
+        // Prioritize shields when we're about to trade damage
+        var shieldChips = [CHIP_FORTRESS, CHIP_ARMOR, CHIP_SHIELD];
         for (var i = 0; i < count(shieldChips); i++) {
-            var chip = shieldChips[i];
-            tryUseChip(chip, myLeek);  // tryUseChip handles TP and logging
+            if (getCooldown(shieldChips[i]) == 0 && myTP >= getChipCost(shieldChips[i])) {
+                tryUseChip(shieldChips[i], myLeek);
+            }
+        }
+        
+        // Heal if still hurt after shielding
+        if (hpRatio < 0.5 && myTP >= 4) {
+            tryUseChip(CHIP_CURE, myLeek);
+        }
+    }
+    // Low threat or out of range - Heal up
+    else if (threatLevel < 0.3 || enemyDistance > 10) {
+        debugLog("LOW THREAT - Healing opportunity");
+        
+        var healThreshold = 0.7;  // Heal up to 70% when safe
+        if (hpRatio < healThreshold) {
+            // Prefer HoT when safe for efficiency
+            var healChips = [CHIP_SERUM, CHIP_VACCINE, CHIP_CURE];
+            for (var i = 0; i < count(healChips); i++) {
+                if (getCooldown(healChips[i]) == 0 && myTP >= getChipCost(healChips[i])) {
+                    tryUseChip(healChips[i], myLeek);
+                    if (hpRatio >= 0.6) break;  // Don't overheal
+                }
+            }
+        }
+        
+        // Shield after healing if TP remains
+        if (myTP >= 3) {
+            tryUseChip(CHIP_SHIELD, myLeek);
+        }
+    }
+    // Medium threat - Balanced approach
+    else {
+        debugLog("BALANCED DEFENSE - Mixed strategy");
+        
+        // Balance healing and shielding
+        if (hpRatio < 0.5 && myTP >= 4) {
+            tryUseChip(CHIP_CURE, myLeek);
+        }
+        
+        if (myTP >= 3) {
+            tryUseChip(CHIP_SHIELD, myLeek);
+        }
+        
+        // Add fortress if we have extra TP
+        if (myTP >= 6) {
+            tryUseChip(CHIP_FORTRESS, myLeek);
         }
     }
     
-    // Priority 3: Buffs if have TP left
-    if (myTP >= 3) {
+    // Priority 3: Buffs if TP remains and not critically threatened
+    if (myTP >= 3 && threatLevel < 0.8) {
         executeBuffs();
+    }
+    
+    // CRITICAL: Reposition after defensive actions to minimize EID
+    if (getMP() > 0 && enemy != null && getLife(enemy) > 0) {
+        debugLog("Post-defense repositioning with " + getMP() + " MP");
+        repositionDefensive();
     }
 }
 
@@ -641,58 +1060,63 @@ function executeEarlyGameSequence() {
 
     // TURN 1 EXECUTION
     if (turn == 1) {
-    // TURN 1: BALANCED OPENING - Defense, ONE buff, then attack
-    debugLog("=== TURN 1: BALANCED OPENING ===");
+    // TURN 1: OPTIMAL HP BUFF STRATEGY - Knowledge -> Armoring -> Elevation
+    debugLog("=== TURN 1: MAX HP BUFF STRATEGY ===");
     debugLog("TP: " + myTP + ", Enemy at distance " + enemyDistance);
     
-    // PRIORITY 1: SHIELDS if enemy can hit us
-    if (enemyDistance <= 10) {
-        // Enemy can potentially attack - shield first!
-        if (getCooldown(CHIP_SHIELD) == 0 && myTP >= 3) {
-            if (tryUseChip(CHIP_SHIELD, myLeek)) {
-                myAbsShield = getAbsoluteShield(myLeek);
-                debugLog("🛡️ SHIELD: +" + myAbsShield + " absolute shield");
-                myTP = getTP();
-            }
-        }
-        
-        // Use relative shield too if we have TP
-        if (getCooldown(CHIP_FORTRESS) == 0 && myTP >= 4) {
-            if (tryUseChip(CHIP_FORTRESS, myLeek)) {
-                myRelShield = getRelativeShield(myLeek);
-                debugLog("🏰 FORTRESS: +" + myRelShield + "% damage reduction");
-                myTP = getTP();
-            }
-        }
-    }
+    // Since enemy is usually out of range on Turn 1, focus on permanent HP buffs
+    // These last the entire fight and provide maximum value
     
-    // PRIORITY 2: ONE key buff (not all three!)
-    // Choose based on enemy type
-    var buffUsed = false;
-    
-    // If enemy is magic/science based, prioritize resistance
-    if (enemyMagic > 400 || enemyScience > 400) {
-        if (getCooldown(CHIP_SOLIDIFICATION) == 0 && myTP >= 6 && !buffUsed) {
-            if (tryUseChip(CHIP_SOLIDIFICATION, myLeek)) {
-                myResistance = getResistance();
-                debugLog("💎 SOLIDIFICATION: Resistance now " + myResistance);
-                myTP = getTP();
-                buffUsed = true;
-            }
-        }
-    }
-    
-    // Otherwise use Knowledge for wisdom boost
-    if (!buffUsed && getCooldown(CHIP_KNOWLEDGE) == 0 && myTP >= 5) {
+    // PRIORITY 1: KNOWLEDGE - Wisdom boost first (enhances other buffs)
+    // Knowledge gives +250-270 flat Wisdom, which scales our HP buffs
+    if (getCooldown(CHIP_KNOWLEDGE) == 0 && myTP >= 6) {
         if (tryUseChip(CHIP_KNOWLEDGE, myLeek)) {
             var oldWisdom = myWisdom;
             myWisdom = getWisdom();
             var wisBoost = myWisdom - oldWisdom;
             debugLog("📚 KNOWLEDGE: +" + wisBoost + " Wisdom (now " + myWisdom + ")");
             myTP = getTP();
-            buffUsed = true;
         }
     }
+    
+    // PRIORITY 2: ARMORING - First HP buff (scales with Wisdom we just gained)
+    if (getCooldown(CHIP_ARMORING) == 0 && myTP >= 4) {
+        if (tryUseChip(CHIP_ARMORING, myLeek)) {
+            var oldMaxHP = myMaxHP;
+            myMaxHP = getTotalLife();
+            myHP = getLife();
+            var armorHP = myMaxHP - oldMaxHP;
+            debugLog("🛡️ ARMORING: +" + armorHP + " max HP (total " + myMaxHP + ")");
+            myTP = getTP();
+        }
+    }
+    
+    // PRIORITY 3: ELEVATION - Second HP buff (also scales with Wisdom)
+    // Elevation gives +80 base max HP that scales with Wisdom
+    if (getCooldown(CHIP_ELEVATION) == 0 && myTP >= 6) {
+        if (tryUseChip(CHIP_ELEVATION, myLeek)) {
+            var oldMaxHP = myMaxHP;
+            myMaxHP = getTotalLife();
+            myHP = getLife();
+            var elevHP = myMaxHP - oldMaxHP;
+            debugLog("⬆️ ELEVATION: +" + elevHP + " max HP (total " + myMaxHP + ")");
+            myTP = getTP();
+        }
+    }
+    
+    // EMERGENCY: Only use shields if enemy is very close and can attack
+    if (enemyDistance <= 7 && myTP >= 3) {
+        // Enemy can attack next turn - shield now!
+        if (getCooldown(CHIP_SHIELD) == 0) {
+            if (tryUseChip(CHIP_SHIELD, myLeek)) {
+                myAbsShield = getAbsoluteShield(myLeek);
+                debugLog("🛡️ EMERGENCY SHIELD: +" + myAbsShield + " (enemy at range " + enemyDistance + ")");
+                myTP = getTP();
+            }
+        }
+    }
+    
+    debugLog("Turn 1 complete. HP: " + myHP + "/" + myMaxHP + ", Shields: " + myAbsShield + "+" + myRelShield + "%, Position: " + myCell);
     
     // PRIORITY 3: POSITION for optimal attack range
     if (myMP > 0) {
@@ -749,7 +1173,17 @@ function executeEarlyGameSequence() {
     debugLog("🌀 TELEPORT NEEDED!");
     var bestTeleportCell = findBestTeleportTarget();
     if (executeTeleport(bestTeleportCell)) {
-        // Successfully teleported - now attack from new position
+        // After teleporting, check if we need to move to attack range
+        var currentDist = getCellDistance(getCell(), getCell(enemy));
+        if (currentDist > 9 && getMP() > 0) {
+            // Still too far, move closer
+            var targetCell = bestApproachStep(getCell(enemy));
+            if (targetCell != getCell()) {
+                moveToCell(targetCell);
+                debugLog("  Moved to range " + getCellDistance(getCell(), getCell(enemy)) + " after teleport");
+            }
+        }
+        // Now attack from new position
         executeAttack();
     }
 // Check if we should use bait tactics on turn 2+
@@ -819,7 +1253,7 @@ function executeEarlyGameSequence() {
         var enemyEID = calculateEID(myCell);
         var threatRatio = myEHP > 0 ? enemyEID / myEHP : 1.0;
         
-        debugLog("Threat: EID=" + enemyEID + ", EHP=" + myEHP + ", ratio=" + round(threatRatio * 100) + "%");
+        debugLog("Threat: EHP=" + myEHP + ", ratio=" + round(threatRatio * 100) + "%");
         
         if (threatRatio > 0.5) {
             // HIGH THREAT - Defensive sequence
@@ -853,13 +1287,13 @@ function executeEarlyGameSequence() {
             // Only use STEROID if it significantly improves damage
             var currentDamage = calculateDamageFrom(myCell);
             // STEROID adds flat strength (250-270), not percentage
-            var simStrength = myStrength + 260;  // Approximate flat boost
-            var weaponBoost = floor((simStrength - myStrength) * 2);  // Rough weapon damage increase
+            var simStrength = mySTR + 260;  // Approximate flat boost
+            var weaponBoost = floor((simStrength - mySTR) * 2);  // Rough weapon damage increase
             
             if (weaponBoost > 100 && getCooldown(CHIP_STEROID) == 0 && myTP >= 7) {
                 if (tryUseChip(CHIP_STEROID, myLeek)) {
-                    myStrength = getStrength();
-                    debugLog("💉 STEROID: Damage boost ~" + weaponBoost + " (STR: " + myStrength + ")");
+                    mySTR = getStrength();
+                    debugLog("💉 STEROID: Damage boost ~" + weaponBoost + " (STR: " + mySTR + ")");
                     myTP = getTP();
                 }
             }
@@ -893,7 +1327,48 @@ function executeEarlyGameSequence() {
         if (shouldUseTeleport()) {
             var bestTeleportCell = findBestTeleportTarget();
             if (executeTeleport(bestTeleportCell)) {
-                // Successfully teleported - now attack from new position
+                debugLog("🌀 Teleported! Now checking if we need to move to attack...");
+                
+                // After teleporting, we likely need to MOVE to attack range!
+                var currentDist = getCellDistance(getCell(), getCell(enemy));
+                var canAttack = false;
+                
+                // Check if we can attack from teleport position
+                if (hasLOS(getCell(), getCell(enemy))) {
+                    if (currentDist >= 7 && currentDist <= 9) canAttack = true;  // Rifle
+                    else if (currentDist >= 5 && currentDist <= 12 && isOnSameLine(getCell(), getCell(enemy))) canAttack = true;  // M-Laser
+                }
+                
+                // If can't attack, MOVE closer!
+                if (!canAttack && getMP() > 0) {
+                    debugLog("  Need to move after teleport - distance: " + currentDist);
+                    var targetRange = 8;  // Optimal rifle range
+                    var reachable = getReachableCells(getCell(), getMP());
+                    var bestMove = getCell();
+                    var bestScore = -999999;
+                    
+                    for (var i = 0; i < min(20, count(reachable)); i++) {
+                        var cell = reachable[i];
+                        var dist = getCellDistance(cell, getCell(enemy));
+                        var score = -abs(dist - targetRange) * 100;
+                        
+                        // Bonus for attack ranges
+                        if (dist >= 7 && dist <= 9) score += 1000;  // Rifle
+                        if (dist >= 5 && dist <= 12) score += 500;   // M-Laser
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMove = cell;
+                        }
+                    }
+                    
+                    if (bestMove != getCell()) {
+                        moveToCell(bestMove);
+                        debugLog("  Moved to range " + getCellDistance(getCell(), getCell(enemy)) + " after teleport");
+                    }
+                }
+                
+                // Now attack from new position
                 executeAttack();
             }
         }
@@ -922,7 +1397,7 @@ function executeEarlyGameSequence() {
         }
         if (getCooldown(CHIP_PROTEIN) == 0 && myTP >= 3) {
             tryUseChip(CHIP_PROTEIN, myLeek);
-            myStrength = getStrength();
+            mySTR = getStrength();
             myTP = getTP();
         }
         
@@ -957,25 +1432,45 @@ function executeEarlyGameSequence() {
         // SEQUENCE 4: Attack round 1
         debugLog("→ Attack sequence starting with " + myTP + " TP at range " + enemyDistance);
         
-        // FORCE ATTACK at range 10 with Lightninger if available
-        if (enemyDistance >= 6 && enemyDistance <= 10 && myTP >= 5) {
-            if (inArray(getWeapons(), WEAPON_LIGHTNINGER)) {
-                setWeaponIfNeeded(WEAPON_LIGHTNINGER);
+        // FORCE ATTACK at range 5-12 with M-Laser if available
+        if (enemyDistance >= 5 && enemyDistance <= 12 && myTP >= 8) {
+            if (inArray(getWeapons(), WEAPON_M_LASER)) {
+                setWeaponIfNeeded(WEAPON_M_LASER);
                 var shots = 0;
-                while (myTP >= 5 && shots < 2) {
+                while (myTP >= 8 && shots < 2) {
                     var result = useWeapon(enemy);
                     if (result == USE_SUCCESS || result == USE_CRITICAL) {
                         shots++;
                         myTP = getTP();
                         if (result == USE_CRITICAL) {
-                            debugLog("CRITICAL Lightninger!");
+                            debugLog("CRITICAL M-Laser!");
                         }
                     } else {
-                        debugLog("Failed to use Lightninger: " + result);
+                        debugLog("Failed to use M-Laser: " + result);
                         break;
                     }
                 }
-                debugLog("→ Lightninger: " + shots + " shots fired");
+                debugLog("→ M-Laser: " + shots + " shots fired");
+            }
+        // Attack at range 7-9 with Rifle if available
+        } else if (enemyDistance >= 7 && enemyDistance <= 9 && myTP >= 7) {
+            if (inArray(getWeapons(), WEAPON_RIFLE)) {
+                setWeaponIfNeeded(WEAPON_RIFLE);
+                var shots = 0;
+                while (myTP >= 7 && shots < 2) {
+                    var result = useWeapon(enemy);
+                    if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                        shots++;
+                        myTP = getTP();
+                        if (result == USE_CRITICAL) {
+                            debugLog("CRITICAL Rifle shot!");
+                        }
+                    } else {
+                        debugLog("Failed to use Rifle: " + result);
+                        break;
+                    }
+                }
+                debugLog("→ Rifle: " + shots + " shots fired");
             }
         } else {
             executeAttack();
@@ -989,14 +1484,14 @@ function executeEarlyGameSequence() {
         
         if (eidRatio < 0.5) {
             // Safe - attack again
-            debugLog("→ EID safe (" + round(eidRatio*100) + "%), continuing attacks");
+            debugLog("→ Safe to continue attacks");
             if (myTP >= 3) {
                 executeAttack();
                 myTP = getTP();
             }
         } else {
             // Dangerous - shield up
-            debugLog("→ EID dangerous (" + round(eidRatio*100) + "%), applying shields");
+            debugLog("→ Dangerous position, applying shields");
             if (getCooldown(CHIP_FORTRESS) == 0 && myTP >= 6) tryUseChip(CHIP_FORTRESS, myLeek);
             if (getCooldown(CHIP_ARMOR) == 0 && myTP >= 6) tryUseChip(CHIP_ARMOR, myLeek);
             if (getCooldown(CHIP_SHIELD) == 0 && myTP >= 4) tryUseChip(CHIP_SHIELD, myLeek);
@@ -1007,64 +1502,59 @@ function executeEarlyGameSequence() {
     // SEQUENCED COMBAT STRATEGY WITH EID DECISION MAKING
     debugLog("=== TURN " + turn + " SEQUENCED COMBAT ===");
     
-    // PHASE 1: BUFF SEQUENCE (Prioritize TP → STR → AGI → WIS buffs)
-    debugLog("PHASE 1: Buff sequence");
+    // PHASE 1: MINIMAL BUFFS AFTER TURN 1 - RESERVE TP FOR ATTACKS!
+    debugLog("PHASE 1: Buff sequence (minimal after turn 1)");
     
-    // 1A: Adrenaline for TP boost (highest priority)
-    if (getCooldown(CHIP_ADRENALINE) == 0 && myTP >= 1) {
-        if (tryUseChip(CHIP_ADRENALINE, myLeek)) {
-            debugLog("→ Adrenaline: +5 TP next turn");
-            myTP = getTP();
-        }
-    }
+    // CRITICAL: After Turn 1, we need to ATTACK, not buff endlessly!
+    // Reserve at least 9 TP for Lightninger or 6 TP for Grenade Launcher
+    var tpReserveForAttack = 9;  // Enough for Lightninger
     
-    // 1B: Motivation for sustained TP
-    if (getCooldown(CHIP_MOTIVATION) == 0 && myTP >= 4) {
-        if (tryUseChip(CHIP_MOTIVATION, myLeek)) {
-            debugLog("→ Motivation: +2 TP/turn");
-            myTP = getTP();
-        }
-    }
-    
-    // 1C: Combat buffs in priority order
-    if (myTP >= 6) {
-        // Solidification for defense multiplier (shields become 5.3x effective)
-        if (getResistance() < 300 && getCooldown(CHIP_SOLIDIFICATION) == 0) {
-            if (tryUseChip(CHIP_SOLIDIFICATION, myLeek)) {
-                debugLog("→ Solidification: Shields 5.3x effective");
-                myResistance = getResistance();
+    // Only use essential buffs after Turn 1
+    if (turn <= 2) {
+        // Turn 2: Can use ONE key buff if we have excess TP
+        
+        // 1A: Adrenaline for TP boost (only if we have spare TP)
+        if (getCooldown(CHIP_ADRENALINE) == 0 && myTP >= (tpReserveForAttack + 1)) {
+            if (tryUseChip(CHIP_ADRENALINE, myLeek)) {
+                debugLog("→ Adrenaline: +5 TP next turn");
                 myTP = getTP();
             }
         }
         
-        // Steroid for damage (570+ STR)
-        if (getStrength() < 500 && getCooldown(CHIP_STEROID) == 0 && myTP >= 7) {
+        // 1B: Solidification ONLY if enemy is magic/science heavy
+        if (enemyMagic > 400 || enemyScience > 400) {
+            if (getResistance() < 300 && getCooldown(CHIP_SOLIDIFICATION) == 0 && myTP >= (tpReserveForAttack + 6)) {
+                if (tryUseChip(CHIP_SOLIDIFICATION, myLeek)) {
+                    debugLog("→ Solidification: Shields 5.3x effective");
+                    myResistance = getResistance();
+                    myTP = getTP();
+                }
+            }
+        }
+        
+        // 1C: Steroid ONLY if we have tons of TP and need damage
+        if (myTP >= (tpReserveForAttack + 7) && getStrength() < 500 && getCooldown(CHIP_STEROID) == 0) {
             if (tryUseChip(CHIP_STEROID, myLeek)) {
                 debugLog("→ Steroid: " + getStrength() + " STR");
-                myStrength = getStrength();
+                mySTR = getStrength();
                 myTP = getTP();
             }
         }
-        
-        // Warm Up for crits (39% crit chance)
-        if (getAgility() < 350 && getCooldown(CHIP_WARM_UP) == 0 && myTP >= 7) {
-            if (tryUseChip(CHIP_WARM_UP, myLeek)) {
-                debugLog("→ Warm Up: " + round(getAgility()/10) + "% crit");
-                myAgility = getAgility();
+    } else if (turn == 3) {
+        // Turn 3+: ONLY use Adrenaline if available (1 TP for 5 TP gain is worth it)
+        if (getCooldown(CHIP_ADRENALINE) == 0 && myTP >= (tpReserveForAttack + 1)) {
+            if (tryUseChip(CHIP_ADRENALINE, myLeek)) {
+                debugLog("→ Adrenaline: +5 TP next turn");
                 myTP = getTP();
             }
-        }
-        
-        // Protein as backup STR buff
-        if (getStrength() < 500 && getCooldown(CHIP_PROTEIN) == 0 && myTP >= 3) {
-            tryUseChip(CHIP_PROTEIN, myLeek);
-            myStrength = getStrength();
-            myTP = getTP();
         }
     }
+    // Turn 4+: NO MORE BUFFS - PURE COMBAT!
+    
+    debugLog("TP after buffs: " + myTP + " (reserved " + tpReserveForAttack + " for attacks)");
     
     // PHASE 2: POSITIONING (Strategy-based positioning)
-    debugLog("PHASE 2: " + COMBAT_STRATEGY + " positioning (EID=" + round(eidOf(myCell)) + ")");
+    debugLog("PHASE 2: " + COMBAT_STRATEGY + " positioning");
     
     var myEHP = calculateEHP(myHP, myAbsShield, myRelShield, 0, myResistance);
     var currentEID = eidOf(myCell);
@@ -1204,9 +1694,9 @@ function executeEarlyGameSequence() {
         debugLog("→ Completed " + attackRounds + " attack rounds, TP remaining: " + myTP);
     }
     
-    // PHASE 4: EID DECISION - Continue aggression or defend/heal?
+    // PHASE 4: EID DECISION - Prioritize attacks over defense!
     if (enemy != null) {
-        debugLog("PHASE 4: EID Decision");
+        debugLog("PHASE 4: Attack Priority Decision");
         
         // Recalculate EID after attacks
         currentEID = eidOf(myCell);
@@ -1214,85 +1704,51 @@ function executeEarlyGameSequence() {
         eidRatio = currentEID / myEHP;
         var hpRatio = myHP / myMaxHP;
         
-        debugLog("→ Current state: HP=" + round(hpRatio*100) + "%, EID ratio=" + round(eidRatio*100) + "%");
+        debugLog("→ Current state: HP=" + round(hpRatio*100) + "%");
         
-        // Special handling for KITE strategy - only retreat if in danger OR have MP to spare
-        if (COMBAT_STRATEGY == "KITE" && myMP > 0 && (eidRatio > 0.4 || myMP >= 3)) {
-            debugLog("→ Kiting retreat phase");
-            enemyDistance = getCellDistance(myCell, enemyCell);
+        // CRITICAL CHANGE: Only defend if TRULY critical, otherwise keep attacking!
+        if (hpRatio < 0.25) {
+            // EMERGENCY: Below 25% HP - must heal
+            debugLog("→ EMERGENCY! HP critical (<25%)");
             
-            // Only retreat if enemy is too close or we're taking too much damage
-            if (enemyDistance <= 7 || eidRatio > 0.4) {
-                // Try to retreat to max range
-                var retreatCells = getCellsInRange(myCell, myMP);
-                var bestRetreat = null;
-                var maxDist = enemyDistance;
-                
-                for (var i = 0; i < count(retreatCells); i++) {
-                    var cell = retreatCells[i];
-                    if (!isObstacle(cell) && cell != myCell) {
-                        var newDist = getCellDistance(cell, enemyCell);
-                        if (newDist >= 9 && newDist <= 10 && hasLOS(cell, enemyCell)) {
-                            if (newDist > maxDist) {
-                                maxDist = newDist;
-                                bestRetreat = cell;
-                            }
-                        }
-                    }
-                }
-                
-                if (bestRetreat != null) {
-                    moveToCell(bestRetreat);
-                    debugLog("→ Retreated to distance " + getCellDistance(myCell, enemyCell));
-                }
-            } else {
-                debugLog("→ Already at safe distance " + enemyDistance + ", saving MP");
-            }
-        } else if (eidRatio > 0.7 || hpRatio < 0.4) {
-            // CRITICAL: Must defend/heal immediately
-            debugLog("→ CRITICAL! Defending and healing");
-            
-            // Apply shields first (5.3x effective with Solidification!)
-            if (myTP >= 4) {
-                if (getCooldown(CHIP_FORTRESS) == 0 && myTP >= 6) tryUseChip(CHIP_FORTRESS, myLeek);
-                if (getCooldown(CHIP_ARMOR) == 0 && myTP >= 6) tryUseChip(CHIP_ARMOR, myLeek);
-                if (getCooldown(CHIP_SHIELD) == 0 && myTP >= 4) tryUseChip(CHIP_SHIELD, myLeek);
-            }
-            
-            // Heal if very low
-            if (hpRatio < 0.4 && myTP >= 4) {
-                if (getCooldown(CHIP_CURE) == 0) tryUseChip(CHIP_CURE, myLeek);
-                if (getCooldown(CHIP_SERUM) == 0 && myTP >= 8) tryUseChip(CHIP_SERUM, myLeek);
-                if (getCooldown(CHIP_VACCINE) == 0 && myTP >= 6) tryUseChip(CHIP_VACCINE, myLeek);
-            }
-            
-            // Reposition if we have MP
-            if (myMP > 0) {
-                repositionDefensive();
-            }
-            
-        } else if (eidRatio > 0.4) {
-            // Moderate danger - apply shields while continuing to attack
-            debugLog("→ Moderate danger, shielding while attacking");
-            
-            if (myTP >= 4) {
-                if (getCooldown(CHIP_SHIELD) == 0) tryUseChip(CHIP_SHIELD, myLeek);
+            // Emergency heal
+            if (myTP >= 8 && getCooldown(CHIP_REGENERATION) == 0) {
+                tryUseChip(CHIP_REGENERATION, myLeek);
+                myTP = getTP();
+            } else if (myTP >= 4 && getCooldown(CHIP_CURE) == 0) {
+                tryUseChip(CHIP_CURE, myLeek);
                 myTP = getTP();
             }
             
-            // One more attack if possible
+            // One shield if we have TP left
+            if (myTP >= 4 && getCooldown(CHIP_SHIELD) == 0) {
+                tryUseChip(CHIP_SHIELD, myLeek);
+                myTP = getTP();
+            }
+            
+        } else if (hpRatio < 0.5 && eidRatio > 0.6) {
+            // HIGH DANGER: Below 50% HP and high incoming damage
+            debugLog("→ High danger, quick shield then attack");
+            
+            // ONE shield only
+            if (myTP >= 4 && getCooldown(CHIP_SHIELD) == 0) {
+                tryUseChip(CHIP_SHIELD, myLeek);
+                myTP = getTP();
+            }
+            
+            // Use remaining TP for attacks
             if (myTP >= 3) {
                 executeAttack();
             }
             
         } else {
-            // Safe - continue maximum aggression
-            debugLog("→ Safe position, continuing aggression");
+            // DEFAULT: Keep attacking! We have 3700+ HP after buffs
+            debugLog("→ Continuing offense (HP: " + round(hpRatio*100) + "%)");
             
-            // Use all remaining TP for attacks (max 3 iterations to prevent infinite loop)
+            // Use ALL remaining TP for attacks
             var attackCount = 0;
             var prevTP = myTP;
-            while (myTP >= 3 && enemy != null && attackCount < 3) {
+            while (myTP >= 3 && enemy != null && attackCount < 5) {
                 executeAttack();
                 myTP = getTP();
                 attackCount++;
@@ -1300,15 +1756,15 @@ function executeEarlyGameSequence() {
                 if (myTP == prevTP) break;
                 prevTP = myTP;
             }
+            
+            // Only shield if we have leftover TP and nothing else to do
+            if (myTP >= 4 && attackCount == 0 && getCooldown(CHIP_SHIELD) == 0) {
+                tryUseChip(CHIP_SHIELD, myLeek);
+            }
         }
     }
     
-    // PHASE 5: Use any remaining TP efficiently
-    if (myTP >= 3) {
-        // Apply any remaining buffs or shields
-        if (getCooldown(CHIP_SHIELD) == 0 && myTP >= 4) tryUseChip(CHIP_SHIELD, myLeek);
-        if (getCooldown(CHIP_LEATHER_BOOTS) == 0 && myTP >= 3) tryUseChip(CHIP_LEATHER_BOOTS, myLeek);
-    }
+    // PHASE 5: REMOVED - No more wasting TP on random buffs!
 }
 
 if (myMP > 0 && canSpendOps(10000)) {
@@ -1328,15 +1784,27 @@ if (myMP > 0 && canSpendOps(10000)) {
 
 // Function: simplifiedCombat
 function simplifiedCombat() {
-    // Ultra-simple combat for panic mode
-    if (enemyDistance <= 10 && hasLOS(myCell, enemyCell)) {
+    // Ultra-simple combat for panic mode - just heal and attack
+    debugLog("PANIC MODE - HP: " + myHP + "/" + myMaxHP);
+    
+    // Try to heal first
+    if (myTP >= 8 && getCooldown(CHIP_REGENERATION) == 0) {
+        useChip(CHIP_REGENERATION, getEntity());
+    } else if (myTP >= 4 && getCooldown(CHIP_CURE) == 0) {
+        useChip(CHIP_CURE, getEntity());
+    }
+    
+    // Then attack or move
+    if (enemyDistance <= 12 && hasLOS(myCell, enemyCell)) {
         // Just attack with best available weapon
-        if (enemyDistance <= 4) {
-            setWeaponIfNeeded(WEAPON_RHINO);
+        if (enemyDistance == 1 && myHP > 50) {
+            setWeaponIfNeeded(WEAPON_DARK_KATANA);
         } else if (enemyDistance <= 7) {
             setWeaponIfNeeded(WEAPON_GRENADE_LAUNCHER);
+        } else if (enemyDistance <= 9) {
+            setWeaponIfNeeded(WEAPON_RIFLE);
         } else {
-            setWeaponIfNeeded(WEAPON_LIGHTNINGER);
+            setWeaponIfNeeded(WEAPON_M_LASER);
         }
         useWeapon(enemy);
     } else if (myMP > 0) {

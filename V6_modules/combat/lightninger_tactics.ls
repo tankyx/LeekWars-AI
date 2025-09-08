@@ -31,7 +31,7 @@ function evaluateLightningerPosition(fromCell, targetCell) {
         }
         
         // For team battles (future support)
-        var enemies = getEnemies();
+        enemies = getAliveEnemies();
         if (count(enemies) > 1) {
             for (var j = 0; j < count(enemies); j++) {
                 var e = enemies[j];

@@ -15,12 +15,12 @@ function getOperationalMode() {
     var percentUsed = opsUsed / 7000000.0;  // 7M total ops
     var previousMode = OPERATIONAL_MODE;
     
-    // Smooth transitions based on percentage
-    if (percentUsed < 0.70) {
+    // Use operations aggressively - we have 7M per turn!
+    if (percentUsed < 0.90) {  // Use up to 6.3M ops freely
         OPERATIONAL_MODE = "OPTIMAL";
-    } else if (percentUsed < 0.85) {
+    } else if (percentUsed < 0.95) {  // 6.3M-6.65M ops
         OPERATIONAL_MODE = "EFFICIENT";
-    } else if (percentUsed < 0.95) {
+    } else if (percentUsed < 0.98) {  // 6.65M-6.86M ops
         OPERATIONAL_MODE = "SURVIVAL";
     } else {
         OPERATIONAL_MODE = "PANIC";
@@ -69,7 +69,18 @@ function getOperationLevel() {
 
 // Function: isInPanicMode
 function isInPanicMode() {
-    return getOperationalMode() == "PANIC";
+    // Panic mode triggers on either operation usage OR very low HP
+    if (getOperationalMode() == "PANIC") {
+        return true;  // Operation-based panic
+    }
+    
+    // HP-based panic mode (20% HP threshold - only in critical situations)
+    if (myHP < myMaxHP * 0.2 && myHP < 500) {
+        debugLog("HP PANIC MODE TRIGGERED - HP at " + round(myHP/myMaxHP*100) + "%");
+        return true;
+    }
+    
+    return false;
 }
 
 

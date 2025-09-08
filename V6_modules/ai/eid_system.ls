@@ -4,6 +4,11 @@
 
 // Function: calculateEID
 function calculateEID(cell) {
+    // Multi-enemy support: calculate total EID from all enemies
+    if (count(allEnemies) > 1) {
+        return calculateMultiEID(cell);
+    }
+    
     if (enemy == null) return 0;
     
     // Early exit if enemy can't possibly reach
@@ -221,6 +226,79 @@ function visualizeEID() {
     if (enemy != null) {
         mark(enemyCell, COLOR_TARGET);
     }
+    
+    // Mark all enemies in multi-enemy scenarios
+    if (count(allEnemies) > 1) {
+        for (var i = 0; i < count(allEnemies); i++) {
+            var e = allEnemies[i];
+            if (e["entity"] == enemy) {
+                mark(e["cell"], COLOR_TARGET);  // Primary target
+            } else {
+                mark(e["cell"], 0xFF00FF);  // Secondary targets (magenta)
+            }
+        }
+    }
+}
+
+// Function: calculateMultiEID
+function calculateMultiEID(cell) {
+    // Calculate total expected incoming damage from all enemies
+    var totalEID = 0;
+    
+    for (var i = 0; i < count(allEnemies); i++) {
+        var e = allEnemies[i];
+        var enemyEntity = e["entity"];
+        var enemyPos = e["cell"];
+        var enemyTPNext = getTotalTP(enemyEntity);
+        var enemyMPNext = getTotalMP(enemyEntity);
+        
+        // Skip if enemy can't possibly reach
+        if (getCellDistance(enemyPos, cell) > 14 + enemyMPNext) {
+            continue;
+        }
+        
+        // Get enemy's reachable positions
+        var enemyReachable = getEnemyReachable(enemyPos, enemyMPNext);
+        
+        // Limit positions to check (performance)
+        if (count(enemyReachable) > 10) {
+            var sorted = [];
+            for (var j = 0; j < count(enemyReachable); j++) {
+                var dist = getCellDistance(enemyReachable[j], cell);
+                push(sorted, [dist, enemyReachable[j]]);
+            }
+            sort(sorted);
+            enemyReachable = [];
+            for (var j = 0; j < 10; j++) {
+                push(enemyReachable, sorted[j][1]);
+            }
+        }
+        
+        // Calculate max damage from this enemy
+        var maxDamageFromEnemy = 0;
+        for (var j = 0; j < count(enemyReachable); j++) {
+            var enemyAttackPos = enemyReachable[j];
+            var dist = getCellDistance(enemyAttackPos, cell);
+            
+            // Estimate damage based on enemy strength
+            var estimatedDamage = 0;
+            if (dist <= 7 && hasLOS(enemyAttackPos, cell)) {
+                // Enemy can likely attack with weapons
+                estimatedDamage = e["strength"] * 2.5;  // Rough estimate
+            } else if (dist <= 10 && hasLOS(enemyAttackPos, cell)) {
+                // Can use chips
+                estimatedDamage = e["strength"] * 1.5;
+            }
+            
+            maxDamageFromEnemy = max(maxDamageFromEnemy, estimatedDamage);
+        }
+        
+        totalEID += maxDamageFromEnemy;
+    }
+    
+    // Cache the result
+    CACHE_EID[cell] = totalEID;
+    return totalEID;
 }
 
 // === EID HELPERS ===

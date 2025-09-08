@@ -20,7 +20,9 @@ import json
 import time
 import sys
 import os
+import re
 from datetime import datetime
+from html.parser import HTMLParser
 
 BASE_URL = "https://leekwars.com/api"
 
@@ -255,16 +257,91 @@ class LeekWarsScriptTester:
                         "result": result,
                         "url": f"https://leekwars.com/fight/{fight_id}",
                         "date": fight_data.get("date"),
-                        "leeks": leeks
+                        "leeks": leeks,
+                        "fight_data": fight_data  # Store full fight data for log extraction
                     }
                 except Exception as e:
                     print(f"\n❌ Error getting fight result: {e}")
         return None
     
-    def run_tests(self, script_id, num_tests, bot_opponent):
+    def get_fight_logs(self, fight_id):
+        """Get the logs of a fight - try multiple methods"""
+        # Method 1: Try the official logs endpoint (requires authentication)
+        try:
+            url = f"{BASE_URL}/fight/get-logs/{fight_id}"
+            response = self.session.get(url)
+            if response.status_code == 200:
+                data = response.json()
+                # The response is directly the logs object
+                if data:
+                    return self.parse_logs(data)
+        except Exception as e:
+            pass
+        
+        # Method 2: Get from fight data
+        try:
+            url = f"{BASE_URL}/fight/get/{fight_id}"
+            response = self.session.get(url)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check for logs in different locations
+                if "logs" in data and data["logs"]:
+                    return data["logs"]
+                
+                fight_data = data.get("data", {})
+                if "logs" in fight_data and fight_data["logs"]:
+                    return fight_data["logs"]
+                
+                # Check in ops field (operations/debug info)
+                if "ops" in fight_data:
+                    ops_data = fight_data["ops"]
+                    if isinstance(ops_data, dict):
+                        logs = []
+                        for entity_id, entity_logs in ops_data.items():
+                            if isinstance(entity_logs, list) and entity_logs:
+                                for log_entry in entity_logs:
+                                    if isinstance(log_entry, list):
+                                        logs.append([int(entity_id), *log_entry])
+                        if logs:
+                            return logs
+        except Exception as e:
+            pass
+        
+        return None
+    
+    def parse_logs(self, logs_data):
+        """Parse the logs data structure from LeekWars API"""
+        parsed_logs = []
+        
+        # The logs are structured as {farmer_id: {action_id: [log_entries]}}
+        for farmer_id, farmer_logs in logs_data.items():
+            for action_id, action_logs in farmer_logs.items():
+                for log in action_logs:
+                    # Log format: [leek_id, type, message/line, color, ai_id, line_number, ...]
+                    if isinstance(log, list) and len(log) >= 3:
+                        parsed_logs.append({
+                            'farmer_id': farmer_id,
+                            'action_id': action_id,
+                            'leek_id': log[0],
+                            'type': log[1],
+                            'message': log[2],  # The actual log message is at index 2
+                            'color': log[3] if len(log) > 3 else None,
+                            'ai_id': log[4] if len(log) > 4 else None,
+                            'line_number': log[5] if len(log) > 5 else None,
+                            'raw': log
+                        })
+        
+        # Sort by action_id to get chronological order
+        parsed_logs.sort(key=lambda x: int(x['action_id']))
+        return parsed_logs
+    
+    def run_tests(self, script_id, num_tests, bot_opponent, save_logs=True):
         """Run multiple test fights against specific bot opponent"""
         print(f"\n🎯 Running {num_tests} test fights for script {script_id} vs {bot_opponent['name']}...")
         print(f"🤖 Opponent: {bot_opponent['name']} - {bot_opponent['desc']}")
+        if save_logs:
+            print("📜 Log retrieval: ENABLED")
         
         # Get script info
         ai_info = self.get_script_info(script_id)
@@ -281,6 +358,7 @@ class LeekWarsScriptTester:
         # Run tests
         results = {"wins": 0, "losses": 0, "draws": 0}
         fight_urls = []
+        fight_logs = []  # Store logs for each fight
         
         print("\n🚀 Starting tests...")
         print("Progress: ", end="", flush=True)
@@ -308,6 +386,39 @@ class LeekWarsScriptTester:
                         result_key = "draws"
                     results[result_key] += 1
                     fight_urls.append(fight_result["url"])
+                    
+                    # Get logs for this fight if enabled
+                    if save_logs:
+                        time.sleep(0.5)  # Small delay to ensure fight is processed
+                        logs = self.get_fight_logs(fight_id)
+                        if not logs and i == 0:  # Debug first fight only
+                            print(f"\n   ⚠️ No logs retrieved for fight {fight_id}")
+                    else:
+                        logs = None
+                    
+                    if logs:
+                        fight_logs.append({
+                            "fight_id": fight_id,
+                            "result": fight_result["result"],
+                            "url": fight_result["url"],
+                            "logs": logs
+                        })
+                    else:
+                        # Try alternative: extract logs from fight data if available
+                        if 'actions' in fight_result.get('fight_data', {}):
+                            # Convert actions to readable logs
+                            actions = fight_result['fight_data']['actions']
+                            readable_logs = []
+                            # Basic action parsing (can be expanded)
+                            for action in actions[:100]:  # First 100 actions
+                                readable_logs.append(str(action))
+                            if readable_logs:
+                                fight_logs.append({
+                                    "fight_id": fight_id,
+                                    "result": fight_result["result"],
+                                    "url": fight_result["url"],
+                                    "logs": readable_logs
+                                })
                     
                     # Progress indicator
                     if i > 0 and i % 10 == 0:
@@ -364,6 +475,86 @@ class LeekWarsScriptTester:
             }, f, indent=2)
         
         print(f"\n💾 Results saved to: {results_file}")
+        
+        # Save fight logs to separate file if we have them
+        if fight_logs:
+            logs_file = f"fight_logs_{script_id}_{bot_opponent['name'].lower()}_{timestamp}.json"
+            with open(logs_file, "w") as f:
+                json.dump({
+                    "script_id": script_id,
+                    "script_name": ai_info.get('name'),
+                    "opponent": bot_opponent['name'],
+                    "timestamp": timestamp,
+                    "fights": fight_logs
+                }, f, indent=2)
+            
+            print(f"📜 Fight logs saved to: {logs_file}")
+            
+            # Also create a simplified log analysis
+            analysis_file = f"log_analysis_{script_id}_{bot_opponent['name'].lower()}_{timestamp}.txt"
+            with open(analysis_file, "w") as f:
+                f.write(f"Fight Log Analysis\n")
+                f.write(f"==================\n")
+                f.write(f"Script: {ai_info.get('name')} (ID: {script_id})\n")
+                f.write(f"Opponent: {bot_opponent['name']} - {bot_opponent['desc']}\n")
+                f.write(f"Date: {timestamp}\n")
+                f.write(f"Total Fights: {len(fight_logs)}\n\n")
+                
+                for fight_data in fight_logs:
+                    f.write(f"\n{'='*60}\n")
+                    f.write(f"Fight {fight_data['fight_id']} - {fight_data['result']}\n")
+                    f.write(f"URL: {fight_data['url']}\n")
+                    f.write(f"{'='*60}\n\n")
+                    
+                    # Parse and display key log events
+                    if fight_data['logs']:
+                        current_turn = 0
+                        logs_to_show = fight_data['logs'][:200]  # Show more logs
+                        
+                        for log_entry in logs_to_show:
+                            if isinstance(log_entry, dict):
+                                # Parsed log format
+                                message = str(log_entry.get('message', ''))
+                                entity_name = "V6" if log_entry.get('farmer_id') == str(self.farmer.get('id')) else bot_opponent['name']
+                                
+                                # Check for turn markers
+                                if "Turn" in str(message) or "turn" in str(message).lower():
+                                    turn_match = re.search(r'[Tt]urn (\d+)', str(message))
+                                    if turn_match:
+                                        new_turn = int(turn_match.group(1))
+                                        if new_turn != current_turn:
+                                            current_turn = new_turn
+                                            f.write(f"\n{'='*40}\n")
+                                            f.write(f"TURN {current_turn}\n")
+                                            f.write(f"{'='*40}\n")
+                                
+                                # Format the log message
+                                if message:
+                                    f.write(f"[{entity_name}] {message}\n")
+                            elif isinstance(log_entry, list) and len(log_entry) >= 4:
+                                # Raw log format [leek_id, type, line, message, ...]
+                                message = log_entry[3] if len(log_entry) > 3 else ""
+                                entity_name = "V6"  # Default
+                                
+                                # Check for turn markers
+                                if "Turn" in str(message) or "turn" in str(message).lower():
+                                    turn_match = re.search(r'[Tt]urn (\d+)', str(message))
+                                    if turn_match:
+                                        new_turn = int(turn_match.group(1))
+                                        if new_turn != current_turn:
+                                            current_turn = new_turn
+                                            f.write(f"\n{'='*40}\n")
+                                            f.write(f"TURN {current_turn}\n")
+                                            f.write(f"{'='*40}\n")
+                                
+                                # Format the log message
+                                if message:
+                                    f.write(f"[{entity_name}] {message}\n")
+                        
+                        if len(fight_data['logs']) > 100:
+                            f.write(f"\n... {len(fight_data['logs']) - 100} more log entries ...\n")
+            
+            print(f"📊 Log analysis saved to: {analysis_file}")
 
 def main():
     if len(sys.argv) < 3:

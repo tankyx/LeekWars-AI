@@ -13,10 +13,10 @@ function analyzeWeaponRanges() {
         var cost = getWeaponCost(w);
         push(acc.ranges, [minR, maxR]);
         
-        // Skip Rhino from optimal range calc
-        var isRhino = (minR == 2 && maxR == 4 && cost == 5);
+        // Skip Dark Katana from optimal range calc (melee with self-damage)
+        var isDarkKatana = (minR == 1 && maxR == 1 && cost == 7);
         
-        if (!isRhino) {
+        if (!isDarkKatana) {
             var dmg = getWeaponDamage(w, myLeek);
             for (var r = minR; r <= maxR; r++) {
                 var current = mapGet(acc.damageByRange, r, 0);
@@ -204,24 +204,22 @@ function updateOptimalGrenadeRange() {
     var oldRange = optimalAttackRange;
     var newRange = 7;  // Default
     
-    // Only update if we have Grenade Launcher
-    if (inArray(getWeapons(), WEAPON_GRENADE_LAUNCHER)) {
-        newRange = analyzeGrenadeEffectiveness();
+    // Prioritize RIFLE and M-LASER over grenade!
+    if (inArray(getWeapons(), WEAPON_RIFLE)) {
+        // Rifle range 7-9, prefer 8 for flexibility
+        newRange = 8;
+    } else if (inArray(getWeapons(), WEAPON_M_LASER)) {
+        // M-Laser is line attack, range 5-12
+        // Prefer 8-9 to also use rifle
+        newRange = 8;
+    } else if (inArray(getWeapons(), WEAPON_GRENADE_LAUNCHER)) {
+        // Grenade is backup for no-LOS situations
+        // Don't optimize positioning for it!
+        newRange = 7; // Middle ground
         
         if (newRange != oldRange) {
-            debugLog("🎯 Grenade optimal range: " + oldRange + " → " + newRange);
+            debugLog("🎯 Range update: " + oldRange + " → " + newRange);
         }
-        
-        // For mixed weapon loadout, take weighted average
-        if (inArray(getWeapons(), WEAPON_LIGHTNINGER)) {
-            // Lightninger optimal is 8, weight based on TP efficiency
-            var grenadeWeight = 0.6;  // Grenade is 4 TP
-            var lightningerWeight = 0.4;  // Lightninger is 5 TP
-            newRange = floor(newRange * grenadeWeight + 8 * lightningerWeight);
-            debugLog("Mixed loadout optimal range: " + newRange);
-        }
-    } else if (inArray(getWeapons(), WEAPON_LIGHTNINGER)) {
-        newRange = 8;  // Pure Lightninger optimal
     }
     
     optimalAttackRange = newRange;

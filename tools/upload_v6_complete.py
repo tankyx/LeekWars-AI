@@ -199,9 +199,17 @@ class V6CompleteUploader:
                 code = f.read()
             self.create_or_update_ai_script("V6_main", code, folder_v6, existing_ais)
         
+        # Step 3.5: Upload B-Laser main file
+        print("\n3.5️⃣ Uploading B-Laser main file...")
+        blaser_main_file = v6_dir / "V6_BLaser_main.ls"
+        if blaser_main_file.exists():
+            with open(blaser_main_file, 'r', encoding='utf-8') as f:
+                code = f.read()
+            self.create_or_update_ai_script("V6_BLaser_main", code, folder_v6, existing_ais)
+        
         # Step 4: Create category folders and upload modules
         print("\n4️⃣ Creating categories and uploading modules...")
-        categories = ['core', 'combat', 'movement', 'strategy', 'ai', 'utils']
+        categories = ['core', 'combat', 'movement', 'strategy', 'ai', 'utils', 'blaser']
         
         stats = {"total": 0, "success": 0, "failed": 0}
         
@@ -293,16 +301,23 @@ def main():
     
     # Count total modules
     total_modules = 0
-    for category in ['core', 'combat', 'movement', 'strategy', 'ai', 'utils']:
+    for category in ['core', 'combat', 'movement', 'strategy', 'ai', 'utils', 'blaser']:
         cat_path = v6_dir / category
         if cat_path.exists():
             total_modules += len(list(cat_path.glob("*.ls")))
+    
+    # Count main files
+    main_files = 0
+    if (v6_dir / "V6_main.ls").exists():
+        main_files += 1
+    if (v6_dir / "V6_BLaser_main.ls").exists():
+        main_files += 1
     
     print("="*60)
     print("V6 COMPLETE MODULE UPLOADER")
     print("="*60)
     print(f"📁 Source: {v6_dir}")
-    print(f"📦 Total modules to upload: {total_modules}")
+    print(f"📦 Total modules to upload: {total_modules + main_files}")
     
     uploader = V6CompleteUploader()
     

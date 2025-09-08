@@ -22,13 +22,14 @@ global COLOR_TARGET = 0xFF00FF;      // Purple - Target
 global COLOR_BLUE = 0x0066FF;        // Blue - Current position
 global COLOR_WHITE = 0xFFFFFF;       // White - Text
 
-// Threat thresholds
-global THREAT_HIGH_RATIO = 0.9;      // EID/EHP ratio for high threat - MORE AGGRESSIVE
-global THREAT_SAFE_RATIO = 0.5;      // EID/EHP ratio for safe zone - MORE AGGRESSIVE
-global PKILL_COMMIT = 0.8;            // Probability to commit to kill
-global PKILL_SETUP = 0.6;             // Probability to setup 2-turn kill
-global TP_DEFENSIVE_RATIO = 0.5;     // EID/EHP ratio to use TP defensively
+// Threat thresholds - BALANCED AGGRESSION
+global THREAT_HIGH_RATIO = 0.8;      // EID/EHP ratio for high threat - Moderately aggressive
+global THREAT_SAFE_RATIO = 0.4;      // EID/EHP ratio for safe zone - Balanced risk
+global PKILL_COMMIT = 0.7;            // Probability to commit to kill - Reasonable threshold
+global PKILL_SETUP = 0.5;             // Probability to setup 2-turn kill - Balanced
+global TP_DEFENSIVE_RATIO = 0.6;     // EID/EHP ratio to use TP defensively - Moderate
 global MP_REPOSITION_MIN = 2;        // Minimum MP to attempt repositioning
+global PANIC_HP_PERCENT = 0.2;       // Enter panic mode below 20% HP
 
 // Critical hit constants - FIXED from 50% to 30%
 global CRITICAL_FACTOR = 0.3;        // 30% damage bonus on critical hit
@@ -101,12 +102,18 @@ global enemyAgility;
 global enemyScience;
 global enemyMagic;
 
+// Multi-enemy support
+global enemies = [];
+global enemyCount = 0;
+global isTeamBattle = false;
+
 // Erosion tracking
 global ENEMY_EROSION = 0;            // Track cumulative erosion damage
 global ENEMY_ORIGINAL_MAX_HP = 0;    // Store original max HP
 
 global debugEnabled = true;
 global opsStartTurn = 0;  // Track operations at turn start
+global maxOperations = 0; // Maximum operations based on cores (set in initialization)
 
 // Weapon analysis
 global weaponRanges = [];  // [[minRange, maxRange], ...]
@@ -205,3 +212,42 @@ global PHASE_INITIALIZED = false;
 global BAIT_HISTORY = [];
 global BAIT_SUCCESS_RATE = 0;
 global LAST_BAIT_TURN = -1;
+
+// ===================================================================
+// ALTERNATE WEAPON LOADOUT SUPPORT
+// ===================================================================
+// B-Laser Build (Magnum/Destroyer/B-Laser)
+global MAGNUM_MIN_RANGE = 1;
+global MAGNUM_MAX_RANGE = 8;
+global DESTROYER_MIN_RANGE = 1;
+global DESTROYER_MAX_RANGE = 6;
+global B_LASER_MIN_RANGE = 2;
+global B_LASER_MAX_RANGE = 8;
+
+// Weapon costs
+global MAGNUM_COST = 5;
+global DESTROYER_COST = 6;
+global B_LASER_COST = 5;
+
+// Weapon use limits
+global MAGNUM_MAX_USES = 2;
+global DESTROYER_MAX_USES = 2;
+global B_LASER_MAX_USES = 3;
+
+// B-Laser specific settings
+global OPTIMAL_RANGE_BLASER = 4;     // Sweet spot for B-Laser weapons
+global B_LASER_HEAL_THRESHOLD = 0.6; // Consider B-Laser healing below 60% HP
+global HEAL_THRESHOLD = 0.6;         // General heal threshold
+global SHIELD_THRESHOLD = 0.5;       // Apply shields below 50% HP
+
+// Weapon tracking (reset each turn)
+global magnumUsesRemaining = 0;
+global destroyerUsesRemaining = 0;
+global bLaserUsesRemaining = 0;
+
+// B-Laser build buff tracking
+global hasProtein = false;
+global hasMotivation = false;
+global hasStretching = false;
+global hasLeatherBoots = false;
+global hasSolidification = false;

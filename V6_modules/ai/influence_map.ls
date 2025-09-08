@@ -13,21 +13,19 @@ function buildInfluenceMap() {
     INFLUENCE_MAP = [:];
     INFLUENCE_TURN = turn;
     
-    // Get all cells in reasonable range - increased to 10 for better coverage
-    var influenceRange = 10;  // Increased from 5 since we have ops to spare
+    // Get all cells in reasonable range - Use operations aggressively!
+    var influenceRange = 10;  // Full range for better tactical awareness
     var mapCells = getCellsInRange(myCell, influenceRange);
     debugLog("Found " + count(mapCells) + " cells to analyze in range " + influenceRange);
     
-    // Increased limit since we're only using 1-19% operations
-    var maxCells = 40;  // Process up to 40 cells (increased from 20)
+    // Process many cells - we have 7M ops to use!
+    var maxCells = 50;  // Process 50 cells for thorough analysis
     var cellsToProcess = min(count(mapCells), maxCells);
     debugLog("Processing " + cellsToProcess + " cells (limited)");
     
     for (var i = 0; i < cellsToProcess; i++) {
         var cell = mapCells[i];
-        if (i % 10 == 0) {
-            debugLog("Processing cell " + i + "/" + cellsToProcess);
-        }
+        // Removed cell processing logs to reduce spam
         
         var cellInfluence = [:];
         cellInfluence["myDamage"] = 0;      // Damage I can deal from here
@@ -38,18 +36,14 @@ function buildInfluenceMap() {
         cellInfluence["control"] = 0;       // Territory control value
         
         // Calculate my damage potential from this cell
-        debugLog("  Calculating damage from cell " + i);
         cellInfluence["myDamage"] = calculateDamageFrom(cell);
         
         // Calculate enemy threat to this cell  
-        debugLog("  Calculating EID for cell " + i);
         cellInfluence["enemyDamage"] = calculateEID(cell);
-        debugLog("  EID complete for cell " + i);
         
         // Calculate AoE zones - RE-ENABLED with limited scope
         // Only calculate AoE for first 20 cells to balance performance
         if (i < 20) {
-            debugLog("  Calculating AoE zones for cell " + i);
             cellInfluence["myAoE"] = calculateMyAoEZones(cell);
             cellInfluence["enemyAoE"] = calculateEnemyAoEZones(cell);
         } else {
@@ -116,8 +110,8 @@ function calculateMyAoEZones(fromCell) {
         }
     }
     
-    // Check Lightninger zones - OPTIMIZED
-    if (inArray(getWeapons(), WEAPON_LIGHTNINGER)) {
+    // Check M-Laser zones - OPTIMIZED
+    if (inArray(getWeapons(), WEAPON_M_LASER)) {
         // Only check enemy position instead of all cells in range
         var lightTargets = [enemyCell];
         

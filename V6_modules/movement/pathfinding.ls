@@ -60,8 +60,9 @@ function aStar(start, goal, maxOps) {
                 continue;
             }
             
-            // Skip enemy cell (can't move through enemy)
-            if (neighbor == enemyCell) continue;
+            // Can't move THROUGH enemy, but can pathfind TO enemy cell (for approach)
+            // Only block if it's not our goal
+            if (neighbor == enemyCell && neighbor != goal) continue;
             
             // Calculate tentative g score
             var moveCost = 1;  // Base movement cost

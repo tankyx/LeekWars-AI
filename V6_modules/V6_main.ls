@@ -38,14 +38,17 @@ include("ai/influence_map");
 include("strategy/enemy_profiling");
 include("strategy/phase_management");
 include("strategy/pattern_learning");
+include("strategy/multi_enemy");
 
 // COMBAT modules
 include("combat/chip_management");
 include("combat/weapon_management");
 include("combat/aoe_tactics");
-include("combat/lightninger_tactics");
+include("combat/m_laser_tactics");
 include("combat/grenade_tactics");
 include("combat/erosion");
+include("combat/damage_sequences");
+include("combat/b_laser_tactics");
 
 // MOVEMENT modules
 include("movement/positioning");
@@ -97,6 +100,12 @@ if (enemy != null) {
             debugLog("Ensuring combat execution for turn " + turn);
             executeAttack();
             if (myTP >= 4) executeDefensive();
+            
+            // REPOSITION after combat if we have MP left
+            if (getMP() > 0 && enemy != null && getLife(enemy) > 0) {
+                debugLog("Post-combat repositioning with " + getMP() + " MP");
+                repositionDefensive();
+            }
         }
     }
 } else {

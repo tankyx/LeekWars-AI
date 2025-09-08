@@ -29,18 +29,38 @@ function findBestGrenadeTarget(fromCell) {
         // Check all cells in AoE radius (2 cells from impact)
         var aoeCells = getCellsInRange(targetCell, 2);
         
-        for (var j = 0; j < count(aoeCells); j++) {
-            var aoeCell = aoeCells[j];
-            var aoeDist = getCellDistance(targetCell, aoeCell);
-            
-            // Check if enemy is in this cell
-            if (aoeCell == enemyCell) {
-                // Damage falloff: 100% at center, -20% per cell
-                var damagePercent = max(0, 1 - 0.2 * aoeDist);
-                var baseDamage = 70 * (1 + myStrength / 100.0);  // Grenade base damage
-                var damage = baseDamage * damagePercent;
-                totalDamage += damage;
-                enemiesHit++;
+        // Multi-enemy support: check all enemies in AoE
+        if (count(allEnemies) > 0) {
+            for (var e = 0; e < count(allEnemies); e++) {
+                var enemyData = allEnemies[e];
+                var eCell = enemyData["cell"];
+                var aoeDist = getCellDistance(targetCell, eCell);
+                
+                // Check if enemy is in AoE radius (2 cells)
+                if (aoeDist <= 2) {
+                    // Damage falloff: 100% at center, -20% per cell
+                    var damagePercent = max(0, 1 - 0.2 * aoeDist);
+                    var baseDamage = 70 * (1 + myStrength / 100.0);  // Grenade base damage
+                    var damage = baseDamage * damagePercent;
+                    totalDamage += damage;
+                    enemiesHit++;
+                }
+            }
+        } else {
+            // Single enemy fallback
+            for (var j = 0; j < count(aoeCells); j++) {
+                var aoeCell = aoeCells[j];
+                var aoeDist = getCellDistance(targetCell, aoeCell);
+                
+                // Check if enemy is in this cell
+                if (aoeCell == enemyCell) {
+                    // Damage falloff: 100% at center, -20% per cell
+                    var damagePercent = max(0, 1 - 0.2 * aoeDist);
+                    var baseDamage = 70 * (1 + myStrength / 100.0);  // Grenade base damage
+                    var damage = baseDamage * damagePercent;
+                    totalDamage += damage;
+                    enemiesHit++;
+                }
             }
         }
         

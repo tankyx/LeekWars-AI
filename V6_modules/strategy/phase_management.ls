@@ -56,10 +56,10 @@ function adjustStrategyForPhase() {
         WEIGHT_SAFETY = 0.2;
         WEIGHT_POSITION = 0.5;
         
-        // Prioritize buffs and safety
-        THREAT_HIGH_RATIO = 0.9;  // Very safe
-        THREAT_SAFE_RATIO = 0.3;
-        PKILL_COMMIT = 0.95;      // Only commit to sure kills
+        // Balanced opening - setup focused
+        THREAT_HIGH_RATIO = 0.85;  // Moderately cautious
+        THREAT_SAFE_RATIO = 0.4;
+        PKILL_COMMIT = 0.85;       // Prefer good opportunities
         
         // Prefer longer range
         optimalAttackRange = 9;
@@ -72,9 +72,9 @@ function adjustStrategyForPhase() {
         WEIGHT_SAFETY = 0.3;
         WEIGHT_POSITION = 0.3;
         
-        THREAT_HIGH_RATIO = 0.7;
-        THREAT_SAFE_RATIO = 0.4;
-        PKILL_COMMIT = 0.8;
+        THREAT_HIGH_RATIO = 0.75;  // Balanced mid-game
+        THREAT_SAFE_RATIO = 0.45;
+        PKILL_COMMIT = 0.7;       // Reasonable aggression
         
         // Keep dynamically calculated range
         
@@ -86,9 +86,9 @@ function adjustStrategyForPhase() {
         WEIGHT_SAFETY = 0.4;
         WEIGHT_POSITION = 0.1;
         
-        THREAT_HIGH_RATIO = 0.6;
+        THREAT_HIGH_RATIO = 0.65;  // Calculated risks late game
         THREAT_SAFE_RATIO = 0.5;
-        PKILL_COMMIT = 0.7;
+        PKILL_COMMIT = 0.65;       // Opportunistic
         
         // Closer range for efficiency
         optimalAttackRange = 6;
@@ -101,9 +101,9 @@ function adjustStrategyForPhase() {
         WEIGHT_SAFETY = 0.1;
         WEIGHT_POSITION = 0.1;
         
-        THREAT_HIGH_RATIO = 0.9;  // Ignore most safety
-        THREAT_SAFE_RATIO = 0.8;  // Very aggressive
-        PKILL_COMMIT = 0.5;       // Take any decent kill chance
+        THREAT_HIGH_RATIO = 1.0;  // Accept high risk in endgame
+        THREAT_SAFE_RATIO = 0.7;  // Aggressive but not reckless
+        PKILL_COMMIT = 0.5;       // Take any decent chance
         
         // Get close for maximum damage
         optimalAttackRange = 4;
@@ -154,7 +154,7 @@ function getPhaseSpecificTactics() {
         tactics["idealRange"] = 12;  // Stay far initially
         tactics["healThreshold"] = 0.8;  // Heal early to stay healthy
         tactics["mpUsage"] = "CONSERVATIVE";  // Save MP for later
-        tactics["preferredWeapon"] = WEAPON_LIGHTNINGER;  // Long range poke
+        tactics["preferredWeapon"] = WEAPON_M_LASER;  // Long range line attack
         
     } else if (GAME_PHASE == "MID_GAME") {
         tactics["priorities"] = ["DAMAGE", "SUSTAIN", "CONTROL"];
@@ -175,7 +175,7 @@ function getPhaseSpecificTactics() {
         tactics["healThreshold"] = 0.3;  // Only heal if critical
         tactics["idealRange"] = 3;  // Get close for maximum damage
         tactics["mpUsage"] = "ALL_IN";  // Use everything
-        tactics["preferredWeapon"] = WEAPON_RHINO;  // Maximum burst damage
+        tactics["preferredWeapon"] = WEAPON_DARK_KATANA;  // Maximum burst damage (99 per hit)
     }
     
     return tactics;

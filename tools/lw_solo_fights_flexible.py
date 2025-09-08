@@ -255,24 +255,26 @@ class LeekWarsAutoFighter:
             pass
         return None
     
-    def download_all_fight_logs(self, leek_name):
+    def download_all_fight_logs(self, leek_id, leek_name):
         """Download all fight logs after battles are complete"""
         if not self.fight_ids:
             return
         
         print(f"\n📥 Downloading logs for {len(self.fight_ids)} fights...")
+        print(f"   Leek: {leek_name} (ID: {leek_id})")
         
-        # Create directory for logs
-        log_dir = f"fight_logs/{leek_name}"
+        # Create directory for logs using leek ID
+        log_dir = f"fight_logs/{leek_id}"
         os.makedirs(log_dir, exist_ok=True)
+        print(f"   Directory: {log_dir}/")
         
         successful = 0
         failed = []
         
         for i, fight_id in enumerate(self.fight_ids):
-            # Rate limiting - 1 second between requests
+            # Rate limiting - 0.3 seconds between requests
             if i > 0:
-                time.sleep(1)
+                time.sleep(0.3)
             
             # Progress indicator
             if i > 0 and i % 10 == 0:
@@ -561,7 +563,7 @@ class LeekWarsAutoFighter:
         
         # Download all fight logs after battles are complete
         if selected_leek and self.fight_ids:
-            self.download_all_fight_logs(selected_leek['name'])
+            self.download_all_fight_logs(selected_leek['id'], selected_leek['name'])
         
         # Update and show final stats
         print("\n📊 Updating final stats...")

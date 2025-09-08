@@ -7,6 +7,9 @@ function initialize() {
     turn = getTurn();
     opsStartTurn = getOperations();  // Store ops at start
     myLeek = getEntity();
+    
+    // Calculate max operations based on cores
+    maxOperations = getCores(myLeek) * 1000000;
     myCell = getCell();
     myHP = getLife();
     myMaxHP = getTotalLife();
@@ -21,19 +24,11 @@ function initialize() {
     myAbsShield = getAbsoluteShield(myLeek);
     myRelShield = getRelativeShield(myLeek);
     
-    enemy = getNearestEnemy();
+    // Initialize multi-enemy system
+    initializeEnemies();
+    
+    // Backward compatibility - enemy variable is set by initializeEnemies()
     if (enemy != null) {
-        enemyCell = getCell(enemy);
-        enemyHP = getLife(enemy);
-        enemyMaxHP = getTotalLife(enemy);
-        enemyTP = getTP(enemy);
-        enemyMP = getMP(enemy);
-        enemyDistance = getCellDistance(myCell, enemyCell);
-        enemyStrength = getStrength(enemy);
-        enemyAgility = getAgility(enemy);
-        enemyScience = getScience(enemy);
-        enemyMagic = getMagic(enemy);
-        
         // Initialize erosion tracking on first turn
         if (turn == 1) {
             ENEMY_ORIGINAL_MAX_HP = enemyMaxHP;
@@ -48,10 +43,19 @@ function initialize() {
         
         // Check teleportation availability (can't use turn 1, 10 turn cooldown)
         if (turn > 1) {
-            var teleportCD = getCooldown(CHIP_TELEPORTATION);
-            TELEPORT_AVAILABLE = (teleportCD == 0);
-            if (TELEPORT_AVAILABLE && turn <= 5) {
-                debugLog("🌀 Teleportation available!");
+            // First check if we have the teleportation chip equipped
+            var chips = getChips();
+            if (inArray(chips, CHIP_TELEPORTATION)) {
+                var teleportCD = getCooldown(CHIP_TELEPORTATION);
+                TELEPORT_AVAILABLE = (teleportCD == 0);
+                if (TELEPORT_AVAILABLE && turn <= 5) {
+                    debugLog("🌀 Teleportation available!");
+                }
+            } else {
+                TELEPORT_AVAILABLE = false;
+                if (turn == 2) {
+                    debugLog("No teleportation chip equipped");
+                }
             }
         }
         
@@ -73,6 +77,9 @@ function initialize() {
     
     // Analyze our weapon loadout
     analyzeWeaponRanges();
+    
+    // Detect and initialize alternate weapon loadouts
+    detectWeaponLoadout();
     
     // Initialize enemy max range
     if (enemy != null) {
@@ -108,7 +115,7 @@ function adjustKnobs() {
 // Function: adjustKnobsSmooth
 function adjustKnobsSmooth() {
     var mode = getOperationalMode();
-    var opsPercent = getOperations() / 7000000.0;
+    var opsPercent = getOperations() / maxOperations;
     
     if (mode == "OPTIMAL") {
         // Full quality algorithms
@@ -152,6 +159,27 @@ function adjustKnobsSmooth() {
     if (turn <= 3 || (turn % 10 == 0 && turn <= 30)) {
         debugLog("Mode: " + mode + " (" + round(opsPercent * 100) + "% ops) | " +
                 "K=" + K_BEAM + " D=" + SEARCH_DEPTH + " R=" + R_E_MAX);
+    }
+}
+
+// Function: detectWeaponLoadout
+// Detect which weapon set we're using and initialize counters
+function detectWeaponLoadout() {
+    var weapons = getWeapons();
+    
+    // Check for B-Laser build (Magnum/Destroyer/B-Laser)
+    if (inArray(weapons, WEAPON_B_LASER)) {
+        debugLog("B-Laser weapon loadout detected");
+        
+        // Initialize use counters for B-Laser weapons
+        magnumUsesRemaining = inArray(weapons, WEAPON_MAGNUM) ? MAGNUM_MAX_USES : 0;
+        destroyerUsesRemaining = inArray(weapons, WEAPON_DESTROYER) ? DESTROYER_MAX_USES : 0;
+        bLaserUsesRemaining = B_LASER_MAX_USES;
+    } else {
+        // Standard loadout - reset B-Laser counters
+        magnumUsesRemaining = 0;
+        destroyerUsesRemaining = 0;
+        bLaserUsesRemaining = 0;
     }
 }
 

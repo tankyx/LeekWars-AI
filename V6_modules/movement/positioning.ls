@@ -22,8 +22,28 @@ function bestApproachStep(towardCell) {
     for (var i = 0; i < count(reach); i++) {
         var c = reach[i];
         var d = getCellDistance(c, towardCell);
-        var los = hasLOS(c, enemyCell) ? 1 : 0;
-        var score = -d * 25 + los * 40 - abs(getCellDistance(c, enemyCell) - optimalAttackRange) * 20;
+        var score = -d * 25;
+        
+        // Multi-enemy support: check positioning relative to all enemies
+        if (count(allEnemies) > 0) {
+            for (var e = 0; e < count(allEnemies); e++) {
+                var eCell = allEnemies[e]["cell"];
+                if (hasLOS(c, eCell)) {
+                    score += 20;  // Bonus for LOS to enemies
+                }
+                var dist = getCellDistance(c, eCell);
+                if (dist >= 6 && dist <= 8) {
+                    score += 30;  // Optimal range bonus
+                } else if (dist < 4) {
+                    score -= 40;  // Too close penalty
+                }
+            }
+        } else if (enemyCell != -1) {
+            // Single enemy fallback
+            var los = hasLOS(c, enemyCell) ? 1 : 0;
+            score += los * 40 - abs(getCellDistance(c, enemyCell) - optimalAttackRange) * 20;
+        }
+        
         if (score > bestScore) {
             bestScore = score;
             best = c;
@@ -55,6 +75,7 @@ function moveToCell(targetCell) {
                     mpUsed += moved;
                     myMP -= moved;
                     myCell = getCell();
+                    enemyCell = getCell(enemy);  // Update enemy position too!
                 } else {
                     break;  // Can't move further
                 }
@@ -72,6 +93,7 @@ function moveToCell(targetCell) {
     if (mpUsed > 0) {
         myMP -= mpUsed;
         myCell = getCell();
+        enemyCell = getCell(enemy);  // Update enemy position too!
     }
     
     return mpUsed;
@@ -83,13 +105,17 @@ function moveToCell(targetCell) {
 
 // Function: repositionDefensive
 function repositionDefensive() {
+    // Get FRESH positions before repositioning!
+    var currentCell = getCell();
+    var currentEnemyCell = getCell(enemy);
+    
     var safeCells = findSafeCells();
     
     if (count(safeCells) == 0) {
         // No strictly safe cells - find the LEAST dangerous cell
-        var reachable = getReachableCells(myCell, myMP);
-        var leastBadCell = myCell;
-        var lowestEID = eidOf(myCell);
+        var reachable = getReachableCells(currentCell, getMP());
+        var leastBadCell = currentCell;
+        var lowestEID = eidOf(currentCell);
         
         // Find cell with minimum EID
         for (var i = 0; i < min(30, count(reachable)); i++) {
@@ -103,21 +129,21 @@ function repositionDefensive() {
         }
         
         // If we found a better cell, use it as our "safe" option
-        if (leastBadCell != myCell) {
+        if (leastBadCell != currentCell) {
             safeCells = [leastBadCell];
-            debugLog("No safe cells found, using least dangerous: EID=" + lowestEID);
+            debugLog("No safe cells found, using least dangerous position");
         }
     }
     
     if (count(safeCells) == 0) {
         // FALLBACK: Move to maintain 3-7 range (Rhino/Grenade/Lightninger coverage)
-        var reachable = getReachableCells(myCell, myMP);
-        var bestCell = myCell;
+        var reachable = getReachableCells(currentCell, getMP());
+        var bestCell = currentCell;
         var bestScore = -999999;
         
         for (var i = 0; i < min(30, count(reachable)); i++) {
             var cell = reachable[i];
-            var dist = getCellDistance(cell, enemyCell);
+            var dist = getCellDistance(cell, currentEnemyCell);
             var score = 0;
             
             // Ideal kiting distance: 7-9 (can use all weapons)
@@ -130,7 +156,7 @@ function repositionDefensive() {
             }
             
             // Check if we can attack from this position
-            if (hasLOS(cell, enemyCell)) {
+            if (hasLOS(cell, currentEnemyCell)) {
                 score += 300;
             }
             
@@ -140,24 +166,27 @@ function repositionDefensive() {
             }
         }
         
-        if (bestCell != myCell) {
-            var newDist = getCellDistance(bestCell, enemyCell);
+        if (bestCell != currentCell) {
+            var newDist = getCellDistance(bestCell, currentEnemyCell);
             debugLog("Kiting to distance " + newDist);
             if (moveToCell(bestCell) > 0) {
+                // Update cached positions after moving
+                myCell = getCell();
+                enemyCell = getCell(enemy);
                 enemyDistance = getCellDistance(myCell, enemyCell);
                 debugLog("New distance after kiting: " + enemyDistance);
             }
         }
     } else {
         // Move to safest cell that can still hit (KITING)
-        var bestCell = myCell;
+        var bestCell = currentCell;
         var bestScore = -999999;
         
         for (var i = 0; i < count(safeCells); i++) {
             var cell = safeCells[i];
             var damage = calculateDamageFrom(cell);
             var eid = eidOf(cell);
-            var dist = getCellDistance(cell, enemyCell);
+            var dist = getCellDistance(cell, currentEnemyCell);
             
             // Prefer cells where we can attack (kiting)
             var score = damage * 2 - eid * 3;  // Balance damage and safety
@@ -176,7 +205,7 @@ function repositionDefensive() {
             }
         }
         
-        if (bestCell != myCell) {
+        if (bestCell != currentCell) {
             if (moveToCell(bestCell) > 0) {
                 enemyDistance = getCellDistance(myCell, enemyCell);
             }
