@@ -9,7 +9,8 @@ function initialize() {
     myLeek = getEntity();
     
     // Calculate max operations based on cores
-    maxOperations = getCores(myLeek) * 1000000;
+    maxOperations = getCores(getEntity()) * 1000000;
+    debugLog("🔧 Operation Budget: " + maxOperations + " ops (" + getCores(getEntity()) + " cores × 1M)");
     myCell = getCell();
     myHP = getLife();
     myMaxHP = getTotalLife();
@@ -21,8 +22,8 @@ function initialize() {
     myMagic = getMagic();
     myResistance = getResistance();
     myWisdom = getWisdom();
-    myAbsShield = getAbsoluteShield(myLeek);
-    myRelShield = getRelativeShield(myLeek);
+    myAbsShield = getAbsoluteShield(getEntity());
+    myRelShield = getRelativeShield(getEntity());
     
     // Initialize multi-enemy system
     initializeEnemies();

@@ -63,8 +63,8 @@ function calculateEID(cell) {
     var bestEV = arrayFoldLeft(enemyReachable, function(maxDamage, enemyPos) {
         var dist = getCellDistance(enemyPos, cell);
         
-        // Skip expensive operations if we're low
-        if (!canSpendOps(10000)) {
+        // Skip expensive operations if we're very low
+        if (!canSpendOps(500000)) {
             // Simple estimate based on distance
             if (dist <= 7) {
                 return max(maxDamage, 200);  // Rough estimate

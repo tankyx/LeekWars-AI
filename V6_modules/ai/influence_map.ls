@@ -16,12 +16,11 @@ function buildInfluenceMap() {
     // Get all cells in reasonable range - Use operations aggressively!
     var influenceRange = 10;  // Full range for better tactical awareness
     var mapCells = getCellsInRange(myCell, influenceRange);
-    debugLog("Found " + count(mapCells) + " cells to analyze in range " + influenceRange);
+    // Influence map cell analysis - debug removed to reduce spam
     
     // Process many cells - we have 7M ops to use!
-    var maxCells = 50;  // Process 50 cells for thorough analysis
+    var maxCells = 500;  // Process 500+ cells for MAXIMUM tactical analysis
     var cellsToProcess = min(count(mapCells), maxCells);
-    debugLog("Processing " + cellsToProcess + " cells (limited)");
     
     for (var i = 0; i < cellsToProcess; i++) {
         var cell = mapCells[i];
@@ -41,9 +40,9 @@ function buildInfluenceMap() {
         // Calculate enemy threat to this cell  
         cellInfluence["enemyDamage"] = calculateEID(cell);
         
-        // Calculate AoE zones - RE-ENABLED with limited scope
-        // Only calculate AoE for first 20 cells to balance performance
-        if (i < 20) {
+        // Calculate AoE zones - MAXIMUM ANALYSIS with 7M operation budget
+        // Calculate AoE for maximum cells for ultimate tactical awareness
+        if (i < 350) {
             cellInfluence["myAoE"] = calculateMyAoEZones(cell);
             cellInfluence["enemyAoE"] = calculateEnemyAoEZones(cell);
         } else {

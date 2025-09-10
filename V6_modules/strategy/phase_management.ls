@@ -10,7 +10,7 @@ function determineGamePhase() {
     var turnNumber = turn;
     var myHPPercent = myHP / myMaxHP;
     var enemyHPPercent = enemy ? enemyHP / enemyMaxHP : 1.0;
-    var totalBuffs = count(getEffects(myLeek));
+    var totalBuffs = count(getEffects(getEntity()));
     var enemyBuffs = enemy ? count(getEffects(enemy)) : 0;
     var combatIntensity = (myMaxHP - myHP) + (enemy ? enemyMaxHP - enemyHP : 0);
     

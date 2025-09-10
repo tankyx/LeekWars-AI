@@ -187,7 +187,7 @@ function makeDecision() {
     // Precompute EID for likely positions - Use ops aggressively!
     var candidateCells = getReachableCells(myCell, myMP);  // Just current movement
     var eidCap = 30;  // Process many cells for better positioning
-    debugLog("Precomputing EID for " + min(eidCap, count(candidateCells)) + " cells...");
+    // EID computation - debug removed to reduce spam
     precomputeEID(candidateCells, eidCap);
     debugLog("EID precomputation complete");
     
@@ -341,7 +341,7 @@ function makeDecision() {
         var currentCellEID = eidOf(myCell);
         var currentScore = currentCellDamage - currentCellEID * 0.5;
         
-        debugLog("Current position damage=" + currentCellDamage + " EID=" + currentCellEID + " score=" + currentScore);
+        // Current position analysis - debug removed to reduce spam
         
         // Check if current position is a hit cell
         var currentIsHitCell = false;
@@ -362,7 +362,7 @@ function makeDecision() {
             var eid = eidOf(cell);
             var score = damage - eid * 0.5;
             
-            debugLog("  Cell " + cell + ": damage=" + damage + " EID=" + eid + " score=" + score);
+            // Cell evaluation - debug removed to reduce spam
             
             if (score > bestScore) {
                 bestScore = score;
@@ -461,7 +461,7 @@ function makeDecision() {
     
     // Check if we have healing over time active for kiting strategy
     var hasHoT = false;
-    var myEffects = getEffects(myLeek);
+    var myEffects = getEffects(getEntity());
     for (var i = 0; i < count(myEffects); i++) {
         if (myEffects[i][0] == EFFECT_HEAL) {  // Healing over time effect
             hasHoT = true;
@@ -669,12 +669,9 @@ function makeDecision() {
                 push(reachableHitCells, [myCell, WEAPON_M_LASER, 400]);
             }
         } else if (canSpendOps(2000000)) {
-            debugLog("Calling findHitCells for standard detection...");
             allHitCells = findHitCells();
-            debugLog("Found " + count(allHitCells) + " hit cells");
-            debugLog("Calling findReachableHitCells...");
             reachableHitCells = findReachableHitCells(allHitCells);
-            debugLog("Found " + count(reachableHitCells) + " reachable hit cells");
+            // Hit cell analysis - debug removed to reduce spam
         } else {
             debugLog("Turn " + turn + " - simplified hit detection");
             // Just check current position and immediate moves

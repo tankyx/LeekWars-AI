@@ -8,7 +8,7 @@ function getCellsInRange(center, range) {
     var allCells = [];
     
     // Use sampling only when very low on ops
-    if (!canSpendOps(50000)) {
+    if (!canSpendOps(3000000)) {
         // Emergency mode - sample every 2nd cell
         var cx = getCellX(center);
         var cy = getCellY(center);
@@ -82,7 +82,7 @@ function findHitCells() {
     if (enemy == null) return [];
     
     // Remove early turn optimization - always do full hit cell detection
-    debugLog("Full hit cell detection - turn " + turn);
+    // Hit cell detection - debug removed to reduce spam
     
     // Calculate actual weapon damage
     var weapons = getWeapons();
@@ -120,7 +120,7 @@ function findHitCells() {
     }
     
     // OPERATION MANAGEMENT: Limit search based on turn and available ops
-    if (turn >= 5 && !canSpendOps(2000000)) {
+    if (turn >= 5 && !canSpendOps(6000000)) {
         // Late game or low ops - reduce search
         maxRange = min(maxRange, 8);
     }
@@ -128,10 +128,10 @@ function findHitCells() {
     // Get cells around enemy within our max weapon range
     var cellsAroundEnemy = getCellsInRange(enemyCell, maxRange);
     
-    // AGGRESSIVE CAPPING to prevent operation overflow
-    var maxCellsToCheck = 150;  // Much lower limit!
-    if (turn >= 5) maxCellsToCheck = 80;  // Even lower late game
-    if (!canSpendOps(1000000)) maxCellsToCheck = 50;  // Emergency limit
+    // MAXIMUM ANALYSIS with full operation budget
+    var maxCellsToCheck = 800;  // Use maximum operations for ultimate analysis!
+    if (turn >= 5) maxCellsToCheck = 600;  // Still analyze many cells late game
+    if (!canSpendOps(5000000)) maxCellsToCheck = 400;  // Emergency limit very high
     
     // Don't filter too aggressively - we need all potential hit cells
     // Just cap the total to avoid operations explosion
@@ -175,7 +175,7 @@ function findHitCells() {
                 if (dist <= getWeaponMaxRange(w) + area - 1 && dist >= max(0, getWeaponMinRange(w) - area + 1)) {
                     if (hasLOS(cell, enemyCell)) {
                         canHit = true;
-                        var dmg = getWeaponDamage(w, myLeek);
+                        var dmg = getWeaponDamage(w, getEntity());
                         // Reduce damage estimate for AoE splash
                         if (dist > getWeaponMaxRange(w)) {
                             dmg = dmg * 0.7; // Splash damage estimate
@@ -192,7 +192,7 @@ function findHitCells() {
                 if (dist >= getWeaponMinRange(w) && dist <= getWeaponMaxRange(w)) {
                     if (hasLOS(cell, enemyCell)) {
                         canHit = true;
-                        var dmg = getWeaponDamage(w, myLeek);
+                        var dmg = getWeaponDamage(w, getEntity());
                         damageAtRange += dmg;
                         if (dmg > bestDamage) {
                             bestDamage = dmg;
@@ -216,7 +216,7 @@ function findHitCells() {
                 if (dist <= getChipMaxRange(ch) + area - 1 && dist >= max(0, getChipMinRange(ch) - area + 1)) {
                     if (!chipNeedLos(ch) || hasLOS(cell, enemyCell)) {
                         canHit = true;
-                        var dmg = getChipDamage(ch, myLeek);
+                        var dmg = getChipDamage(ch, getEntity());
                         // Reduce damage estimate for AoE splash
                         if (dist > getChipMaxRange(ch)) {
                             dmg = dmg * 0.7; // Splash damage estimate
@@ -233,7 +233,7 @@ function findHitCells() {
                 if (dist >= getChipMinRange(ch) && dist <= getChipMaxRange(ch)) {
                     if (!chipNeedLos(ch) || hasLOS(cell, enemyCell)) {
                         canHit = true;
-                        var dmg = getChipDamage(ch, myLeek);
+                        var dmg = getChipDamage(ch, getEntity());
                         damageAtRange += dmg;
                         if (dmg > bestDamage) {
                             bestDamage = dmg;
@@ -252,7 +252,7 @@ function findHitCells() {
         }
     }
     
-    debugLog("Found " + count(allHitCells) + " total hit cells around enemy");
+    // Hit cells found - debug removed to reduce spam
     return allHitCells;
 }
 

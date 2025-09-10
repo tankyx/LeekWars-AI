@@ -17,7 +17,7 @@ function analyzeWeaponRanges() {
         var isDarkKatana = (minR == 1 && maxR == 1 && cost == 7);
         
         if (!isDarkKatana) {
-            var dmg = getWeaponDamage(w, myLeek);
+            var dmg = getWeaponDamage(w, getEntity());
             for (var r = minR; r <= maxR; r++) {
                 var current = mapGet(acc.damageByRange, r, 0);
                 acc.damageByRange[r] = current + dmg;

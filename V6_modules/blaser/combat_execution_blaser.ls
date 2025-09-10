@@ -2,8 +2,8 @@
 // V6 B-LASER BUILD - COMBAT EXECUTION MODULE
 // ===================================================================
 
-// Include generic laser tactics for multi-hit support
-include("../combat/laser_tactics_generic");
+// NOTE: When included from V6_main.ls, all dependencies are already loaded
+// No include statements needed here
 
 function executeAttackBLaser() {
     if (enemy == null || myTP <= 0) return;
@@ -144,7 +144,7 @@ function calculateBestAttackSequence() {
     // Destroyer evaluation
     if (destroyerUsesRemaining > 0 && remainingTP >= DESTROYER_COST) {
         if (enemyDistance >= DESTROYER_MIN_RANGE && enemyDistance <= DESTROYER_MAX_RANGE) {
-            var destroyerDmg = getWeaponDamage(WEAPON_DESTROYER, enemy);
+            var destroyerDmg = getWeaponDamage(WEAPON_DESTROYER);
             var weaponData = [:];
             weaponData["weapon"] = WEAPON_DESTROYER;
             weaponData["priority"] = destroyerDmg;
@@ -157,7 +157,7 @@ function calculateBestAttackSequence() {
     // Magnum evaluation
     if (magnumUsesRemaining > 0 && remainingTP >= MAGNUM_COST) {
         if (enemyDistance >= MAGNUM_MIN_RANGE && enemyDistance <= MAGNUM_MAX_RANGE) {
-            var magnumDmg = getWeaponDamage(WEAPON_MAGNUM, enemy);
+            var magnumDmg = getWeaponDamage(WEAPON_MAGNUM);
             var weaponData = [:];
             weaponData["weapon"] = WEAPON_MAGNUM;
             weaponData["priority"] = magnumDmg;

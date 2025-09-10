@@ -12,15 +12,15 @@ function canSpendOps(amount) {
 // Function: getOperationalMode
 function getOperationalMode() {
     var opsUsed = getOperations();
-    var percentUsed = opsUsed / 7000000.0;  // 7M total ops
+    var percentUsed = opsUsed / maxOperations;  // Use dynamic operation budget
     var previousMode = OPERATIONAL_MODE;
     
-    // Use operations aggressively - we have 7M per turn!
-    if (percentUsed < 0.90) {  // Use up to 6.3M ops freely
+    // Use operations aggressively based on actual core count!
+    if (percentUsed < 0.90) {  // Use up to 90% ops freely
         OPERATIONAL_MODE = "OPTIMAL";
-    } else if (percentUsed < 0.95) {  // 6.3M-6.65M ops
+    } else if (percentUsed < 0.95) {  // 90%-95% ops
         OPERATIONAL_MODE = "EFFICIENT";
-    } else if (percentUsed < 0.98) {  // 6.65M-6.86M ops
+    } else if (percentUsed < 0.98) {  // 95%-98% ops
         OPERATIONAL_MODE = "SURVIVAL";
     } else {
         OPERATIONAL_MODE = "PANIC";

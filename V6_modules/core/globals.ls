@@ -104,6 +104,7 @@ global enemyMagic;
 
 // Multi-enemy support
 global enemies = [];
+global allEnemies = [];        // Array of all alive enemies (detailed data)
 global enemyCount = 0;
 global isTeamBattle = false;
 
@@ -212,6 +213,9 @@ global PHASE_INITIALIZED = false;
 global BAIT_HISTORY = [];
 global BAIT_SUCCESS_RATE = 0;
 global LAST_BAIT_TURN = -1;
+
+// Turn 1-3 Combo Strategy System
+global COMBO_STRATEGY = null;  // "ANTI_BURST", "ANTI_MAGIC", "STANDARD", null
 
 // ===================================================================
 // ALTERNATE WEAPON LOADOUT SUPPORT

@@ -27,21 +27,31 @@ function shouldUseTeleport() {
         canAttackHere = true;  // Dark Katana melee
     }
     
-    // If we can already attack, no need to teleport
+    // STRATEGIC TELEPORT: Force enemy to react even if we can attack
+    if (canAttackHere && myTP >= 14 && turn >= 3) {
+        if (shouldTeleportForResourcePressure(currentCell, currentEnemyCell)) {
+            debugLog("🎯 STRATEGIC TELEPORT: Creating resource pressure opportunity");
+            return true;
+        }
+    }
+    
+    // If we can already attack and no strategic opportunity, no need to teleport
     if (canAttackHere) {
         debugLog("Can already attack - no teleport needed");
         return false;
     }
     
-    // Check if we can WALK to attack range
+    // Check if we can WALK to attack range with LOS
     var reachable = getReachableCells(currentCell, getMP());
     var canWalkToAttack = false;
+    var hasAnyLOSOption = false;
     
     for (var i = 0; i < count(reachable); i++) {
         var cell = reachable[i];
         var dist = getCellDistance(cell, currentEnemyCell);
         
         if (hasLOS(cell, currentEnemyCell)) {
+            hasAnyLOSOption = true;
             if ((dist >= 7 && dist <= 9) ||  // Rifle
                 (dist >= 4 && dist <= 7) ||  // Grenade
                 (dist >= 5 && dist <= 12 && isOnSameLine(cell, currentEnemyCell))) {  // M-Laser
@@ -55,9 +65,15 @@ function shouldUseTeleport() {
         }
     }
     
-    // Only teleport if we CAN'T walk into range
+    // Only teleport if we CAN'T walk into range OR no LOS available
     if (!canWalkToAttack) {
         debugLog("⚔️ TELEPORT NEEDED! Can't walk to any attack range");
+        return true;
+    }
+    
+    // If no LOS options at all, consider teleporting to bypass obstacles
+    if (!hasAnyLOSOption && currentDistance > 12) {
+        debugLog("🎯 LOS BYPASS TELEPORT! No line of sight options available");
         return true;
     }
     
@@ -84,7 +100,7 @@ function findBestTeleportTarget() {
     var currentCell = getCell();
     var currentEnemyCell = getCell(enemy);
     
-    debugLog("Finding best teleport target from cell " + currentCell);
+    // Finding teleport target - debug removed to reduce spam
     
     // Get walkable cells to avoid teleporting where we can walk
     var walkableCells = getReachableCells(currentCell, getMP());
@@ -109,7 +125,7 @@ function findBestTeleportTarget() {
             
             // CRITICAL: Skip cells we can walk to!
             if (mapContainsKey(walkableSet, cell)) {
-                debugLog("  Skipping walkable cell " + cell);
+                // Skipping walkable cell - debug removed to reduce spam
                 continue;
             }
             
@@ -123,7 +139,7 @@ function findBestTeleportTarget() {
         }
     }
     
-    debugLog("Evaluated " + evaluated + " teleport candidates, best: " + bestCell + " (score: " + bestScore + ")");
+    // Teleport candidates evaluated - debug removed to reduce spam
     
     // Visual debugging - show best target
     if (bestCell != currentCell) {
@@ -131,6 +147,57 @@ function findBestTeleportTarget() {
     }
     
     return bestCell;
+}
+
+// NEW: Resource pressure teleportation
+function shouldTeleportForResourcePressure(myCell, enemyCell) {
+    // Don't use if low on TP
+    if (myTP < 14) return false;
+    
+    var currentDist = getCellDistance(myCell, enemyCell);
+    
+    // Scenario 1: Enemy is at their optimal range → force them to reposition
+    if (currentDist >= 7 && currentDist <= 9) {
+        // We're both in rifle range - teleport to force their reaction
+        if (hasLOS(myCell, enemyCell)) {
+            debugLog("📍 Resource pressure: Both in optimal range - forcing enemy reposition");
+            return true;
+        }
+    }
+    
+    // Scenario 2: Create range advantage opportunity
+    // If they're in their optimal range but we can create better positioning
+    var enemyOptimalRange = isEnemyInOptimalRange(enemyCell, myCell);
+    if (enemyOptimalRange && myTP > (enemyTP + 4)) {
+        debugLog("📍 Resource pressure: Enemy optimal, we have TP advantage - repositioning");
+        return true;
+    }
+    
+    // Scenario 3: Turn sequence manipulation
+    // Teleport to create a position where they MUST move next turn
+    if (turn >= 5 && (turn % 3 == 1)) {  // Every 3rd turn starting turn 5
+        debugLog("📍 Resource pressure: Turn sequence manipulation");
+        return true;
+    }
+    
+    return false;
+}
+
+// Helper: Check if enemy is in their optimal range relative to us
+function isEnemyInOptimalRange(enemyCell, myCell) {
+    var dist = getCellDistance(enemyCell, myCell);
+    
+    // Most leeks optimize for similar ranges to us
+    if (dist >= 7 && dist <= 9) {
+        return hasLOS(enemyCell, myCell);
+    }
+    
+    // Also check melee range (aggressive builds)
+    if (dist <= 3) {
+        return true;
+    }
+    
+    return false;
 }
 
 // Helper: Evaluate a teleport destination
@@ -192,6 +259,31 @@ function evaluateTeleportCell(cell, enemyCell) {
     
     // Prefer optimal distances
     if (distToEnemy == 8) score += 200;  // Perfect rifle range
+    
+    // RESOURCE PRESSURE BONUS: Positions that force enemy repositioning
+    if (turn >= 3 && myTP >= 14) {
+        // Positions that break enemy optimal range
+        if (distToEnemy > 9 || distToEnemy < 7) {
+            score += 300;  // Force them out of rifle range
+        }
+        
+        // Positions behind cover that they can't easily reach
+        if (!hasLOS(enemyCell, cell)) {
+            var enemyReachable = getReachableCells(enemyCell, 6);  // Assume 6 MP
+            var canEnemyReachUs = false;
+            for (var i = 0; i < min(10, count(enemyReachable)); i++) {
+                var enemyOption = enemyReachable[i];
+                var enemyNewDist = getCellDistance(enemyOption, cell);
+                if (hasLOS(enemyOption, cell) && enemyNewDist >= 7 && enemyNewDist <= 9) {
+                    canEnemyReachUs = true;
+                    break;
+                }
+            }
+            if (!canEnemyReachUs) {
+                score += 500;  // They'll waste TP trying to get LOS
+            }
+        }
+    }
     
     return score;
 }

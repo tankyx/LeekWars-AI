@@ -2,6 +2,79 @@
 // Damage calculations
 // Auto-generated from V5.0 script
 
+// === STANDALONE COMPILATION SUPPORT ===
+// These variables/functions are defined in other modules when included via V6_main.ls
+// For standalone compilation, provide stub implementations
+
+// NOTE: Global variables are defined in core/globals.ls when included via V6_main.ls
+// For standalone testing only, uncomment the lines below:
+// global myTP = 0;
+// global myStrength = 0; 
+// global myWisdom = 0;
+// global enemy = null;
+// global enemyCell = 0;
+// global MATRIX_INITIALIZED = false;
+
+// Functions from other modules
+// hasLOS is provided by movement/line_of_sight.ls when included via V6_main.ls
+
+// canUseWeapon is provided by combat/weapon_management.ls when included via V6_main.ls
+// getOptimalDamage is provided by combat/weapon_matrix.ls when included via V6_main.ls
+// findAoESplashPositions is provided by combat/aoe_tactics.ls when included via V6_main.ls
+
+// chipHasDamage is provided by combat/chip_management.ls when included via V6_main.ls
+
+// getChipDamage is provided by combat/chip_management.ls when included via V6_main.ls
+
+// calculateOptimalAoEDamage is provided by combat/aoe_tactics.ls when included via V6_main.ls
+
+// getWeaponDamage is provided by combat/weapon_management.ls when included via V6_main.ls
+
+// Variable declaration that may be missing
+var totalDamage = 0;
+
+// Function: calculateMaxDamage
+function calculateMaxDamage(fromCell, target, availableTP) {
+    if (target == null || availableTP <= 0) return 0;
+    
+    var maxDamage = 0;
+    var weapons = getWeapons();
+    var targetCell = getCell(target);
+    var distance = getCellDistance(fromCell, targetCell);
+    
+    // Check each weapon to find maximum damage potential
+    for (var i = 0; i < count(weapons); i++) {
+        var weapon = weapons[i];
+        var weaponCost = getWeaponCost(weapon);
+        
+        if (weaponCost > availableTP) continue;
+        
+        var minRange = getWeaponMinRange(weapon);
+        var maxRange = getWeaponMaxRange(weapon);
+        
+        if (distance < minRange || distance > maxRange) continue;
+        
+        // Calculate base damage for this weapon
+        var baseDamage = getWeaponDamage(weapon, getEntity());
+        
+        // Apply strength scaling
+        baseDamage = floor(baseDamage * (1 + getStrength(getEntity()) / 100.0));
+        
+        // Calculate actual damage after shields
+        var actualDamage = calculateActualDamage(baseDamage, target);
+        
+        // Consider multiple uses if TP allows
+        var maxUses = floor(availableTP / weaponCost);
+        var totalDamage = actualDamage * maxUses;
+        
+        if (totalDamage > maxDamage) {
+            maxDamage = totalDamage;
+        }
+    }
+    
+    return maxDamage;
+}
+
 // Function: calculateActualDamage
 function calculateActualDamage(baseDamage, target) {
     if (target == null) return baseDamage;
@@ -75,7 +148,7 @@ function calculateDamageFrom(cell) {
         var maxUses = getWeaponMaxUses(w);
         if (maxUses > 0) uses = min(uses, maxUses);
         
-        var damage = uses * getWeaponDamage(w, myLeek);
+        var damage = uses * getWeaponDamage(w, getEntity());
         totalDamage += damage;
         tpLeft -= uses * cost;
         
@@ -99,7 +172,7 @@ function calculateDamageFrom(cell) {
         var maxUses = getChipMaxUses(ch);
         if (maxUses > 0) uses = min(uses, maxUses);
         
-        var damage = uses * getChipDamage(ch, myLeek);
+        var damage = uses * getChipDamage(ch, getEntity());
         totalDamage += damage;
         tpLeft -= uses * cost;
         
@@ -133,7 +206,7 @@ function calculateDamageFromTo(fromCell, toCell) {
             var minR = getWeaponMinRange(w);
             var maxR = getWeaponMaxRange(w);
             
-            if (dist >= minR && dist <= maxR && lineOfSight(fromCell, toCell, enemy)) {
+            if (dist >= minR && dist <= maxR && hasLOS(fromCell, toCell)) {
                 var effects = getWeaponEffects(w);
                 if (effects != null) {
                     for (var j = 0; j < count(effects); j++) {
@@ -205,7 +278,7 @@ function calculateDamageFromWithTP(cell, availableTP) {
         var maxUses = getWeaponMaxUses(w);
         if (maxUses > 0) uses = min(uses, maxUses);
         
-        var damage = uses * getWeaponDamage(w, myLeek);
+        var damage = uses * getWeaponDamage(w, getEntity());
         totalDamage += damage;
         tpLeft -= uses * cost;
         

@@ -1,12 +1,12 @@
 // ===================================================================
-// VIRUS LEEK v6.0 - MODULAR WIS-TANK BUILD WITH EID POSITIONING
+// VIRUS LEEK v6.0 - MODULAR WIS-TANK BUILD WITH EID POSITIONING  
 // ===================================================================
 // Modularized version preserving ALL V5 features
 // Uses LeekScript's include() for better organization and maintainability
 
 // === INCLUDE MODULES ===
 
-// CORE modules
+// CORE modules - globals first, initialization AFTER dependencies
 include("core/globals");
 include("core/state_management");
 include("core/operations");
@@ -34,11 +34,11 @@ include("ai/evaluation");
 include("ai/eid_system");
 include("ai/influence_map");
 
-// STRATEGY modules
+// STRATEGY modules - multi_enemy FIRST (needed for initialization)
+include("strategy/multi_enemy");
 include("strategy/enemy_profiling");
 include("strategy/phase_management");
 include("strategy/pattern_learning");
-include("strategy/multi_enemy");
 
 // COMBAT modules
 include("combat/chip_management");
@@ -61,25 +61,30 @@ include("strategy/bait_tactics");
 include("strategy/kill_calculations");
 include("strategy/anti_tank");
 
-// AI modules
-include("ai/decision_making");
+// AI modules - using refactored modules
+include("ai/emergency_decisions");
+include("ai/tactical_decisions_ai");
+include("ai/combat_decisions");
+include("ai/deep_analysis");
+include("ai/decision_making_refactored");
 include("ai/visualization");
 
-// COMBAT modules
-include("combat/execute_combat");
+// COMBAT modules - using refactored modules
+include("combat/weapon_selection");
+include("combat/positioning_logic");
+include("combat/attack_execution");
+include("combat/execute_combat_refactored");
 
-// CORE modules
+// CORE modules - initialization AFTER all dependencies are loaded
 include("core/initialization");
 
 // === MAIN EXECUTION ===
 
 debug("=== V6 MAIN STARTING ===");
-// say("V6 Starting - Turn " + getTurn()); // Removed - costs 1 TP
 
 // Initialize the system
 initialize();
 debug("Initialized - enemy=" + enemy);
-// say("Enemy found: " + getName(enemy)); // Removed - costs 1 TP
 
 // Main combat loop
 if (enemy != null) {
@@ -91,6 +96,10 @@ if (enemy != null) {
         // Turn 1 special handling - early game sequence
         debugLog("Turn 1 - executing early game sequence");
         executeEarlyGameSequence();
+    } else if (turn == 2 && shouldUseTurn2ComboSequence()) {
+        // Turn 2 combo sequence for high damage opponents
+        debugLog("Turn 2 - executing combo sequence");
+        executeTurn2ComboSequence();
     } else {
         // Turn 2+ uses standard decision making - ensure proper execution
         debugLog("Turn " + turn + " - entering normal combat mode");
@@ -100,12 +109,12 @@ if (enemy != null) {
             debugLog("Ensuring combat execution for turn " + turn);
             executeAttack();
             if (myTP >= 4) executeDefensive();
-            
-            // REPOSITION after combat if we have MP left
-            if (getMP() > 0 && enemy != null && getLife(enemy) > 0) {
-                debugLog("Post-combat repositioning with " + getMP() + " MP");
-                repositionDefensive();
-            }
+        }
+        
+        // REPOSITION after combat if we have MP left
+        if (getMP() > 0 && enemy != null && getLife(enemy) > 0) {
+            debugLog("Post-combat repositioning with " + getMP() + " MP");
+            repositionDefensive();
         }
     }
 } else {

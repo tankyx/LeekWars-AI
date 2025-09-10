@@ -61,7 +61,7 @@ function updateCombatState() {
     }
     
     // Buff states from effects
-    var myEffects = getEffects(myLeek);
+    var myEffects = getEffects(getEntity());
     if (myEffects != null) {
         for (var i = 0; i < count(myEffects); i++) {
             var effectType = myEffects[i][0];

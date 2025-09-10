@@ -58,8 +58,8 @@ function bestApproachStep(towardCell) {
 function moveToCell(targetCell) {
     if (targetCell == myCell) return 0;
     
-    // Use A* pathfinding for optimal movement
-    var useAStar = shouldUseAlgorithm(30000);
+    // Use A* pathfinding for optimal movement - be MAXIMUM aggressive
+    var useAStar = shouldUseAlgorithm(2000000);
     
     if (useAStar) {
         // Try A* pathfinding first
@@ -118,8 +118,8 @@ function repositionDefensive() {
         var lowestEID = eidOf(currentCell);
         
         // Find cell with minimum EID
-        for (var i = 0; i < min(30, count(reachable)); i++) {
-            if (!canSpendOps(5000)) break;
+        for (var i = 0; i < min(300, count(reachable)); i++) {
+            if (!canSpendOps(500000)) break;
             var cell = reachable[i];
             var cellEID = eidOf(cell);
             if (cellEID < lowestEID) {
@@ -141,7 +141,7 @@ function repositionDefensive() {
         var bestCell = currentCell;
         var bestScore = -999999;
         
-        for (var i = 0; i < min(30, count(reachable)); i++) {
+        for (var i = 0; i < min(400, count(reachable)); i++) {
             var cell = reachable[i];
             var dist = getCellDistance(cell, currentEnemyCell);
             var score = 0;

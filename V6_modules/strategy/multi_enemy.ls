@@ -1,8 +1,7 @@
 // V6 Module: strategy/multi_enemy.ls
 // Multi-enemy target selection and management
 
-// Global variables for multi-enemy tracking
-global allEnemies = [];        // Array of all alive enemies
+// Global variables for multi-enemy tracking (allEnemies declared in core/globals.ls)
 global primaryTarget = null;   // Primary target for focused fire
 global secondaryTargets = [];  // Other enemies to consider for AoE
 
@@ -169,7 +168,7 @@ function isKillable(e) {
         var maxR = getWeaponMaxRange(w);
         
         if (dist >= minR && dist <= maxR && (!weaponNeedLos(w) || hasLine)) {
-            var dmg = getWeaponDamage(w, myLeek);
+            var dmg = getWeaponDamage(w, getEntity());
             var cost = getWeaponCost(w);
             var uses = floor(myTP / cost);
             
@@ -272,7 +271,7 @@ function getBestAoETarget(weapon) {
         if (weapon == WEAPON_GRENADE_LAUNCHER) {
             // Grenade launcher has 2 cell AoE
             // Use proper damage calculation with strength scaling
-            var grenadeBase = getWeaponDamage(WEAPON_GRENADE_LAUNCHER, myLeek);
+            var grenadeBase = getWeaponDamage(WEAPON_GRENADE_LAUNCHER, getEntity());
             
             for (var j = 0; j < count(allEnemies); j++) {
                 var e = allEnemies[j];
@@ -436,7 +435,7 @@ function calculateMultiHitValue(weapon, targetCell) {
         if (!isOnSameLine(myPos, targetCell)) return 0;
         
         // Use proper damage calculation with strength scaling
-        var laserBase = getWeaponDamage(WEAPON_M_LASER, myLeek);
+        var laserBase = getWeaponDamage(WEAPON_M_LASER, getEntity());
         var enemiesHit = 0;
         
         // Get line direction and check for enemies
@@ -476,7 +475,7 @@ function calculateMultiHitValue(weapon, targetCell) {
     } else if (weapon == WEAPON_GRENADE_LAUNCHER) {
         // Check grenade AoE
         // Use proper damage calculation with strength scaling
-        var grenadeBase = getWeaponDamage(WEAPON_GRENADE_LAUNCHER, myLeek);
+        var grenadeBase = getWeaponDamage(WEAPON_GRENADE_LAUNCHER, getEntity());
         var enemiesHit = 0;
         
         for (var i = 0; i < count(allEnemies); i++) {
@@ -496,9 +495,9 @@ function calculateMultiHitValue(weapon, targetCell) {
         // Single target weapons (Rifle, Dark Katana)
         // Use proper damage calculation with strength scaling
         if (weapon == WEAPON_RIFLE) {
-            value = getWeaponDamage(WEAPON_RIFLE, myLeek);
+            value = getWeaponDamage(WEAPON_RIFLE, getEntity());
         } else if (weapon == WEAPON_DARK_KATANA) {
-            value = getWeaponDamage(WEAPON_DARK_KATANA, myLeek);
+            value = getWeaponDamage(WEAPON_DARK_KATANA, getEntity());
         }
     }
     

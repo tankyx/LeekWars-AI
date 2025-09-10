@@ -22,7 +22,7 @@ function calculatePkill(targetHP, availableTP) {
         if (dist < getWeaponMinRange(w) || dist > getWeaponMaxRange(w)) return acc;
         if (weaponNeedLos(w) && !hasLos) return acc;
         
-        var dptp = getWeaponDamage(w, myLeek) / cost;
+        var dptp = getWeaponDamage(w, getEntity()) / cost;
         push(acc, [-dptp, w]);
         return acc;
     }, []);
@@ -68,7 +68,7 @@ function calculatePkill(targetHP, availableTP) {
         if (uses <= 0) continue;
         
         // Check cooldown
-        if (getCooldown(ch, myLeek) > 0) continue;
+        if (getCooldown(ch) > 0) continue;
         
         // Check range and LOS from current position (dist already declared above)
         if (dist < getChipMinRange(ch) || dist > getChipMaxRange(ch)) continue;
@@ -116,7 +116,7 @@ function canSetupKill() {
 
 // Function: estimateNextTurnEV
 function estimateNextTurnEV() {
-    var nextTP = getTotalTP(myLeek);
+    var nextTP = getTotalTP();
     var bestDamage = 0;
     
     // Check from current position

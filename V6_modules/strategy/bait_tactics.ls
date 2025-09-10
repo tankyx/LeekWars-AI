@@ -85,7 +85,7 @@ function evaluateBaitPosition(cell) {
         // Calculate actual strength (what we know)
         // Factor in healing, shields we'll apply, life steal
         var nextTurnHealing = 0;
-        var myEffects = getEffects(myLeek);
+        var myEffects = getEffects(getEntity());
         if (myEffects != null) {
             for (var i = 0; i < count(myEffects); i++) {
                 if (myEffects[i][0] == EFFECT_HEAL) {
