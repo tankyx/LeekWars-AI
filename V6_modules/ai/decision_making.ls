@@ -57,7 +57,14 @@ function makeDecision() {
             for (var i = 0; i < min(20, count(reach)); i++) {
                 var c = reach[i];
                 var d = getCellDistance(c, enemyCell);
-                if (d >= 3 && d <= 7 && hasLOS(c, enemyCell)) {
+                
+                // Prefer Flame Thrower's optimal range when equipped
+                if (inArray(getWeapons(), WEAPON_FLAME_THROWER)) {
+                    if (d >= 4 && d <= 6 && hasLOS(c, enemyCell)) {
+                        bestCell = c;
+                        break;
+                    }
+                } else if (d >= 3 && d <= 7 && hasLOS(c, enemyCell)) {
                     bestCell = c;
                     break;
                 }

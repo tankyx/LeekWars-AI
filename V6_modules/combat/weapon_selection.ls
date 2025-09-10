@@ -224,6 +224,11 @@ function applyWeaponPriorities(weaponId, baseDptp, distance, availableWeapons) {
         if (getStrength(enemy) > 300) {
             adjustedDptp *= 1.3; // 30% bonus vs high STR enemies
         }
+        
+        // Penalty when Flame Thrower is available at better range
+        if (inArray(availableWeapons, WEAPON_FLAME_THROWER) && distance >= 2) {
+            adjustedDptp *= 0.7; // 30% penalty - prefer Flame Thrower for its DoT
+        }
     } else if (weaponId == WEAPON_LASER) {
         // Laser is good line weapon, similar to M-Laser but shorter range
         adjustedDptp *= 1.1; // 10% bonus for line piercing
@@ -239,7 +244,7 @@ function applyWeaponPriorities(weaponId, baseDptp, distance, availableWeapons) {
         }
     } else if (weaponId == WEAPON_FLAME_THROWER) {
         // Flame Thrower is excellent line weapon with poison DoT
-        adjustedDptp *= 1.4; // 40% bonus for line piercing + poison damage
+        adjustedDptp *= 1.6; // 60% bonus for line piercing + poison damage
         
         // Multi-enemy bonus for line piercing
         if (count(allEnemies) > 1) {
