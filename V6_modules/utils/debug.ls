@@ -41,4 +41,3 @@ function debugVisualization(visualizationFunc) {
         visualizationFunc();
     }
 }
-

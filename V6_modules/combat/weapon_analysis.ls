@@ -23,6 +23,7 @@ function analyzeWeaponRanges() {
                 acc.damageByRange[r] = current + dmg;
             }
         }
+
         return acc;
     }, {ranges: [], damageByRange: [:]});
     
@@ -31,8 +32,11 @@ function analyzeWeaponRanges() {
     // Dynamic range calculation based on weapon effectiveness analysis
     // updateOptimalGrenadeRange() will set the best range
     
-    debugLog("Optimal attack range: " + optimalAttackRange);
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Optimal attack range: " + optimalAttackRange);
+    }
 }
+
 
 // === TELEPORTATION TACTICS ===
 
@@ -58,7 +62,9 @@ function initEnemyMaxRange() {
             // Detect Bazooka
             if (minR >= 4 && maxR <= 7 && area >= 25) {
                 acc.hasBazooka = true;
-                debugLog("⚠️ Enemy has BAZOOKA! Range " + minR + "-" + maxR + ", AoE=" + area + " cells");
+                if (debugEnabled && canSpendOps(1000)) {
+		            debugLog("⚠️ Enemy has BAZOOKA! Range " + minR + "-" + maxR + ", AoE=" + area + " cells");
+                }
             }
             return acc;
         }, {maxRange: ENEMY_MAX_RANGE, minRange: ENEMY_MIN_RANGE, maxAoE: ENEMY_MAX_AOE_SIZE, hasBazooka: false});
@@ -78,9 +84,12 @@ function initEnemyMaxRange() {
     }
     
     if (ENEMY_MIN_RANGE < 999) {
-        debugLog("Enemy weapon ranges: " + ENEMY_MIN_RANGE + "-" + ENEMY_MAX_RANGE + ", max AoE=" + ENEMY_MAX_AOE_SIZE);
+        if (debugEnabled && canSpendOps(1000)) {
+		    debugLog("Enemy weapon ranges: " + ENEMY_MIN_RANGE + "-" + ENEMY_MAX_RANGE + ", max AoE=" + ENEMY_MAX_AOE_SIZE);
+        }
     }
 }
+
 
 // === ENEMY PROFILING ===
 
@@ -88,7 +97,7 @@ function initEnemyMaxRange() {
 function analyzeGrenadeEffectiveness() {
     if (!inArray(getWeapons(), WEAPON_GRENADE_LAUNCHER)) return 7;
     
-    var analysis = [:];;
+    var analysis = [:];
     
     for (var range = 4; range <= 7; range++) {
         var positions = [];
@@ -149,7 +158,7 @@ function analyzeGrenadeEffectiveness() {
         }
         
         var flexScore = count(positions) > 0 ? totalCoverage / count(positions) : 0;
-        analysis[range] = [:];;
+        analysis[range] = [:];
         analysis[range]["coverage"] = totalCoverage;
         analysis[range]["splashOptions"] = splashOptions;
         analysis[range]["obstacleBypasses"] = obstacleBypasses;
@@ -161,10 +170,12 @@ function analyzeGrenadeEffectiveness() {
         for (var range = 4; range <= 7; range++) {
             var data = analysis[range];
             if (data != null) {
-                debugLog("Grenade Range " + range + ": Coverage=" + data["coverage"] + 
-                         " Splash=" + data["splashOptions"] + 
-                         " Bypass=" + data["obstacleBypasses"] +
-                         " Flex=" + round(data["flexibility"]));
+                if (debugEnabled && canSpendOps(1000)) {
+		            debugLog("Grenade Range " + range + ": Coverage=" + data["coverage"] + 
+                             " Splash=" + data["splashOptions"] + 
+                             " Bypass=" + data["obstacleBypasses"] +
+                             " Flex=" + round(data["flexibility"]));
+                }
             }
         }
     }
@@ -197,6 +208,7 @@ function analyzeGrenadeEffectiveness() {
     return bestRange;
 }
 
+
 // Update optimal range based on weapon mix
 
 // Function: updateOptimalGrenadeRange
@@ -218,12 +230,15 @@ function updateOptimalGrenadeRange() {
         newRange = 7; // Middle ground
         
         if (newRange != oldRange) {
-            debugLog("🎯 Range update: " + oldRange + " → " + newRange);
+            if (debugEnabled && canSpendOps(1000)) {
+		        debugLog("🎯 Range update: " + oldRange + " → " + newRange);
+            }
         }
     }
     
     optimalAttackRange = newRange;
     return newRange;
 }
+
 
 // Find best grenade target considering AoE damage

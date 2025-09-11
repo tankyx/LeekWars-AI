@@ -2,10 +2,6 @@
 // Emergency decision making and panic mode handling
 // Refactored from decision_making.ls for better modularity
 
-// === STANDALONE COMPILATION SUPPORT ===
-// These variables/functions are defined in other modules when included via V6_main.ls
-// For standalone compilation, provide stub implementations
-
 // NOTE: Global variables are defined in core/globals.ls when included via V6_main.ls
 // For standalone testing only, uncomment the lines below:
 // global debugEnabled = true;
@@ -43,8 +39,6 @@
 // getTurn1Strategy is provided by strategy/phase_management.ls when included via V6_main.ls  
 // getBestDamageSequence is provided by combat/damage_sequences.ls when included via V6_main.ls
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 // Function: bestFleeStep
 function bestFleeStep() {
@@ -64,6 +58,7 @@ function bestFleeStep() {
             var dist = getCellDistance(cell, getCell(currentEnemy));
             score += dist;
         }
+
         
         // Prefer cells that maximize distance to enemies
         if (score > bestScore) {
@@ -75,23 +70,29 @@ function bestFleeStep() {
     return bestCell;
 }
 
+
 // Function: handleEmergencyDecisions
 // Returns true if emergency action was taken, false to continue normal processing
 function handleEmergencyDecisions() {
     // Check for panic mode first
     if (isInPanicMode()) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("PANIC MODE - Using simplified tactics");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PANIC MODE - Using simplified tactics");
+            }
         }
         simplifiedCombat();
         return true;
     }
     
-    // Emergency check for mid-game turns to avoid timeout
-    if (turn >= 5 && !canSpendOps(4000000)) {
+    // Emergency check for mid-game turns to avoid timeout (DISABLED - AI works better with full logic)
+    if (turn >= 5 && !canSpendOps(10000)) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Turn 5+ emergency mode - simplified logic");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Turn 5+ emergency mode - simplified logic");
+            }
         }
+        
         // Just find a decent position and attack
         var step = bestApproachStep(enemyCell);
         if (step != myCell) {
@@ -105,10 +106,12 @@ function handleEmergencyDecisions() {
         return true;
     }
     
-    // Emergency check for late turns to avoid timeout
-    if (turn >= 9 && !canSpendOps(2000000)) {
+    // Emergency check for late turns to avoid timeout (DISABLED - AI works better with full logic)
+    if (turn >= 9 && !canSpendOps(10000)) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Turn 9+ emergency mode - direct attack");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Turn 9+ emergency mode - direct attack");
+            }
         }
         executeAttack();
         if (myTP >= 4) executeDefensive();
@@ -118,6 +121,7 @@ function handleEmergencyDecisions() {
     return false; // No emergency action taken
 }
 
+
 // Function: handleAggressiveOpening
 // Returns true if aggressive opening was executed, false to continue
 function handleAggressiveOpening() {
@@ -125,7 +129,9 @@ function handleAggressiveOpening() {
     if (turn <= 2) {
         var strategy = getTurn1Strategy(enemy);
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Turn " + turn + " strategy: " + strategy);
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Turn " + turn + " strategy: " + strategy);
+            }
         }
         
         if (strategy == "all_damage") {
@@ -134,11 +140,15 @@ function handleAggressiveOpening() {
             var sequence = getBestDamageSequence(myTP, enemyDistance, myHP, mySTR);
             if (sequence != null) {
                 if (debugEnabled && canSpendOps(1000)) {
-                    debugLog("Aggressive opening! Sequence: " + sequence[4] + " for " + sequence[2] + " damage");
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Aggressive opening! Sequence: " + sequence[4] + " for " + sequence[2] + " damage");
+                    }
                 }
                 var dmgDealt = executeDamageSequence(sequence, enemy);
                 if (debugEnabled && canSpendOps(1000)) {
-                    debugLog("Damage dealt: " + dmgDealt);
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Damage dealt: " + dmgDealt);
+                    }
                 }
                 return true;
             }
@@ -148,13 +158,16 @@ function handleAggressiveOpening() {
     return false; // No aggressive opening executed
 }
 
+
 // Function: handlePanicModeDecisions
 // Ultra-basic decisions when in panic mode
 function handlePanicModeDecisions() {
     if (getOperationLevel() == "PANIC") {
         // Emergency mode - just attack or flee
         if (debugEnabled && canSpendOps(500)) {
-            debugLog("⚠️ PANIC MODE - Emergency only!");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("⚠️ PANIC MODE - Emergency only!");
+            }
         }
         
         if (myTP >= 5 && enemyDistance <= 10) {
@@ -175,6 +188,7 @@ function handlePanicModeDecisions() {
     
     return false;
 }
+
 
 // Function: makeQuickEmergencyDecision
 // Quick tactical decision for when operations are limited

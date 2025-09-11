@@ -2,8 +2,8 @@
 // Range and cell finding
 // Auto-generated from V5.0 script
 
-// Function: getCellsInRange
-function getCellsInRange(center, range) {
+// Function: getCellsInRangeCustom
+function getCellsInRangeCustom(center, maxRange) {
     // Full hit-cell detection as promised - no early-turn pruning!
     var allCells = [];
     
@@ -14,15 +14,15 @@ function getCellsInRange(center, range) {
         var cy = getCellY(center);
         var step = 2;
         
-        for (var dx = -range; dx <= range; dx += step) {
-            for (var dy = -range; dy <= range; dy += step) {
+        for (var dx = -maxRange; dx <= maxRange; dx += step) {
+            for (var dy = -maxRange; dy <= maxRange; dy += step) {
                 var x = cx + dx;
                 var y = cy + dy;
                 var cell = getCellFromXY(x, y);
                 
                 if (cell != -1 && !isObstacle(cell)) {
                     var dist = getCellDistance(center, cell);
-                    if (dist <= range) {
+                    if (dist <= maxRange) {
                         push(allCells, cell);
                     }
                 }
@@ -37,15 +37,15 @@ function getCellsInRange(center, range) {
     var cx = getCellX(center);
     var cy = getCellY(center);
     
-    for (var dx = -range; dx <= range; dx++) {
-        for (var dy = -range; dy <= range; dy++) {
+    for (var dx = -maxRange; dx <= maxRange; dx++) {
+        for (var dy = -maxRange; dy <= maxRange; dy++) {
             var x = cx + dx;
             var y = cy + dy;
             var cell = getCellFromXY(x, y);
             
             if (cell != -1 && !isObstacle(cell)) {
                 var dist = getCellDistance(center, cell);
-                if (dist <= range) {
+                if (dist <= maxRange) {
                     push(allCells, cell);
                 }
             }
@@ -57,8 +57,8 @@ function getCellsInRange(center, range) {
 
 // Find which hit cells we can actually reach this turn - O(N) version
 
-// Function: getCellsAtDistance
-function getCellsAtDistance(fromCell, distance) {
+// Function: getCellsAtExactDistance
+function getCellsAtExactDistance(fromCell, distance) {
     var cells = [];
     var x = getCellX(fromCell);
     var y = getCellY(fromCell);
@@ -126,7 +126,7 @@ function findHitCells() {
     }
     
     // Get cells around enemy within our max weapon range
-    var cellsAroundEnemy = getCellsInRange(enemyCell, maxRange);
+    var cellsAroundEnemy = getCellsInRangeCustom(enemyCell, maxRange);
     
     // MAXIMUM ANALYSIS with full operation budget
     var maxCellsToCheck = 800;  // Use maximum operations for ultimate analysis!

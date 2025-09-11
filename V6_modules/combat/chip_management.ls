@@ -16,11 +16,15 @@ function tryUseChip(chip, target) {
     if (result == USE_SUCCESS || result == USE_CRITICAL) {  // Both indicate successful use
         myTP -= cost;
         var critText = (result == USE_CRITICAL) ? " (CRIT!)" : "";
-        debugLog("Used chip " + getChipName(chip) + " for " + cost + " TP" + critText);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Used chip " + getChipName(chip) + " for " + cost + " TP" + critText);
+        }
         return true;
     }
+
     return false;
 }
+
 
 
 // Function: getCachedCooldown
@@ -39,6 +43,7 @@ function getCachedCooldown(chip) {
 }
 
 
+
 // Function: chipHasDamage
 function chipHasDamage(chip) {
     var effects = getChipEffects(chip);
@@ -49,6 +54,7 @@ function chipHasDamage(chip) {
     }
     return false;
 }
+
 
 
 // Function: getChipDamage
@@ -65,6 +71,7 @@ function getChipDamage(chip, leek) {
     }
     return 0;
 }
+
 
 
 // Function: chipNeedLos

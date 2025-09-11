@@ -107,7 +107,9 @@ function aStar(start, goal, maxOps) {
         
         // Limit nodes to prevent timeout
         if (nodesEvaluated > 500) {
-            debugLog("A* reached node limit, using partial path");
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("A* reached node limit, using partial path");
+            }
             break;
         }
     }
@@ -115,7 +117,6 @@ function aStar(start, goal, maxOps) {
     // No path found - return null
     return null;
 }
-
 
 // Function: reconstructPath
 function reconstructPath(cameFrom, current) {
@@ -129,7 +130,6 @@ function reconstructPath(cameFrom, current) {
     return path;
 }
 
-
 // Function: findBestPathTo
 function findBestPathTo(targetCell, maxMP) {
     // Use A* to find optimal path
@@ -137,7 +137,9 @@ function findBestPathTo(targetCell, maxMP) {
     
     if (path == null || count(path) == 0) {
         // No path found, fall back to direct approach
-        debugLog("No A* path found to " + targetCell);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("No A* path found to " + targetCell);
+        }
         return null;
     }
     
@@ -175,4 +177,3 @@ function getNeighborCells(cell) {
     
     return neighbors;
 }
-

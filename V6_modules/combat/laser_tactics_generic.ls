@@ -50,7 +50,9 @@ function findBestLaserTargetGeneric(weapon, fromCell, minRange, maxRange, enemie
     }
     
     if (bestTarget != null) {
-        debugLog("Best laser target: " + getName(bestTarget) + " - hits " + bestHits + " enemies, damage: " + bestDamage);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Best laser target: " + getName(bestTarget) + " - hits " + bestHits + " enemies, damage: " + bestDamage);
+        }
         return [
             "target": bestTarget, 
             "targetCell": bestTargetCell, 
@@ -129,7 +131,9 @@ function findOptimalLaserPosition(weapon, minRange, maxRange, currentCell, avail
     }
     
     if (bestCell != currentCell) {
-        debugLog("Found better laser position with score: " + bestScore);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Found better laser position with score: " + bestScore);
+        }
     }
     
     return bestCell;
@@ -254,7 +258,9 @@ function debugLaserShot(fromCell, targetCell, hits) {
         // Multi-hit - use special color
         mark(fromCell, COLOR_BLUE);
         mark(targetCell, COLOR_RED);
-        debugLog("MULTI-HIT LASER: " + hits + " enemies!");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("MULTI-HIT LASER: " + hits + " enemies!");
+        }
     } else {
         // Single hit
         mark(fromCell, 3); // Green color
@@ -262,4 +268,6 @@ function debugLaserShot(fromCell, targetCell, hits) {
     }
 }
 
-debugLog("Generic laser tactics module loaded");
+if (debugEnabled && canSpendOps(1000)) {
+    debugLog("Generic laser tactics module loaded");
+}

@@ -5,40 +5,26 @@
 
 // Include required modules
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 // Function: evaluateCombatPositioning
 // Evaluate if we should reposition before attacking
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function evaluateCombatPositioning(currentDistance, hasLineOfSight, availableMP, availableWeapons) {
     if (availableMP == 0) {
         return null; // Can't move
     }
     
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentDamage = calculatePositionDamage(myCell, availableWeapons);
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var shouldReposition = false;
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var repositionReason = "";
     
     // Check for optimal weapon positioning
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var positioningNeeds = analyzePositioningNeeds(currentDistance, hasLineOfSight, availableWeapons);
     
@@ -50,28 +36,23 @@ function evaluateCombatPositioning(currentDistance, hasLineOfSight, availableMP,
             debugLog("Positioning needed: " + repositionReason);
         }
     }
-    
     // Find best position within movement range
     if (shouldReposition) {
         // Looking for better position - debug removed to reduce spam
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var bestPosition = findOptimalAttackPosition(availableMP, availableWeapons);
         if (bestPosition != null && bestPosition != myCell) {
             // Found position - debug removed to reduce spam
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
             var newDamage = calculatePositionDamage(bestPosition, availableWeapons);
-            // Damage comparison - debug removed to reduce spam
-            // Lower threshold for movement - even small improvements are worth it
-            if (newDamage > currentDamage * 1.05 || currentDamage == 0) { // 5% improvement or no current damage
+            // Special handling for line weapons - they need alignment more than damage improvement
+            var hasLineWeapons = inArray(availableWeapons, WEAPON_B_LASER) || inArray(availableWeapons, WEAPON_M_LASER) || inArray(availableWeapons, WEAPON_LASER) || inArray(availableWeapons, WEAPON_FLAME_THROWER);
+            var improvementThreshold = hasLineWeapons ? 1.01 : 1.05; // 1% for line weapons, 5% for others
+            
+            if (newDamage > currentDamage * improvementThreshold || currentDamage == 0) { // Line weapons: 1%, others: 5% improvement
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
                 var result = [:];
                 result["cell"] = bestPosition;
@@ -96,13 +77,11 @@ function evaluateCombatPositioning(currentDistance, hasLineOfSight, availableMP,
             debugLog("No repositioning needed");
         }
     }
-    
     // CRITICAL FIX: If desperately out of range, force movement towards enemy
     if (shouldReposition && availableMP > 0 && currentDistance > 12) {
         if (debugEnabled && canSpendOps(1000)) {
             debugLog("EMERGENCY: Forcing movement towards enemy - distance " + currentDistance + " > 12");
         }
-        
         // Find a cell closer to the enemy, even if not optimal
         var reachableCells = getReachableCells(myCell, availableMP);
         var closestCell = null;
@@ -116,7 +95,6 @@ function evaluateCombatPositioning(currentDistance, hasLineOfSight, availableMP,
                 closestCell = cell;
             }
         }
-        
         if (closestCell != null && closestCell != myCell) {
             if (debugEnabled && canSpendOps(1000)) {
                 debugLog("Emergency movement to " + closestCell + " (distance " + closestDistance + " vs " + currentDistance + ")");
@@ -129,20 +107,15 @@ function evaluateCombatPositioning(currentDistance, hasLineOfSight, availableMP,
             return result;
         }
     }
-    
     return null;
 }
 
 // Function: analyzePositioningNeeds
 // Analyze what positioning improvements are needed
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function analyzePositioningNeeds(distance, hasLOS, weapons) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var needs = [:];
     needs["needsRepositioning"] = false;
@@ -151,19 +124,13 @@ function analyzePositioningNeeds(distance, hasLOS, weapons) {
     // Dark Katana close-range opportunity
     if (distance >= 2 && distance <= 4 && inArray(weapons, WEAPON_DARK_KATANA)) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var mySTR = getStrength();
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var darkKatanaSelfDmg = 44 * (1 + mySTR / 100);
         if (myHP > darkKatanaSelfDmg * 2) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
             var meleeReachable = canReachDistance(1, myMP);
             if (meleeReachable) {
@@ -186,7 +153,6 @@ function analyzePositioningNeeds(distance, hasLOS, weapons) {
             return needs;
         }
     }
-    
     // M-Laser alignment
     if (inArray(weapons, WEAPON_M_LASER) && distance >= 5 && distance <= 12) {
         if (!isOnSameLine(myCell, enemyCell)) {
@@ -200,7 +166,14 @@ function analyzePositioningNeeds(distance, hasLOS, weapons) {
             return needs;
         }
     }
-    
+    // B-Laser alignment
+    if (inArray(weapons, WEAPON_B_LASER) && distance >= 2 && distance <= 8) {
+        if (!isOnSameLine(myCell, enemyCell)) {
+            needs["needsRepositioning"] = true;
+            needs["reason"] = "B-Laser not aligned - seek line positioning";
+            return needs;
+        }
+    }
     // Flame Thrower alignment
     if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8) {
         if (!isOnSameLine(myCell, enemyCell)) {
@@ -209,7 +182,6 @@ function analyzePositioningNeeds(distance, hasLOS, weapons) {
             return needs;
         }
     }
-    
     // Grenade launcher accessibility
     if (distance == 8 && inArray(weapons, WEAPON_GRENADE_LAUNCHER) && !hasLOS) {
         // We're at range 8 but no LOS - move to range 7 for grenade access
@@ -217,41 +189,33 @@ function analyzePositioningNeeds(distance, hasLOS, weapons) {
         needs["reason"] = "Range 8 without LOS - move to grenade range";
         return needs;
     }
-    
     // Line of sight issues
     if (!hasLOS && distance <= 10) {
         needs["needsRepositioning"] = true;
         needs["reason"] = "No line of sight - repositioning for better angle";
         return needs;
     }
-    
-    // Out of all weapon ranges
-    if (distance > 12) {
+    // Out of all weapon ranges - check actual max weapon range
+    var maxWeaponRange = getMaxWeaponRange(weapons);
+    if (distance > maxWeaponRange) {
         needs["needsRepositioning"] = true;
         needs["reason"] = "Out of weapon range - moving closer";
         return needs;
     }
-    
     return needs;
 }
 
 // Function: findOptimalAttackPosition
 // Find the best position for attacking within movement range
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function findOptimalAttackPosition(maxMovement, weapons) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var reachableCells = getReachableCells(myCell, maxMovement);
     
     // Removed verbose cell searching logs
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var bestCell = null;
     var bestScore = -999999;
@@ -261,6 +225,8 @@ function findOptimalAttackPosition(maxMovement, weapons) {
     var bestMLaserScore = -999999;
     var bestLaserCell = null;
     var bestLaserScore = -999999;
+    var bestBLaserCell = null;
+    var bestBLaserScore = -999999;
     var bestRifleCell = null;  
     var bestRifleScore = -999999;
     var bestNeutrinoCell = null;
@@ -282,13 +248,11 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestScore = score;
             bestCell = cell;
         }
-        
         // Track best LOS position separately
         if (hasLOS(cell, enemyCell) && score > bestLOSScore) {
             bestLOSScore = score;
             bestLOSCell = cell;
         }
-        
         var distance = getCellDistance(cell, enemyCell);
         
         // Track best M-Laser aligned position (range 5-12, line aligned)
@@ -300,7 +264,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestMLaserScore = score;
             bestMLaserCell = cell;
         }
-        
         // Track best Laser aligned position (range 2-9, line aligned)
         if (inArray(weapons, WEAPON_LASER) && 
             distance >= 2 && distance <= 9 && 
@@ -310,7 +273,15 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestLaserScore = score;
             bestLaserCell = cell;
         }
-        
+        // Track best B-Laser aligned position (range 2-8, line aligned)
+        if (inArray(weapons, WEAPON_B_LASER) && 
+            distance >= 2 && distance <= 8 && 
+            hasLOS(cell, enemyCell) && 
+            isOnSameLine(cell, enemyCell) && 
+            score > bestBLaserScore) {
+            bestBLaserScore = score;
+            bestBLaserCell = cell;
+        }
         // Track best Rifle position (range 7-9, LOS required)
         if (inArray(weapons, WEAPON_RIFLE) && 
             distance >= 7 && distance <= 9 && 
@@ -319,7 +290,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestRifleScore = score;
             bestRifleCell = cell;
         }
-        
         // Track best Neutrino position (range 2-6, LOS required)
         if (inArray(weapons, WEAPON_NEUTRINO) && 
             distance >= 2 && distance <= 6 && 
@@ -328,7 +298,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestNeutrinoScore = score;
             bestNeutrinoCell = cell;
         }
-        
         // Track best Destroyer position (range 1-6, LOS required)
         if (inArray(weapons, WEAPON_DESTROYER) && 
             distance >= 1 && distance <= 6 && 
@@ -337,7 +306,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestDestroyerScore = score;
             bestDestroyerCell = cell;
         }
-        
         // Track best Flame Thrower position (range 2-8, line alignment required)
         if (inArray(weapons, WEAPON_FLAME_THROWER) && 
             distance >= 2 && distance <= 8 && 
@@ -347,14 +315,12 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestFlameThrowerScore = score;
             bestFlameThrowerCell = cell;
         }
-        
         // Track best AoE position (for Grenade range 4-7)
         if (distance >= 4 && distance <= 7 && score > bestAoEScore) {
             bestAoEScore = score;
             bestAoECell = cell;
         }
     }
-    
     // PRIORITY 1: M-Laser aligned position (best weapon when aligned)
     if (bestMLaserCell != null && bestMLaserScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -362,7 +328,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestMLaserCell;
     }
-    
     // PRIORITY 2: Flame Thrower aligned position (excellent line weapon with poison DoT)
     if (bestFlameThrowerCell != null && bestFlameThrowerScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -370,7 +335,13 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestFlameThrowerCell;
     }
-    
+    // PRIORITY 2.5: B-Laser aligned position (healing line weapon, high DPT)
+    if (bestBLaserCell != null && bestBLaserScore > -5000) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("🎯 B-Laser aligned position: " + bestBLaserCell + " (score: " + bestBLaserScore + ")");
+        }
+        return bestBLaserCell;
+    }
     // PRIORITY 3: Laser aligned position (good line weapon, shorter range than M-Laser)
     if (bestLaserCell != null && bestLaserScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -378,7 +349,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestLaserCell;
     }
-    
     // PRIORITY 4: Rifle position (consistent reliable weapon)
     if (bestRifleCell != null && bestRifleScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -386,7 +356,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestRifleCell;
     }
-    
     // PRIORITY 6: Destroyer position (debuff weapon, fallback to close range)
     if (bestDestroyerCell != null && bestDestroyerScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -394,7 +363,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestDestroyerCell;
     }
-    
     // PRIORITY 5: Neutrino position (vulnerability debuff utility)
     if (bestNeutrinoCell != null && bestNeutrinoScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -402,7 +370,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestNeutrinoCell;
     }
-    
     // PRIORITY 6: General LOS positions (fallback)
     if (bestLOSCell != null && bestLOSScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -410,7 +377,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestLOSCell;
     }
-    
     // PRIORITY 7: AoE position for indirect attacks
     if (bestAoECell != null && bestAoEScore > -8000) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -418,7 +384,6 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestAoECell;
     }
-    
     // Multi-turn LOS pathfinding as last resort
     if (bestScore < -8000) {
         var futurePosition = findFutureLOSPosition(maxMovement * 2); // Look 2 turns ahead
@@ -430,30 +395,22 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             return planMovementToward(futurePosition, maxMovement);
         }
     }
-    
     // Last resort: return best overall position
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("Best attack position: " + bestCell + " (score: " + bestScore + ") - Emergency fallback");
     }
-    
     return bestCell;
 }
 
 // Function: scoreAttackPosition
 // Score a position for attack effectiveness
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function scoreAttackPosition(cell, weapons) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var score = 0;
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var distance = getCellDistance(cell, enemyCell);
     
@@ -467,36 +424,26 @@ function scoreAttackPosition(cell, weapons) {
             return -10000; // Heavily penalize no line of sight outside AoE range
         }
     }
-    
     // Score based on weapon effectiveness
     for (var w = 0; w < count(weapons); w++) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var weaponId = weapons[w];
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var weaponScore = scoreWeaponAtPosition(weaponId, cell, distance);
         score = max(score, weaponScore); // Take best weapon score
     }
-    
     // Distance penalties for being too close to dangerous enemies
     if (ENEMY_HAS_BAZOOKA && distance >= 2 && distance <= 4) {
         score -= 2000; // Heavy penalty for bazooka range
     }
-    
     // Small bonus for optimal range (7-8)
     if (distance >= 7 && distance <= 8) {
         score += 100;
     }
-    
     // EID penalty (Expected Incoming Damage)
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var eid = calculateEID(cell);
     score -= eid * 0.5;
@@ -507,28 +454,19 @@ function scoreAttackPosition(cell, weapons) {
 // Function: scoreWeaponAtPosition
 // Score a specific weapon at a position
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function scoreWeaponAtPosition(weaponId, cell, distance) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var minRange = getWeaponMinRange(weaponId);
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var maxRange = getWeaponMaxRange(weaponId);
     
     if (distance < minRange || distance > maxRange) {
         return -5000; // Can't use weapon
     }
-    
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var baseScore = 1000; // Base score for usable weapon
     
@@ -554,26 +492,21 @@ function scoreWeaponAtPosition(weaponId, cell, distance) {
     } else if (weaponId == WEAPON_GRENADE_LAUNCHER && distance >= 4 && distance <= 7) {
         baseScore = 5000; // Good grenade range
     }
-    
     return baseScore;
 }
 
 // Function: executePositioning
 // Execute the positioning move
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function executePositioning(positionInfo) {
     if (positionInfo == null || positionInfo["cell"] == myCell) {
         return false;
     }
-    
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("Repositioning: " + positionInfo["reason"] + 
                 " (damage improvement: +" + positionInfo["damageImprovement"] + ")");
     }
-    
     moveToCell(positionInfo["cell"]);
     
     // Update position variables
@@ -585,58 +518,40 @@ function executePositioning(positionInfo) {
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("Repositioned - new distance: " + enemyDistance + ", new LOS: " + hasLOS(myCell, enemyCell));
     }
-    
     return true;
 }
 
 // Function: calculatePositionDamage
 // Calculate potential damage from a position
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function calculatePositionDamage(cell, weapons) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var maxDamage = 0;
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var distance = getCellDistance(cell, enemyCell);
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var mySTR = getStrength();
     
     if (!hasLOS(cell, enemyCell)) {
         return 0;
     }
-    
     for (var w = 0; w < count(weapons); w++) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var weaponId = weapons[w];
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var minRange = getWeaponMinRange(weaponId);
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var maxRange = getWeaponMaxRange(weaponId);
         
         if (distance >= minRange && distance <= maxRange) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
             var damage = 0;
             
@@ -651,83 +566,64 @@ function calculatePositionDamage(cell, weapons) {
             } else if (weaponId == WEAPON_GRENADE_LAUNCHER && distance >= 4 && distance <= 7) {
                 damage = 150 * (1 + mySTR / 100);
             }
-            
             maxDamage = max(maxDamage, damage);
         }
     }
-    
     return maxDamage;
 }
 
 // Function: canReachDistance
 // Check if we can reach a specific distance from enemy
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function canReachDistance(targetDistance, movementPoints) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var reachable = getReachableCells(myCell, movementPoints);
     
     for (var i = 0; i < count(reachable); i++) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var cell = reachable[i];
         if (getCellDistance(cell, enemyCell) == targetDistance) {
             return true;
         }
     }
-    
     return false;
 }
 
 // Function: findBestAttackPosition
 // Find the best position for attacking (used in fallback logic)
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
-function findBestAttackPosition() {
+function findBestAttackPosition(availableWeapons) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var reachable = getReachableCells(myCell, myMP);
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var bestCell = null;
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var bestScore = -999999;
     
     for (var i = 0; i < min(30, count(reachable)); i++) {
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var cell = reachable[i];
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var distance = getCellDistance(cell, enemyCell);
         
-        if (!hasLOS(cell, enemyCell) || distance > 12) {
-            continue; // Skip unusable positions
+        if (!hasLOS(cell, enemyCell)) {
+            continue; // Skip positions without LOS
         }
-        
+        // Allow positions up to max weapon range + movement buffer
+        var maxRange = getMaxWeaponRange(availableWeapons) + 3;
+        if (distance > maxRange) {
+            continue; // Skip positions too far from any weapon range
+        }
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var score = 1000 - distance * 10; // Prefer closer positions
         
@@ -737,13 +633,11 @@ function findBestAttackPosition() {
         } else if (distance >= 5 && distance <= 8) {
             score += 300; // Good general range
         }
-        
         if (score > bestScore) {
             bestScore = score;
             bestCell = cell;
         }
     }
-    
     return bestCell;
 }
 
@@ -774,7 +668,6 @@ function findFutureLOSPosition(maxDistance) {
             }
         }
     }
-    
     return null;
 }
 
@@ -810,6 +703,42 @@ function planMovementToward(targetCell, availableMP) {
             bestCell = cell;
         }
     }
-    
     return bestCell;
+}
+
+// Function: getMaxWeaponRange
+// Get maximum range of available weapons
+function getMaxWeaponRange(weapons) {
+    var maxRange = 0;
+    
+    for (var i = 0; i < count(weapons); i++) {
+        var weaponId = weapons[i];
+        var range = 0;
+        
+        if (weaponId == WEAPON_GRENADE_LAUNCHER) {
+            range = 7;
+        } else if (weaponId == WEAPON_RIFLE) {
+            range = 9;
+        } else if (weaponId == WEAPON_M_LASER) {
+            range = 12;
+        } else if (weaponId == WEAPON_B_LASER) {
+            range = 8;
+        } else if (weaponId == WEAPON_MAGNUM) {
+            range = 7;
+        } else if (weaponId == WEAPON_LASER) {
+            range = 8;
+        } else if (weaponId == WEAPON_FLAME_THROWER) {
+            range = 8;
+        } else if (weaponId == WEAPON_DESTROYER) {
+            range = 2;
+        } else if (weaponId == WEAPON_DARK_KATANA) {
+            range = 1;
+        } else {
+            range = 9; // Default reasonable range
+        }
+        if (range > maxRange) {
+            maxRange = range;
+        }
+    }
+    return maxRange > 0 ? maxRange : 9; // Fallback to 9 if no weapons
 }

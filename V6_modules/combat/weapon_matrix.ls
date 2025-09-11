@@ -6,7 +6,9 @@
 function initializeWeaponMatrix() {
     if (MATRIX_INITIALIZED) return;
     
-    debugLog("Pre-computing weapon effectiveness matrix...");
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Pre-computing weapon effectiveness matrix...");
+    }
     
     var myWeapons = getWeapons();
     var myChips = getChips();
@@ -33,6 +35,7 @@ function initializeWeaponMatrix() {
                 }
             }
         }
+
         
         // Apply strength bonus
         baseDamage = baseDamage * (1 + myStrength / 100.0);
@@ -69,6 +72,7 @@ function initializeWeaponMatrix() {
             }
         }
     }
+
     
     // Pre-compute chip effectiveness
     for (var c = 0; c < count(myChips); c++) {
@@ -122,6 +126,7 @@ function initializeWeaponMatrix() {
             }
         }
     }
+
     
     // Pre-compute optimal combinations at each range
     for (var range = 1; range <= 15; range++) {
@@ -136,7 +141,9 @@ function initializeWeaponMatrix() {
     }
     
     MATRIX_INITIALIZED = true;
-    debugLog("Matrix initialization complete");
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Matrix initialization complete");
+    }
 }
 
 
@@ -166,6 +173,7 @@ function getOptimalDamage(range, tpAvailable) {
     return 0;
 }
 
+
 // Quick weapon lookup
 
 // Function: getWeaponDamageAt
@@ -184,6 +192,7 @@ function getWeaponDamageAt(weapon, range) {
     return 0;
 }
 
+
 // Quick chip lookup
 
 // Function: getChipDamageAt
@@ -201,6 +210,7 @@ function getChipDamageAt(chip, range) {
     
     return 0;
 }
+
 
 // === BITWISE STATE MANAGEMENT ===
 
@@ -229,6 +239,7 @@ function calculateOptimalCombo(range, tpBudget) {
             push(items, item);
         }
     }
+
     
     var myChips = getChips();
     for (var i = 0; i < count(myChips); i++) {
@@ -242,6 +253,7 @@ function calculateOptimalCombo(range, tpBudget) {
             push(items, item);
         }
     }
+
     
     // Sort by DPTP (manual sort since LeekScript doesn't support comparison functions)
     var sorted = [];
@@ -288,5 +300,6 @@ function calculateOptimalCombo(range, tpBudget) {
     
     return combo;
 }
+
 
 // Fast lookup function

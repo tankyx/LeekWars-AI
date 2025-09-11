@@ -54,7 +54,6 @@ function visualizeHitCells(hitCells) {
     }
 }
 
-
 // Function: findSafeCells
 function findSafeCells() {
     var safeCells = [];
@@ -76,7 +75,6 @@ function findSafeCells() {
             push(coarse, cell);
         }
     }
-    
     // Precise evaluation on subset
     var cap = min(60, count(coarse));
     for (var i = 0; i < cap; i++) {

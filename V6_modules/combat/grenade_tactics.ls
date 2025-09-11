@@ -18,9 +18,8 @@ function findBestGrenadeTarget(fromCell) {
         var targetCell = targetCells[i];
         var dist = getCellDistance(fromCell, targetCell);
         
-        // Check range and LOS
+        // Check range (no LOS required for indirect fire)
         if (dist < minRange || dist > maxRange) continue;
-        if (!hasLOS(fromCell, targetCell)) continue;
         
         // Calculate AoE damage at this target position
         var totalDamage = 0;
@@ -67,7 +66,7 @@ function findBestGrenadeTarget(fromCell) {
         // Prefer positions that hit the enemy
         if (enemiesHit > 0 && totalDamage > bestDamage) {
             bestDamage = totalDamage;
-            bestResult = [:];;
+            bestResult = [:];
             bestResult["targetCell"] = targetCell;
             bestResult["damage"] = totalDamage;
             bestResult["directHit"] = (targetCell == enemyCell);
@@ -76,10 +75,12 @@ function findBestGrenadeTarget(fromCell) {
     }
     
     if (bestResult != null && debugEnabled) {
-        debugLog("👣 Grenade target: cell " + bestResult["targetCell"] + 
-                 " dmg=" + round(bestResult["damage"]) +
-                 " direct=" + bestResult["directHit"] +
-                 " range=" + bestResult["range"]);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("👣 Grenade target: cell " + bestResult["targetCell"] + 
+                     " dmg=" + round(bestResult["damage"]) +
+                     " direct=" + bestResult["directHit"] +
+                     " range=" + bestResult["range"]);
+        }
     }
     
     return bestResult;

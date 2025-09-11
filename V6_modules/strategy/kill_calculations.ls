@@ -48,6 +48,7 @@ function calculatePkill(targetHP, availableTP) {
                 break;
             }
         }
+
         return acc;
     }, {minD: minD, maxD: maxD, tp: tp});
     
@@ -126,7 +127,6 @@ function estimateNextTurnEV() {
     if (!canSpendOps(100)) {
         return bestDamage;
     }
-    
     var neighbors = [
         getCellFromXY(getCellX(myCell)+1, getCellY(myCell)),
         getCellFromXY(getCellX(myCell)-1, getCellY(myCell)),

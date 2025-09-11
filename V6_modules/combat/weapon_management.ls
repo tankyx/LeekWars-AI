@@ -2,8 +2,8 @@
 // Weapon usage and switching
 // Auto-generated from V5.0 script
 
-// Function: useWeapon
-function useWeapon(target) {
+// Function: tryUseWeapon
+function tryUseWeapon(target) {
     var w = getWeapon();
     if (w == null || !canUseWeapon(w, target)) return false;
     
@@ -16,12 +16,13 @@ function useWeapon(target) {
     if (result == USE_SUCCESS || result == USE_CRITICAL) {
         myTP -= cost;
         var critText = (result == USE_CRITICAL) ? " (CRIT!)" : "";
-        debugLog("Used weapon " + getWeaponName(w) + " for " + cost + " TP" + critText);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Used weapon " + getWeaponName(w) + " for " + cost + " TP" + critText);
+        }
         return true;
     }
     return false;
 }
-
 
 // Function: setWeaponIfNeeded
 function setWeaponIfNeeded(weapon) {
@@ -38,7 +39,6 @@ function weaponNeedLos(weapon) {
     // All our current weapons need LOS
     return true;
 }
-
 
 // Function: getWeaponDamage
 function getWeaponDamage(weapon, leek) {
@@ -58,4 +58,3 @@ function getWeaponDamage(weapon, leek) {
     }
     return 0;
 }
-

@@ -19,17 +19,26 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
     
     // Debug weapon detection
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("Detected weapons: " + count(myWeapons));
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Detected weapons: " + count(myWeapons));
         for (var i = 0; i < count(myWeapons); i++) {
-            debugLog("  Weapon " + i + ": " + myWeapons[i] + " (" + getWeaponName(myWeapons[i]) + ")");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("  Weapon " + i + ": " + myWeapons[i] + " (" + getWeaponName(myWeapons[i]) + ")");
+            }
+        }
         }
     }
+
+
     
     // Add null check for weapons
     if (myWeapons == null) {
-        debugLog("ERROR: getWeapons() returned null");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("ERROR: getWeapons() returned null");
+        }
         return [];
     }
+
 
     var myChips = getChips();
 
@@ -40,8 +49,11 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
         var weaponId = myWeapons[w];
         
         if (debugEnabled && canSpendOps(500)) {
-            debugLog("Processing weapon: " + weaponId + " (" + getWeaponName(weaponId) + ")");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Processing weapon: " + weaponId + " (" + getWeaponName(weaponId) + ")");
+            }
         }
+
 
         var minRange = getWeaponMinRange(weaponId);
         var maxRange = getWeaponMaxRange(weaponId);
@@ -54,41 +66,97 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
             var baseDamage = getWeaponBaseDamage(weaponId);
             
             if (debugEnabled && canSpendOps(500)) {
-                debugLog("Weapon " + weaponId + " - baseDamage: " + baseDamage + ", range: " + minRange + "-" + maxRange + ", cost: " + cost);
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Weapon " + weaponId + " - baseDamage: " + baseDamage + ", range: " + minRange + "-" + maxRange + ", cost: " + cost);
+                }
             }
+
 
             var scaledDamage = baseDamage * (1 + mySTR / 100);
             
             // Calculate uses possible with current TP
             var maxUses = getWeaponMaxUses(weaponId);
+            
+            // Special tracking for weapons with custom usage limits
+            if (weaponId == WEAPON_MAGNUM) {
+                if (magnumUsesRemaining <= 0) {
+                    if (debugEnabled && canSpendOps(500)) {
+                        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping Magnum - no uses remaining (" + magnumUsesRemaining + ")");
+                        }
+                    }
+                    continue; // Skip if no uses left
+                }
+
+                maxUses = magnumUsesRemaining; // Use custom tracking for Magnum
+            } else if (weaponId == WEAPON_B_LASER) {
+                if (bLaserUsesRemaining <= 0) {
+                    if (debugEnabled && canSpendOps(500)) {
+                        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping B-Laser - no uses remaining (" + bLaserUsesRemaining + ")");
+                        }
+                    }
+                    continue; // Skip if no uses left
+                }
+
+                maxUses = bLaserUsesRemaining; // Use custom tracking for B-Laser
+            }
+
+            
             var possibleUses = min(maxUses, floor(currentTP / cost));
             
             // Special weapon handling
             if (weaponId == WEAPON_M_LASER && !isOnSameLine(myCell, enemyCell)) {
+                if (debugEnabled && canSpendOps(500)) {
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping M-Laser - not aligned");
+                    }
+                }
                 continue; // Skip M-Laser if not aligned
             }
+
             
             if (weaponId == WEAPON_DARK_KATANA) {
                 var selfDamage = 44 * (1 + mySTR / 100);
                 if (myHP <= selfDamage * 2) {
+                    if (debugEnabled && canSpendOps(500)) {
+                        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping Dark Katana - too dangerous (HP: " + myHP + ", selfDmg: " + selfDamage + ")");
+                        }
+                    }
                     continue; // Skip if too dangerous
                 }
             }
+
+
             
             // Laser weapon line alignment check
             if (weaponId == WEAPON_LASER && !isOnSameLine(myCell, enemyCell)) {
+                if (debugEnabled && canSpendOps(500)) {
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping Laser - not aligned");
+                    }
+                }
                 continue; // Skip Laser if not aligned (line weapon)
             }
+
             
             // B-Laser line alignment check (if B-Laser system is active)
             if (weaponId == WEAPON_B_LASER && !isOnSameLine(myCell, enemyCell)) {
+                if (debugEnabled && canSpendOps(500)) {
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping B-Laser - not aligned");
+                    }
+                }
                 continue; // Skip B-Laser if not aligned (line weapon)
             }
+
             
             // Flame Thrower line alignment check
             if (weaponId == WEAPON_FLAME_THROWER && !isOnSameLine(myCell, enemyCell)) {
                 continue; // Skip Flame Thrower if not aligned (line weapon)
             }
+
             
             // Calculate damage per TP
 
@@ -102,6 +170,7 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
                 totalDamage += poisonDamage; // Add poison DoT value
             }
 
+
             var totalCost = cost * possibleUses;
 
 
@@ -112,8 +181,28 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
             
             // Add to options
             push(attackOptions, ["weapon", weaponId, totalDamage, cost, dptp, possibleUses, name]);
+            
+            if (debugEnabled && canSpendOps(500)) {
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Added weapon option: " + name + " (damage: " + totalDamage + ", dptp: " + dptp + ", uses: " + possibleUses + ")");
+                }
+            }
+
+        } else {
+            if (debugEnabled && canSpendOps(500)) {
+                var reason = "";
+                if (currentDistance < minRange) reason = "too close (" + currentDistance + " < " + minRange + ")";
+                else if (currentDistance > maxRange) reason = "too far (" + currentDistance + " > " + maxRange + ")";
+                else if (currentTP < cost) reason = "insufficient TP (" + currentTP + " < " + cost + ")";
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping " + name + " - " + reason);
+                }
+            }
         }
     }
+
+
+
     
     // === AoE INDIRECT ATTACKS ===
     // Check for Grenade AoE opportunities when no direct LOS
@@ -123,6 +212,7 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
             attackOptions = arrayConcat(attackOptions, grenadeAoE);
         }
     }
+
     
     // === CHIP OPTIONS ===
 
@@ -131,6 +221,7 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
     if (chipOptions != null) {
         attackOptions = arrayConcat(attackOptions, chipOptions);
     }
+
     
     // Sort by damage per TP (highest first)
     
@@ -138,25 +229,106 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
     if (attackOptions == null) {
         return [];
     }
+
+    
+    // Debug pre-sort order
+    if (debugEnabled) {
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PRE-SORT weapon order:");
+        }
+        for (var i = 0; i < min(5, count(attackOptions)); i++) {
+            var option = attackOptions[i];
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("  " + i + ": " + option[6] + " (dptp: " + option[4] + ")");
+            }
+        }
+    }
+
+
     
     var sortable = [];
     for (var i = 0; i < count(attackOptions); i++) {
         var option = attackOptions[i];
         push(sortable, [option[4], option]); // [dptp, option] - push modifies in-place
     }
+
     
-    arraySort(sortable, function(a, b) {
-        return b[0] - a[0]; // Sort by dptp descending
-    });
+    // Debug pre-sort order
+    if (debugEnabled) {
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Before arraySort:");
+        }
+        for (var j = 0; j < count(sortable); j++) {
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("  " + j + ": dptp=" + sortable[j][0] + " weapon=" + sortable[j][1][6]);
+            }
+        }
+    }
+
+
+    
+    // Use simple bubble sort for reliable descending order (highest dptp first)
+    for (var i = 0; i < count(sortable) - 1; i++) {
+        for (var j = 0; j < count(sortable) - 1 - i; j++) {
+            if (sortable[j][0] < sortable[j + 1][0]) { // If current < next, swap them
+                var temp = sortable[j];
+                sortable[j] = sortable[j + 1];
+                sortable[j + 1] = temp;
+                if (debugEnabled && canSpendOps(500)) {
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Swapped: " + sortable[j + 1][1][6] + "(" + sortable[j + 1][0] + ") with " + sortable[j][1][6] + "(" + sortable[j][0] + ")");
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
+    
+    // Debug post-sort order
+    if (debugEnabled) {
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("After arraySort:");
+        }
+        for (var j = 0; j < count(sortable); j++) {
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("  " + j + ": dptp=" + sortable[j][0] + " weapon=" + sortable[j][1][6]);
+            }
+        }
+    }
+
+
     
     // Extract the sorted options
     var sortedOptions = [];
     for (var i = 0; i < count(sortable); i++) {
         push(sortedOptions, sortable[i][1]); // push modifies in-place
     }
+
+    
+    // Debug the final sorted order - ALWAYS show this critical info
+    if (debugEnabled) {
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Sorting " + count(attackOptions) + " options into " + count(sortedOptions) + " sorted");
+        }
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Final weapon order after sorting:");
+        }
+        for (var i = 0; i < min(5, count(sortedOptions)); i++) {
+            var option = sortedOptions[i];
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("  " + i + ": " + option[6] + " (dptp: " + option[4] + ")");
+            }
+        }
+    }
+
+
     
     return sortedOptions;
 }
+
 
 // Function: applyWeaponPriorities
 // Apply weapon-specific priority adjustments
@@ -181,54 +353,51 @@ function applyWeaponPriorities(weaponId, baseDptp, distance, availableWeapons) {
         if (count(allEnemies) > 1) {
             adjustedDptp *= 1.3; // 30% bonus for multi-hit potential
         }
+
     } else if (weaponId == WEAPON_DARK_KATANA) {
         // Dark Katana prioritized in close range
         if (distance >= 2 && distance <= 4) {
             adjustedDptp *= 1.5; // 50% bonus for close range positioning
         }
+
     } else if (weaponId == WEAPON_GRENADE_LAUNCHER) {
-        // Grenade penalties when better options available
-
-
-        var hasBetterOptions = false;
-        if (inArray(availableWeapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9) {
-            hasBetterOptions = true;
-        }
-        if (inArray(availableWeapons, WEAPON_M_LASER) && distance >= 5 && distance <= 12) {
-            hasBetterOptions = true;
-        }
-        
-        if (hasBetterOptions) {
-            adjustedDptp *= 0.7; // 30% penalty when better options exist
-        }
+        // Grenade Launcher should compete based on its high damage, no artificial penalties
+        // Let dptp comparison handle priority naturally
         
         // Multi-enemy bonus for AoE
         if (count(allEnemies) > 1) {
             adjustedDptp *= 1.4; // 40% bonus for AoE multi-hit
         }
+
     } else if (weaponId == WEAPON_NEUTRINO) {
         // Neutrino prioritized for its vulnerability effect
         if (distance >= 2 && distance <= 6) {
             adjustedDptp *= 1.3; // 30% bonus for vulnerability debuff utility
         }
+
         // Bonus against high-HP enemies where vulnerability helps
         if (getLife(enemy) > 1500) {
             adjustedDptp *= 1.2; // 20% bonus vs tanks
         }
+
     } else if (weaponId == WEAPON_DESTROYER) {
         // Destroyer prioritized for its strength debuff
         if (distance >= 1 && distance <= 6) {
             adjustedDptp *= 1.25; // 25% bonus for strength debuff utility
         }
+
         // Bonus against high-STR enemies where debuff is most valuable
         if (getStrength(enemy) > 300) {
             adjustedDptp *= 1.3; // 30% bonus vs high STR enemies
         }
+
         
-        // Penalty when Flame Thrower is available at better range
-        if (inArray(availableWeapons, WEAPON_FLAME_THROWER) && distance >= 2) {
+        // Apply penalty only when Flame Thrower is equipped and viable
+        // (This leek has B-Laser + Magnum + Grenade, no Flame Thrower, so no penalty should apply)
+        if (inArray(availableWeapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8) {
             adjustedDptp *= 0.7; // 30% penalty - prefer Flame Thrower for its DoT
         }
+
     } else if (weaponId == WEAPON_LASER) {
         // Laser is good line weapon, similar to M-Laser but shorter range
         adjustedDptp *= 1.1; // 10% bonus for line piercing
@@ -237,11 +406,13 @@ function applyWeaponPriorities(weaponId, baseDptp, distance, availableWeapons) {
         if (count(allEnemies) > 1) {
             adjustedDptp *= 1.25; // 25% bonus for multi-hit potential
         }
+
         
         // Preference in mid-range where it excels
         if (distance >= 4 && distance <= 7) {
             adjustedDptp *= 1.15; // 15% bonus in sweet spot
         }
+
     } else if (weaponId == WEAPON_FLAME_THROWER) {
         // Flame Thrower is excellent line weapon with poison DoT
         adjustedDptp *= 1.6; // 60% bonus for line piercing + poison damage
@@ -250,15 +421,29 @@ function applyWeaponPriorities(weaponId, baseDptp, distance, availableWeapons) {
         if (count(allEnemies) > 1) {
             adjustedDptp *= 1.3; // 30% bonus for multi-hit potential
         }
+
         
         // Optimal range bonus (2-8 range)
         if (distance >= 2 && distance <= 6) {
             adjustedDptp *= 1.2; // 20% bonus in sweet spot
         }
+
+    } else if (weaponId == WEAPON_MAGNUM) {
+        // Magnum competes on raw dptp - no artificial bonuses
+        // Life steal is factored into damage calculation already
     }
+
+    
+    if (debugEnabled && canSpendOps(500)) {
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Priority adjustment for " + getWeaponName(weaponId) + ": " + baseDptp + " -> " + adjustedDptp);
+        }
+    }
+
     
     return adjustedDptp;
 }
+
 
 // Function: buildChipOptions
 // Build chip attack options
@@ -270,22 +455,12 @@ function buildChipOptions(currentTP, distance, hasLOS, chips, strength) {
     var chipOptions = [];
     
     for (var c = 0; c < count(chips); c++) {
-
-
         var chipId = chips[c];
-
-
         var chipCost = getChipCost(chipId);
-
-
         var chipName = getChipName(chipId);
         
         if (currentTP >= chipCost && isAttackChip(chipId)) {
-
-
             var damage = calculateChipDamage(chipId, strength);
-
-
             var dptp = damage / chipCost;
             
             // Apply chip-specific range checks
@@ -300,9 +475,13 @@ function buildChipOptions(currentTP, distance, hasLOS, chips, strength) {
             }
         }
     }
+
+
+
     
     return chipOptions;
 }
+
 
 // Function: isAttackChip
 // Check if chip is an attack chip
@@ -314,6 +493,7 @@ function isAttackChip(chipId) {
     var attackChips = [CHIP_SPARK, CHIP_LIGHTNING, CHIP_ROCK, CHIP_ICE];
     return inArray(attackChips, chipId);
 }
+
 
 // Function: calculateChipDamage
 // Calculate chip damage with strength scaling
@@ -333,10 +513,12 @@ function calculateChipDamage(chipId, strength) {
     } else if (chipId == CHIP_ICE) {
         baseDamage = 45; // Base ice damage
     }
+
     
     // Scale with strength
     return baseDamage * (1 + strength / 100);
 }
+
 
 // Function: getWeaponBaseDamage
 // Get base damage for weapons
@@ -364,9 +546,11 @@ function getWeaponBaseDamage(weaponId) {
     } else if (weaponId == WEAPON_FLAME_THROWER) {
         return 37.5; // Flame Thrower base damage (35-40 average)
     }
+
     
     return 50; // Default fallback
 }
+
 
 // Function: selectBestWeapon
 // Select the best weapon for current situation
@@ -377,6 +561,7 @@ function selectBestWeapon(attackOptions) {
     if (attackOptions == null || count(attackOptions) == 0) {
         return null;
     }
+
     
     // Get the highest priority option
 
@@ -385,16 +570,17 @@ function selectBestWeapon(attackOptions) {
     
     // Prefer weapons over chips if damage is similar
     for (var i = 0; i < min(3, count(attackOptions)); i++) {
-
-
         var option = attackOptions[i];
         if (option[0] == "weapon" && option[4] >= bestOption[4] * 0.9) {
             return option;
         }
     }
+
+
     
     return bestOption;
 }
+
 
 // Function: switchToWeaponIfNeeded
 // Only switch weapon if different from current
@@ -405,6 +591,8 @@ function switchToWeaponIfNeeded(weaponId) {
         setWeapon(weaponId);
     }
 }
+
+
 
 // Function: checkGrenadeAoEOptions
 // Look for indirect Grenade attacks using AoE splash damage
@@ -419,10 +607,12 @@ function checkGrenadeAoEOptions(currentTP, currentDistance, myWeapons, mySTR) {
             break;
         }
     }
+
     
     if (!hasGrenade || currentTP < 7) { // Grenade costs 7 TP
         return aoeOptions;
     }
+
     
     // Get cells around the enemy for AoE targeting
     var enemyX = getCellX(enemyCell);
@@ -461,6 +651,8 @@ function checkGrenadeAoEOptions(currentTP, currentDistance, myWeapons, mySTR) {
             break;
         }
     }
+
+
     
     return aoeOptions;
 }

@@ -2,10 +2,6 @@
 // Combat-focused decision making and execution
 // Refactored from decision_making.ls for better modularity
 
-// === STANDALONE COMPILATION SUPPORT ===
-// These variables/functions are defined in other modules when included via V6_main.ls
-// For standalone compilation, provide stub implementations
-
 // NOTE: Global variables are defined in core/globals.ls when included via V6_main.ls
 // For standalone testing only, uncomment the lines below:
 // global debugEnabled = true;
@@ -88,7 +84,9 @@
 
 function makeCombatDecision() {
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("Entering Stage C: Full evaluation");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Entering Stage C: Full evaluation");
+        }
     }
     
     // Stage C: Full evaluation (skip expensive parts on turn 5+)
@@ -103,8 +101,10 @@ function makeCombatDecision() {
     
     if (effectivePkill >= PKILL_COMMIT) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Committing to attack - effectivePkill=" + effectivePkill + 
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Committing to attack - effectivePkill=" + effectivePkill + 
                     " (base=" + pkillCurrent + " lifesteal=" + lifeStealNow + ")");
+            }
         }
         executeAttack();
         if (myTP >= 4) executeDefensive();
@@ -113,26 +113,36 @@ function makeCombatDecision() {
     
     // Check if we can setup a 2-turn kill
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("Checking canSetupKill...");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Checking canSetupKill...");
+        }
     }
     
     if (canSetupKill() && canSpendOps(1500000)) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Setting up 2-turn kill");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Setting up 2-turn kill");
+            }
         }
         // Find cells where we can hit the enemy
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Calling findHitCells...");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Calling findHitCells...");
+            }
         }
 
         var raw = findHitCells();
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Found " + count(raw) + " hit cells");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Found " + count(raw) + " hit cells");
+            }
         }
         
         // Setup positioning for kill - simplified
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Potential kill setup detected");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Potential kill setup detected");
+            }
         }
         executeAttack();
         return "kill_setup";
@@ -148,14 +158,18 @@ function evaluateCombatStrategy() {
     // KITING STRATEGY: If we have regeneration effects, prioritize maintaining distance
     if (myHP < myMaxHP * 0.7) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Low HP - maintaining distance");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Low HP - maintaining distance");
+            }
         }
         
         if (enemyDistance <= 8 && myMP > 2) {
             // Simple kiting - move away and attack
             executeDefensive();
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Executed defensive positioning");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Executed defensive positioning");
+                }
             }
             return "kiting_executed";
         }
@@ -164,12 +178,16 @@ function evaluateCombatStrategy() {
     // TACTICAL: Exploit enemy min range weapons (like Bazooka)
     if (enemyDistance <= ENEMY_MIN_RANGE && ENEMY_MIN_RANGE >= 4) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("🎯 CLOSE COMBAT ADVANTAGE! Enemy can't shoot (dist=" + enemyDistance + ", min=" + ENEMY_MIN_RANGE + ")");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🎯 CLOSE COMBAT ADVANTAGE! Enemy can't shoot (dist=" + enemyDistance + ", min=" + ENEMY_MIN_RANGE + ")");
+            }
         }
         
         if (ENEMY_HAS_BAZOOKA) {
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("🦔 BAZOOKA TRAP: Enemy must waste MP to escape!");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🦔 BAZOOKA TRAP: Enemy must waste MP to escape!");
+                }
             }
             return executeCloseRangeDomination();
         }
@@ -178,7 +196,9 @@ function evaluateCombatStrategy() {
     // DANGER: Bazooka optimal range - be extra defensive
     if (ENEMY_HAS_BAZOOKA && enemyDistance >= 2 && enemyDistance <= 4) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("⚠️ BAZOOKA DANGER ZONE! Distance " + enemyDistance);
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("⚠️ BAZOOKA DANGER ZONE! Distance " + enemyDistance);
+            }
         }
         return handleBazookaRange();
     }
@@ -197,7 +217,6 @@ function evaluateCombatStrategy() {
         return executeStandardStrategy(threatRatio);
     }
 }
-
 // Function: executeCloseRangeDomination
 // Execute close range combat advantage
 
@@ -217,7 +236,9 @@ function executeCloseRangeDomination() {
         
         if (myHP > darkKatanaSelfDmg * 3) { // Safe health threshold
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Dark Katana ready: " + round(darkKatanaDamage) + " damage per hit!");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Dark Katana ready: " + round(darkKatanaDamage) + " damage per hit!");
+                }
             }
             
             switchToWeaponIfNeeded(WEAPON_DARK_KATANA);
@@ -225,17 +246,20 @@ function executeCloseRangeDomination() {
             var katanaUses = min(floor(myTP / getWeaponCost(WEAPON_DARK_KATANA)), 3);
             
             for (var k = 0; k < katanaUses; k++) {
-
                 var result = useWeapon(enemy);
                 if (result == USE_CRITICAL) {
                     if (debugEnabled && canSpendOps(1000)) {
-                        debugLog("CRITICAL Dark Katana strike!");
+                        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("CRITICAL Dark Katana strike!");
+                        }
                     }
                 }
             }
             
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Dark Katana burst: " + katanaUses + " strikes landed");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Dark Katana burst: " + katanaUses + " strikes landed");
+                }
             }
             
             if (myTP >= 4) executeDefensive();
@@ -245,7 +269,9 @@ function executeCloseRangeDomination() {
     
     // Standard close combat
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("Exploiting close range - full attack!");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Exploiting close range - full attack!");
+        }
     }
     executeAttack();
     
@@ -257,7 +283,9 @@ function executeCloseRangeDomination() {
             if (getCellDistance(closeCells[i], enemyCell) <= ENEMY_MIN_RANGE) {
                 moveToCell(closeCells[i]);
                 if (debugEnabled && canSpendOps(1000)) {
-                    debugLog("Maintaining trap at range " + getCellDistance(getCell(), enemyCell));
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Maintaining trap at range " + getCellDistance(getCell(), enemyCell));
+                    }
                 }
                 break;
             }
@@ -274,27 +302,31 @@ function executeCloseRangeDomination() {
 function handleBazookaRange() {
     if (myMP >= 3) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Evading Bazooka range!");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Evading Bazooka range!");
+            }
         }
         
         // Decide: rush in or back out?
         if (myHP > myMaxHP * 0.6 && canReachDistance(1, myMP)) {
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Rushing to close combat!");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Rushing to close combat!");
+                }
             }
             // Move closer for melee range
-
-            var meleePosition = findBestAttackPosition();
+            var meleePosition = findBestAttackPosition(getWeapons());
             if (meleePosition != null) {
                 moveToCell(meleePosition);
             }
         } else {
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Retreating from Bazooka range!");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Retreating from Bazooka range!");
+                }
             }
             // Move to safer range
-
-            var safePosition = findBestAttackPosition();
+            var safePosition = findBestAttackPosition(getWeapons());
             if (safePosition != null) {
                 moveToCell(safePosition);
             }
@@ -311,29 +343,34 @@ function handleBazookaRange() {
 
 function executeHighThreatStrategy(threatRatio, potentialLifeSteal, willAttackThisTurn) {
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("High threat mode - KITING - ratio=" + threatRatio + 
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("High threat mode - KITING - ratio=" + threatRatio + 
                 " (lifesteal=" + potentialLifeSteal + ", willAttack=" + willAttackThisTurn + ")");
+        }
     }
     
     // KITE: Attack FIRST while in range, THEN flee!
     if (willAttackThisTurn) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Kiting - attacking BEFORE retreating");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Kiting - attacking BEFORE retreating");
+            }
         }
         executeAttack();
         
         // FLEE after attacking
         if (myMP > 0 && enemyDistance < 9) {
             // Move to optimal rifle range
-
-            var riflePosition = findBestAttackPosition();
+            var riflePosition = findBestAttackPosition(getWeapons());
             if (riflePosition != null) {
                 moveToCell(riflePosition);
             }
             // Bonus attack from new position if we have TP and can hit
             if (myTP >= 5 && getCellDistance(getCell(), getCell(enemy)) <= 8) {
                 if (debugEnabled && canSpendOps(1000)) {
-                    debugLog("Kiting - bonus attack from new position");
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Kiting - bonus attack from new position");
+                    }
                 }
                 executeAttack();
             }
@@ -342,8 +379,7 @@ function executeHighThreatStrategy(threatRatio, potentialLifeSteal, willAttackTh
         // Just flee if we can't attack effectively
         if (myMP > 0) {
             // Move to optimal rifle range
-
-            var riflePosition = findBestAttackPosition();
+            var riflePosition = findBestAttackPosition(getWeapons());
             if (riflePosition != null) {
                 moveToCell(riflePosition);
             }
@@ -359,12 +395,16 @@ function executeHighThreatStrategy(threatRatio, potentialLifeSteal, willAttackTh
 
 function executeStandardStrategy(threatRatio) {
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("Standard mode - ratio=" + threatRatio);
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Standard mode - ratio=" + threatRatio);
+        }
     }
     
     // Check hit cells for positioning
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("Checking hit cells for turn " + turn);
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Checking hit cells for turn " + turn);
+        }
     }
     
 
@@ -374,29 +414,41 @@ function executeStandardStrategy(threatRatio) {
     
     if (turn <= 8 && canSpendOps(2000000)) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Turn " + turn + " - skip complex hit detection");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Turn " + turn + " - skip complex hit detection");
+            }
         }
     } else {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Calling findHitCells for standard detection...");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Calling findHitCells for standard detection...");
+            }
         }
         allHitCells = findHitCells();
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Found " + count(allHitCells) + " hit cells");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Found " + count(allHitCells) + " hit cells");
+            }
         }
         
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Calling findReachableHitCells...");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Calling findReachableHitCells...");
+            }
         }
         reachableHitCells = findReachableHitCells(allHitCells);
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Found " + count(reachableHitCells) + " reachable hit cells");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Found " + count(reachableHitCells) + " reachable hit cells");
+            }
         }
     }
     
     if (turn <= 8) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Turn " + turn + " - simplified hit detection");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Turn " + turn + " - simplified hit detection");
+            }
         }
         // Simple hit detection for early turns
         if (enemyDistance <= 10 && hasLOS(myCell, enemyCell)) {
@@ -413,30 +465,36 @@ function executeStandardStrategy(threatRatio) {
 function executeStandardCombat(reachableHitCells) {
     if (count(reachableHitCells) > 0) {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Have " + count(reachableHitCells) + " reachable hit cells - ATTACKING!");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Have " + count(reachableHitCells) + " reachable hit cells - ATTACKING!");
+            }
         }
         executeAttack();
         if (myTP >= 4) executeDefensive();
     } else {
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("No reachable hit cells, need to move into weapon range");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("No reachable hit cells, need to move into weapon range");
+            }
         }
         
         // Move toward enemy for attack range
         if (myMP > 0) {
-
-            var bestStep = findBestAttackPosition();
+            var bestStep = findBestAttackPosition(getWeapons());
             if (bestStep != null && bestStep != myCell) {
                 if (debugEnabled && canSpendOps(1000)) {
-                    debugLog("Moving to cell for attack range");
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Moving to cell for attack range");
+                    }
                 }
                 moveToCell(bestStep);
             } else {
-
                 var step = bestApproachStep(enemyCell);
                 if (step != myCell) {
                     if (debugEnabled && canSpendOps(1000)) {
-                        debugLog("Moving to approach step " + step);
+                        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Moving to approach step " + step);
+                        }
                     }
                     moveToCell(step);
                 }
@@ -451,18 +509,24 @@ function executeStandardCombat(reachableHitCells) {
         // Attack after positioning
         if (enemyDistance <= 10) {
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("In harassment range " + enemyDistance + " - attacking!");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("In harassment range " + enemyDistance + " - attacking!");
+                }
             }
             executeAttack();
         } else if (enemyDistance <= 12 && myMP > 0) {
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Near harassment range - approaching to attack");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Near harassment range - approaching to attack");
+                }
             }
             moveToward(enemy, min(2, myMP));
             executeAttack();
         } else {
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Far approach - using shields first");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Far approach - using shields first");
+                }
             }
             if (myTP >= 4) executeDefensive();
         }

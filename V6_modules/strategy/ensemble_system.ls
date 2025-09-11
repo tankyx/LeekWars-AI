@@ -22,6 +22,8 @@ function initializeEnsemble() {
 }
 
 
+
+
 // Function: ensembleDecision
 function ensembleDecision() {
     initializeEnsemble();
@@ -51,6 +53,7 @@ function ensembleDecision() {
         push(explanations, name + " suggests " + action + 
              " (conf: " + round(result["confidence"] * 100) + "%)");
     }
+
     
     // Find winning action
     var bestAction = null;
@@ -62,6 +65,8 @@ function ensembleDecision() {
             bestAction = action;
         }
     }
+
+
     
     // Log ensemble decision
     if (count(explanations) > 0 && turn <= 5) {
@@ -71,16 +76,24 @@ function ensembleDecision() {
             if (i > 0) explainText += ", ";
             explainText += explanations[i];
         }
-        debugLog("Ensemble: " + explainText);
+
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Ensemble: " + explainText);
+        }
         
         if (bestAction != null && totalWeight > 0) {
             var support = round(bestVotes / totalWeight * 100);
-            debugLog("Decision: " + bestAction + " with " + support + "% support");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Decision: " + bestAction + " with " + support + "% support");
+            }
         }
     }
+
+
     
     return bestAction;
 }
+
 
 // Lightweight ensemble for EFFICIENT mode - fewer strategies
 
@@ -101,6 +114,7 @@ function ensembleDecisionLight() {
     } else {
         aggressiveVote = 0.2;
     }
+
     
     // Quick defensive evaluation  
     if (enemyEID > myHP * 0.6) {
@@ -110,6 +124,7 @@ function ensembleDecisionLight() {
     } else {
         defensiveVote = 0.2;
     }
+
     
     // Determine action based on votes
     if (aggressiveVote > defensiveVote) {
@@ -120,6 +135,7 @@ function ensembleDecisionLight() {
         } else {
             return "APPROACH";
         }
+
     } else {
         if (enemyEID >= myHP) {
             return "ESCAPE";
@@ -130,6 +146,9 @@ function ensembleDecisionLight() {
         }
     }
 }
+
+
+
 
 // Quick tactical decision for SURVIVAL mode
 
@@ -273,15 +292,20 @@ function evaluateBalanced() {
 }
 
 
+
 // Function: executeEnsembleAction
 function executeEnsembleAction(action) {
     if (action == null) {
-        debugLog("No ensemble action - using default behavior");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("No ensemble action - using default behavior");
+        }
         executeAttack();
         return;
     }
     
-    debugLog("Executing ensemble action: " + action);
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Executing ensemble action: " + action);
+    }
     
     if (action == "ATTACK" || action == "COMMIT") {
         executeAttack();
@@ -308,6 +332,7 @@ function executeEnsembleAction(action) {
             moveToCell(bestRetreat);
             enemyDistance = getCellDistance(myCell, enemyCell);
         }
+
         executeDefensive();
     } else if (action == "KITE") {
         // Move to optimal range and attack
@@ -351,5 +376,7 @@ function executeEnsembleAction(action) {
         executeAttack();
     }
 }
+
+
 
 // === DAMAGE CALCULATION ===

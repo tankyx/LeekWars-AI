@@ -2,18 +2,19 @@
 // Ultra-comprehensive tactical analysis using maximum operations
 // Uses 2-3M operations for ultimate positioning and decision making
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 // Function: performDeepTacticalAnalysis
 function performDeepTacticalAnalysis() {
     if (!canSpendOps(1000000)) {
-        debugLog("Deep analysis skipped - insufficient operations");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Deep analysis skipped - insufficient operations");
+        }
         return null;
     }
     
-    debugLog("=== DEEP TACTICAL ANALYSIS - MAXIMUM OPERATIONS ===");
-    
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("=== DEEP TACTICAL ANALYSIS - MAXIMUM OPERATIONS ===");
+    }
     var analysis = [:];
     analysis["bestPositions"] = [];
     analysis["threatMap"] = [:];
@@ -51,8 +52,9 @@ function performDeepTacticalAnalysis() {
         }
     }
     
-    debugLog("Analyzing " + count(allPositions) + " positions with maximum depth");
-    
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Analyzing " + count(allPositions) + " positions with maximum depth");
+    }
     // COMPREHENSIVE POSITION SCORING - Use maximum operations efficiently 
     var maxPositions = count(allPositions); // Analyze ALL tactically relevant positions
     for (var i = 0; i < maxPositions; i++) {
@@ -74,11 +76,12 @@ function performDeepTacticalAnalysis() {
     sort(analysis["bestPositions"]);
     reverse(analysis["bestPositions"]);
     
-    debugLog("Deep analysis complete - analyzed " + count(analysis["bestPositions"]) + " positions");
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Deep analysis complete - analyzed " + count(analysis["bestPositions"]) + " positions");
+    }
     
     return analysis;
 }
-
 // Function: calculateUltraPositionScore
 function calculateUltraPositionScore(pos) {
     if (!canSpendOps(50000)) return 0;
@@ -165,7 +168,6 @@ function calculateDeepThreatLevel(pos) {
     
     return threat;
 }
-
 // Function: calculateDeepOpportunityValue
 function calculateDeepOpportunityValue(pos) {
     if (!canSpendOps(30000)) return 0;
@@ -201,13 +203,14 @@ function calculateDeepOpportunityValue(pos) {
     
     return opportunity;
 }
-
 // Function: burnRemainingOperations
 // Use any remaining operations for additional tactical analysis
 function burnRemainingOperations() {
     if (!canSpendOps(500000)) return;
     
-    debugLog("🔥 BURNING REMAINING OPERATIONS for maximum analysis");
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🔥 BURNING REMAINING OPERATIONS for maximum analysis");
+    }
     
     var iterations = 0;
     var maxIterations = 10000; // Safety limit
@@ -233,5 +236,7 @@ function burnRemainingOperations() {
         iterations++;
     }
     
-    debugLog("🔥 Operation burn complete - " + iterations + " iterations performed");
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🔥 Operation burn complete - " + iterations + " iterations performed");
+    }
 }

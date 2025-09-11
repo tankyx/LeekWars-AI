@@ -30,6 +30,8 @@ function useAntiTankStrategy() {
                 break;
             }
         }
+
+
         
         // Use Liberation if: shields > 50, or 3+ effects, or any high-value buff
         if (enemyShields > 50 || numEffects >= 3 || hasHighValueBuff) {
@@ -38,12 +40,17 @@ function useAntiTankStrategy() {
                 if (result == USE_SUCCESS || result == USE_CRITICAL) {
                     myTP = getTP();  // Update TP
                     var critText = result == USE_CRITICAL ? " (CRITICAL!)" : "";
-                    debugLog("Used Liberation" + critText + "! Stripped " + round(enemyShields * 0.4) + " shields + 40% of " + numEffects + " effects");
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Used Liberation" + critText + "! Stripped " + round(enemyShields * 0.4) + " shields + 40% of " + numEffects + " effects");
+                    }
                     return true;
                 }
             }
         }
     }
+
+
+
+
     return false;
 }
-

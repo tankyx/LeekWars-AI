@@ -39,14 +39,14 @@ function determineGamePhase() {
         transition["enemyHP"] = enemyHPPercent;
         push(PHASE_HISTORY, transition);
         
-        debugLog("PHASE TRANSITION: " + previousPhase + " → " + GAME_PHASE);
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PHASE TRANSITION: " + previousPhase + " → " + GAME_PHASE);
+        }
         adjustStrategyForPhase();
     }
     
     return GAME_PHASE;
 }
-
-
 // Function: adjustStrategyForPhase
 function adjustStrategyForPhase() {
     // Adjust combat weights based on phase
@@ -64,7 +64,9 @@ function adjustStrategyForPhase() {
         // Prefer longer range
         optimalAttackRange = 9;
         
-        debugLog("Opening phase: Focus on setup and positioning");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Opening phase: Focus on setup and positioning");
+        }
         
     } else if (GAME_PHASE == "MID_GAME") {
         // Balanced approach
@@ -78,7 +80,9 @@ function adjustStrategyForPhase() {
         
         // Keep dynamically calculated range
         
-        debugLog("Mid-game: Balanced tactics");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Mid-game: Balanced tactics");
+        }
         
     } else if (GAME_PHASE == "LATE_GAME") {
         // Resource conservation
@@ -93,7 +97,9 @@ function adjustStrategyForPhase() {
         // Closer range for efficiency
         optimalAttackRange = 6;
         
-        debugLog("Late game: Resource conservation");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Late game: Resource conservation");
+        }
         
     } else if (GAME_PHASE == "ENDGAME") {
         // All-out damage
@@ -108,14 +114,14 @@ function adjustStrategyForPhase() {
         // Get close for maximum damage
         optimalAttackRange = 4;
         
-        debugLog("ENDGAME: Maximum aggression!");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("ENDGAME: Maximum aggression!");
+        }
     }
     
     // Adjust operation knobs based on phase
     adjustKnobsForPhase();
 }
-
-
 // Function: adjustKnobsForPhase
 function adjustKnobsForPhase() {
     if (GAME_PHASE == "OPENING") {
@@ -141,7 +147,6 @@ function adjustKnobsForPhase() {
         R_E_MAX = 30;
     }
 }
-
 // Phase-specific tactics
 
 // Function: getPhaseSpecificTactics
@@ -180,7 +185,6 @@ function getPhaseSpecificTactics() {
     
     return tactics;
 }
-
 // Check if we should use specific tactics based on phase
 
 // Function: shouldUsePhaseTactic
@@ -197,7 +201,6 @@ function shouldUsePhaseTactic(tacticName) {
     
     return false;
 }
-
 // Get phase-adjusted movement points to use
 
 // Function: getPhaseMP
@@ -217,6 +220,5 @@ function getPhaseMP() {
     
     return myMP;
 }
-
 // === SACRIFICIAL POSITIONING SYSTEM ===
 

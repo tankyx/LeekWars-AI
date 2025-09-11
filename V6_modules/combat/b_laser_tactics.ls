@@ -84,9 +84,13 @@ function executeBLaserShot() {
     
     if (result == USE_SUCCESS) {
         bLaserUsesRemaining--;
-        debugLog("B-Laser fired! Hits: " + bestTarget["hits"] + ", Damage: " + bestTarget["totalDamage"]);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("B-Laser fired! Hits: " + bestTarget["hits"] + ", Damage: " + bestTarget["totalDamage"]);
+        }
         if (bestTarget["healValue"] > 0) {
-            debugLog("B-Laser heal: " + bestTarget["healValue"]);
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("B-Laser heal: " + bestTarget["healValue"]);
+            }
         }
         return true;
     }
@@ -96,5 +100,7 @@ function executeBLaserShot() {
 
 // Only log if we actually have B-Laser equipped
 if (inArray(getWeapons(), WEAPON_B_LASER)) {
-    debugLog("B-Laser tactics module loaded");
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("B-Laser tactics module loaded");
+    }
 }

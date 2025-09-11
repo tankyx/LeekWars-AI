@@ -13,7 +13,9 @@ function updateErosion(damageDealt, wasCritical) {
     // Adjust strategy if erosion is significant
     if (ENEMY_EROSION > ENEMY_ORIGINAL_MAX_HP * 0.2) {
         if (debugEnabled) {
-            debugLog("🔥 Significant erosion! Enemy lost " + round(ENEMY_EROSION) + " max HP");
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("🔥 Significant erosion! Enemy lost " + round(ENEMY_EROSION) + " max HP");
+            }
         }
         // Be more aggressive - their healing is less effective
         WEIGHT_DAMAGE = min(1.5, WEIGHT_DAMAGE * 1.1);

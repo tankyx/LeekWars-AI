@@ -62,14 +62,12 @@ function selectPrimaryTarget() {
         primaryTarget = null;
         return;
     }
-    
     // Single enemy - simple choice
     if (count(allEnemies) == 1) {
         primaryTarget = allEnemies[0];
         secondaryTargets = [];
         return;
     }
-    
     // Multiple enemies - smart target selection
     var bestTarget = null;
     var bestScore = -999999;
@@ -84,7 +82,6 @@ function selectPrimaryTarget() {
             // Prefer killing weaker enemies first (easier to reduce enemy count)
             score += (1000 - e["hp"]);
         }
-        
         // Priority 2: Low HP enemies (finish them off)
         var hpPercent = e["hp"] / e["maxHP"];
         if (hpPercent < 0.3) {
@@ -92,7 +89,6 @@ function selectPrimaryTarget() {
         } else if (hpPercent < 0.5) {
             score += 3000;
         }
-        
         // Priority 3: High threat enemies
         score += e["threat"] * 100;
         
@@ -105,18 +101,15 @@ function selectPrimaryTarget() {
         } else if (e["distance"] >= 5 && e["distance"] <= 12 && isOnSameLine(myCell, e["cell"])) {
             score += 400;  // M-Laser range
         }
-        
         // Penalty: Heavily shielded enemies
         if (e["absShield"] > 200 || e["relShield"] > 30) {
             score -= 1000;
         }
-        
         if (score > bestScore) {
             bestScore = score;
             bestTarget = e;
         }
     }
-    
     primaryTarget = bestTarget;
     
     // Set secondary targets (everyone except primary)
@@ -127,7 +120,6 @@ function selectPrimaryTarget() {
         }
     }
 }
-
 // Function: calculateThreatLevel
 function calculateThreatLevel(e) {
     var threat = 0;
@@ -145,14 +137,12 @@ function calculateThreatLevel(e) {
     } else if (dist <= 13) {
         threat *= 1.5;  // Can reach us next turn
     }
-    
     // HP modifier (healthy enemies are more threatening)
     var hpPercent = getLife(e) / getTotalLife(e);
     threat *= hpPercent;
     
     return threat;
 }
-
 // Function: isKillable
 function isKillable(e) {
     // Calculate our maximum damage potential this turn
@@ -176,23 +166,19 @@ function isKillable(e) {
             if (w == WEAPON_M_LASER && !isOnSameLine(myCell, getCell(e))) {
                 continue;
             }
-            
             maxDamage = max(maxDamage, dmg * uses);
         }
     }
-    
     // Add chip damage
     if (myTP >= 4 && dist <= 10 && hasLine) {
         maxDamage += 120;  // Lightning chip estimate
     }
-    
     // Check if we can kill considering shields
     var effectiveHP = getLife(e) + getAbsoluteShield(e);
     effectiveHP *= (1 + getRelativeShield(e) / 100);
     
     return maxDamage >= effectiveHP;
 }
-
 // Function: shouldSwitchTarget
 function shouldSwitchTarget() {
     // Don't switch if no primary target
@@ -208,7 +194,6 @@ function shouldSwitchTarget() {
     if (primaryTarget["hp"] <= 0) {
         shouldSwitch = true;
     }
-    
     // Switch if a new enemy became killable
     for (var i = 0; i < count(allEnemies); i++) {
         var e = allEnemies[i];
@@ -217,7 +202,6 @@ function shouldSwitchTarget() {
             break;
         }
     }
-    
     // Switch if current target is too far and another is much closer
     if (primaryTarget["distance"] > 15) {
         for (var i = 0; i < count(allEnemies); i++) {
@@ -228,22 +212,18 @@ function shouldSwitchTarget() {
             }
         }
     }
-    
     if (shouldSwitch) {
         selectPrimaryTarget();
         return true;
     }
-    
     return false;
 }
-
 // Function: getBestAoETarget
 function getBestAoETarget(weapon) {
     // Find the best cell to hit multiple enemies with AoE weapons
     if (count(allEnemies) <= 1) {
         return primaryTarget != null ? primaryTarget["cell"] : null;
     }
-    
     var bestCell = null;
     var bestScore = 0;
     var myPos = getCell();
@@ -290,25 +270,23 @@ function getBestAoETarget(weapon) {
                 }
             }
         }
-        
         // Base score from total damage
         score += totalDamage;
         
         // Massive bonus for hitting multiple enemies
         if (enemiesHit > 1) {
             score *= (1 + enemiesHit * 0.5);  // 50% bonus per additional enemy
-            debugLog("Multi-hit opportunity at " + targetCell + ": " + enemiesHit + " enemies, " + totalDamage + " total damage");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Multi-hit opportunity at " + targetCell + ": " + enemiesHit + " enemies, " + totalDamage + " total damage");
+            }
         }
-        
         if (score > bestScore) {
             bestScore = score;
             bestCell = targetCell;
         }
     }
-    
     return bestCell;
 }
-
 // Function: getAllEnemiesInRange
 function getAllEnemiesInRange(minRange, maxRange, needLOS) {
     var enemiesInRange = [];
@@ -321,10 +299,8 @@ function getAllEnemiesInRange(minRange, maxRange, needLOS) {
             }
         }
     }
-    
     return enemiesInRange;
 }
-
 // Function: getBestLaserTarget
 function getBestLaserTarget() {
     // Find best target for M-Laser to hit multiple enemies
@@ -340,7 +316,6 @@ function getBestLaserTarget() {
         }
         return null;
     }
-    
     var bestTarget = null;
     var bestScore = 0;
     var myPos = getCell();
@@ -395,35 +370,31 @@ function getBestLaserTarget() {
                     break;
                 }
             }
-            
             currentX += dx;
             currentY += dy;
             steps++;
         }
-        
         // Calculate score
         var score = totalDamage;
         
         // Massive bonus for multi-hits
         if (enemiesHit > 1) {
             score *= enemiesHit;  // Multiply by number of enemies hit
-            debugLog("⚡ Laser can hit " + enemiesHit + " enemies in line to " + targetCell);
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("⚡ Laser can hit " + enemiesHit + " enemies in line to " + targetCell);
+            }
         }
-        
         // Bonus for hitting primary target
         if (primaryTarget != null && targetCell == primaryTarget["cell"]) {
             score += 500;
         }
-        
         if (score > bestScore) {
             bestScore = score;
             bestTarget = targetCell;
         }
     }
-    
     return bestTarget;
 }
-
 // Function: calculateMultiHitValue
 function calculateMultiHitValue(weapon, targetCell) {
     // Calculate the value of using a weapon considering multi-hit potential
@@ -462,12 +433,10 @@ function calculateMultiHitValue(weapon, targetCell) {
                     break;
                 }
             }
-            
             currentX += dx;
             currentY += dy;
             steps++;
         }
-        
         // Multiply value for multi-hits
         if (enemiesHit > 1) {
             value *= 1.5;  // 50% bonus for multi-hit
@@ -486,7 +455,6 @@ function calculateMultiHitValue(weapon, targetCell) {
                 enemiesHit++;
             }
         }
-        
         // Multiply value for multi-hits
         if (enemiesHit > 1) {
             value *= 1.5;  // 50% bonus for multi-hit
@@ -500,7 +468,6 @@ function calculateMultiHitValue(weapon, targetCell) {
             value = getWeaponDamage(WEAPON_DARK_KATANA, getEntity());
         }
     }
-    
     return value;
 }
 
@@ -521,6 +488,5 @@ function getTotalIncomingDamage(fromCell) {
             totalDamage += e["strength"];
         }
     }
-    
     return totalDamage;
 }

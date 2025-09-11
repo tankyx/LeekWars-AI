@@ -10,7 +10,9 @@ function initialize() {
     
     // Calculate max operations based on cores
     maxOperations = getCores(getEntity()) * 1000000;
-    debugLog("🔧 Operation Budget: " + maxOperations + " ops (" + getCores(getEntity()) + " cores × 1M)");
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("🔧 Operation Budget: " + maxOperations + " ops (" + getCores(getEntity()) + " cores × 1M)");
+    }
     myCell = getCell();
     myHP = getLife();
     myMaxHP = getTotalLife();
@@ -38,7 +40,9 @@ function initialize() {
             // Update erosion based on max HP change
             ENEMY_EROSION = ENEMY_ORIGINAL_MAX_HP - enemyMaxHP;
             if (ENEMY_EROSION > 0) {
-                debugLog("🔥 Erosion damage: " + ENEMY_EROSION + " (" + round(ENEMY_EROSION * 100 / ENEMY_ORIGINAL_MAX_HP) + "%)");
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("🔥 Erosion damage: " + ENEMY_EROSION + " (" + round(ENEMY_EROSION * 100 / ENEMY_ORIGINAL_MAX_HP) + "%)");
+                }
             }
         }
         
@@ -50,12 +54,16 @@ function initialize() {
                 var teleportCD = getCooldown(CHIP_TELEPORTATION);
                 TELEPORT_AVAILABLE = (teleportCD == 0);
                 if (TELEPORT_AVAILABLE && turn <= 5) {
-                    debugLog("🌀 Teleportation available!");
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("🌀 Teleportation available!");
+                    }
                 }
             } else {
                 TELEPORT_AVAILABLE = false;
                 if (turn == 2) {
-                    debugLog("No teleportation chip equipped");
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("No teleportation chip equipped");
+                    }
                 }
             }
         }
@@ -101,7 +109,9 @@ function initialize() {
             profileEnemy();
             selectCombatStrategy();
         }
-        debugLog("Turn " + turn + " initialized. Enemy: " + getName(enemy) + " at dist " + enemyDistance);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Turn " + turn + " initialized. Enemy: " + getName(enemy) + " at dist " + enemyDistance);
+        }
     }
 }
 
@@ -111,7 +121,6 @@ function initialize() {
 function adjustKnobs() {
     adjustKnobsSmooth();
 }
-
 
 // Function: adjustKnobsSmooth
 function adjustKnobsSmooth() {
@@ -158,8 +167,10 @@ function adjustKnobsSmooth() {
     
     // Log current settings occasionally
     if (turn <= 3 || (turn % 10 == 0 && turn <= 30)) {
-        debugLog("Mode: " + mode + " (" + round(opsPercent * 100) + "% ops) | " +
-                "K=" + K_BEAM + " D=" + SEARCH_DEPTH + " R=" + R_E_MAX);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Mode: " + mode + " (" + round(opsPercent * 100) + "% ops) | " +
+                    "K=" + K_BEAM + " D=" + SEARCH_DEPTH + " R=" + R_E_MAX);
+        }
     }
 }
 
@@ -170,7 +181,9 @@ function detectWeaponLoadout() {
     
     // Check for B-Laser build (Magnum/Destroyer/B-Laser)
     if (inArray(weapons, WEAPON_B_LASER)) {
-        debugLog("B-Laser weapon loadout detected");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("B-Laser weapon loadout detected");
+        }
         
         // Initialize use counters for B-Laser weapons
         magnumUsesRemaining = inArray(weapons, WEAPON_MAGNUM) ? MAGNUM_MAX_USES : 0;

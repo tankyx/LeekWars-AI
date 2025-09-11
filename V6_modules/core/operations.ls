@@ -8,7 +8,6 @@ function canSpendOps(amount) {
     return remaining >= (amount + OPS_SAFETY_RESERVE);
 }
 
-
 // Function: getOperationalMode
 function getOperationalMode() {
     var opsUsed = getOperations();
@@ -49,8 +48,10 @@ function getOperationalMode() {
             push(MODE_HISTORY, transition);
             
             if (turn <= 10) {
-                debugLog("Mode transition: " + previousMode + " → " + OPERATIONAL_MODE + 
-                        " at " + round(percentUsed * 100) + "% ops");
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Mode transition: " + previousMode + " → " + OPERATIONAL_MODE + 
+                            " at " + round(percentUsed * 100) + "% ops");
+                }
             }
         }
     }
@@ -66,7 +67,6 @@ function getOperationLevel() {
     return getOperationalMode();
 }
 
-
 // Function: isInPanicMode
 function isInPanicMode() {
     // Panic mode triggers on either operation usage OR very low HP
@@ -76,24 +76,26 @@ function isInPanicMode() {
     
     // HP-based panic mode (20% HP threshold - only in critical situations)
     if (myHP < myMaxHP * 0.2 && myHP < 500) {
-        debugLog("HP PANIC MODE TRIGGERED - HP at " + round(myHP/myMaxHP*100) + "%");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("HP PANIC MODE TRIGGERED - HP at " + round(myHP/myMaxHP*100) + "%");
+        }
         return true;
     }
     
     return false;
 }
 
-
 // Function: checkOperationCheckpoint
 function checkOperationCheckpoint() {
     var mode = getOperationalMode();
     if (mode == "PANIC") {
-        debugLog("⚠️ PANIC MODE - Emergency only!");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("⚠️ PANIC MODE - Emergency only!");
+        }
         return false;
     }
     return true;
 }
-
 
 // Function: shouldUseAlgorithm
 function shouldUseAlgorithm(algorithmCost) {
@@ -109,4 +111,3 @@ function shouldUseAlgorithm(algorithmCost) {
         return algorithmCost < 5000;  // Emergency only
     }
 }
-

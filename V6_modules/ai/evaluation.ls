@@ -78,7 +78,9 @@ function evaluatePosition(cell) {
     score += lifeStealBonus;
     
     if (debugEnabled && lifeStealBonus > 0) {
-        debugLog("Life steal bonus: " + round(lifeStealBonus) + " (capped from " + round(lifeSteal) + ")");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Life steal bonus: " + round(lifeStealBonus) + " (capped from " + round(lifeSteal) + ")");
+        }
     }
     
     // Penalize by NET damage (after life steal), not raw EID
@@ -212,5 +214,6 @@ function calculateEffectiveShieldValue(baseAbsShield, baseRelShield, resistance)
         totalValue: effectiveAbsShield + (effectiveRelShield * 10)  // Rough HP equivalence
     };
 }
+
 
 // === EID CALCULATION ===

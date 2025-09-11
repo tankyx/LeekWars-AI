@@ -43,9 +43,13 @@ function updatePatternLearning() {
         if (enemyHP > expectedHP + 50) {
             turnInfo["enemyUsedHeal"] = true;
             push(ENEMY_PATTERNS["healThreshold"], enemyLastHP / enemyMaxHP);
-            debugLog("PATTERN: Enemy healed at " + round((enemyLastHP/enemyMaxHP)*100) + "% HP");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PATTERN: Enemy healed at " + round((enemyLastHP/enemyMaxHP)*100) + "% HP");
+            }
         }
     }
+
+
     
     // Track damage dealt to us
     if (turn > 1 && myLastHP > 0) {
@@ -53,6 +57,7 @@ function updatePatternLearning() {
         turnInfo["enemyDamageDealt"] = damageToUs;
         push(ENEMY_PATTERNS["aggressionLevel"], damageToUs);
     }
+
     
     // Track movement patterns
     if (turn > 1 && enemyLastCell != -1) {
@@ -60,6 +65,7 @@ function updatePatternLearning() {
         turnInfo["enemyMPUsed"] = mpUsed;
         push(ENEMY_PATTERNS["averageMP"], mpUsed);
     }
+
     
     // Track position preference
     push(ENEMY_PATTERNS["positionPreference"], turnInfo["enemyQuadrant"]);
@@ -71,6 +77,7 @@ function updatePatternLearning() {
     if (turnInfo["enemyWeapon"] != null) {
         push(ENEMY_PATTERNS["weaponSequence"], turnInfo["enemyWeapon"]);
     }
+
     
     // Store turn data
     push(ENEMY_PATTERNS["turnData"], turnInfo);
@@ -84,8 +91,10 @@ function updatePatternLearning() {
     if (turn >= 3) {
         return predictEnemyBehavior();
     }
+
     return null;
 }
+
 
 
 // Function: predictEnemyBehavior
@@ -104,9 +113,13 @@ function predictEnemyBehavior() {
         
         if (enemyHP / enemyMaxHP <= avgHealThreshold + 0.05) {
             predictions["willHeal"] = true;
-            debugLog("PATTERN: Enemy likely to heal (usually at " + round(avgHealThreshold * 100) + "% HP)");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PATTERN: Enemy likely to heal (usually at " + round(avgHealThreshold * 100) + "% HP)");
+            }
         }
     }
+
+
     
     // Predict positioning
     var quadrantCounts = [:];
@@ -114,6 +127,7 @@ function predictEnemyBehavior() {
         var q = ENEMY_PATTERNS["positionPreference"][i];
         quadrantCounts[q] = mapGet(quadrantCounts, q, 0) + 1;
     }
+
     
     var maxCount = 0;
     for (var q in quadrantCounts) {
@@ -122,6 +136,8 @@ function predictEnemyBehavior() {
             predictions["preferredQuadrant"] = q;
         }
     }
+
+
     
     // Predict aggression level
     if (count(ENEMY_PATTERNS["aggressionLevel"]) > 0) {
@@ -130,20 +146,29 @@ function predictEnemyBehavior() {
         
         if (avgDamage > 300) {
             predictions["expectedAggression"] = "HIGH";
-            debugLog("PATTERN: High aggression enemy (avg " + round(avgDamage) + " damage/turn)");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PATTERN: High aggression enemy (avg " + round(avgDamage) + " damage/turn)");
+            }
         } else if (avgDamage < 150) {
             predictions["expectedAggression"] = "LOW";
-            debugLog("PATTERN: Low aggression enemy (avg " + round(avgDamage) + " damage/turn)");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PATTERN: Low aggression enemy (avg " + round(avgDamage) + " damage/turn)");
+            }
         }
     }
+
+
     
     // Predict preferred range
     if (count(ENEMY_PATTERNS["preferredRange"]) > 0) {
         var avgRange = arrayFoldLeft(ENEMY_PATTERNS["preferredRange"],
             function(acc, val) { return acc + val; }, 0) / count(ENEMY_PATTERNS["preferredRange"]);
         predictions["preferredRange"] = round(avgRange);
-        debugLog("PATTERN: Enemy prefers range " + predictions["preferredRange"]);
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PATTERN: Enemy prefers range " + predictions["preferredRange"]);
+        }
     }
+
     
     // Predict retreat behavior
     if (count(ENEMY_PATTERNS["turnData"]) >= 2) {
@@ -156,14 +181,21 @@ function predictEnemyBehavior() {
                 retreats++;
             }
         }
+
+
         if (retreats > 0 && enemyHP / enemyMaxHP < 0.3) {
             predictions["likelyRetreat"] = true;
-            debugLog("PATTERN: Enemy likely to retreat when low HP");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("PATTERN: Enemy likely to retreat when low HP");
+            }
         }
     }
+
+
     
     return predictions;
 }
+
 
 
 // Function: getQuadrant
@@ -182,6 +214,7 @@ function getQuadrant(cell) {
 }
 
 
+
 // Function: applyPatternPredictions
 function applyPatternPredictions(predictions) {
     if (predictions == null) return;
@@ -189,26 +222,37 @@ function applyPatternPredictions(predictions) {
     // Adjust strategy based on predictions
     if (predictions["willHeal"]) {
         // Enemy about to heal - increase aggression
-        debugLog("Adjusting for predicted heal - increasing damage weight");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Adjusting for predicted heal - increasing damage weight");
+        }
         WEIGHT_DAMAGE = WEIGHT_DAMAGE * 1.5;
         WEIGHT_SAFETY = WEIGHT_SAFETY * 0.5;
     }
+
     
     if (predictions["expectedAggression"] == "HIGH") {
         // High aggression enemy - prioritize safety
-        debugLog("Adjusting for high aggression - increasing safety weight");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Adjusting for high aggression - increasing safety weight");
+        }
         WEIGHT_SAFETY = WEIGHT_SAFETY * 1.3;
     } else if (predictions["expectedAggression"] == "LOW") {
         // Low aggression enemy - be more aggressive
-        debugLog("Adjusting for low aggression - increasing damage weight");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Adjusting for low aggression - increasing damage weight");
+        }
         WEIGHT_DAMAGE = WEIGHT_DAMAGE * 1.2;
     }
+
     
     if (predictions["likelyRetreat"]) {
         // Enemy will retreat - cut off escape routes
-        debugLog("Enemy likely to retreat - adjusting positioning");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Enemy likely to retreat - adjusting positioning");
+        }
         COMBAT_STRATEGY = "RUSH";  // Chase them down
     }
+
     
     // Adjust optimal range based on enemy preference
     if (predictions["preferredRange"] > 0) {
@@ -220,6 +264,9 @@ function applyPatternPredictions(predictions) {
         }
     }
 }
+
+
+
 
 // === ENSEMBLE DECISION SYSTEM ===
 
@@ -239,6 +286,7 @@ function predictEnemyResponse(baitCell) {
     if (enemyReachable == null || count(enemyReachable) == 0) {
         return enemyCell;  // Enemy stays put
     }
+
     
     for (var i = 0; i < min(30, count(enemyReachable)); i++) {
         var cell = enemyReachable[i];
@@ -252,6 +300,7 @@ function predictEnemyResponse(baitCell) {
             var counterDamage = calculateDamageFromTo(baitCell, cell);
             enemySafety = enemyHP > 0 ? max(0.1, 1 - counterDamage / enemyHP) : 0.1;
         }
+
         
         // Enemy likely picks high damage with reasonable safety
         var score = damage * enemySafety;
@@ -261,7 +310,10 @@ function predictEnemyResponse(baitCell) {
             predictedCell = cell;
         }
     }
+
+
     
     return predictedCell;
 }
+
 

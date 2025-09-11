@@ -222,7 +222,9 @@ function calculateAoEDamageAtCell(weapon, targetCell, enemyPositions) {
         
         // Multi-hit bonus: multiply damage if hitting multiple enemies
         if (enemiesHit > 1) {
-            debugLog("💥 Grenade multi-hit! Hitting " + enemiesHit + " enemies");
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("💥 Grenade multi-hit! Hitting " + enemiesHit + " enemies");
+            }
         }
     }
     // M-LASER: Line pattern (goes through entities)
@@ -272,7 +274,9 @@ function calculateAoEDamageAtCell(weapon, targetCell, enemyPositions) {
         }
         
         if (enemiesHit > 1) {
-            debugLog("⚡ M-Laser multi-hit! Piercing " + enemiesHit + " enemies");
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("⚡ M-Laser multi-hit! Piercing " + enemiesHit + " enemies");
+            }
         }
     }
     

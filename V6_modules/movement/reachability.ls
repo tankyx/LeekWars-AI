@@ -117,7 +117,6 @@ function getEnemyReachable(fromCell, mp) {
     return reachable;
 }
 
-
 // Function: findReachableHitCells
 function findReachableHitCells(allHitCells) {
     var reachableHitCells = [];
@@ -152,4 +151,3 @@ function findReachableHitCells(allHitCells) {
     // Hit cells reachable - debug removed to reduce spam
     return reachableHitCells;
 }
-

@@ -44,4 +44,6 @@ function getMLaserDamage(fromCell, targetCell) {
     return calculateLaserTotalDamage(WEAPON_M_LASER, fromCell, targetCell, M_LASER_MIN_RANGE, M_LASER_MAX_RANGE, enemiesArray, getEntity());
 }
 
-debugLog("M-Laser tactics module loaded (using generic laser implementation)");
+if (debugEnabled && canSpendOps(1000)) {
+    debugLog("M-Laser tactics module loaded (using generic laser implementation)");
+}

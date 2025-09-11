@@ -8,7 +8,6 @@ function calculateEID(cell) {
     if (count(allEnemies) > 1) {
         return calculateMultiEID(cell);
     }
-    
     if (enemy == null) return 0;
     
     // Early exit if enemy can't possibly reach
@@ -16,7 +15,6 @@ function calculateEID(cell) {
         CACHE_EID[cell] = 0;
         return 0;
     }
-    
     // Check cache first
     var cached = mapGet(CACHE_EID, cell, null);
     if (cached != null) return cached;
@@ -39,7 +37,6 @@ function calculateEID(cell) {
     } else if (turn >= 5) {
         maxPositions = 15;  // Good coverage mid-game
     }
-    
     if (count(enemyReachable) > maxPositions) {
         // Use arrayFoldLeft for 300% better performance
         var sortable = arrayFoldLeft(enemyReachable, function(acc, r) {
@@ -58,7 +55,6 @@ function calculateEID(cell) {
             return acc;
         }, []);
     }
-    
     // Calculate EID from each enemy position using arrayFoldLeft (adversarial max)
     var bestEV = arrayFoldLeft(enemyReachable, function(maxDamage, enemyPos) {
         var dist = getCellDistance(enemyPos, cell);
@@ -71,7 +67,6 @@ function calculateEID(cell) {
             }
             return maxDamage;
         }
-        
         // Check weapons using arrayFoldLeft
         var weapons = getWeapons(enemy);
         var weaponDamage = 0;
@@ -104,7 +99,6 @@ function calculateEID(cell) {
                 return maxWpnDmg;
             }, 0);
         }
-        
         // Check chips if still have ops - using slice to limit and arrayFoldLeft
         var chipDamage = 0;
         if (canSpendOps(5000)) {
@@ -132,7 +126,6 @@ function calculateEID(cell) {
                 }, 0);
             }
         }
-        
         // Return max of current max and this position's damage
         var totalDamage = max(weaponDamage, chipDamage);
         return max(maxDamage, totalDamage);
@@ -191,7 +184,6 @@ function visualizeEID() {
             push(reach, sorted[i][1]);
         }
     }
-    
     for (var i = 0; i < count(reach); i++) {
         var cell = reach[i];
         var eid = eidOf(cell);
@@ -212,7 +204,6 @@ function visualizeEID() {
         } else {
             color = 0x00FF00;  // Green - safe
         }
-        
         mark(cell, color);  // Fixed: removed opacity arg
         
         // Show EID value for high threat cells
@@ -220,13 +211,11 @@ function visualizeEID() {
             markText(cell, floor(eid), COLOR_WHITE);
         }
     }
-    
     // Mark special positions
     mark(myCell, COLOR_BLUE);
     if (enemy != null) {
         mark(enemyCell, COLOR_TARGET);
     }
-    
     // Mark all enemies in multi-enemy scenarios
     if (count(allEnemies) > 1) {
         for (var i = 0; i < count(allEnemies); i++) {
@@ -239,7 +228,6 @@ function visualizeEID() {
         }
     }
 }
-
 // Function: calculateMultiEID
 function calculateMultiEID(cell) {
     // Calculate total expected incoming damage from all enemies
@@ -256,7 +244,6 @@ function calculateMultiEID(cell) {
         if (getCellDistance(enemyPos, cell) > 14 + enemyMPNext) {
             continue;
         }
-        
         // Get enemy's reachable positions
         var enemyReachable = getEnemyReachable(enemyPos, enemyMPNext);
         
@@ -273,7 +260,6 @@ function calculateMultiEID(cell) {
                 push(enemyReachable, sorted[j][1]);
             }
         }
-        
         // Calculate max damage from this enemy
         var maxDamageFromEnemy = 0;
         for (var j = 0; j < count(enemyReachable); j++) {
@@ -295,7 +281,6 @@ function calculateMultiEID(cell) {
         
         totalEID += maxDamageFromEnemy;
     }
-    
     // Cache the result
     CACHE_EID[cell] = totalEID;
     return totalEID;

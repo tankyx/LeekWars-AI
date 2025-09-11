@@ -2,10 +2,6 @@
 // Strategic and tactical decision making
 // Refactored from decision_making.ls for better modularity
 
-// === STANDALONE COMPILATION SUPPORT ===
-// These variables/functions are defined in other modules when included via V6_main.ls
-// For standalone compilation, provide stub implementations
-
 // NOTE: Global variables are defined in core/globals.ls when included via V6_main.ls
 // For standalone testing only, uncomment the lines below:
 // global debugEnabled = true;
@@ -84,21 +80,13 @@
 
 // Include required modules
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 // Function: makeTacticalDecision
 // Main tactical decision logic - returns action to take
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function makeTacticalDecision() {
     // Check teleportation opportunities first
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var teleportAction = evaluateTeleportation();
     if (teleportAction != null) {
         return teleportAction;
@@ -115,10 +103,6 @@ function makeTacticalDecision() {
     }
     
     // Get current operational mode and build influence map if needed
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentMode = getOperationLevel();
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("Current mode: " + currentMode);
@@ -137,15 +121,7 @@ function makeTacticalDecision() {
     }
     
     // Precompute EID for candidate cells
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var candidateCells = getReachableCells(myCell, myMP + 3);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var eidCap = (currentMode == "PANIC") ? 5 : min(10, count(candidateCells));
     
     if (debugEnabled && canSpendOps(1000)) {
@@ -161,19 +137,14 @@ function makeTacticalDecision() {
     return evaluateStrategicOptions();
 }
 
+
 // Function: evaluateTeleportation
 // Check for teleportation opportunities
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function evaluateTeleportation() {
     // AGGRESSIVE TELEPORTATION: Check if we can teleport for tactical advantage!
     if (TELEPORT_AVAILABLE && turn >= 3 && myTP >= 12 && canSpendOps(500000)) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var bestTeleportCell = findBestTeleportTarget();
         
         if (bestTeleportCell != null && bestTeleportCell != myCell) {
@@ -182,19 +153,12 @@ function evaluateTeleportation() {
                 debugLog("Best teleport target: " + bestTeleportCell + " (current: " + getCell() + ")");
             }
             
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
             var teleportResult = useChipOnCell(CHIP_TELEPORTATION, bestTeleportCell);
             if (teleportResult == USE_SUCCESS || teleportResult == USE_CRITICAL) {
                 myCell = getCell();
                 myMP = getMP();
                 myTP = getTP();
                 enemyCell = getCell(enemy);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
                 var currentDist = getCellDistance(myCell, enemyCell);
                 
@@ -207,9 +171,6 @@ function evaluateTeleportation() {
                     if (debugEnabled && canSpendOps(1000)) {
                         debugLog("Need to move after teleport to attack!");
                     }
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
                     var moveSteps = min(myMP, currentDist - 7);
                     moveToward(enemy, moveSteps);
@@ -234,43 +195,18 @@ function evaluateTeleportation() {
     return null;
 }
 
+
 // Function: evaluateStrategicOptions
 // Evaluate strategic options based on current state
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function evaluateStrategicOptions() {
     // Calculate key metrics
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var myEHP = calculateEHP(myHP, myAbsShield, myRelShield, 0, myResistance);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var enemyEHP = calculateEHP(enemyHP, getAbsoluteShield(enemy), getRelativeShield(enemy), 0, getResistance(enemy));
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentEID = calculateEID(myCell);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentDamage = calculateMaxDamage(myCell, enemy, myTP);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var lifeStealPotential = calculateLifeSteal(currentDamage, enemy);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var pkillCurrent = calculatePkill(enemyHP, myTP);
     
     if (debugEnabled && canSpendOps(2000)) {
@@ -301,10 +237,6 @@ function evaluateStrategicOptions() {
         debugLog("Checking quick combat decision...");
     }
     
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var quickDecision = null;
     if (canSpendOps(2000000)) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -317,10 +249,6 @@ function evaluateStrategicOptions() {
         
         // Log state for debugging
         if (debugEnabled && turn <= 5 && canSpendOps(3000)) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
             var stateDesc = [];
             if ((combatState & STATE_CAN_MOVE) > 0) push(stateDesc, "CAN_MOVE");
             if ((combatState & STATE_CAN_ATTACK) > 0) push(stateDesc, "CAN_ATTACK");
@@ -331,21 +259,15 @@ function evaluateStrategicOptions() {
             if ((combatState & STATE_PKILL_READY) > 0) push(stateDesc, "PKILL_READY");
             if ((combatState & STATE_PANIC_MODE) > 0) push(stateDesc, "PANIC_MODE");
             
-            debugLog("Combat states: " + join(stateDesc, ", "));
-            debugLog("Quick decision: " + quickDecision);
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Combat states: " + join(stateDesc, ", "));
+                debugLog("Quick decision: " + quickDecision);
+            }
         }
     }
     
     // Check ensemble decision for non-panic modes
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var ensembleAction = null;
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentMode = getOperationLevel();
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("Checking ensemble decision for mode: " + currentMode);
@@ -366,10 +288,6 @@ function evaluateStrategicOptions() {
     }
     
     if (quickDecision != null && quickDecision != "continue") {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var quickAction = makeQuickEmergencyDecision();
         return quickAction;
     }
@@ -377,73 +295,32 @@ function evaluateStrategicOptions() {
     return "standard_positioning";
 }
 
+
 // Function: evaluatePositioning
 // Evaluate positioning options - Stage B logic
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 function evaluatePositioning() {
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("Stage B: Standard positioning check");
     }
     
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentCellDamage = calculateMaxDamage(myCell, enemy, myTP);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentCellEID = calculateEID(myCell);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentScore = currentCellDamage * WEIGHT_DAMAGE - currentCellEID * WEIGHT_SAFETY;
     
     if (debugEnabled && canSpendOps(2000)) {
         debugLog("Current position damage=" + currentCellDamage + " EID=" + currentCellEID + " score=" + currentScore);
     }
     
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var bestCell = myCell;
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var bestScore = currentScore;
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var reachable = getReachableCells(myCell, myMP);
     
     for (var i = 0; i < min(20, count(reachable)); i++) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var cell = reachable[i];
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var damage = calculateMaxDamage(cell, enemy, myTP);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var eid = calculateEID(cell);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var score = damage * WEIGHT_DAMAGE - eid * WEIGHT_SAFETY;
         
         if (debugEnabled && canSpendOps(1000) && i < 10) {

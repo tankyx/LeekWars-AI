@@ -11,7 +11,9 @@ function shouldUseTeleport() {
     var currentEnemyCell = getCell(enemy);
     var currentDistance = getCellDistance(currentCell, currentEnemyCell);
     
-    debugLog("Checking teleport need: dist=" + currentDistance + ", MP=" + getMP() + ", TP=" + myTP);
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Checking teleport need: dist=" + currentDistance + ", MP=" + getMP() + ", TP=" + myTP);
+    }
     
     // Check if we can attack from current position
     var canAttackHere = false;
@@ -30,14 +32,18 @@ function shouldUseTeleport() {
     // STRATEGIC TELEPORT: Force enemy to react even if we can attack
     if (canAttackHere && myTP >= 14 && turn >= 3) {
         if (shouldTeleportForResourcePressure(currentCell, currentEnemyCell)) {
-            debugLog("🎯 STRATEGIC TELEPORT: Creating resource pressure opportunity");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🎯 STRATEGIC TELEPORT: Creating resource pressure opportunity");
+            }
             return true;
         }
     }
     
     // If we can already attack and no strategic opportunity, no need to teleport
     if (canAttackHere) {
-        debugLog("Can already attack - no teleport needed");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Can already attack - no teleport needed");
+        }
         return false;
     }
     
@@ -56,7 +62,9 @@ function shouldUseTeleport() {
                 (dist >= 4 && dist <= 7) ||  // Grenade
                 (dist >= 5 && dist <= 12 && isOnSameLine(cell, currentEnemyCell))) {  // M-Laser
                 canWalkToAttack = true;
-                debugLog("Can walk to attack position at cell " + cell);
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Can walk to attack position at cell " + cell);
+                }
                 break;
             }
         } else if (dist == 1) {  // Dark Katana
@@ -67,13 +75,17 @@ function shouldUseTeleport() {
     
     // Only teleport if we CAN'T walk into range OR no LOS available
     if (!canWalkToAttack) {
-        debugLog("⚔️ TELEPORT NEEDED! Can't walk to any attack range");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("⚔️ TELEPORT NEEDED! Can't walk to any attack range");
+        }
         return true;
     }
     
     // If no LOS options at all, consider teleporting to bypass obstacles
     if (!hasAnyLOSOption && currentDistance > 12) {
-        debugLog("🎯 LOS BYPASS TELEPORT! No line of sight options available");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🎯 LOS BYPASS TELEPORT! No line of sight options available");
+        }
         return true;
     }
     
@@ -81,19 +93,24 @@ function shouldUseTeleport() {
     if (myHP < myMaxHP * 0.3) {
         var currentEID = calculateEID(currentCell);
         if (currentEID >= myHP * 0.5) {
-            debugLog("🚨 EMERGENCY TELEPORT! HP critical");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🚨 EMERGENCY TELEPORT! HP critical");
+            }
             return true;
         }
     }
     
     // Too far to reach even with movement
     if (currentDistance > 15) {
-        debugLog("🏃 GAP CLOSE TELEPORT! Enemy too far");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🏃 GAP CLOSE TELEPORT! Enemy too far");
+        }
         return true;
     }
     
     return false;
 }
+
 
 // Function: findBestTeleportTarget
 function findBestTeleportTarget() {
@@ -149,6 +166,7 @@ function findBestTeleportTarget() {
     return bestCell;
 }
 
+
 // NEW: Resource pressure teleportation
 function shouldTeleportForResourcePressure(myCell, enemyCell) {
     // Don't use if low on TP
@@ -160,7 +178,9 @@ function shouldTeleportForResourcePressure(myCell, enemyCell) {
     if (currentDist >= 7 && currentDist <= 9) {
         // We're both in rifle range - teleport to force their reaction
         if (hasLOS(myCell, enemyCell)) {
-            debugLog("📍 Resource pressure: Both in optimal range - forcing enemy reposition");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("📍 Resource pressure: Both in optimal range - forcing enemy reposition");
+            }
             return true;
         }
     }
@@ -169,19 +189,24 @@ function shouldTeleportForResourcePressure(myCell, enemyCell) {
     // If they're in their optimal range but we can create better positioning
     var enemyOptimalRange = isEnemyInOptimalRange(enemyCell, myCell);
     if (enemyOptimalRange && myTP > (enemyTP + 4)) {
-        debugLog("📍 Resource pressure: Enemy optimal, we have TP advantage - repositioning");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("📍 Resource pressure: Enemy optimal, we have TP advantage - repositioning");
+        }
         return true;
     }
     
     // Scenario 3: Turn sequence manipulation
     // Teleport to create a position where they MUST move next turn
     if (turn >= 5 && (turn % 3 == 1)) {  // Every 3rd turn starting turn 5
-        debugLog("📍 Resource pressure: Turn sequence manipulation");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("📍 Resource pressure: Turn sequence manipulation");
+        }
         return true;
     }
     
     return false;
 }
+
 
 // Helper: Check if enemy is in their optimal range relative to us
 function isEnemyInOptimalRange(enemyCell, myCell) {
@@ -199,6 +224,7 @@ function isEnemyInOptimalRange(enemyCell, myCell) {
     
     return false;
 }
+
 
 // Helper: Evaluate a teleport destination
 function evaluateTeleportCell(cell, enemyCell) {
@@ -288,23 +314,29 @@ function evaluateTeleportCell(cell, enemyCell) {
     return score;
 }
 
+
 // Function: executeTeleport
 function executeTeleport(targetCell) {
     var currentCell = getCell();
     if (targetCell == currentCell) {
-        debugLog("Teleport target is current cell - aborting");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Teleport target is current cell - aborting");
+        }
         return false;
     }
     
     // Final check: NEVER teleport to walkable cells
     var path = getPath(currentCell, targetCell);
     if (path != null && count(path) <= getMP()) {
-        debugLog("❌ BLOCKED: Target is walkable in " + count(path) + " MP - walking instead!");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("❌ BLOCKED: Target is walkable in " + count(path) + " MP - walking instead!");
+        }
         moveToward(targetCell, getMP());
         return false;
     }
-    
-    debugLog("🌀 Teleporting from " + currentCell + " to " + targetCell);
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("🌀 Teleporting from " + currentCell + " to " + targetCell);
+    }
     
     // Visual debugging BEFORE teleport
     mark(currentCell, COLOR_CAUTION);  // Yellow for source
@@ -313,10 +345,11 @@ function executeTeleport(targetCell) {
     
     // Double-check we have the chip before trying to use it
     if (!inArray(getChips(), CHIP_TELEPORTATION)) {
-        debugLog("ERROR: Teleportation chip not equipped!");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("ERROR: Teleportation chip not equipped!");
+        }
         return false;
     }
-    
     var result = useChipOnCell(CHIP_TELEPORTATION, targetCell);
     if (result == USE_SUCCESS) {
         myTP -= 9;
@@ -327,7 +360,9 @@ function executeTeleport(targetCell) {
         enemyDistance = getCellDistance(myCell, enemyCell);
         TELEPORT_LAST_USED = turn;
         
-        debugLog("✅ Teleported successfully! New position: " + myCell + ", distance: " + enemyDistance);
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("✅ Teleported successfully! New position: " + myCell + ", distance: " + enemyDistance);
+        }
         
         // NOW CHECK IF WE NEED TO MOVE TO ATTACK!
         var canAttackNow = false;
@@ -343,7 +378,9 @@ function executeTeleport(targetCell) {
         
         // If we can't attack, MOVE towards attack position!
         if (!canAttackNow && getMP() > 0) {
-            debugLog("📍 Can't attack yet, moving to attack position...");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("📍 Can't attack yet, moving to attack position...");
+            }
             
             // Find nearest attack position
             var attackPos = findNearestAttackPosition();
@@ -362,7 +399,9 @@ function executeTeleport(targetCell) {
                     // Update position again
                     myCell = getCell();
                     enemyDistance = getCellDistance(myCell, enemyCell);
-                    debugLog("➡️ Moved to " + myCell + ", final distance: " + enemyDistance);
+                    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("➡️ Moved to " + myCell + ", final distance: " + enemyDistance);
+                    }
                 }
             }
         }
@@ -370,9 +409,12 @@ function executeTeleport(targetCell) {
         return true;
     }
     
-    debugLog("❌ Teleport failed with error: " + result);
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("❌ Teleport failed with error: " + result);
+    }
     return false;
 }
+
 
 // Helper: Find nearest position from which we can attack
 function findNearestAttackPosition() {
@@ -408,11 +450,14 @@ function findNearestAttackPosition() {
     }
     
     if (bestCell != null) {
-        debugLog("Found attack position at " + bestCell + " (" + bestDist + " MP away)");
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Found attack position at " + bestCell + " (" + bestDist + " MP away)");
+        }
     }
     
     return bestCell;
 }
+
 
 // Function: evaluateTeleportValue
 function evaluateTeleportValue() {

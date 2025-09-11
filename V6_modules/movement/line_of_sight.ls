@@ -50,4 +50,3 @@ function canAttackFromPosition(cell) {
     
     return false;
 }
-

@@ -80,54 +80,77 @@ include("core/initialization");
 
 // === MAIN EXECUTION ===
 
-debug("=== V6 MAIN STARTING ===");
-
 // Initialize the system
 initialize();
-debug("Initialized - enemy=" + enemy);
+if (debugEnabled && canSpendOps(1000)) {
+    debugLog("=== V6 MAIN STARTING ===");
+    debugLog("Initialized - enemy=" + enemy);
+}
 
 // Main combat loop
 if (enemy != null) {
     // Make tactical decision based on operational mode
     if (isInPanicMode()) {
-        debugLog("Entering PANIC mode");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Entering PANIC mode");
+        }
         simplifiedCombat();
     } else if (turn == 1) {
         // Turn 1 special handling - early game sequence
-        debugLog("Turn 1 - executing early game sequence");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Turn 1 - executing early game sequence");
+        }
         executeEarlyGameSequence();
     } else if (turn == 2 && shouldUseTurn2ComboSequence()) {
         // Turn 2 combo sequence for high damage opponents
-        debugLog("Turn 2 - executing combo sequence");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Turn 2 - executing combo sequence");
+        }
         executeTurn2ComboSequence();
     } else {
         // Turn 2+ uses standard decision making - ensure proper execution
-        debugLog("Turn " + turn + " - entering normal combat mode");
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Turn " + turn + " - entering normal combat mode");
+        }
         makeDecision();
         // Fallback in case makeDecision() doesn't execute properly
         if (myTP >= 3 && enemy != null) {
-            debugLog("Ensuring combat execution for turn " + turn);
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Ensuring combat execution for turn " + turn);
+            }
             executeAttack();
             if (myTP >= 4) executeDefensive();
         }
         
         // REPOSITION after combat if we have MP left
         if (getMP() > 0 && enemy != null && getLife(enemy) > 0) {
-            debugLog("Post-combat repositioning with " + getMP() + " MP");
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Post-combat repositioning with " + getMP() + " MP");
+            }
             repositionDefensive();
         }
     }
 } else {
-    debugLog('No enemy found');
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog('No enemy found');
+    }
 }
 
-debugLog("Main combat loop complete");
+if (debugEnabled && canSpendOps(1000)) {
+    debugLog("Main combat loop complete");
+}
 
 // Visualize battle state if debug enabled
 if (debugEnabled && !isInPanicMode()) {
-    debugLog("Final visualization...");
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("Final visualization...");
+    }
     visualizeEID();
-    debugLog("Final visualization complete");
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("Final visualization complete");
+    }
 }
 
-debugLog("V6_main.ls complete - end of turn " + turn);
+if (debugEnabled && canSpendOps(1000)) {
+    debugLog("V6_main.ls complete - end of turn " + turn);
+}

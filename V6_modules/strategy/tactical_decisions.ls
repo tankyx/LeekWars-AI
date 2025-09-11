@@ -77,7 +77,6 @@ function executeQuickAction(action) {
     }
 }
 
-
 // Function: quickCombatDecision
 function quickCombatDecision() {
     updateCombatState();
@@ -87,12 +86,16 @@ function quickCombatDecision() {
     if (hasState(attackReady)) {
         // Can attack immediately
         if (hasState(STATE_PKILL_READY)) {
-            debugLog("Quick decision: Kill shot ready!");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Quick decision: Kill shot ready!");
+            }
             return "EXECUTE_KILL";
         }
         
         if (hasState(STATE_SETUP_KILL)) {
-            debugLog("Quick decision: Setup kill");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Quick decision: Setup kill");
+            }
             return "SETUP_ATTACK";
         }
         

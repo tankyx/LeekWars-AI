@@ -9,15 +9,9 @@ include("damage_sequences");
 include("grenade_tactics");
 include("m_laser_tactics");
 
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
 // Function: executeAttackSequence
 // Main attack execution - refactored from executeAttack()
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function executeAttackSequence() {
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("executeAttackSequence called - enemy=" + enemy + ", myTP=" + myTP);
@@ -29,16 +23,8 @@ function executeAttackSequence() {
         }
         return;
     }
-    
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var dist = getCellDistance(myCell, enemyCell);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var hasLine = hasLOS(myCell, enemyCell);
     
     if (debugEnabled && canSpendOps(1000)) {
@@ -46,26 +32,14 @@ function executeAttackSequence() {
     }
     
     // Check for optimal damage sequence first
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var optimalSequence = checkOptimalDamageSequence(dist);
     if (optimalSequence == true) {
         return; // Optimal sequence executed
     }
     
     // Evaluate positioning needs
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var positioningInfo = evaluateCombatPositioning(dist, hasLine, myMP, getWeapons());
     if (positioningInfo != null) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var positioned = executePositioning(positioningInfo);
         if (positioned) {
             // Update distance after repositioning
@@ -75,10 +49,6 @@ function executeAttackSequence() {
     }
     
     // Build attack options
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var attackOptions = buildAttackOptions(myTP, dist, hasLine);
     
     if (debugEnabled && canSpendOps(1000)) {
@@ -86,10 +56,6 @@ function executeAttackSequence() {
     }
     
     // Handle movement if no good attack options
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var movementResult = handleMovementFallback(attackOptions, dist, hasLine);
     if (movementResult) {
         // Rebuild options after movement
@@ -104,25 +70,9 @@ function executeAttackSequence() {
 
 // Function: checkOptimalDamageSequence
 // Check for and execute optimal damage sequences
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function checkOptimalDamageSequence(distance) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var mySTR = getStrength();
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var darkKatanaSelfDmg = 44 * (1 + mySTR / 100);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var optimalSequence = getBestDamageSequence(myTP, distance, myHP, mySTR);
     
     if (optimalSequence != null && optimalSequence[2] >= getLife(enemy) * 0.5) {
@@ -130,9 +80,6 @@ function checkOptimalDamageSequence(distance) {
         if (debugEnabled && canSpendOps(1000)) {
             debugLog("Using optimal damage sequence: " + optimalSequence[4]);
         }
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
         var dmgDealt = executeDamageSequence(optimalSequence, enemy);
         if (dmgDealt > 0) {
@@ -148,21 +95,9 @@ function checkOptimalDamageSequence(distance) {
 
 // Function: handleMovementFallback
 // Handle movement when no good attack options are available
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function handleMovementFallback(attackOptions, distance, hasLine) {
     // Check if we only have chip options but could move to weapon range
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var hasWeaponOptions = false;
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var hasOnlyChipOptions = false;
     
     for (var i = 0; i < count(attackOptions); i++) {
@@ -238,31 +173,15 @@ function handleMovementFallback(attackOptions, distance, hasLine) {
 
 // Function: executeAttackOptions
 // Execute the selected attack options
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function executeAttackOptions(attackOptions) {
     if (count(attackOptions) == 0) {
         // Fallback attack attempt
         executeFallbackAttack();
         return;
     }
-    
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
     var tpLeft = myTP;
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var totalDamage = 0;
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var currentWeapon = getWeapon();
     
     if (debugEnabled && canSpendOps(1000)) {
@@ -270,39 +189,63 @@ function executeAttackOptions(attackOptions) {
     }
     
     for (var i = 0; i < count(attackOptions); i++) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var option = attackOptions[i];
         // Array indices: 0=type, 1=item, 2=damage, 3=cost, 4=dptp, 5=maxUses, 6=name
         
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Processing attack option " + i + ": " + option[6] + " (dptp: " + option[4] + ", damage: " + option[2] + ")");
+        }
+        
         if (tpLeft < option[3]) continue; // Not enough TP
         
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var uses = min(option[5], floor(tpLeft / option[3]));
         if (uses <= 0) continue;
         
-        // Check weapon switching efficiency
+        // Check weapon switching efficiency and pre-validate
         if (option[0] == "weapon") {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
-            var needsSwap = (currentWeapon != option[1]);
+            var weaponId = option[1];
+            var needsSwap = (currentWeapon != weaponId);
+            
+            // Pre-switch validation to prevent wasting TP
+            var canFire = true;
+            var skipReason = "";
+            
+            // Check if weapon can actually fire before switching
+            if (weaponId == WEAPON_MAGNUM || weaponId == WEAPON_B_LASER || weaponId == WEAPON_LASER || weaponId == WEAPON_FLAME_THROWER) {
+                // Direct fire weapons need LOS
+                if (!hasLOS(myCell, enemyCell)) {
+                    canFire = false;
+                    skipReason = "no line of sight";
+                }
+            } else if (weaponId == WEAPON_GRENADE_LAUNCHER) {
+                // Grenade Launcher can always fire (direct or indirect)
+                canFire = true;
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Grenade Launcher pre-validation: can fire (direct/indirect)");
+                }
+            }
+            
+            // Check alignment for line weapons
+            if (canFire && (weaponId == WEAPON_B_LASER || weaponId == WEAPON_M_LASER || weaponId == WEAPON_LASER || weaponId == WEAPON_FLAME_THROWER)) {
+                if (!isOnSameLine(myCell, enemyCell)) {
+                    canFire = false;
+                    skipReason = "not aligned for line weapon";
+                }
+            }
+            
+            if (!canFire) {
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Skipping " + option[6] + " - " + skipReason);
+                }
+                continue;
+            }
+            
             if (needsSwap && totalDamage > 0 && tpLeft < (option[3] + 1)) {
                 if (debugEnabled && canSpendOps(1000)) {
                     debugLog("Skipping " + option[6] + " - would require weapon switch with insufficient TP");
                 }
                 continue;
             }
-            
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
 
             var damageDealt = executeWeaponAttacks(option, uses);
             totalDamage += damageDealt;
@@ -310,10 +253,6 @@ function executeAttackOptions(attackOptions) {
             currentWeapon = option[1];
             
         } else if (option[0] == "chip") {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
             var chipResult = executeChipAttack(option[1]);
             if (chipResult > 0) {
                 totalDamage += chipResult;
@@ -345,79 +284,98 @@ function executeAttackOptions(attackOptions) {
 
 // Function: executeWeaponAttacks
 // Execute weapon attacks
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function executeWeaponAttacks(weaponOption, uses) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var weaponId = weaponOption[1];
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var weaponName = weaponOption[6];
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var totalDamage = 0;
     
     switchToWeaponIfNeeded(weaponId);
     
-    // Special handling for AoE weapons
-    if (isAoEWeapon(weaponId)) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
-        var targetCell = findBestAoETarget(weaponId);
-        if (targetCell != null) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
+    // Special handling for AoE weapons - but prefer direct fire for Grenade Launcher when possible
+    var useDirectFire = true;
+    if (weaponId == WEAPON_GRENADE_LAUNCHER) {
+        // Use direct fire if in LOS, AoE if not
+        useDirectFire = hasLOS(myCell, enemyCell);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Grenade Launcher: using " + (useDirectFire ? "direct" : "AoE") + " fire");
+        }
+    } else if (weaponId == WEAPON_M_LASER) {
+        // M-Laser always uses direct fire when aligned
+        useDirectFire = true;
+    }
+    
+    if (!useDirectFire && isAoEWeapon(weaponId)) {
+        var targetInfo = findBestAoETarget(weaponId);
+        if (targetInfo != null) {
+            var targetCell = (weaponId == WEAPON_GRENADE_LAUNCHER) ? targetInfo["targetCell"] : targetInfo;
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Attempting AoE fire at cell " + targetCell + " with " + weaponName);
+            }
             var result = useWeaponOnCell(targetCell);
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("AoE fire result: " + result + " for " + weaponName);
+            }
             if (result == USE_SUCCESS || result == USE_CRITICAL) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
                 var estimatedDamage = weaponOption[2] / uses;
                 totalDamage += estimatedDamage;
                 if (debugEnabled && canSpendOps(1000)) {
-                    debugLog("AoE " + weaponName + " fired at cell " + targetCell);
+                    debugLog("AoE " + weaponName + " fired at cell " + targetCell + " for " + estimatedDamage + " damage");
                 }
             }
         }
     } else {
         // Direct targeting
         for (var u = 0; u < uses && myTP >= getWeaponCost(weaponId); u++) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
-            var result = useWeapon(enemy);
+            var result;
+            if (weaponId == WEAPON_GRENADE_LAUNCHER) {
+                // Grenade Launcher always targets cells, even in direct fire
+                result = useWeaponOnCell(enemyCell);
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Direct Grenade fire at enemy cell " + enemyCell);
+                }
+            } else {
+                result = useWeapon(enemy);
+            }
             if (result == USE_SUCCESS) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
                 var estimatedDamage = weaponOption[2] / uses;
                 totalDamage += estimatedDamage;
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Used weapon " + weaponName + " for " + getWeaponCost(weaponId) + " TP");
+                }
+                
+                // Track weapon usage for max uses per turn management
+                if (weaponId == WEAPON_MAGNUM) {
+                    magnumUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Magnum uses remaining: " + magnumUsesRemaining);
+                    }
+                } else if (weaponId == WEAPON_B_LASER) {
+                    bLaserUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("B-Laser uses remaining: " + bLaserUsesRemaining);
+                    }
+                }
+                
             } else if (result == USE_CRITICAL) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
                 var estimatedDamage = weaponOption[2] / uses * 1.3; // Critical bonus
                 totalDamage += estimatedDamage;
                 if (debugEnabled && canSpendOps(1000)) {
-                    debugLog("CRITICAL " + weaponName + " hit!");
+                    debugLog("Used weapon " + weaponName + " for " + getWeaponCost(weaponId) + " TP (CRIT!)");
                 }
+                
+                // Track weapon usage for max uses per turn management
+                if (weaponId == WEAPON_MAGNUM) {
+                    magnumUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Magnum uses remaining: " + magnumUsesRemaining);
+                    }
+                } else if (weaponId == WEAPON_B_LASER) {
+                    bLaserUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("B-Laser uses remaining: " + bLaserUsesRemaining);
+                    }
+                }
+                
             } else {
                 if (debugEnabled && canSpendOps(1000)) {
                     debugLog("Weapon attack failed: " + result + " for " + weaponName);
@@ -432,27 +390,11 @@ function executeWeaponAttacks(weaponOption, uses) {
 
 // Function: executeChipAttack
 // Execute chip attack
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function executeChipAttack(chipId) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var result = 0;
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var chipName = getChipName(chipId);
     
     if (chipId == CHIP_SPARK || chipId == CHIP_LIGHTNING) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var useResult = useChip(chipId, enemy);
         if (useResult == USE_SUCCESS || useResult == USE_CRITICAL) {
             result = calculateChipDamage(chipId, getStrength());
@@ -467,20 +409,12 @@ function executeChipAttack(chipId) {
 
 // Function: isAoEWeapon
 // Check if weapon is Area of Effect
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function isAoEWeapon(weaponId) {
     return (weaponId == WEAPON_GRENADE_LAUNCHER || weaponId == WEAPON_M_LASER);
 }
 
 // Function: findBestAoETarget
 // Find best cell for AoE weapon
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function findBestAoETarget(weaponId) {
     if (weaponId == WEAPON_GRENADE_LAUNCHER) {
         return findBestGrenadeTarget(myCell);
@@ -493,22 +427,10 @@ function findBestAoETarget(weaponId) {
 
 // Function: executeFallbackAttack
 // Fallback attack when no options are available
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function executeFallbackAttack() {
     if (myTP < 3) return;
     
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var dist = getCellDistance(myCell, enemyCell);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var hasLine = hasLOS(myCell, enemyCell);
     
     if (dist > 10 || !hasLine) return; // Can't attack
@@ -517,39 +439,15 @@ function executeFallbackAttack() {
         debugLog("FALLBACK: Forcing attack attempt");
     }
     
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var weapons = getWeapons();
     for (var w = 0; w < count(weapons); w++) {
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var weapon = weapons[w];
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var minR = getWeaponMinRange(weapon);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var maxR = getWeaponMaxRange(weapon);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
         var cost = getWeaponCost(weapon);
         
         if (dist >= minR && dist <= maxR && myTP >= cost) {
             setWeaponIfNeeded(weapon);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
             var result = useWeapon(enemy);
             if (result == USE_SUCCESS || result == USE_CRITICAL) {
                 if (debugEnabled && canSpendOps(1000)) {
@@ -567,19 +465,11 @@ function executeFallbackAttack() {
 
 // Function: updatePositionAfterMovement
 // Update position variables after movement
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
 function updatePositionAfterMovement() {
     myCell = getCell();
     myMP = getMP();
     enemyCell = getCell(enemy);
     enemyDistance = getCellDistance(myCell, enemyCell);
-
-// NOTE: When included from V6_main.ls, all dependencies are already loaded
-// No include statements needed here
-
     var newLOS = hasLOS(myCell, enemyCell);
     
     if (debugEnabled && canSpendOps(1000)) {

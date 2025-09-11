@@ -49,6 +49,7 @@ function bestApproachStep(towardCell) {
             best = c;
         }
     }
+
     return best;
 }
 
@@ -82,7 +83,9 @@ function moveToCell(targetCell) {
             }
             
             if (mpUsed > 0) {
-                debugLog("A* moved " + mpUsed + " MP toward target");
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("A* moved " + mpUsed + " MP toward target");
+                }
             }
             return mpUsed;
         }
@@ -131,7 +134,9 @@ function repositionDefensive() {
         // If we found a better cell, use it as our "safe" option
         if (leastBadCell != currentCell) {
             safeCells = [leastBadCell];
-            debugLog("No safe cells found, using least dangerous position");
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("No safe cells found, using least dangerous position");
+            }
         }
     }
     
@@ -168,13 +173,17 @@ function repositionDefensive() {
         
         if (bestCell != currentCell) {
             var newDist = getCellDistance(bestCell, currentEnemyCell);
-            debugLog("Kiting to distance " + newDist);
+            if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Kiting to distance " + newDist);
+            }
             if (moveToCell(bestCell) > 0) {
                 // Update cached positions after moving
                 myCell = getCell();
                 enemyCell = getCell(enemy);
                 enemyDistance = getCellDistance(myCell, enemyCell);
-                debugLog("New distance after kiting: " + enemyDistance);
+                if (debugEnabled && canSpendOps(1000)) {
+		debugLog("New distance after kiting: " + enemyDistance);
+                }
             }
         }
     } else {
@@ -212,4 +221,3 @@ function repositionDefensive() {
         }
     }
 }
-

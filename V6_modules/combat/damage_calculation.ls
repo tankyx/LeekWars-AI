@@ -2,10 +2,6 @@
 // Damage calculations
 // Auto-generated from V5.0 script
 
-// === STANDALONE COMPILATION SUPPORT ===
-// These variables/functions are defined in other modules when included via V6_main.ls
-// For standalone compilation, provide stub implementations
-
 // NOTE: Global variables are defined in core/globals.ls when included via V6_main.ls
 // For standalone testing only, uncomment the lines below:
 // global myTP = 0;
@@ -75,6 +71,7 @@ function calculateMaxDamage(fromCell, target, availableTP) {
     return maxDamage;
 }
 
+
 // Function: calculateActualDamage
 function calculateActualDamage(baseDamage, target) {
     if (target == null) return baseDamage;
@@ -95,6 +92,7 @@ function calculateActualDamage(baseDamage, target) {
     return floor(finalDamage);
 }
 
+
 // Calculate life steal based on actual damage dealt
 
 // Function: calculateLifeSteal
@@ -103,6 +101,7 @@ function calculateLifeSteal(damage, target) {
     var lifeSteal = floor(actualDamage * myWisdom / 1000.0);
     return lifeSteal;
 }
+
 
 // === INFLUENCE MAP SYSTEM ===
 
@@ -116,6 +115,7 @@ function calculateDamageFrom(cell) {
     if (MATRIX_INITIALIZED) {
         return getOptimalDamage(dist, myTP);
     }
+
     
     // Fallback to manual calculation if matrix not ready
     var totalDamage = 0;
@@ -138,6 +138,7 @@ function calculateDamageFrom(cell) {
             var splashPositions = findAoESplashPositions(w, cell, enemyCell);
             canHitSplash = count(splashPositions) > 0;
         }
+
         
         if (!canHitDirect && !canHitSplash) continue;
         
@@ -154,6 +155,7 @@ function calculateDamageFrom(cell) {
         
         if (tpLeft < 3) break;
     }
+
     
     // Check damage chips
     var chips = getChips();
@@ -178,11 +180,13 @@ function calculateDamageFrom(cell) {
         
         if (tpLeft < 3) break;
     }
+
     
     // Fix 6: Include AoE damage potential
     var aoeDamage = calculateOptimalAoEDamage(cell, dist, tpLeft);
     return max(totalDamage, aoeDamage);  // Use best of direct or AoE
 }
+
 
 // Fix 6: AoE targeting with CORRECT damage falloff formula
 // LeekWars AoE formula: damage = baseDamage * max(0, 1 - 0.2 * distance)
@@ -197,6 +201,7 @@ function calculateDamageFromTo(fromCell, toCell) {
     if (MATRIX_INITIALIZED) {
         return getOptimalDamage(dist, myTP);
     }
+
     
     // Fallback calculation
     var myWeapons = getWeapons();
@@ -222,6 +227,7 @@ function calculateDamageFromTo(fromCell, toCell) {
     
     return totalDamage * (1 + myStrength / 100.0);
 }
+
 
 
 // Function: calculateEnemyDamageFrom
@@ -255,6 +261,7 @@ function calculateEnemyDamageFrom(fromCell, toCell) {
 }
 
 
+
 // Function: calculateDamageFromWithTP
 function calculateDamageFromWithTP(cell, availableTP) {
     if (enemy == null) return 0;
@@ -284,6 +291,7 @@ function calculateDamageFromWithTP(cell, availableTP) {
         
         if (tpLeft < 3) break;
     }
+
     
     // Check damage chips
     var damageChips = [
@@ -319,6 +327,7 @@ function calculateDamageFromWithTP(cell, availableTP) {
     
     return totalDamage;
 }
+
 
 // === ATTACK ACTIONS ===
 // Fix 12: Cache cooldown checks to avoid redundant calls

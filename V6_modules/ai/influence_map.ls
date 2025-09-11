@@ -5,11 +5,15 @@
 // Function: buildInfluenceMap
 function buildInfluenceMap() {
     if (INFLUENCE_TURN == turn) {
-        debugLog("Influence map already built for turn " + turn);
+        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Influence map already built for turn " + turn);
+        }
         return;  // Already built this turn
     }
     
-    debugLog("Building influence map for turn " + turn);
+    if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Building influence map for turn " + turn);
+    }
     INFLUENCE_MAP = [:];
     INFLUENCE_TURN = turn;
     
@@ -49,6 +53,7 @@ function buildInfluenceMap() {
             cellInfluence["myAoE"] = [];
             cellInfluence["enemyAoE"] = [];
         }
+
         
         // Calculate safety score
         var myEHP = calculateEHP(myHP, myAbsShield, myRelShield, 0, myResistance);
@@ -60,6 +65,8 @@ function buildInfluenceMap() {
         INFLUENCE_MAP[cell] = cellInfluence;
     }
 }
+
+
 
 
 // Function: calculateMyAoEZones
@@ -74,6 +81,7 @@ function calculateMyAoEZones(fromCell) {
         for (var i = 0; i < min(4, count(nearbyEnemy)); i++) {
             push(grenadeTargets, nearbyEnemy[i]);
         }
+
         
         for (var i = 0; i < count(grenadeTargets); i++) {
             var target = grenadeTargets[i];
@@ -108,7 +116,6 @@ function calculateMyAoEZones(fromCell) {
             push(zones, zone);
         }
     }
-    
     // Check M-Laser zones - OPTIMIZED
     if (inArray(getWeapons(), WEAPON_M_LASER)) {
         // Only check enemy position instead of all cells in range
@@ -147,6 +154,7 @@ function calculateMyAoEZones(fromCell) {
     
     return zones;
 }
+
 
 
 // Function: calculateEnemyAoEZones
@@ -193,8 +201,6 @@ function calculateEnemyAoEZones(toCell) {
     
     return zones;
 }
-
-
 // Function: visualizeInfluenceMap
 function visualizeInfluenceMap() {
     if (!debugEnabled || !canSpendOps(100000)) return;
@@ -212,6 +218,7 @@ function visualizeInfluenceMap() {
             maxSafety = max(maxSafety, inf["safety"]);
         }
     }
+
     
     // Visualize based on selected mode
     var displayMode = "SAFETY";  // Can be DAMAGE, SAFETY, CONTROL, AOE
