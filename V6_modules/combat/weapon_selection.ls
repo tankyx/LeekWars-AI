@@ -100,6 +100,28 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
                 }
 
                 maxUses = bLaserUsesRemaining; // Use custom tracking for B-Laser
+            } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                if (enhancedLightningerUsesRemaining <= 0) {
+                    if (debugEnabled && canSpendOps(500)) {
+                        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping Enhanced Lightninger - no uses remaining (" + enhancedLightningerUsesRemaining + ")");
+                        }
+                    }
+                    continue; // Skip if no uses left
+                }
+
+                maxUses = enhancedLightningerUsesRemaining; // Use custom tracking for Enhanced Lightninger
+            } else if (weaponId == WEAPON_KATANA) {
+                if (katanaUsesRemaining <= 0) {
+                    if (debugEnabled && canSpendOps(500)) {
+                        if (debugEnabled && canSpendOps(1000)) {
+		debugLog("Skipping Katana - no uses remaining (" + katanaUsesRemaining + ")");
+                        }
+                    }
+                    continue; // Skip if no uses left
+                }
+
+                maxUses = katanaUsesRemaining; // Use custom tracking for Katana
             }
 
             
@@ -168,6 +190,23 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
                 // Poison damage scales with magic: 24-30 base, 27 average
                 var poisonDamage = 27 * (1 + myMagic / 100) * possibleUses;
                 totalDamage += poisonDamage; // Add poison DoT value
+            }
+            
+            // Add healing value for Enhanced Lightninger
+            if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                // 100 HP flat heal per use (not affected by magic/wisdom)
+                var healValue = 100 * possibleUses;
+                // Convert heal to damage equivalent for comparison
+                totalDamage += healValue * 0.8; // 80% damage equivalent for healing
+            }
+            
+            // Add TP debuff value for Katana
+            if (weaponId == WEAPON_KATANA) {
+                // TP debuff scales with magic: -30-40% TP for 1 turn, 35% average
+                var tpDebuffPercent = 0.35 * (1 + myMagic / 100); // Scale with magic
+                var tpDebuffValue = enemyTP * tpDebuffPercent * possibleUses;
+                // Convert TP denial to damage equivalent (1 TP ≈ 3 damage equivalent)
+                totalDamage += tpDebuffValue * 3; // TP denial is very valuable
             }
 
 
@@ -428,6 +467,39 @@ function applyWeaponPriorities(weaponId, baseDptp, distance, availableWeapons) {
             adjustedDptp *= 1.2; // 20% bonus in sweet spot
         }
 
+    } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+        // Enhanced Lightninger is excellent AoE weapon with healing
+        adjustedDptp *= 1.8; // 80% bonus for AoE damage + healing utility
+        
+        // Multi-enemy bonus for 3x3 AoE
+        if (count(allEnemies) > 1) {
+            adjustedDptp *= 1.5; // 50% bonus for multi-hit AoE potential
+        }
+        
+        // Bonus when at low health (healing value)
+        if (myHP < myMaxHP * 0.7) {
+            adjustedDptp *= 1.3; // 30% bonus when healing is valuable
+        }
+        
+        // Optimal range bonus (6-10 range)
+        if (distance >= 6 && distance <= 8) {
+            adjustedDptp *= 1.2; // 20% bonus in sweet spot
+        }
+
+    } else if (weaponId == WEAPON_KATANA) {
+        // Katana is excellent melee weapon with TP debuff
+        adjustedDptp *= 1.7; // 70% bonus for TP debuff utility + high damage
+        
+        // Bonus against high-TP enemies where debuff is most valuable
+        if (enemyTP > 10) {
+            adjustedDptp *= 1.4; // 40% bonus vs high TP enemies
+        }
+        
+        // Bonus in melee range (range 1 only)
+        if (distance == 1) {
+            adjustedDptp *= 1.3; // 30% bonus at optimal range
+        }
+
     } else if (weaponId == WEAPON_MAGNUM) {
         // Magnum competes on raw dptp - no artificial bonuses
         // Life steal is factored into damage calculation already
@@ -545,6 +617,10 @@ function getWeaponBaseDamage(weaponId) {
         return 51; // Laser base damage (43-59 average)
     } else if (weaponId == WEAPON_FLAME_THROWER) {
         return 37.5; // Flame Thrower base damage (35-40 average)
+    } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+        return 91; // Enhanced Lightninger base damage (89-93 average)
+    } else if (weaponId == WEAPON_KATANA) {
+        return 77; // Katana base damage
     }
 
     

@@ -248,6 +248,8 @@ global SHIELD_THRESHOLD = 0.5;       // Apply shields below 50% HP
 global magnumUsesRemaining = 0;
 global destroyerUsesRemaining = 0;
 global bLaserUsesRemaining = 0;
+global enhancedLightningerUsesRemaining = 0;
+global katanaUsesRemaining = 0;
 
 // B-Laser build buff tracking
 global hasProtein = false;

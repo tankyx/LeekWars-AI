@@ -195,6 +195,26 @@ function detectWeaponLoadout() {
         destroyerUsesRemaining = 0;
         bLaserUsesRemaining = 0;
     }
+    
+    // Check for Enhanced Lightninger and initialize uses
+    if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER)) {
+        enhancedLightningerUsesRemaining = 2; // Max uses per battle
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Enhanced Lightninger detected - 2 uses available");
+        }
+    } else {
+        enhancedLightningerUsesRemaining = 0;
+    }
+    
+    // Check for Katana and initialize uses
+    if (inArray(weapons, WEAPON_KATANA)) {
+        katanaUsesRemaining = 2; // Max uses per battle
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Katana detected - 2 uses available");
+        }
+    } else {
+        katanaUsesRemaining = 0;
+    }
 }
 
 // Alias for backwards compatibility

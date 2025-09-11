@@ -182,6 +182,28 @@ function analyzePositioningNeeds(distance, hasLOS, weapons) {
             return needs;
         }
     }
+    
+    // Enhanced Lightninger range check
+    if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER)) {
+        if (distance < 6) {
+            needs["needsRepositioning"] = true;
+            needs["reason"] = "Enhanced Lightninger too close - need range 6-10";
+            return needs;
+        } else if (distance > 10) {
+            needs["needsRepositioning"] = true;
+            needs["reason"] = "Enhanced Lightninger too far - need range 6-10";
+            return needs;
+        }
+    }
+    
+    // Katana range check - must be at range 1
+    if (inArray(weapons, WEAPON_KATANA)) {
+        if (distance != 1) {
+            needs["needsRepositioning"] = true;
+            needs["reason"] = "Katana requires melee range - need range 1";
+            return needs;
+        }
+    }
     // Grenade launcher accessibility
     if (distance == 8 && inArray(weapons, WEAPON_GRENADE_LAUNCHER) && !hasLOS) {
         // We're at range 8 but no LOS - move to range 7 for grenade access
@@ -235,6 +257,8 @@ function findOptimalAttackPosition(maxMovement, weapons) {
     var bestDestroyerScore = -999999;
     var bestFlameThrowerCell = null;
     var bestFlameThrowerScore = -999999;
+    var bestKatanaCell = null;
+    var bestKatanaScore = -999999;
     var bestAoECell = null;
     var bestAoEScore = -999999;
     
@@ -315,6 +339,24 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             bestFlameThrowerScore = score;
             bestFlameThrowerCell = cell;
         }
+        
+        // Track best Enhanced Lightninger position (range 6-10, LOS required for AoE)
+        if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && 
+            distance >= 6 && distance <= 10 && 
+            hasLOS(cell, enemyCell) && 
+            score > bestFlameThrowerScore) {  // Reuse variable or add new one
+            bestFlameThrowerScore = score;
+            bestFlameThrowerCell = cell;
+        }
+        
+        // Track best Katana position (range 1, melee combat)
+        if (inArray(weapons, WEAPON_KATANA) && 
+            distance == 1 && 
+            hasLOS(cell, enemyCell) && 
+            score > bestKatanaScore) {
+            bestKatanaScore = score;
+            bestKatanaCell = cell;
+        }
         // Track best AoE position (for Grenade range 4-7)
         if (distance >= 4 && distance <= 7 && score > bestAoEScore) {
             bestAoEScore = score;
@@ -328,7 +370,15 @@ function findOptimalAttackPosition(maxMovement, weapons) {
         }
         return bestMLaserCell;
     }
-    // PRIORITY 2: Flame Thrower aligned position (excellent line weapon with poison DoT)
+    // PRIORITY 2: Enhanced Lightninger position (excellent AoE weapon with healing)
+    if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && bestFlameThrowerCell != null && bestFlameThrowerScore > -5000) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("🎯 Enhanced Lightninger position: " + bestFlameThrowerCell + " (score: " + bestFlameThrowerScore + ")");
+        }
+        return bestFlameThrowerCell;
+    }
+    
+    // PRIORITY 2.5: Flame Thrower aligned position (excellent line weapon with poison DoT)
     if (bestFlameThrowerCell != null && bestFlameThrowerScore > -5000) {
         if (debugEnabled && canSpendOps(1000)) {
             debugLog("🎯 Flame Thrower aligned position: " + bestFlameThrowerCell + " (score: " + bestFlameThrowerScore + ")");
@@ -355,6 +405,14 @@ function findOptimalAttackPosition(maxMovement, weapons) {
             debugLog("🎯 Rifle position: " + bestRifleCell + " (score: " + bestRifleScore + ")");
         }
         return bestRifleCell;
+    }
+    
+    // PRIORITY 4.5: Katana position (high damage melee with TP debuff)
+    if (bestKatanaCell != null && bestKatanaScore > -5000) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("🎯 Katana position: " + bestKatanaCell + " (score: " + bestKatanaScore + ")");
+        }
+        return bestKatanaCell;
     }
     // PRIORITY 6: Destroyer position (debuff weapon, fallback to close range)
     if (bestDestroyerCell != null && bestDestroyerScore > -5000) {

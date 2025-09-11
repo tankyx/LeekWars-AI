@@ -265,6 +265,16 @@ function executeAttackOptions(attackOptions) {
             if (debugEnabled && canSpendOps(1000)) {
                 debugLog("Enemy eliminated with " + totalDamage + " total damage");
             }
+            
+            // Enhanced Lightninger passive: +1 TP per entity killed
+            var weapons = getWeapons();
+            if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER)) {
+                // Add 1 TP for the kill (LeekScript doesn't have direct setTP, but the passive works automatically)
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Enhanced Lightninger passive: +1 TP for kill");
+                }
+            }
+            
             break;
         }
         
@@ -333,6 +343,12 @@ function executeWeaponAttacks(weaponOption, uses) {
                 if (debugEnabled && canSpendOps(1000)) {
                     debugLog("Direct Grenade fire at enemy cell " + enemyCell);
                 }
+            } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                // Enhanced Lightninger always targets cells for AoE + healing
+                result = useWeaponOnCell(enemyCell);
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Enhanced Lightninger AoE at enemy cell " + enemyCell);
+                }
             } else {
                 result = useWeapon(enemy);
             }
@@ -354,6 +370,16 @@ function executeWeaponAttacks(weaponOption, uses) {
                     if (debugEnabled && canSpendOps(1000)) {
                         debugLog("B-Laser uses remaining: " + bLaserUsesRemaining);
                     }
+                } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                    enhancedLightningerUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Enhanced Lightninger uses remaining: " + enhancedLightningerUsesRemaining);
+                    }
+                } else if (weaponId == WEAPON_KATANA) {
+                    katanaUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Katana uses remaining: " + katanaUsesRemaining);
+                    }
                 }
                 
             } else if (result == USE_CRITICAL) {
@@ -373,6 +399,16 @@ function executeWeaponAttacks(weaponOption, uses) {
                     bLaserUsesRemaining--;
                     if (debugEnabled && canSpendOps(1000)) {
                         debugLog("B-Laser uses remaining: " + bLaserUsesRemaining);
+                    }
+                } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                    enhancedLightningerUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Enhanced Lightninger uses remaining: " + enhancedLightningerUsesRemaining);
+                    }
+                } else if (weaponId == WEAPON_KATANA) {
+                    katanaUsesRemaining--;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Katana uses remaining: " + katanaUsesRemaining);
                     }
                 }
                 
@@ -410,7 +446,7 @@ function executeChipAttack(chipId) {
 // Function: isAoEWeapon
 // Check if weapon is Area of Effect
 function isAoEWeapon(weaponId) {
-    return (weaponId == WEAPON_GRENADE_LAUNCHER || weaponId == WEAPON_M_LASER);
+    return (weaponId == WEAPON_GRENADE_LAUNCHER || weaponId == WEAPON_M_LASER || weaponId == WEAPON_ENHANCED_LIGHTNINGER);
 }
 
 // Function: findBestAoETarget
@@ -420,6 +456,8 @@ function findBestAoETarget(weaponId) {
         return findBestGrenadeTarget(myCell);
     } else if (weaponId == WEAPON_M_LASER) {
         return findBestMLaserTarget();
+    } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+        return findBestEnhancedLightningerTarget();
     }
     
     return enemyCell; // Fallback to direct targeting
@@ -475,4 +513,81 @@ function updatePositionAfterMovement() {
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("Repositioned - new distance: " + enemyDistance + ", new LOS: " + newLOS);
     }
+}
+
+// Function: findBestEnhancedLightningerTarget
+// Find best target cell for Enhanced Lightninger 3x3 AoE
+function findBestEnhancedLightningerTarget() {
+    // Enhanced Lightninger has range 6-10 and 3x3 square area
+    var distance = getCellDistance(myCell, enemyCell);
+    
+    if (distance < 6 || distance > 10) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Enhanced Lightninger out of range: " + distance + " (need 6-10)");
+        }
+        return null; // Out of range
+    }
+    
+    // Check if we have line of sight to enemy cell
+    if (hasLOS(myCell, enemyCell)) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Enhanced Lightninger direct target: enemy at " + enemyCell);
+        }
+        return enemyCell; // Direct targeting is best
+    }
+    
+    // If no direct LOS, look for cells around enemy that we can target
+    var enemyX = getCellX(enemyCell);
+    var enemyY = getCellY(enemyCell);
+    
+    // Check all cells in 3x3 area around enemy for targeting
+    var bestTarget = null;
+    var bestScore = -1;
+    
+    for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+            var targetCell = getCellFromXY(enemyX + dx, enemyY + dy);
+            if (targetCell == null || targetCell == -1) continue;
+            
+            var targetDistance = getCellDistance(myCell, targetCell);
+            if (targetDistance < 6 || targetDistance > 10) continue;
+            
+            if (hasLOS(myCell, targetCell)) {
+                // Calculate how many enemies this position might hit
+                var score = 1; // Base score for hitting primary enemy
+                
+                // Bonus for hitting multiple enemies if in team battle
+                if (count(allEnemies) > 1) {
+                    for (var e = 0; e < count(allEnemies); e++) {
+                        var enemyEntity = allEnemies[e];
+                        var enemyPos = getCell(enemyEntity);
+                        var hitDistance = getCellDistance(targetCell, enemyPos);
+                        if (hitDistance <= 1) { // Within 3x3 area (distance 1 from center)
+                            score += 1;
+                        }
+                    }
+                }
+                
+                // Prefer closer targets for accuracy
+                score += (11 - targetDistance) * 0.1;
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTarget = targetCell;
+                }
+            }
+        }
+    }
+    
+    if (bestTarget != null) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Enhanced Lightninger indirect target: " + bestTarget + " (score: " + bestScore + ")");
+        }
+        return bestTarget;
+    }
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("Enhanced Lightninger: no valid target found");
+    }
+    return null;
 }

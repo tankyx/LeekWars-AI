@@ -314,22 +314,39 @@ function simplifiedCombat() {
         }
     }
     
-    // Priority 1: Emergency healing if critically low HP
+    // Priority 1: Enhanced Lightninger in panic mode (attack + heal combo)
+    if (myHP < myMaxHP * 0.4 && myTP >= 9 && enhancedLightningerUsesRemaining > 0) {
+        if (enemyDistance >= 6 && enemyDistance <= 10 && hasLOS(myCell, enemyCell)) {
+            if (debugEnabled && canSpendOps(500)) {
+                debugLog("PANIC: Using Enhanced Lightninger (attack+heal combo)");
+            }
+            var weapons = getWeapons();
+            if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER)) {
+                var result = useWeaponOnCell(enemyCell);
+                if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                    enhancedLightningerUsesRemaining--;
+                    return; // Done with turn
+                }
+            }
+        }
+    }
+    
+    // Priority 2: Emergency healing if critically low HP (only if Enhanced Lightninger failed)
     if (myHP < myMaxHP * 0.2 && myTP >= 4) {
         executeEmergencyHealing();
     }
     
-    // Priority 2: Attack if we can
+    // Priority 3: Attack if we can
     if (myTP >= 5 && enemyDistance <= 10 && hasLOS(myCell, enemyCell)) {
         executeAttackSequence();
     }
     
-    // Priority 3: Move closer if out of range
+    // Priority 4: Move closer if out of range
     if (enemyDistance > 10 && myMP > 0) {
         moveToward(enemy, min(myMP, 3));
     }
     
-    // Priority 4: Shield if we have TP left
+    // Priority 5: Shield if we have TP left
     if (myTP >= 4) {
         executeShielding();
     }
