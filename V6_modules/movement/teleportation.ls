@@ -6,13 +6,78 @@
 function shouldUseTeleport() {
     if (!TELEPORT_AVAILABLE || myTP < 9) return false;
     
+    // NEW STRATEGY: Conservative TP usage - only for emergencies and Katana positioning
+    if (!USE_CONSERVATIVE_TP) {
+        // Use old logic if conservative mode is disabled
+        return shouldUseTeleportLegacy();
+    }
+    
     // Get FRESH positions
     var currentCell = getCell();
     var currentEnemyCell = getCell(enemy);
     var currentDistance = getCellDistance(currentCell, currentEnemyCell);
     
     if (debugEnabled && canSpendOps(1000)) {
-		debugLog("Checking teleport need: dist=" + currentDistance + ", MP=" + getMP() + ", TP=" + myTP);
+        debugLog("CONSERVATIVE TP: Checking teleport need: dist=" + currentDistance + ", MP=" + getMP() + ", TP=" + myTP);
+    }
+    
+    // EMERGENCY TELEPORT: Life-threatening situations only
+    if (myHP < myMaxHP * 0.2) { // Below 20% HP (more conservative than old 30%)
+        var currentEID = calculateEID(currentCell);
+        if (currentEID >= myHP * 0.8) { // Much higher threat threshold 
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("🚨 CONSERVATIVE: Emergency teleport - HP critical: " + myHP + ", EID: " + currentEID);
+            }
+            return true;
+        }
+    }
+    
+    // KATANA POSITIONING: Only use TP to get into Katana range for finishing moves
+    var weapons = getWeapons();
+    if (inArray(weapons, WEAPON_KATANA) && katanaUsesRemaining > 0) {
+        var enemyHPPercent = getLife(enemy) / getTotalLife(enemy);
+        
+        // Only teleport for Katana if enemy is low HP (finishing move)
+        if (enemyHPPercent <= 0.3 && currentDistance > 2) {
+            // Check if we can't walk to Katana range (1-2)
+            var reachable = getReachableCells(currentCell, getMP());
+            var canWalkToKatana = false;
+            
+            for (var i = 0; i < count(reachable); i++) {
+                var cell = reachable[i];
+                var dist = getCellDistance(cell, currentEnemyCell);
+                if (dist >= 1 && dist <= 2) {
+                    canWalkToKatana = true;
+                    break;
+                }
+            }
+            
+            if (!canWalkToKatana && myTP >= 15) { // Need enough TP for teleport + Katana attack
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("⚔️ CONSERVATIVE: Katana finishing teleport - enemy HP: " + (enemyHPPercent * 100) + "%");
+                }
+                return true;
+            }
+        }
+    }
+    
+    // NEVER teleport for general positioning - save TP for attacks and chips
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("CONSERVATIVE: No teleport - saving TP for attacks/chips");
+    }
+    return false;
+}
+
+// Function: shouldUseTeleportLegacy
+// Legacy teleport logic for fallback
+function shouldUseTeleportLegacy() {
+    // Get FRESH positions
+    var currentCell = getCell();
+    var currentEnemyCell = getCell(enemy);
+    var currentDistance = getCellDistance(currentCell, currentEnemyCell);
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("LEGACY: Checking teleport need: dist=" + currentDistance + ", MP=" + getMP() + ", TP=" + myTP);
     }
     
     // Check if we can attack from current position
@@ -29,42 +94,24 @@ function shouldUseTeleport() {
         canAttackHere = true;  // Dark Katana melee
     }
     
-    // STRATEGIC TELEPORT: Force enemy to react even if we can attack
-    if (canAttackHere && myTP >= 14 && turn >= 3) {
-        if (shouldTeleportForResourcePressure(currentCell, currentEnemyCell)) {
-            if (debugEnabled && canSpendOps(1000)) {
-		debugLog("🎯 STRATEGIC TELEPORT: Creating resource pressure opportunity");
-            }
-            return true;
-        }
-    }
-    
-    // If we can already attack and no strategic opportunity, no need to teleport
+    // If we can already attack, no need to teleport
     if (canAttackHere) {
-        if (debugEnabled && canSpendOps(1000)) {
-		debugLog("Can already attack - no teleport needed");
-        }
         return false;
     }
     
     // Check if we can WALK to attack range with LOS
     var reachable = getReachableCells(currentCell, getMP());
     var canWalkToAttack = false;
-    var hasAnyLOSOption = false;
     
     for (var i = 0; i < count(reachable); i++) {
         var cell = reachable[i];
         var dist = getCellDistance(cell, currentEnemyCell);
         
         if (hasLOS(cell, currentEnemyCell)) {
-            hasAnyLOSOption = true;
             if ((dist >= 7 && dist <= 9) ||  // Rifle
                 (dist >= 4 && dist <= 7) ||  // Grenade
                 (dist >= 5 && dist <= 12 && isOnSameLine(cell, currentEnemyCell))) {  // M-Laser
                 canWalkToAttack = true;
-                if (debugEnabled && canSpendOps(1000)) {
-		debugLog("Can walk to attack position at cell " + cell);
-                }
                 break;
             }
         } else if (dist == 1) {  // Dark Katana
@@ -73,19 +120,8 @@ function shouldUseTeleport() {
         }
     }
     
-    // Only teleport if we CAN'T walk into range OR no LOS available
+    // Only teleport if we CAN'T walk into range
     if (!canWalkToAttack) {
-        if (debugEnabled && canSpendOps(1000)) {
-		debugLog("⚔️ TELEPORT NEEDED! Can't walk to any attack range");
-        }
-        return true;
-    }
-    
-    // If no LOS options at all, consider teleporting to bypass obstacles
-    if (!hasAnyLOSOption && currentDistance > 12) {
-        if (debugEnabled && canSpendOps(1000)) {
-		debugLog("🎯 LOS BYPASS TELEPORT! No line of sight options available");
-        }
         return true;
     }
     
@@ -93,19 +129,8 @@ function shouldUseTeleport() {
     if (myHP < myMaxHP * 0.3) {
         var currentEID = calculateEID(currentCell);
         if (currentEID >= myHP * 0.5) {
-            if (debugEnabled && canSpendOps(1000)) {
-		debugLog("🚨 EMERGENCY TELEPORT! HP critical");
-            }
             return true;
         }
-    }
-    
-    // Too far to reach even with movement
-    if (currentDistance > 15) {
-        if (debugEnabled && canSpendOps(1000)) {
-		debugLog("🏃 GAP CLOSE TELEPORT! Enemy too far");
-        }
-        return true;
     }
     
     return false;

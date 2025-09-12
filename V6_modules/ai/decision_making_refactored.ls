@@ -9,7 +9,7 @@ include("combat_decisions");
 
 
 // Function: makeDecision
-// Main decision making orchestrator - now much cleaner and modular
+// Main decision making orchestrator - prioritizes new strategy
 
 
 function makeDecision() {
@@ -23,7 +23,7 @@ function makeDecision() {
         }
     }
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("makeDecision called - enemy=" + enemy + " (" + count(allEnemies) + " total enemies)");
+        debugLog("makeDecision called - Turn " + turn + ", enemy=" + enemy + " (" + count(allEnemies) + " total enemies)");
     }
     if (enemy == null) {
         if (debugEnabled && canSpendOps(1000)) {
@@ -31,72 +31,69 @@ function makeDecision() {
         }
         return;
     }
-    // PHASE 1: Emergency Decisions
-    // Handle panic mode, emergency timeouts, and aggressive openings
+    
+    // === NEW STRATEGY DECISION FLOW ===
+    // Turns 2+ use the new STEROID + RIFLE strategy prioritized over legacy logic
+    
+    // PHASE 1: Emergency Decisions (always first priority)
     if (handleEmergencyDecisions()) {
         return; // Emergency action taken, exit early
     }
-    // Check for aggressive opening (turns 1-2)
-    if (handleAggressiveOpening()) {
-        return; // Aggressive opening executed, exit early
+    
+    // PHASE 2: NEW STRATEGY EXECUTION (turn 2+)
+    if (turn >= 2) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("=== NEW STRATEGY DECISION MAKING ===");
+        }
+        
+        // Execute the new strategy attack system
+        executeNewStrategyAttack();
+        
+        // Post-combat defensive actions if TP remains
+        if (myTP >= 4) {
+            executeDefensive();
+        }
+        
+        // Conservative repositioning if MP remains (no TP usage)
+        if (getMP() > 0 && enemy != null && getLife(enemy) > 0) {
+            repositionDefensiveMP(); // MP-only repositioning
+        }
+        
+        return; // New strategy handled everything
     }
+    
+    // === LEGACY FALLBACK FOR EDGE CASES ===
+    // Only used if new strategy doesn't apply (turn 1 has its own sequence)
+    
     // Handle panic mode ultra-basic decisions
     if (handlePanicModeDecisions()) {
         return; // Panic mode action taken, exit early
     }
     if (debugEnabled && canSpendOps(1000)) {
-        debugLog("Not in panic mode, continuing...");
+        debugLog("Using legacy decision flow...");
     }
-    // PHASE 2: Tactical Decisions
-    // Strategic positioning, teleportation, pattern learning, influence mapping
-
-
+    
+    // Legacy tactical decisions
     var tacticalAction = makeTacticalDecision();
     
     if (tacticalAction == "teleport_executed") {
         return; // Teleportation handled everything
     } else if (tacticalAction == "standard_positioning") {
-        // Continue to positioning evaluation with deep analysis
-        
-        // Try deep tactical analysis first - much more aggressive trigger
-        var deepAnalysis = null;
-        if (canSpendOps(1500000)) {
-            deepAnalysis = performDeepTacticalAnalysis();
-            if (deepAnalysis != null && count(deepAnalysis["bestPositions"]) > 0) {
-                var bestPos = deepAnalysis["bestPositions"][0][0];
-                if (bestPos != myCell) {
-                    if (debugEnabled && canSpendOps(1000)) {
-                        debugLog("🎯 Deep analysis found superior position");
-                    }
-                    if (moveToCell(bestPos)) {
-                        executeAttack();
-                        if (myTP >= 4) executeDefensive();
-                        return;
-                    }
-                }
-            }
-        }
-        
         var positionResult = evaluatePositioning();
         if (positionResult == "position_improved") {
-            // Position was improved, now attack from new position
             executeAttack();
             if (myTP >= 4) executeDefensive();
             return;
         }
     }
-    // PHASE 3: Combat Decisions  
-    // Attack commitment, kill setup, combat strategies
-
-
-    var combatAction = makeCombatDecision();
     
+    // Legacy combat decisions
+    var combatAction = makeCombatDecision();
     if (combatAction != null) {
-        // Combat action was taken
         return;
     }
-    // PHASE 4: Fallback Logic
-    // Final positioning and attack attempts
+    
+    // Legacy fallback
     executeFallbackLogic();
     
     // PHASE 5: Burn Remaining Operations

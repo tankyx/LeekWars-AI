@@ -257,3 +257,24 @@ global hasMotivation = false;
 global hasStretching = false;
 global hasLeatherBoots = false;
 global hasSolidification = false;
+
+// ===================================================================
+// NEW STRATEGY TRACKING (520 STR / 400 WIS BUILD)
+// ===================================================================
+// Turn 1: KNOWLEDGE -> ELEVATION -> ARMORING -> LEATHER_BOOTS -> equip RIFLE
+// Core combo: STEROID -> 2x RIFLE (when available)
+// Weapon priority: RIFLE baseline, M_LASER/ENHANCED_LIGHTNINGER when LEATHER_BOOTS up
+
+global STEROID_LAST_USED = -10;          // Turn when STEROID was last used  
+global STEROID_COOLDOWN = 5;             // STEROID has 5-turn cooldown
+global LEATHER_BOOTS_LAST_USED = -10;    // Turn when LEATHER_BOOTS was last used
+global LEATHER_BOOTS_COOLDOWN = 3;       // LEATHER_BOOTS has 3-turn cooldown
+
+// Strategy tracking
+global TURN_1_BUFFS_COMPLETE = false;    // Track if turn 1 buff sequence completed
+global RIFLE_USES_REMAINING = 0;         // Track RIFLE uses per turn
+global USE_CONSERVATIVE_TP = true;       // Only use TP for emergency/Katana positioning
+
+// Chip priority order for new build
+global CHIP_PRIORITY_TURN_1 = [CHIP_KNOWLEDGE, CHIP_ELEVATION, CHIP_ARMORING, CHIP_LEATHER_BOOTS];
+global CORE_CHIPS_ONLY = [CHIP_KNOWLEDGE, CHIP_ELEVATION, CHIP_ARMORING, CHIP_LEATHER_BOOTS, CHIP_STEROID, CHIP_REGENERATION, CHIP_ANTIDOTE, CHIP_LIBERATION, CHIP_TELEPORTATION];

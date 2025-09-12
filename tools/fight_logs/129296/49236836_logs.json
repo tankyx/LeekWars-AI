@@ -1,0 +1,300 @@
+{
+  "18035": {
+    "21": [
+      [
+        0,
+        3,
+        "[Turn null] Generic laser tactics module loaded",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn null] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] \ud83d\udd27 Operation Budget: 1000000 ops (1 cores \u00d7 1M)",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Optimal attack range: 7",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Mode: OPTIMAL (1% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Pre-computing weapon effectiveness matrix...",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Matrix initialization complete",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Enemy Profile: TANK (STR:2000 MAG:0 AGI:200)",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Strategy: ENDURANCE - Efficient DPS vs tank",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Optimal attack range: 6",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Enemy weapon ranges: 999-7, max AoE=1",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Turn 1 initialized. Enemy: diamond_chest at dist 19",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] === V6 MAIN STARTING ===",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Initialized - enemy=2",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Turn 1 - executing early game sequence",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] === TURN 1 EARLY GAME SEQUENCE ===",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] HP: 1063/1063 | TP: 14 | MP: 7",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Enemy: diamond_chest | Distance: 19",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] executeBuffs called - TP=14, turn=1",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Phase 1 complete - Used 0 TP on buffs",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Positioning needed: Out of weapon range - moving closer",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Planning multi-turn move toward LOS position: 375",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Moving to position 340 for +0 damage",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Repositioning: Out of weapon range - moving closer (damage improvement: +0)",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] No A* path found to 340",
+        0,
+        445977,
+        9
+      ]
+    ],
+    "22": [
+      [
+        0,
+        3,
+        "[Turn 1] Repositioned - new distance: 15, new LOS: false",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Phase 2 complete - Final distance: 15",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Phase 3 - Attack sequence with 14 TP remaining",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] executeAttackSequence called - enemy=2, myTP=14",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Combat range=15, hasLOS=false",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Positioning needed: Out of weapon range - moving closer",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Planning multi-turn move toward LOS position: 375",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Moving to position 340 for +0 damage",
+        0,
+        445977,
+        9
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Repositioning: Out of weapon range - moving closer (damage improvement: +0)",
+        0,
+        445977,
+        9
+      ]
+    ],
+    "23": [
+      [
+        0,
+        8,
+        "    \u25b6 AI pathfinding, line 91\n    \u25b6 AI pathfinding, line 136\n    \u25b6 AI positioning, line 67\n    \u25b6 AI positioning_logic, line 510\n    \u25b6 AI attack_execution, line 43\n    \u25b6 AI execute_combat_refactored, line 285\n    \u25b6 AI V6_main, line 103\n",
+        101,
+        [
+          null
+        ]
+      ],
+      [
+        0,
+        6,
+        "",
+        113,
+        [
+          "too_much_ops"
+        ]
+      ]
+    ]
+  }
+}

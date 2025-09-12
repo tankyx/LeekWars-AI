@@ -221,3 +221,111 @@ function repositionDefensive() {
         }
     }
 }
+
+// Function: repositionDefensiveMP
+// Conservative repositioning using only MP (no TP usage)
+function repositionDefensiveMP() {
+    if (getMP() <= 0) return false;
+    
+    var currentCell = getCell();
+    var currentEnemyCell = getCell(enemy);
+    var currentDistance = getCellDistance(currentCell, currentEnemyCell);
+    var currentEID = calculateEID(currentCell);
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("CONSERVATIVE MP repositioning: MP=" + getMP() + ", dist=" + currentDistance + ", EID=" + currentEID);
+    }
+    
+    // Only reposition if current position is dangerous or suboptimal
+    var needsRepositioning = false;
+    var reason = "";
+    
+    // Check if in danger (high EID)
+    if (currentEID > myHP * 0.4) {
+        needsRepositioning = true;
+        reason = "high threat (EID: " + currentEID + ")";
+    }
+    
+    // Check if out of RIFLE optimal range (7-9)
+    else if (currentDistance < 7 || currentDistance > 9) {
+        // Only move if we can't attack from current position
+        var currentLOS = hasLOS(currentCell, currentEnemyCell);
+        if (!currentLOS || currentDistance > 12) {
+            needsRepositioning = true;
+            reason = "out of attack range/LOS (dist: " + currentDistance + ", LOS: " + currentLOS + ")";
+        }
+    }
+    
+    if (!needsRepositioning) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("CONSERVATIVE MP: No repositioning needed");
+        }
+        return false;
+    }
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("CONSERVATIVE MP: Repositioning needed - " + reason);
+    }
+    
+    // Find best MP-only reposition target
+    var reachable = getReachableCells(currentCell, getMP());
+    var bestCell = currentCell;
+    var bestScore = -999999;
+    
+    for (var i = 0; i < min(50, count(reachable)); i++) { // Limit search for operations
+        var cell = reachable[i];
+        if (cell == currentCell) continue;
+        
+        var cellDistance = getCellDistance(cell, currentEnemyCell);
+        var cellEID = calculateEID(cell);
+        var cellLOS = hasLOS(cell, currentEnemyCell);
+        
+        var score = 0;
+        
+        // Safety bonus (lower EID is better)
+        score += (currentEID - cellEID) * 10;
+        
+        // RIFLE range preference (7-9)
+        if (cellDistance >= 7 && cellDistance <= 9 && cellLOS) {
+            score += 500; // High bonus for optimal RIFLE range
+        } else if (cellDistance >= 6 && cellDistance <= 10 && cellLOS) {
+            score += 200; // Moderate bonus for near-optimal range
+        }
+        
+        // LOS bonus
+        if (cellLOS) {
+            score += 100;
+        }
+        
+        // Distance penalty (prefer staying roughly same distance)
+        var distanceChange = abs(cellDistance - 8); // 8 is center of RIFLE range
+        score -= distanceChange * 20;
+        
+        // Don't get too close
+        if (cellDistance < 5) {
+            score -= 300;
+        }
+        
+        if (score > bestScore) {
+            bestScore = score;
+            bestCell = cell;
+        }
+    }
+    
+    // Only move if significantly better
+    if (bestCell != currentCell && bestScore > 50) {
+        var mpUsed = moveToCell(bestCell);
+        if (mpUsed > 0) {
+            if (debugEnabled && canSpendOps(1000)) {
+                var newDistance = getCellDistance(getCell(), currentEnemyCell);
+                debugLog("CONSERVATIVE MP: Repositioned (-" + mpUsed + " MP) - new distance: " + newDistance);
+            }
+            return true;
+        }
+    }
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("CONSERVATIVE MP: No beneficial repositioning found");
+    }
+    return false;
+}

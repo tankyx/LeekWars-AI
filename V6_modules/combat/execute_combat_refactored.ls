@@ -172,132 +172,186 @@ function executeHealing() {
 
 
 // Function: executeBuffs
-// Apply buffs in early game
+// Apply buffs according to new strategy
 
 
 function executeBuffs() {
     if (debugEnabled && canSpendOps(1000)) {
-        if (debugEnabled && canSpendOps(1000)) {
-            debugLog("executeBuffs called - TP=" + myTP + ", turn=" + turn);
-        }
+        debugLog("executeBuffs called - TP=" + myTP + ", turn=" + turn);
     }
 
     var chips = getChips();
-    var usedBuff = false;
     
-    // Turn 1 priority buffs
-    if (turn == 1) {
-        // Knowledge for wisdom boost
-        if (!usedBuff && inArray(chips, CHIP_KNOWLEDGE) && myTP >= getChipCost(CHIP_KNOWLEDGE)) {
-            var result = useChip(CHIP_KNOWLEDGE);
+    // Turn 1: Execute mandatory buff sequence - KNOWLEDGE -> ELEVATION -> ARMORING
+    if (turn == 1 && !TURN_1_BUFFS_COMPLETE) {
+        executeTurn1BuffSequence(chips);
+        return;
+    }
+    
+    // Turn 2+: Only use STEROID if available and on cooldown cycle
+    if (turn >= 2) {
+        executeSTEROIDCycle(chips);
+    }
+}
+
+
+// Function: executeTurn1BuffSequence
+// Execute the mandatory turn 1 sequence: KNOWLEDGE -> ELEVATION -> ARMORING -> LEATHER_BOOTS
+function executeTurn1BuffSequence(chips) {
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("=== TURN 1 BUFF SEQUENCE ===");
+        debugLog("Starting TP: " + myTP);
+    }
+    
+    // Sequence: KNOWLEDGE (5 TP) -> ELEVATION (5 TP) -> ARMORING (6 TP) -> LEATHER_BOOTS (3 TP) = 19 TP
+    // With 22 TP total, leaves 3 TP for weapon equip
+    
+    var chipOrder = [CHIP_KNOWLEDGE, CHIP_ELEVATION, CHIP_ARMORING];
+    var totalUsed = 0;
+    
+    for (var i = 0; i < count(chipOrder); i++) {
+        var chip = chipOrder[i];
+        
+        if (inArray(chips, chip) && myTP >= getChipCost(chip)) {
+            var cost = getChipCost(chip);
+            var result = useChip(chip);
+            
             if (result == USE_SUCCESS || result == USE_CRITICAL) {
-                usedBuff = true;
+                myTP -= cost;
+                totalUsed += cost;
+                
                 if (debugEnabled && canSpendOps(1000)) {
-                    if (debugEnabled && canSpendOps(1000)) {
-                        debugLog("Knowledge applied (Turn 1)");
-                    }
+                    debugLog("Applied " + getChipName(chip) + " (-" + cost + " TP, remaining: " + myTP + ")");
+                }
+            } else {
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("FAILED to apply " + getChipName(chip));
                 }
             }
-        }
-        
-        // Armoring for HP boost
-        if (!usedBuff && inArray(chips, CHIP_ARMORING) && myTP >= getChipCost(CHIP_ARMORING)) {
-            var result = useChip(CHIP_ARMORING);
-            if (result == USE_SUCCESS || result == USE_CRITICAL) {
-                usedBuff = true;
-                if (debugEnabled && canSpendOps(1000)) {
-                    if (debugEnabled && canSpendOps(1000)) {
-                        debugLog("Armoring applied (Turn 1)");
-                    }
-                }
+        } else {
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Cannot use " + getChipName(chip) + " - not available or insufficient TP");
             }
         }
     }
     
-    // Turn 2-3 situational buffs
-    if (turn >= 2 && turn <= 3 && !usedBuff) {
-        // Motivation if we need more TP
-        if (myTP < 6 && inArray(chips, CHIP_MOTIVATION) && myTP >= getChipCost(CHIP_MOTIVATION)) {
-            var result = useChip(CHIP_MOTIVATION);
-            if (result == USE_SUCCESS || result == USE_CRITICAL) {
-                if (debugEnabled && canSpendOps(1000)) {
-                    if (debugEnabled && canSpendOps(1000)) {
-                        debugLog("Motivation applied (low TP)");
-                    }
-                }
+    // Now use LEATHER_BOOTS if we have enough TP (need 6 TP total: 3 for boots + 3 for weapon equip)
+    if (inArray(chips, CHIP_LEATHER_BOOTS) && myTP >= 6) {
+        var result = useChip(CHIP_LEATHER_BOOTS);
+        if (result == USE_SUCCESS || result == USE_CRITICAL) {
+            myTP -= 3;
+            totalUsed += 3;
+            LEATHER_BOOTS_LAST_USED = turn;
+            hasLeatherBoots = true;
+            
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Applied LEATHER_BOOTS (-3 TP, remaining: " + myTP + ")");
             }
         }
+    }
+    
+    TURN_1_BUFFS_COMPLETE = true;
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("Turn 1 buffs complete - Used " + totalUsed + " TP, remaining: " + myTP);
+    }
+}
+
+
+// Function: executeSTEROIDCycle  
+// Handle STEROID usage on its cooldown cycle
+function executeSTEROIDCycle(chips) {
+    // Check if STEROID is off cooldown (5-turn cooldown)
+    var steroidAvailable = (turn - STEROID_LAST_USED) >= STEROID_COOLDOWN;
+    
+    if (steroidAvailable && inArray(chips, CHIP_STEROID) && myTP >= getChipCost(CHIP_STEROID)) {
+        var result = useChip(CHIP_STEROID);
+        if (result == USE_SUCCESS || result == USE_CRITICAL) {
+            myTP -= getChipCost(CHIP_STEROID);
+            STEROID_LAST_USED = turn;
+            
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Applied STEROID for damage boost (next available: turn " + (turn + STEROID_COOLDOWN) + ")");
+            }
+        }
+    } else if (!steroidAvailable && debugEnabled && canSpendOps(1000)) {
+        var turnsUntilReady = STEROID_COOLDOWN - (turn - STEROID_LAST_USED);
+        debugLog("STEROID on cooldown - available in " + turnsUntilReady + " turns");
     }
 }
 
 
 // Function: executeEarlyGameSequence
-// Early game sequence with minimal buffs and quick attack
+// Turn 1 sequence: KNOWLEDGE -> ELEVATION -> ARMORING -> LEATHER_BOOTS -> equip RIFLE
 
 
 function executeEarlyGameSequence() {
     if (debugEnabled && canSpendOps(1000)) {
-        if (debugEnabled && canSpendOps(1000)) {
-            debugLog("=== TURN 1 EARLY GAME SEQUENCE ===");
-        }
-        if (debugEnabled && canSpendOps(1000)) {
-            debugLog("HP: " + myHP + "/" + myMaxHP + " | TP: " + myTP + " | MP: " + myMP);
-        }
-        if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Enemy: " + getName(enemy) + " | Distance: " + enemyDistance);
-        }
+        debugLog("=== TURN 1 NEW STRATEGY SEQUENCE ===");
+        debugLog("HP: " + myHP + "/" + myMaxHP + " | TP: " + myTP + " | MP: " + myMP);
+        debugLog("Enemy: " + getName(enemy) + " | Distance: " + enemyDistance);
     }
     
-    // PHASE 1: MINIMAL BUFFS - Reserve TP for attacks
+    // PHASE 1: MANDATORY BUFF SEQUENCE (16-19 TP)
     var initialTP = myTP;
-    if (myTP >= 8) { // Only buff if we have sufficient TP
-        executeBuffs();
-    }
+    executeBuffs(); // This will execute the turn 1 buff sequence
     
     var buffsTP = initialTP - myTP;
     if (debugEnabled && canSpendOps(1000)) {
-        if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Phase 1 complete - Used " + buffsTP + " TP on buffs");
+        debugLog("Phase 1 complete - Used " + buffsTP + " TP on buffs, remaining: " + myTP);
+    }
+    
+    // PHASE 2: EQUIP RIFLE (3 TP) - Only if we have enough TP
+    if (myTP >= 3) {
+        var weapons = getWeapons();
+        if (inArray(weapons, WEAPON_RIFLE)) {
+            var result = setWeapon(WEAPON_RIFLE);
+            if (result == USE_SUCCESS) {
+                myTP -= 3;
+                RIFLE_USES_REMAINING = getWeaponMaxUses(WEAPON_RIFLE);
+                
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Equipped RIFLE (-3 TP, remaining: " + myTP + ", uses: " + RIFLE_USES_REMAINING + ")");
+                }
+            }
+        } else {
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("RIFLE not available - checking other weapons");
+            }
         }
     }
     
-    // PHASE 2: POSITIONING
+    // PHASE 3: POSITIONING (if MP available and needed)
     if (myMP > 0) {
-        var positioningInfo = evaluateCombatPositioning(enemyDistance, hasLOS(myCell, enemyCell), myMP, getWeapons());
-        if (positioningInfo != null) {
-            executePositioning(positioningInfo);
-        }
-    }
-    
-    if (debugEnabled && canSpendOps(1000)) {
-        if (debugEnabled && canSpendOps(1000)) {
-            debugLog("Phase 2 complete - Final distance: " + getCellDistance(myCell, enemyCell));
-        }
-    }
-    
-    // PHASE 3: ATTACK SEQUENCE
-    if (myTP >= 5) {
-        if (debugEnabled && canSpendOps(1000)) {
+        var currentDistance = getCellDistance(myCell, enemyCell);
+        var hasLine = hasLOS(myCell, enemyCell);
+        
+        // Only move if we're out of RIFLE range (7-9) or don't have line of sight
+        if (currentDistance > 9 || currentDistance < 7 || !hasLine) {
+            var positioningInfo = evaluateCombatPositioning(currentDistance, hasLine, myMP, getWeapons());
+            if (positioningInfo != null) {
+                executePositioning(positioningInfo);
+                
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Phase 3 positioning complete - Final distance: " + getCellDistance(myCell, enemyCell));
+                }
+            }
+        } else {
             if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Phase 3 - Attack sequence with " + myTP + " TP remaining");
+                debugLog("Phase 3 - Already in RIFLE range, no positioning needed");
             }
         }
-        executeAttackSequence();
     }
     
-    // PHASE 4: DEFENSIVE ACTIONS
-    if (myTP >= 4) {
+    // PHASE 4: REMAINING ACTIONS (should have 0-3 TP left)
+    if (myTP > 0) {
         if (debugEnabled && canSpendOps(1000)) {
-            if (debugEnabled && canSpendOps(1000)) {
-                debugLog("Phase 4 - Defensive actions with " + myTP + " TP remaining");
-            }
+            debugLog("Phase 4 - " + myTP + " TP remaining after turn 1 setup");
         }
-        executeDefensive();
-    }
-    
-    if (debugEnabled && canSpendOps(1000)) {
+        
+        // Skip attacking on turn 1 - save TP for turn 2 STEROID combo
         if (debugEnabled && canSpendOps(1000)) {
-            debugLog("=== EARLY GAME SEQUENCE COMPLETE ===");
+            debugLog("Turn 1 complete - saving remaining TP for turn 2 STEROID combo");
         }
     }
 }

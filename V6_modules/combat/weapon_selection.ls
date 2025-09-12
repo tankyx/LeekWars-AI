@@ -374,144 +374,93 @@ function buildAttackOptions(currentTP, currentDistance, hasLineOfSight) {
 
 
 function applyWeaponPriorities(weaponId, baseDptp, distance, availableWeapons) {
-
-
     var adjustedDptp = baseDptp;
     
-    // Weapon priority adjustments
-    if (weaponId == WEAPON_RIFLE) {
-        // Rifle is excellent in its range
-        if (distance >= 7 && distance <= 9) {
-            adjustedDptp *= 1.2; // 20% bonus in optimal range
-        }
-    } else if (weaponId == WEAPON_M_LASER) {
-        // M-Laser is superior - highest damage, longest range, line piercing
-        adjustedDptp *= 1.4; // 40% bonus - highest priority line weapon
-        
-        // Multi-enemy bonus if applicable
-        if (count(allEnemies) > 1) {
-            adjustedDptp *= 1.3; // 30% bonus for multi-hit potential
-        }
-
-    } else if (weaponId == WEAPON_DARK_KATANA) {
-        // Dark Katana prioritized in close range
-        if (distance >= 2 && distance <= 4) {
-            adjustedDptp *= 1.5; // 50% bonus for close range positioning
-        }
-
-    } else if (weaponId == WEAPON_GRENADE_LAUNCHER) {
-        // Grenade Launcher should compete based on its high damage, no artificial penalties
-        // Let dptp comparison handle priority naturally
-        
-        // Multi-enemy bonus for AoE
-        if (count(allEnemies) > 1) {
-            adjustedDptp *= 1.4; // 40% bonus for AoE multi-hit
-        }
-
-    } else if (weaponId == WEAPON_NEUTRINO) {
-        // Neutrino prioritized for its vulnerability effect
-        if (distance >= 2 && distance <= 6) {
-            adjustedDptp *= 1.3; // 30% bonus for vulnerability debuff utility
-        }
-
-        // Bonus against high-HP enemies where vulnerability helps
-        if (getLife(enemy) > 1500) {
-            adjustedDptp *= 1.2; // 20% bonus vs tanks
-        }
-
-    } else if (weaponId == WEAPON_DESTROYER) {
-        // Destroyer prioritized for its strength debuff
-        if (distance >= 1 && distance <= 6) {
-            adjustedDptp *= 1.25; // 25% bonus for strength debuff utility
-        }
-
-        // Bonus against high-STR enemies where debuff is most valuable
-        if (getStrength(enemy) > 300) {
-            adjustedDptp *= 1.3; // 30% bonus vs high STR enemies
-        }
-
-        
-        // Apply penalty only when Flame Thrower is equipped and viable
-        // (This leek has B-Laser + Magnum + Grenade, no Flame Thrower, so no penalty should apply)
-        if (inArray(availableWeapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8) {
-            adjustedDptp *= 0.7; // 30% penalty - prefer Flame Thrower for its DoT
-        }
-
-    } else if (weaponId == WEAPON_LASER) {
-        // Laser is good line weapon, similar to M-Laser but shorter range
-        adjustedDptp *= 1.1; // 10% bonus for line piercing
-        
-        // Multi-enemy bonus if applicable
-        if (count(allEnemies) > 1) {
-            adjustedDptp *= 1.25; // 25% bonus for multi-hit potential
-        }
-
-        
-        // Preference in mid-range where it excels
-        if (distance >= 4 && distance <= 7) {
-            adjustedDptp *= 1.15; // 15% bonus in sweet spot
-        }
-
-    } else if (weaponId == WEAPON_FLAME_THROWER) {
-        // Flame Thrower is excellent line weapon with poison DoT
-        adjustedDptp *= 1.6; // 60% bonus for line piercing + poison damage
-        
-        // Multi-enemy bonus for line piercing
-        if (count(allEnemies) > 1) {
-            adjustedDptp *= 1.3; // 30% bonus for multi-hit potential
-        }
-
-        
-        // Optimal range bonus (2-8 range)
-        if (distance >= 2 && distance <= 6) {
-            adjustedDptp *= 1.2; // 20% bonus in sweet spot
-        }
-
-    } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
-        // Enhanced Lightninger is excellent AoE weapon with healing
-        adjustedDptp *= 1.8; // 80% bonus for AoE damage + healing utility
-        
-        // Multi-enemy bonus for 3x3 AoE
-        if (count(allEnemies) > 1) {
-            adjustedDptp *= 1.5; // 50% bonus for multi-hit AoE potential
-        }
-        
-        // Bonus when at low health (healing value)
-        if (myHP < myMaxHP * 0.7) {
-            adjustedDptp *= 1.3; // 30% bonus when healing is valuable
-        }
-        
-        // Optimal range bonus (6-10 range)
-        if (distance >= 6 && distance <= 8) {
-            adjustedDptp *= 1.2; // 20% bonus in sweet spot
-        }
-
-    } else if (weaponId == WEAPON_KATANA) {
-        // Katana is excellent melee weapon with TP debuff
-        adjustedDptp *= 1.7; // 70% bonus for TP debuff utility + high damage
-        
-        // Bonus against high-TP enemies where debuff is most valuable
-        if (enemyTP > 10) {
-            adjustedDptp *= 1.4; // 40% bonus vs high TP enemies
-        }
-        
-        // Bonus in melee range (range 1 only)
-        if (distance == 1) {
-            adjustedDptp *= 1.3; // 30% bonus at optimal range
-        }
-
-    } else if (weaponId == WEAPON_MAGNUM) {
-        // Magnum competes on raw dptp - no artificial bonuses
-        // Life steal is factored into damage calculation already
+    // Check LEATHER_BOOTS availability (3-turn cooldown)
+    var leatherBootsAvailable = (turn - LEATHER_BOOTS_LAST_USED) >= LEATHER_BOOTS_COOLDOWN;
+    var steroidActive = (turn - STEROID_LAST_USED) < 2; // STEROID lasts 2 turns
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("Weapon priority check - LEATHER_BOOTS available: " + leatherBootsAvailable + ", STEROID active: " + steroidActive);
     }
-
+    
+    // === NEW STRATEGY WEAPON PRIORITIES ===
+    
+    if (weaponId == WEAPON_RIFLE) {
+        // RIFLE is the baseline weapon - highest priority when STEROID is active
+        adjustedDptp *= 1.5; // Base priority boost
+        
+        if (steroidActive) {
+            adjustedDptp *= 2.0; // Massive boost when STEROID is active (STEROID + 2x RIFLE combo)
+        }
+        
+        if (distance >= 7 && distance <= 9) {
+            adjustedDptp *= 1.2; // Optimal range bonus
+        }
+        
+    } else if (weaponId == WEAPON_M_LASER) {
+        // M_LASER only when LEATHER_BOOTS is available (for weapon switching)
+        if (leatherBootsAvailable && isOnSameLine(myCell, enemyCell)) {
+            adjustedDptp *= 1.6; // High priority when LEATHER_BOOTS can be used
+            
+            // Multi-enemy bonus
+            if (count(allEnemies) > 1) {
+                adjustedDptp *= 1.3; // Line piercing bonus
+            }
+        } else {
+            // Penalty when LEATHER_BOOTS not available - stick to RIFLE
+            adjustedDptp *= 0.3; // Heavy penalty - avoid when can't switch weapons efficiently
+        }
+        
+    } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+        // ENHANCED_LIGHTNINGER only when LEATHER_BOOTS is available (for AoE needs)
+        if (leatherBootsAvailable) {
+            adjustedDptp *= 1.4; // High priority when LEATHER_BOOTS can be used for AoE
+            
+            // Multi-enemy AoE bonus
+            if (count(allEnemies) > 1) {
+                adjustedDptp *= 1.8; // Massive bonus for AoE when multiple enemies
+            }
+            
+            // Healing value bonus
+            if (myHP < myMaxHP * 0.7) {
+                adjustedDptp *= 1.3; // Bonus for healing when damaged
+            }
+        } else {
+            // Penalty when LEATHER_BOOTS not available
+            adjustedDptp *= 0.4; // Heavy penalty - avoid when can't switch weapons efficiently
+        }
+        
+    } else if (weaponId == WEAPON_KATANA) {
+        // KATANA for close-range finishing moves (conservative TP usage exception)
+        if (distance >= 1 && distance <= 2) {
+            // Only prioritize Katana if enemy is low HP (finishing move)
+            var enemyHPPercent = getLife(enemy) / getTotalLife(enemy);
+            if (enemyHPPercent <= 0.3) {
+                adjustedDptp *= 2.0; // High priority for finishing moves
+            } else {
+                adjustedDptp *= 0.5; // Lower priority if not finishing
+            }
+        } else {
+            adjustedDptp *= 0.2; // Very low priority out of range
+        }
+        
+    } else {
+        // All other weapons get lower priority in new strategy
+        // We focus on RIFLE baseline + M_LASER/ENHANCED_LIGHTNINGER when LEATHER_BOOTS up
+        adjustedDptp *= 0.6; // General penalty for non-core weapons
+        
+        // Exception: Keep some utility weapons viable
+        if (weaponId == WEAPON_GRENADE_LAUNCHER && count(allEnemies) > 1) {
+            adjustedDptp *= 1.2; // AoE bonus overrides penalty
+        }
+    }
     
     if (debugEnabled && canSpendOps(500)) {
         if (debugEnabled && canSpendOps(1000)) {
-		debugLog("Priority adjustment for " + getWeaponName(weaponId) + ": " + baseDptp + " -> " + adjustedDptp);
+            debugLog("Priority adjustment for " + getWeaponName(weaponId) + ": " + baseDptp + " -> " + adjustedDptp);
         }
     }
-
     
     return adjustedDptp;
 }

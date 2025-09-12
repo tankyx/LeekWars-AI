@@ -11,7 +11,7 @@ include("m_laser_tactics");
 
 
 // Function: executeAttackSequence
-// Main attack execution - refactored from executeAttack()
+// Main attack execution - now uses new strategy when appropriate
 function executeAttackSequence() {
     if (debugEnabled && canSpendOps(1000)) {
         debugLog("executeAttackSequence called - enemy=" + enemy + ", myTP=" + myTP);
@@ -24,6 +24,13 @@ function executeAttackSequence() {
         return;
     }
 
+    // Use new strategy for turns 2+ (turn 1 has its own sequence)
+    if (turn >= 2) {
+        executeNewStrategyAttack();
+        return;
+    }
+    
+    // Legacy code for fallback scenarios
     var dist = getCellDistance(myCell, enemyCell);
     var hasLine = hasLOS(myCell, enemyCell);
     
@@ -267,8 +274,8 @@ function executeAttackOptions(attackOptions) {
             }
             
             // Enhanced Lightninger passive: +1 TP per entity killed
-            var weapons = getWeapons();
-            if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER)) {
+            var weaponList = getWeapons();
+            if (inArray(weaponList, WEAPON_ENHANCED_LIGHTNINGER)) {
                 // Add 1 TP for the kill (LeekScript doesn't have direct setTP, but the passive works automatically)
                 if (debugEnabled && canSpendOps(1000)) {
                     debugLog("Enhanced Lightninger passive: +1 TP for kill");
@@ -477,9 +484,9 @@ function executeFallbackAttack() {
         debugLog("FALLBACK: Forcing attack attempt");
     }
     
-    var weapons = getWeapons();
-    for (var w = 0; w < count(weapons); w++) {
-        var weapon = weapons[w];
+    var weaponList = getWeapons();
+    for (var w = 0; w < count(weaponList); w++) {
+        var weapon = weaponList[w];
         var minR = getWeaponMinRange(weapon);
         var maxR = getWeaponMaxRange(weapon);
         var cost = getWeaponCost(weapon);
@@ -590,4 +597,405 @@ function findBestEnhancedLightningerTarget() {
         debugLog("Enhanced Lightninger: no valid target found");
     }
     return null;
+}
+
+// Function: executeNewStrategyAttack
+// Main attack function implementing the new STEROID + RIFLE strategy
+function executeNewStrategyAttack() {
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("=== NEW STRATEGY ATTACK ===");
+        debugLog("Turn: " + turn + ", TP: " + myTP + ", Enemy HP: " + getLife(enemy));
+    }
+    
+    // Check if STEROID is active (lasts 2 turns after use)
+    var steroidActive = (turn - STEROID_LAST_USED) < 2;
+    var steroidAvailable = (turn - STEROID_LAST_USED) >= STEROID_COOLDOWN;
+    var leatherBootsAvailable = (turn - LEATHER_BOOTS_LAST_USED) >= LEATHER_BOOTS_COOLDOWN;
+    
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("STEROID active: " + steroidActive + ", available: " + steroidAvailable);
+        debugLog("LEATHER_BOOTS available: " + leatherBootsAvailable);
+    }
+    
+    // PRIORITY 1: Execute STEROID + 2x RIFLE combo when STEROID is active
+    if (steroidActive && inArray(getWeapons(), WEAPON_RIFLE)) {
+        executeSTEROIDRifleCombo();
+        return;
+    }
+    
+    // PRIORITY 2: Use STEROID to start new combo cycle (if available)
+    if (steroidAvailable && myTP >= 10) { // Need enough TP for STEROID + 2 rifle shots
+        executeBuffs(); // This will use STEROID if available
+        if ((turn - STEROID_LAST_USED) < 1) { // STEROID was just used
+            executeSTEROIDRifleCombo();
+            return;
+        }
+    }
+    
+    // PRIORITY 3: Use LEATHER_BOOTS weapon switching if available
+    if (leatherBootsAvailable && myTP >= 6) { // Need TP for boots + weapon switching
+        executeLEATHERBOOTSCombo();
+        return;
+    }
+    
+    // PRIORITY 4: Default RIFLE attacks when STEROID on cooldown
+    if (inArray(getWeapons(), WEAPON_RIFLE)) {
+        executeRifleDefault();
+        return;
+    }
+    
+    // PRIORITY 5: Use any available weapon if RIFLE fails
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("RIFLE not available - using best weapon");
+    }
+    var weaponList = getWeapons();
+    var distance = getCellDistance(myCell, enemyCell);
+    var hasLine = hasLOS(myCell, enemyCell);
+    
+    // Try Enhanced Lightninger if available
+    if (inArray(weaponList, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && myTP >= 4) {
+        setWeapon(WEAPON_ENHANCED_LIGHTNINGER);
+        var result = useWeapon(enemy);
+        if (result == USE_SUCCESS || result == USE_CRITICAL) {
+            myTP -= 4;
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Used ENHANCED_LIGHTNINGER as fallback");
+            }
+            return;
+        }
+    }
+    
+    // Try Katana if close
+    if (inArray(weaponList, WEAPON_KATANA) && distance >= 1 && distance <= 2 && myTP >= 4) {
+        setWeapon(WEAPON_KATANA);
+        var result = useWeapon(enemy);
+        if (result == USE_SUCCESS || result == USE_CRITICAL) {
+            myTP -= 4;
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Used KATANA as fallback");
+            }
+            return;
+        }
+    }
+    
+    // FALLBACK: Use standard attack selection
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("Falling back to standard attack selection");
+    }
+    executeAttackSequence();
+}
+
+// Function: executeSTEROIDRifleCombo
+// Execute the core STEROID + 2x RIFLE combo
+function executeSTEROIDRifleCombo() {
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("=== STEROID + RIFLE COMBO ===");
+    }
+    
+    var weaponList = getWeapons();
+    if (!inArray(weaponList, WEAPON_RIFLE)) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("RIFLE not available for STEROID combo");
+        }
+        return;
+    }
+    
+    var distance = getCellDistance(myCell, enemyCell);
+    var hasLine = hasLOS(myCell, enemyCell);
+    
+    // Check if in RIFLE range (7-9) and has LOS
+    if (distance < 7 || distance > 9 || !hasLine) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Not in RIFLE range or no LOS - distance: " + distance + ", LOS: " + hasLine);
+        }
+        
+        // If we have no LOS, try teleportation first (conservative usage allows this)
+        if (!hasLine && TELEPORT_AVAILABLE && myTP >= 9) {
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Using teleport to get LOS for STEROID RIFLE combo");
+            }
+            var teleResult = executeTeleport(enemy);
+            if (teleResult) {
+                updatePositionAfterMovement();
+                distance = getCellDistance(myCell, enemyCell);
+                hasLine = hasLOS(myCell, enemyCell);
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Post-teleport: distance=" + distance + ", LOS=" + hasLine);
+                }
+            }
+        }
+        
+        // Try to move to optimal range if MP available  
+        if (getMP() > 0) {
+            var targetDist = 8; // Center of RIFLE range
+            if (distance > 9) {
+                moveToward(enemy, min(getMP(), distance - targetDist));
+            } else if (distance < 7) {
+                // Move away to get into range - simplified
+                var moveAway = min(getMP(), targetDist - distance);
+                if (moveAway > 0) {
+                    // Just move in any direction that increases distance
+                    var reachable = getReachableCells(myCell, moveAway);
+                    var bestCell = myCell;
+                    var bestDist = distance;
+                    for (var i = 0; i < min(10, count(reachable)); i++) {
+                        var cell = reachable[i];
+                        var cellDist = getCellDistance(cell, enemyCell);
+                        if (cellDist >= 7 && cellDist <= 9 && cellDist > bestDist) {
+                            bestCell = cell;
+                            bestDist = cellDist;
+                        }
+                    }
+                    if (bestCell != myCell) {
+                        moveToCell(bestCell);
+                    }
+                }
+            }
+            updatePositionAfterMovement();
+            distance = getCellDistance(myCell, enemyCell);
+            hasLine = hasLOS(myCell, enemyCell);
+        }
+    }
+    
+    // Execute 2x RIFLE shots while STEROID is active
+    if (distance >= 7 && distance <= 9 && hasLine) {
+        var shotsToFire = min(2, min(floor(myTP / 3), RIFLE_USES_REMAINING));
+        
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Firing " + shotsToFire + " RIFLE shots with STEROID boost");
+        }
+        
+        for (var shot = 0; shot < shotsToFire; shot++) {
+            if (myTP < 3 || RIFLE_USES_REMAINING <= 0) break;
+            
+            setWeapon(WEAPON_RIFLE);
+            var result = useWeapon(enemy);
+            
+            if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                myTP -= 3;
+                RIFLE_USES_REMAINING--;
+                
+                var critText = (result == USE_CRITICAL) ? " (CRIT!)" : "";
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("STEROID RIFLE shot " + (shot + 1) + " - SUCCESS" + critText);
+                }
+                
+                if (getLife(enemy) <= 0) {
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Enemy eliminated by STEROID RIFLE combo");
+                    }
+                    break;
+                }
+            } else {
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("STEROID RIFLE shot failed: " + result);
+                }
+                break;
+            }
+        }
+    } else {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Cannot execute STEROID RIFLE combo - range/LOS issue - trying default RIFLE");
+        }
+        // Fallback: try RIFLE attacks even if not in perfect range
+        executeRifleDefault();
+    }
+}
+
+// Function: executeLEATHERBOOTSCombo  
+// Execute LEATHER_BOOTS + M_LASER/ENHANCED_LIGHTNINGER combo
+function executeLEATHERBOOTSCombo() {
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("=== LEATHER_BOOTS COMBO ===");
+    }
+    
+    var chips = getChips();
+    if (!inArray(chips, CHIP_LEATHER_BOOTS) || myTP < 6) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("LEATHER_BOOTS not available or insufficient TP");
+        }
+        return;
+    }
+    
+    // Use LEATHER_BOOTS first
+    var result = useChip(CHIP_LEATHER_BOOTS);
+    if (result == USE_SUCCESS || result == USE_CRITICAL) {
+        myTP -= 3;
+        LEATHER_BOOTS_LAST_USED = turn;
+        hasLeatherBoots = true;
+        
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("LEATHER_BOOTS used - weapon switching enabled");
+        }
+        
+        // Now decide on weapon based on situation
+        var weaponList = getWeapons();
+        var distance = getCellDistance(myCell, enemyCell);
+        var hasLine = hasLOS(myCell, enemyCell);
+        var isAligned = isOnSameLine(myCell, enemyCell);
+        
+        // Priority 1: M_LASER if aligned and in range
+        if (inArray(weaponList, WEAPON_M_LASER) && isAligned && distance >= 10 && distance <= 12 && hasLine) {
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Switching to M_LASER (aligned, range " + distance + ")");
+            }
+            
+            setWeapon(WEAPON_M_LASER);
+            var mlResult = useWeapon(enemy);
+            if (mlResult == USE_SUCCESS || mlResult == USE_CRITICAL) {
+                myTP -= 8;
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("M_LASER fired successfully with LEATHER_BOOTS");
+                }
+            }
+            
+        // Priority 2: ENHANCED_LIGHTNINGER for AoE or healing
+        } else if (inArray(weaponList, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && hasLine) {
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("Switching to ENHANCED_LIGHTNINGER (range " + distance + ")");
+            }
+            
+            setWeapon(WEAPON_ENHANCED_LIGHTNINGER);
+            var elResult = useWeapon(enemy);
+            if (elResult == USE_SUCCESS || elResult == USE_CRITICAL) {
+                myTP -= 4;
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("ENHANCED_LIGHTNINGER fired with LEATHER_BOOTS (damage + heal)");
+                }
+            }
+            
+        // Fallback: Use remaining TP for RIFLE shots
+        } else {
+            if (debugEnabled && canSpendOps(1000)) {
+                debugLog("LEATHER_BOOTS used but optimal weapons not available - using RIFLE");
+            }
+            executeRifleDefault();
+        }
+        
+    } else {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("LEATHER_BOOTS chip use failed: " + result + " - falling back to RIFLE");
+        }
+        // Fallback to RIFLE attacks when LEATHER_BOOTS fails
+        executeRifleDefault();
+    }
+}
+
+// Function: executeRifleDefault
+// Execute default RIFLE attacks when not in STEROID combo
+function executeRifleDefault() {
+    if (debugEnabled && canSpendOps(1000)) {
+        debugLog("=== DEFAULT RIFLE ATTACKS ===");
+    }
+    
+    var weaponList = getWeapons();
+    if (!inArray(weaponList, WEAPON_RIFLE)) {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("RIFLE not available for default attacks");
+        }
+        return;
+    }
+    
+    var distance = getCellDistance(myCell, enemyCell);
+    var hasLine = hasLOS(myCell, enemyCell);
+    
+    // Move to optimal range if needed and possible
+    if ((distance < 7 || distance > 9) && getMP() > 0) {
+        var targetDist = 8; // Center of RIFLE range
+        var moveAmount = 0;
+        
+        if (distance > 9) {
+            moveAmount = min(getMP(), distance - targetDist);
+        } else if (distance < 7) {
+            moveAmount = min(getMP(), targetDist - distance);
+        }
+        
+        if (moveAmount > 0) {
+            if (distance > targetDist) {
+                moveToward(enemy, moveAmount);
+            } else {
+                // Move away - need to implement moveAwayFrom or use positioning logic
+                // For now, skip movement when too close
+            }
+            updatePositionAfterMovement();
+            distance = getCellDistance(myCell, enemyCell);
+            hasLine = hasLOS(myCell, enemyCell);
+        }
+    }
+    
+    // Fire as many RIFLE shots as possible (be flexible with range when STEROID is active)
+    var steroidActive = (turn - STEROID_LAST_USED) < 2;
+    var canUseRifle = false;
+    
+    if (steroidActive) {
+        // When STEROID is active, be more flexible with RIFLE range
+        canUseRifle = (distance >= 6 && distance <= 10 && hasLine);
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("STEROID active - using flexible RIFLE range 6-10, current: " + distance);
+        }
+    } else {
+        // Normal RIFLE range
+        canUseRifle = (distance >= 7 && distance <= 9 && hasLine);
+    }
+    
+    if (canUseRifle) {
+        var maxShots = min(floor(myTP / 3), RIFLE_USES_REMAINING);
+        
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Firing " + maxShots + " RIFLE shots (no STEROID)");
+        }
+        
+        for (var shot = 0; shot < maxShots; shot++) {
+            if (myTP < 3 || RIFLE_USES_REMAINING <= 0) break;
+            
+            setWeapon(WEAPON_RIFLE);
+            var result = useWeapon(enemy);
+            
+            if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                myTP -= 3;
+                RIFLE_USES_REMAINING--;
+                
+                var critText = (result == USE_CRITICAL) ? " (CRIT!)" : "";
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Default RIFLE shot " + (shot + 1) + " - SUCCESS" + critText);
+                }
+                
+                if (getLife(enemy) <= 0) {
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Enemy eliminated by default RIFLE");
+                    }
+                    break;
+                }
+            } else {
+                if (debugEnabled && canSpendOps(1000)) {
+                    debugLog("Default RIFLE shot failed: " + result);
+                }
+                break;
+            }
+        }
+    } else {
+        if (debugEnabled && canSpendOps(1000)) {
+            debugLog("Cannot use RIFLE - distance: " + distance + ", LOS: " + hasLine + " - trying any weapon");
+        }
+        
+        // If RIFLE fails, try any available weapon as emergency
+        for (var w = 0; w < count(weaponList); w++) {
+            var weapon = weaponList[w];
+            var minRange = getWeaponMinRange(weapon);
+            var maxRange = getWeaponMaxRange(weapon);
+            var cost = getWeaponCost(weapon);
+            
+            if (distance >= minRange && distance <= maxRange && myTP >= cost) {
+                setWeapon(weapon);
+                var result = useWeapon(enemy);
+                if (result == USE_SUCCESS || result == USE_CRITICAL) {
+                    myTP -= cost;
+                    if (debugEnabled && canSpendOps(1000)) {
+                        debugLog("Emergency fallback weapon used: " + getWeaponName(weapon));
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
