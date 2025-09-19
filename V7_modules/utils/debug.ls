@@ -25,12 +25,12 @@ function debugDamageZones(damageMap) {
 }
 
 function debugPath(pathResult) {
-    if (!debugEnabled || pathResult == null) return;
+    if (!debugEnabled || pathResult == null || count(pathResult) < 7) return;
     
-    debugW("[PATH] Target: " + pathResult.targetCell + 
-        ", Damage: " + pathResult.damage + 
-        ", Distance: " + pathResult.distance +
-        ", Reachable: " + pathResult.reachable);
+    debugW("[PATH] Target: " + pathResult[0] + 
+        ", Damage: " + pathResult[2] + 
+        ", Distance: " + pathResult[5] +
+        ", Reachable: " + pathResult[4]);
 }
 
 function debugError(message) {

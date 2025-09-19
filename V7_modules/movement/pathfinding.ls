@@ -1,5 +1,25 @@
 // V7 Module: movement/pathfinding.ls
 // A* pathfinding to optimal damage cells
+// Version 7.0.1 - Object literal fixes (Jan 2025)
+
+// === HELPER FUNCTIONS ===
+function createPathResult(targetCell, path, damage, weaponId, reachable, distance, useTeleport) {
+    // Use push() instead of direct array indexing which doesn't work in LeekScript V4+
+    var result = [];
+    push(result, (targetCell != null) ? targetCell : -1);    // [0] targetCell
+    push(result, (path != null) ? path : []);                // [1] path
+    push(result, (damage != null) ? damage : 0);             // [2] damage
+    push(result, weaponId);                                  // [3] weaponId (can be null)
+    push(result, (reachable != null) ? reachable : false);   // [4] reachable
+    push(result, (distance != null) ? distance : 0);        // [5] distance
+    push(result, (useTeleport != null) ? useTeleport : false); // [6] useTeleport
+    
+    if (debugEnabled) {
+        debugW("PathResult created: size=" + count(result) + ", target=" + result[0] + ", damage=" + result[2]);
+    }
+    
+    return result;
+}
 
 // === MAIN PATHFINDING FUNCTION (ARRAY-BASED) ===
 function findOptimalPathFromArray(currentCell, damageArray) {
@@ -15,6 +35,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
         var targetData = sortedArray[i];
         var targetCell = targetData[0];
         var expectedDamage = targetData[1];
+        var weaponId = targetData[2]; // Get weapon ID from damage calculation
         
         var path = aStar(currentCell, targetCell, myMP);
         
@@ -28,13 +49,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
                 debug("Path found: " + count(path) + " steps to damage " + expectedDamage);
             }
             
-            return {
-                targetCell: targetCell,
-                path: path,
-                damage: expectedDamage,
-                reachable: true,
-                distance: count(path) - 1
-            };
+            return createPathResult(targetCell, path, expectedDamage, weaponId, true, count(path) - 1, false);
         }
     }
     
@@ -71,13 +86,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
                 if (pathToAlignment != null && count(pathToAlignment) > 1) {
                     var moveToCell = pathToAlignment[min(myMP, count(pathToAlignment) - 1)];
                     
-                    return {
-                        targetCell: moveToCell,
-                        path: pathToAlignment,
-                        damage: 0,
-                        reachable: getCellDistance(currentCell, moveToCell) <= myMP,
-                        distance: getCellDistance(currentCell, moveToCell)
-                    };
+                    return createPathResult(moveToCell, pathToAlignment, 0, WEAPON_M_LASER, getCellDistance(currentCell, moveToCell) <= myMP, getCellDistance(currentCell, moveToCell), false);
                 }
             }
         }
@@ -91,27 +100,28 @@ function findOptimalPathFromArray(currentCell, damageArray) {
         if (pathToEnemy != null && count(pathToEnemy) > 1) {
             var moveToCell = pathToEnemy[min(myMP, count(pathToEnemy) - 1)];
             
-            return {
-                targetCell: moveToCell,
-                path: pathToEnemy,
-                damage: 0,
-                reachable: false,
-                distance: min(myMP, count(pathToEnemy) - 1)
-            };
+            return createPathResult(moveToCell, pathToEnemy, 0, null, false, min(myMP, count(pathToEnemy) - 1), false);
         }
     }
     
-    // Check if we should use teleportation due to low HP (late-game positioning)
+    // Check if we should use teleportation for strategic positioning
     var currentHPPercent = getLife() / getTotalLife();
     var shouldUseTeleport = false;
     
     // Trigger teleportation if:
     // 1. HP < 40% (late-game threshold)
-    // 2. No high-damage paths were found
+    // 2. No high-damage paths were found by movement
+    // 3. We have high-damage cells that are only reachable by teleport
     if (currentHPPercent < 0.4 && maxDamage > 0) {
         shouldUseTeleport = true;
         if (debugEnabled) {
             debugW("LATE-GAME TELEPORT: HP=" + floor(currentHPPercent * 100) + "% < 40%, trying teleportation for positioning");
+        }
+    } else if (maxDamage == 0 && count(damageArray) > 0) {
+        // No movement paths found, but damage zones exist - try teleport
+        shouldUseTeleport = true;
+        if (debugEnabled) {
+            debugW("STRATEGIC TELEPORT: No movement paths to damage zones, trying teleportation");
         }
     }
     
@@ -144,10 +154,13 @@ function sortArrayByDamage(damageArray) {
         var entry = damageArray[i];
         var cellId = entry[0];
         var damage = entry[1];
+        var weaponId = (count(entry) > 2) ? entry[2] : null; // Preserve weapon ID
+        var enemyEntity = (count(entry) > 3) ? entry[3] : null; // NEW: Preserve enemy association
         
         // Validate cell and damage
         if (cellId >= 0 && cellId <= 612 && damage > 0) {
-            push(sortedArray, [cellId, damage]);
+            // Enhanced format: [cellId, damage, weaponId, enemyEntity]
+            push(sortedArray, [cellId, damage, weaponId, enemyEntity]);
         } else if (debugEnabled && i < 3) {
             debugW("SORT REJECT: cell=" + cellId + ", damage=" + damage);
         }
@@ -185,6 +198,7 @@ function findOptimalPath(currentCell, damageZones) {
         var targetData = sortedCells[i];
         var targetCell = targetData[0];
         var expectedDamage = targetData[1];
+        var weaponId = (count(targetData) > 2) ? targetData[2] : null;
         
         var path = aStar(currentCell, targetCell, myMP);
         
@@ -199,13 +213,7 @@ function findOptimalPath(currentCell, damageZones) {
                 debug("Path found: " + count(path) + " steps to damage " + expectedDamage);
             }
             
-            return {
-                targetCell: targetCell,
-                path: path,
-                damage: expectedDamage,
-                reachable: true,
-                distance: count(path) - 1
-            };
+            return createPathResult(targetCell, path, expectedDamage, weaponId, true, count(path) - 1, false);
         }
     }
     
@@ -234,24 +242,12 @@ function findOptimalPath(currentCell, damageZones) {
                 debugW("No damage zones found, moving toward enemy from " + currentCell + " to " + moveToCell);
             }
             
-            return {
-                targetCell: moveToCell,
-                path: arraySlice(moveTowardEnemy, 0, min(myMP + 1, count(moveTowardEnemy))),
-                damage: 0,
-                reachable: false,
-                distance: min(myMP, count(moveTowardEnemy) - 1)
-            };
+            return createPathResult(moveToCell, arraySlice(moveTowardEnemy, 0, min(myMP + 1, count(moveTowardEnemy))), 0, null, false, min(myMP, count(moveTowardEnemy) - 1), false);
         } else {
             // A* failed, try simple directional movement
             var simplePath = findMultiStepMovementToward(currentCell, enemyCell, myMP);
             if (simplePath != null && count(simplePath) > 1) {
-                return {
-                    targetCell: simplePath[count(simplePath) - 1],
-                    path: simplePath,
-                    damage: 0,
-                    reachable: false,
-                    distance: count(simplePath) - 1
-                };
+                return createPathResult(simplePath[count(simplePath) - 1], simplePath, 0, null, false, count(simplePath) - 1, false);
             }
         }
     }
@@ -259,28 +255,18 @@ function findOptimalPath(currentCell, damageZones) {
     // Move toward best damage zone (even if 0)
     if (count(sortedCells) > 0) {
         var bestCell = sortedCells[0][0];
+        var bestDamage = sortedCells[0][1];
+        var bestWeapon = (count(sortedCells[0]) > 2) ? sortedCells[0][2] : null;
         var partialPath = aStar(currentCell, bestCell, myMP);
         
         if (partialPath != null && count(partialPath) > 1) {
             var moveToCell = partialPath[min(myMP + 1, count(partialPath) - 1)];
-            return {
-                targetCell: moveToCell,
-                path: arraySlice(partialPath, 0, min(myMP + 1, count(partialPath))),
-                damage: sortedCells[0][1],
-                reachable: false,
-                distance: min(myMP, count(partialPath) - 1)
-            };
+            return createPathResult(moveToCell, arraySlice(partialPath, 0, min(myMP + 1, count(partialPath))), bestDamage, bestWeapon, false, min(myMP, count(partialPath) - 1), false);
         }
     }
     
     // Fallback: stay in place
-    return {
-        targetCell: currentCell,
-        path: [currentCell],
-        damage: (damageZones[currentCell] + 0) || 0,
-        reachable: true,
-        distance: 0
-    };
+    return createPathResult(currentCell, [currentCell], (damageZones[currentCell] + 0) || 0, null, true, 0, false);
 }
 
 // === CELL SORTING BY DAMAGE ===
@@ -481,7 +467,7 @@ function evaluateMLaserPosition(cell) {
     
     // Cover bonus - check adjacent cells for obstacles
     var coverBonus = 0;
-    var adjacentCells = getCellsAtDistance(cell, 1);
+    var adjacentCells = getCellsAtExactDistance(cell, 1);
     for (var i = 0; i < count(adjacentCells); i++) {
         var adjCell = adjacentCells[i];
         if (getCellContent(adjCell) == CELL_OBSTACLE) {
@@ -652,15 +638,15 @@ function executeMovement(pathResult) {
         return; // No movement needed
     }
     
-    // Handle teleport + movement combo
-    if (pathResult.useTeleport) {
+    // Handle teleport + movement combo  
+    if (pathResult[6]) { // pathResult[6] = useTeleport
         if (debugEnabled) {
-            debugW("EXECUTE TELEPORT: Using teleportation to " + pathResult.teleportCell);
+            debugW("EXECUTE TELEPORT: Using teleportation to " + pathResult[0]);
         }
         
         var chips = getChips();
-        if (inArray(chips, CHIP_TELEPORTATION) && canUseChip(CHIP_TELEPORTATION, pathResult.teleportCell)) {
-            useChip(CHIP_TELEPORTATION, pathResult.teleportCell);
+        if (inArray(chips, CHIP_TELEPORTATION) && canUseChip(CHIP_TELEPORTATION, pathResult[0])) {
+            useChip(CHIP_TELEPORTATION, pathResult[0]);
             
             // Update position after teleport
             myCell = getCell();
@@ -670,12 +656,9 @@ function executeMovement(pathResult) {
                 debugW("TELEPORT SUCCESS: Now at " + myCell + " with " + myMP + " MP remaining");
             }
             
-            // If target cell is different from teleport cell, move there
-            if (pathResult.targetCell != pathResult.teleportCell) {
-                var pathAfterTeleport = aStar(myCell, pathResult.targetCell, myMP);
-                if (pathAfterTeleport != null && count(pathAfterTeleport) > 1) {
-                    executeNormalMovement({path: pathAfterTeleport, targetCell: pathResult.targetCell});
-                }
+            // Target cell reached after teleport - no additional movement needed
+            if (debugEnabled) {
+                debugW("TELEPORT COMPLETE: Reached target " + pathResult[0]);
             }
         } else {
             if (debugEnabled) {
@@ -690,11 +673,11 @@ function executeMovement(pathResult) {
 }
 
 function executeNormalMovement(pathResult) {
-    if (pathResult == null || pathResult.path == null || count(pathResult.path) <= 1) {
+    if (pathResult == null || pathResult[1] == null || count(pathResult[1]) <= 1) {
         return; // No movement needed
     }
     
-    var path = pathResult.path;
+    var path = pathResult[1]; // pathResult[1] = path
     var mpRemaining = myMP;
     
     // Execute movement along path
@@ -819,6 +802,7 @@ function findMultiTurnPath(currentCell, sortedArray) {
         var targetData = sortedArray[i];
         var targetCell = targetData[0];
         var expectedDamage = targetData[1];
+        var weaponId = targetData[2]; // Get weapon ID
         
         // Skip if damage is 0
         if (expectedDamage <= 0) continue;
@@ -835,46 +819,129 @@ function findMultiTurnPath(currentCell, sortedArray) {
             // Consider this target if it offers good damage per turn
             if (damagePerTurn > bestDamagePerTurn) {
                 bestDamagePerTurn = damagePerTurn;
-                bestTarget = {
-                    targetCell: targetCell,
-                    fullPath: fullPath,
-                    damage: expectedDamage,
-                    turnsNeeded: turnsNeeded,
-                    damagePerTurn: damagePerTurn
-                };
+                // Create array instead of object: [targetCell, fullPath, damage, weaponId, turnsNeeded, damagePerTurn]
+                bestTarget = [];
+                push(bestTarget, targetCell);       // [0] targetCell
+                push(bestTarget, fullPath);         // [1] fullPath
+                push(bestTarget, expectedDamage);   // [2] damage
+                push(bestTarget, weaponId);         // [3] weaponId
+                push(bestTarget, turnsNeeded);      // [4] turnsNeeded  
+                push(bestTarget, damagePerTurn);    // [5] damagePerTurn
+            }
+        } else {
+            // Debug invalid path
+            if (debugEnabled && i < 3) {
+                debugW("MULTI-TURN: Invalid path to cell " + targetCell + " - fullPath is " + (fullPath == null ? "null" : "length " + count(fullPath)));
             }
         }
     }
     
     // If we found a good multi-turn target, take first steps toward it
     if (bestTarget != null && bestDamagePerTurn > 100) { // Minimum threshold
-        var firstTurnPath = [];
-        var pathLength = min(myMP + 1, count(bestTarget.fullPath));
-        
-        for (var j = 0; j < pathLength; j++) {
-            push(firstTurnPath, bestTarget.fullPath[j]);
-        }
-        
-        if (debugEnabled) {
-            var pathStr = "";
-            for (var p in firstTurnPath) {
-                pathStr += (pathStr == "" ? "" : ",") + firstTurnPath[p];
+        // Validate bestTarget[1] (fullPath) before using it
+        if (bestTarget[1] != null && count(bestTarget[1]) > 1) {
+            var firstTurnPath = [];
+            var pathLength = min(myMP + 1, count(bestTarget[1]));
+            
+            for (var j = 0; j < pathLength; j++) {
+                if (j < count(bestTarget[1])) {
+                    push(firstTurnPath, bestTarget[1][j]);
+                }
             }
-            debugW("Multi-turn path (" + count(firstTurnPath) + " cells): [" + pathStr + "]");
-            markText(bestTarget.targetCell, "T" + floor(bestTarget.damage + 0.5), getColor(255, 255, 0), 10); // Yellow target
-        }
+            
+            if (debugEnabled) {
+                var pathStr = "";
+                for (var p = 0; p < count(firstTurnPath); p++) {
+                    pathStr += (pathStr == "" ? "" : ",") + firstTurnPath[p];
+                }
+                debugW("Multi-turn path (" + count(firstTurnPath) + " cells): [" + pathStr + "]");
+                markText(bestTarget[0], "T" + floor(bestTarget[2] + 0.5), getColor(255, 255, 0), 10); // Yellow target
+            }
         
-        return {
-            targetCell: firstTurnPath[count(firstTurnPath) - 1],
-            path: firstTurnPath,
-            damage: 0, // No immediate damage, moving toward future damage
-            reachable: false, // Not reachable this turn
-            distance: count(firstTurnPath) - 1,
-            multiTurn: true,
-            finalTarget: bestTarget.targetCell,
-            finalDamage: bestTarget.damage,
-            turnsNeeded: bestTarget.turnsNeeded
-        };
+            if (count(firstTurnPath) > 0) {
+                return createPathResult(
+                    firstTurnPath[count(firstTurnPath) - 1], // targetCell
+                    firstTurnPath,                           // path
+                    0,                                       // damage (no immediate damage)
+                    bestTarget[3],                           // weaponId for future use
+                    false,                                   // reachable (not reachable this turn)
+                    count(firstTurnPath) - 1,                // distance
+                    false                                    // useTeleport
+                );
+            } else {
+                if (debugEnabled) {
+                    debugW("MULTI-TURN: Empty path generated, falling back");
+                }
+            }
+        } else {
+            if (debugEnabled) {
+                debugW("MULTI-TURN: bestTarget has invalid fullPath");
+            }
+        }
+    }
+    
+    // If no damage zones reachable, find best cover position toward target
+    if (debugEnabled) {
+        debugW("MULTI-TURN: No damage zones reachable, seeking cover toward target");
+    }
+    
+    var targetDirection = null;
+    if (count(sortedArray) > 0) {
+        targetDirection = sortedArray[0][0]; // Highest damage cell
+    } else if (enemyCell != null) {
+        targetDirection = enemyCell; // Fall back to enemy position
+    }
+    
+    if (targetDirection != null) {
+        // Find cover positions along path to target
+        var pathToTarget = aStar(currentCell, targetDirection, myMP * 2);
+        if (pathToTarget != null && count(pathToTarget) > 1) {
+            var bestCoverCell = null;
+            var bestCoverScore = 0;
+            
+            // Check each cell along the path for cover quality
+            var checkLimit = min(myMP + 1, count(pathToTarget));
+            for (var p = 1; p < checkLimit; p++) {
+                var pathCell = pathToTarget[p];
+                
+                // Must be walkable
+                if (getCellContent(pathCell) != CELL_EMPTY) continue;
+                
+                var coverScore = calculateCoverScore(pathCell);
+                
+                // Bonus for being closer to target
+                var distanceToTarget = getCellDistance(pathCell, targetDirection);
+                coverScore += (50 - distanceToTarget); // Closer is better
+                
+                // Additional bonus for being along the optimal path
+                coverScore += 10;
+                
+                if (coverScore > bestCoverScore) {
+                    bestCoverScore = coverScore;
+                    bestCoverCell = pathCell;
+                }
+            }
+            
+            if (bestCoverCell != null) {
+                var coverPath = aStar(currentCell, bestCoverCell, myMP);
+                if (coverPath != null && count(coverPath) > 1) {
+                    if (debugEnabled) {
+                        debugW("COVER SEEK: Moving to cover cell " + bestCoverCell + " (score: " + bestCoverScore + ") toward target " + targetDirection);
+                        markText(bestCoverCell, "C" + floor(bestCoverScore), getColor(0, 255, 255), 10); // Cyan cover marker
+                    }
+                    
+                    return createPathResult(
+                        bestCoverCell,           // targetCell
+                        coverPath,               // path
+                        0,                       // damage
+                        null,                    // weaponId
+                        true,                    // reachable
+                        count(coverPath) - 1,    // distance
+                        false                    // useTeleport
+                    );
+                }
+            }
+        }
     }
     
     return null;
@@ -899,9 +966,9 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
     }
     
     // Try teleporting to various positions within range
-    var teleportRange = 6; // CHIP_TELEPORTATION range
+    var teleportRange = 12; // CHIP_TELEPORTATION range
     for (var range = 1; range <= teleportRange; range++) {
-        var teleportCells = getCellsAtDistance(currentCell, range);
+        var teleportCells = getCellsAtExactDistance(currentCell, range);
         
         for (var i = 0; i < count(teleportCells); i++) {
             var teleportCell = teleportCells[i];
@@ -929,15 +996,15 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
             }
         }
         
-        return {
-            targetCell: bestOption.targetCell,
-            path: bestOption.path,
-            damage: bestOption.damage,
-            reachable: true,
-            distance: bestOption.distance,
-            useTeleport: true,
-            teleportCell: bestOption.teleportCell
-        };
+        return createPathResult(
+            bestOption.targetCell,     // targetCell
+            bestOption.path,           // path
+            bestOption.damage,         // damage
+            bestOption.weaponId,       // weaponId from teleport option
+            true,                      // reachable
+            bestOption.distance,       // distance
+            true                       // useTeleport
+        );
     }
     
     if (debugEnabled) {
@@ -951,17 +1018,20 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
     var bestDamage = 0;
     var bestCell = null;
     var bestPath = null;
+    var bestWeaponId = null;
     
     // First, check if teleport cell itself gives good damage
     for (var i = 0; i < count(damageArray); i++) {
         var targetData = damageArray[i];
         var targetCell = targetData[0];
         var damage = targetData[1];
+        var weaponId = targetData[2];
         
         if (targetCell == teleportCell && damage > bestDamage) {
             bestDamage = damage;
             bestCell = teleportCell;
             bestPath = [teleportCell];
+            bestWeaponId = weaponId;
         }
     }
     
@@ -972,6 +1042,7 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
         var targetData = damageArray[i];
         var targetCell = targetData[0];
         var damage = targetData[1];
+        var weaponId = targetData[2];
         
         if (damage <= bestDamage) continue; // Skip if not better than current best
         
@@ -980,6 +1051,7 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
             bestDamage = damage;
             bestCell = targetCell;
             bestPath = pathFromTeleport;
+            bestWeaponId = weaponId;
         }
     }
     
@@ -996,6 +1068,7 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
                     targetCell: coverCell,
                     path: pathToCover,
                     damage: 0,
+                    weaponId: null, // No weapon for cover movement
                     distance: count(pathToCover) - 1,
                     score: coverScore * 0.5 // Cover worth less than damage
                 };
@@ -1009,6 +1082,7 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
             targetCell: bestCell,
             path: bestPath,
             damage: bestDamage,
+            weaponId: bestWeaponId, // Pass best weapon ID
             distance: count(bestPath) - 1,
             score: bestDamage + 10 // Base bonus for any viable option
         };
@@ -1023,7 +1097,7 @@ function findCoverFromPosition(startCell, maxMP) {
     
     // Check cells within movement range from start position
     for (var range = 1; range <= maxMP; range++) {
-        var cells = getCellsAtDistance(startCell, range);
+        var cells = getCellsAtExactDistance(startCell, range);
         
         for (var i = 0; i < count(cells); i++) {
             var cell = cells[i];
@@ -1042,4 +1116,27 @@ function findCoverFromPosition(startCell, maxMP) {
     }
     
     return bestCover;
+}
+
+// === COVER SCORING FUNCTION ===
+function calculateCoverScore(cell) {
+    var score = 0;
+    
+    // Base score: distance from enemy
+    if (enemyCell != null) {
+        score = getCellDistance(cell, enemyCell);
+    }
+    
+    // Bonus for adjacent obstacles (cover)
+    var obstacles = countAdjacentObstacles(cell);
+    score += obstacles * 2;
+    
+    // Penalty for being too close to map edges
+    var x = getCellX(cell);
+    var y = getCellY(cell);
+    if (x < 2 || x > 15 || y < 2 || y > 15) {
+        score -= 5;
+    }
+    
+    return score;
 }

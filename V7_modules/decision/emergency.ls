@@ -1,136 +1,282 @@
 // V7 Module: decision/emergency.ls
 // Panic mode and emergency decisions
 
-// === EMERGENCY MODE DETECTION ===
+// === MULTI-ENEMY EMERGENCY MODE DETECTION ===
 function isEmergencyMode() {
-    if (enemy == null) return false;
+    if (count(enemies) == 0) return false;
     
     // Low HP threshold
     if ((myHP / myMaxHP) < EMERGENCY_HP_THRESHOLD) return true;
     
-    // Enemy can kill us next turn
-    var estimatedEnemyDamage = estimateEnemyDamageNextTurn();
-    if (estimatedEnemyDamage >= myHP) return true;
+    // Calculate combined threat from all enemies
+    var totalEnemyThreat = 0;
+    var immediateKillPossible = false;
     
-    // We can kill enemy this turn (go for it!)
-    var estimatedMyDamage = estimateMyDamageThisTurn();
-    if (estimatedMyDamage >= enemyHP && estimatedMyDamage > 0) return false;
+    for (var i = 0; i < count(enemies); i++) {
+        var enemyEntity = enemies[i];
+        if (getLife(enemyEntity) <= 0) continue;
+        
+        // Enemy threat assessment
+        var enemyDamage = estimateEnemyDamageNextTurn(enemyEntity);
+        totalEnemyThreat += enemyDamage;
+        
+        // Check if we can kill any enemy this turn (aggressive override)
+        if (primaryTarget == enemyEntity) {
+            var myDamageToTarget = estimateMyDamageThisTurn(enemyEntity);
+            if (myDamageToTarget >= getLife(enemyEntity) && myDamageToTarget > 0) {
+                immediateKillPossible = true;
+            }
+        }
+    }
+    
+    // Don't go emergency if we can kill primary target this turn (PRIORITY CHECK)
+    if (immediateKillPossible) {
+        if (debugEnabled) {
+            debugW("EMERGENCY OVERRIDE: Can kill primary target, staying aggressive");
+        }
+        return false;
+    }
+    
+    // CRITICAL: Never flee if primary enemy is extremely low HP (< 25%)
+    if (primaryTarget != null && getLife(primaryTarget) > 0) {
+        var primaryHP = getLife(primaryTarget);
+        var primaryMaxHP = getTotalLife(primaryTarget);
+        var primaryHPPercent = primaryHP / primaryMaxHP;
+        
+        if (primaryHPPercent < 0.25) {
+            if (debugEnabled) {
+                debugW("EMERGENCY OVERRIDE: Primary target critical HP (" + floor(primaryHPPercent * 100) + "%), staying aggressive");
+            }
+            return false;
+        }
+    }
+    
+    // Combined enemies can kill us next turn
+    if (totalEnemyThreat >= myHP) {
+        if (debugEnabled) {
+            debugW("EMERGENCY THREAT: Combined enemy damage " + totalEnemyThreat + " >= our HP " + myHP);
+        }
+        return true;
+    }
+    
+    // Outnumbered significantly (3+ enemies vs 1)
+    if (count(enemies) >= 3 && (myHP / myMaxHP) < 0.5) {
+        if (debugEnabled) {
+            debugW("EMERGENCY OUTNUMBERED: " + count(enemies) + " enemies, HP < 50%");
+        }
+        return true;
+    }
     
     return false;
 }
 
-// === EMERGENCY MODE EXECUTION ===
+// === SIMPLIFIED EMERGENCY MODE ===
 function executeEmergencyMode() {
-    if (debugEnabled) {
-        debugE("EMERGENCY MODE ACTIVATED! HP: " + myHP + "/" + myMaxHP);
+    // Priority 1: Try to heal with REGENERATION if available
+    if (canUseChip(CHIP_REGENERATION, getEntity())) {
+        useChip(CHIP_REGENERATION, getEntity());
+        myHP = getLife(); // Update HP after healing
+        myTP = getTP();   // Update TP after healing
+        // DON'T RETURN - continue with movement and attacks!
     }
     
-    // Check if we need healing (and haven't used it this turn)
-    var needsHealing = (canUseChip(CHIP_REGENERATION, getEntity()) || canUseChip(CHIP_CURE, getEntity()));
-    
-    if (needsHealing) {
-        // Priority 1: Teleport to safety FIRST (before healing)
-        if (tryEmergencyTeleport()) {
-            if (debugEnabled) {
-                debugW("Emergency teleport executed, will heal after");
-            }
-            // Now heal in safety
-            tryEmergencyHealing();
-            return;
-        } else {
-            if (debugEnabled) {
-                debugW("Emergency teleport FAILED - checking why");
+    // Priority 2: Tactical repositioning - find safe position that maintains weapon range
+    if (myMP > 0) {
+        var weapons = getWeapons();
+        var bestCell = null;
+        var bestScore = -999;
+        
+        // Find tactically optimal cell within movement range
+        for (var dist = 1; dist <= myMP; dist++) {
+            var cells = getCellsAtExactDistance(myCell, dist);
+            for (var i = 0; i < count(cells); i++) {
+                var cell = cells[i];
+                
+                // Must be walkable
+                if (getCellContent(cell) != CELL_EMPTY) continue;
+                
+                var score = 0;
+                var enemyDist = getCellDistance(cell, enemyCell);
+                
+                // PRIORITY 1: Stay within Enhanced Lightninger range (6-10) for healing + damage
+                if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && enemyDist >= 6 && enemyDist <= 10) {
+                    score += 50; // High priority for Enhanced Lightninger range
+                    if (hasLOS(cell, enemyCell)) {
+                        score += 20; // LOS bonus
+                    }
+                }
+                
+                // PRIORITY 2: Stay within M-Laser range (5-12) if aligned
+                if (inArray(weapons, WEAPON_M_LASER) && enemyDist >= 5 && enemyDist <= 12) {
+                    var cellX = getCellX(cell);
+                    var cellY = getCellY(cell);
+                    var enemyX = getCellX(enemyCell);  
+                    var enemyY = getCellY(enemyCell);
+                    var xAligned = (cellX == enemyX);
+                    var yAligned = (cellY == enemyY);
+                    
+                    if ((xAligned || yAligned) && !(xAligned && yAligned)) {
+                        score += 40; // M-Laser alignment bonus
+                    }
+                }
+                
+                // PRIORITY 3: Stay within Rifle range (7-9) 
+                if (inArray(weapons, WEAPON_RIFLE) && enemyDist >= 7 && enemyDist <= 9) {
+                    score += 30; // Rifle range bonus
+                    if (hasLOS(cell, enemyCell)) {
+                        score += 15; // LOS bonus  
+                    }
+                }
+                
+                // Distance bonus: prefer farther cells for safety (but within weapon range)
+                score += min(enemyDist, 12); // Cap distance bonus
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestCell = cell;
+                }
             }
         }
         
-        // Priority 2: Move away from enemy if teleport failed
-        if (tryEmergencyMovement()) {
+        // Move to tactically optimal position
+        if (bestCell != null && bestScore > 0) {
+            moveTowardCells([bestCell], myMP);
+            myCell = getCell();
+            myMP = getMP();
             if (debugEnabled) {
-                debugW("Moved to safety, will try Enhanced Lightninger healing");
+                debugW("TACTICAL EMERGENCY: Moved to weapon-ready position " + bestCell + " (score: " + bestScore + ")");
             }
-            // Now try Enhanced Lightninger for healing bonus, fallback to regular healing
-            if (!tryEmergencyHealingWithAttack()) {
-                tryEmergencyHealing();
-            }
-            return;
-        }
-        
-        // Priority 3: Heal immediately if we can't escape, but try Enhanced Lightninger for bonus healing
-        if (tryEmergencyHealingWithAttack()) {
-            if (debugEnabled) {
-                debugW("Emergency healing + Enhanced Lightninger attack applied");
-            }
-            return;
-        }
-        
-        // Priority 4: Just heal if Enhanced Lightninger isn't available
-        if (tryEmergencyHealing()) {
-            if (debugEnabled) {
-                debugW("Emergency healing applied (couldn't escape)");
-            }
-        }
-    } else {
-        // No healing available - use kiting strategy
-        if (debugEnabled) {
-            debugW("No healing available, initiating kiting strategy");
-        }
-        
-        // Priority 1: Try to escape first (teleport or movement)
-        if (tryEmergencyTeleport()) {
-            if (debugEnabled) {
-                debugW("Kiting: teleported to safety");
-            }
-            return;
-        } else if (tryEmergencyMovement()) {
-            if (debugEnabled) {
-                debugW("Kiting: moved to tactical position - now trying to attack");
-            }
-            // Don't return - continue to attack after positioning
-        }
-        
-        // Priority 2: If can't escape, attack with Enhanced Lightninger for healing
-        if (tryKitingAttack()) {
-            if (debugEnabled) {
-                debugW("Kiting attack executed (couldn't escape)");
-            }
-            return;
-        }
-        
-        // Priority 3: Break line of sight as last resort
-        if (tryHideAndSeek()) {
-            if (debugEnabled) {
-                debugW("Attempting hide-and-seek");
-            }
-            return;
         }
     }
     
-    // Priority 4: Go for kill if we can
-    if (tryDesperationAttack()) {
-        if (debugEnabled) {
-            debugW("Desperation attack mode");
+    // Priority 3: Attack with any available weapon if in range
+    if (myTP > 0 && enemy != null) {
+        var weapons = getWeapons();
+        var currentWeapon = getWeapon();
+        
+        // First, try current weapon without switching (saves 1 TP)
+        if (currentWeapon != null) {
+            var cost = getWeaponCost(currentWeapon);
+            if (myTP >= cost && canWeaponReachTarget(currentWeapon, myCell, enemyCell)) {
+                if (canUseWeapon(enemy)) {
+                    useWeapon(enemy);
+                    myTP = getTP(); // Update TP after attack
+                    return; // Exit after successful attack
+                }
+            }
         }
-        return;
+        
+        // Only switch if current weapon doesn't work
+        for (var i = 0; i < count(weapons) && i < 3; i++) { // Limit to prevent timeout
+            var weapon = weapons[i];
+            if (weapon == currentWeapon) continue; // Skip current weapon
+            
+            var cost = getWeaponCost(weapon);
+            // Check if we have TP for switch (1) + attack (cost)
+            if (myTP >= cost + 1) {
+                // Pre-validate BEFORE switching to avoid wasting TP
+                if (canWeaponReachTarget(weapon, myCell, enemyCell)) {
+                    setWeapon(weapon);
+                    myTP--; // Deduct switch cost immediately
+                    if (canUseWeapon(enemy)) {
+                        useWeapon(enemy);
+                        myTP = getTP(); // Update TP after attack
+                        break;
+                    }
+                }
+            }
+        }
     }
-    
-    // Priority 5: Move away and use any remaining TP for defense
-    tryDefensiveRetreat();
 }
+
+// Note: getCellsAtExactDistance() is defined in evaluation.ls
 
 // === EMERGENCY HEALING ===
 function tryEmergencyHealing() {
     var healed = false;
+    var myCurrentTP = getTP();
+    var currentCell = getCell();
+    var distanceToEnemy = getCellDistance(currentCell, enemyCell);
     
-    // Try Regeneration chip
-    if (canUseChip(CHIP_REGENERATION, getEntity())) {
-        useChip(CHIP_REGENERATION, getEntity());
-        healed = true;
+    if (debugEnabled) {
+        debugW("EMERGENCY HEAL: TP=" + myCurrentTP + ", Distance=" + distanceToEnemy);
     }
     
-    // Try any other healing chips
-    if (canUseChip(CHIP_CURE, getEntity())) {
-        useChip(CHIP_CURE, getEntity());
+    // PRIORITY 1: Enhanced Lightninger if positioned correctly (range 6-10) and has TP
+    var weapons = getWeapons();
+    var hasLightninger = inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER);
+    var inRange = distanceToEnemy >= 6 && distanceToEnemy <= 10;
+    var hasTP = myCurrentTP >= 9;
+    var hasLineOfSight = hasLOS(currentCell, enemyCell);
+    
+    if (debugEnabled) {
+        debugW("LIGHTNINGER CHECK: hasWeapon=" + hasLightninger + ", inRange=" + inRange + " (d=" + distanceToEnemy + "), hasTP=" + hasTP + ", hasLOS=" + hasLineOfSight);
+    }
+    
+    if (hasLightninger && inRange && hasTP && hasLineOfSight) {
+        if (debugEnabled) {
+            debugW("EMERGENCY: Using Enhanced Lightninger for healing + damage at distance " + distanceToEnemy);
+        }
+        
+        // Use Enhanced Lightninger for healing + damage
+        useWeapon(primaryTarget);
         healed = true;
+        myCurrentTP -= 9;
+        
+        // Follow up with REGENERATION if available and enough TP
+        if (myCurrentTP >= 3 && canUseChip(CHIP_REGENERATION, getEntity())) {
+            useChip(CHIP_REGENERATION, getEntity());
+            if (debugEnabled) {
+                debugW("EMERGENCY: Added REGENERATION for extra healing");
+            }
+        }
+        
+        return healed;
+    }
+    
+    // PRIORITY 2: Regeneration chip (guaranteed percentage healing) - ONE USE PER FIGHT
+    var regenAlreadyUsed = (lastChipUse[CHIP_REGENERATION] != null);
+    var canUseRegen = canUseChip(CHIP_REGENERATION, getEntity());
+    
+    if (debugEnabled) {
+        debugW("REGEN CHECK: alreadyUsed=" + regenAlreadyUsed + ", canUse=" + canUseRegen);
+    }
+    
+    if (!regenAlreadyUsed && canUseRegen) {
+        useChip(CHIP_REGENERATION, getEntity());
+        lastChipUse[CHIP_REGENERATION] = getTurn(); // Track usage
+        healed = true;
+        if (debugEnabled) {
+            debugW("EMERGENCY: Used REGENERATION chip (first use this fight)");
+        }
+    } else {
+        if (debugEnabled) {
+            if (regenAlreadyUsed) {
+                debugW("EMERGENCY: REGENERATION already used on turn " + lastChipUse[CHIP_REGENERATION]);
+            } else {
+                debugW("EMERGENCY: REGENERATION chip not available (not equipped or other issue)");
+            }
+        }
+    }
+    
+    // PRIORITY 3: If no healing available, try to attack with healing weapons
+    if (!healed && hasLightninger && inRange && hasTP) {
+        if (debugEnabled) {
+            debugW("EMERGENCY FALLBACK: No healing chips available, trying Enhanced Lightninger anyway (LOS=" + hasLineOfSight + ")");
+        }
+        
+        // Try Enhanced Lightninger even without perfect LOS - it might work
+        if (hasLineOfSight) {
+            useWeapon(primaryTarget);
+            healed = true;
+            if (debugEnabled) {
+                debugW("EMERGENCY FALLBACK: Used Enhanced Lightninger without healing chips");
+            }
+        }
+    }
+    
+    if (debugEnabled && !healed) {
+        debugW("EMERGENCY HEAL: No healing options available - REGENERATION used and Enhanced Lightninger unavailable");
     }
     
     return healed;
@@ -149,22 +295,28 @@ function tryEmergencyHealingWithAttack() {
     var minTpNeeded = switchCost + weaponCost + tpReservedForRegen; // Minimum for 1 attack
     
     if (debugEnabled) {
-        debugW("HEAL WITH ATTACK: hasLightninger=" + hasLightninger + ", distance=" + currentDistance + ", TP=" + myTP + "/" + minTpNeeded);
+        debugW("COMBAT HEAL CHECK: hasLightninger=" + hasLightninger + ", distance=" + currentDistance + ", TP=" + myTP + "/" + minTpNeeded);
     }
     
     if (hasLightninger && myTP >= minTpNeeded) {
-        // Check if Enhanced Lightninger is in range (5-12)
+        // Check if Enhanced Lightninger is in range (5-12) AND has LOS
         if (currentDistance >= 5 && currentDistance <= 12) {
-            // Switch to Enhanced Lightninger if needed
-            if (getWeapon() != WEAPON_ENHANCED_LIGHTNINGER) {
-                setWeapon(WEAPON_ENHANCED_LIGHTNINGER);
-                if (debugEnabled) {
-                    debugW("EMERGENCY: Switched to Enhanced Lightninger");
-                }
+            if (debugEnabled) {
+                debugW("COMBAT HEAL: In range at distance " + currentDistance + ", checking LOS");
             }
             
-            // Check if we can use the weapon now
-            if (canUseWeapon(enemy)) {
+            // Check LOS before switching weapons (avoid wasting TP)
+            if (hasLOS(myCell, enemyCell)) {
+                // Switch to Enhanced Lightninger if needed
+                if (getWeapon() != WEAPON_ENHANCED_LIGHTNINGER) {
+                    setWeapon(WEAPON_ENHANCED_LIGHTNINGER);
+                    if (debugEnabled) {
+                        debugW("COMBAT HEAL: Switched to Enhanced Lightninger");
+                    }
+                }
+                
+                // Double-check if we can use the weapon now
+                if (canUseWeapon(enemy)) {
                 if (debugEnabled) {
                     debugW("EMERGENCY: Using Enhanced Lightninger for bonus healing at distance " + currentDistance);
                 }
@@ -218,7 +370,7 @@ function tryEmergencyHealingWithAttack() {
                         }
                     }
                 } else {
-                    // HP ≤ 50%: Use REGENERATION instead
+                    // HP ≤ 50%: Use REGENERATION if available, otherwise fire second Enhanced Lightninger
                     if (canUseChip(CHIP_REGENERATION, getEntity()) && currentTP >= getChipCost(CHIP_REGENERATION)) {
                         if (debugEnabled) {
                             debugW("SMART HEALING: HP ≤ 50% (" + floor(hpPercent * 100) + "%), using REGENERATION instead");
@@ -232,21 +384,41 @@ function tryEmergencyHealingWithAttack() {
                             debugW("REGENERATION: Used chip - HP: " + hpBeforeRegen + " → " + hpAfterRegen + ", TP after: " + getTP());
                         }
                     } else {
-                        if (debugEnabled) {
-                            debugW("SMART HEALING: HP ≤ 50% but REGENERATION not available");
+                        // REGENERATION not available, fire second Enhanced Lightninger if we have TP
+                        if (currentTP >= lightningCost && canUseWeapon(enemy)) {
+                            if (debugEnabled) {
+                                debugW("SMART HEALING: HP ≤ 50% but REGENERATION not available, firing second Enhanced Lightninger");
+                            }
+                            
+                            var hpBeforeSecond = getLife();
+                            useWeapon(enemy);
+                            var hpAfterSecond = getLife();
+                            
+                            if (debugEnabled) {
+                                debugW("ENHANCED LIGHTNINGER: Second shot (fallback) - HP: " + hpBeforeSecond + " → " + hpAfterSecond + ", TP after: " + getTP());
+                            }
+                        } else {
+                            if (debugEnabled) {
+                                debugW("SMART HEALING: HP ≤ 50%, no REGENERATION, and insufficient TP (" + currentTP + "/" + lightningCost + ") for second shot");
+                            }
                         }
                     }
                 }
                 
                 return true;
+                } else {
+                    if (debugEnabled) {
+                        debugW("COMBAT HEAL FAIL: canUseWeapon() failed - target may be dead/invalid");
+                    }
+                }
             } else {
                 if (debugEnabled) {
-                    debugW("HEAL FAIL: Cannot use Enhanced Lightninger (LOS issue?)");
+                    debugW("COMBAT HEAL FAIL: No LOS from " + myCell + " to " + enemyCell + " at distance " + currentDistance);
                 }
             }
         } else {
             if (debugEnabled) {
-                debugW("HEAL FAIL: Enhanced Lightninger out of range (" + currentDistance + " not in 5-12)");
+                debugW("COMBAT HEAL FAIL: Enhanced Lightninger out of range (" + currentDistance + " not in 5-12)");
             }
         }
     } else {
@@ -269,7 +441,23 @@ function tryEmergencyMovement() {
         debugW("TACTICAL EMERGENCY MOVE: Finding weapon-ready position from distance " + currentDistance);
     }
     
-    // Priority 1: Move to Enhanced Lightninger range (5-12) with LOS
+    // Priority 1: Move to FLAME_THROWER range (2-8) with LOS - POISON HEALING!
+    if (inArray(weapons, WEAPON_FLAME_THROWER)) {
+        var bestCell = findTacticalPosition(WEAPON_FLAME_THROWER, "Flame Thrower");
+        if (bestCell != null) {
+            var oldCell = myCell;
+            var mpUsed = moveTowardCells([bestCell], myMP);
+            myCell = getCell();
+            myMP = getMP();
+            
+            if (debugEnabled) {
+                debugW("TACTICAL MOVE (Flame): From " + oldCell + " to " + myCell + " (MP used: " + mpUsed + ")");
+            }
+            return mpUsed > 0;
+        }
+    }
+    
+    // Priority 2: Move to Enhanced Lightninger range (5-12) with LOS
     if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER)) {
         var bestCell = findTacticalPosition(WEAPON_ENHANCED_LIGHTNINGER, "Enhanced Lightninger");
         if (bestCell != null) {
@@ -285,7 +473,39 @@ function tryEmergencyMovement() {
         }
     }
     
-    // Priority 2: Move to Rifle range (7-9) with LOS
+    // Priority 3: Move to NEUTRINO range (2-6) with diagonal alignment - VULNERABILITY!
+    if (inArray(weapons, WEAPON_NEUTRINO)) {
+        var bestCell = findNeutrinoDiagonalPosition();
+        if (bestCell != null) {
+            var oldCell = myCell;
+            var mpUsed = moveTowardCells([bestCell], myMP);
+            myCell = getCell();
+            myMP = getMP();
+            
+            if (debugEnabled) {
+                debugW("TACTICAL MOVE (Neutrino): From " + oldCell + " to " + myCell + " (MP used: " + mpUsed + ")");
+            }
+            return mpUsed > 0;
+        }
+    }
+    
+    // Priority 4: Move to DESTROYER range (1-6) with LOS - DEBUFF!
+    if (inArray(weapons, WEAPON_DESTROYER)) {
+        var bestCell = findTacticalPosition(WEAPON_DESTROYER, "Destroyer");
+        if (bestCell != null) {
+            var oldCell = myCell;
+            var mpUsed = moveTowardCells([bestCell], myMP);
+            myCell = getCell();
+            myMP = getMP();
+            
+            if (debugEnabled) {
+                debugW("TACTICAL MOVE (Destroyer): From " + oldCell + " to " + myCell + " (MP used: " + mpUsed + ")");
+            }
+            return mpUsed > 0;
+        }
+    }
+    
+    // Priority 5: Move to Rifle range (7-9) with LOS
     if (inArray(weapons, WEAPON_RIFLE)) {
         var bestCell = findTacticalPosition(WEAPON_RIFLE, "Rifle");
         if (bestCell != null) {
@@ -301,7 +521,7 @@ function tryEmergencyMovement() {
         }
     }
     
-    // Priority 3: Move to M-Laser range (6-10) with alignment
+    // Priority 6: Move to M-Laser range (6-10) with alignment
     if (inArray(weapons, WEAPON_M_LASER)) {
         var bestCell = findMLaserAlignmentPosition();
         if (bestCell != null) {
@@ -365,6 +585,23 @@ function tryEmergencyMovement() {
         }
     }
     
+    // Priority 6: Move to Sword range (1) - prioritize sword over katana due to lower cost
+    if (inArray(weapons, WEAPON_SWORD)) {
+        var bestCell = findTacticalPosition(WEAPON_SWORD, "Sword");
+        if (bestCell != null) {
+            var oldCell = myCell;
+            var mpUsed = moveTowardCells([bestCell], myMP);
+            myCell = getCell();
+            myMP = getMP();
+            
+            if (debugEnabled) {
+                debugW("TACTICAL MOVE: From " + oldCell + " to " + myCell + " (MP used: " + mpUsed + ")");
+            }
+            
+            return mpUsed > 0; // Return true if we moved
+        }
+    }
+    
     // Priority 7: Move to Katana range (1) as last resort
     if (inArray(weapons, WEAPON_KATANA)) {
         var bestCell = findTacticalPosition(WEAPON_KATANA, "Katana");
@@ -423,8 +660,8 @@ function findTacticalPosition(weapon, weaponName) {
                 
                 // Must be reachable and in weapon range
                 if (moveDistance <= myMP && enemyDistance >= minRange && enemyDistance <= maxRange) {
-                    // Check LOS for ranged weapons (not Katana)
-                    if (weapon != WEAPON_KATANA && !lineOfSight(cell, enemyCell)) {
+                    // Check LOS for ranged weapons (not Sword or Katana)
+                    if (weapon != WEAPON_SWORD && weapon != WEAPON_KATANA && !lineOfSight(cell, enemyCell)) {
                         continue; // Need LOS for ranged weapons
                     }
                     
@@ -506,6 +743,59 @@ function findBLaserAlignmentPosition() {
     return bestCell;
 }
 
+// === NEUTRINO DIAGONAL POSITION FINDER ===
+function findNeutrinoDiagonalPosition() {
+    var bestCell = null;
+    var bestScore = 0;
+    var minRange = getWeaponMinRange(WEAPON_NEUTRINO);
+    var maxRange = getWeaponMaxRange(WEAPON_NEUTRINO);
+    
+    if (debugEnabled) {
+        debugW("Finding Neutrino diagonal position (range " + minRange + "-" + maxRange + ")");
+    }
+    
+    // Check cells within MP range for diagonal alignment with enemy
+    for (var x = getCellX(myCell) - myMP; x <= getCellX(myCell) + myMP; x++) {
+        for (var y = getCellY(myCell) - myMP; y <= getCellY(myCell) + myMP; y++) {
+            var cell = getCellFromXY(x, y);
+            
+            if (cell != null && cell != -1 && cell != myCell) {
+                var moveDistance = getCellDistance(myCell, cell);
+                var enemyDistance = getCellDistance(cell, enemyCell);
+                
+                // Check if within movement range and weapon range
+                if (moveDistance <= myMP && enemyDistance >= minRange && enemyDistance <= maxRange) {
+                    // Check for diagonal alignment
+                    var cellX = getCellX(cell);
+                    var cellY = getCellY(cell);
+                    var enemyX = getCellX(enemyCell);
+                    var enemyY = getCellY(enemyCell);
+                    
+                    var dx = abs(cellX - enemyX);
+                    var dy = abs(cellY - enemyY);
+                    
+                    // Must be diagonally aligned (dx == dy and not on same cell)
+                    if (dx == dy && dx > 0) {
+                        // Score based on distance (farther is better for emergency)
+                        var score = enemyDistance;
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestCell = cell;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (debugEnabled && bestCell != null) {
+        var distance = getCellDistance(bestCell, enemyCell);
+        debugW("Found Neutrino diagonal position " + bestCell + " at distance " + distance);
+    }
+    
+    return bestCell;
+}
+
 // Note: findMLaserAlignmentPosition is defined in movement/pathfinding.ls
 
 // === FALLBACK ESCAPE POSITION ===
@@ -514,7 +804,7 @@ function findEscapePosition() {
     var bestCell = null;
     var maxDistance = 0;
     
-    // Find cells within MP range that are farther from enemy
+    // Phase 1: Find cells that are farther from enemy (ideal)
     for (var x = getCellX(myCell) - myMP; x <= getCellX(myCell) + myMP; x++) {
         for (var y = getCellY(myCell) - myMP; y <= getCellY(myCell) + myMP; y++) {
             var cell = getCellFromXY(x, y);
@@ -532,6 +822,43 @@ function findEscapePosition() {
                 }
             }
         }
+    }
+    
+    // Phase 2: If no farther cells found, accept same distance (kiting movement)
+    if (bestCell == null) {
+        if (debugEnabled) {
+            debugW("ESCAPE FALLBACK: No farther cells, trying same distance");
+        }
+        
+        for (var x = getCellX(myCell) - myMP; x <= getCellX(myCell) + myMP; x++) {
+            for (var y = getCellY(myCell) - myMP; y <= getCellY(myCell) + myMP; y++) {
+                var cell = getCellFromXY(x, y);
+                
+                if (cell != null && cell != -1 && cell != myCell) {
+                    var moveDistance = getCellDistance(myCell, cell);
+                    var enemyDistance = getCellDistance(cell, enemyCell);
+                    
+                    // Accept cells at same distance or slightly closer (tactical repositioning)
+                    if (moveDistance <= myMP && enemyDistance >= currentDistance - 1) {
+                        // Prefer cells that break LOS or provide cover
+                        var score = enemyDistance;
+                        if (!hasLOS(cell, enemyCell)) {
+                            score += 10; // LOS breaking bonus
+                        }
+                        
+                        if (score > maxDistance) {
+                            maxDistance = score;
+                            bestCell = cell;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (debugEnabled && bestCell != null) {
+        var finalDistance = getCellDistance(bestCell, enemyCell);
+        debugW("ESCAPE: Found position " + bestCell + " at distance " + finalDistance + " (current: " + currentDistance + ")");
     }
     
     return bestCell;
@@ -680,7 +1007,7 @@ function tryEmergencyTeleport() {
 
 // === DESPERATION ATTACK ===
 function tryDesperationAttack() {
-    var estimatedDamage = estimateMyDamageThisTurn();
+    var estimatedDamage = estimateMyDamageOnPrimary();
     
     // Only go for desperation attack if we can potentially kill enemy
     if (estimatedDamage < enemyHP * 0.8) return false;
@@ -690,7 +1017,7 @@ function tryDesperationAttack() {
     }
     
     // Execute combat with all remaining TP
-    executeCombat(myCell);
+    executeCombat(myCell, null); // No pre-calculated weapon in emergency mode
     return true;
 }
 
@@ -702,7 +1029,7 @@ function tryDefensiveRetreat() {
     
     // Find cells that are farther from enemy
     for (var range = 1; range <= myMP; range++) {
-        var cells = getCellsAtDistance(myCell, range);
+        var cells = getCellsAtExactDistance(myCell, range);
         
         for (var i = 0; i < count(cells); i++) {
             var cell = cells[i];
@@ -763,7 +1090,7 @@ function tryKitingMovement() {
     
     // Find cells within our movement range that are farther from enemy
     for (var range = 1; range <= myMP; range++) {
-        var cells = getCellsAtDistance(myCell, range);
+        var cells = getCellsAtExactDistance(myCell, range);
         
         for (var i = 0; i < count(cells); i++) {
             var cell = cells[i];
@@ -834,7 +1161,42 @@ function tryKitingAttack() {
     var distance = getCellDistance(myCell, enemyCell);
     var weapons = getWeapons();
     
-    // PRIORITY 1: Try B-Laser first - HEALING + DAMAGE + cheaper cost (5 TP vs 8 TP)
+    // PRIORITY 1: Try FLAME_THROWER first - POISON HEALING + LINE WEAPON
+    if (inArray(weapons, WEAPON_FLAME_THROWER)) {
+        var minRange = getWeaponMinRange(WEAPON_FLAME_THROWER);
+        var maxRange = getWeaponMaxRange(WEAPON_FLAME_THROWER);
+        var cost = getWeaponCost(WEAPON_FLAME_THROWER);
+        
+        if (distance >= minRange && distance <= maxRange && isOnSameLine(myCell, enemyCell) && myTP >= cost) {
+            if (debugEnabled) {
+                debugW("KITING ATTACK: Using Flame Thrower for poison healing at distance " + distance);
+            }
+            
+            // Switch to Flame Thrower if needed
+            if (getWeapon() != WEAPON_FLAME_THROWER) {
+                if (myTP >= cost + 1) {
+                    setWeapon(WEAPON_FLAME_THROWER);
+                    myTP--;
+                    if (debugEnabled) {
+                        debugW("EMERGENCY: Switched to Flame Thrower");
+                    }
+                } else {
+                    return false; // Not enough TP
+                }
+            }
+            
+            // Attack with Flame Thrower (poison + lifesteal healing)
+            if (canUseWeapon(enemy)) {
+                useWeapon(enemy);
+                if (debugEnabled) {
+                    debugW("EMERGENCY: Used Flame Thrower for poison healing");
+                }
+                return true;
+            }
+        }
+    }
+    
+    // PRIORITY 2: Try B-Laser - HEALING + DAMAGE + cheaper cost (5 TP vs 8 TP)
     if (inArray(weapons, WEAPON_B_LASER)) {
         var minRange = getWeaponMinRange(WEAPON_B_LASER);
         var maxRange = getWeaponMaxRange(WEAPON_B_LASER);
@@ -949,7 +1311,86 @@ function tryKitingAttack() {
         }
     }
     
-    // PRIORITY 3: Try Rhino for close-range high DPS
+    // PRIORITY 3: Try NEUTRINO for diagonal vulnerability attacks
+    if (inArray(weapons, WEAPON_NEUTRINO)) {
+        var minRange = getWeaponMinRange(WEAPON_NEUTRINO);
+        var maxRange = getWeaponMaxRange(WEAPON_NEUTRINO);
+        var cost = getWeaponCost(WEAPON_NEUTRINO);
+        
+        // Check diagonal alignment
+        var cellX = getCellX(myCell);
+        var cellY = getCellY(myCell);
+        var enemyX = getCellX(enemyCell);
+        var enemyY = getCellY(enemyCell);
+        var dx = abs(cellX - enemyX);
+        var dy = abs(cellY - enemyY);
+        var isDiagonal = (dx == dy && dx > 0);
+        
+        if (distance >= minRange && distance <= maxRange && isDiagonal && myTP >= cost) {
+            if (debugEnabled) {
+                debugW("KITING ATTACK: Using Neutrino for vulnerability at distance " + distance);
+            }
+            
+            // Switch to Neutrino if needed
+            if (getWeapon() != WEAPON_NEUTRINO) {
+                if (myTP >= cost + 1) {
+                    setWeapon(WEAPON_NEUTRINO);
+                    myTP--;
+                    if (debugEnabled) {
+                        debugW("EMERGENCY: Switched to Neutrino");
+                    }
+                } else {
+                    return false; // Not enough TP
+                }
+            }
+            
+            // Attack with Neutrino (vulnerability debuff)
+            if (canUseWeapon(enemy)) {
+                useWeapon(enemy);
+                if (debugEnabled) {
+                    debugW("EMERGENCY: Used Neutrino for vulnerability");
+                }
+                return true;
+            }
+        }
+    }
+    
+    // PRIORITY 4: Try DESTROYER for debuff attacks
+    if (inArray(weapons, WEAPON_DESTROYER)) {
+        var minRange = getWeaponMinRange(WEAPON_DESTROYER);
+        var maxRange = getWeaponMaxRange(WEAPON_DESTROYER);
+        var cost = getWeaponCost(WEAPON_DESTROYER);
+        
+        if (distance >= minRange && distance <= maxRange && myTP >= cost) {
+            if (debugEnabled) {
+                debugW("KITING ATTACK: Using Destroyer for debuff at distance " + distance);
+            }
+            
+            // Switch to Destroyer if needed
+            if (getWeapon() != WEAPON_DESTROYER) {
+                if (myTP >= cost + 1) {
+                    setWeapon(WEAPON_DESTROYER);
+                    myTP--;
+                    if (debugEnabled) {
+                        debugW("EMERGENCY: Switched to Destroyer");
+                    }
+                } else {
+                    return false; // Not enough TP
+                }
+            }
+            
+            // Attack with Destroyer (strength debuff)
+            if (canUseWeapon(enemy)) {
+                useWeapon(enemy);
+                if (debugEnabled) {
+                    debugW("EMERGENCY: Used Destroyer for debuff");
+                }
+                return true;
+            }
+        }
+    }
+    
+    // PRIORITY 5: Try Rhino for close-range high DPS
     if (inArray(weapons, WEAPON_RHINO)) {
         var minRange = getWeaponMinRange(WEAPON_RHINO);
         var maxRange = getWeaponMaxRange(WEAPON_RHINO);
@@ -985,7 +1426,9 @@ function tryKitingAttack() {
     // Fallback: Try other weapons at current range
     for (var i = 0; i < count(weapons); i++) {
         var weapon = weapons[i];
-        if (weapon == WEAPON_ENHANCED_LIGHTNINGER || weapon == WEAPON_B_LASER || weapon == WEAPON_RHINO) continue; // Already tried above
+        if (weapon == WEAPON_FLAME_THROWER || weapon == WEAPON_ENHANCED_LIGHTNINGER || 
+            weapon == WEAPON_B_LASER || weapon == WEAPON_NEUTRINO || 
+            weapon == WEAPON_DESTROYER || weapon == WEAPON_RHINO) continue; // Already tried above
         
         var minRange = getWeaponMinRange(weapon);
         var maxRange = getWeaponMaxRange(weapon);
@@ -1016,7 +1459,7 @@ function tryKitingAttack() {
     }
     
     // Fallback to chips if no weapons available
-    var chips = getDamageChips();
+    var chips = getAvailableDamageChips();
     for (var i = 0; i < count(chips); i++) {
         var chip = chips[i];
         if (canUseChip(chip, enemy)) {
@@ -1041,7 +1484,7 @@ function findCellsWithoutLOS(enemyCell, maxDistance) {
     var hideCells = [];
     
     for (var range = 1; range <= maxDistance; range++) {
-        var cells = getCellsAtDistance(myCell, range);
+        var cells = getCellsAtExactDistance(myCell, range);
         
         for (var i = 0; i < count(cells); i++) {
             var cell = cells[i];
@@ -1054,12 +1497,13 @@ function findCellsWithoutLOS(enemyCell, maxDistance) {
     return hideCells;
 }
 
-function estimateEnemyDamageNextTurn() {
-    if (enemy == null) return 0;
+// === ENEMY DAMAGE ESTIMATION (TARGET-SPECIFIC) ===
+function estimateEnemyDamageNextTurn(enemyEntity) {
+    if (enemyEntity == null || getLife(enemyEntity) <= 0) return 0;
     
     // Simple damage estimation based on enemy weapons
-    var enemyWeapons = getWeapons(enemy);
-    var distance = getCellDistance(myCell, enemyCell);
+    var enemyWeapons = getWeapons(enemyEntity);
+    var distance = getCellDistance(myCell, getCell(enemyEntity));
     var totalDamage = 0;
     
     for (var i = 0; i < count(enemyWeapons); i++) {
@@ -1068,28 +1512,104 @@ function estimateEnemyDamageNextTurn() {
         var maxRange = getWeaponMaxRange(weapon);
         
         if (distance >= minRange && distance <= maxRange) {
-            var damage = getWeaponEffects(weapon)[0][1]; // Get base damage from weapon effects
-            totalDamage += damage * (1 + getStrength(enemy) / 100.0);
+            // Use our weapon damage estimation for consistency
+            var baseDamage = getWeaponBaseDamage(weapon);
+            var strengthMultiplier = 1 + (getStrength(enemyEntity) / 100.0);
+            var damage = baseDamage * strengthMultiplier;
+            totalDamage += damage;
         }
     }
     
-    return totalDamage;
-}
-
-function estimateMyDamageThisTurn() {
-    if (enemy == null) return 0;
-    
-    var weapons = getWeapons();
-    var distance = getCellDistance(myCell, enemyCell);
-    var totalDamage = 0;
-    
-    for (var i = 0; i < count(weapons); i++) {
-        var weapon = weapons[i];
-        var damage = calculateWeaponDamageFromCell(weapon, myCell, enemyCell);
-        totalDamage += damage;
+    // Add chip damage potential
+    var currentEnemyTP = getTP(enemyEntity);
+    if (currentEnemyTP >= 4) {
+        totalDamage += 50; // Lightning chip estimation
     }
     
-    return totalDamage;
+    return floor(totalDamage);
+}
+
+// === MY DAMAGE ESTIMATION (TARGET-SPECIFIC) ===
+function estimateMyDamageThisTurn(targetEntity) {
+    if (targetEntity == null || getLife(targetEntity) <= 0) return 0;
+    
+    var targetCell = getCell(targetEntity);
+    var weapons = getWeapons();
+    var maxDamage = 0;
+    
+    // Check damage from current position
+    var currentPositionDamage = 0;
+    for (var i = 0; i < count(weapons); i++) {
+        var weapon = weapons[i];
+        var damage = calculateWeaponDamageFromCell(weapon, myCell, targetCell);
+        currentPositionDamage += damage;
+    }
+    
+    maxDamage = currentPositionDamage;
+    
+    // If we have movement points, check nearby optimal positions
+    if (myMP > 0) {
+        var bestMoveDamage = 0;
+        
+        // Check weapon-optimal positions within movement range
+        for (var i = 0; i < count(weapons); i++) {
+            var weapon = weapons[i];
+            var weaponCost = getWeaponCost(weapon);
+            if (weaponCost > myTP) continue;
+            
+            var minRange = getWeaponMinRange(weapon);
+            var maxRange = getWeaponMaxRange(weapon);
+            
+            // Check optimal range positions
+            for (var range = minRange; range <= min(maxRange, minRange + 3); range++) {
+                var optimalPositions = getCellsAtExactDistance(targetCell, range);
+                
+                for (var j = 0; j < min(count(optimalPositions), 8); j++) {
+                    var testCell = optimalPositions[j];
+                    var moveDistance = getCellDistance(myCell, testCell);
+                    
+                    if (moveDistance <= myMP && getCellContent(testCell) == CELL_EMPTY) {
+                        var positionDamage = 0;
+                        
+                        // Calculate all weapon damage from this position
+                        for (var k = 0; k < count(weapons); k++) {
+                            var testWeapon = weapons[k];
+                            var damage = calculateWeaponDamageFromCell(testWeapon, testCell, targetCell);
+                            positionDamage += damage;
+                        }
+                        
+                        if (positionDamage > bestMoveDamage) {
+                            bestMoveDamage = positionDamage;
+                        }
+                    }
+                }
+            }
+        }
+        
+        maxDamage = max(maxDamage, bestMoveDamage);
+    }
+    
+    // Add potential chip damage
+    if (myTP >= 4) {
+        maxDamage += 50; // Lightning chip damage
+    }
+    
+    if (debugEnabled) {
+        debugW("DAMAGE ESTIMATE: Current=" + floor(currentPositionDamage) + ", Best=" + floor(maxDamage) + " vs Enemy HP=" + getLife(targetEntity));
+    }
+    
+    return floor(maxDamage);
+}
+
+// === LEGACY DAMAGE ESTIMATION FUNCTIONS (for backward compatibility) ===
+function estimatePrimaryEnemyDamage() {
+    if (primaryTarget == null) return 0;
+    return estimateEnemyDamageNextTurn(primaryTarget);
+}
+
+function estimateMyDamageOnPrimary() {
+    if (primaryTarget == null) return 0;
+    return estimateMyDamageThisTurn(primaryTarget);
 }
 
 function tryDefensiveChips() {

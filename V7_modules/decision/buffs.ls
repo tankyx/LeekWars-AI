@@ -8,6 +8,11 @@ function applyTurnBuffs() {
         debugW("Turn: " + getTurn() + ", TP: " + myTP);
     }
     
+    // Check if we should skip buffs to reserve TP for weapons
+    if (shouldSkipBuffsInEmergency()) {
+        return 0; // No TP used
+    }
+    
     var turn = getTurn();
     var tpUsed = 0;
     var chips = getChips();
@@ -183,9 +188,10 @@ function shouldSkipBuffsInEmergency() {
     }
     
     // Skip buffs if we're very low on TP and need it for combat
-    if (myTP < 8) {
+    // Reserve at least 6 TP for weapon attacks (B_LASER costs 5 TP)
+    if (myTP < 12) {
         if (debugEnabled) {
-            debugW("BUFF SKIP: Low TP (" + myTP + ") - saving for combat");
+            debugW("BUFF SKIP: Low TP (" + myTP + ") - saving for weapons (need 6+ TP reserved)");
         }
         return true;
     }
