@@ -3,138 +3,227 @@
 
 // === ENHANCED MULTI-ENEMY COMBAT EXECUTION WITH ENEMY ASSOCIATIONS ===
 function executeCombat(fromCell, recommendedWeapon) {
-    if (count(enemies) == 0) {
-        debugW("COMBAT: No enemies found");
+    if (count(allEnemies) == 0) {
         return;
     }
     
-    var tpRemaining = myTP;
+    var tpRemaining = getTP();
     
-    if (debugEnabled) {
-        debugW("=== ENHANCED COMBAT START ===");
-        debugW("TP Available: " + tpRemaining + ", Enemies: " + count(enemies));
-    }
+    // Enhanced combat starting
     
     // Execute enhanced combat strategy with enemy associations
     var combatAttempts = 0;
-    var maxCombatAttempts = 3;
+    var maxCombatAttempts = 2; // REDUCED from 3 to 2
     var lastTP = tpRemaining;
     var consecutiveFailures = 0;
+    var weaponSwitches = 0;
+    var maxWeaponSwitches = 3; // PREVENT infinite weapon switching
     
-    while (tpRemaining >= 3 && count(getEnemies()) > 0 && combatAttempts < maxCombatAttempts) {
+    // Limit to single combat attempt when called from peek-a-boo to prevent weapon switching loops
+    var maxLoops = (fromCell == getCell()) ? 1 : maxCombatAttempts;
+    
+    while (tpRemaining >= 3 && count(getEnemies()) > 0 && combatAttempts < maxLoops) {
         combatAttempts++;
         
         // Update targets and priorities
         updatePrimaryTarget();
         
         if (primaryTarget == null || getLife(primaryTarget) <= 0) {
-            if (debugEnabled) {
-                debugW("No valid primary target, combat ending");
-            }
             break;
         }
         
-        // NEW: Try to use enemy associations from current cell's damage zones
+        // Try to use enemy associations from current cell's damage zones
         var targetToAttack = primaryTarget;
         var associatedWeapon = recommendedWeapon;
         
         // Check if current cell has enemy associations from damage zones
+        // Checking enemy associations
         var currentCellAssociation = findEnemyAssociationForCell(myCell);
         if (currentCellAssociation != null) {
             targetToAttack = currentCellAssociation[0];   // enemy
             associatedWeapon = currentCellAssociation[1]; // weapon
+            debugW("ENEMY ASSOCIATION: Using associated target " + targetToAttack + " with weapon " + associatedWeapon);
+        } else {
+            // No enemy associations found
+        }
+        
+        // If we don't have a recommended weapon, get scenario for current TP
+        if (recommendedWeapon == null) {
+            var scenario = getBestScenarioForTP(tpRemaining, true);
+
+            // If no valid scenario, we should stop combat
+            if (scenario == null || count(scenario) == 0) {
+                break;
+            }
             
-            if (debugEnabled) {
-                debugW("ENEMY ASSOCIATION: Using associated target " + targetToAttack + " with weapon " + associatedWeapon);
-            }
-        }
-        
-        // If we don't have a recommended weapon, check what we can attack from current cell
-        if (recommendedWeapon == null) {
-            var bestAttackOption = findBestAttackFromCurrentCell();
-            if (bestAttackOption != null) {
-                targetToAttack = bestAttackOption.target;
-                recommendedWeapon = bestAttackOption.weapon;
-                if (debugEnabled) {
-                    debugW("FROM CURRENT CELL: Best target " + targetToAttack + " with weapon " + recommendedWeapon);
+            // Use the first weapon from the scenario as recommended weapon
+            for (var i = 0; i < count(scenario); i++) {
+                var action = scenario[i];
+                if (isWeapon(action)) {
+                    recommendedWeapon = action;
+                    break;
                 }
             }
-        }
-        
-        // If still no recommended weapon, try ALL available weapons systematically
-        if (recommendedWeapon == null) {
-            var weapons = getWeapons();
-            if (weapons != null && count(weapons) > 0) {
-                if (debugEnabled) {
-                    debugW("WEAPON DETECTION: Trying all " + count(weapons) + " available weapons from current position");
-                }
-                
-                // Try each weapon to see what can hit from current position
-                for (var w = 0; w < count(weapons); w++) {
-                    var weapon = weapons[w];
-                    var weaponCost = getWeaponCost(weapon);
-                    
-                    if (tpRemaining < weaponCost + 1) continue; // Not enough TP (include weapon switch cost)
-                    
-                    // Check each enemy
-                    for (var e = 0; e < count(enemies); e++) {
-                        var currentEnemy = enemies[e];
-                        if (getLife(currentEnemy) <= 0) continue;
-                        
-                        var currentEnemyCell = getCell(currentEnemy);
-                        var distance = getCellDistance(myCell, currentEnemyCell);
-                        
-                        // Check if weapon can reach this enemy
-                        if (canWeaponReachTarget(weapon, myCell, currentEnemyCell)) {
-                            recommendedWeapon = weapon;
-                            targetToAttack = currentEnemy;
-                            if (debugEnabled) {
-                                debugW("WEAPON DETECTION: Found " + weapon + " can hit " + currentEnemy + " at distance " + distance);
-                            }
-                            break;
-                        }
-                    }
-                    
-                    if (recommendedWeapon != null) break;
-                }
-                
-                if (debugEnabled && recommendedWeapon == null) {
-                    debugW("WEAPON DETECTION: No weapons can hit any enemy from current position");
-                }
+            
+            if (recommendedWeapon == null) {
+                break;
             }
         }
         
         // Check for AoE opportunities first
         var aoeOption = findBestAoETarget();
         if (aoeOption != null && aoeOption.enemyCount >= 2 && tpRemaining >= getWeaponCost(aoeOption.weapon)) {
-            if (debugEnabled) {
-                debugW("AOE OPPORTUNITY: " + aoeOption.weapon + " can hit " + aoeOption.enemyCount + " enemies");
-            }
+            // AoE opportunity found
             tpRemaining = executeAoEAttack(aoeOption, tpRemaining);
         } else {
             // Single-target attack on primary target
             var tpBefore = tpRemaining;
             
-            // Use pre-calculated weapon (this should always be available from pathfinding)
-            if (recommendedWeapon != null) {
-                tpRemaining = executePreCalculatedWeapon(recommendedWeapon, targetToAttack, tpRemaining);
-            } else {
-                // No recommended weapon - handle "no cells in reach" scenario
-                if (debugEnabled) {
-                    debugW("NO RECOMMENDED WEAPON: Handling unreachable enemies scenario");
+            // Scenario-based attack: recalculating optimal combinations
+            
+            // For strength builds: First check what weapons work at current distance
+            if (!isMagicBuild && primaryTarget != null) {
+                var currentDistance = getCellDistance(getCell(), getCell(primaryTarget));
+                // Checking best weapon for current distance
+                
+                // Find best weapon for current distance using equipped weapons
+                var bestWeaponForRange = null;
+                var bestWeaponDamage = 0;
+                var equippedWeapons = getWeapons();
+                for (var w = 0; w < count(equippedWeapons); w++) {
+                    var testWeapon = equippedWeapons[w];
+                    var minRange = getWeaponMinRange(testWeapon);
+                    var maxRange = getWeaponMaxRange(testWeapon);
+                    if (currentDistance >= minRange && currentDistance <= maxRange) {
+                        // Check alignment for M-Laser and line weapons
+                        var alignmentOK = true;
+                        var launchType = getWeaponLaunchType(testWeapon);
+                        if (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_LINE_INVERTED) {
+                            var myX = getCellX(getCell());
+                            var myY = getCellY(getCell());
+                            var targetX = getCellX(getCell(primaryTarget));
+                            var targetY = getCellY(getCell(primaryTarget));
+                            var dx = targetX - myX;
+                            var dy = targetY - myY;
+                            alignmentOK = (dx == 0) || (dy == 0); // Line weapons require X OR Y axis alignment
+                            // Line weapon alignment checked
+                        } else if (launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_DIAGONAL_INVERTED) {
+                            var myX = getCellX(getCell());
+                            var myY = getCellY(getCell());
+                            var targetX = getCellX(getCell(primaryTarget));
+                            var targetY = getCellY(getCell(primaryTarget));
+                            var dx = abs(targetX - myX);
+                            var dy = abs(targetY - myY);
+                            alignmentOK = (dx == dy && dx > 0); // Diagonal weapons require perfect diagonal alignment
+                            if (!alignmentOK) {
+                                // Diagonal weapon lacks alignment
+                            }
+                        } else if (launchType == LAUNCH_TYPE_STAR || launchType == LAUNCH_TYPE_STAR_INVERTED) {
+                            var myX = getCellX(getCell());
+                            var myY = getCellY(getCell());
+                            var targetX = getCellX(getCell(primaryTarget));
+                            var targetY = getCellY(getCell(primaryTarget));
+                            var dx = targetX - myX;
+                            var dy = targetY - myY;
+                            var lineAligned = (dx == 0) || (dy == 0);
+                            var diagAligned = (abs(dx) == abs(dy) && dx != 0);
+                            alignmentOK = lineAligned || diagAligned; // Star pattern: line OR diagonal
+                            if (!alignmentOK) {
+                                // Star weapon lacks alignment
+                            }
+                        }
+                        
+                        if (alignmentOK) {
+                            // Use weapon cost as damage proxy (higher cost usually = higher damage)
+                            var damage = getWeaponCost(testWeapon) * 10;
+                            // Weapon range and cost checked
+                            if (damage > bestWeaponDamage) {
+                                bestWeaponDamage = damage;
+                                bestWeaponForRange = testWeapon;
+                            }
+                        }
+                    }
                 }
                 
-                // Try to find any attack from current position
-                var bestCurrentAttack = findBestAttackFromCurrentCell();
-                if (bestCurrentAttack != null) {
-                    // We found something to attack from current cell
-                    tpRemaining = executePreCalculatedWeapon(bestCurrentAttack.weapon, bestCurrentAttack.target, tpRemaining);
-                    if (debugEnabled) {
-                        debugW("CURRENT CELL ATTACK: Used " + bestCurrentAttack.weapon + " on " + bestCurrentAttack.target);
+                if (bestWeaponForRange != null) {
+                    // Using range-optimized weapon
+                    recommendedWeapon = bestWeaponForRange;
+                }
+            }
+            
+            // Get fresh scenario based on current position (after movement)
+            var scenario = getBestScenarioForTP(tpRemaining, true);
+            
+            var actualTPUsed = 0;
+            var newTPRemaining = tpRemaining;
+            
+            if (scenario != null && count(scenario) > 0) {
+                // Only log scenario selection if debug enabled
+                if (debugEnabled) {
+                    // Scenario selected for execution
+                }
+                newTPRemaining = executeScenario(scenario, targetToAttack, tpRemaining);
+                actualTPUsed = tpRemaining - newTPRemaining;
+            } else {
+                // ERROR: No scenario available - always log this issue
+                debugW("ERROR: No combat scenario available for magic build with " + tpRemaining + " TP");
+            }
+            
+            if (actualTPUsed > 0) {
+                // Success - only log if debug enabled
+                if (debugEnabled) {
+                    // Scenario executed successfully
+                }
+                tpRemaining = newTPRemaining;
+                consecutiveFailures = 0; // Reset failure counter
+            } else {
+                // ERROR: No TP used - always log this issue
+                debugW("ERROR: Scenario execution failed - no TP used, falling back to single weapon");
+                // Fallback to single weapon attack if scenario fails
+                if (recommendedWeapon != null) {
+                    // First check if it's a valid weapon before getting cost
+                    var validWeapon = recommendedWeapon;
+
+                    // Check if recommendedWeapon is actually a chip ID before using setWeapon
+                    if (recommendedWeapon != null && isChip(recommendedWeapon)) {
+                        // Recommended action is chip, clearing for fallback
+                        validWeapon = null;
+                    } else if (recommendedWeapon != null && !isWeapon(recommendedWeapon)) {
+                        // Invalid recommended weapon ID
+                        validWeapon = null;
+                    }
+
+                    if (validWeapon != null) {
+                        var weaponCost = getWeaponCost(validWeapon);
+                        if (tpRemaining >= weaponCost) {
+                            // Ensure correct weapon is equipped for fallback
+                            if (getWeapon() != validWeapon) {
+                                setWeapon(validWeapon);
+                                tpRemaining -= 1; // Account for weapon switch cost
+                            }
+
+                            // Use the valid weapon
+                            if (canUseWeapon(targetToAttack)) {
+                                useWeapon(targetToAttack);
+                                recordWeaponUse(validWeapon);
+                                tpRemaining -= weaponCost;
+                                // Fallback weapon used successfully
+                                consecutiveFailures = 0;
+                            } else {
+                                // Fallback weapon failed - range/LOS issue
+                                consecutiveFailures++;
+                            }
+                        } else {
+                            // Insufficient TP for fallback weapon
+                            consecutiveFailures++;
+                        }
+                    } else {
+                        // No valid fallback weapon available
+                        consecutiveFailures++;
                     }
                 } else {
-                    // Truly no attacks possible - try emergency options
-                    tpRemaining = handleNoAttacksPossible(tpRemaining);
+                    // No fallback weapon available
+                    consecutiveFailures++;
                 }
             }
             
@@ -192,8 +281,143 @@ function executeCombat(fromCell, recommendedWeapon) {
     }
     
     if (debugEnabled) {
-        debugW("=== COMBAT COMPLETE ===");
+        // Combat phase complete
         debugW("TP Used: " + (myTP - tpRemaining) + ", Enemies Remaining: " + count(getEnemies()));
+    }
+    
+    // MAGIC BUILD HIDE-AND-SEEK TACTICS
+    if (isMagicBuild && count(getEnemies()) > 0) {
+        var mpRemaining = getMP();
+        var currentCell = getCell();
+        
+        // Check if we successfully applied DoT this turn
+        var dotApplied = (myTP - tpRemaining) >= 12; // FLAME_THROWER + FLAME_THROWER costs 12 TP
+        
+        if (dotApplied && mpRemaining >= 3) {
+            debugW("MAGIC TACTICS: DoT applied, attempting to flee from " + count(getEnemies()) + " enemies");
+            
+            // Find safest position away from all enemies
+            var bestFleeCell = null;
+            var bestFleeScore = -1;
+            var searchRadius = min(mpRemaining, 4); // Don't search too far
+            
+            for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+                for (var dy = -searchRadius; dy <= searchRadius; dy++) {
+                    var testCell = currentCell + dx + dy * MAP_WIDTH;
+                    var distance = abs(dx) + abs(dy); // Manhattan distance
+                    
+                    if (distance == 0 || distance > mpRemaining) continue;
+                    if (getCellContent(testCell) != CELL_EMPTY) continue;
+                    
+                    // Calculate safety score - farther from enemies is better
+                    var totalEnemyDistance = 0;
+                    var hasLoS = false;
+                    
+                    for (var e = 0; e < count(allEnemies); e++) {
+                        var targetEnemyCell = getCell(allEnemies[e]);
+                        var enemyDistance = getCellDistance(testCell, targetEnemyCell);
+                        totalEnemyDistance += enemyDistance;
+                        
+                        // Check if enemies have line of sight to this position
+                        if (lineOfSight(testCell, targetEnemyCell, targetEnemyCell)) {
+                            hasLoS = true;
+                        }
+                    }
+                    
+                    // Prefer positions without LoS, but prioritize distance
+                    var fleeScore = totalEnemyDistance * 10;
+                    if (!hasLoS) fleeScore += 50; // Bonus for breaking LoS
+                    
+                    if (fleeScore > bestFleeScore) {
+                        bestFleeScore = fleeScore;
+                        bestFleeCell = testCell;
+                    }
+                }
+            }
+            
+            // Execute flee movement
+            if (bestFleeCell != null && bestFleeCell != currentCell) {
+                var moveResult = moveToward(bestFleeCell);
+                if (moveResult > 0) {
+                    debugW("MAGIC FLEE: Moved toward cell " + bestFleeCell + " (score: " + bestFleeScore + ")");
+                } else {
+                    debugW("MAGIC FLEE: Failed to move toward " + bestFleeCell);
+                }
+            }
+        }
+
+        // HEALING PHASE: After fleeing, use remaining TP for healing if needed
+        var remainingTPAfterFlee = getTP();
+        var hpPercent = myHP / myMaxHP;
+        var safeDistance = getAverageEnemyDistance() >= 8; // Safe if average distance 8+
+
+        if (remainingTPAfterFlee >= 5 && safeDistance) {
+            var healingPriority = getHealingPriority();
+            debugW("MAGIC HEALING: HP=" + floor(hpPercent * 100) + "%, TP=" + remainingTPAfterFlee + ", Priority=" + healingPriority);
+
+            // Critical: Use REGENERATION if available and HP very low
+            if (shouldUseHealingChip(CHIP_REGENERATION, 0.3) && remainingTPAfterFlee >= 8) {
+                debugW("MAGIC HEAL: Using REGENERATION (once per fight) at " + floor(hpPercent * 100) + "% HP");
+                if (canUseChip(CHIP_REGENERATION, getEntity())) {
+                    useChip(CHIP_REGENERATION, getEntity());
+                    regenerationUsed = true;
+                    tpRemaining -= 8;
+                    debugW("MAGIC HEAL: REGENERATION successful, TP remaining: " + tpRemaining);
+                }
+            }
+            // Moderate: Use REMISSION for reliable healing
+            else if (shouldUseHealingChip(CHIP_REMISSION, 0.5) && remainingTPAfterFlee >= 5) {
+                debugW("MAGIC HEAL: Using REMISSION at " + floor(hpPercent * 100) + "% HP");
+                if (canUseChip(CHIP_REMISSION, getEntity())) {
+                    useChip(CHIP_REMISSION, getEntity());
+                    chipCooldowns[CHIP_REMISSION] = 1;
+                    tpRemaining -= 5;
+                    debugW("MAGIC HEAL: REMISSION successful, TP remaining: " + tpRemaining);
+                }
+            }
+            // Sustain: Use VACCINE for heal over time
+            else if (shouldUseHealingChip(CHIP_VACCINE, 0.7) && remainingTPAfterFlee >= 6) {
+                debugW("MAGIC HEAL: Using VACCINE for HoT at " + floor(hpPercent * 100) + "% HP");
+                if (canUseChip(CHIP_VACCINE, getEntity())) {
+                    useChip(CHIP_VACCINE, getEntity());
+                    chipCooldowns[CHIP_VACCINE] = 4;
+                    vaccineHoTTurnsLeft = 3;
+                    tpRemaining -= 6;
+                    debugW("MAGIC HEAL: VACCINE successful, HoT for 3 turns, TP remaining: " + tpRemaining);
+                }
+            }
+        }
+        
+        // If we can't flee effectively, use DESTROYER for strength debuffing
+        var remainingTP = getTP();
+        if (remainingTP >= 6 && getWeapon() != WEAPON_DESTROYER) { // DESTROYER costs 6 TP
+            var nearbyEnemies = [];
+            for (var e = 0; e < count(allEnemies); e++) {
+                var enemyDistance = getCellDistance(getCell(), getCell(allEnemies[e]));
+                if (enemyDistance <= 6) { // DESTROYER max range
+                    push(nearbyEnemies, allEnemies[e]);
+                }
+            }
+            
+            if (count(nearbyEnemies) > 0) {
+                debugW("MAGIC TACTICS: Cannot flee effectively, using DESTROYER to debuff enemies");
+                // Target strongest enemy first
+                var targetEnemy = nearbyEnemies[0];
+                var maxStrength = getStrength(targetEnemy);
+                for (var e = 1; e < count(nearbyEnemies); e++) {
+                    var enemyStrength = getStrength(nearbyEnemies[e]);
+                    if (enemyStrength > maxStrength) {
+                        maxStrength = enemyStrength;
+                        targetEnemy = nearbyEnemies[e];
+                    }
+                }
+                
+                if (setWeapon(WEAPON_DESTROYER)) {
+                    useWeapon(getCell(targetEnemy));
+                    debugW("MAGIC DEBUFF: Used DESTROYER on strongest enemy (strength: " + maxStrength + ")");
+                }
+            }
+        }
     }
     
     // Update our position after combat
@@ -229,6 +453,7 @@ function executeAoEAttack(aoeOption, tpRemaining) {
         }
         
         useWeapon(primaryTarget);
+        recordWeaponUse(weapon);
         tpRemaining -= weaponCost;
         
         if (debugEnabled) {
@@ -243,161 +468,21 @@ function executeAoEAttack(aoeOption, tpRemaining) {
     return tpRemaining;
 }
 
-// === PRE-CALCULATED WEAPON EXECUTION ===
-function executePreCalculatedWeapon(weaponId, target, tpRemaining) {
-    if (target == null || getLife(target) <= 0) {
-        return tpRemaining;
-    }
-    
-    if (debugEnabled) {
-        debugW("PRE-CALC WEAPON: Using calculated weapon " + weaponId + " on target " + target);
-    }
-    
-    var weaponCost = getWeaponCost(weaponId);
-    
-    // Check if we have enough TP
-    if (tpRemaining < weaponCost) {
-        if (debugEnabled) {
-            debugW("PRE-CALC FAIL: Not enough TP for weapon " + weaponId + " (need " + weaponCost + ", have " + tpRemaining + ")");
-        }
-        // Try chip fallback when weapon fails due to insufficient TP
-        return tryChipFallback(target, tpRemaining);
-    }
-    
-    // Switch to the pre-calculated weapon if needed
-    if (getWeapon() != weaponId) {
-        if (tpRemaining < weaponCost + 1) {
-            if (debugEnabled) {
-                debugW("PRE-CALC FAIL: Not enough TP to switch and use weapon (need " + (weaponCost + 1) + ", have " + tpRemaining + ")");
-            }
-            // Try chip fallback when can't afford weapon switch
-            return tryChipFallback(target, tpRemaining);
-        }
-        setWeapon(weaponId);
-        tpRemaining--;
-        if (debugEnabled) {
-            debugW("PRE-CALC: Switched to weapon " + weaponId);
-        }
-    }
-    
-    // Use the weapon - it should work since it was pre-calculated
-    if (debugEnabled) {
-        var myPos = getCell();
-        var targetPos = getCell(target);
-        var distance = getCellDistance(myPos, targetPos);
-        var hasLOSCheck = hasLOS(myPos, targetPos);
-        var weaponMinRange = getWeaponMinRange(weaponId);
-        var weaponMaxRange = getWeaponMaxRange(weaponId);
-        debugW("PRE-CALC DEBUG: Weapon " + weaponId + " check - Distance: " + distance + ", Range: " + weaponMinRange + "-" + weaponMaxRange + ", LOS: " + hasLOSCheck + ", MyPos: " + myPos + ", TargetPos: " + targetPos);
-    }
-    
-    // Additional debugging for weapon state
-    if (debugEnabled) {
-        var currentWeapon = getWeapon();
-        var currentTP = getTP();
-        var targetValid = (target != null && getLife(target) > 0);
-        debugW("PRE-CALC STATE: Current weapon=" + currentWeapon + ", Expected=" + weaponId + ", TP=" + currentTP + ", Target=" + target + ", Valid=" + targetValid);
-    }
-    
-    // CRITICAL FIX: Enhanced Lightninger often fails canUseWeapon() at max range
-    // Add manual range/LOS check as fallback for Enhanced Lightninger
-    var canAttack = canUseWeapon(target);
-    
-    if (!canAttack && weaponId == 225) { // Enhanced Lightninger
-        if (debugEnabled) {
-            debugW("PRE-CALC LIGHTNINGER FIX: Bypassing canUseWeapon() check for Enhanced Lightninger");
-        }
-        
-        var myPos = getCell();
-        var targetPos = getCell(target);
-        var distance = getCellDistance(myPos, targetPos);
-        var hasLOSCheck = hasLOS(myPos, targetPos);
-        var inRange = (distance >= 6 && distance <= 10); // Fixed: Enhanced Lightninger range is 6-10
-        
-        if (hasLOSCheck && inRange && getTP() >= 9) { // Enhanced Lightninger costs 9 TP
-            canAttack = true;
-            if (debugEnabled) {
-                debugW("PRE-CALC LIGHTNINGER FIX: Manual check passed - Distance:" + distance + ", LOS:" + hasLOSCheck + ", TP:" + getTP());
-            }
-        }
-    }
-    
-    if (canAttack) {
-        if (debugEnabled) {
-            debugW("PRE-CALC ATTACK: Using " + weaponId + " on " + target);
-        }
-        
-        useWeapon(target);
-        tpRemaining -= weaponCost;
-        
-        if (debugEnabled) {
-            debugW("PRE-CALC SUCCESS: Used " + weaponId + " on " + target + " (TP left: " + tpRemaining + ")");
-        }
-        
-        // Try to use weapon multiple times if possible
-        var maxUses = getWeaponMaxUses(weaponId);
-        var remainingUses = maxUses - 1; // Already used once
-        
-        while (remainingUses > 0 && tpRemaining >= weaponCost && canUseWeapon(target) && getLife(target) > 0) {
-            if (debugEnabled) {
-                debugW("PRE-CALC MULTI: Using " + weaponId + " again on " + target + " (use " + (maxUses - remainingUses + 1) + "/" + maxUses + ")");
-            }
-            
-            useWeapon(target);
-            tpRemaining -= weaponCost;
-            remainingUses--;
-        }
-    } else {
-        if (debugEnabled) {
-            debugW("PRE-CALC UNEXPECTED FAIL: Cannot use pre-calculated weapon " + weaponId + " on " + target + " - trying cell-based attack");
-        }
-        
-        // Try using weapon on target's cell instead of entity (might be entity reference issue)
-        var targetCell = getCell(target);
-        if (targetCell != null && canUseWeaponOnCell(targetCell)) {
-            if (debugEnabled) {
-                debugW("PRE-CALC CELL SUCCESS: Using " + weaponId + " on cell " + targetCell);
-            }
-            useWeapon(targetCell);
-            tpRemaining -= weaponCost;
-            
-            if (debugEnabled) {
-                debugW("PRE-CALC CELL SUCCESS: Used " + weaponId + " on cell " + targetCell + " (TP left: " + tpRemaining + ")");
-            }
-            
-            // Try to use weapon multiple times if possible
-            var maxUses = getWeaponMaxUses(weaponId);
-            var remainingUses = maxUses - 1; // Already used once
-            
-            while (remainingUses > 0 && tpRemaining >= weaponCost && canUseWeaponOnCell(targetCell) && getLife(target) > 0) {
-                if (debugEnabled) {
-                    debugW("PRE-CALC CELL MULTI: Using " + weaponId + " again on cell " + targetCell + " (use " + (maxUses - remainingUses + 1) + "/" + maxUses + ")");
-                }
-                
-                useWeapon(targetCell);
-                tpRemaining -= weaponCost;
-                remainingUses--;
-            }
-        } else {
-            if (debugEnabled) {
-                debugW("PRE-CALC CELL FAIL: Cannot use weapon on cell " + targetCell + " either - trying chip fallback");
-            }
-            // Both entity and cell approach failed, try chip fallback
-            return tryChipFallback(target, tpRemaining);
-        }
-    }
-    
-    return tpRemaining;
-}
+// Old executePreCalculatedWeapon function removed - now uses executeUnifiedWeaponAction with "precalc" mode
 
-// === SINGLE TARGET COMBAT ===
-function executeSingleTargetCombat(target, tpRemaining) {
-    if (target == null || getLife(target) <= 0) {
+// === UNIFIED SCENARIO-BASED COMBAT ===
+function executeUnifiedScenarioCombat(target, tpRemaining, mode) {
+    var actualTarget = (mode == "legacy") ? enemy : target;
+    
+    if (actualTarget == null || getLife(actualTarget) <= 0) {
+        if (mode == "legacy") {
+            debugW("COMBAT: No enemy found");
+        }
         return tpRemaining;
     }
     
     var weapons = getWeapons();
-    var distance = getCellDistance(myCell, getCell(target));
+    var distance = getCellDistance(myCell, getCell(actualTarget));
     
     // Get appropriate scenario for current weapon loadout
     var scenario = getScenarioForLoadout(weapons, tpRemaining);
@@ -409,102 +494,300 @@ function executeSingleTargetCombat(target, tpRemaining) {
     }
     
     if (debugEnabled) {
-        debugW("SINGLE TARGET: [" + join(scenario, ", ") + "] against " + target + " at distance " + distance);
-    }
-    
-    // Execute scenario actions
-    for (var i = 0; i < count(scenario) && tpRemaining >= 3; i++) {
-        var action = scenario[i];
-        
-        if (debugEnabled) {
-            debugW("ACTION: " + action + " (isWeapon=" + isWeapon(action) + ", isChip=" + isChip(action) + ")");
-        }
-        
-        if (isWeapon(action)) {
-            tpRemaining = executeWeaponActionOnTarget(action, target, tpRemaining);
-        } else if (isChip(action)) {
-            tpRemaining = executeChipActionOnTarget(action, target, tpRemaining);
-        }
-        
-        // Stop if target is defeated
-        if (getLife(target) <= 0) {
-            if (debugEnabled) {
-                debugW("Target " + target + " defeated!");
-            }
-            break;
-        }
-    }
-    
-    return tpRemaining;
-}
-
-// === LEGACY SINGLE-ENEMY COMBAT (for backward compatibility) ===
-function executeLegacyCombat(fromCell) {
-    if (enemy == null) {
-        debugW("COMBAT: No enemy found");
-        return;
-    }
-    
-    var weapons = getWeapons();
-    var tpRemaining = myTP;
-    var distance = getCellDistance(myCell, enemyCell);
-    
-    
-    // Get appropriate scenario for current weapon loadout
-    var scenario = getScenarioForLoadout(weapons, tpRemaining);
-    
-    // Ensure scenario is always an array
-    if (scenario == null) {
-        scenario = [CHIP_LIGHTNING];
-        debugW("COMBAT: Using fallback scenario");
-    }
-    
-    if (debugEnabled) {
-        debugW("COMBAT SCENARIO: [" + join(scenario, ", ") + "] for distance=" + distance + ", TP=" + tpRemaining);
+        var targetDesc = (mode == "legacy") ? ("enemy at distance=" + distance) : ("target " + actualTarget + " at distance " + distance);
+        debugW("UNIFIED COMBAT: [" + join(scenario, ", ") + "] against " + targetDesc + ", TP=" + tpRemaining);
     }
     
     // Execute scenario actions in sequence
+    var lastTPBefore = tpRemaining;
+    var successfulActions = 0;
+    
     for (var i = 0; i < count(scenario) && tpRemaining >= 3; i++) {
         var action = scenario[i];
+        var tpBefore = tpRemaining;
         
         if (debugEnabled) {
             debugW("COMBAT ACTION: " + action + " (isWeapon=" + isWeapon(action) + ", isChip=" + isChip(action) + ")");
         }
         
         if (isWeapon(action)) {
-            tpRemaining = executeWeaponAction(action, tpRemaining);
+            if (mode == "legacy") {
+                tpRemaining = executeWeaponAction(action, tpRemaining);
+            } else {
+                tpRemaining = executeWeaponActionOnTarget(action, actualTarget, tpRemaining);
+            }
         } else if (isChip(action)) {
-            tpRemaining = executeChipAction(action, tpRemaining);
+            if (mode == "legacy") {
+                tpRemaining = executeChipAction(action, tpRemaining);
+            } else {
+                tpRemaining = executeChipActionOnTarget(action, actualTarget, tpRemaining);
+            }
         }
         
-        // Stop if enemy is defeated
-        if (getLife(enemy) <= 0) {
+        // Check if action was successful (TP was consumed)
+        var actionSuccess = (tpRemaining < tpBefore);
+        if (actionSuccess) {
+            successfulActions++;
             if (debugEnabled) {
-                debugW("Enemy defeated!");
+                debugW("COMBAT SUCCESS: Action " + action + " completed, TP: " + tpBefore + " -> " + tpRemaining);
+            }
+        } else {
+            if (debugEnabled) {
+                debugW("COMBAT FAIL: Action " + action + " failed, TP unchanged: " + tpRemaining);
+            }
+            // Stop executing more weapons if this one failed
+            if (isWeapon(action)) {
+                // Weapon failed, aborting scenario
+                break;
+            }
+        }
+        
+        // Stop if target is defeated
+        if (getLife(actualTarget) <= 0) {
+            if (debugEnabled) {
+                var targetName = (mode == "legacy") ? "Enemy" : ("Target " + actualTarget);
+                debugW(targetName + " defeated!");
             }
             break;
         }
     }
     
-    // After all combat actions, update our position
-    myCell = getCell();
-    myMP = getMP();
+    // Update position for legacy mode
+    if (mode == "legacy") {
+        myCell = getCell();
+        myMP = getMP();
+    }
+    
+    return tpRemaining;
 }
 
-// === TARGET-SPECIFIC WEAPON EXECUTION ===
-function executeWeaponActionOnTarget(weapon, target, tpRemaining) {
+// === COMPATIBILITY WRAPPER FUNCTIONS ===
+function executeSingleTargetCombat(target, tpRemaining) {
+    return executeUnifiedScenarioCombat(target, tpRemaining, "target");
+}
+
+function executeLegacyCombat(fromCell) {
+    executeUnifiedScenarioCombat(null, myTP, "legacy");
+}
+
+// === SCENARIO EXECUTION ===
+function executeScenario(scenario, target, tpRemaining) {
+    // Executing scenario on target
+    
     if (target == null || getLife(target) <= 0) {
+        // Scenario aborted - invalid target
+        return tpRemaining;
+    }
+    
+    var successfulActions = 0;
+    var originalTP = tpRemaining;
+    
+    for (var i = 0; i < count(scenario) && tpRemaining >= 1; i++) {
+        var action = scenario[i];
+        var tpBefore = tpRemaining;
+        
+        // Only log individual actions if debug enabled
+        if (debugEnabled) {
+            debugW("SCENARIO ACTION " + (i+1) + "/" + count(scenario) + ": " + action + " (TP=" + tpRemaining + ")");
+        }
+        
+        // Debug action type detection
+        debugW("ACTION DEBUG: action=" + action + ", isWeapon=" + isWeapon(action) + ", isChip=" + isChip(action));
+        
+        if (isWeapon(action)) {
+            // Execute weapon action
+            var weaponCost = getWeaponCost(action);
+            if (tpRemaining >= weaponCost) {
+                // Switch weapon if needed
+                if (getWeapon() != action) {
+                    if (tpRemaining >= weaponCost + 1) {
+                        setWeapon(action);
+                        tpRemaining--;
+                        debugW("SCENARIO: Switched to weapon " + action + " (-1 TP)");
+                    } else {
+                        debugW("SCENARIO: Not enough TP to switch to weapon " + action);
+                        break;
+                    }
+                }
+                
+                // Use weapon on target
+                if (canUseWeapon(target)) {
+                    useWeapon(target);
+                    recordWeaponUse(action);
+                    tpRemaining -= weaponCost;
+                    successfulActions++;
+                    // Success - only log if debug enabled
+                    if (debugEnabled) {
+                        debugW("SCENARIO: Used weapon " + action + " (-" + weaponCost + " TP, remaining: " + tpRemaining + ")");
+                    }
+                } else {
+                    // Enhanced debug for weapon failures
+                    var myPos = getCell();
+                    var targetPos = getCell(target);
+                    var myX = getCellX(myPos);
+                    var myY = getCellY(myPos);
+                    var targetX = getCellX(targetPos);
+                    var targetY = getCellY(targetPos);
+                    var dx = targetX - myX;
+                    var dy = targetY - myY;
+                    var distance = getCellDistance(myPos, targetPos);
+                    
+                    debugW("WEAPON FAIL: " + action + " from " + myPos + "(" + myX + "," + myY + ") to " + targetPos + "(" + targetX + "," + targetY + ")");
+                    debugW("WEAPON FAIL: Distance=" + distance + ", dx=" + dx + ", dy=" + dy + ", aligned=" + ((dx == 0) || (dy == 0)));
+                    debugW("WEAPON FAIL: LineOfSight=" + lineOfSight(myPos, targetPos, targetPos));
+                    
+                    break;
+                }
+            } else {
+                // ERROR: Always log insufficient TP
+                debugW("ERROR: Not enough TP for weapon " + action + " (need " + weaponCost + ", have " + tpRemaining + ")");
+                break;
+            }
+        } else if (isChip(action)) {
+            // Execute chip action
+            var chipCost = getChipCost(action);
+            // Attempting chip usage
+            if (tpRemaining >= chipCost) {
+                // Check cooldown status for debug
+                if (action == CHIP_TOXIN && chipCooldowns[CHIP_TOXIN] > 0) {
+                    debugW("SCENARIO CHIP: CHIP_TOXIN on cooldown for " + chipCooldowns[CHIP_TOXIN] + " turns");
+                } else if (action == CHIP_VENOM && chipCooldowns[CHIP_VENOM] > 0) {
+                    debugW("SCENARIO CHIP: CHIP_VENOM on cooldown for " + chipCooldowns[CHIP_VENOM] + " turns");
+                } else if (action == CHIP_LIBERATION && chipCooldowns[CHIP_LIBERATION] > 0) {
+                    debugW("SCENARIO CHIP: CHIP_LIBERATION on cooldown for " + chipCooldowns[CHIP_LIBERATION] + " turns");
+                } else if (action == CHIP_ANTIDOTE && chipCooldowns[CHIP_ANTIDOTE] > 0) {
+                    debugW("SCENARIO CHIP: CHIP_ANTIDOTE on cooldown for " + chipCooldowns[CHIP_ANTIDOTE] + " turns");
+                }
+
+                // DEFENSIVE CHIP TARGETING: Determine correct target for the chip
+                var chipTarget = target; // Default to attacking target
+
+                // For defensive chips, determine if we should target self or enemy
+                if (action == CHIP_ANTIDOTE) {
+                    chipTarget = getEntity(); // Always target self for antidote
+                    debugW("DEFENSIVE CHIP: ANTIDOTE targets self for poison removal/healing");
+                } else if (action == CHIP_LIBERATION) {
+                    // LIBERATION can target self (remove debuffs) or enemy (remove buffs)
+                    var shouldTargetSelf = (hasNegativeEffects() || getDefensivePriority() > 40);
+                    var shouldTargetEnemy = false;
+
+                    // Check if current target has removable buffs
+                    if (target != null && getLife(target) > 0) {
+                        shouldTargetEnemy = hasRemovableBuffs(target);
+                    }
+
+                    // Prioritize self-targeting if we have critical effects
+                    if (shouldTargetSelf && getDefensivePriority() >= 50) {
+                        chipTarget = getEntity();
+                        debugW("DEFENSIVE CHIP: LIBERATION targets self for debuff removal (priority=" + getDefensivePriority() + ")");
+                    } else if (shouldTargetEnemy) {
+                        chipTarget = target; // Keep enemy target for buff removal
+                        debugW("OFFENSIVE CHIP: LIBERATION targets enemy " + target + " for buff removal");
+                    } else if (shouldTargetSelf) {
+                        chipTarget = getEntity();
+                        debugW("DEFENSIVE CHIP: LIBERATION targets self for effect reduction");
+                    }
+                }
+                
+                // Enhanced debugging for chip usage validation using built-in functions
+                var canUse = canUseChip(action, chipTarget);
+                debugW("CHIP VALIDATION: canUseChip(" + action + ", " + chipTarget + ") = " + canUse);
+                if (!canUse) {
+                    debugW("CHIP DEBUG: Chip " + action + " failed validation - checking reasons");
+                    var minRange = getChipMinRange(action);
+                    var maxRange = getChipMaxRange(action);
+                    var cooldown = getChipCooldown(action);
+                    var maxUses = getChipMaxUses(action);
+                    var launchType = getChipLaunchType(action);
+                    var area = getChipArea(action);
+                    var distance = getCellDistance(getCell(), getCell(chipTarget));
+                    var hasLOS = lineOfSight(getCell(), getCell(chipTarget));
+
+                    debugW("CHIP DEBUG: Range=" + minRange + "-" + maxRange + ", Distance=" + distance + ", HasLOS=" + hasLOS);
+                    debugW("CHIP DEBUG: Cooldown=" + cooldown + ", MaxUses=" + maxUses + ", LaunchType=" + launchType + ", Area=" + area);
+                }
+
+                if (canUse) {
+                    useChip(action, chipTarget);
+                    tpRemaining -= chipCost;
+                    successfulActions++;
+
+                    // Set cooldowns for chips after successful use
+                    if (action == CHIP_LIBERATION) {
+                        chipCooldowns[CHIP_LIBERATION] = 5; // 5 turn cooldown
+                        debugW("COOLDOWN SET: CHIP_LIBERATION cooldown set to 5 turns");
+                    } else if (action == CHIP_ANTIDOTE) {
+                        chipCooldowns[CHIP_ANTIDOTE] = 4; // 4 turn cooldown
+                        debugW("COOLDOWN SET: CHIP_ANTIDOTE cooldown set to 4 turns");
+                    } else if (action == CHIP_REGENERATION) {
+                        regenerationUsed = true; // Mark as used once per fight
+                        debugW("HEALING USED: CHIP_REGENERATION marked as used (once per fight)");
+                    } else if (action == CHIP_VACCINE) {
+                        chipCooldowns[CHIP_VACCINE] = 4; // 4 turn cooldown
+                        vaccineHoTTurnsLeft = 3; // 3 turns of healing
+                        debugW("COOLDOWN SET: CHIP_VACCINE cooldown set to 4 turns, HoT for 3 turns");
+                    } else if (action == CHIP_REMISSION) {
+                        chipCooldowns[CHIP_REMISSION] = 1; // 1 turn cooldown
+                        debugW("COOLDOWN SET: CHIP_REMISSION cooldown set to 1 turn");
+                    }
+
+                    // Success - only log if debug enabled
+                    if (debugEnabled) {
+                        debugW("SCENARIO: Used chip " + action + " on " + chipTarget + " (-" + chipCost + " TP, remaining: " + tpRemaining + ")");
+                    }
+                } else {
+                    // ERROR: Always log chip usage failures
+                    debugW("ERROR: Cannot use chip " + action + " on target " + chipTarget + " (cooldown or other issue)");
+                    break;
+                }
+            } else {
+                // ERROR: Always log insufficient TP for chips
+                debugW("ERROR: Not enough TP for chip " + action + " (need " + chipCost + ", have " + tpRemaining + ")");
+                break;
+            }
+        } else {
+            // Action is neither weapon nor chip
+            debugW("ERROR: Unknown action type " + action + " - not weapon or chip");
+            break;
+        }
+        
+        // Check if target is defeated
+        if (getLife(target) <= 0) {
+            debugW("SCENARIO: Target " + target + " defeated after action " + (i+1) + "!");
+            break;
+        }
+    }
+    
+    var totalTPUsed = originalTP - tpRemaining;
+    debugW("SCENARIO COMPLETE: " + successfulActions + "/" + count(scenario) + " actions completed, " + totalTPUsed + " TP used");
+    
+    return tpRemaining;
+}
+
+// === UNIFIED WEAPON EXECUTION ===
+function executeUnifiedWeaponAction(weapon, target, tpRemaining, mode) {
+    debugW("UNIFIED WEAPON ENTRY: weapon=" + weapon + ", target=" + target + ", TP=" + tpRemaining + ", mode=" + mode);
+    
+    if ((target != null && getLife(target) <= 0) || (target == null && mode != "legacy")) {
+        debugW("UNIFIED WEAPON EXIT: Invalid target (target=" + target + ", life=" + (target != null ? getLife(target) : "null") + ")");
+        return tpRemaining;
+    }
+    
+    // For legacy mode, use global enemy variable
+    var actualTarget = (mode == "legacy") ? enemy : target;
+    if (actualTarget == null || getLife(actualTarget) <= 0) {
         return tpRemaining;
     }
     
     if (debugEnabled) {
-        debugW("WEAPON ON TARGET: Trying weapon " + weapon + " on " + target + " with " + tpRemaining + " TP");
+        debugW("UNIFIED WEAPON: Trying " + weapon + " on " + actualTarget + " with " + tpRemaining + " TP (mode: " + mode + ")");
     }
     
     var weaponCost = getWeaponCost(weapon);
     
-    // Switch weapon if needed (with caching)
-    if (getWeapon() != weapon) {
+    // Switch weapon if needed (avoid redundant switches)
+    var currentWeapon = getWeapon();
+    if (currentWeapon != weapon) {
         if (tpRemaining < weaponCost + 1) {
             if (debugEnabled) {
                 debugW("WEAPON FAIL: Not enough TP to switch weapons (need " + (weaponCost + 1) + ", have " + tpRemaining + ")");
@@ -512,65 +795,121 @@ function executeWeaponActionOnTarget(weapon, target, tpRemaining) {
             return tpRemaining;
         }
         setWeapon(weapon);
-        // Removed invalid assignment: getWeapon() = weapon; // Update cache
         tpRemaining--;
+        
+        // Track weapon switches in debug output
         if (debugEnabled) {
-            debugW("Switched to weapon " + weapon + " (cached)");
+            debug("WEAPON SWITCHES: Incremented");
+        }
+        
+        if (debugEnabled) {
+            debug("WEAPON SWITCH: " + currentWeapon + " -> " + weapon + " (-1 TP)");
         }
     } else {
         if (debugEnabled) {
-            debugW("WEAPON READY: Already equipped " + weapon + " (no switch needed)");
+            debug("WEAPON OK: Already equipped " + weapon);
         }
     }
     
-    // Check range to target
-    var distance = getCellDistance(myCell, getCell(target));
+    // Get target cell
+    var targetCell = getCell(actualTarget);
+    var distance = getCellDistance(myCell, targetCell);
     var minRange = getWeaponMinRange(weapon);
     var maxRange = getWeaponMaxRange(weapon);
     
+    // Range check
     if (distance < minRange || distance > maxRange) {
         if (debugEnabled) {
-            debugW("TARGET WEAPON FAIL: Out of range - distance=" + distance + ", range=" + minRange + "-" + maxRange);
+            debugW("WEAPON FAIL: Out of range - distance=" + distance + ", range=" + minRange + "-" + maxRange);
         }
-        return tryFallbackWeaponsOnTarget(target, tpRemaining, distance);
+        
+        // FIXED: Don't call fallback weapons during scenario execution to prevent weapon switching loops
+        if (mode == "target") {
+            debugW("RANGE FAIL: Skipping fallback to prevent weapon switching loop");
+            return tpRemaining; // Return unchanged TP to indicate failure
+        }
+        
+        return tryFallbackWeapons(tpRemaining, distance);
     }
     
-    // Check if we can use weapon on target
-    if (!canUseWeapon(target)) {
-        if (debugEnabled) {
-            var myPos = getCell();
-            var targetPos = getCell(target);
-            var myX = getCellX(myPos);
-            var myY = getCellY(myPos);
-            var targetX = getCellX(targetPos);
-            var targetY = getCellY(targetPos);
-            var dx = abs(targetX - myX);
-            var dy = abs(targetY - myY);
-            var hasLOSCheck = hasLOS(myPos, targetPos);
-            
-            debugW("TARGET WEAPON FAIL: Cannot use weapon " + weapon + " on " + target);
-            debugW("  Position: Me=" + myPos + "(" + myX + "," + myY + ") → Target=" + targetPos + "(" + targetX + "," + targetY + ")");
-            debugW("  Distance=" + distance + ", dx=" + dx + ", dy=" + dy + ", LOS=" + hasLOSCheck);
-            
-            // Special debugging for NEUTRINO diagonal check
-            if (weapon == WEAPON_NEUTRINO) {
-                var isDiagonal = (dx == dy && dx > 0);
-                debugW("  NEUTRINO: diagonal=" + isDiagonal + " (dx=" + dx + " == dy=" + dy + " && dx>0)");
+    // Enhanced Lightninger special handling for precalculated mode
+    var canAttack = canUseWeapon(actualTarget);
+    if (!canAttack && mode == "precalc" && weapon == 225) { // Enhanced Lightninger
+        var hasLOSCheck = checkLineOfSight(myCell, targetCell);
+        var inRange = (distance >= 6 && distance <= 10);
+        if (hasLOSCheck && inRange && getTP() >= 9) {
+            canAttack = true;
+            if (debugEnabled) {
+                debugW("LIGHTNINGER FIX: Manual check passed");
             }
         }
-        return tryFallbackWeaponsOnTarget(target, tpRemaining, distance);
     }
     
-    // Execute the attack
-    if (debugEnabled) {
-        debugW("TARGET WEAPON ATTACK: Using " + weapon + " on " + target);
+    if (!canAttack) {
+        if (debugEnabled) {
+            debugW("WEAPON FAIL: Cannot use weapon " + weapon + " on " + actualTarget);
+        }
+        if (mode == "precalc") {
+            // Try cell-based attack
+            if (getCellContent(targetCell) != CELL_OBSTACLE) {
+                return executeWeaponOnCell(weapon, targetCell, tpRemaining);
+            } else {
+                return tryChipFallback(actualTarget, tpRemaining);
+            }
+        }
+        
+        // FIXED: Don't call fallback weapons during scenario execution to prevent weapon switching loops
+        if (mode == "target") {
+            debugW("WEAPON FAIL: Skipping fallback to prevent weapon switching loop");
+            return tpRemaining; // Return unchanged TP to indicate failure
+        }
+        
+        return tryFallbackWeapons(tpRemaining, distance);
     }
     
-    useWeapon(target);
-    tpRemaining -= weaponCost;
+    // Execute weapon attack(s)
+    var maxUses = getWeaponMaxUses(weapon);
+    var tpUses = floor(tpRemaining / weaponCost);
+    var actualUses = (maxUses > 0) ? min(tpUses, maxUses) : tpUses;
     
-    if (debugEnabled) {
-        debugW("TARGET WEAPON SUCCESS: Used " + weapon + " on " + target + " (TP left: " + tpRemaining + ")");
+    if (mode == "legacy") {
+        actualUses = min(actualUses, 3); // Legacy mode limits
+    }
+    
+    for (var use = 0; use < actualUses; use++) {
+        if (tpRemaining < weaponCost || getLife(actualTarget) <= 0) break;
+        
+        if (debugEnabled) {
+            debugW("WEAPON ATTACK: Using " + weapon + " on " + actualTarget + " (use " + (use + 1) + "/" + actualUses + ")");
+        }
+        
+        useWeapon(actualTarget);
+        recordWeaponUse(weapon);
+        tpRemaining -= weaponCost;
+        
+        if (debugEnabled) {
+            debugW("WEAPON SUCCESS: Used " + weapon + " (TP left: " + tpRemaining + ")");
+        }
+    }
+    
+    return tpRemaining;
+}
+
+function executeWeaponOnCell(weapon, targetCell, tpRemaining) {
+    var weaponCost = getWeaponCost(weapon);
+    var maxUses = getWeaponMaxUses(weapon);
+    var actualUses = (maxUses > 0) ? min(floor(tpRemaining / weaponCost), maxUses) : floor(tpRemaining / weaponCost);
+    
+    for (var use = 0; use < actualUses; use++) {
+        if (tpRemaining < weaponCost) break;
+        
+        if (debugEnabled) {
+            debugW("CELL ATTACK: Using " + weapon + " on cell " + targetCell);
+        }
+        
+        useWeapon(targetCell);
+        recordWeaponUse(weapon);
+        tpRemaining -= weaponCost;
     }
     
     return tpRemaining;
@@ -627,11 +966,13 @@ function executeChipActionOnTarget(chip, target, tpRemaining) {
     // Set cooldown after successful use
     if (chip == CHIP_TOXIN) {
         chipCooldowns[CHIP_TOXIN] = 2; // 2 turn cooldown
+        lastDoTApplicationTurn = getTurn(); // Track DoT application for cycle timing
         if (debugEnabled) {
             debugW("TOXIN cooldown set: 2 turns");
         }
     } else if (chip == CHIP_VENOM) {
         chipCooldowns[CHIP_VENOM] = 1; // 1 turn cooldown
+        lastDoTApplicationTurn = getTurn(); // Track DoT application for cycle timing
         if (debugEnabled) {
             debugW("VENOM cooldown set: 1 turn");
         }
@@ -644,34 +985,35 @@ function executeChipActionOnTarget(chip, target, tpRemaining) {
     return tpRemaining;
 }
 
-// === FALLBACK WEAPONS FOR TARGET ===
-function tryFallbackWeaponsOnTarget(target, tpRemaining, distance) {
+// === UNIFIED FALLBACK WEAPONS ===
+function tryUnifiedFallbackWeapons(target, tpRemaining, distance, useTarget) {
     var weapons = getWeapons();
     
     if (debugEnabled) {
-        debugW("FALLBACK: Checking " + count(weapons) + " weapons for target " + target + " at distance " + distance);
+        var targetDesc = useTarget ? ("target " + target) : "enemies";
+        debugW("FALLBACK: Checking " + count(weapons) + " weapons for " + targetDesc + " at distance " + distance);
     }
     
-    // Create cache key for this target-distance combination
-    var cacheKey = target + "_" + distance;
+    // Create cache key
+    var cacheKey = (useTarget ? target : "legacy") + "_" + distance;
     
-    // Check if we've already tested weapons for this scenario
+    // Check cache
     if (weaponSwitchCache[cacheKey] != null) {
         var cachedWeapon = weaponSwitchCache[cacheKey];
         if (debugEnabled) {
             debugW("FALLBACK CACHE: Using cached weapon " + cachedWeapon + " for " + cacheKey);
         }
         
-        // Try the cached weapon first
         var currentWeap = getWeapon();
         if (currentWeap != cachedWeapon) {
             setWeapon(cachedWeapon);
-            // Removed invalid assignment: getWeapon() = cachedWeapon;
             tpRemaining--;
         }
         
-        if (canUseWeapon(target)) {
-            useWeapon(target);
+        var testTarget = useTarget ? target : enemy;
+        if (canUseWeapon(testTarget)) {
+            useWeapon(testTarget);
+            recordWeaponUse(cachedWeapon);
             tpRemaining -= getWeaponCost(cachedWeapon);
             if (debugEnabled) {
                 debugW("FALLBACK CACHE SUCCESS: Used cached weapon " + cachedWeapon);
@@ -680,9 +1022,17 @@ function tryFallbackWeaponsOnTarget(target, tpRemaining, distance) {
         }
     }
     
-    // Sort weapons by priority: try current weapon first, then by damage potential
+    // Create weapon priority list
     var weaponPriority = [];
     var currentWeap = getWeapon();
+    
+    var weaponPriorityMap = [
+        {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 800},
+        {weapon: WEAPON_RIFLE, priority: 600},
+        {weapon: WEAPON_M_LASER, priority: 400},
+        {weapon: WEAPON_SWORD, priority: 300},
+        {weapon: WEAPON_KATANA, priority: 200}
+    ];
     
     for (var i = 0; i < count(weapons); i++) {
         var weapon = weapons[i];
@@ -695,31 +1045,19 @@ function tryFallbackWeaponsOnTarget(target, tpRemaining, distance) {
             continue;
         }
         
-        var priority = 0;
+        var priority = 100; // Default priority
         
-        // Highest priority: current weapon (no switch cost)
+        // Current weapon gets highest priority (no switch cost)
         if (weapon == currentWeap) {
             priority = 1000;
-        }
-        // Enhanced Lightninger gets high priority
-        else if (weapon == WEAPON_ENHANCED_LIGHTNINGER) {
-            priority = 800;
-        }
-        // Rifle gets medium priority
-        else if (weapon == WEAPON_RIFLE) {
-            priority = 600;
-        }
-        // M-Laser gets lower priority (requires alignment)
-        else if (weapon == WEAPON_M_LASER) {
-            priority = 400;
-        }
-        // Sword gets priority over Katana (less TP cost)
-        else if (weapon == WEAPON_SWORD) {
-            priority = 300;
-        }
-        // Katana gets lowest priority (melee range)
-        else if (weapon == WEAPON_KATANA) {
-            priority = 200;
+        } else {
+            // Look up weapon in priority map
+            for (var p = 0; p < count(weaponPriorityMap); p++) {
+                if (weaponPriorityMap[p].weapon == weapon) {
+                    priority = weaponPriorityMap[p].priority;
+                    break;
+                }
+            }
         }
         
         push(weaponPriority, {weapon: weapon, priority: priority});
@@ -741,156 +1079,72 @@ function tryFallbackWeaponsOnTarget(target, tpRemaining, distance) {
         var weaponInfo = weaponPriority[p];
         var weapon = weaponInfo.weapon;
         var weaponCost = getWeaponCost(weapon);
+        var needsSwitch = (currentWeap != weapon);
+        var testTarget = useTarget ? target : enemy;
         
         if (debugEnabled) {
             debugW("FALLBACK: Testing weapon " + weapon + " (priority " + weaponInfo.priority + ")");
         }
         
-        // Test if we can use this weapon WITHOUT switching first (save TP)
-        var needsSwitch = (currentWeap != weapon);
-        
         if (!needsSwitch) {
-            // Already have the right weapon
-            if (canUseWeapon(target)) {
-                if (debugEnabled) {
-                    debugW("FALLBACK SUCCESS: Already equipped " + weapon + ", attacking");
-                }
-                
-                useWeapon(target);
+            if (canUseWeapon(testTarget)) {
+                useWeapon(testTarget);
+                recordWeaponUse(weapon);
                 tpRemaining -= weaponCost;
-                
-                // Cache this successful weapon
                 weaponSwitchCache[cacheKey] = weapon;
-                
+                if (debugEnabled) {
+                    debugW("FALLBACK SUCCESS: Used equipped " + weapon);
+                }
                 return tpRemaining;
             }
         } else {
-            // Need to switch - only do it if we're confident it will work
             setWeapon(weapon);
-            // Removed invalid assignment: getWeapon() = weapon;
             tpRemaining--;
             
-            if (canUseWeapon(target)) {
-                if (debugEnabled) {
-                    debugW("FALLBACK SUCCESS: Switched to " + weapon + ", attacking");
-                }
-                
-                useWeapon(target);
+            if (canUseWeapon(testTarget)) {
+                useWeapon(testTarget);
+                recordWeaponUse(weapon);
                 tpRemaining -= weaponCost;
-                
-                // Cache this successful weapon
                 weaponSwitchCache[cacheKey] = weapon;
-                
-                return tpRemaining;
-            } else {
                 if (debugEnabled) {
-                    debugW("FALLBACK FAIL: Cannot use weapon " + weapon + " after switch (LOS/range issue)");
+                    debugW("FALLBACK SUCCESS: Switched to " + weapon);
                 }
-                // We've wasted 1 TP on the switch, continue to try other weapons
+                return tpRemaining;
             }
         }
     }
     
-    if (debugEnabled) {
-        debugW("FALLBACK: No weapons in range for target " + target + ", trying chips");
-    }
-    
     // Try chips as last resort
     if (tpRemaining >= 4) {
-        return executeChipActionOnTarget(CHIP_LIGHTNING, target, tpRemaining);
+        if (useTarget) {
+            return executeChipActionOnTarget(CHIP_LIGHTNING, target, tpRemaining);
+        } else {
+            return executeChipAction(CHIP_LIGHTNING, tpRemaining);
+        }
     }
     
     return tpRemaining;
 }
 
-// === WEAPON EXECUTION ===
+// === COMPATIBILITY WRAPPER FUNCTIONS ===
+function executeWeaponActionOnTarget(weapon, target, tpRemaining) {
+    return executeUnifiedWeaponAction(weapon, target, tpRemaining, "target");
+}
+
+function executePreCalculatedWeapon(weaponId, target, tpRemaining) {
+    return executeUnifiedWeaponAction(weaponId, target, tpRemaining, "precalc");
+}
+
 function executeWeaponAction(weapon, tpRemaining) {
-    if (debugEnabled) {
-        debugW("WEAPON EXEC: Trying weapon " + weapon + " with " + tpRemaining + " TP, enemy " + enemy);
-    }
-    
-    var weaponCost = getWeaponCost(weapon);
-    
-    // Switch weapon if needed (with caching)
-    if (getWeapon() != weapon) {
-        if (tpRemaining < weaponCost + 1) {
-            if (debugEnabled) {
-                debugW("WEAPON FAIL: Not enough TP to switch weapons (need " + (weaponCost + 1) + ", have " + tpRemaining + ")");
-            }
-            return tpRemaining;
-        }
-        setWeapon(weapon);
-        // Removed invalid assignment: getWeapon() = weapon; // Update cache
-        tpRemaining--;
-        if (debugEnabled) {
-            debugW("Switched to weapon " + weapon + " (cached)");
-        }
-    } else {
-        if (debugEnabled) {
-            debugW("WEAPON READY: Already equipped " + weapon + " (no switch needed)");
-        }
-    }
-    
-    // Check range manually first
-    var distance = getCellDistance(myCell, enemyCell);
-    var minRange = getWeaponMinRange(weapon);
-    var maxRange = getWeaponMaxRange(weapon);
-    
-    if (distance < minRange || distance > maxRange) {
-        if (debugEnabled) {
-            debugW("WEAPON FAIL: Out of range - distance=" + distance + ", range=" + minRange + "-" + maxRange + 
-                   ". Trying fallback weapons...");
-        }
-        // Try other weapons that might be in range
-        return tryFallbackWeapons(tpRemaining, distance);
-    }
-    
-    // Now check if we can use the equipped weapon on the enemy
-    if (!canUseWeapon(enemy)) {
-        if (debugEnabled) {
-            debugW("WEAPON FAIL: Cannot use weapon " + weapon + " on enemy " + enemy + 
-                   " (distance=" + distance + ", range=" + minRange + "-" + maxRange + 
-                   ", LOS=" + lineOfSight(myCell, enemyCell) + "). Trying fallback weapons...");
-        }
-        // Try other weapons that might work at this distance
-        return tryFallbackWeapons(tpRemaining, distance);
-    }
-    
-    // Calculate number of uses
-    var maxUses = getWeaponMaxUses(weapon);
-    var tpUses = floor(tpRemaining / weaponCost);
-    var actualUses = (maxUses > 0) ? min(tpUses, maxUses) : tpUses;
-    
-    // Execute weapon attacks
-    for (var use = 0; use < actualUses; use++) {
-        if (tpRemaining < weaponCost) break;
-        
-        var target = selectBestTarget(weapon);
-        if (target != null) {
-            if (debugEnabled) {
-                debugW("WEAPON ATTACK: Using " + weapon + " on target " + target);
-            }
-            var result = useWeapon(target);
-            tpRemaining -= weaponCost;
-            
-            if (debugEnabled) {
-                debugW("WEAPON SUCCESS: Used " + weapon + " on " + target + " (TP left: " + tpRemaining + ")");
-            }
-            
-            
-            // Special handling for area weapons
-            if (isAreaWeapon(weapon)) {
-                var splashTarget = findBestAreaTarget(weapon);
-                if (splashTarget != null) {
-                    useWeapon(splashTarget);
-                }
-            }
-        } else {
-            break;
-        }
-    }
-    
-    return tpRemaining;
+    return executeUnifiedWeaponAction(weapon, null, tpRemaining, "legacy");
+}
+
+function tryFallbackWeaponsOnTarget(target, tpRemaining, distance) {
+    return tryUnifiedFallbackWeapons(target, tpRemaining, distance, true);
+}
+
+function tryFallbackWeapons(tpRemaining, distance) {
+    return tryUnifiedFallbackWeapons(null, tpRemaining, distance, false);
 }
 
 // === CHIP EXECUTION ===
@@ -1004,20 +1258,7 @@ function calculateAreaEffectScore(targetCell, weapon) {
 }
 
 // === UTILITY FUNCTIONS ===
-function isWeapon(action) {
-    // Check against known weapon IDs used in V7
-    return action == WEAPON_ENHANCED_LIGHTNINGER || action == WEAPON_RIFLE || 
-           action == WEAPON_M_LASER || action == WEAPON_KATANA ||
-           action == WEAPON_SWORD ||
-           action == WEAPON_FLAME_THROWER || action == WEAPON_GRENADE_LAUNCHER || 
-           action == WEAPON_B_LASER || action == WEAPON_LASER ||
-           action == WEAPON_RHINO || action == WEAPON_NEUTRINO || 
-           action == WEAPON_DESTROYER;
-}
-
-function isChip(action) {
-    return action >= 400; // Chip constants are 400+
-}
+// Note: isWeapon() and isChip() are LeekScript built-in functions
 
 // === CHIP FALLBACK SYSTEM ===
 function tryChipFallback(target, tpRemaining) {
@@ -1027,7 +1268,7 @@ function tryChipFallback(target, tpRemaining) {
     
     // NO CHIP FALLBACK: AI should move to weapon range instead of using weak chips
     if (debugEnabled) {
-        debugW("NO CHIP FALLBACK: Combat ending - AI should move to weapon range next turn");
+        // No chip fallback - should move to weapon range
     }
     
     return false; // No combat action taken - let movement system handle positioning
@@ -1075,90 +1316,7 @@ function optimizeWeaponSwitching(scenario, currentTP) {
     return optimizedSequence;
 }
 
-// === FALLBACK WEAPON SYSTEM ===
-function tryFallbackWeapons(tpRemaining, currentDistance) {
-    var weapons = getWeapons();
-    
-    if (debugEnabled) {
-        debugW("FALLBACK: Checking " + count(weapons) + " weapons for distance " + currentDistance);
-    }
-    
-    // Try each weapon to see if any are in range
-    for (var i = 0; i < count(weapons); i++) {
-        var weapon = weapons[i];
-        var minRange = getWeaponMinRange(weapon);
-        var maxRange = getWeaponMaxRange(weapon);
-        var weaponCost = getWeaponCost(weapon);
-        
-        if (currentDistance >= minRange && currentDistance <= maxRange && 
-            tpRemaining >= weaponCost) {
-            
-            if (debugEnabled) {
-                debugW("FALLBACK: Trying weapon " + weapon + " (range " + minRange + "-" + maxRange + ")");
-            }
-            
-            // Switch to this weapon and try using it directly
-            if (getWeapon() != weapon) {
-                if (tpRemaining < weaponCost + 1) {
-                    continue; // Not enough TP to switch, try next weapon
-                }
-                setWeapon(weapon);
-                tpRemaining--;
-                if (debugEnabled) {
-                    debugW("FALLBACK: Switched to weapon " + weapon);
-                }
-            }
-            
-            // Check if we can use this weapon
-            if (canUseWeapon(enemy)) {
-                if (debugEnabled) {
-                    debugW("FALLBACK SUCCESS: Can use weapon " + weapon + " at distance " + currentDistance);
-                }
-                
-                // Execute attacks with this weapon
-                var maxUses = getWeaponMaxUses(weapon);
-                var tpUses = floor(tpRemaining / weaponCost);
-                var actualUses = (maxUses > 0) ? min(tpUses, maxUses) : tpUses;
-                
-                for (var use = 0; use < actualUses; use++) {
-                    if (tpRemaining < weaponCost) break;
-                    
-                    var target = selectBestTarget(weapon);
-                    if (target != null) {
-                        if (debugEnabled) {
-                            debugW("FALLBACK ATTACK: Using " + weapon + " on target " + target);
-                        }
-                        useWeapon(target);
-                        tpRemaining -= weaponCost;
-                    } else {
-                        break;
-                    }
-                }
-                
-                return tpRemaining;
-            } else {
-                if (debugEnabled) {
-                    debugW("FALLBACK FAIL: Cannot use weapon " + weapon + " at distance " + currentDistance);
-                }
-            }
-        }
-    }
-    
-    if (debugEnabled) {
-        debugW("FALLBACK: No weapons in range, trying chips");
-    }
-    
-    // If no weapons work, try chips
-    var chips = getChips();
-    for (var j = 0; j < count(chips); j++) {
-        var chip = chips[j];
-        if (canUseChip(chip, enemy)) {
-            return executeChipAction(chip, tpRemaining);
-        }
-    }
-    
-    return tpRemaining;
-}
+// This duplicate function has been removed - now uses tryUnifiedFallbackWeapons
 
 // === CLOSEST ENEMY FALLBACK FUNCTIONS ===
 function canReachEnemyWithWeapons(enemyEntity) {
@@ -1178,7 +1336,7 @@ function canReachEnemyWithWeapons(enemyEntity) {
         
         if (distance >= minRange && distance <= maxRange && myTP >= weaponCost + 1) {
             // Check if we have line of sight
-            if (hasLOS(myCell, getCell(enemyEntity))) {
+            if (checkLineOfSight(myCell, getCell(enemyEntity))) {
                 return true;
             }
         }

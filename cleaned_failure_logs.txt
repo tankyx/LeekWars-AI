@@ -1,0 +1,29 @@
+CLEANED FAILURE LOGS - LeekWars V7 AI (Script 446029)
+=======================================================
+
+COMPILATION FAILURES (RESOLVED):
+--------------------------------
+
+Fight 49392377 (2025-09-23 10:39:20):
+❌ FAILURE: "weapons:671 : 25 : UNKNOWN_VARIABLE_OR_FUNCTION"
+❌ RESULT: "Invalid AI" 
+🔧 CAUSE: Used undefined variable "recommendedWeapon"
+✅ FIXED: Replaced with distance-based weapon selection
+
+COMBAT FAILURES (ONGOING INVESTIGATION):
+----------------------------------------
+
+Recent Test Results:
+- Fight 49392389: LOSS (no compilation errors)
+- Fight 49392390: LOSS (no compilation errors) 
+- Fight 49392391: LOSS (no compilation errors)
+
+✅ PROGRESS:
+- Compilation errors eliminated
+- AI now executes without crashes
+- Need to investigate why strength builds still don't attack
+
+🔍 NEXT STEPS:
+- Analyze combat logs to see if AI is reaching attack phase
+- Check if weapon scenarios are being built correctly
+- Verify strength build weapon prioritization logic

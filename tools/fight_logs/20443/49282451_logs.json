@@ -1,0 +1,7812 @@
+{
+  "18035": {
+    "11": [
+      [
+        0,
+        2,
+        "[DEBUG] V7 AI initialized - Path cache: 0, LOS cache: 0",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] First turn initialization",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "111": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1356, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=160, Weapon=190, Total=840",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=90, Weapon=0, Total=90",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=190, Weapon=0, Total=190",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=840, Priority=-1940, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=190, Priority=-770, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=90, Priority=131930, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 815/2824, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1356/1747, Distance: 4, TTK: 2",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=0, Best=622 vs Enemy HP=1356",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY THREAT: Combined enemy damage 1271 >= our HP 815",
+        0,
+        446032,
+        57
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] EMERGENCY MODE ACTIVATED",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        3,
+        "EMERGENCY MODE ACTIVATED! HP: 815/2824",
+        0,
+        446032,
+        76
+      ],
+      [
+        0,
+        2,
+        "COMBAT HEAL CHECK: hasLightninger=true, distance=4, TP=22/18",
+        0,
+        446032,
+        209
+      ],
+      [
+        0,
+        2,
+        "COMBAT HEAL FAIL: Enhanced Lightninger out of range (4 not in 5-12)",
+        0,
+        446032,
+        332
+      ],
+      [
+        0,
+        2,
+        "TELEPORT CHECK: hasChip=true, cooldown=0, cost=9, TP=22, canUse=false",
+        0,
+        446032,
+        670
+      ],
+      [
+        0,
+        2,
+        "TELEPORT FAIL: Unknown reason",
+        0,
+        446032,
+        683
+      ],
+      [
+        0,
+        2,
+        "Emergency teleport FAILED - checking why",
+        0,
+        446032,
+        101
+      ],
+      [
+        0,
+        2,
+        "TACTICAL EMERGENCY MOVE: Finding weapon-ready position from distance 4",
+        0,
+        446032,
+        352
+      ],
+      [
+        0,
+        2,
+        "TACTICAL: Finding Enhanced Lightninger position (range 5-12)",
+        0,
+        446032,
+        495
+      ],
+      [
+        0,
+        2,
+        "TACTICAL: Found Enhanced Lightninger position 178 at distance 10",
+        0,
+        446032,
+        533
+      ]
+    ],
+    "112": [
+      [
+        0,
+        2,
+        "TACTICAL MOVE: From 111 to 178 (MP used: 6)",
+        0,
+        446032,
+        365
+      ],
+      [
+        0,
+        2,
+        "Moved to safety, using defensive healing",
+        0,
+        446032,
+        108
+      ]
+    ],
+    "13": [
+      [
+        0,
+        2,
+        "[DEBUG] Applied CHIP_KNOWLEDGE",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "137": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1706, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=110, Weapon=195, Total=795",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=140, Weapon=0, Total=140",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=795, Priority=-1300, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=140, Priority=-620, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=132050, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 2390/2802, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1706/1865, Distance: 9, TTK: 2",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=2070, Best=2120 vs Enemy HP=1706",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY OVERRIDE: Can kill primary target, staying aggressive",
+        0,
+        446032,
+        35
+      ],
+      [
+        0,
+        2,
+        "=== BUFF APPLICATION START ===",
+        0,
+        446048,
+        7
+      ],
+      [
+        0,
+        2,
+        "Turn: 6, TP: 22",
+        0,
+        446048,
+        8
+      ],
+      [
+        0,
+        2,
+        "BUFF APPLICATION COMPLETE: Used 0 TP, Remaining: 22",
+        0,
+        446048,
+        71
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: Processing 3 alive enemies",
+        0,
+        446033,
+        30
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 146 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 146 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 146 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 146 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 146 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: 0 cells, max: 0",
+        0,
+        446033,
+        163
+      ],
+      [
+        0,
+        9,
+        [
+          178
+        ],
+        "ME",
+        "00ff00",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          200
+        ],
+        "PRIMARY",
+        "ff00ff",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          203
+        ],
+        "E1",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          146
+        ],
+        "E2",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: 0 entries",
+        0,
+        446035,
+        7
+      ],
+      [
+        0,
+        2,
+        "SORT ARRAY: 0 entries",
+        0,
+        446035,
+        152
+      ],
+      [
+        0,
+        2,
+        "SORT COMPLETE: 0 sorted entries",
+        0,
+        446035,
+        183
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: maxDamage = 0, sorted cells count = 0",
+        0,
+        446035,
+        61
+      ],
+      [
+        0,
+        2,
+        "=== M-LASER ALIGNMENT SEARCH ===",
+        0,
+        446035,
+        438
+      ],
+      [
+        0,
+        2,
+        "Enemy at (-4,-2), seeking X/Y axis alignment",
+        0,
+        446035,
+        439
+      ],
+      [
+        0,
+        2,
+        "M-Laser horizontal: Cell 308 (2,-2) score: 20",
+        0,
+        446035,
+        466
+      ],
+      [
+        0,
+        2,
+        "M-Laser horizontal: Cell 326 (3,-2) score: 52",
+        0,
+        446035,
+        466
+      ],
+      [
+        0,
+        2,
+        "BEST M-LASER POSITION: Cell 326 (score: 52)",
+        0,
+        446035,
+        473
+      ],
+      [
+        0,
+        9,
+        [
+          326
+        ],
+        "M-LASER",
+        "ffff00",
+        8
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: Seeking M-Laser alignment position 326",
+        0,
+        446035,
+        71
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: No damage zones, moving toward enemy from 178 to 200",
+        0,
+        446035,
+        92
+      ],
+      [
+        0,
+        2,
+        "PATHFIND FALLBACK: No paths found, trying teleport + movement",
+        0,
+        446035,
+        136
+      ],
+      [
+        0,
+        2,
+        "TELEPORT FALLBACK: Teleportation not available",
+        0,
+        446035,
+        937
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY COMBAT START ===",
+        0,
+        446034,
+        14
+      ],
+      [
+        0,
+        2,
+        "TP Available: 22, Enemies: 3",
+        0,
+        446034,
+        15
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1706, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=110, Weapon=195, Total=795",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=140, Weapon=0, Total=140",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=795, Priority=-1300, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=140, Priority=-620, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=132050, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ]
+    ],
+    "139": [
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 34 on 3",
+        0,
+        446034,
+        1103
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1706, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=110, Weapon=195, Total=795",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=140, Weapon=0, Total=140",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=795, Priority=-1300, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=140, Priority=-620, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=132050, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 34 on 3",
+        0,
+        446034,
+        1103
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1706, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=110, Weapon=195, Total=795",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=140, Weapon=0, Total=140",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=795, Priority=-1300, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=140, Priority=-620, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=132050, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 34 on 3",
+        0,
+        446034,
+        1103
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1706, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=110, Weapon=195, Total=795",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=140, Weapon=0, Total=140",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=795, Priority=-1300, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=140, Priority=-620, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=132050, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 34 on 3",
+        0,
+        446034,
+        1103
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1706, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=110, Weapon=195, Total=795",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=140, Weapon=0, Total=140",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=795, Priority=-1300, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=140, Priority=-620, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=132050, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 34 on 3",
+        0,
+        446034,
+        1103
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "=== COMBAT COMPLETE ===",
+        0,
+        446034,
+        140
+      ],
+      [
+        0,
+        2,
+        "TP Used: 20, Enemies Remaining: 3",
+        0,
+        446034,
+        141
+      ],
+      [
+        0,
+        2,
+        "=== SEEKING COVER POSITION ===",
+        0,
+        446033,
+        678
+      ],
+      [
+        0,
+        2,
+        "Current position: 178, MP: 7",
+        0,
+        446033,
+        679
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 55 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 56 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 73 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 158 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 175 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 57 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 74 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 91 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 159 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 176 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 210 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 58 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 75 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 92 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 109 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 177 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 211 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 228 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 245 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 59 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 76 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 110 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 212 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 229 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 246 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 263 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 280 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 94 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 111 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 128 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 213 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 230 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 247 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 264 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 281 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 298 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 129 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 214 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 231 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 248 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 265 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 282 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 299 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 215 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 232 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 249 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 266 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 283 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 300 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 216 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 233 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 250 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 267 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 284 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 301 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 234 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 251 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 268 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 285 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 302 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 286 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 303 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER: Found position 175 with score 128",
+        0,
+        446033,
+        704
+      ]
+    ],
+    "140": [
+      [
+        0,
+        2,
+        "COVER: Moved from 178 to 175 (MP used: 6)",
+        0,
+        446033,
+        792
+      ],
+      [
+        0,
+        9,
+        [
+          175
+        ],
+        "COVER",
+        "80ff80",
+        8
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Moved to cover after combat",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN END ===",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "15": [
+      [
+        0,
+        2,
+        "[DEBUG] Applied CHIP_ARMORING",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "160": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1865, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=110, Weapon=195, Total=795",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=10, Weapon=0, Total=10",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=120, Weapon=0, Total=120",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=795, Priority=-1800, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=120, Priority=-560, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=10, Priority=132170, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 1327/2749, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1865/1865, Distance: 9, TTK: 2",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=2070, Best=2120 vs Enemy HP=1865",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY OVERRIDE: Can kill primary target, staying aggressive",
+        0,
+        446032,
+        35
+      ],
+      [
+        0,
+        2,
+        "=== BUFF APPLICATION START ===",
+        0,
+        446048,
+        7
+      ],
+      [
+        0,
+        2,
+        "Turn: 7, TP: 22",
+        0,
+        446048,
+        8
+      ],
+      [
+        0,
+        2,
+        "BUFF APPLICATION COMPLETE: Used 0 TP, Remaining: 22",
+        0,
+        446048,
+        71
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: Processing 3 alive enemies",
+        0,
+        446033,
+        30
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 38 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: 0 cells, max: 0",
+        0,
+        446033,
+        163
+      ],
+      [
+        0,
+        9,
+        [
+          175
+        ],
+        "ME",
+        "00ff00",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          127
+        ],
+        "PRIMARY",
+        "ff00ff",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          167
+        ],
+        "E1",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          38
+        ],
+        "E2",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: 0 entries",
+        0,
+        446035,
+        7
+      ],
+      [
+        0,
+        2,
+        "SORT ARRAY: 0 entries",
+        0,
+        446035,
+        152
+      ],
+      [
+        0,
+        2,
+        "SORT COMPLETE: 0 sorted entries",
+        0,
+        446035,
+        183
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: maxDamage = 0, sorted cells count = 0",
+        0,
+        446035,
+        61
+      ],
+      [
+        0,
+        2,
+        "=== M-LASER ALIGNMENT SEARCH ===",
+        0,
+        446035,
+        438
+      ],
+      [
+        0,
+        2,
+        "Enemy at (-9,-1), seeking X/Y axis alignment",
+        0,
+        446035,
+        439
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 229 (-9,5) score: 29",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 246 (-9,6) score: 63",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "BEST M-LASER POSITION: Cell 246 (score: 63)",
+        0,
+        446035,
+        473
+      ],
+      [
+        0,
+        9,
+        [
+          246
+        ],
+        "M-LASER",
+        "ffff00",
+        8
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: Seeking M-Laser alignment position 246",
+        0,
+        446035,
+        71
+      ],
+      [
+        0,
+        2,
+        "[PATH] Target: 246, Damage: 0, Distance: 4, Reachable: true",
+        0,
+        446037,
+        30
+      ]
+    ],
+    "161": [
+      [
+        0,
+        2,
+        "Moved to 193 (MP used: 1, remaining: 6)",
+        0,
+        446035,
+        732
+      ]
+    ],
+    "162": [
+      [
+        0,
+        2,
+        "Moved to 211 (MP used: 1, remaining: 5)",
+        0,
+        446035,
+        732
+      ]
+    ],
+    "163": [
+      [
+        0,
+        2,
+        "Moved to 228 (MP used: 1, remaining: 4)",
+        0,
+        446035,
+        732
+      ]
+    ],
+    "164": [
+      [
+        0,
+        2,
+        "Moved to 246 (MP used: 1, remaining: 3)",
+        0,
+        446035,
+        732
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY COMBAT START ===",
+        0,
+        446034,
+        14
+      ],
+      [
+        0,
+        2,
+        "TP Available: 22, Enemies: 3",
+        0,
+        446034,
+        15
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1865, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=30, Weapon=0, Total=30",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=80, Weapon=0, Total=80",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=815, Priority=-1860, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=80, Priority=60, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=30, Priority=132110, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC ATTACK: Using 47 on 1",
+        0,
+        446034,
+        229
+      ]
+    ],
+    "167": [
+      [
+        0,
+        2,
+        "PRE-CALC SUCCESS: Used 47 on 1 (TP left: 13)",
+        0,
+        446034,
+        236
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 9, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1330, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=30, Weapon=0, Total=30",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=80, Weapon=0, Total=80",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=815, Priority=-1860, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=80, Priority=60, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=30, Priority=132110, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC ATTACK: Using 47 on 1",
+        0,
+        446034,
+        229
+      ]
+    ],
+    "17": [
+      [
+        0,
+        2,
+        "[DEBUG] Applied CHIP_ELEVATION",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=50, EffDmg=50.0, TTK=37",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=20, Weapon=0, Total=510",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=50, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=0, Weapon=0, Total=0",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=37, Threat=510, Priority=2860, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 2: TTK=1320, Threat=0, Priority=132230, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 3039/3039, TP: 6, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 2, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1802/1802, Distance: 18, TTK: 37",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=0, Best=50 vs Enemy HP=1802",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "=== BUFF APPLICATION START ===",
+        0,
+        446048,
+        7
+      ],
+      [
+        0,
+        2,
+        "Turn: 1, TP: 6",
+        0,
+        446048,
+        8
+      ],
+      [
+        0,
+        2,
+        "BUFF APPLICATION COMPLETE: Used 0 TP, Remaining: 6",
+        0,
+        446048,
+        71
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: Processing 2 alive enemies",
+        0,
+        446033,
+        30
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: 0 cells, max: 0",
+        0,
+        446033,
+        163
+      ],
+      [
+        0,
+        9,
+        [
+          109
+        ],
+        "ME",
+        "00ff00",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          328
+        ],
+        "PRIMARY",
+        "ff00ff",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          313
+        ],
+        "E1",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: 0 entries",
+        0,
+        446035,
+        7
+      ],
+      [
+        0,
+        2,
+        "SORT ARRAY: 0 entries",
+        0,
+        446035,
+        152
+      ],
+      [
+        0,
+        2,
+        "SORT COMPLETE: 0 sorted entries",
+        0,
+        446035,
+        183
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: maxDamage = 0, sorted cells count = 0",
+        0,
+        446035,
+        61
+      ],
+      [
+        0,
+        2,
+        "=== M-LASER ALIGNMENT SEARCH ===",
+        0,
+        446035,
+        438
+      ],
+      [
+        0,
+        2,
+        "Enemy at (5,-4), seeking X/Y axis alignment",
+        0,
+        446035,
+        439
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 430 (5,2) score: 20",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 447 (5,3) score: 50",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 481 (5,5) score: 52",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "BEST M-LASER POSITION: Cell 481 (score: 52)",
+        0,
+        446035,
+        473
+      ],
+      [
+        0,
+        9,
+        [
+          481
+        ],
+        "M-LASER",
+        "ffff00",
+        8
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: Seeking M-Laser alignment position 481",
+        0,
+        446035,
+        71
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: No damage zones, moving toward enemy from 109 to 328",
+        0,
+        446035,
+        92
+      ],
+      [
+        0,
+        2,
+        "PATHFIND FALLBACK: No paths found, trying teleport + movement",
+        0,
+        446035,
+        136
+      ],
+      [
+        0,
+        2,
+        "TELEPORT FALLBACK: Teleportation not available",
+        0,
+        446035,
+        937
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY COMBAT START ===",
+        0,
+        446034,
+        14
+      ],
+      [
+        0,
+        2,
+        "TP Available: 6, Enemies: 2",
+        0,
+        446034,
+        15
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=50, EffDmg=50.0, TTK=37",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=20, Weapon=0, Total=510",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=50, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=0, Weapon=0, Total=0",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=37, Threat=510, Priority=2860, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 2: TTK=1320, Threat=0, Priority=132230, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ]
+    ],
+    "170": [
+      [
+        0,
+        2,
+        "PRE-CALC SUCCESS: Used 47 on 1 (TP left: 4)",
+        0,
+        446034,
+        236
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 9, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=800, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=30, Weapon=0, Total=30",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=80, Weapon=0, Total=80",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=815, Priority=-1960, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=80, Priority=60, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=30, Priority=132110, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC FAIL: Not enough TP for weapon 47 (need 9, have 4)",
+        0,
+        446034,
+        206
+      ],
+      [
+        0,
+        2,
+        "CONSECUTIVE FAILURE: 1 (used 0 TP)",
+        0,
+        446034,
+        90
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 0, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Minimal TP progress (used: 0), attempt 1/3",
+        0,
+        446034,
+        120
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=800, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=30, Weapon=0, Total=30",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=80, Weapon=0, Total=80",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=815, Priority=-1960, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=80, Priority=60, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=30, Priority=132110, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC FAIL: Not enough TP for weapon 47 (need 9, have 4)",
+        0,
+        446034,
+        206
+      ],
+      [
+        0,
+        2,
+        "CONSECUTIVE FAILURE: 2 (used 0 TP)",
+        0,
+        446034,
+        90
+      ],
+      [
+        0,
+        2,
+        "BREAKING: 2 consecutive combat failures, ending combat",
+        0,
+        446034,
+        94
+      ],
+      [
+        0,
+        2,
+        "=== COMBAT COMPLETE ===",
+        0,
+        446034,
+        140
+      ],
+      [
+        0,
+        2,
+        "TP Used: 18, Enemies Remaining: 3",
+        0,
+        446034,
+        141
+      ],
+      [
+        0,
+        2,
+        "=== SEEKING COVER POSITION ===",
+        0,
+        446033,
+        678
+      ],
+      [
+        0,
+        2,
+        "Current position: 246, MP: 3",
+        0,
+        446033,
+        679
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 193 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 210 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 194 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 211 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 228 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 245 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 247 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 264 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 281 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 298 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 299 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER: Found position 210 with score 166",
+        0,
+        446033,
+        704
+      ],
+      [
+        0,
+        2,
+        "COVER: Moved from 246 to 246 (MP used: 0)",
+        0,
+        446033,
+        792
+      ],
+      [
+        0,
+        9,
+        [
+          246
+        ],
+        "COVER",
+        "80ff80",
+        8
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN END ===",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "18": [
+      [
+        0,
+        2,
+        "EMERGENCY MOVE: Moved 3 MP toward 1",
+        0,
+        446034,
+        1167
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS: All emergency options exhausted",
+        0,
+        446034,
+        1174
+      ],
+      [
+        0,
+        2,
+        "CONSECUTIVE FAILURE: 1 (used 0 TP)",
+        0,
+        446034,
+        90
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 0, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Minimal TP progress (used: 0), attempt 1/3",
+        0,
+        446034,
+        120
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=50, EffDmg=50.0, TTK=37",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=50, Weapon=0, Total=540",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=50, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=0, Weapon=0, Total=0",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=37, Threat=540, Priority=2770, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 2: TTK=1320, Threat=0, Priority=132200, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ]
+    ],
+    "19": [
+      [
+        0,
+        2,
+        "EMERGENCY MOVE: Moved 3 MP toward 1",
+        0,
+        446034,
+        1167
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS: All emergency options exhausted",
+        0,
+        446034,
+        1174
+      ],
+      [
+        0,
+        2,
+        "CONSECUTIVE FAILURE: 2 (used 0 TP)",
+        0,
+        446034,
+        90
+      ],
+      [
+        0,
+        2,
+        "BREAKING: 2 consecutive combat failures, ending combat",
+        0,
+        446034,
+        94
+      ],
+      [
+        0,
+        2,
+        "=== COMBAT COMPLETE ===",
+        0,
+        446034,
+        140
+      ],
+      [
+        0,
+        2,
+        "TP Used: 0, Enemies Remaining: 2",
+        0,
+        446034,
+        141
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN END ===",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "191": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1445, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=140, Weapon=195, Total=825",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=130, Weapon=0, Total=130",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=825, Priority=-1890, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=130, Priority=-590, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=132050, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 1240/2723, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1445/1811, Distance: 6, TTK: 2",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=1128, Best=1178 vs Enemy HP=1445",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY THREAT: Combined enemy damage 1300 >= our HP 1240",
+        0,
+        446032,
+        57
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] EMERGENCY MODE ACTIVATED",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        3,
+        "EMERGENCY MODE ACTIVATED! HP: 1240/2723",
+        0,
+        446032,
+        76
+      ],
+      [
+        0,
+        2,
+        "COMBAT HEAL CHECK: hasLightninger=true, distance=6, TP=22/18",
+        0,
+        446032,
+        209
+      ],
+      [
+        0,
+        2,
+        "COMBAT HEAL: In range at distance 6, checking LOS",
+        0,
+        446032,
+        216
+      ]
+    ],
+    "192": [
+      [
+        0,
+        2,
+        "COMBAT HEAL: Switched to Enhanced Lightninger",
+        0,
+        446032,
+        225
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY: Using Enhanced Lightninger for bonus healing at distance 6",
+        0,
+        446032,
+        232
+      ],
+      [
+        0,
+        2,
+        "MULTI-SHOT CALCULATION: Starting Enhanced Lightninger multi-shot logic",
+        0,
+        446032,
+        236
+      ],
+      [
+        0,
+        2,
+        "MULTI-SHOT CALCULATION: weaponCost=9, maxUses=2",
+        0,
+        446032,
+        244
+      ],
+      [
+        0,
+        2,
+        "SMART HEALING: Step 1 - Firing first Enhanced Lightninger shot",
+        0,
+        446032,
+        249
+      ]
+    ],
+    "196": [
+      [
+        0,
+        2,
+        "ENHANCED LIGHTNINGER: First shot - HP: 1240 \u2192 1540, TP after: 12",
+        0,
+        446032,
+        257
+      ],
+      [
+        0,
+        2,
+        "SMART HEALING: HP > 50% (56%), firing second Enhanced Lightninger",
+        0,
+        446032,
+        268
+      ]
+    ],
+    "200": [
+      [
+        0,
+        2,
+        "ENHANCED LIGHTNINGER: Second shot - HP: 1540 \u2192 1846, TP after: 3",
+        0,
+        446032,
+        276
+      ],
+      [
+        0,
+        2,
+        "Emergency combat healing successful - Enhanced Lightninger lifesteal",
+        0,
+        446032,
+        82
+      ]
+    ],
+    "227": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1390, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=180, Weapon=190, Total=860",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=150, Weapon=0, Total=150",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=860, Priority=-2000, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=150, Priority=-650, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=70, Priority=131990, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 834/2596, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1390/1760, Distance: 2, TTK: 2",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=0, Best=1178 vs Enemy HP=1390",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY THREAT: Combined enemy damage 1271 >= our HP 834",
+        0,
+        446032,
+        57
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] EMERGENCY MODE ACTIVATED",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        3,
+        "EMERGENCY MODE ACTIVATED! HP: 834/2596",
+        0,
+        446032,
+        76
+      ],
+      [
+        0,
+        2,
+        "COMBAT HEAL CHECK: hasLightninger=true, distance=2, TP=22/17",
+        0,
+        446032,
+        209
+      ],
+      [
+        0,
+        2,
+        "COMBAT HEAL FAIL: Enhanced Lightninger out of range (2 not in 5-12)",
+        0,
+        446032,
+        332
+      ],
+      [
+        0,
+        2,
+        "TELEPORT CHECK: hasChip=true, cooldown=0, cost=9, TP=22, canUse=false",
+        0,
+        446032,
+        670
+      ],
+      [
+        0,
+        2,
+        "TELEPORT FAIL: Unknown reason",
+        0,
+        446032,
+        683
+      ],
+      [
+        0,
+        2,
+        "Emergency teleport FAILED - checking why",
+        0,
+        446032,
+        101
+      ],
+      [
+        0,
+        2,
+        "TACTICAL EMERGENCY MOVE: Finding weapon-ready position from distance 2",
+        0,
+        446032,
+        352
+      ],
+      [
+        0,
+        2,
+        "TACTICAL: Finding Enhanced Lightninger position (range 5-12)",
+        0,
+        446032,
+        495
+      ],
+      [
+        0,
+        2,
+        "TACTICAL: Found Enhanced Lightninger position 372 at distance 9",
+        0,
+        446032,
+        533
+      ]
+    ],
+    "228": [
+      [
+        0,
+        2,
+        "TACTICAL MOVE: From 246 to 371 (MP used: 7)",
+        0,
+        446032,
+        365
+      ],
+      [
+        0,
+        2,
+        "Moved to safety, using defensive healing",
+        0,
+        446032,
+        108
+      ]
+    ],
+    "36": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=100, Weapon=195, Total=785",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=785, Priority=-1270, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=70, Priority=90, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=131550, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 3039/3039, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1802/1802, Distance: 10, TTK: 2",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=1128, Best=2120 vs Enemy HP=1802",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY OVERRIDE: Can kill primary target, staying aggressive",
+        0,
+        446032,
+        35
+      ],
+      [
+        0,
+        2,
+        "=== BUFF APPLICATION START ===",
+        0,
+        446048,
+        7
+      ],
+      [
+        0,
+        2,
+        "Turn: 2, TP: 22",
+        0,
+        446048,
+        8
+      ],
+      [
+        0,
+        2,
+        "BUFF APPLICATION COMPLETE: Used 0 TP, Remaining: 22",
+        0,
+        446048,
+        71
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: Processing 3 alive enemies",
+        0,
+        446033,
+        30
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 292 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: 0 cells, max: 0",
+        0,
+        446033,
+        163
+      ],
+      [
+        0,
+        9,
+        [
+          217
+        ],
+        "ME",
+        "00ff00",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          292
+        ],
+        "PRIMARY",
+        "ff00ff",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          277
+        ],
+        "E1",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          346
+        ],
+        "E2",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: 0 entries",
+        0,
+        446035,
+        7
+      ],
+      [
+        0,
+        2,
+        "SORT ARRAY: 0 entries",
+        0,
+        446035,
+        152
+      ],
+      [
+        0,
+        2,
+        "SORT COMPLETE: 0 sorted entries",
+        0,
+        446035,
+        183
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: maxDamage = 0, sorted cells count = 0",
+        0,
+        446035,
+        61
+      ],
+      [
+        0,
+        2,
+        "=== M-LASER ALIGNMENT SEARCH ===",
+        0,
+        446035,
+        438
+      ],
+      [
+        0,
+        2,
+        "Enemy at (3,-4), seeking X/Y axis alignment",
+        0,
+        446035,
+        439
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 122 (3,-14) score: 22",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 139 (3,-13) score: 50",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "BEST M-LASER POSITION: Cell 139 (score: 50)",
+        0,
+        446035,
+        473
+      ],
+      [
+        0,
+        9,
+        [
+          139
+        ],
+        "M-LASER",
+        "ffff00",
+        8
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: Seeking M-Laser alignment position 139",
+        0,
+        446035,
+        71
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: No damage zones, moving toward enemy from 217 to 292",
+        0,
+        446035,
+        92
+      ],
+      [
+        0,
+        2,
+        "PATHFIND FALLBACK: No paths found, trying teleport + movement",
+        0,
+        446035,
+        136
+      ],
+      [
+        0,
+        2,
+        "TELEPORT FALLBACK: Teleportation not available",
+        0,
+        446035,
+        937
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY COMBAT START ===",
+        0,
+        446034,
+        14
+      ],
+      [
+        0,
+        2,
+        "TP Available: 22, Enemies: 3",
+        0,
+        446034,
+        15
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=100, Weapon=195, Total=785",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=785, Priority=-1270, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=70, Priority=90, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=131550, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=100, Weapon=195, Total=785",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=785, Priority=-1270, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=70, Priority=90, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=131550, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=100, Weapon=195, Total=785",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=785, Priority=-1270, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=70, Priority=90, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=131550, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=100, Weapon=195, Total=785",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=785, Priority=-1270, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=70, Priority=90, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=131550, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=100, Weapon=195, Total=785",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=50, Weapon=0, Total=50",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=785, Priority=-1270, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=70, Priority=90, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=50, Priority=131550, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "=== COMBAT COMPLETE ===",
+        0,
+        446034,
+        140
+      ],
+      [
+        0,
+        2,
+        "TP Used: 20, Enemies Remaining: 3",
+        0,
+        446034,
+        141
+      ],
+      [
+        0,
+        2,
+        "=== SEEKING COVER POSITION ===",
+        0,
+        446033,
+        678
+      ],
+      [
+        0,
+        2,
+        "Current position: 217, MP: 7",
+        0,
+        446033,
+        679
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 91 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 92 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 109 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 126 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 93 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 110 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 127 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 161 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 94 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 111 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 128 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 145 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 179 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 196 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 95 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 112 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 129 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 146 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 163 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 197 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 214 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 231 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 96 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 113 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 130 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 147 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 164 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 198 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 215 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 232 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 249 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 266 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 97 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 114 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 131 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 148 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 165 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 182 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 216 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 233 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 250 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 267 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 284 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 301 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 132 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 166 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 183 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 200 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 234 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 251 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 268 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 285 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 302 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 319 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 336 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 184 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 201 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 269 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 286 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 303 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 320 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 337 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 202 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 219 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 270 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 287 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 304 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 321 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 338 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 271 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 288 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 305 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 322 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 339 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 289 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 306 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 340 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 341 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 342 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 343 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER: Found position 200 with score 128",
+        0,
+        446033,
+        704
+      ]
+    ],
+    "37": [
+      [
+        0,
+        2,
+        "COVER: Moved from 217 to 200 (MP used: 1)",
+        0,
+        446033,
+        792
+      ],
+      [
+        0,
+        9,
+        [
+          200
+        ],
+        "COVER",
+        "80ff80",
+        8
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Moved to cover after combat",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN END ===",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "52": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=170, Weapon=190, Total=850",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=80, Weapon=0, Total=80",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=140, Weapon=0, Total=140",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=850, Priority=-1970, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=140, Priority=-620, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=80, Priority=131460, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 2554/3015, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1802/1802, Distance: 3, TTK: 2",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=0, Best=2709 vs Enemy HP=1802",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY OVERRIDE: Can kill primary target, staying aggressive",
+        0,
+        446032,
+        35
+      ],
+      [
+        0,
+        2,
+        "=== BUFF APPLICATION START ===",
+        0,
+        446048,
+        7
+      ],
+      [
+        0,
+        2,
+        "Turn: 3, TP: 22",
+        0,
+        446048,
+        8
+      ],
+      [
+        0,
+        2,
+        "BUFF APPLICATION COMPLETE: Used 0 TP, Remaining: 22",
+        0,
+        446048,
+        71
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: Processing 3 alive enemies",
+        0,
+        446033,
+        30
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 2 at 241 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 3 at 238 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: 0 cells, max: 0",
+        0,
+        446033,
+        163
+      ],
+      [
+        0,
+        9,
+        [
+          200
+        ],
+        "ME",
+        "00ff00",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          254
+        ],
+        "PRIMARY",
+        "ff00ff",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          241
+        ],
+        "E1",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          238
+        ],
+        "E2",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: 0 entries",
+        0,
+        446035,
+        7
+      ],
+      [
+        0,
+        2,
+        "SORT ARRAY: 0 entries",
+        0,
+        446035,
+        152
+      ],
+      [
+        0,
+        2,
+        "SORT COMPLETE: 0 sorted entries",
+        0,
+        446035,
+        183
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: maxDamage = 0, sorted cells count = 0",
+        0,
+        446035,
+        61
+      ],
+      [
+        0,
+        2,
+        "=== M-LASER ALIGNMENT SEARCH ===",
+        0,
+        446035,
+        438
+      ],
+      [
+        0,
+        2,
+        "Enemy at (-1,-2), seeking X/Y axis alignment",
+        0,
+        446035,
+        439
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 84 (-1,-12) score: 22",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 101 (-1,-11) score: 53",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 118 (-1,-10) score: 54",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser vertical: Cell 135 (-1,-9) score: 55",
+        0,
+        446035,
+        451
+      ],
+      [
+        0,
+        2,
+        "M-Laser horizontal: Cell 128 (-8,-2) score: 56",
+        0,
+        446035,
+        466
+      ],
+      [
+        0,
+        2,
+        "BEST M-LASER POSITION: Cell 128 (score: 56)",
+        0,
+        446035,
+        473
+      ],
+      [
+        0,
+        9,
+        [
+          128
+        ],
+        "M-LASER",
+        "ffff00",
+        8
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: Seeking M-Laser alignment position 128",
+        0,
+        446035,
+        71
+      ],
+      [
+        0,
+        2,
+        "[PATH] Target: 128, Damage: 0, Distance: 4, Reachable: true",
+        0,
+        446037,
+        30
+      ]
+    ],
+    "53": [
+      [
+        0,
+        2,
+        "Moved to 182 (MP used: 1, remaining: 6)",
+        0,
+        446035,
+        732
+      ]
+    ],
+    "54": [
+      [
+        0,
+        2,
+        "Moved to 164 (MP used: 1, remaining: 5)",
+        0,
+        446035,
+        732
+      ]
+    ],
+    "55": [
+      [
+        0,
+        2,
+        "Moved to 146 (MP used: 1, remaining: 4)",
+        0,
+        446035,
+        732
+      ]
+    ],
+    "56": [
+      [
+        0,
+        2,
+        "Moved to 128 (MP used: 1, remaining: 3)",
+        0,
+        446035,
+        732
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY COMBAT START ===",
+        0,
+        446034,
+        14
+      ],
+      [
+        0,
+        2,
+        "TP Available: 22, Enemies: 3",
+        0,
+        446034,
+        15
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1802, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=40, Weapon=0, Total=40",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=100, Weapon=0, Total=100",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=815, Priority=-1860, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=100, Priority=0, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=40, Priority=132080, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ]
+    ],
+    "57": [
+      [
+        0,
+        2,
+        "PRE-CALC: Switched to weapon 47",
+        0,
+        446034,
+        222
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC ATTACK: Using 47 on 1",
+        0,
+        446034,
+        229
+      ]
+    ],
+    "60": [
+      [
+        0,
+        2,
+        "PRE-CALC SUCCESS: Used 47 on 1 (TP left: 12)",
+        0,
+        446034,
+        236
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 10, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1263, MyDmg=1085, EffDmg=1085.0, TTK=2",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=40, Weapon=0, Total=40",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=100, Weapon=0, Total=100",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=2, Threat=815, Priority=-1860, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=100, Priority=0, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=40, Priority=132080, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC ATTACK: Using 47 on 1",
+        0,
+        446034,
+        229
+      ]
+    ],
+    "63": [
+      [
+        0,
+        2,
+        "PRE-CALC SUCCESS: Used 47 on 1 (TP left: 3)",
+        0,
+        446034,
+        236
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 9, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=702, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=40, Weapon=0, Total=40",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=100, Weapon=0, Total=100",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=815, Priority=-1960, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=100, Priority=0, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=40, Priority=132080, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC FAIL: Not enough TP for weapon 47 (need 9, have 3)",
+        0,
+        446034,
+        206
+      ],
+      [
+        0,
+        2,
+        "CONSECUTIVE FAILURE: 1 (used 0 TP)",
+        0,
+        446034,
+        90
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 0, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Minimal TP progress (used: 0), attempt 1/3",
+        0,
+        446034,
+        120
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=702, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=130, Weapon=195, Total=815",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=40, Weapon=0, Total=40",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=100, Weapon=0, Total=100",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=815, Priority=-1960, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=100, Priority=0, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=40, Priority=132080, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC WEAPON: Using calculated weapon 47 on target 1",
+        0,
+        446034,
+        198
+      ],
+      [
+        0,
+        2,
+        "PRE-CALC FAIL: Not enough TP for weapon 47 (need 9, have 3)",
+        0,
+        446034,
+        206
+      ],
+      [
+        0,
+        2,
+        "CONSECUTIVE FAILURE: 2 (used 0 TP)",
+        0,
+        446034,
+        90
+      ],
+      [
+        0,
+        2,
+        "BREAKING: 2 consecutive combat failures, ending combat",
+        0,
+        446034,
+        94
+      ],
+      [
+        0,
+        2,
+        "=== COMBAT COMPLETE ===",
+        0,
+        446034,
+        140
+      ],
+      [
+        0,
+        2,
+        "TP Used: 19, Enemies Remaining: 3",
+        0,
+        446034,
+        141
+      ],
+      [
+        0,
+        2,
+        "=== SEEKING COVER POSITION ===",
+        0,
+        446033,
+        678
+      ],
+      [
+        0,
+        2,
+        "Current position: 128, MP: 3",
+        0,
+        446033,
+        679
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 75 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 76 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 93 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 77 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 94 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 111 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 179 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 112 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 129 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 147 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER: Found position 111 with score 128",
+        0,
+        446033,
+        704
+      ]
+    ],
+    "64": [
+      [
+        0,
+        2,
+        "COVER: Moved from 128 to 111 (MP used: 1)",
+        0,
+        446033,
+        792
+      ],
+      [
+        0,
+        9,
+        [
+          111
+        ],
+        "COVER",
+        "80ff80",
+        8
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Moved to cover after combat",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN END ===",
+        0,
+        446037,
+        6
+      ]
+    ],
+    "87": [
+      [
+        0,
+        2,
+        "TTK[1]: HP=1023, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=160, Weapon=190, Total=840",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=130, Weapon=0, Total=130",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=840, Priority=-2040, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=130, Priority=-590, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=70, Priority=131990, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN START ===",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] HP: 1924/2920, TP: 22, MP: 7",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Enemies: 3, Primary Target: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] Primary Enemy HP: 1023/1747, Distance: 4, TTK: 1",
+        0,
+        446037,
+        6
+      ],
+      [
+        0,
+        2,
+        "DAMAGE ESTIMATE: Current=0, Best=622 vs Enemy HP=1023",
+        0,
+        446032,
+        1238
+      ],
+      [
+        0,
+        2,
+        "=== BUFF APPLICATION START ===",
+        0,
+        446048,
+        7
+      ],
+      [
+        0,
+        2,
+        "Turn: 4, TP: 22",
+        0,
+        446048,
+        8
+      ],
+      [
+        0,
+        2,
+        "BUFF APPLICATION COMPLETE: Used 0 TP, Remaining: 22",
+        0,
+        446048,
+        71
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: Processing 3 alive enemies",
+        0,
+        446033,
+        30
+      ],
+      [
+        0,
+        2,
+        "AOE HIT: Enemy 1 at 183 takes 76.0 AoE damage (dist=0, mult=1.0)",
+        0,
+        446033,
+        866
+      ],
+      [
+        0,
+        2,
+        "MULTI-ENEMY: 0 cells, max: 0",
+        0,
+        446033,
+        163
+      ],
+      [
+        0,
+        9,
+        [
+          111
+        ],
+        "ME",
+        "00ff00",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          183
+        ],
+        "PRIMARY",
+        "ff00ff",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          205
+        ],
+        "E1",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        9,
+        [
+          236
+        ],
+        "E2",
+        "ff8000",
+        15
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: 0 entries",
+        0,
+        446035,
+        7
+      ],
+      [
+        0,
+        2,
+        "SORT ARRAY: 0 entries",
+        0,
+        446035,
+        152
+      ],
+      [
+        0,
+        2,
+        "SORT COMPLETE: 0 sorted entries",
+        0,
+        446035,
+        183
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: maxDamage = 0, sorted cells count = 0",
+        0,
+        446035,
+        61
+      ],
+      [
+        0,
+        2,
+        "=== M-LASER ALIGNMENT SEARCH ===",
+        0,
+        446035,
+        438
+      ],
+      [
+        0,
+        2,
+        "Enemy at (-4,-3), seeking X/Y axis alignment",
+        0,
+        446035,
+        439
+      ],
+      [
+        0,
+        2,
+        "PATHFIND ARRAY: No damage zones, moving toward enemy from 111 to 183",
+        0,
+        446035,
+        92
+      ],
+      [
+        0,
+        2,
+        "PATHFIND FALLBACK: No paths found, trying teleport + movement",
+        0,
+        446035,
+        136
+      ],
+      [
+        0,
+        2,
+        "TELEPORT FALLBACK: Teleportation not available",
+        0,
+        446035,
+        937
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY COMBAT START ===",
+        0,
+        446034,
+        14
+      ],
+      [
+        0,
+        2,
+        "TP Available: 22, Enemies: 3",
+        0,
+        446034,
+        15
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1023, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=160, Weapon=190, Total=840",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=130, Weapon=0, Total=130",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=840, Priority=-2040, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=130, Priority=-590, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=70, Priority=131990, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1023, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=160, Weapon=190, Total=840",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=130, Weapon=0, Total=130",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=840, Priority=-2040, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=130, Priority=-590, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=70, Priority=131990, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1023, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=160, Weapon=190, Total=840",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=130, Weapon=0, Total=130",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=840, Priority=-2040, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=130, Priority=-590, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=70, Priority=131990, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1023, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=160, Weapon=190, Total=840",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=130, Weapon=0, Total=130",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=840, Priority=-2040, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=130, Priority=-590, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=70, Priority=131990, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "TTK[1]: HP=1023, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[1]: Base=490, Dist=160, Weapon=190, Total=840",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[2]: HP=1320, MyDmg=52, EffDmg=1.0, TTK=1320",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[2]: Base=0, Dist=70, Weapon=0, Total=70",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TTK[3]: HP=400, MyDmg=1085, EffDmg=1085.0, TTK=1",
+        0,
+        446060,
+        25
+      ],
+      [
+        0,
+        2,
+        "THREAT[3]: Base=0, Dist=130, Weapon=0, Total=130",
+        0,
+        446060,
+        134
+      ],
+      [
+        0,
+        2,
+        "TARGET PRIORITY ORDER:",
+        0,
+        446060,
+        320
+      ],
+      [
+        0,
+        2,
+        "  [1] Enemy 1: TTK=1, Threat=840, Priority=-2040, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [2] Enemy 3: TTK=1, Threat=130, Priority=-590, Reachable=true",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "  [3] Enemy 2: TTK=1320, Threat=70, Priority=131990, Reachable=false",
+        0,
+        446060,
+        325
+      ],
+      [
+        0,
+        2,
+        "NO RECOMMENDED WEAPON: Handling unreachable enemies scenario",
+        0,
+        446034,
+        69
+      ],
+      [
+        0,
+        2,
+        "NO ATTACKS POSSIBLE: Trying emergency options",
+        0,
+        446034,
+        1075
+      ],
+      [
+        0,
+        2,
+        "EMERGENCY CHIP: Used 59 on 1",
+        0,
+        446034,
+        1091
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION CHECK: TP used this iteration: 4, attempt 1/3",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "LOOP PREVENTION: Good progress, resetting attempt counter",
+        0,
+        446034,
+        132
+      ],
+      [
+        0,
+        2,
+        "=== COMBAT COMPLETE ===",
+        0,
+        446034,
+        140
+      ],
+      [
+        0,
+        2,
+        "TP Used: 20, Enemies Remaining: 3",
+        0,
+        446034,
+        141
+      ],
+      [
+        0,
+        2,
+        "COVER BONUS: Cell 111 breaks LOS with enemy",
+        0,
+        446033,
+        717
+      ],
+      [
+        0,
+        2,
+        "COVER: Current position already has good cover (score: 100)",
+        0,
+        446033,
+        778
+      ],
+      [
+        0,
+        2,
+        "[DEBUG] === TURN END ===",
+        0,
+        446037,
+        6
+      ]
+    ]
+  }
+}

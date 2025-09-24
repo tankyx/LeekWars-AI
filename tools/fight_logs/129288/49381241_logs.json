@@ -1,0 +1,11312 @@
+{
+  "18035": {
+    "11": [
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY DAMAGE CALCULATION START ===",
+        0,
+        446033,
+        12
+      ],
+      [
+        0,
+        2,
+        "ENEMIES CHECK: aliveEnemies=2, allEnemies=2",
+        0,
+        446033,
+        27
+      ],
+      [
+        0,
+        2,
+        "WEAPON CHECK: hasWeapons=true, count=4",
+        0,
+        446033,
+        38
+      ],
+      [
+        0,
+        2,
+        "AVAILABLE WEAPONS: [153, 44, 43, 277]",
+        0,
+        446033,
+        40
+      ],
+      [
+        0,
+        2,
+        "ENEMY-CENTRIC CALC: Processing 2 enemies with 4 weapons",
+        0,
+        446033,
+        50
+      ],
+      [
+        0,
+        2,
+        "WEAPON 153 (Magenta): range 2-4, cost=5, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=0, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 395, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 2 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 2 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=2, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 3 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 3 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=3, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 1 cells at distance 4 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=4, found 1 cells, limit=1",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 323 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=323, weapon=153, damage=403.56, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          323
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=323, damage=403.56, weapon=153, dist=16, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 2 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 2 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=2, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 3 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 3 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=3, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 4 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=4, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "WEAPON 44 (Cyan): range 7-7, cost=7, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=1, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 395, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 2 cells at distance 7 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=7, found 2 cells, limit=2",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 304 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 304 to 395",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=304, weapon=44, damage=20, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          304
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=304, damage=20, weapon=44, dist=15, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 269 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=269, weapon=44, damage=531.0, dist=13",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          269
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=269, damage=531.0, weapon=44, dist=13, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 7 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=7, found 8 cells, limit=8",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 280 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 280 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=280, weapon=44, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          280
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=280, damage=20, weapon=44, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 281 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=281, weapon=44, damage=531.0, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          281
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=281, damage=531.0, weapon=44, dist=14, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 282 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=282, weapon=44, damage=531.0, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          282
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=282, damage=531.0, weapon=44, dist=14, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 283 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 283 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=283, weapon=44, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=20, weapon=44, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 284 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 284 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=284, weapon=44, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=20, weapon=44, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 285 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 285 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=285, weapon=44, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=20, weapon=44, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 321 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 321 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=321, weapon=44, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=20, weapon=44, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 286 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 286 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=286, weapon=44, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=20, weapon=44, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "WEAPON 43 (Green): range 4-7, cost=6, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=11, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 395, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 1 cells at distance 4 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=4, found 1 cells, limit=1",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 323 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=323, weapon=43, damage=417.72, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          323
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=323, damage=417.72, weapon=43, dist=16, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 5 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 1 cells at distance 5 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=5, found 1 cells, limit=1",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 305 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=305, weapon=43, damage=417.72, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          305
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=305, damage=417.72, weapon=43, dist=15, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 6 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 2 cells at distance 6 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=6, found 2 cells, limit=2",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 322 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 322 to 395",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=322, weapon=43, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          322
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=322, damage=20, weapon=43, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 287 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=287, weapon=43, damage=417.72, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          287
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=287, damage=417.72, weapon=43, dist=14, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 2 cells at distance 7 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=7, found 2 cells, limit=2",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 304 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 304 to 395",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=304, weapon=43, damage=20, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          304
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=304, damage=20, weapon=43, dist=15, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 269 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=269, weapon=43, damage=417.72, dist=13",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          269
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=269, damage=417.72, weapon=43, dist=13, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 4 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=4, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 5 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 5 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=5, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 315 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 315 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=315, weapon=43, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          315
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=315, damage=20, weapon=43, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 316 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 316 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=316, weapon=43, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          316
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=316, damage=20, weapon=43, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 317 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=317, weapon=43, damage=417.72, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          317
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=317, damage=417.72, weapon=43, dist=16, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 318 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 318 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=318, weapon=43, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          318
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=318, damage=20, weapon=43, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 319 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 319 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=319, weapon=43, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          319
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=319, damage=20, weapon=43, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 320 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 320 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=320, weapon=43, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=320, damage=20, weapon=43, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 6 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 6 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=6, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 298 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 298 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=298, weapon=43, damage=20, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          298
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=298, damage=20, weapon=43, dist=15, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 299 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=299, weapon=43, damage=417.72, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          299
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=299, damage=417.72, weapon=43, dist=15, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 300 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=300, weapon=43, damage=417.72, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          300
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=300, damage=417.72, weapon=43, dist=15, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 301 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 301 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=301, weapon=43, damage=20, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=301, damage=20, weapon=43, dist=15, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 302 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 302 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=302, weapon=43, damage=20, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          302
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=302, damage=20, weapon=43, dist=15, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 303 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 303 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=303, weapon=43, damage=20, dist=15",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          303
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=303, damage=20, weapon=43, dist=15, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 7 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=7, found 8 cells, limit=8",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 280 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 280 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=280, weapon=43, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          280
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=280, damage=20, weapon=43, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 281 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=281, weapon=43, damage=417.72, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          281
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=281, damage=417.72, weapon=43, dist=14, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 282 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=282, weapon=43, damage=417.72, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          282
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=282, damage=417.72, weapon=43, dist=14, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 283 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 283 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=283, weapon=43, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=20, weapon=43, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 284 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 284 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=284, weapon=43, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=20, weapon=43, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 285 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 285 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=285, weapon=43, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=20, weapon=43, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 321 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 321 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=321, weapon=43, damage=20, dist=16",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=20, weapon=43, dist=16, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 286 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 286 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=286, weapon=43, damage=20, dist=14",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=20, weapon=43, dist=14, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "WEAPON 277 (Gold): range 1-1, cost=6, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=37, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 395, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 1 from enemy 395",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 1 from enemy 395",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 395, range=1, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 38",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 1 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 1 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=1, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "ENEMY-CENTRIC: Created 13 damage zones around enemies",
+        0,
+        446033,
+        199
+      ],
+      [
+        0,
+        4,
+        [
+          38
+        ],
+        "0000ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "STEP 2: Checking immediate combat opportunity",
+        0,
+        446029,
+        242
+      ],
+      [
+        0,
+        2,
+        "IMMEDIATE ATTACK: None found, proceeding to pathfinding",
+        0,
+        446029,
+        247
+      ],
+      [
+        0,
+        2,
+        "STEP 3: Checking teleportation options",
+        0,
+        446029,
+        262
+      ],
+      [
+        0,
+        2,
+        "STEP 4: Starting pathfinding with 13 damage zones",
+        0,
+        446029,
+        283
+      ],
+      [
+        0,
+        2,
+        "STEP 4: Pathfinding completed, result=SUCCESS",
+        0,
+        446029,
+        285
+      ],
+      [
+        0,
+        2,
+        "STEP 5: Checking movement execution, pathResult=EXISTS",
+        0,
+        446029,
+        437
+      ],
+      [
+        0,
+        2,
+        "STEP 5: hasValidPath=true, useTeleport=false",
+        0,
+        446029,
+        447
+      ],
+      [
+        0,
+        2,
+        "STEP 5: pathResult details - count=7, pathResult[1]=count=8",
+        0,
+        446029,
+        448
+      ],
+      [
+        0,
+        2,
+        "STEP 5: Executing movement",
+        0,
+        446029,
+        451
+      ]
+    ],
+    "18": [
+      [
+        0,
+        2,
+        "STEP 6: Starting combat phase",
+        0,
+        446029,
+        469
+      ],
+      [
+        0,
+        2,
+        "STEP 6: recommendedWeapon=44",
+        0,
+        446029,
+        474
+      ],
+      [
+        0,
+        2,
+        "STEP 6: Combat check - enemies=2, TP=16, myTP=16",
+        0,
+        446029,
+        504
+      ],
+      [
+        0,
+        2,
+        "COMBAT: Using recommended weapon 44",
+        0,
+        446029,
+        507
+      ],
+      [
+        0,
+        2,
+        "COMBAT: Calling tryPeekABooCombat",
+        0,
+        446029,
+        511
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: Starting with weapon=44, enemies=2, TP=16",
+        0,
+        446029,
+        885
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: Calling executeCombat with weapon=44, TP=16",
+        0,
+        446029,
+        927
+      ],
+      [
+        0,
+        2,
+        "EXEC COMBAT: Starting with weapon=44, enemies=2, TP=16",
+        0,
+        446034,
+        6
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP CHECK: tpRemaining=16, enemies=2, attempts=0/1",
+        0,
+        446034,
+        31
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 162",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: No enemy associations found for current cell",
+        0,
+        446034,
+        59
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 44",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 44",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 44 on target 1",
+        0,
+        446034,
+        129
+      ]
+    ],
+    "19": [
+      [
+        0,
+        2,
+        "SIMPLIFIED: Switched to weapon 44",
+        0,
+        446034,
+        139
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Cannot attack - canUse=false, weapon=44, distance=13 (range 7-7), LOS=true, targetLife=1947, myCell=162, targetCell=395",
+        0,
+        446034,
+        175
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: executeCombat completed",
+        0,
+        446029,
+        929
+      ],
+      [
+        0,
+        2,
+        "COMBAT: tryPeekABooCombat completed",
+        0,
+        446029,
+        513
+      ],
+      [
+        0,
+        2,
+        "V7 AI FINISHED - Turn 1",
+        0,
+        446029,
+        1115
+      ]
+    ],
+    "39": [
+      [
+        0,
+        2,
+        "V7 AI STARTING - Turn 2",
+        0,
+        446029,
+        1113
+      ],
+      [
+        0,
+        2,
+        "=== MAIN FUNCTION CALLED - TURN 2 ===",
+        0,
+        446029,
+        24
+      ],
+      [
+        0,
+        2,
+        "=== CLEARED CACHES ===",
+        0,
+        446029,
+        31
+      ],
+      [
+        0,
+        2,
+        "GAME STATE: Our entity=0, our cell=162",
+        0,
+        446030,
+        87
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 1",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 1 is at cell 392",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 1 at cell 392 (we are at 162)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 3",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 3 is at cell 356",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 3 at cell 356 (we are at 162)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 2",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 2 is at cell 405",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 2 at cell 405 (we are at 162)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "=== UPDATED GAME STATE ===",
+        0,
+        446029,
+        35
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 162 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 13 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 20.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 162 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 13 beyond splash range 7-7",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 162 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 13 beyond splash range 2-9",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 162 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 13 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 14.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 38.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 266 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 266 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 32.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 38.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 32.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 38.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 269 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 269 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 32.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 284 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 41.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 284 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 6 beyond splash range 7-7",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 284 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 284 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 284 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 35.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 285 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 41.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 285 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 6 beyond splash range 7-7",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 285 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 285 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 285 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 35.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 286 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 41.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 286 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 6 beyond splash range 7-7",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 286 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 286 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 35.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 287 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 41.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 287 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 6 beyond splash range 7-7",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 287 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 287 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 287 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 6 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 35.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 38.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 266 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 266 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 32.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 38.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 32.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 38.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 269 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 269 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 7 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 32.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ]
+    ],
+    "41": [
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY DAMAGE CALCULATION START ===",
+        0,
+        446033,
+        12
+      ],
+      [
+        0,
+        2,
+        "ENEMIES CHECK: aliveEnemies=3, allEnemies=3",
+        0,
+        446033,
+        27
+      ],
+      [
+        0,
+        2,
+        "WEAPON CHECK: hasWeapons=true, count=4",
+        0,
+        446033,
+        38
+      ],
+      [
+        0,
+        2,
+        "AVAILABLE WEAPONS: [153, 44, 43, 277]",
+        0,
+        446033,
+        40
+      ],
+      [
+        0,
+        2,
+        "ENEMY-CENTRIC CALC: Processing 3 enemies with 4 weapons",
+        0,
+        446033,
+        50
+      ],
+      [
+        0,
+        2,
+        "WEAPON 153 (Magenta): range 2-4, cost=5, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=3, operationsUsed=0, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 392, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 2 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 2 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=2, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 3 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 3 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=3, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 4 cells at distance 4 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=4, found 4 cells, limit=4",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 320 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 320 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=320, weapon=153, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=320, damage=20, weapon=153, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 321 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=321, weapon=153, damage=1210.68, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=1210.68, weapon=153, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 322 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 322 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=322, weapon=153, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          322
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=322, damage=20, weapon=153, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 323 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=323, weapon=153, damage=1210.68, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          323
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=323, damage=1210.68, weapon=153, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=3",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 3 at cell 356, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 2 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 3 cells at distance 2 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=2, found 3 cells, limit=3",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 320 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=320, weapon=153, damage=1210.68, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=320, damage=1210.68, weapon=153, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 321 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=321, weapon=153, damage=1210.68, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=1210.68, weapon=153, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 322 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 322 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=322, weapon=153, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          322
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=322, damage=20, weapon=153, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 3 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 4 cells at distance 3 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=3, found 4 cells, limit=4",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 302 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=302, weapon=153, damage=1210.68, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          302
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=302, damage=1210.68, weapon=153, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 303 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=303, weapon=153, damage=1210.68, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          303
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=303, damage=1210.68, weapon=153, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 304 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=304, weapon=153, damage=1210.68, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          304
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=304, damage=1210.68, weapon=153, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 305 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 305 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=305, weapon=153, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          305
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=305, damage=20, weapon=153, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 4 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=4, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 319 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=319, weapon=153, damage=1210.68, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          319
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=319, damage=1210.68, weapon=153, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 284 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=284, weapon=153, damage=1210.68, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=1210.68, weapon=153, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 285 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=285, weapon=153, damage=1210.68, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=1210.68, weapon=153, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 286 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=286, weapon=153, damage=1210.68, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=1210.68, weapon=153, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 287 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=287, weapon=153, damage=1210.68, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          287
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=287, damage=1210.68, weapon=153, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 323 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=323, weapon=153, damage=1210.68, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          323
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=323, damage=1210.68, weapon=153, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=2, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 2 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 2 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=2, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 3 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 3 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=3, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 4 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=4, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "WEAPON 44 (Cyan): range 7-7, cost=7, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=3, operationsUsed=17, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 392, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 5 cells at distance 7 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=7, found 5 cells, limit=5",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 301 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 301 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=301, weapon=44, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=301, damage=20, weapon=44, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 266 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=266, weapon=44, damage=20, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          266
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=266, damage=20, weapon=44, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 267 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 267 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=267, weapon=44, damage=20, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          267
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=267, damage=20, weapon=44, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=268, weapon=44, damage=1062.0, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          268
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=268, damage=1062.0, weapon=44, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 269 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=269, weapon=44, damage=20, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          269
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=269, damage=20, weapon=44, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=3",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 3 at cell 356, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 7 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=7, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 300 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 300 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=300, weapon=44, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          300
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=300, damage=20, weapon=44, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 265 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=265, weapon=44, damage=1062.0, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          265
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=265, damage=1062.0, weapon=44, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 230 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=230, weapon=44, damage=1062.0, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          230
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=230, damage=1062.0, weapon=44, dist=4, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 231 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 231 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=231, weapon=44, damage=20, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          231
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=231, damage=20, weapon=44, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 232 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 232 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=232, weapon=44, damage=20, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          232
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=232, damage=20, weapon=44, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 233 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 233 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=233, weapon=44, damage=20, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          233
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=233, damage=20, weapon=44, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=2, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 7 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=7, found 8 cells, limit=8",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 280 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 280 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=280, weapon=44, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          280
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=280, damage=20, weapon=44, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 281 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=281, weapon=44, damage=1062.0, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          281
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=281, damage=1062.0, weapon=44, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 282 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=282, weapon=44, damage=1062.0, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          282
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=282, damage=1062.0, weapon=44, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 283 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 283 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=283, weapon=44, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=20, weapon=44, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 284 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 284 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=284, weapon=44, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=20, weapon=44, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 285 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 285 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=285, weapon=44, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=20, weapon=44, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 321 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 321 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=321, weapon=44, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=20, weapon=44, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 286 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 286 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=286, weapon=44, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=20, weapon=44, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "WEAPON 43 (Green): range 4-7, cost=6, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=3, operationsUsed=36, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 392, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 4 cells at distance 4 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=4, found 4 cells, limit=4",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 320 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 320 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=320, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=320, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 321 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=321, weapon=43, damage=835.44, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=835.44, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 322 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 322 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=322, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          322
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=322, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 323 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=323, weapon=43, damage=835.44, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          323
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=323, damage=835.44, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 5 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 4 cells at distance 5 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=5, found 4 cells, limit=4",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 302 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 302 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=302, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          302
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=302, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 303 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 303 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=303, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          303
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=303, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 304 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 304 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=304, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          304
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=304, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 305 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 305 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=305, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          305
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=305, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 6 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 5 cells at distance 6 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=6, found 5 cells, limit=5",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 319 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 319 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=319, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          319
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=319, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 284 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 284 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=284, weapon=43, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 285 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 285 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=285, weapon=43, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 286 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=286, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 287 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 287 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=287, weapon=43, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          287
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=287, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 5 cells at distance 7 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=7, found 5 cells, limit=5",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 301 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 301 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=301, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=301, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 266 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 266 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=266, weapon=43, damage=20, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          266
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=266, damage=20, weapon=43, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 267 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 267 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=267, weapon=43, damage=20, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          267
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=267, damage=20, weapon=43, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 268 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=268, weapon=43, damage=835.44, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          268
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=268, damage=835.44, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 269 to 392",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 269 to 392",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=269, weapon=43, damage=20, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          269
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=269, damage=20, weapon=43, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=3",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 3 at cell 356, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 4 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=4, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 319 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=319, weapon=43, damage=835.44, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          319
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=319, damage=835.44, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 284 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=284, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 285 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=285, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 286 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=286, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 287 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=287, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          287
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=287, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 323 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=323, weapon=43, damage=835.44, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          323
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=323, damage=835.44, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 5 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 5 cells at distance 5 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=5, found 5 cells, limit=5",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 301 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=301, weapon=43, damage=835.44, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=301, damage=835.44, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 266 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=266, weapon=43, damage=835.44, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          266
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=266, damage=835.44, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 267 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 267 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=267, weapon=43, damage=20, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          267
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=267, damage=20, weapon=43, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 268 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=268, weapon=43, damage=835.44, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          268
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=268, damage=835.44, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 269 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=269, weapon=43, damage=835.44, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          269
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=269, damage=835.44, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 6 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 6 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=6, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 318 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 318 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=318, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          318
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=318, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 283 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=283, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 248 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=248, weapon=43, damage=835.44, dist=5",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          248
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=248, damage=835.44, weapon=43, dist=5, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 249 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 249 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=249, weapon=43, damage=20, dist=5",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          249
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=249, damage=20, weapon=43, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 250 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 250 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=250, weapon=43, damage=20, dist=5",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          250
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=250, damage=20, weapon=43, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 251 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 251 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=251, weapon=43, damage=20, dist=5",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          251
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=251, damage=20, weapon=43, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 7 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=7, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 300 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 300 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=300, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          300
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=300, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 265 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=265, weapon=43, damage=835.44, dist=6",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          265
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=265, damage=835.44, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 230 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=230, weapon=43, damage=835.44, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          230
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=230, damage=835.44, weapon=43, dist=4, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 231 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 231 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=231, weapon=43, damage=20, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          231
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=231, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 232 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 232 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=232, weapon=43, damage=20, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          232
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=232, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 233 to 356",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 233 to 356",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=233, weapon=43, damage=20, dist=4",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          233
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=233, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=2, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 4 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=4, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 5 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 5 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=5, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 315 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 315 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=315, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          315
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=315, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 316 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 316 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=316, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          316
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=316, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 317 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=317, weapon=43, damage=835.44, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          317
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=317, damage=835.44, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 318 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 318 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=318, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          318
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=318, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 319 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 319 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=319, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          319
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=319, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 320 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 320 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=320, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=320, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 6 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 6 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=6, found 6 cells, limit=6",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 298 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 298 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=298, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          298
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=298, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 299 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=299, weapon=43, damage=835.44, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          299
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=299, damage=835.44, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 300 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=300, weapon=43, damage=835.44, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          300
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=300, damage=835.44, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 301 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 301 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=301, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=301, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 302 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 302 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=302, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          302
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=302, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 303 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 303 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=303, weapon=43, damage=20, dist=8",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          303
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=303, damage=20, weapon=43, dist=8, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 7 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=7, found 8 cells, limit=8",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 280 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 280 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=280, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          280
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=280, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 281 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=281, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          281
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=281, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 282 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=282, weapon=43, damage=835.44, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          282
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=282, damage=835.44, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 283 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 283 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=283, weapon=43, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 284 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 284 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=284, weapon=43, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 285 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 285 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=285, weapon=43, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 321 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 321 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=321, weapon=43, damage=20, dist=9",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=20, weapon=43, dist=9, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 286 to 405",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: No LOS from 286 to 405",
+        0,
+        446033,
+        411
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: pos=286, weapon=43, damage=20, dist=7",
+        0,
+        446033,
+        141
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "WEAPON 277 (Gold): range 1-1, cost=6, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=3, operationsUsed=97, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 392, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 1 from enemy 392",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 1 from enemy 392",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 392, range=1, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=3",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 3 at cell 356, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 1 from enemy 356",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 1 from enemy 356",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 356, range=1, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=2, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 162",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 1 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 1 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ZONE SEARCH: Enemy at 405, range=1, found 0 cells, limit=0",
+        0,
+        446033,
+        123
+      ],
+      [
+        0,
+        2,
+        "ENEMY-CENTRIC: Created 41 damage zones around enemies",
+        0,
+        446033,
+        199
+      ],
+      [
+        0,
+        4,
+        [
+          162
+        ],
+        "0000ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "STEP 2: Checking immediate combat opportunity",
+        0,
+        446029,
+        242
+      ],
+      [
+        0,
+        2,
+        "IMMEDIATE ATTACK: None found, proceeding to pathfinding",
+        0,
+        446029,
+        247
+      ],
+      [
+        0,
+        2,
+        "STEP 3: Checking teleportation options",
+        0,
+        446029,
+        262
+      ],
+      [
+        0,
+        2,
+        "STEP 4: Starting pathfinding with 41 damage zones",
+        0,
+        446029,
+        283
+      ],
+      [
+        0,
+        2,
+        "STEP 4: Pathfinding completed, result=SUCCESS",
+        0,
+        446029,
+        285
+      ],
+      [
+        0,
+        2,
+        "STEP 5: Checking movement execution, pathResult=EXISTS",
+        0,
+        446029,
+        437
+      ],
+      [
+        0,
+        2,
+        "STEP 5: hasValidPath=true, useTeleport=false",
+        0,
+        446029,
+        447
+      ],
+      [
+        0,
+        2,
+        "STEP 5: pathResult details - count=7, pathResult[1]=count=8",
+        0,
+        446029,
+        448
+      ],
+      [
+        0,
+        2,
+        "STEP 5: Executing movement",
+        0,
+        446029,
+        451
+      ]
+    ],
+    "48": [
+      [
+        0,
+        2,
+        "STEP 6: Starting combat phase",
+        0,
+        446029,
+        469
+      ],
+      [
+        0,
+        2,
+        "STEP 6: recommendedWeapon=153",
+        0,
+        446029,
+        474
+      ],
+      [
+        0,
+        2,
+        "STEP 6: Combat check - enemies=3, TP=20, myTP=20",
+        0,
+        446029,
+        504
+      ],
+      [
+        0,
+        2,
+        "COMBAT: Using recommended weapon 153",
+        0,
+        446029,
+        507
+      ],
+      [
+        0,
+        2,
+        "COMBAT: Calling tryPeekABooCombat",
+        0,
+        446029,
+        511
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: Starting with weapon=153, enemies=3, TP=20",
+        0,
+        446029,
+        885
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: Calling executeCombat with weapon=153, TP=20",
+        0,
+        446029,
+        927
+      ],
+      [
+        0,
+        2,
+        "EXEC COMBAT: Starting with weapon=153, enemies=3, TP=20",
+        0,
+        446034,
+        6
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP CHECK: tpRemaining=20, enemies=3, attempts=0/1",
+        0,
+        446034,
+        31
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 286",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 3 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 3",
+        0,
+        446034,
+        129
+      ]
+    ],
+    "49": [
+      [
+        0,
+        2,
+        "SIMPLIFIED: Switched to weapon 153",
+        0,
+        446034,
+        139
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attacking 3 with 153",
+        0,
+        446034,
+        164
+      ]
+    ],
+    "51": [
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attack completed, TP remaining: 14",
+        0,
+        446034,
+        167
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 286",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 3 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 3",
+        0,
+        446034,
+        129
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attacking 3 with 153",
+        0,
+        446034,
+        164
+      ]
+    ],
+    "55": [
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attack completed, TP remaining: 9",
+        0,
+        446034,
+        167
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 286",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 3 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 3",
+        0,
+        446034,
+        129
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Cannot attack - canUse=false, weapon=153, distance=16 (range 2-4), LOS=false, targetLife=0, myCell=286, targetCell=null",
+        0,
+        446034,
+        175
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: executeCombat completed",
+        0,
+        446029,
+        929
+      ],
+      [
+        0,
+        2,
+        "COMBAT: tryPeekABooCombat completed",
+        0,
+        446029,
+        513
+      ],
+      [
+        0,
+        2,
+        "V7 AI FINISHED - Turn 2",
+        0,
+        446029,
+        1115
+      ]
+    ],
+    "7": [
+      [
+        0,
+        2,
+        "GAME STATE: Our entity=0, our cell=38",
+        0,
+        446030,
+        87
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 1",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 1 is at cell 395",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 1 at cell 395 (we are at 38)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 2",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 2 is at cell 405",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 2 at cell 405 (we are at 38)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "V7 AI STARTING - Turn 1",
+        0,
+        446029,
+        1113
+      ],
+      [
+        0,
+        2,
+        "=== MAIN FUNCTION CALLED - TURN 1 ===",
+        0,
+        446029,
+        24
+      ],
+      [
+        0,
+        2,
+        "=== CLEARED CACHES ===",
+        0,
+        446029,
+        31
+      ],
+      [
+        0,
+        2,
+        "GAME STATE: Our entity=0, our cell=38",
+        0,
+        446030,
+        87
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 1",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 1 is at cell 395",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 1 at cell 395 (we are at 38)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 2",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 2 is at cell 405",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 2 at cell 405 (we are at 38)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "=== UPDATED GAME STATE ===",
+        0,
+        446029,
+        35
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 153 from 38 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 20 not in range 2-4",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 0.0 (optimal range 3.0)",
+        0,
+        446033,
+        404
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 44 from 38 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 20 beyond splash range 7-7",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 43 from 38 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "AOE FAIL: Distance 20 beyond splash range 2-9",
+        0,
+        446033,
+        384
+      ],
+      [
+        0,
+        2,
+        "DAMAGE CALC: Weapon 277 from 38 to 395",
+        0,
+        446033,
+        356
+      ],
+      [
+        0,
+        2,
+        "DAMAGE FAIL: Distance 20 not in range 1-1",
+        0,
+        446033,
+        396
+      ],
+      [
+        0,
+        2,
+        "MOVEMENT INCENTIVE: 0.0 (optimal range 1.0)",
+        0,
+        446033,
+        404
+      ]
+    ],
+    "79": [
+      [
+        0,
+        2,
+        "V7 AI STARTING - Turn 3",
+        0,
+        446029,
+        1113
+      ],
+      [
+        0,
+        2,
+        "=== MAIN FUNCTION CALLED - TURN 3 ===",
+        0,
+        446029,
+        24
+      ],
+      [
+        0,
+        2,
+        "=== CLEARED CACHES ===",
+        0,
+        446029,
+        31
+      ],
+      [
+        0,
+        2,
+        "GAME STATE: Our entity=0, our cell=286",
+        0,
+        446030,
+        87
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 1",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 1 is at cell 320",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 1 at cell 320 (we are at 286)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "ENEMY RETRIEVAL: Getting position for enemy entity 2",
+        0,
+        446030,
+        108
+      ],
+      [
+        0,
+        2,
+        "ENEMY POSITION: Enemy 2 is at cell 405",
+        0,
+        446030,
+        110
+      ],
+      [
+        0,
+        2,
+        "ENEMY SETUP: Entity 2 at cell 405 (we are at 286)",
+        0,
+        446030,
+        136
+      ],
+      [
+        0,
+        2,
+        "=== UPDATED GAME STATE ===",
+        0,
+        446029,
+        35
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        2,
+        "=== MULTI-ENEMY DAMAGE CALCULATION START ===",
+        0,
+        446033,
+        12
+      ],
+      [
+        0,
+        2,
+        "ENEMIES CHECK: aliveEnemies=2, allEnemies=2",
+        0,
+        446033,
+        27
+      ],
+      [
+        0,
+        2,
+        "WEAPON CHECK: hasWeapons=true, count=4",
+        0,
+        446033,
+        38
+      ],
+      [
+        0,
+        2,
+        "AVAILABLE WEAPONS: [153, 44, 43, 277]",
+        0,
+        446033,
+        40
+      ],
+      [
+        0,
+        2,
+        "ENEMY-CENTRIC CALC: Processing 2 enemies with 4 weapons",
+        0,
+        446033,
+        50
+      ],
+      [
+        0,
+        2,
+        "WEAPON 153 (Magenta): range 2-4, cost=5, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=0, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 320, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 2 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 5 cells at distance 2 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          319
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=319, damage=1060.2, weapon=153, dist=4, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=1060.2, weapon=153, dist=4, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=1060.2, weapon=153, dist=2, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=1060.2, weapon=153, dist=2, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=1060.2, weapon=153, dist=0, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 3 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 3 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=301, damage=1060.2, weapon=153, dist=5, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          266
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=266, damage=1060.2, weapon=153, dist=5, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          267
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=267, damage=20, weapon=153, dist=3, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          268
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=268, damage=1060.2, weapon=153, dist=1, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          304
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=304, damage=1060.2, weapon=153, dist=1, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          269
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=269, damage=1060.2, weapon=153, dist=1, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 4 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          318
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=318, damage=1060.2, weapon=153, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=1060.2, weapon=153, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          248
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=248, damage=1060.2, weapon=153, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          249
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=249, damage=20, weapon=153, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          250
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=250, damage=20, weapon=153, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          322
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=322, damage=20, weapon=153, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          251
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=251, damage=20, weapon=153, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          287
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=287, damage=1060.2, weapon=153, dist=2, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 2 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 2 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 3 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 3 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 4 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "WEAPON 44 (Cyan): range 7-7, cost=7, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=19, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 320, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 7 cells at distance 7 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          299
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=299, damage=1395.0, weapon=44, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          264
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=264, damage=1395.0, weapon=44, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          229
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=229, damage=1395.0, weapon=44, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          194
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=194, damage=1395.0, weapon=44, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          195
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=195, damage=20, weapon=44, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          196
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=196, damage=20, weapon=44, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          197
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=197, damage=20, weapon=44, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 7 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          280
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=280, damage=20, weapon=44, dist=12, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          281
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=281, damage=1395.0, weapon=44, dist=10, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          282
+        ],
+        "00ffff",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=282, damage=1395.0, weapon=44, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=20, weapon=44, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=20, weapon=44, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=20, weapon=44, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=20, weapon=44, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=20, weapon=44, dist=0, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "WEAPON 43 (Green): range 4-7, cost=6, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=34, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 320, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 4 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          318
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=318, damage=731.6, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=731.6, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          248
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=248, damage=731.6, weapon=43, dist=6, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          249
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=249, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          250
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=250, damage=20, weapon=43, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          322
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=322, damage=20, weapon=43, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          251
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=251, damage=20, weapon=43, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          287
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=287, damage=731.6, weapon=43, dist=2, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 5 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 7 cells at distance 5 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          300
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=300, damage=731.6, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          265
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=265, damage=731.6, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          230
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=230, damage=731.6, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          231
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=231, damage=20, weapon=43, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          232
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=232, damage=20, weapon=43, dist=3, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          233
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=233, damage=20, weapon=43, dist=3, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          305
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=305, damage=20, weapon=43, dist=3, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 6 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 6 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          317
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=317, damage=731.6, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          282
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=282, damage=731.6, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          247
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=247, damage=731.6, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          212
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=212, damage=731.6, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          213
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=213, damage=20, weapon=43, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          214
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=214, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          215
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=215, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          323
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=323, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 7 cells at distance 7 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          299
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=299, damage=731.6, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          264
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=264, damage=731.6, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          229
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=229, damage=731.6, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          194
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=194, damage=731.6, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          195
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=195, damage=20, weapon=43, dist=7, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          196
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=196, damage=20, weapon=43, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          197
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=197, damage=20, weapon=43, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 4 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 4 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 5 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 5 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          315
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=315, damage=20, weapon=43, dist=12, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          316
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=316, damage=20, weapon=43, dist=10, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          317
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=317, damage=731.6, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          318
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=318, damage=20, weapon=43, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          319
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=319, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=320, damage=20, weapon=43, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 6 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 6 cells at distance 6 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          298
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=298, damage=20, weapon=43, dist=11, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          299
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=299, damage=731.6, weapon=43, dist=9, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          300
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=300, damage=731.6, weapon=43, dist=7, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=301, damage=20, weapon=43, dist=5, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          302
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=302, damage=20, weapon=43, dist=3, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          303
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=303, damage=20, weapon=43, dist=1, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 7 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 8 cells at distance 7 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          280
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=280, damage=20, weapon=43, dist=12, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          281
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=281, damage=731.6, weapon=43, dist=10, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          282
+        ],
+        "008000",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=282, damage=731.6, weapon=43, dist=8, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          283
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=283, damage=20, weapon=43, dist=6, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=284, damage=20, weapon=43, dist=4, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          285
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=285, damage=20, weapon=43, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          321
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=321, damage=20, weapon=43, dist=2, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "808080",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=286, damage=20, weapon=43, dist=0, LoS=false",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "WEAPON 277 (Gold): range 1-1, cost=6, calculating zones for ALL ranges",
+        0,
+        446033,
+        86
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP START: aliveEnemies count=2, operationsUsed=84, maxOperations=150",
+        0,
+        446033,
+        89
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=0, enemy=1",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 1 at cell 320, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 1 from enemy 320",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 2 cells at distance 1 from enemy 320",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        4,
+        [
+          302
+        ],
+        "ffd700",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=302, damage=750.2, weapon=277, dist=3, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        4,
+        [
+          303
+        ],
+        "ffd700",
+        1
+      ],
+      [
+        0,
+        2,
+        "ZONE CREATED: cell=303, damage=750.2, weapon=277, dist=1, LoS=true",
+        0,
+        446033,
+        189
+      ],
+      [
+        0,
+        2,
+        "ENEMY LOOP ITERATION: e=1, enemy=2",
+        0,
+        446033,
+        91
+      ],
+      [
+        0,
+        2,
+        "ENEMY VALIDATION: Enemy 2 at cell 405, we are at 286",
+        0,
+        446033,
+        106
+      ],
+      [
+        0,
+        2,
+        "RANGE CALCULATION: 1 from enemy 405",
+        0,
+        446033,
+        114
+      ],
+      [
+        0,
+        2,
+        "CELLS FOUND: 0 cells at distance 1 from enemy 405",
+        0,
+        446033,
+        117
+      ],
+      [
+        0,
+        2,
+        "ENEMY-CENTRIC: Created 42 damage zones around enemies",
+        0,
+        446033,
+        199
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "0000ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "00ff00",
+        1
+      ],
+      [
+        0,
+        2,
+        "STEP 2: Checking immediate combat opportunity",
+        0,
+        446029,
+        242
+      ],
+      [
+        0,
+        2,
+        "IMMEDIATE ATTACK: None found, proceeding to pathfinding",
+        0,
+        446029,
+        247
+      ],
+      [
+        0,
+        2,
+        "STEP 3: Checking teleportation options",
+        0,
+        446029,
+        262
+      ],
+      [
+        0,
+        2,
+        "STEP 4: Starting pathfinding with 42 damage zones",
+        0,
+        446029,
+        283
+      ],
+      [
+        0,
+        2,
+        "STEP 4: Pathfinding completed, result=SUCCESS",
+        0,
+        446029,
+        285
+      ],
+      [
+        0,
+        2,
+        "STEP 5: Checking movement execution, pathResult=EXISTS",
+        0,
+        446029,
+        437
+      ],
+      [
+        0,
+        2,
+        "STEP 5: hasValidPath=true, useTeleport=false",
+        0,
+        446029,
+        447
+      ],
+      [
+        0,
+        2,
+        "STEP 5: pathResult details - count=7, pathResult[1]=count=6",
+        0,
+        446029,
+        448
+      ],
+      [
+        0,
+        2,
+        "STEP 5: Executing movement",
+        0,
+        446029,
+        451
+      ]
+    ],
+    "84": [
+      [
+        0,
+        2,
+        "STEP 6: Starting combat phase",
+        0,
+        446029,
+        469
+      ],
+      [
+        0,
+        2,
+        "STEP 6: recommendedWeapon=153",
+        0,
+        446029,
+        474
+      ],
+      [
+        0,
+        2,
+        "STEP 6: Combat check - enemies=2, TP=23, myTP=23",
+        0,
+        446029,
+        504
+      ],
+      [
+        0,
+        2,
+        "COMBAT: Using recommended weapon 153",
+        0,
+        446029,
+        507
+      ],
+      [
+        0,
+        2,
+        "COMBAT: Calling tryPeekABooCombat",
+        0,
+        446029,
+        511
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: Starting with weapon=153, enemies=2, TP=23",
+        0,
+        446029,
+        885
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: Calling executeCombat with weapon=153, TP=23",
+        0,
+        446029,
+        927
+      ],
+      [
+        0,
+        2,
+        "EXEC COMBAT: Starting with weapon=153, enemies=2, TP=23",
+        0,
+        446034,
+        6
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP CHECK: tpRemaining=23, enemies=3, attempts=0/1",
+        0,
+        446034,
+        31
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 266",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 1 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 1",
+        0,
+        446034,
+        129
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attacking 1 with 153",
+        0,
+        446034,
+        164
+      ]
+    ],
+    "87": [
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attack completed, TP remaining: 18",
+        0,
+        446034,
+        167
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 266",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 1 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 1",
+        0,
+        446034,
+        129
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attacking 1 with 153",
+        0,
+        446034,
+        164
+      ]
+    ],
+    "90": [
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attack completed, TP remaining: 13",
+        0,
+        446034,
+        167
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 266",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 1 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 1",
+        0,
+        446034,
+        129
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attacking 1 with 153",
+        0,
+        446034,
+        164
+      ]
+    ],
+    "93": [
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attack completed, TP remaining: 8",
+        0,
+        446034,
+        167
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 266",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 1 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 1",
+        0,
+        446034,
+        129
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attacking 1 with 153",
+        0,
+        446034,
+        164
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Attack completed, TP remaining: 3",
+        0,
+        446034,
+        167
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Entering attempt 1",
+        0,
+        446034,
+        33
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Updating primary target",
+        0,
+        446034,
+        37
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Primary target updated, target=1",
+        0,
+        446034,
+        39
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Setting up target and weapon",
+        0,
+        446034,
+        47
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking enemy associations for cell 266",
+        0,
+        446034,
+        52
+      ],
+      [
+        0,
+        2,
+        "ENEMY ASSOCIATION: Using associated target 1 with weapon 153",
+        0,
+        446034,
+        57
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Checking AoE opportunities with weapon 153",
+        0,
+        446034,
+        115
+      ],
+      [
+        0,
+        2,
+        "COMBAT LOOP: Executing single-target attack with weapon 153",
+        0,
+        446034,
+        124
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED ATTACK: Using weapon 153 on target 1",
+        0,
+        446034,
+        129
+      ],
+      [
+        0,
+        2,
+        "SIMPLIFIED: Not enough TP for weapon 153 (need 5, have 3)",
+        0,
+        446034,
+        183
+      ],
+      [
+        0,
+        2,
+        "PEEK-A-BOO: executeCombat completed",
+        0,
+        446029,
+        929
+      ],
+      [
+        0,
+        2,
+        "COMBAT: tryPeekABooCombat completed",
+        0,
+        446029,
+        513
+      ]
+    ],
+    "94": [
+      [
+        0,
+        2,
+        "V7 AI FINISHED - Turn 3",
+        0,
+        446029,
+        1115
+      ]
+    ]
+  }
+}

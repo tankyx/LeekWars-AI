@@ -14,46 +14,163 @@ function createPathResult(targetCell, path, damage, weaponId, reachable, distanc
     push(result, (distance != null) ? distance : 0);        // [5] distance
     push(result, (useTeleport != null) ? useTeleport : false); // [6] useTeleport
     
-    if (debugEnabled) {
-        debugW("PathResult created: size=" + count(result) + ", target=" + result[0] + ", damage=" + result[2]);
-    }
+    // PathResult created
     
     return result;
 }
 
 // === MAIN PATHFINDING FUNCTION (ARRAY-BASED) ===
 function findOptimalPathFromArray(currentCell, damageArray) {
-    if (debugEnabled) {
-        debugW("PATHFIND ARRAY: " + count(damageArray) + " entries");
-    }
+    // Pathfinding array processed
     
     // Sort array by damage potential (highest first)
     var sortedArray = sortArrayByDamage(damageArray);
     
     // Try single-turn A* first to each high-damage cell
+    // Trying top damage cells
+    
     for (var i = 0; i < min(MAX_PATHFIND_CELLS, count(sortedArray)); i++) {
         var targetData = sortedArray[i];
         var targetCell = targetData[0];
         var expectedDamage = targetData[1];
-        var weaponId = targetData[2]; // Get weapon ID from damage calculation
+        var weaponId = targetData[2]; // Get weapon/chip ID from damage calculation
+
+        // Only pass weapon IDs, not chip IDs, to prevent setWeapon errors
+        if (weaponId != null && !isWeapon(weaponId)) {
+            weaponId = null; // Don't recommend chips as weapons
+        }
+        
+        // Trying pathfinding to damage cell
         
         var path = aStar(currentCell, targetCell, myMP);
         
         if (path != null && count(path) <= myMP + 1) {
             // Mark chosen path with text indicators
-            if (debugEnabled) {
-                for (var p = 0; p < count(path); p++) {
-                    markText(path[p], ">" + p, getColor(255, 165, 0), 10); // Orange path steps
-                }
-                markText(targetCell, "!" + floor(expectedDamage + 0.5), getColor(255, 0, 0), 10); // Target with damage
-                debug("Path found: " + count(path) + " steps to damage " + expectedDamage);
-            }
+            // Path found and marked
             
             return createPathResult(targetCell, path, expectedDamage, weaponId, true, count(path) - 1, false);
+        } else {
+            // Path attempt failed
         }
     }
     
-    // No single-turn path found - try multi-turn pathfinding
+    // No single-turn path found - move toward best damage zone
+    // No single-turn paths found, moving toward damage zone
+    
+    // Try to move toward the highest damage cell (even if unreachable this turn)
+    if (count(sortedArray) > 0) {
+        var bestTarget = sortedArray[0];
+        var bestCell = bestTarget[0];
+        var bestDamage = bestTarget[1];
+        var bestWeapon = bestTarget[2];
+        
+        // Moving toward best damage cell
+        
+        // IMPROVED: Instead of moving toward damage zone, move to weapon range of enemy
+        // Get equipped weapons to find optimal positioning
+        var weapons = getWeapons();
+        var targetPosition = null;
+        
+        if (weapons != null && count(weapons) > 0 && enemyCell != null) {
+            // Find the best weapon we can afford and its optimal range
+            var affordableWeapon = null;
+            var weaponRange = null;
+            var bestWeaponValue = 0;
+            
+            // Weapon selection based on build type
+            
+            for (var w = 0; w < count(weapons); w++) {
+                var weapon = weapons[w];
+                var cost = getWeaponCost(weapon);
+                
+                if (myTP >= cost) {
+                    var minRange = getWeaponMinRange(weapon);
+                    var maxRange = getWeaponMaxRange(weapon);
+                    
+                    // Use dynamic weapon selection to find best weapon for current situation
+                    // For pathfinding, use weapon's optimal range instead of current distance
+                    var optimalDistance = floor((minRange + maxRange) / 2);
+                    var testScenario = buildScenarioForWeapon(weapon, myTP, getChips(), optimalDistance, false);
+                    if (testScenario != null) {
+                        var weaponValue = calculateScenarioValue(testScenario, weapon);
+                        
+                        // Select weapon with highest value
+                        if (affordableWeapon == null || weaponValue > bestWeaponValue) {
+                            affordableWeapon = weapon;
+                            weaponRange = [minRange, maxRange];
+                            bestWeaponValue = weaponValue;
+                            // Weapon selected for pathfinding
+                        }
+                    }
+                }
+            }
+            
+            if (affordableWeapon != null && weaponRange != null) {
+                // Targeting optimal weapon range
+                
+                // Find optimal distance within weapon range
+                var targetDistance = weaponRange[0]; // Start with minimum range
+                if (affordableWeapon == WEAPON_RHINO) {
+                    targetDistance = 3; // Middle of 2-4 range for flexibility
+                } else if (affordableWeapon == WEAPON_ELECTRISOR) {
+                    targetDistance = 7; // Exact range required
+                } else if (weaponRange[1] > weaponRange[0]) {
+                    targetDistance = floor((weaponRange[0] + weaponRange[1]) / 2); // Middle of range
+                }
+                
+                // Find cells at target distance from enemy
+                var targetCells = getCellsAtExactDistance(enemyCell, targetDistance);
+                var bestTargetCell = null;
+                var bestTargetDistance = 999;
+                
+                for (var t = 0; t < count(targetCells) && t < 15; t++) {
+                    var cell = targetCells[t];
+                    if (getCellContent(cell) == CELL_EMPTY) {
+                        var distanceFromUs = getCellDistance(currentCell, cell);
+                        if (distanceFromUs < bestTargetDistance) {
+                            bestTargetDistance = distanceFromUs;
+                            bestTargetCell = cell;
+                        }
+                    }
+                }
+                
+                if (bestTargetCell != null) {
+                    targetPosition = bestTargetCell;
+                    if (debugEnabled) {
+                        // Optimal weapon position found
+                    }
+                }
+            }
+        }
+        
+        // If no weapon-specific position found, fall back to original logic
+        if (targetPosition == null) {
+            targetPosition = bestCell;
+        }
+        
+        // Try to get as close as possible to the target position
+        var pathToBest = aStar(currentCell, targetPosition, myMP * 4); // Allow longer path for distant enemies
+        if (pathToBest != null && count(pathToBest) > 1) {
+            // Take as many steps as possible toward the target
+            var stepsToTake = min(myMP, count(pathToBest) - 1);
+            var moveToCell = pathToBest[stepsToTake];
+
+            // Create a path with only the steps we can take this turn
+            var actualPath = [];
+            for (var step = 0; step <= stepsToTake; step++) {
+                push(actualPath, pathToBest[step]);
+            }
+
+            // Moving steps toward target position
+
+            // ALWAYS move if we can - even if we can't attack immediately, we're making progress
+            if (stepsToTake > 0) {
+                return createPathResult(moveToCell, actualPath, 0, bestWeapon, false, stepsToTake, false);
+            }
+        }
+    }
+    
+    // Multi-turn pathfinding fallback
     var multiTurnResult = findMultiTurnPath(currentCell, sortedArray);
     if (multiTurnResult != null) {
         return multiTurnResult;
@@ -69,9 +186,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
     }
     
     // If all damage is 0, move toward enemy to get in weapon range
-    if (debugEnabled) {
-        debugW("PATHFIND ARRAY: maxDamage = " + maxDamage + ", sorted cells count = " + count(sortedArray));
-    }
+    // Damage analysis complete
     
     if (maxDamage == 0) {
         // Check if we have M-Laser and should seek alignment
@@ -79,9 +194,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
         if (inArray(weapons, WEAPON_M_LASER)) {
             var alignmentTarget = findMLaserAlignmentPosition();
             if (alignmentTarget != null) {
-                if (debugEnabled) {
-                    debugW("PATHFIND ARRAY: Seeking M-Laser alignment position " + alignmentTarget);
-                }
+                // Seeking M-Laser alignment position
                 var pathToAlignment = aStar(currentCell, alignmentTarget, myMP);
                 if (pathToAlignment != null && count(pathToAlignment) > 1) {
                     var moveToCell = pathToAlignment[min(myMP, count(pathToAlignment) - 1)];
@@ -91,16 +204,65 @@ function findOptimalPathFromArray(currentCell, damageArray) {
             }
         }
         
-        // Move toward enemy when no damage zones available
-        if (debugEnabled) {
-            debugW("PATHFIND ARRAY: No damage zones, moving toward enemy from " + currentCell + " to " + enemyCell);
+        // Smart positioning based on equipped weapons and their DPS potential
+        var bestPosition = findBestWeaponPosition(currentCell, weapons);
+        if (bestPosition != null) {
+            // Moving to optimal weapon position
+            
+            var pathToPosition = aStar(currentCell, bestPosition.cell, myMP);
+            if (pathToPosition != null && count(pathToPosition) > 1) {
+                var moveToCell = pathToPosition[min(myMP, count(pathToPosition) - 1)];
+                
+                return createPathResult(moveToCell, pathToPosition, 0, bestPosition.weapon, false, min(myMP, count(pathToPosition) - 1), false);
+            }
         }
         
-        var pathToEnemy = aStar(currentCell, enemyCell, myMP);
+        // IMPROVED: If smart positioning failed, use weapon-specific targeting
+        if (enemyCell != null) {
+            var targetPosition = findWeaponSpecificPosition(currentCell, weapons, enemyCell);
+            if (targetPosition != null) {
+                // Using weapon-specific position
+                
+                var pathToTarget = aStar(currentCell, targetPosition.cell, myMP);
+                if (pathToTarget != null && count(pathToTarget) > 1) {
+                    var moveToCell = pathToTarget[min(myMP, count(pathToTarget) - 1)];
+                    
+                    // VALIDATION: Ensure destination allows attack with the weapon
+                    var destDistance = getCellDistance(moveToCell, enemyCell);
+                    var minRange = getWeaponMinRange(targetPosition.weapon);
+                    var maxRange = getWeaponMaxRange(targetPosition.weapon);
+                    var canAttack = (destDistance >= minRange && destDistance <= maxRange);
+                    
+                    // Weapon-specific validation complete
+                    
+                    if (canAttack) {
+                        return createPathResult(moveToCell, pathToTarget, 0, targetPosition.weapon, false, min(myMP, count(pathToTarget) - 1), false);
+                    } else if (debugEnabled) {
+                        // Position rejected - not in attack range
+                    }
+                }
+            }
+        }
+        
+        // Fallback: Move toward enemy when no smart position found
+        if (debugEnabled) {
+            // Fallback - moving toward enemy
+        }
+
+        var pathToEnemy = aStar(currentCell, enemyCell, myMP * 4); // Allow longer search for distant enemies
         if (pathToEnemy != null && count(pathToEnemy) > 1) {
-            var moveToCell = pathToEnemy[min(myMP, count(pathToEnemy) - 1)];
-            
-            return createPathResult(moveToCell, pathToEnemy, 0, null, false, min(myMP, count(pathToEnemy) - 1), false);
+            var stepsToTake = min(myMP, count(pathToEnemy) - 1);
+            var moveToCell = pathToEnemy[stepsToTake];
+
+            // Create path with only the steps we can take
+            var actualPath = [];
+            for (var step = 0; step <= stepsToTake; step++) {
+                push(actualPath, pathToEnemy[step]);
+            }
+
+            // Moving toward enemy as fallback
+
+            return createPathResult(moveToCell, actualPath, 0, null, false, stepsToTake, false);
         }
     }
     
@@ -114,23 +276,16 @@ function findOptimalPathFromArray(currentCell, damageArray) {
     // 3. We have high-damage cells that are only reachable by teleport
     if (currentHPPercent < 0.4 && maxDamage > 0) {
         shouldUseTeleport = true;
-        if (debugEnabled) {
-            debugW("LATE-GAME TELEPORT: HP=" + floor(currentHPPercent * 100) + "% < 40%, trying teleportation for positioning");
-        }
+        // Late-game teleportation triggered
     } else if (maxDamage == 0 && count(damageArray) > 0) {
         // No movement paths found, but damage zones exist - try teleport
         shouldUseTeleport = true;
-        if (debugEnabled) {
-            debugW("STRATEGIC TELEPORT: No movement paths to damage zones, trying teleportation");
-        }
+        // Strategic teleportation for positioning
     }
     
     // Last resort: Try teleport + movement fallback (or forced teleport for late-game)
     if (shouldUseTeleport || maxDamage == 0) {
-        if (debugEnabled) {
-            var reason = shouldUseTeleport ? "Late-game positioning" : "No paths found";
-            debugW("PATHFIND FALLBACK: " + reason + ", trying teleport + movement");
-        }
+        // Pathfinding fallback with teleportation
         
         var teleportResult = tryTeleportMovementFallback(currentCell, damageArray);
         if (teleportResult != null) {
@@ -138,15 +293,32 @@ function findOptimalPathFromArray(currentCell, damageArray) {
         }
     }
     
+    // ABSOLUTE FALLBACK: Use simple directional movement if everything else fails
+    // Absolute fallback - simple movement toward enemy
+
+    if (enemyCell != null) {
+        var simpleMovePath = findMultiStepMovementToward(currentCell, enemyCell, myMP);
+        if (simpleMovePath != null && count(simpleMovePath) > 1) {
+            // Simple movement path found
+            return createPathResult(
+                simpleMovePath[count(simpleMovePath) - 1], // Final position
+                simpleMovePath,                            // Path
+                0,                                         // No immediate damage
+                null,                                      // No specific weapon
+                false,                                     // Not immediately reachable
+                count(simpleMovePath) - 1,                 // Distance moved
+                false                                      // No teleport
+            );
+        }
+    }
+
     // Return null if no path found
     return null;
 }
 
 // === ARRAY SORTING FUNCTION ===
 function sortArrayByDamage(damageArray) {
-    if (debugEnabled) {
-        debugW("SORT ARRAY: " + count(damageArray) + " entries");
-    }
+    // Sorting damage array by priority
     
     // Make a copy to avoid modifying original array
     var sortedArray = [];
@@ -162,28 +334,65 @@ function sortArrayByDamage(damageArray) {
             // Enhanced format: [cellId, damage, weaponId, enemyEntity]
             push(sortedArray, [cellId, damage, weaponId, enemyEntity]);
         } else if (debugEnabled && i < 3) {
-            debugW("SORT REJECT: cell=" + cellId + ", damage=" + damage);
+            // Rejecting invalid cell
         }
     }
     
-    // Sort by damage (highest first) - manual bubble sort
-    for (var i = 0; i < count(sortedArray) - 1; i++) {
-        for (var j = 0; j < count(sortedArray) - 1 - i; j++) {
-            if (sortedArray[j][1] < sortedArray[j + 1][1]) {
-                var temp = sortedArray[j];
-                sortedArray[j] = sortedArray[j + 1];
-                sortedArray[j + 1] = temp;
+    // Sort by damage AND weapon priority (highest first) - optimized for small arrays
+    var arraySize = count(sortedArray);
+    if (arraySize > 50) {
+        // If array too large, take top entries and skip full sort
+        var topEntries = [];
+        var maxEntries = 20; // Limit to top 20 entries
+        
+        for (var k = 0; k < min(maxEntries, arraySize); k++) {
+            var maxIndex = k;
+            var maxScore = getWeaponSortScore(sortedArray[k]);
+            
+            // Find max in remaining elements
+            for (var m = k + 1; m < arraySize; m++) {
+                var score = getWeaponSortScore(sortedArray[m]);
+                if (score > maxScore) {
+                    maxIndex = m;
+                    maxScore = score;
+                }
+            }
+            
+            // Swap if needed
+            if (maxIndex != k) {
+                var temp = sortedArray[k];
+                sortedArray[k] = sortedArray[maxIndex];
+                sortedArray[maxIndex] = temp;
+            }
+        }
+        
+        // Truncate to top entries only
+        var truncated = [];
+        for (var t = 0; t < min(maxEntries, arraySize); t++) {
+            push(truncated, sortedArray[t]);
+        }
+        sortedArray = truncated;
+    } else {
+        // Use simple selection sort for small arrays with weapon prioritization
+        for (var i = 0; i < arraySize - 1; i++) {
+            var maxIndex = i;
+            var maxScore = getWeaponSortScore(sortedArray[i]);
+            for (var j = i + 1; j < arraySize; j++) {
+                var score = getWeaponSortScore(sortedArray[j]);
+                if (score > maxScore) {
+                    maxIndex = j;
+                    maxScore = score;
+                }
+            }
+            if (maxIndex != i) {
+                var temp = sortedArray[i];
+                sortedArray[i] = sortedArray[maxIndex];
+                sortedArray[maxIndex] = temp;
             }
         }
     }
     
-    if (debugEnabled) {
-        debugW("SORT COMPLETE: " + count(sortedArray) + " sorted entries");
-        for (var i = 0; i < min(3, count(sortedArray)); i++) {
-            var entry = sortedArray[i];
-            debugW("TOP DAMAGE[" + i + "]: cell=" + entry[0] + ", damage=" + entry[1]);
-        }
-    }
+    // Array sorting complete
     
     return sortedArray;
 }
@@ -205,13 +414,7 @@ function findOptimalPath(currentCell, damageZones) {
         if (path != null && count(path) <= myMP + 1) {
             // Mark chosen path in bright orange
             // TEMPORARILY DISABLED: Testing if mark() corrupts the map
-            if (debugEnabled) {
-                // for (var p = 0; p < count(path); p++) {
-                //     mark(path[p], getColor(255, 165, 0)); // Orange color
-                // }
-                // mark(targetCell, getColor(255, 0, 0)); // Bright red for final target
-                debug("Path found: " + count(path) + " steps to damage " + expectedDamage);
-            }
+            // Path found and marked
             
             return createPathResult(targetCell, path, expectedDamage, weaponId, true, count(path) - 1, false);
         }
@@ -227,19 +430,15 @@ function findOptimalPath(currentCell, damageZones) {
     }
     
     // If all damage is 0, move toward enemy to get in weapon range
-    if (debugEnabled) {
-        debugW("PATHFINDING: maxDamage = " + maxDamage + ", sorted cells count = " + count(sortedCells));
-    }
+    // Pathfinding damage analysis complete
     if (maxDamage == 0) {
-        if (debugEnabled) {
-            debugW("MOVING TOWARD ENEMY: currentCell=" + currentCell + ", enemyCell=" + enemyCell + ", myMP=" + myMP);
-        }
+        // Moving toward enemy
         var moveTowardEnemy = aStar(currentCell, enemyCell, myMP);
         if (moveTowardEnemy != null && count(moveTowardEnemy) > 1) {
             var moveToCell = moveTowardEnemy[min(myMP, count(moveTowardEnemy) - 1)];
             
             if (debugEnabled) {
-                debugW("No damage zones found, moving toward enemy from " + currentCell + " to " + moveToCell);
+                // Moving toward enemy - no damage zones
             }
             
             return createPathResult(moveToCell, arraySlice(moveTowardEnemy, 0, min(myMP + 1, count(moveTowardEnemy))), 0, null, false, min(myMP, count(moveTowardEnemy) - 1), false);
@@ -273,26 +472,16 @@ function findOptimalPath(currentCell, damageZones) {
 function sortCellsByDamage(damageZones) {
     var cellArray = [];
     
-    var debugCount = 0;
     for (var cell in damageZones) {
-        if (debugEnabled && debugCount < 3) {
-            debugW("SIMPLE SORT DEBUG: cell=" + cell + ", damage=" + damageZones[cell]);
-            debugCount++;
-        }
-        
         // Use cell ID directly
         var cellId = cell + 0;  // Convert to number
         if (cellId != null && !isNaN(cellId) && cellId >= 0 && cellId <= 612) {
             var damage = damageZones[cell] + 0; // Convert damage to number
             push(cellArray, [cellId, damage]);
-        } else if (debugEnabled && debugCount < 3) {
-            debugW("SORT REJECT: Invalid cell " + cell + " -> " + cellId);
         }
     }
     
-    if (debugEnabled) {
-        debugW("SORT RESULT: " + count(cellArray) + " valid cells to sort");
-    }
+    // Cell array prepared for sorting
     
     // Sort by damage (highest first) - manual bubble sort
     for (var i = 0; i < count(cellArray) - 1; i++) {
@@ -397,8 +586,7 @@ function findMLaserAlignmentPosition() {
     var bestScore = 0;
     
     if (debugEnabled) {
-        debugW("=== M-LASER ALIGNMENT SEARCH ===");
-        debugW("Enemy at (" + enemyX + "," + enemyY + "), seeking X/Y axis alignment");
+        // M-Laser alignment search
     }
     
     // Check cells on same X axis as enemy (vertical line)
@@ -410,7 +598,7 @@ function findMLaserAlignmentPosition() {
                 bestScore = score;
                 bestTarget = cell;
                 if (debugEnabled) {
-                    debugW("M-Laser vertical: Cell " + cell + " (" + enemyX + "," + y + ") score: " + score);
+                    // M-Laser vertical alignment checked
                 }
             }
         }
@@ -425,14 +613,14 @@ function findMLaserAlignmentPosition() {
                 bestScore = score;
                 bestTarget = cell;
                 if (debugEnabled) {
-                    debugW("M-Laser horizontal: Cell " + cell + " (" + x + "," + enemyY + ") score: " + score);
+                    // M-Laser horizontal alignment checked
                 }
             }
         }
     }
     
     if (bestTarget != null && debugEnabled) {
-        debugW("BEST M-LASER POSITION: Cell " + bestTarget + " (score: " + bestScore + ")");
+        // Best M-Laser position found
         markText(bestTarget, "M-LASER", getColor(255, 255, 0), 8);
     }
     
@@ -450,7 +638,7 @@ function evaluateMLaserPosition(cell) {
     if (!isWalkable) return 0;
     
     // Must have LOS to enemy
-    if (!hasLOS(cell, enemyCell)) return 0;
+    if (!checkLineOfSight(cell, enemyCell)) return 0;
     
     var score = 0;
     
@@ -475,6 +663,59 @@ function evaluateMLaserPosition(cell) {
         }
     }
     score += min(coverBonus, 8); // Cap cover bonus at 8
+    
+    // MAGIC BUILD HIDE-AND-SEEK BONUSES
+    if (isMagicBuild && count(allEnemies) > 0) {
+        // Enhanced cover bonus for magic builds (hit-and-run tactics)
+        score += min(coverBonus * 2, 15); // Double cover bonus for magic builds
+        
+        // Escape route bonus - prefer positions with multiple movement options
+        var escapeRoutes = 0;
+        var escapeDistance = 3; // Check 3 cells in each direction for escape routes
+        var directions = [
+            [-1, 0], [1, 0], [0, -1], [0, 1],  // Cardinal directions
+            [-1, -1], [-1, 1], [1, -1], [1, 1] // Diagonal directions
+        ];
+        
+        for (var d = 0; d < count(directions); d++) {
+            var dx = directions[d][0];
+            var dy = directions[d][1];
+            var routeOpen = true;
+            
+            for (var step = 1; step <= escapeDistance; step++) {
+                var escapeCell = cell + (dx * step) + (dy * step * MAP_WIDTH);
+                if (getCellContent(escapeCell) != CELL_EMPTY) {
+                    routeOpen = false;
+                    break;
+                }
+            }
+            
+            if (routeOpen) {
+                escapeRoutes++;
+            }
+        }
+        
+        // Bonus for having multiple escape routes (max 8 directions)
+        var escapeBonus = min(escapeRoutes * 2, 16); // Max 16 points for escape routes
+        score += escapeBonus;
+        
+        // Line of sight penalty for magic builds - prefer positions where enemies can't see you
+        var losBlockedFromEnemies = 0;
+        for (var e = 0; e < count(allEnemies); e++) {
+            var targetEnemyCell = getCell(allEnemies[e]);
+            if (!lineOfSight(cell, targetEnemyCell, targetEnemyCell)) {
+                losBlockedFromEnemies++;
+            }
+        }
+        
+        // Bonus for breaking line of sight with enemies
+        var stealthBonus = losBlockedFromEnemies * 10; // 10 points per enemy we can hide from
+        score += stealthBonus;
+        
+        if (debugEnabled && stealthBonus > 0) {
+            // Magic stealth bonus applied
+        }
+    }
     
     // Penalty for being on same line as current position (avoids minimal movement)
     if (isOnSameLine(myCell, cell)) {
@@ -540,7 +781,7 @@ function findMultiStepMovementToward(fromCell, toCell, maxMP) {
         var nextCell = findSimpleMovementToward(currentCell, toCell, 1);
         if (nextCell == null || nextCell == currentCell) {
             if (debugEnabled) {
-                debugW("MULTI-STEP: Step " + step + " blocked, trying alternative");
+                // Multi-step blocked, trying alternative
             }
             // Try alternative directions if blocked
             nextCell = findAlternativeMovement(currentCell, toCell);
@@ -558,7 +799,7 @@ function findMultiStepMovementToward(fromCell, toCell, maxMP) {
     }
     
     if (debugEnabled) {
-        debugW("MULTI-STEP PATH: " + count(path) + " steps, from " + fromCell + " to " + currentCell);
+        // Multi-step path created
     }
     
     return (count(path) > 1) ? path : null;
@@ -571,7 +812,7 @@ function findSimpleMovementToward(fromCell, toCell, maxMP) {
     var toY = getCellY(toCell);
     
     if (debugEnabled) {
-        debugW("SIMPLE MOVE: from (" + fromX + "," + fromY + ") to (" + toX + "," + toY + ")");
+        // Simple directional movement
     }
     
     // Try moving directly toward enemy
@@ -589,7 +830,7 @@ function findSimpleMovementToward(fromCell, toCell, maxMP) {
         var targetCell = getCellFromXY(fromX + dirX, fromY);
         if (targetCell != null && targetCell != -1) {
             if (debugEnabled) {
-                debugW("SIMPLE MOVE: X direction to " + targetCell);
+                // Moving in X direction
             }
             return targetCell;
         }
@@ -599,7 +840,7 @@ function findSimpleMovementToward(fromCell, toCell, maxMP) {
         var targetCell = getCellFromXY(fromX, fromY + dirY);
         if (targetCell != null && targetCell != -1) {
             if (debugEnabled) {
-                debugW("SIMPLE MOVE: Y direction to " + targetCell);
+                // Moving in Y direction
             }
             return targetCell;
         }
@@ -610,7 +851,7 @@ function findSimpleMovementToward(fromCell, toCell, maxMP) {
         var targetCell = getCellFromXY(fromX, fromY + dirY);
         if (targetCell != null && targetCell != -1) {
             if (debugEnabled) {
-                debugW("SIMPLE MOVE: Y direction to " + targetCell + " (fallback)");
+                // Moving in Y direction (fallback)
             }
             return targetCell;
         }
@@ -620,14 +861,14 @@ function findSimpleMovementToward(fromCell, toCell, maxMP) {
         var targetCell = getCellFromXY(fromX + dirX, fromY);
         if (targetCell != null && targetCell != -1) {
             if (debugEnabled) {
-                debugW("SIMPLE MOVE: X direction to " + targetCell + " (fallback)");
+                // Moving in X direction (fallback)
             }
             return targetCell;
         }
     }
     
     if (debugEnabled) {
-        debugW("SIMPLE MOVE: No valid directions found");
+        // No valid movement directions found
     }
     return null;
 }
@@ -641,7 +882,7 @@ function executeMovement(pathResult) {
     // Handle teleport + movement combo  
     if (pathResult[6]) { // pathResult[6] = useTeleport
         if (debugEnabled) {
-            debugW("EXECUTE TELEPORT: Using teleportation to " + pathResult[0]);
+            // Executing teleportation
         }
         
         var chips = getChips();
@@ -653,16 +894,16 @@ function executeMovement(pathResult) {
             myMP = getMP(); // MP should be unchanged after teleport
             
             if (debugEnabled) {
-                debugW("TELEPORT SUCCESS: Now at " + myCell + " with " + myMP + " MP remaining");
+                // Teleport successful
             }
             
             // Target cell reached after teleport - no additional movement needed
             if (debugEnabled) {
-                debugW("TELEPORT COMPLETE: Reached target " + pathResult[0]);
+                // Teleport completed to target
             }
         } else {
             if (debugEnabled) {
-                debugW("TELEPORT FAILED: Cannot use teleportation chip");
+                // Teleport failed
             }
         }
         return;
@@ -688,11 +929,11 @@ function executeNormalMovement(pathResult) {
         if (mpUsed > 0) {
             mpRemaining -= mpUsed;
             if (debugEnabled) {
-                debugW("Moved to " + targetCell + " (MP used: " + mpUsed + ", remaining: " + mpRemaining + ")");
+                // Movement completed
             }
         } else {
             if (debugEnabled) {
-                debugW("Movement blocked to " + targetCell + ", trying alternative");
+                // Movement blocked, trying alternative
             }
             // Try alternative movement when blocked
             var currentPos = getCell();
@@ -702,11 +943,11 @@ function executeNormalMovement(pathResult) {
                 if (altMpUsed > 0) {
                     mpRemaining -= altMpUsed;
                     if (debugEnabled) {
-                        debugW("Alternative move to " + alternative + " (MP used: " + altMpUsed + ", remaining: " + mpRemaining + ")");
+                        // Alternative movement completed
                     }
                 } else {
                     if (debugEnabled) {
-                        debugW("Alternative movement also blocked, stopping");
+                        // Alternative movement blocked
                     }
                     break;
                 }
@@ -777,14 +1018,14 @@ function findAlternativeMovement(fromCell, toCell) {
         }
         
         if (debugEnabled) {
-            debugW("ALTERNATIVE: Trying " + testCell + " from direction [" + dir[0] + "," + dir[1] + "]");
+            // Trying alternative direction
         }
         
         return testCell; // Return first valid alternative
     }
     
     if (debugEnabled) {
-        debugW("ALTERNATIVE: No alternatives found from " + fromCell);
+        // No movement alternatives found
     }
     
     return null;
@@ -831,7 +1072,7 @@ function findMultiTurnPath(currentCell, sortedArray) {
         } else {
             // Debug invalid path
             if (debugEnabled && i < 3) {
-                debugW("MULTI-TURN: Invalid path to cell " + targetCell + " - fullPath is " + (fullPath == null ? "null" : "length " + count(fullPath)));
+                // Multi-turn path invalid
             }
         }
     }
@@ -854,7 +1095,7 @@ function findMultiTurnPath(currentCell, sortedArray) {
                 for (var p = 0; p < count(firstTurnPath); p++) {
                     pathStr += (pathStr == "" ? "" : ",") + firstTurnPath[p];
                 }
-                debugW("Multi-turn path (" + count(firstTurnPath) + " cells): [" + pathStr + "]");
+                // Multi-turn path created
                 markText(bestTarget[0], "T" + floor(bestTarget[2] + 0.5), getColor(255, 255, 0), 10); // Yellow target
             }
         
@@ -870,19 +1111,19 @@ function findMultiTurnPath(currentCell, sortedArray) {
                 );
             } else {
                 if (debugEnabled) {
-                    debugW("MULTI-TURN: Empty path generated, falling back");
+                    // Empty path generated, falling back
                 }
             }
         } else {
             if (debugEnabled) {
-                debugW("MULTI-TURN: bestTarget has invalid fullPath");
+                // Best target has invalid path
             }
         }
     }
     
     // If no damage zones reachable, find best cover position toward target
     if (debugEnabled) {
-        debugW("MULTI-TURN: No damage zones reachable, seeking cover toward target");
+        // No damage zones reachable, seeking cover
     }
     
     var targetDirection = null;
@@ -926,7 +1167,7 @@ function findMultiTurnPath(currentCell, sortedArray) {
                 var coverPath = aStar(currentCell, bestCoverCell, myMP);
                 if (coverPath != null && count(coverPath) > 1) {
                     if (debugEnabled) {
-                        debugW("COVER SEEK: Moving to cover cell " + bestCoverCell + " (score: " + bestCoverScore + ") toward target " + targetDirection);
+                        // Moving to cover position
                         markText(bestCoverCell, "C" + floor(bestCoverScore), getColor(0, 255, 255), 10); // Cyan cover marker
                     }
                     
@@ -953,7 +1194,7 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
     var chips = getChips();
     if (!inArray(chips, CHIP_TELEPORTATION) || !canUseChip(CHIP_TELEPORTATION, currentCell)) {
         if (debugEnabled) {
-            debugW("TELEPORT FALLBACK: Teleportation not available");
+            // Teleportation not available
         }
         return null;
     }
@@ -962,7 +1203,7 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
     var bestScore = 0;
     
     if (debugEnabled) {
-        debugW("TELEPORT FALLBACK: Searching teleport + movement combinations");
+        // Searching teleport + movement combinations
     }
     
     // Try teleporting to various positions within range
@@ -1136,6 +1377,383 @@ function calculateCoverScore(cell) {
     var y = getCellY(cell);
     if (x < 2 || x > 15 || y < 2 || y > 15) {
         score -= 5;
+    }
+    
+    return score;
+}
+
+// === SMART WEAPON POSITIONING ===
+function findBestWeaponPosition(currentCell, weapons) {
+    if (enemyCell == null) return null;
+    
+    var bestPosition = null;
+    var bestScore = 0;
+    
+    if (debugEnabled) {
+        debugW("SMART POSITION: Finding best position for " + count(weapons) + " weapons");
+    }
+    
+    // Define weapon priorities based on build type and DPS potential
+    var weaponPriorities = [];
+    
+    if (isMagicBuild) {
+        // MAGIC BUILD: Prioritize DoT weapons as main DPS, DESTROYER for tactical debuffing
+        if (debugEnabled) {
+            debugW("SMART POSITION: Magic build detected, prioritizing DoT weapons as main DPS");
+        }
+        weaponPriorities = [
+            {weapon: WEAPON_FLAME_THROWER, priority: 100, dps: 2, range: [2, 8]},   // Main DoT DPS (max 2 uses)
+            {weapon: WEAPON_RHINO, priority: 90, dps: 3, range: [2, 4]},            // High DPS backup
+            {weapon: WEAPON_ELECTRISOR, priority: 80, dps: 2, range: [7, 7]},       // AoE backup
+            {weapon: WEAPON_DESTROYER, priority: 75, dps: 2, range: [1, 6]},        // Tactical debuff
+            {weapon: WEAPON_GRENADE_LAUNCHER, priority: 70, dps: 2, range: [4, 7]}, // AoE backup
+            {weapon: WEAPON_SWORD, priority: 60, dps: 2, range: [1, 1]},            // Melee backup
+            {weapon: WEAPON_KATANA, priority: 50, dps: 1, range: [1, 1]},           // Melee backup
+            {weapon: WEAPON_RIFLE, priority: 40, dps: 2, range: [7, 9]},            // Standard backup
+            {weapon: WEAPON_M_LASER, priority: 35, dps: 2, range: [5, 12]},         // Alignment needed
+            {weapon: WEAPON_LIGHTNINGER, priority: 32, dps: 2, range: [6, 10]},     // Star pattern AoE
+            {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 30, dps: 2, range: [6, 10]} // Healing
+        ];
+    } else {
+        // STRENGTH BUILD: Standard DPS priorities
+        weaponPriorities = [
+            {weapon: WEAPON_RHINO, priority: 100, dps: 3, range: [2, 4]},           // 3 uses = highest DPS
+            {weapon: WEAPON_ELECTRISOR, priority: 80, dps: 2, range: [7, 7]},       // 2 uses + AoE
+            {weapon: WEAPON_GRENADE_LAUNCHER, priority: 75, dps: 2, range: [4, 7]}, // 2 uses + AoE
+            {weapon: WEAPON_SWORD, priority: 60, dps: 2, range: [1, 1]},            // 2 uses melee
+            {weapon: WEAPON_KATANA, priority: 50, dps: 1, range: [1, 1]},           // 1 use melee
+            {weapon: WEAPON_RIFLE, priority: 40, dps: 2, range: [7, 9]},            // 2 uses
+            {weapon: WEAPON_M_LASER, priority: 35, dps: 2, range: [5, 12]},         // Alignment needed
+            {weapon: WEAPON_DESTROYER, priority: 32, dps: 2, range: [1, 6]},        // Lower priority for strength
+            {weapon: WEAPON_FLAME_THROWER, priority: 31, dps: 2, range: [2, 8]},    // Lower priority for strength (max 2 uses)
+            {weapon: WEAPON_LIGHTNINGER, priority: 30, dps: 2, range: [6, 10]},     // Star pattern AoE
+            {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 29, dps: 2, range: [6, 10]} // Healing
+        ];
+    }
+    
+    // Find highest priority weapon we have equipped
+    var targetWeapon = null;
+    var targetPriority = 0;
+    var targetRange = null;
+    
+    for (var w = 0; w < count(weapons); w++) {
+        var weapon = weapons[w];
+        
+        for (var p = 0; p < count(weaponPriorities); p++) {
+            var wpn = weaponPriorities[p];
+            if (wpn.weapon == weapon && wpn.priority > targetPriority) {
+                targetWeapon = weapon;
+                targetPriority = wpn.priority;
+                targetRange = wpn.range;
+                
+                if (debugEnabled) {
+                    debugW("SMART POSITION: Priority weapon " + weapon + " (priority=" + wpn.priority + ", DPS=" + wpn.dps + ")");
+                }
+                break;
+            }
+        }
+    }
+    
+    if (targetWeapon == null) return null;
+    
+    // For high-DPS weapons, prioritize getting into range quickly
+    var minRange = targetRange[0];
+    var maxRange = targetRange[1];
+    
+    if (debugEnabled) {
+        debugW("SMART POSITION: Target weapon " + targetWeapon + " range " + minRange + "-" + maxRange);
+    }
+    
+    // Check positions at each distance in priority order
+    var distancePriorities = [];
+    
+    if (targetWeapon == WEAPON_RHINO) {
+        // RHINO: Prioritize distance 3 (middle of range) for flexibility
+        push(distancePriorities, 3);
+        push(distancePriorities, 2);
+        push(distancePriorities, 4);
+    } else if (targetWeapon == WEAPON_ELECTRISOR) {
+        // ELECTRISOR: Must be exactly distance 7
+        push(distancePriorities, 7);
+    } else if (targetWeapon == WEAPON_GRENADE_LAUNCHER) {
+        // GRENADE: Prefer distance 5-6 for good AoE coverage
+        push(distancePriorities, 5);
+        push(distancePriorities, 6);
+        push(distancePriorities, 4);
+        push(distancePriorities, 7);
+    } else if (targetWeapon == WEAPON_SWORD || targetWeapon == WEAPON_KATANA) {
+        // Melee: Must be distance 1
+        push(distancePriorities, 1);
+    } else {
+        // Other weapons: Try middle of range first
+        var midRange = floor((minRange + maxRange) / 2);
+        for (var d = midRange; d >= minRange; d--) {
+            push(distancePriorities, d);
+        }
+        for (var d = midRange + 1; d <= maxRange; d++) {
+            push(distancePriorities, d);
+        }
+    }
+    
+    // Find best position at priority distances
+    for (var dp = 0; dp < count(distancePriorities); dp++) {
+        var targetDistance = distancePriorities[dp];
+        var positions = getCellsAtExactDistance(enemyCell, targetDistance);
+        
+        for (var i = 0; i < count(positions); i++) {
+            var cell = positions[i];
+            
+            // Must be walkable
+            if (getCellContent(cell) == CELL_OBSTACLE) continue;
+            
+            // Calculate reachability score
+            var moveDistance = getCellDistance(currentCell, cell);
+            var reachableThisTurn = (moveDistance <= myMP);
+            
+            var score = 100 - moveDistance; // Closer is better
+            
+            if (reachableThisTurn) {
+                score += 50; // Bonus for immediate reach
+            }
+            
+            // Line of sight bonus
+            if (lineOfSight(cell, enemyCell)) {
+                score += 20;
+            }
+            
+            // Cover bonus
+            var coverBonus = countAdjacentObstacles(cell) * 3;
+            score += min(coverBonus, 10); // Cap cover bonus
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestPosition = {
+                    cell: cell,
+                    distance: targetDistance,
+                    weapon: targetWeapon,
+                    reachable: reachableThisTurn
+                };
+                
+                if (debugEnabled) {
+                    debugW("SMART POSITION: New best position " + cell + " distance=" + targetDistance + " score=" + score);
+                }
+            }
+        }
+        
+        // If we found a good position at this distance, use it
+        if (bestPosition != null && bestScore > 50) {
+            break;
+        }
+    }
+    
+    return bestPosition;
+}
+
+// === WEAPON-SPECIFIC POSITIONING ===
+function findWeaponSpecificPosition(currentCell, weapons, enemyCell) {
+    if (weapons == null || count(weapons) == 0 || enemyCell == null) {
+        return null;
+    }
+    
+    var bestResult = null;
+    var bestScore = 0;
+    
+    if (debugEnabled) {
+        debugW("WEAPON-SPECIFIC: Finding position for " + count(weapons) + " weapons, enemy at " + enemyCell);
+    }
+    
+    // Check each weapon for optimal positioning
+    for (var w = 0; w < count(weapons); w++) {
+        var weapon = weapons[w];
+        var cost = getWeaponCost(weapon);
+        
+        // Skip if we can't afford this weapon
+        if (myTP < cost) {
+            continue;
+        }
+        
+        var minRange = getWeaponMinRange(weapon);
+        var maxRange = getWeaponMaxRange(weapon);
+        
+        // Determine optimal distance based on weapon type
+        var optimalDistance = minRange;
+        if (weapon == WEAPON_RHINO) {
+            optimalDistance = 3; // Middle of 2-4 range for flexibility
+        } else if (weapon == WEAPON_ELECTRISOR) {
+            optimalDistance = 7; // Exact range required
+        } else if (weapon == WEAPON_GRENADE_LAUNCHER) {
+            optimalDistance = 5; // Good AoE range
+        } else if (weapon == WEAPON_SWORD || weapon == WEAPON_KATANA) {
+            optimalDistance = 1; // Melee
+        } else if (maxRange > minRange) {
+            optimalDistance = floor((minRange + maxRange) / 2); // Middle of range
+        }
+        
+        if (debugEnabled) {
+            debugW("WEAPON-SPECIFIC: Checking " + weapon + " optimal distance " + optimalDistance);
+        }
+        
+        // Find cells at optimal distance from enemy
+        var targetCells = getCellsAtExactDistance(enemyCell, optimalDistance);
+        
+        for (var t = 0; t < count(targetCells) && t < 10; t++) {
+            var cell = targetCells[t];
+            
+            // Must be walkable
+            if (getCellContent(cell) != CELL_EMPTY) {
+                continue;
+            }
+            
+            // Calculate score based on reachability and weapon priority
+            var moveDistance = getCellDistance(currentCell, cell);
+            var score = 100 - moveDistance; // Closer is better
+            
+            // Weapon priority bonuses based on build type
+            if (isMagicBuild) {
+                // MAGIC BUILD: DoT weapons as main DPS, DESTROYER for tactical debuffing
+                if (weapon == WEAPON_FLAME_THROWER) {
+                    score += 60; // Top priority for main DoT DPS
+                } else if (weapon == WEAPON_RHINO) {
+                    score += 50; // High DPS backup
+                } else if (weapon == WEAPON_ELECTRISOR) {
+                    score += 45; // AoE backup
+                } else if (weapon == WEAPON_DESTROYER) {
+                    score += 40; // Tactical debuff (lower than main DPS)
+                } else if (weapon == WEAPON_GRENADE_LAUNCHER) {
+                    score += 35; // AoE backup
+                } else if (weapon == WEAPON_SWORD) {
+                    score += 30; // Melee backup
+                } else if (weapon == WEAPON_KATANA) {
+                    score += 25; // Melee backup
+                }
+            } else {
+                // STRENGTH BUILD: Standard priorities
+                if (weapon == WEAPON_RHINO) {
+                    score += 50; // Highest DPS
+                } else if (weapon == WEAPON_ELECTRISOR) {
+                    score += 40; // High DPS + AoE
+                } else if (weapon == WEAPON_GRENADE_LAUNCHER) {
+                    score += 35; // Good DPS + AoE
+                } else if (weapon == WEAPON_SWORD) {
+                    score += 30; // Good melee
+                } else if (weapon == WEAPON_KATANA) {
+                    score += 25; // Standard melee
+                } else if (weapon == WEAPON_DESTROYER) {
+                    score += 22; // Lower priority for strength
+                } else if (weapon == WEAPON_FLAME_THROWER) {
+                    score += 21; // Lower priority for strength
+                }
+            }
+            
+            // Bonus for reachable this turn
+            if (moveDistance <= myMP) {
+                score += 25;
+            }
+            
+            // Line of sight bonus
+            if (checkLineOfSight(cell, enemyCell)) {
+                score += 15;
+            }
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestResult = {
+                    cell: cell,
+                    weapon: weapon,
+                    distance: optimalDistance,
+                    reachable: moveDistance <= myMP
+                };
+                
+                if (debugEnabled) {
+                    debugW("WEAPON-SPECIFIC: New best " + weapon + " position " + cell + " (score=" + score + ")");
+                }
+            }
+        }
+    }
+    
+    return bestResult;
+}
+
+// === WEAPON PRIORITY SCORING ===
+function getWeaponSortScore(entry) {
+    var damage = entry[1];
+    var weaponId = (count(entry) > 2) ? entry[2] : null;
+    
+    // Base score is damage
+    var score = damage;
+    
+    // Add weapon priority bonuses based on build type
+    if (weaponId != null) {
+        if (isMagicBuild) {
+            // MAGIC BUILD: DoT weapons as main DPS, DESTROYER for tactical debuffing
+            if (weaponId == WEAPON_FLAME_THROWER) {
+                score += 1200; // Highest priority - main DoT DPS
+            } else if (weaponId == WEAPON_RHINO) {
+                score += 1100; // High DPS backup
+            } else if (weaponId == WEAPON_ELECTRISOR) {
+                score += 1000; // Good DPS + AoE
+            } else if (weaponId == WEAPON_DESTROYER) {
+                score += 900; // Tactical debuff (lower than main DPS)
+            } else if (weaponId == WEAPON_GRENADE_LAUNCHER) {
+                score += 800; // Decent DPS + AoE
+            } else if (weaponId == WEAPON_B_LASER) {
+                score += 700; // Multi-use backup
+            } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                score += 600; // Healing capability
+            } else if (weaponId == WEAPON_M_LASER) {
+                score += 500; // Alignment required
+            } else if (weaponId == WEAPON_RIFLE) {
+                score += 400; // Standard weapon
+            } else if (weaponId == WEAPON_KATANA) {
+                score += 300; // Melee backup
+            } else if (weaponId == WEAPON_SWORD) {
+                score += 200; // Basic melee
+            }
+        } else {
+            // STRENGTH BUILD: Standard priorities
+            if (weaponId == WEAPON_RHINO) {
+                score += 1000; // Highest priority - excellent DPS, low cost
+            } else if (weaponId == WEAPON_ELECTRISOR) {
+                score += 900; // High priority - good DPS, AoE
+            } else if (weaponId == WEAPON_GRENADE_LAUNCHER) {
+                score += 800; // Good priority - decent DPS, AoE
+            } else if (weaponId == WEAPON_B_LASER) {
+                score += 700; // Good priority - multi-use
+            } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                score += 600; // Moderate priority - healing capability
+            } else if (weaponId == WEAPON_M_LASER) {
+                score += 500; // Moderate priority - high damage but alignment required
+            } else if (weaponId == WEAPON_RIFLE) {
+                score += 400; // Lower priority - standard weapon
+            } else if (weaponId == WEAPON_DESTROYER) {
+                score += 350; // Lower priority for strength builds
+            } else if (weaponId == WEAPON_FLAME_THROWER) {
+                score += 340; // Lower priority for strength builds
+            } else if (weaponId == WEAPON_KATANA) {
+                score += 300; // Low priority - melee, bonus damage
+            } else if (weaponId == WEAPON_SWORD) {
+                score += 100; // Lowest priority - basic melee
+            }
+        }
+    }
+    
+    // DISTANCE BONUS: For magic builds using FLAME_THROWER, prefer longer distances to stay out of enemy TOXIN range
+    if (isMagicBuild && weaponId == WEAPON_FLAME_THROWER && count(entry) > 0) {
+        var cellId = entry[0];
+        if (primaryTarget != null) {
+            var targetCell = getCell(primaryTarget);
+            if (targetCell != null) {
+                var dist = getDistance(cellId, targetCell);
+                // Bonus for distances 6-8 (max FLAME_THROWER range), penalty for close range
+                if (dist >= 6 && dist <= 8) {
+                    score += 50; // Prefer max range for safety
+                } else if (dist >= 4 && dist <= 5) {
+                    score += 25; // Moderate range is acceptable
+                } else if (dist <= 3) {
+                    score -= 25; // Penalty for being too close to enemy TOXIN range
+                }
+            }
+        }
     }
     
     return score;

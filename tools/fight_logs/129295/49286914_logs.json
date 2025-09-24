@@ -1,0 +1,9318 @@
+{
+  "18035": {
+    "100": [
+      [
+        0,
+        3,
+        "[Turn 5]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Failed to use flame_thrower: result=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "101": [
+      [
+        0,
+        3,
+        "[Turn 5]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Failed to use neutrino: result=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "107": [
+      [
+        0,
+        3,
+        "[Turn 5] Total damage dealt: 96.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff9900",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          373
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] V6_main.ls complete - end of turn 5",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "120": [
+      [
+        0,
+        3,
+        "[Turn 5] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] \ud83d\udd25 Erosion damage: 18 (3%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Turn 6 initialized. Enemy: Mixotron at dist 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Turn 6 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] PATTERN: Enemy likely to heal (usually at 101% HP)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] PATTERN: Enemy prefers range 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Adjusting for predicted heal - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Building influence map for turn 6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] State: MyEHP=617 EnemyEHP=631 EID=274.52700000000004 Damage=419 LifeSteal=13 Pkill=0.9470720720720722",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Current phase: MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Quick decision: Kill shot ready!",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Quick decision result: EXECUTE_KILL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=4, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Can't attack from range 4, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]   Range=4, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 4 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "121": [
+      [
+        0,
+        3,
+        "[Turn 6]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "125": [
+      [
+        0,
+        3,
+        "[Turn 6] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "126": [
+      [
+        0,
+        3,
+        "[Turn 6]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "127": [
+      [
+        0,
+        3,
+        "[Turn 6]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "131": [
+      [
+        0,
+        3,
+        "[Turn 6] Total damage dealt: 96.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff6600",
+        1
+      ],
+      [
+        0,
+        9,
+        [
+          320
+        ],
+        "274",
+        "ffffff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          357
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] V6_main.ls complete - end of turn 6",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "143": [
+      [
+        0,
+        3,
+        "[Turn 6] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 6] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] \ud83d\udd25 Erosion damage: 22 (4%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Turn 7 initialized. Enemy: Mixotron at dist 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Turn 7 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] PATTERN: Enemy healed at 63% HP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] PATTERN: Enemy likely to heal (usually at 82% HP)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] PATTERN: Low aggression enemy (avg 124 damage/turn)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] PATTERN: Enemy prefers range 6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Adjusting for predicted heal - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Adjusting for low aggression - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Building influence map for turn 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] State: MyEHP=620 EnemyEHP=696 EID=237.30300000000003 Damage=419 LifeSteal=13 Pkill=0.5810810810810811",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Current phase: MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Quick decision: Setup kill",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Quick decision result: SETUP_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Full hit cell detection - turn 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Found 43 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Current position damage=419 EID=237.30300000000003 score=300.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 298: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 197: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 316: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 333: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 198: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 215: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 232: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 334: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 351: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 368: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 233: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 250: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 335: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 352: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 369: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 268: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 285: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 319: damage=419 EID=237.30300000000003 score=300.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 336: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Cell 353: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=3, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Can't attack from range 3, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Range=3, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 3 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "144": [
+      [
+        0,
+        3,
+        "[Turn 7]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "148": [
+      [
+        0,
+        3,
+        "[Turn 7] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "149": [
+      [
+        0,
+        3,
+        "[Turn 7]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "15": [
+      [
+        0,
+        3,
+        "[Turn 1] A* moved 6 MP toward target",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] \u2192 Approached to distance 15",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Turn 1 complete. HP: 1236/1236, Shields: 0+0%, Position: 15",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          529
+        ],
+        "00ff00",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          529
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          309
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] V6_main.ls complete - end of turn 1",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "150": [
+      [
+        0,
+        3,
+        "[Turn 7]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "154": [
+      [
+        0,
+        3,
+        "[Turn 7] Total damage dealt: 96.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff9900",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          373
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] V6_main.ls complete - end of turn 7",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "172": [
+      [
+        0,
+        3,
+        "[Turn 7] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 7] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] \ud83d\udd25 Erosion damage: 26 (5%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Turn 8 initialized. Enemy: Mixotron at dist 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Turn 8 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] PATTERN: Enemy healed at 75% HP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] PATTERN: Low aggression enemy (avg 121 damage/turn)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] PATTERN: Enemy prefers range 6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Adjusting for low aggression - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Building influence map for turn 8",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] State: MyEHP=512 EnemyEHP=789 EID=274.52700000000004 Damage=419 LifeSteal=13 Pkill=0.05743243243243238",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Current phase: MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Quick decision: Setup kill",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Quick decision result: SETUP_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Full hit cell detection - turn 8",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Found 42 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Current position damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 180: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 181: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 198: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 215: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 182: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 199: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 216: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 233: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 335: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 352: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 183: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 200: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 217: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 234: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 251: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 319: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 336: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 353: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 184: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Cell 201: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=4, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Can't attack from range 4, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Range=4, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 4 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "173": [
+      [
+        0,
+        3,
+        "[Turn 8]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "177": [
+      [
+        0,
+        3,
+        "[Turn 8] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "178": [
+      [
+        0,
+        3,
+        "[Turn 8]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "179": [
+      [
+        0,
+        3,
+        "[Turn 8]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "183": [
+      [
+        0,
+        3,
+        "[Turn 8] Total damage dealt: 96.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff6600",
+        1
+      ],
+      [
+        0,
+        9,
+        [
+          320
+        ],
+        "274",
+        "ffffff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          357
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] V6_main.ls complete - end of turn 8",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "198": [
+      [
+        0,
+        3,
+        "[Turn 8] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 8] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] \ud83d\udd25 Erosion damage: 29 (5%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Turn 9 initialized. Enemy: Mixotron at dist 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Turn 9 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] PATTERN: Enemy healed at 94% HP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] PATTERN: Low aggression enemy (avg 112 damage/turn)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] PATTERN: Enemy prefers range 6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Adjusting for low aggression - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Building influence map for turn 9",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] State: MyEHP=456 EnemyEHP=823 EID=237.30300000000003 Damage=419 LifeSteal=13 Pkill=0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Current phase: MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Quick decision result: STANDARD_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Full hit cell detection - turn 9",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Found 43 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Current position damage=419 EID=237.30300000000003 score=300.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 298: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 197: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 316: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 333: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 198: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 215: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 232: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 334: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 351: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 368: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 233: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 250: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 335: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 352: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 369: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 268: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 285: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 319: damage=419 EID=237.30300000000003 score=300.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 336: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Cell 353: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=3, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Can't attack from range 3, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Range=3, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 3 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "199": [
+      [
+        0,
+        3,
+        "[Turn 9]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "203": [
+      [
+        0,
+        3,
+        "[Turn 9] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "204": [
+      [
+        0,
+        3,
+        "[Turn 9]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "205": [
+      [
+        0,
+        3,
+        "[Turn 9]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "209": [
+      [
+        0,
+        3,
+        "[Turn 9] Total damage dealt: 96.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff6600",
+        1
+      ],
+      [
+        0,
+        9,
+        [
+          320
+        ],
+        "237",
+        "ffffff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          373
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] V6_main.ls complete - end of turn 9",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "226": [
+      [
+        0,
+        3,
+        "[Turn 9] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 9] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] \ud83d\udd25 Erosion damage: 34 (6%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Mode: OPTIMAL (0% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Turn 10 initialized. Enemy: Mixotron at dist 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Turn 10 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] PATTERN: Enemy healed at 101% HP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] PATTERN: Low aggression enemy (avg 116 damage/turn)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] PATTERN: Enemy prefers range 5",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Adjusting for low aggression - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Building influence map for turn 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] State: MyEHP=310 EnemyEHP=522 EID=274.52700000000004 Damage=419 LifeSteal=16 Pkill=0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Current phase: MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Mode: OPTIMAL (2% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Quick decision: Setup kill",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Quick decision result: SETUP_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Full hit cell detection - turn 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Found 42 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Current position damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 180: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 181: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 198: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 215: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 182: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 199: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 216: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 233: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 335: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 352: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 183: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 200: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 217: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 234: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 251: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 319: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 336: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 353: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 184: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Cell 201: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=4, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Can't attack from range 4, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Range=4, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 4 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "227": [
+      [
+        0,
+        3,
+        "[Turn 10]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "231": [
+      [
+        0,
+        3,
+        "[Turn 10] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "232": [
+      [
+        0,
+        3,
+        "[Turn 10]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "233": [
+      [
+        0,
+        3,
+        "[Turn 10]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "239": [
+      [
+        0,
+        3,
+        "[Turn 10] Total damage dealt: 96.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff0000",
+        1
+      ],
+      [
+        0,
+        9,
+        [
+          320
+        ],
+        "274",
+        "ffffff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          357
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] V6_main.ls complete - end of turn 10",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "25": [
+      [
+        0,
+        3,
+        "[Turn 1] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] No teleportation chip equipped",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Mode: OPTIMAL (0% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Turn 2 initialized. Enemy: Mixotron at dist 12",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Turn 2 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Turn 2 strategy: standard_buffs",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Building influence map for turn 2",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Found 116 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Influence map already built for turn 2",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] State: MyEHP=1236 EnemyEHP=852 EID=0 Damage=0 LifeSteal=0 Pkill=0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Current phase: OPENING",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Mode: OPTIMAL (2% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Quick decision result: APPLY_BUFFS",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Combat states: CAN_MOVE, CAN_ATTACK, ENEMY_SHIELDED",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Quick decision: APPLY_BUFFS",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Full hit cell detection - turn 2",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Found 100 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Current position damage=0 EID=0 score=0.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 146: damage=197 EID=58.92 score=167.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 163: damage=197 EID=275.451 score=59.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 180: damage=197 EID=58.92 score=167.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 164: damage=197 EID=275.451 score=59.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 181: damage=325 EID=275.451 score=187.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 198: damage=197 EID=275.451 score=59.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 215: damage=197 EID=58.92 score=167.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 182: damage=325 EID=275.451 score=187.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 199: damage=325 EID=318.65900000000005 score=165.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 216: damage=325 EID=275.451 score=187.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 233: damage=197 EID=275.451 score=59.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 250: damage=197 EID=58.92 score=167.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 217: damage=419 EID=318.65900000000005 score=259.67049999999995",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 234: damage=325 EID=318.65900000000005 score=165.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 251: damage=325 EID=275.451 score=187.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 268: damage=197 EID=275.451 score=59.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 285: damage=197 EID=58.92 score=167.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 235: damage=419 EID=318.65900000000005 score=259.67049999999995",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 252: damage=419 EID=318.65900000000005 score=259.67049999999995",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Cell 269: damage=325 EID=318.65900000000005 score=165.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Moving to cell 217 (score=259.67049999999995 vs current=0.0)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "251": [
+      [
+        0,
+        3,
+        "[Turn 10] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 10] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] \ud83d\udd25 Erosion damage: 49 (9%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Turn 11 initialized. Enemy: Mixotron at dist 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Turn 11 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] PATTERN: Enemy likely to heal (usually at 87% HP)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] PATTERN: Low aggression enemy (avg 103 damage/turn)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] PATTERN: Enemy prefers range 5",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Adjusting for predicted heal - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Adjusting for low aggression - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Building influence map for turn 11",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] State: MyEHP=322 EnemyEHP=658 EID=237.30300000000003 Damage=419 LifeSteal=13 Pkill=0.7950450450450451",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] PHASE TRANSITION: MID_GAME \u2192 LATE_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Late game: Resource conservation",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Current phase: LATE_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Quick decision: Kill shot ready!",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Quick decision result: EXECUTE_KILL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=3, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Can't attack from range 3, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]   Range=3, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 3 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "252": [
+      [
+        0,
+        3,
+        "[Turn 11]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "256": [
+      [
+        0,
+        3,
+        "[Turn 11] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "257": [
+      [
+        0,
+        3,
+        "[Turn 11]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "258": [
+      [
+        0,
+        3,
+        "[Turn 11]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "262": [
+      [
+        0,
+        3,
+        "[Turn 11] CRITICAL HIT with spark!",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Total damage dealt: 110.4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff3300",
+        1
+      ],
+      [
+        0,
+        9,
+        [
+          320
+        ],
+        "237",
+        "ffffff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          373
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] V6_main.ls complete - end of turn 11",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "275": [
+      [
+        0,
+        3,
+        "[Turn 11] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 11] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] \ud83d\udd25 Erosion damage: 55 (10%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Turn 12 initialized. Enemy: Mixotron at dist 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Turn 12 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] PATTERN: Enemy likely to heal (usually at 87% HP)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] PATTERN: Low aggression enemy (avg 97 damage/turn)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] PATTERN: Enemy prefers range 5",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Adjusting for predicted heal - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Adjusting for low aggression - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Building influence map for turn 12",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] State: MyEHP=285 EnemyEHP=553 EID=274.52700000000004 Damage=419 LifeSteal=10 Pkill=1",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] PHASE TRANSITION: LATE_GAME \u2192 ENDGAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] ENDGAME: Maximum aggression!",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Current phase: ENDGAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Quick decision: Kill shot ready!",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Quick decision result: EXECUTE_KILL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=4, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Can't attack from range 4, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]   Range=4, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 4 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "276": [
+      [
+        0,
+        3,
+        "[Turn 12]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "280": [
+      [
+        0,
+        3,
+        "[Turn 12] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "281": [
+      [
+        0,
+        3,
+        "[Turn 12]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "282": [
+      [
+        0,
+        3,
+        "[Turn 12]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Executing: spark (type=chip, uses=2, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "286": [
+      [
+        0,
+        3,
+        "[Turn 12] Total damage dealt: 96.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Post-attack repositioning with 6 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff0000",
+        1
+      ],
+      [
+        0,
+        9,
+        [
+          320
+        ],
+        "274",
+        "ffffff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          357
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] V6_main.ls complete - end of turn 12",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "303": [
+      [
+        0,
+        3,
+        "[Turn 12] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 12] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] \ud83d\udd25 Erosion damage: 61 (11%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] Turn 13 initialized. Enemy: Mixotron at dist 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] HP PANIC MODE TRIGGERED - HP at 19%",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] Entering PANIC mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] PANIC MODE - HP: 228/1182",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        7,
+        "    \u25b6 AI execute_combat, line 1926\n    \u25b6 AI V6_main, line 89\n",
+        1001,
+        [
+          "35",
+          "regeneration"
+        ]
+      ],
+      [
+        0,
+        7,
+        "    \u25b6 AI weapon_management, line 29\n    \u25b6 AI execute_combat, line 1937\n    \u25b6 AI V6_main, line 89\n",
+        1004,
+        [
+          "43",
+          "grenade_launcher"
+        ]
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] HP PANIC MODE TRIGGERED - HP at 19%",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] V6_main.ls complete - end of turn 13",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "31": [
+      [
+        0,
+        3,
+        "[Turn 2] A* moved 6 MP toward target",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=14, hasLOS=false",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Range=14, TP=16, LOS=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Checking 5 chips for damage options",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 0 at range 14 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "WARNING: No attack options - checking weapons: 3",
+        0,
+        445938,
+        475
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 0 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Checking for AoE opportunities (including diagonal patterns)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Ensuring combat execution for turn 2",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=14, hasLOS=false",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Range=14, TP=16, LOS=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Checking 5 chips for damage options",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 0 at range 14 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "WARNING: No attack options - checking weapons: 3",
+        0,
+        445938,
+        475
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 0 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Checking for AoE opportunities (including diagonal patterns)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Defensive: HP=100%, Threat=0%, TP=16",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] LOW THREAT - Healing opportunity",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "318": [
+      [
+        0,
+        3,
+        "[Turn 13] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 13] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] \ud83d\udd25 Erosion damage: 61 (11%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] Turn 14 initialized. Enemy: Mixotron at dist 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] HP PANIC MODE TRIGGERED - HP at 8%",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] Entering PANIC mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] PANIC MODE - HP: 96/1176",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        7,
+        "    \u25b6 AI execute_combat, line 1926\n    \u25b6 AI V6_main, line 89\n",
+        1001,
+        [
+          "35",
+          "regeneration"
+        ]
+      ],
+      [
+        0,
+        7,
+        "    \u25b6 AI weapon_management, line 29\n    \u25b6 AI execute_combat, line 1937\n    \u25b6 AI V6_main, line 89\n",
+        1004,
+        [
+          "43",
+          "grenade_launcher"
+        ]
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] HP PANIC MODE TRIGGERED - HP at 8%",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 14] V6_main.ls complete - end of turn 14",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "33": [
+      [
+        0,
+        3,
+        "[Turn 2] Used chip motivation for 4 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          423
+        ],
+        "00ff00",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          423
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          325
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] V6_main.ls complete - end of turn 2",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "42": [
+      [
+        0,
+        3,
+        "[Turn 2] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 2] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Mode: OPTIMAL (0% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Turn 3 initialized. Enemy: Mixotron at dist 11",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Turn 3 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] PATTERN: Low aggression enemy (avg 0 damage/turn)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] PATTERN: Enemy prefers range 12",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Adjusting for low aggression - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Building influence map for turn 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Found 141 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Influence map already built for turn 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] State: MyEHP=1236 EnemyEHP=852 EID=0 Damage=0 LifeSteal=0 Pkill=0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Current phase: OPENING",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Mode: OPTIMAL (2% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Quick decision result: MOVE_TO_RANGE",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Combat states: CAN_MOVE, CAN_ATTACK, ENEMY_SHIELDED",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Quick decision: MOVE_TO_RANGE",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Full hit cell detection - turn 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Found 81 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Current position damage=0 EID=0 score=0.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 161: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 162: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 179: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 163: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 180: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 197: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 164: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 181: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 198: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 215: damage=366 EID=318.65900000000005 score=206.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 232: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 165: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 182: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 199: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 216: damage=366 EID=318.65900000000005 score=206.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 233: damage=471 EID=318.65900000000005 score=311.67049999999995",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 250: damage=366 EID=318.65900000000005 score=206.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 267: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 166: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Cell 183: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Moving to cell 233 (score=311.67049999999995 vs current=0.0)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "48": [
+      [
+        0,
+        3,
+        "[Turn 3] A* moved 6 MP toward target",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=18",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=7, hasLOS=false",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Range=7, TP=18, LOS=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]     \u2717 No LOS for weapon",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Checking 5 chips for damage options",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 0 at range 7 with TP=18",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "WARNING: No attack options - checking weapons: 3",
+        0,
+        445938,
+        475
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 0 options, TP=18",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Checking for AoE opportunities (including diagonal patterns)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Ensuring combat execution for turn 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=18",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=7, hasLOS=false",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Range=7, TP=18, LOS=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]     \u2717 No LOS for weapon",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3]     \u2717 Out of range",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Checking 5 chips for damage options",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 0 at range 7 with TP=18",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "WARNING: No attack options - checking weapons: 3",
+        0,
+        445938,
+        475
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 0 options, TP=18",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Checking for AoE opportunities (including diagonal patterns)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Defensive: HP=100%, Threat=0%, TP=18",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] LOW THREAT - Healing opportunity",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "50": [
+      [
+        0,
+        3,
+        "[Turn 3] Used chip leather_boots for 3 TP (CRIT!)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Post-defense repositioning with 3 MP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Post-combat repositioning with 3 MP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "00ff00",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          341
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] V6_main.ls complete - end of turn 3",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "63": [
+      [
+        0,
+        3,
+        "[Turn 3] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 3] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Turn 4 initialized. Enemy: Mixotron at dist 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Turn 4 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] PATTERN: Enemy prefers range 9",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Building influence map for turn 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Influence map already built for turn 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] State: MyEHP=751 EnemyEHP=852 EID=318.65900000000005 Damage=471 LifeSteal=15 Pkill=0.03088803088803078",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] PHASE TRANSITION: OPENING \u2192 MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Mid-game: Balanced tactics",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Current phase: MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Quick decision: Setup kill",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Quick decision result: SETUP_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Combat states: CAN_MOVE, CAN_ATTACK, HAS_LOS, IN_RANGE, ENEMY_SHIELDED",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Quick decision: SETUP_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Full hit cell detection - turn 4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Found 56 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Current position damage=471 EID=318.65900000000005 score=311.67049999999995",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 180: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 181: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 198: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 215: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 182: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 199: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 216: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 233: damage=366 EID=318.65900000000005 score=206.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 335: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 352: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 183: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 200: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 217: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 234: damage=366 EID=318.65900000000005 score=206.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 251: damage=471 EID=318.65900000000005 score=311.67049999999995",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 319: damage=471 EID=318.65900000000005 score=311.67049999999995",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 336: damage=366 EID=318.65900000000005 score=206.67049999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 353: damage=366 EID=275.451 score=228.2745",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 184: damage=222 EID=58.92 score=192.54",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Cell 201: damage=222 EID=275.451 score=84.27449999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=18",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=4, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Can't attack from range 4, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Range=4, TP=18, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 4 with TP=18",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=18",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "64": [
+      [
+        0,
+        3,
+        "[Turn 4]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "68": [
+      [
+        0,
+        3,
+        "[Turn 4] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Failed to use destroyer: result=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "69": [
+      [
+        0,
+        3,
+        "[Turn 4]   Switched to flame_thrower (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Use #1 of weapon flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Failed to use flame_thrower: result=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Executing: neutrino (type=weapon, uses=2, cost=4)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Processing weapon: neutrino",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "70": [
+      [
+        0,
+        3,
+        "[Turn 4]   Switched to neutrino (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Use #1 of weapon neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]     Result: false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4]   Failed to use neutrino: result=false",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Executing: spark (type=chip, uses=3, cost=3)",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "76": [
+      [
+        0,
+        3,
+        "[Turn 4] Total damage dealt: 144.0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Post-attack repositioning with 9 MP remaining",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Main combat loop complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Final visualization...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "ff6600",
+        1
+      ],
+      [
+        0,
+        9,
+        [
+          320
+        ],
+        "318",
+        "ffffff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          320
+        ],
+        "0066ff",
+        1
+      ],
+      [
+        0,
+        4,
+        [
+          357
+        ],
+        "ff00ff",
+        1
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] Final visualization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] V6_main.ls complete - end of turn 4",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "9": [
+      [
+        0,
+        3,
+        "[Turn null] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn null] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Mode: OPTIMAL (0% ops) | K=50 D=15 R=200",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Pre-computing weapon effectiveness matrix...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Matrix initialization complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Enemy Profile: BALANCED (STR:391 MAG:0 AGI:0)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Strategy: SUSTAIN - Tank and outlast",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Turn 1 initialized. Enemy: Mixotron at dist 19",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Turn 1 - executing early game sequence",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] === TURN 1: MAX HP BUFF STRATEGY ===",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] TP: 16, Enemy at distance 19",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 1] Turn 1 complete. HP: 1236/1236, Shields: 0+0%, Position: 597",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "94": [
+      [
+        0,
+        3,
+        "[Turn 4] Generic laser tactics module loaded",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 4] M-Laser tactics module loaded (using generic laser implementation)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "=== V6 MAIN STARTING ===",
+        0,
+        445926,
+        76
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] \ud83d\udd25 Erosion damage: 6 (1%)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Optimal attack range: 7",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Enemy weapon ranges: 1-10, max AoE=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Turn 5 initialized. Enemy: Mixotron at dist 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Initialized - enemy=1",
+        0,
+        445926,
+        81
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Turn 5 - entering normal combat mode",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] makeDecision called - enemy=1 (1 total enemies)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Not in panic mode, continuing...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Updating pattern learning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] PATTERN: Enemy healed at 101% HP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] PATTERN: Enemy likely to heal (usually at 101% HP)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] PATTERN: Enemy prefers range 8",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Applying pattern predictions",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Adjusting for predicted heal - increasing damage weight",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Current mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Building influence map...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Building influence map for turn 5",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Found 188 cells to analyze in range 10",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Processing 50 cells (limited)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Influence map already built for turn 5",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Precomputing EID for 1 cells...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] EID precomputation complete",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] State: MyEHP=660 EnemyEHP=550 EID=237.30300000000003 Damage=419 LifeSteal=16 Pkill=0",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Calling determineGamePhase...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Current phase: MID_GAME",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Calling adjustKnobs...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Knobs adjusted",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Checking quick combat decision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Calling quickCombatDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Quick decision result: STANDARD_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Combat states: CAN_MOVE, CAN_ATTACK, HAS_LOS, IN_RANGE",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Quick decision: STANDARD_ATTACK",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Checking ensemble decision for mode: OPTIMAL",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Calling ensembleDecision...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Ensemble action: null",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Stage B: Standard positioning check",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Full hit cell detection - turn 5",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Found 43 total hit cells around enemy",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Current position damage=419 EID=237.30300000000003 score=300.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 298: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 197: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 316: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 333: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 198: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 215: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 232: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 334: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 351: damage=197 EID=237.30300000000003 score=78.34849999999999",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 368: damage=197 EID=50.760000000000005 score=171.62",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 233: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 250: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 335: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 352: damage=325 EID=274.52700000000004 score=187.73649999999998",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 369: damage=325 EID=237.30300000000003 score=206.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 268: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 285: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 319: damage=419 EID=237.30300000000003 score=300.3485",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 336: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Cell 353: damage=419 EID=274.52700000000004 score=281.7365",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "executeAttack called - enemy=1, myTP=16",
+        0,
+        445938,
+        11
+      ],
+      [
+        0,
+        1,
+        "Combat range=3, hasLOS=true",
+        0,
+        445938,
+        20
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Can't attack from range 3, repositioning...",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] No good attack position reachable this turn",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Building attack options - Weapons available: 3",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Range=3, TP=16, LOS=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Checking weapon destroyer: range[1-6] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     \u2713 Added weapon: destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Checking weapon flame_thrower: range[2-8] cost=6",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     \u2713 Added weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Checking weapon neutrino: range[2-6] cost=4",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     \u2713 Added weapon: neutrino",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        1,
+        "Attack options available: 4 at range 3 with TP=16",
+        0,
+        445938,
+        458
+      ],
+      [
+        0,
+        1,
+        "Starting attack execution - 4 options, TP=16",
+        0,
+        445938,
+        534
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Executing: destroyer (type=weapon, uses=2, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Processing weapon: destroyer",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "95": [
+      [
+        0,
+        3,
+        "[Turn 5]   Switched to destroyer (1 TP cost)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Use #1 of weapon destroyer",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Attempting useWeapon on enemy (direct)...",
+        0,
+        445977,
+        8
+      ]
+    ],
+    "99": [
+      [
+        0,
+        3,
+        "[Turn 5] Used weapon destroyer for 6 TP",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]     Result: true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Failed to use destroyer: result=true",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5] Executing: flame_thrower (type=weapon, uses=1, cost=6)",
+        0,
+        445977,
+        8
+      ],
+      [
+        0,
+        3,
+        "[Turn 5]   Processing weapon: flame_thrower",
+        0,
+        445977,
+        8
+      ]
+    ]
+  }
+}

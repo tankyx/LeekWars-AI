@@ -1,10 +1,12 @@
 // V7 Module: config/weapons.ls
 // Pre-defined weapon and chip scenarios by TP amount
 
-// === RIFLE SCENARIOS (Cost: 7 TP, Max 2 uses/turn, Range 7-9, Damage 76) ===
+// === RIFLE SCENARIOS (using built-in constants) ===
 global RIFLE_SCENARIOS = [
-    14: [WEAPON_RIFLE, WEAPON_RIFLE],  // 2 uses = 14 TP
-    7: [WEAPON_RIFLE],                 // 1 use = 7 TP
+    18: [WEAPON_RIFLE, WEAPON_RIFLE, CHIP_LIGHTNING], // 2 uses + chip = 18 TP
+    14: [WEAPON_RIFLE, WEAPON_RIFLE],                 // 2 uses = 14 TP
+    11: [WEAPON_RIFLE, CHIP_LIGHTNING],               // 1 use + chip = 11 TP
+    7: [WEAPON_RIFLE],                                // 1 use = 7 TP
     5: [CHIP_METEORITE],
     4: [CHIP_LIGHTNING],
     3: [CHIP_SPARK]
@@ -12,17 +14,19 @@ global RIFLE_SCENARIOS = [
 
 // === M-LASER SCENARIOS (Cost: 8 TP, Max 2 uses/turn, Range 5-12, Damage 90-100) ===
 global MLASER_SCENARIOS = [
-    16: [WEAPON_M_LASER, WEAPON_M_LASER], // 2 uses = 16 TP
-    12: [WEAPON_M_LASER, CHIP_LIGHTNING], // 1 use + chip = 12 TP  
-    8: [WEAPON_M_LASER],                  // 1 use = 8 TP
+    23: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_LIGHTNING, CHIP_SPARK], // 2 uses + 2 chips = 23 TP
+    21: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_VENOM],                 // 2 uses + venom = 21 TP
+    20: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_LIGHTNING],             // 2 uses + lightning = 20 TP
+    16: [WEAPON_M_LASER, WEAPON_M_LASER],                             // 2 uses = 16 TP
+    12: [WEAPON_M_LASER, CHIP_LIGHTNING],                             // 1 use + lightning = 12 TP  
+    8: [WEAPON_M_LASER],                                              // 1 use = 8 TP
     5: [CHIP_METEORITE],
     4: [CHIP_LIGHTNING],
     3: [CHIP_SPARK]
 ];
 
-// === FLAME THROWER SCENARIOS (with poison chip synergy) ===
+// === FLAME THROWER SCENARIOS (max 2 uses/turn, with poison chip synergy) ===
 global FLAME_SCENARIOS = [
-    18: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER],
     17: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_TOXIN],  // KEY COMBO!
     16: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM],  // Alternative combo
     15: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_SPARK],  // 15 TP combo with SPARK!
@@ -67,19 +71,35 @@ global RHINO_SCENARIOS = [
 
 // === GRENADE LAUNCHER SCENARIOS (Cost: 6 TP, Max 2 uses/turn, Range 4-7, Circle AoE) ===
 global GRENADE_LAUNCHER_SCENARIOS = [
-    12: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER], // 2 uses = 12 TP
-    10: [WEAPON_GRENADE_LAUNCHER, CHIP_LIGHTNING],          // 1 use + chip = 10 TP
-    6: [WEAPON_GRENADE_LAUNCHER],                           // 1 use = 6 TP
+    16: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER, CHIP_LIGHTNING], // 2 uses + chip = 16 TP
+    12: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER],                 // 2 uses = 12 TP
+    10: [WEAPON_GRENADE_LAUNCHER, CHIP_LIGHTNING],                          // 1 use + chip = 10 TP
+    6: [WEAPON_GRENADE_LAUNCHER],                                           // 1 use = 6 TP
     5: [CHIP_METEORITE],
     4: [CHIP_LIGHTNING]
 ];
 
 // === ENHANCED LIGHTNINGER SCENARIOS (Cost: 9 TP, Max 2 uses/turn, Range 6-10, Damage 89-93 + 100 HP heal) ===
 global LIGHTNINGER_SCENARIOS = [
-    18: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER], // 2 uses = 18 TP
-    9: [WEAPON_ENHANCED_LIGHTNINGER],                               // 1 use = 9 TP  
+    23: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_TOXIN],     // 2 uses + toxin = 23 TP
+    22: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_LIGHTNING], // 2 uses + lightning = 22 TP
+    21: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_SPARK],     // 2 uses + spark = 21 TP
+    18: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER],                 // 2 uses = 18 TP
+    13: [WEAPON_ENHANCED_LIGHTNINGER, CHIP_LIGHTNING],                              // 1 use + lightning = 13 TP
+    9: [WEAPON_ENHANCED_LIGHTNINGER],                                               // 1 use = 9 TP  
     5: [CHIP_METEORITE],
     4: [CHIP_LIGHTNING],
+    3: [CHIP_SPARK]
+];
+
+// === LIGHTNINGER SCENARIOS (Cost: 9 TP, Max 2 uses/turn, Range 6-10 star pattern, Diagonal cross AoE) ===
+global REGULAR_LIGHTNINGER_SCENARIOS = [
+    22: [WEAPON_LIGHTNINGER, WEAPON_LIGHTNINGER, CHIP_LIGHTNING], // 2 uses + chip = 22 TP  
+    18: [WEAPON_LIGHTNINGER, WEAPON_LIGHTNINGER],                 // 2 uses = 18 TP
+    13: [WEAPON_LIGHTNINGER, CHIP_LIGHTNING],                     // 1 use + chip = 13 TP
+    9: [WEAPON_LIGHTNINGER],                                      // 1 use = 9 TP
+    5: [CHIP_METEORITE],
+    4: [CHIP_LIGHTNING], 
     3: [CHIP_SPARK]
 ];
 
@@ -90,6 +110,16 @@ global SWORD_SCENARIOS = [
     10: [WEAPON_SWORD, CHIP_LIGHTNING],               // 1 use + chip = 10 TP
     9: [WEAPON_SWORD, CHIP_SPARK],                    // 1 use + spark = 9 TP
     6: [WEAPON_SWORD],                                // 1 use = 6 TP
+    4: [CHIP_LIGHTNING],
+    3: [CHIP_SPARK]
+];
+
+// === ELECTRISOR SCENARIOS (Cost: 7 TP, Max 2 uses/turn, Range 7, Damage 70-80, Circle 1 AoE) ===
+global ELECTRISOR_SCENARIOS = [
+    18: [WEAPON_ELECTRISOR, WEAPON_ELECTRISOR, CHIP_LIGHTNING], // 2 uses + chip = 18 TP
+    14: [WEAPON_ELECTRISOR, WEAPON_ELECTRISOR],                 // 2 uses = 14 TP
+    11: [WEAPON_ELECTRISOR, CHIP_LIGHTNING],                    // 1 use + chip = 11 TP
+    7: [WEAPON_ELECTRISOR],                                     // 1 use = 7 TP
     4: [CHIP_LIGHTNING],
     3: [CHIP_SPARK]
 ];
@@ -113,9 +143,10 @@ global NEUTRINO_SCENARIOS = [
 
 // === DESTROYER SCENARIOS (Cost: 6 TP, Max 2 uses/turn, Range 1-6) ===
 global DESTROYER_SCENARIOS = [
-    12: [WEAPON_DESTROYER, WEAPON_DESTROYER], // 2 uses = 12 TP
-    10: [WEAPON_DESTROYER, CHIP_LIGHTNING],   // 1 use + chip = 10 TP
-    6: [WEAPON_DESTROYER],                    // 1 use = 6 TP
+    16: [WEAPON_DESTROYER, WEAPON_DESTROYER, CHIP_LIGHTNING], // 2 uses + chip = 16 TP
+    12: [WEAPON_DESTROYER, WEAPON_DESTROYER],                 // 2 uses = 12 TP
+    10: [WEAPON_DESTROYER, CHIP_LIGHTNING],                   // 1 use + chip = 10 TP
+    6: [WEAPON_DESTROYER],                                    // 1 use = 6 TP
     4: [CHIP_LIGHTNING],
     3: [CHIP_SPARK]
 ];
@@ -131,6 +162,20 @@ global POISON_SCENARIOS = [
     3: [CHIP_SPARK]                            // Fallback
 ];
 
+// === DEFENSIVE CHIP SCENARIOS ===
+global LIBERATION_SCENARIOS = [
+    8: [CHIP_LIBERATION, CHIP_SPARK],    // Liberation + damage (8 TP)
+    5: [CHIP_LIBERATION],                // Liberation only (5 TP)
+    3: [CHIP_SPARK]                      // Fallback damage
+];
+
+global ANTIDOTE_SCENARIOS = [
+    7: [CHIP_ANTIDOTE, CHIP_LIGHTNING],  // Antidote + damage (7 TP)
+    6: [CHIP_ANTIDOTE, CHIP_SPARK],      // Antidote + cheap damage (6 TP)
+    3: [CHIP_ANTIDOTE],                  // Antidote only (3 TP)
+    2: [CHIP_SPARK]                      // Fallback damage if can't afford antidote
+];
+
 // === FALLBACK CHIP-ONLY SCENARIOS ===
 global CHIP_SCENARIOS = [
     8: [CHIP_METEORITE, CHIP_LIGHTNING],
@@ -141,9 +186,27 @@ global CHIP_SCENARIOS = [
     3: [CHIP_LIGHTNING]
 ];
 
-// === SCENARIO SELECTION FUNCTION ===
+// === NEW SIMPLIFIED SCENARIO SELECTION FUNCTION ===
 function getScenarioForLoadout(weapons, tp) {
-    var distance = getCellDistance(myCell, enemyCell);
+    // Use new dynamic system that works with any loadout
+    return getBestScenarioForTP(tp, false);
+}
+
+// === OLD HARDCODED SCENARIO SELECTION FUNCTION (KEPT FOR REFERENCE) ===
+function getScenarioForLoadout_OLD(weapons, tp) {
+    // Define enemy cell for legacy function
+    var legacyEnemyCell = (primaryTarget != null) ? getCell(primaryTarget) : null;
+    if (legacyEnemyCell == null && count(allEnemies) > 0) {
+        legacyEnemyCell = getCell(allEnemies[0]);
+    }
+    
+    var distance = getCellDistance(myCell, legacyEnemyCell);
+    
+    // Get chips for scenario building
+    var allChips = getChips();
+    
+    // Debug magic build detection
+    // Weapon selection based on build type and range
     
     // Weapon priority order (most effective first by range)
     
@@ -157,34 +220,82 @@ function getScenarioForLoadout(weapons, tp) {
         return KATANA_SCENARIOS[tp] != null ? KATANA_SCENARIOS[tp] : KATANA_SCENARIOS[7];
     }
     
-    // POISON BUILD PRIORITY (high magic + poison weapons/chips)
-    var allChips = getChips();
-    if (myMagic > myStrength * 1.5) { // Strong magic build
+    // MAGIC BUILD PRIORITY (DoT weapons as main DPS, DESTROYER for tactical debuffing)
+    if (isMagicBuild) {
+        // Magic build detected - prioritizing DoT weapons
         
-        // FLAME_THROWER + TOXIN combo (best at range 2-7 for both)
+        // FLAME_THROWER + TOXIN combo (DoT synergy - HIGHEST PRIORITY for magic builds)
         if (inArray(weapons, WEAPON_FLAME_THROWER) && inArray(allChips, CHIP_TOXIN)) {
-            if (distance >= 2 && distance <= 7 && lineOfSight(myCell, enemyCell)) {
-                // Prioritize the 17 TP combo
-                if (tp >= 17) {
-                    return [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_TOXIN];
-                } else if (tp >= 11) {
-                    return [WEAPON_FLAME_THROWER, CHIP_TOXIN];
+            if (distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+                // Using FLAME_THROWER + TOXIN DoT combo
+                // Enhanced combos for magic builds (FLAME_THROWER max 2 uses/turn)
+                // Check AoE safety for TOXIN combinations
+                if (tp >= 17 && isChipSafeToUse(CHIP_TOXIN, legacyEnemyCell)) {
+                    return [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_TOXIN]; // KEY COMBO!
+                } else if (tp >= 16) {
+                    return [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM]; // Alternative combo
+                } else if (tp >= 11 && isChipSafeToUse(CHIP_TOXIN, legacyEnemyCell)) {
+                    return [WEAPON_FLAME_THROWER, CHIP_TOXIN]; // Single flame + AoE poison
+                } else if (tp >= 10) {
+                    return [WEAPON_FLAME_THROWER, CHIP_VENOM]; // Single flame + poison
                 }
             }
         }
         
-        // Pure chip poison if no line to enemy but in range
-        if (inArray(allChips, CHIP_TOXIN) && distance <= 7) {
+        // FLAME_THROWER priority for magic builds (main DoT DPS weapon)
+        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+            // Using FLAME_THROWER as main DoT DPS
+            // Enhanced flame thrower scenarios for magic builds (max 2 uses/turn)
+            if (tp >= 12) {
+                return [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER]; // Double flame (max uses)
+            } else if (tp >= 10) {
+                return [WEAPON_FLAME_THROWER, CHIP_LIGHTNING]; // Single flame + chip
+            } else if (tp >= 6) {
+                return [WEAPON_FLAME_THROWER]; // Single flame
+            }
+        }
+        
+        // DESTROYER priority for magic builds (tactical debuff weapon - secondary)
+        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && lineOfSight(myCell, legacyEnemyCell)) {
+            // Using DESTROYER for tactical debuffing
+            // DESTROYER scenarios for tactical debuffing
+            if (tp >= 16) {
+                return [WEAPON_DESTROYER, WEAPON_DESTROYER, CHIP_LIGHTNING]; // Double destroyer + chip
+            } else if (tp >= 12) {
+                return [WEAPON_DESTROYER, WEAPON_DESTROYER]; // Double destroyer
+            } else if (tp >= 10) {
+                return [WEAPON_DESTROYER, CHIP_LIGHTNING]; // Single destroyer + chip
+            } else if (tp >= 6) {
+                return [WEAPON_DESTROYER]; // Single destroyer
+            }
+        }
+        
+        // FLAME_THROWER solo priority for magic builds (DoT weapon)
+        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+            // Using FLAME_THROWER for DoT damage
+            return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
+        }
+        
+        // Pure poison chip priority (DoT chips without line of sight requirement)
+        if (inArray(allChips, CHIP_TOXIN) && distance <= 7 && isChipSafeToUse(CHIP_TOXIN, legacyEnemyCell)) {
+            // Using TOXIN for AoE DoT
+            if (isHighMagicBuild && tp >= 17) {
+                return [CHIP_TOXIN, CHIP_TOXIN, CHIP_TOXIN]; // Triple toxin for very high magic
+            }
             return POISON_SCENARIOS[tp] != null ? POISON_SCENARIOS[tp] : POISON_SCENARIOS[5];
         }
         
         if (inArray(allChips, CHIP_VENOM) && distance <= 10) {
+            // Using VENOM for single-target DoT
+            if (isHighMagicBuild && tp >= 12) {
+                return [CHIP_VENOM, CHIP_VENOM, CHIP_VENOM]; // Triple venom for very high magic
+            }
             return POISON_SCENARIOS[tp] != null ? POISON_SCENARIOS[tp] : POISON_SCENARIOS[4];
         }
     }
     
     // Rhino - high priority at 2-4 range (3x attacks for maximum DPS)
-    if (inArray(weapons, WEAPON_RHINO) && distance >= 2 && distance <= 4 && lineOfSight(myCell, enemyCell)) {
+    if (inArray(weapons, WEAPON_RHINO) && distance >= 2 && distance <= 4 && lineOfSight(myCell, legacyEnemyCell)) {
         return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
     }
     
@@ -193,14 +304,14 @@ function getScenarioForLoadout(weapons, tp) {
         // Check diagonal alignment
         var myX = getCellX(myCell);
         var myY = getCellY(myCell);
-        var enemyX = getCellX(enemyCell);
-        var enemyY = getCellY(enemyCell);
+        var enemyX = getCellX(legacyEnemyCell);
+        var enemyY = getCellY(legacyEnemyCell);
         
         var dx = abs(enemyX - myX);
         var dy = abs(enemyY - myY);
         
         // Prioritize Neutrino when diagonally aligned - cheap and effective!
-        if (dx == dy && dx != 0 && lineOfSight(myCell, enemyCell)) {
+        if (dx == dy && dx != 0 && lineOfSight(myCell, legacyEnemyCell)) {
             return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
         }
     }
@@ -211,8 +322,8 @@ function getScenarioForLoadout(weapons, tp) {
         // M-Laser needs X or Y axis alignment
         var myX = getCellX(myCell);
         var myY = getCellY(myCell);
-        var enemyX = getCellX(enemyCell);
-        var enemyY = getCellY(enemyCell);
+        var enemyX = getCellX(legacyEnemyCell);
+        var enemyY = getCellY(legacyEnemyCell);
         
         var xAligned = (myX == enemyX);
         var yAligned = (myY == enemyY);
@@ -229,15 +340,15 @@ function getScenarioForLoadout(weapons, tp) {
     var criticalHP = (currentHPPercent < 0.35); // Only below 35% HP (was 60%)
     
     // Enhanced Lightninger for CRITICAL healing - reduced threshold to favor M-Laser movement
-    if (criticalHP && inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && lineOfSight(myCell, enemyCell)) {
+    if (criticalHP && inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && lineOfSight(myCell, legacyEnemyCell)) {
         // CRITICAL HEALING: Enhanced Lightninger when desperately need +100 HP
-        debugW("CRITICAL HP: Using Enhanced Lightninger for emergency healing (" + floor(currentHPPercent * 100) + "% HP)");
+        // Critical HP - using Enhanced Lightninger for healing
         return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[9];
     }
     
     // Enhanced Lightninger - use only when M-Laser unavailable OR as pure fallback
     // Significantly reduced priority to encourage M-Laser positioning
-    if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && lineOfSight(myCell, enemyCell)) {
+    if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && lineOfSight(myCell, legacyEnemyCell)) {
         // Check if M-Laser could work with movement - prefer moving to M-Laser alignment
         var hasMlaser = inArray(weapons, WEAPON_M_LASER);
         if (!hasMlaser) {
@@ -247,27 +358,56 @@ function getScenarioForLoadout(weapons, tp) {
             // M-Laser available but not aligned - prefer Enhanced Lightninger only if MP too low to move
             if (myMP < 3) {
                 // Not enough MP to move for M-Laser alignment, use Enhanced Lightninger
-                debugW("LOW MP: Using Enhanced Lightninger, insufficient MP for M-Laser alignment");
+                // Low MP - using Enhanced Lightninger
                 return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[9];
             }
             // Has MP to move for M-Laser alignment - skip Enhanced Lightninger to encourage movement
-            debugW("M-LASER MOVEMENT: Skipping Enhanced Lightninger to encourage M-Laser alignment movement");
+            // Encouraging M-Laser alignment movement
         }
     }
     
-    // Destroyer - debuff weapon, good at close-mid range
-    if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && lineOfSight(myCell, enemyCell)) {
-        return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
-    }
-    
-    // Rifle - reliable mid-range damage
-    if (inArray(weapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9 && lineOfSight(myCell, enemyCell)) {
-        return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
-    }
-    
-    // Grenade Launcher - AoE damage at mid range
-    if (inArray(weapons, WEAPON_GRENADE_LAUNCHER) && distance >= 4 && distance <= 7 && lineOfSight(myCell, enemyCell)) {
-        return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+    // NON-MAGIC BUILD WEAPON PRIORITIZATION
+    // Skip these for magic builds to prioritize DoT/debuff weapons
+    if (!isMagicBuild) {
+        // Destroyer - debuff weapon, good at close-mid range (normal priority for non-magic)
+        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && lineOfSight(myCell, legacyEnemyCell)) {
+            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+        }
+        
+        // Electrisor - AoE damage at range 7 (prioritize over single-target weapons)
+        if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && lineOfSight(myCell, legacyEnemyCell)) {
+            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+        }
+        
+        // Rifle - reliable mid-range damage
+        if (inArray(weapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9 && lineOfSight(myCell, legacyEnemyCell)) {
+            return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
+        }
+        
+        // Grenade Launcher - AoE damage at mid range
+        if (inArray(weapons, WEAPON_GRENADE_LAUNCHER) && distance >= 4 && distance <= 7 && lineOfSight(myCell, legacyEnemyCell)) {
+            return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+        }
+    } else {
+        // For MAGIC builds, prioritize DoT weapons in this section too
+        // Magic build - prioritizing DoT weapons over non-DoT
+        
+        // FLAME_THROWER gets priority over Grenade Launcher for magic builds
+        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+            // Using FLAME_THROWER over Grenade Launcher
+            return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
+        }
+        
+        // DESTROYER gets priority for magic builds
+        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && lineOfSight(myCell, legacyEnemyCell)) {
+            // Using DESTROYER for debuff over other weapons
+            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+        }
+        
+        // Electrisor still useful for magic builds (AoE)
+        if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && lineOfSight(myCell, legacyEnemyCell)) {
+            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+        }
     }
     
     // B-Laser - cheaper line weapon alternative (5 TP vs M-Laser's 9 TP)
@@ -275,8 +415,8 @@ function getScenarioForLoadout(weapons, tp) {
         // B-Laser needs X or Y axis alignment (like M-Laser)
         var myX = getCellX(myCell);
         var myY = getCellY(myCell);
-        var enemyX = getCellX(enemyCell);
-        var enemyY = getCellY(enemyCell);
+        var enemyX = getCellX(legacyEnemyCell);
+        var enemyY = getCellY(legacyEnemyCell);
         
         var xAligned = (myX == enemyX);
         var yAligned = (myY == enemyY);
@@ -294,6 +434,7 @@ function getScenarioForLoadout(weapons, tp) {
     var canUseRifle = inArray(weapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9;
     var canUseMlaser = inArray(weapons, WEAPON_M_LASER) && distance >= 6 && distance <= 10;  
     var canUseLightninger = inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 5 && distance <= 12;
+    var canUseRegularLightninger = inArray(weapons, WEAPON_LIGHTNINGER) && distance >= 6 && distance <= 10;
     var canUseSword = inArray(weapons, WEAPON_SWORD) && distance <= 1;
     var canUseKatana = inArray(weapons, WEAPON_KATANA) && distance <= 1;
     var canUseRhino = inArray(weapons, WEAPON_RHINO) && distance >= 2 && distance <= 4;
@@ -302,30 +443,95 @@ function getScenarioForLoadout(weapons, tp) {
     var canUseNeutrino = inArray(weapons, WEAPON_NEUTRINO) && distance >= 2 && distance <= 6;
     var canUseDestroyer = inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6;
     var canUseFlamethrower = inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8;
+    var canUseElectrisor = inArray(weapons, WEAPON_ELECTRISOR) && distance == 7;
     
     // Prioritize weapons that are definitely in range
-    if (canUseRhino) {
-        return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
+    // For magic builds, prioritize DoT and debuff weapons first
+    if (isMagicBuild) {
+        // Prioritize DESTROYER for magic builds (debuff weapon)
+        if (canUseDestroyer) {
+            // Magic fallback - DESTROYER for debuff
+            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+        }
+        
+        // Prioritize FLAME_THROWER for magic builds (DoT weapon)
+        if (canUseFlamethrower) {
+            // Magic fallback - FLAME_THROWER for DoT
+            return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
+        }
     }
     
-    if (canUseNeutrino) {
-        return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
-    }
-    
-    if (canUseDestroyer) {
-        return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
-    }
-    
-    if (canUseFlamethrower) {
-        return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
-    }
-    
-    if (canUseRifle) {
-        return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
-    }
-    
-    if (canUseGrenadeLauncher) {
-        return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+    // Standard weapon prioritization - but respect magic build preferences
+    if (!isMagicBuild) {
+        // Non-magic builds use standard order
+        if (canUseRhino) {
+            return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
+        }
+        
+        if (canUseNeutrino) {
+            return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
+        }
+        
+        if (canUseDestroyer) {
+            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+        }
+        
+        if (canUseFlamethrower) {
+            return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
+        }
+        
+        if (canUseElectrisor) {
+            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+        }
+        
+        if (canUseRifle) {
+            return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
+        }
+        
+        if (canUseGrenadeLauncher) {
+            return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+        }
+    } else {
+        // Magic builds: prioritize DoT and debuff weapons even in fallback
+        // Re-checking DoT/debuff weapons before other options
+        
+        if (canUseFlamethrower) {
+            // Magic fallback - FLAME_THROWER for DoT
+            return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
+        }
+        
+        if (canUseDestroyer) {
+            // Magic fallback - DESTROYER for debuff
+            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+        }
+        
+        // Other weapons as secondary fallback for magic builds
+        if (canUseElectrisor) {
+            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+        }
+        
+        if (canUseRhino) {
+            return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
+        }
+        
+        // Regular Lightninger - check star pattern requirement
+        if (canUseRegularLightninger && isValidStarPattern(myCell, legacyEnemyCell)) {
+            // Magic backup - using regular LIGHTNINGER
+            return REGULAR_LIGHTNINGER_SCENARIOS[tp] != null ? REGULAR_LIGHTNINGER_SCENARIOS[tp] : REGULAR_LIGHTNINGER_SCENARIOS[9];
+        }
+        
+        if (canUseNeutrino) {
+            return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
+        }
+        
+        // Non-DoT weapons as last resort for magic builds
+        if (canUseRifle) {
+            return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
+        }
+        
+        if (canUseGrenadeLauncher) {
+            return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+        }
     }
     
     if (canUseBlaser) {
@@ -359,6 +565,10 @@ function getScenarioForLoadout(weapons, tp) {
     
     if (inArray(weapons, WEAPON_GRENADE_LAUNCHER)) {
         return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+    }
+    
+    if (inArray(weapons, WEAPON_ELECTRISOR)) {
+        return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
     }
     
     if (inArray(weapons, WEAPON_RIFLE)) {
@@ -409,7 +619,7 @@ function getScenarioForLoadout(weapons, tp) {
         
         if (cheapestWeapon != null) {
             // Use weak chip and save TP for next turn
-            debugW("LOW-TP STRATEGY: Using LIGHTNING to save TP for " + cheapestWeapon + " (costs " + cheapestCost + ")");
+            // Low-TP strategy - saving TP for weapon usage
             return [CHIP_LIGHTNING]; // Use LIGHTNING (4 TP) instead of SPARK (3 TP) for better damage
         }
     }
@@ -430,7 +640,34 @@ function isNeutrinoWeapon(weapon) {
 
 function isAreaWeapon(weapon) {
     return weapon == WEAPON_GRENADE_LAUNCHER || 
-           weapon == WEAPON_ENHANCED_LIGHTNINGER;  // Enhanced Lightninger has 3x3 AoE
+           weapon == WEAPON_ENHANCED_LIGHTNINGER ||  // Enhanced Lightninger has 3x3 AoE
+           weapon == WEAPON_LIGHTNINGER ||           // Lightninger has diagonal cross AoE
+           weapon == WEAPON_ELECTRISOR;              // Electrisor has Circle 1 AoE
+}
+
+function isStarPatternWeapon(weapon) {
+    return weapon == WEAPON_LIGHTNINGER;
+}
+
+function isValidStarPattern(fromCell, targetCell) {
+    // Star pattern: same line OR 45-degree diagonal, distance 6-10
+    var distance = getCellDistance(fromCell, targetCell);
+    if (distance < 6 || distance > 10) return false;
+    
+    // Calculate dx and dy
+    var fromX = getCellX(fromCell);
+    var fromY = getCellY(fromCell);
+    var targetX = getCellX(targetCell);
+    var targetY = getCellY(targetCell);
+    
+    var dx = targetX - fromX;
+    var dy = targetY - fromY;
+    
+    // LIGHTNINGER star pattern allows:
+    // 1. Same horizontal line (dy = 0)
+    // 2. Same vertical line (dx = 0)  
+    // 3. 45-degree diagonal (abs(dx) = abs(dy)) - ONLY for LIGHTNINGER
+    return (dy == 0) || (dx == 0) || (abs(dx) == abs(dy));
 }
 
 function getAllDamageChips() {
@@ -448,4 +685,947 @@ function getAllDamageChips() {
     }
     
     return damageChips;
+}
+
+// === NEW DYNAMIC WEAPON SELECTION SYSTEM ===
+
+// Get the best scenario based on currently equipped weapons and chips
+function getBestScenarioForTP(tp, forCombat) {
+    var weapons = getWeapons();
+    var chips = getChips();
+    
+    // Define targetEnemyCell for scenario building
+    var targetEnemyCell = (primaryTarget != null) ? getCell(primaryTarget) : null;
+    if (targetEnemyCell == null && count(allEnemies) > 0) {
+        targetEnemyCell = getCell(allEnemies[0]);
+    }
+    
+    if (weapons == null || count(weapons) == 0) {
+        // No weapons - use chip-only scenario (use medium range as default)
+        return getChipOnlyScenario(chips, tp, 8);
+    }
+    
+    var bestScenario = null;
+    var bestValue = 0;
+    
+    // Scenario function called
+    
+    // For magic builds, prioritize optimal mixed scenarios
+    // Magic build check
+    if (isMagicBuild) {
+        // Building magic scenario
+        var magicScenario = buildMagicScenario(weapons, chips, tp, forCombat);
+        // Magic scenario result obtained
+        if (magicScenario != null) {
+            // Built optimal magic scenario
+            var magicValue = calculateScenarioValue(magicScenario, WEAPON_FLAME_THROWER);
+            if (magicValue > bestValue) {
+                bestValue = magicValue;
+                bestScenario = magicScenario;
+                // Magic scenario selected as best
+            }
+        }
+    }
+    
+    // For strength builds: check what weapons work at current distance first
+    var weaponPriorityOrder = weapons;
+    if (!isMagicBuild && targetEnemyCell != null) {
+        var currentDistance = getCellDistance(getCell(), targetEnemyCell);
+        var optimalWeapon = null;
+        
+        // Find best weapon for current distance
+        for (var i = 0; i < count(weapons); i++) {
+            var weapon = weapons[i];
+            var minRange = getWeaponMinRange(weapon);
+            var maxRange = getWeaponMaxRange(weapon);
+            
+            if (currentDistance >= minRange && currentDistance <= maxRange) {
+                optimalWeapon = weapon;
+                break;  // Use first valid weapon
+            }
+        }
+        
+        // If we found an optimal weapon, prioritize it
+        if (optimalWeapon != null) {
+            weaponPriorityOrder = [optimalWeapon];
+            for (var i = 0; i < count(weapons); i++) {
+                if (weapons[i] != optimalWeapon) {
+                    push(weaponPriorityOrder, weapons[i]);
+                }
+            }
+            // Strength priority - using optimal weapon for distance
+        }
+    }
+    
+    // Check each equipped weapon in priority order
+    for (var i = 0; i < count(weaponPriorityOrder); i++) {
+        var weapon = weaponPriorityOrder[i];
+        
+        // Skip weapons that have reached their usage limit this turn
+        var remainingUses = getRemainingWeaponUses(weapon);
+        if (remainingUses <= 0) {
+            // Weapon has no remaining uses this turn
+            continue;
+        }
+        
+        // Testing weapon scenario
+        var scenario = buildScenarioForWeapon(weapon, tp, chips, null, forCombat);
+        
+        if (scenario != null) {
+            // Weapon scenario built successfully
+            
+            // Validate scenario executability before calculating value
+            if (forCombat && targetEnemyCell != null) {
+                var scenarioValid = validateScenarioExecutability(scenario, targetEnemyCell);
+                if (!scenarioValid) {
+                    // Scenario failed validation
+                    continue; // Skip this scenario
+                }
+            }
+            
+            var value = calculateScenarioValue(scenario, weapon);
+            
+            // For strength builds: prefer weapons that work at current distance AND alignment
+            if (!isMagicBuild && targetEnemyCell != null) {
+                var currentDistance = getCellDistance(getCell(), targetEnemyCell);
+                var minRange = getWeaponMinRange(weapon);
+                var maxRange = getWeaponMaxRange(weapon);
+                
+                if (currentDistance >= minRange && currentDistance <= maxRange) {
+                    // Check alignment based on weapon launch type
+                    var alignmentOK = true;
+                    var launchType = getWeaponLaunchType(weapon);
+                    
+                    if (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_LINE_INVERTED) {
+                        var myX = getCellX(getCell());
+                        var myY = getCellY(getCell());
+                        var targetX = getCellX(targetEnemyCell);
+                        var targetY = getCellY(targetEnemyCell);
+                        var dx = targetX - myX;
+                        var dy = targetY - myY;
+                        alignmentOK = (dx == 0) || (dy == 0); // Line weapons require X OR Y axis alignment
+                        if (!alignmentOK) {
+                            // Line weapon lacks alignment
+                        }
+                    } else if (launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_DIAGONAL_INVERTED) {
+                        var myX = getCellX(getCell());
+                        var myY = getCellY(getCell());
+                        var targetX = getCellX(targetEnemyCell);
+                        var targetY = getCellY(targetEnemyCell);
+                        var dx = abs(targetX - myX);
+                        var dy = abs(targetY - myY);
+                        alignmentOK = (dx == dy && dx > 0); // Diagonal weapons require perfect diagonal alignment
+                        if (!alignmentOK) {
+                            // Diagonal weapon lacks alignment
+                        }
+                    } else if (launchType == LAUNCH_TYPE_STAR || launchType == LAUNCH_TYPE_STAR_INVERTED) {
+                        var myX = getCellX(getCell());
+                        var myY = getCellY(getCell());
+                        var targetX = getCellX(targetEnemyCell);
+                        var targetY = getCellY(targetEnemyCell);
+                        var dx = targetX - myX;
+                        var dy = targetY - myY;
+                        var lineAligned = (dx == 0) || (dy == 0);
+                        var diagAligned = (abs(dx) == abs(dy) && dx != 0);
+                        alignmentOK = lineAligned || diagAligned; // Star pattern: line OR diagonal
+                        if (!alignmentOK) {
+                            // Star weapon lacks alignment
+                        }
+                    }
+                    // LAUNCH_TYPE_CIRCLE weapons don't require alignment validation
+                    
+                    if (alignmentOK) {
+                        value = value * 2; // Double the value for range-appropriate weapons
+                        // Strength boost applied for range-appropriate weapon
+                    } else {
+                        // Reduce value significantly for misaligned weapons
+                        value = value * 0.1;
+                        // Alignment penalty applied
+                    }
+                }
+            }
+            
+            if (value > bestValue) {
+                bestValue = value;
+                bestScenario = scenario;
+                // New best weapon scenario found
+            }
+        } else {
+            // Weapon scenario failed
+        }
+    }
+    
+    // For strength builds: Only consider chip-only scenarios if no weapon scenarios work
+    // For magic builds: Always consider chip scenarios competitively
+    if (isMagicBuild) {
+        var targetDistance = (targetEnemyCell != null) ? getCellDistance(myCell, targetEnemyCell) : 8;
+        var chipScenario = getChipOnlyScenario(chips, tp, targetDistance);
+        if (chipScenario != null) {
+            // Built chip-only scenario
+            var chipValue = calculateScenarioValue(chipScenario, chipScenario[0]);
+            // Chip scenario evaluated
+            if (chipValue > bestValue) {
+                bestValue = chipValue;
+                bestScenario = chipScenario;
+                // Chip scenario selected as best
+            }
+        }
+    } else {
+        // STRENGTH BUILD: Only use chips if no weapon scenario was found
+        if (bestScenario == null) {
+            // Fallback to chip scenarios
+            var targetDistance = null;
+            if (targetEnemyCell != null) {
+                targetDistance = getCellDistance(getCell(), targetEnemyCell);
+            }
+            var chipScenario = getChipOnlyScenario(chips, tp, targetDistance);
+            if (chipScenario != null) {
+                // Built chip fallback scenario
+                bestScenario = chipScenario;
+                bestValue = calculateScenarioValue(chipScenario, chipScenario[0]);
+            }
+        } else {
+            // Using weapon scenario over chips
+        }
+    }
+
+    // ALWAYS consider defensive scenarios (both strength and magic builds)
+    var defensiveScenario = getDefensiveScenario(tp, chips);
+    if (defensiveScenario != null) {
+        var defensiveValue = calculateDefensiveScenarioValue(defensiveScenario);
+        debugW("DEFENSIVE EVALUATION: Scenario [" + join(defensiveScenario, ", ") + "] has value " + defensiveValue + " vs best " + bestValue);
+
+        if (defensiveValue > bestValue) {
+            bestValue = defensiveValue;
+            bestScenario = defensiveScenario;
+            debugW("DEFENSIVE BEST: Defensive scenario is new best with value " + defensiveValue);
+        } else {
+            debugW("DEFENSIVE SKIP: Defensive scenario value " + defensiveValue + " < best " + bestValue);
+        }
+    } else {
+        debugW("DEFENSIVE NONE: No defensive scenario needed");
+    }
+
+    // If still no scenario, use fallback
+    if (bestScenario == null) {
+        bestScenario = [CHIP_LIGHTNING];
+    }
+
+    return bestScenario;
+}
+
+// Build optimal mixed scenarios for magic builds
+function buildMagicScenario(weapons, chips, availableTP, forCombat) {
+    debugW("MAGIC FUNC: buildMagicScenario called with availableTP=" + availableTP);
+    debugW("MAGIC FUNC: weapons=[" + join(weapons, ", ") + "], hasFlamethrower=" + inArray(weapons, WEAPON_FLAME_THROWER));
+    
+    // Define targetEnemyCell for scenario building
+    var targetEnemyCell = (primaryTarget != null) ? getCell(primaryTarget) : null;
+    if (targetEnemyCell == null && count(allEnemies) > 0) {
+        targetEnemyCell = getCell(allEnemies[0]);
+    }
+    
+    if (!inArray(weapons, WEAPON_FLAME_THROWER)) {
+        debugW("MAGIC FUNC: No FLAME_THROWER found, returning null");
+        return null;
+    }
+    
+    // Check position validity for FLAME_THROWER if needed
+    if (forCombat == true) {
+        var currentDistance = getCellDistance(getCell(), targetEnemyCell);
+        debugW("MAGIC FUNC: Position check - distance=" + currentDistance + ", forCombat=" + forCombat);
+        if (currentDistance < 2 || currentDistance > 8) {
+            debugW("MAGIC FUNC: Position invalid for FLAME_THROWER (range 2-8), returning null");
+            return null; // FLAME_THROWER range 2-8
+        }
+    }
+    
+    var switchCost = (getWeapon() != WEAPON_FLAME_THROWER) ? 1 : 0;
+    var tpLeft = availableTP - switchCost;
+    
+    // Check remaining FLAME_THROWER uses this turn (max 2 per turn)
+    var maxNewFlamethrowerUses = getRemainingWeaponUses(WEAPON_FLAME_THROWER);
+    var usedThisTurn = 2 - maxNewFlamethrowerUses;
+    debugW("MAGIC FUNC: FLAME_THROWER already used " + usedThisTurn + " times, can use " + maxNewFlamethrowerUses + " more");
+    
+    // Check enemy effects for intelligent alternation
+    var primaryEnemy = primaryTarget;
+    if (primaryEnemy == null && count(allEnemies) > 0) {
+        primaryEnemy = allEnemies[0];
+    }
+    
+    var enemyHasDoT = false;
+    var enemyHasStrengthDebuff = false;
+    var dotTurnsLeft = 0;
+    var debuffTurnsLeft = 0;
+    
+    if (primaryEnemy != null) {
+        enemyHasDoT = hasDoTEffect(primaryEnemy);
+        enemyHasStrengthDebuff = hasStrengthDebuff(primaryEnemy);
+        dotTurnsLeft = getDoTRemainingTurns(primaryEnemy);
+        debuffTurnsLeft = getStrengthDebuffRemainingTurns(primaryEnemy);
+        debugW("MAGIC EFFECTS: enemy=" + primaryEnemy + ", hasDoT=" + enemyHasDoT + " (" + dotTurnsLeft + " turns), hasDebuff=" + enemyHasStrengthDebuff + " (" + debuffTurnsLeft + " turns)");
+    }
+    
+    // Build dynamic scenarios based on enemy effects
+    var scenarios = [];
+
+    // High TP scenarios (17-18 TP)
+    if (!enemyHasDoT || dotTurnsLeft <= 1) {
+        // Priority: Apply DoT if missing or expiring soon
+        // Check AoE self-damage for TOXIN before adding scenario
+        if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
+            push(scenarios, {tp: 17, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_TOXIN]});
+        } else {
+            debugW("MAGIC SAFETY: Skipping TOXIN combo - would hit self at distance " + getCellDistance(getCell(), targetEnemyCell));
+            // Use VENOM as safer alternative
+            push(scenarios, {tp: 17, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM]});
+        }
+        push(scenarios, {tp: 16, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM]});
+    }
+    
+    if (!enemyHasStrengthDebuff || debuffTurnsLeft <= 1) {
+        // Priority: Apply strength debuff if missing or expiring soon  
+        push(scenarios, {tp: 18, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, WEAPON_DESTROYER]});
+    }
+    
+    // Always include backup scenarios
+    push(scenarios, {tp: 15, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_SPARK]});
+    push(scenarios, {tp: 12, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER]});
+    
+    // Medium TP scenarios (9-13 TP) - intelligent alternation
+    if (!enemyHasDoT || dotTurnsLeft <= 1) {
+        // Check AoE self-damage for TOXIN before adding scenario
+        if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
+            push(scenarios, {tp: 11, actions: [WEAPON_FLAME_THROWER, CHIP_TOXIN]});
+        } else {
+            debugW("MAGIC SAFETY: Skipping medium TP TOXIN combo - would hit self");
+            // Use VENOM as safer alternative
+            push(scenarios, {tp: 11, actions: [WEAPON_FLAME_THROWER, CHIP_VENOM]});
+        }
+        push(scenarios, {tp: 10, actions: [WEAPON_FLAME_THROWER, CHIP_VENOM]});
+    }
+    
+    if (!enemyHasStrengthDebuff || debuffTurnsLeft <= 1) {
+        push(scenarios, {tp: 13, actions: [WEAPON_FLAME_THROWER, WEAPON_DESTROYER]});
+    }
+    
+    push(scenarios, {tp: 9, actions: [WEAPON_FLAME_THROWER, CHIP_SPARK]});
+    
+    // Low TP scenarios (3-6 TP) - single actions based on priority
+    push(scenarios, {tp: 6, actions: [WEAPON_FLAME_THROWER]});
+
+    if (!enemyHasDoT || dotTurnsLeft <= 1) {
+        // Check AoE self-damage for TOXIN before adding solo chip scenario
+        if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
+            push(scenarios, {tp: 5, actions: [CHIP_TOXIN]});
+        } else {
+            debugW("MAGIC SAFETY: Skipping solo TOXIN - would hit self, using VENOM instead");
+            // Use VENOM as safer alternative for same TP cost as backup scenario
+            push(scenarios, {tp: 5, actions: [CHIP_VENOM]});
+        }
+        push(scenarios, {tp: 4, actions: [CHIP_VENOM]});
+    }
+    
+    if (!enemyHasStrengthDebuff || debuffTurnsLeft <= 1) {
+        push(scenarios, {tp: 6, actions: [WEAPON_DESTROYER]});
+    }
+    
+    push(scenarios, {tp: 3, actions: [CHIP_SPARK]});
+
+    // HEALING SCENARIOS: Add healing when at safe distance and healing needed
+    var safeDistance = (targetEnemyCell != null) ? (getCellDistance(getCell(), targetEnemyCell) >= 8) : true;
+    var hpPercent = myHP / myMaxHP;
+    var healingPriority = getHealingPriority();
+
+    if (safeDistance && healingPriority >= 20) {
+        debugW("MAGIC HEALING SCENARIOS: Adding healing options, HP=" + floor(hpPercent * 100) + "%, Priority=" + healingPriority);
+
+        // Critical healing: REGENERATION (once per fight)
+        if (hpPercent < 0.3 && !regenerationUsed && inArray(chips, CHIP_REGENERATION)) {
+            push(scenarios, {tp: 8, actions: [CHIP_REGENERATION]});
+            debugW("MAGIC HEALING: Added REGENERATION scenario for critical HP");
+        }
+
+        // Moderate healing: REMISSION (repeatable, 1 turn CD)
+        if (hpPercent < 0.5 && isDefensiveChipAvailable(CHIP_REMISSION) && inArray(chips, CHIP_REMISSION)) {
+            push(scenarios, {tp: 5, actions: [CHIP_REMISSION]});
+            debugW("MAGIC HEALING: Added REMISSION scenario for moderate HP");
+        }
+
+        // Sustained healing: VACCINE (HoT, 4 turn CD)
+        if (hpPercent < 0.7 && isDefensiveChipAvailable(CHIP_VACCINE) && inArray(chips, CHIP_VACCINE)) {
+            push(scenarios, {tp: 6, actions: [CHIP_VACCINE]});
+            debugW("MAGIC HEALING: Added VACCINE scenario for sustained healing");
+        }
+
+        // Combo healing scenarios for high TP situations
+        if (hpPercent < 0.4) {
+            // Critical combo: REGENERATION + REMISSION (once per fight)
+            if (!regenerationUsed && isDefensiveChipAvailable(CHIP_REMISSION) &&
+                inArray(chips, CHIP_REGENERATION) && inArray(chips, CHIP_REMISSION)) {
+                push(scenarios, {tp: 13, actions: [CHIP_REGENERATION, CHIP_REMISSION]});
+                debugW("MAGIC HEALING: Added REGENERATION + REMISSION combo for critical HP");
+            }
+
+            // Sustain combo: REMISSION + VACCINE
+            if (isDefensiveChipAvailable(CHIP_REMISSION) && isDefensiveChipAvailable(CHIP_VACCINE) &&
+                inArray(chips, CHIP_REMISSION) && inArray(chips, CHIP_VACCINE)) {
+                push(scenarios, {tp: 11, actions: [CHIP_REMISSION, CHIP_VACCINE]});
+                debugW("MAGIC HEALING: Added REMISSION + VACCINE combo for sustained healing");
+            }
+        }
+    }
+
+    debugW("MAGIC SCENARIOS: Built " + count(scenarios) + " dynamic scenarios (combat + healing)");
+    
+    // Find first scenario that fits available TP and has required items equipped
+    for (var i = 0; i < count(scenarios); i++) {
+        var scenario = scenarios[i];
+        if (scenario.tp <= tpLeft + switchCost) {
+            // Count FLAME_THROWER uses in this scenario
+            var flamethrowerUsesInScenario = 0;
+            for (var j = 0; j < count(scenario.actions); j++) {
+                if (scenario.actions[j] == WEAPON_FLAME_THROWER) {
+                    flamethrowerUsesInScenario++;
+                }
+            }
+            
+            // Skip scenario if it would exceed FLAME_THROWER use limit
+            if (flamethrowerUsesInScenario > maxNewFlamethrowerUses) {
+                debugW("MAGIC FUNC: Skipping scenario " + join(scenario.actions, "+") + " - needs " + flamethrowerUsesInScenario + " FLAME_THROWER uses, only " + maxNewFlamethrowerUses + " remaining");
+                continue;
+            }
+            
+            // Check if all required items are available
+            var canExecute = true;
+            for (var j = 0; j < count(scenario.actions); j++) {
+                var action = scenario.actions[j];
+                if (action >= CHIP_LIGHTNING) { // It's a chip
+                    if (!inArray(chips, action)) {
+                        canExecute = false;
+                        break;
+                    }
+                } else { // It's a weapon
+                    if (!inArray(weapons, action)) {
+                        canExecute = false;
+                        break;
+                    }
+                }
+            }
+            
+            if (canExecute) {
+                debugW("MAGIC BUILD: Selected scenario [" + join(scenario.actions, ", ") + "] for " + scenario.tp + " TP");
+                return scenario.actions;
+            }
+        }
+    }
+    
+    return null;
+}
+
+// Build a scenario for a specific weapon with available TP and chips
+function buildScenarioForWeapon(weapon, availableTP, chips, distance, forCombat) {
+    var cost = getWeaponCost(weapon);
+    var minRange = getWeaponMinRange(weapon);
+    var maxRange = getWeaponMaxRange(weapon);
+    
+    // Check basic validity
+    if (cost > availableTP) return null;
+    
+    // Account for weapon switching cost if needed
+    var switchCost = (getWeapon() != weapon) ? 1 : 0;
+    if (cost + switchCost > availableTP) return null;
+    
+    // If building scenario for immediate combat, validate weapon availability
+    if (forCombat == true) {
+        // Only validate that we have a target - range validation happens during movement
+        var targetCell = (primaryTarget != null) ? getCell(primaryTarget) : null;
+        if (targetCell == null) return null;
+    }
+    
+    // Build scenario
+    var scenario = [];
+    var tpLeft = availableTP - switchCost; // Reserve TP for weapon switch
+    var maxUses = getWeaponMaxUses(weapon);
+    var uses = 0;
+    
+    // Add weapon uses
+    while (tpLeft >= cost && (maxUses == 0 || uses < maxUses)) {
+        push(scenario, weapon);
+        tpLeft -= cost;
+        uses++;
+    }
+    
+    // Add best chip if TP remaining
+    if (tpLeft >= 3) {
+        var bestChip = selectBestChip(chips, tpLeft, weapon, distance);
+        if (bestChip != null) {
+            push(scenario, bestChip);
+        }
+    }
+    
+    return count(scenario) > 0 ? scenario : null;
+}
+
+// Calculate relative value of a scenario for comparison
+function calculateScenarioValue(scenario, primaryWeapon) {
+    var value = 0;
+    
+    // Base value on weapon type and count
+    for (var i = 0; i < count(scenario); i++) {
+        var action = scenario[i];
+        
+        if (action == primaryWeapon) {
+            // Weapon use - base value on damage potential
+            if (action == WEAPON_RHINO) value += 150; // High DPS, low cost
+            else if (action == WEAPON_M_LASER) value += 140; // Efficient damage
+            else if (action == WEAPON_ENHANCED_LIGHTNINGER) value += 120; // Damage + heal
+            else if (action == WEAPON_RIFLE) value += 110; // Reliable mid-range
+            else if (action == WEAPON_FLAME_THROWER) value += 130; // DoT potential
+            else if (action == WEAPON_DESTROYER) value += 100; // Debuff value
+            else if (action == WEAPON_ELECTRISOR) value += 115; // AoE damage
+            else if (action == WEAPON_KATANA) value += 125; // High single damage
+            else if (action == WEAPON_SWORD) value += 90; // Cheap melee
+            else if (action == WEAPON_B_LASER) value += 85; // Cheap line weapon
+            else if (action == WEAPON_GRENADE_LAUNCHER) value += 95; // AoE
+            else if (action == WEAPON_NEUTRINO) value += 80; // Diagonal specialist
+            else value += 70; // Unknown weapon
+        } else {
+            // Chip use - add chip value
+            if (action == CHIP_TOXIN) value += 60; // AoE poison
+            else if (action == CHIP_LIGHTNING) value += 50; // High damage
+            else if (action == CHIP_METEORITE) value += 55; // Good damage
+            else if (action == CHIP_VENOM) value += 40; // Single poison
+            else if (action == CHIP_SPARK) value += 30; // Cheap damage
+            else value += 25; // Other chips
+        }
+    }
+    
+    // Magic build bonuses
+    if (isMagicBuild) {
+        if (primaryWeapon == WEAPON_FLAME_THROWER) value += 50; // DoT priority
+        if (primaryWeapon == WEAPON_DESTROYER) value += 30; // Debuff priority
+        // Bonus for poison chips in magic builds
+        for (var i = 0; i < count(scenario); i++) {
+            if (scenario[i] == CHIP_TOXIN || scenario[i] == CHIP_VENOM) {
+                value += 20;
+            }
+        }
+    }
+    
+    return value;
+}
+
+// Select the best chip for remaining TP
+function selectBestChip(chips, tpLeft, primaryWeapon, targetDistance) {
+    if (chips == null || count(chips) == 0) return null;
+    
+    // Chip priority list with costs
+    var chipPriority = [
+        {id: CHIP_TOXIN, cost: 5, priority: isMagicBuild ? 100 : 70},
+        {id: CHIP_LIGHTNING, cost: 4, priority: 80},
+        {id: CHIP_METEORITE, cost: 5, priority: 75},
+        {id: CHIP_VENOM, cost: 4, priority: isMagicBuild ? 85 : 60},
+        {id: CHIP_ICEBERG, cost: 3, priority: 50},
+        {id: CHIP_SPARK, cost: 3, priority: 40},
+        {id: CHIP_BURNING, cost: 2, priority: 30},
+        {id: CHIP_ROCKFALL, cost: 4, priority: 65}
+    ];
+    
+    // Special synergies
+    if (primaryWeapon == WEAPON_FLAME_THROWER) {
+        // FLAME_THROWER + poison synergy
+        for (var i = 0; i < count(chipPriority); i++) {
+            if (chipPriority[i].id == CHIP_TOXIN || chipPriority[i].id == CHIP_VENOM) {
+                chipPriority[i].priority += 30;
+            }
+        }
+    }
+    
+    // Find best affordable chip
+    var bestChip = null;
+    var bestPriority = 0;
+    
+    for (var i = 0; i < count(chipPriority); i++) {
+        var chip = chipPriority[i];
+        if (inArray(chips, chip.id) && chip.cost <= tpLeft && chip.priority > bestPriority) {
+            // Validate chip range if targetDistance provided
+            if (targetDistance != null) {
+                var chipMinRange = getChipMinRange(chip.id);
+                var chipMaxRange = getChipMaxRange(chip.id);
+                if (targetDistance < chipMinRange || targetDistance > chipMaxRange) {
+                    // Chip range invalid for distance
+                    continue; // Skip this chip
+                }
+            }
+            
+            bestPriority = chip.priority;
+            bestChip = chip.id;
+        }
+    }
+    
+    return bestChip;
+}
+
+// Chip-only scenario when no weapons work
+function getChipOnlyScenario(chips, tp, targetDistance) {
+    if (chips == null || count(chips) == 0) return [CHIP_LIGHTNING];
+    
+    var scenario = [];
+    var tpLeft = tp;
+    var usedChips = []; // Track chips already used in this scenario
+    
+    // Try to use multiple chips if possible, but only once each per scenario
+    var bestChip = selectBestChip(chips, tpLeft, null, targetDistance);
+    while (bestChip != null && tpLeft >= 3) {
+        // Check if we've already used this chip in this scenario
+        var alreadyUsed = false;
+        for (var i = 0; i < count(usedChips); i++) {
+            if (usedChips[i] == bestChip) {
+                alreadyUsed = true;
+                break;
+            }
+        }
+        
+        if (alreadyUsed) {
+            // Find next best chip that hasn't been used
+            var foundDifferentChip = false;
+            for (var j = 0; j < count(chips); j++) {
+                var candidateChip = chips[j];
+                var candidateCost = getChipCost(candidateChip);
+                if (candidateCost <= tpLeft) {
+                    var candidateUsed = false;
+                    for (var k = 0; k < count(usedChips); k++) {
+                        if (usedChips[k] == candidateChip) {
+                            candidateUsed = true;
+                            break;
+                        }
+                    }
+                    if (!candidateUsed) {
+                        bestChip = candidateChip;
+                        foundDifferentChip = true;
+                        break;
+                    }
+                }
+            }
+            if (!foundDifferentChip) {
+                break; // No more unique chips available
+            }
+        }
+        
+        push(scenario, bestChip);
+        push(usedChips, bestChip);
+        var chipCost = getChipCost(bestChip);
+        tpLeft -= chipCost;
+        
+        // Try to add another chip
+        if (tpLeft >= 3) {
+            bestChip = selectBestChip(chips, tpLeft, null, targetDistance);
+        } else {
+            break;
+        }
+    }
+    
+    return count(scenario) > 0 ? scenario : [CHIP_LIGHTNING];
+}
+
+// Helper functions
+function checkLineAlignment(fromCell, toCell) {
+    var fromX = getCellX(fromCell);
+    var fromY = getCellY(fromCell);
+    var toX = getCellX(toCell);
+    var toY = getCellY(toCell);
+    
+    return (fromX == toX) != (fromY == toY); // Exactly one axis aligned
+}
+
+function checkDiagonalAlignment(fromCell, toCell) {
+    var fromX = getCellX(fromCell);
+    var fromY = getCellY(fromCell);
+    var toX = getCellX(toCell);
+    var toY = getCellY(toCell);
+    
+    var dx = abs(toX - fromX);
+    var dy = abs(toY - fromY);
+    
+    return dx == dy && dx > 0; // Perfect diagonal
+}
+
+function getChipCost(chip) {
+    if (chip == CHIP_LIGHTNING) return 4;
+    if (chip == CHIP_SPARK) return 3;
+    if (chip == CHIP_METEORITE) return 5;
+    if (chip == CHIP_TOXIN) return 5;
+    if (chip == CHIP_VENOM) return 4;
+    if (chip == CHIP_BURNING) return 2;
+    if (chip == CHIP_ROCKFALL) return 4;
+    if (chip == CHIP_ICEBERG) return 3;
+    return 3; // Default cost
+}
+
+// === SCENARIO EXECUTABILITY VALIDATION ===
+function validateScenarioExecutability(scenario, targetEnemyCell) {
+    if (scenario == null || count(scenario) == 0) return false;
+    if (targetEnemyCell == null) return false;
+    
+    var currentCell = getCell();
+    var currentDistance = getCellDistance(currentCell, targetEnemyCell);
+    var scenarioWeaponUses = [:]; // Track weapon usage in this scenario
+    
+    for (var i = 0; i < count(scenario); i++) {
+        var action = scenario[i];
+        
+        if (isWeapon(action)) {
+            // Check weapon range
+            var minRange = getWeaponMinRange(action);
+            var maxRange = getWeaponMaxRange(action);
+            if (currentDistance < minRange || currentDistance > maxRange) {
+                debugW("VALIDATION FAIL: Weapon " + action + " range " + minRange + "-" + maxRange + " invalid for distance " + currentDistance);
+                return false;
+            }
+            
+            // Check weapon alignment based on launch type
+            var launchType = getWeaponLaunchType(action);
+            if (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_LINE_INVERTED) {
+                var fromX = getCellX(currentCell);
+                var fromY = getCellY(currentCell);
+                var targetX = getCellX(targetEnemyCell);
+                var targetY = getCellY(targetEnemyCell);
+                var dx = targetX - fromX;
+                var dy = targetY - fromY;
+                var aligned = (dx == 0) || (dy == 0); // Line weapons require X OR Y axis alignment
+                if (!aligned) {
+                    debugW("VALIDATION FAIL: Line weapon " + action + " not aligned (dx=" + dx + ", dy=" + dy + ")");
+                    return false;
+                }
+            } else if (launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_DIAGONAL_INVERTED) {
+                var fromX = getCellX(currentCell);
+                var fromY = getCellY(currentCell);
+                var targetX = getCellX(targetEnemyCell);
+                var targetY = getCellY(targetEnemyCell);
+                var dx = abs(targetX - fromX);
+                var dy = abs(targetY - fromY);
+                var aligned = (dx == dy && dx > 0); // Diagonal weapons require perfect diagonal alignment
+                if (!aligned) {
+                    debugW("VALIDATION FAIL: Diagonal weapon " + action + " not aligned (dx=" + dx + ", dy=" + dy + ")");
+                    return false;
+                }
+            } else if (launchType == LAUNCH_TYPE_STAR || launchType == LAUNCH_TYPE_STAR_INVERTED) {
+                var fromX = getCellX(currentCell);
+                var fromY = getCellY(currentCell);
+                var targetX = getCellX(targetEnemyCell);
+                var targetY = getCellY(targetEnemyCell);
+                var dx = targetX - fromX;
+                var dy = targetY - fromY;
+                var lineAligned = (dx == 0) || (dy == 0);
+                var diagAligned = (abs(dx) == abs(dy) && dx != 0);
+                var aligned = lineAligned || diagAligned; // Star pattern: line OR diagonal
+                if (!aligned) {
+                    debugW("VALIDATION FAIL: Star weapon " + action + " not aligned (dx=" + dx + ", dy=" + dy + ")");
+                    return false;
+                }
+            }
+            // LAUNCH_TYPE_CIRCLE weapons don't require alignment validation
+            
+            // Check weapon usage limits using built-in function
+            var maxUses = getWeaponMaxUses(action);
+            if (maxUses > 0) { // Only check if there's a limit (-1 means unlimited)
+                var currentUses = scenarioWeaponUses[action];
+                if (currentUses == null) currentUses = 0;
+                currentUses++;
+                if (currentUses > maxUses) {
+                    debugW("VALIDATION FAIL: Weapon " + action + " exceeds max uses " + maxUses + " (attempt " + currentUses + ")");
+                    return false;
+                }
+                scenarioWeaponUses[action] = currentUses;
+            }
+            
+        } else if (isChip(action)) {
+            // Check chip range
+            var chipMinRange = getChipMinRange(action);
+            var chipMaxRange = getChipMaxRange(action);
+            if (currentDistance < chipMinRange || currentDistance > chipMaxRange) {
+                debugW("VALIDATION FAIL: Chip " + action + " range " + chipMinRange + "-" + chipMaxRange + " invalid for distance " + currentDistance);
+                return false;
+            }
+            
+            // Check chip cooldowns
+            if (action == CHIP_TOXIN && chipCooldowns[CHIP_TOXIN] > 0) {
+                // CHIP_TOXIN on cooldown
+                return false;
+            }
+            if (action == CHIP_VENOM && chipCooldowns[CHIP_VENOM] > 0) {
+                // CHIP_VENOM on cooldown
+                return false;
+            }
+            if (action == CHIP_LIBERATION && chipCooldowns[CHIP_LIBERATION] > 0) {
+                // CHIP_LIBERATION on cooldown
+                return false;
+            }
+            if (action == CHIP_ANTIDOTE && chipCooldowns[CHIP_ANTIDOTE] > 0) {
+                // CHIP_ANTIDOTE on cooldown
+                return false;
+            }
+        }
+    }
+    
+    return true; // All validations passed
+}
+
+// === DEFENSIVE CHIP SELECTION LOGIC ===
+
+// Determine if we should use a defensive chip based on current effects
+function shouldUseDefensiveChip() {
+    var priority = getDefensivePriority();
+    debugW("DEFENSIVE CHECK: Priority=" + priority + ", TP=" + myTP);
+
+    // Critical priority (100+) = immediate defensive action required
+    if (priority >= 100) {
+        debugW("DEFENSIVE: Critical priority " + priority + " - immediate action needed");
+        return true;
+    }
+
+    // High priority (50+) = strongly consider defensive action
+    if (priority >= 50 && myTP >= 5) {
+        debugW("DEFENSIVE: High priority " + priority + " - defensive action recommended");
+        return true;
+    }
+
+    // Medium priority (20+) = consider if we have spare TP
+    if (priority >= 20 && myTP >= 8) {
+        debugW("DEFENSIVE: Medium priority " + priority + " - defensive action if TP allows");
+        return true;
+    }
+
+    debugW("DEFENSIVE: Low priority " + priority + " - no defensive action needed");
+    return false;
+}
+
+// Get the best defensive scenario based on our current effects and available TP
+function getDefensiveScenario(tp, chips) {
+    if (!shouldUseDefensiveChip()) {
+        return null;
+    }
+
+    var poisonDamage = calculatePoisonDamage();
+    var hasPoison = (poisonDamage > 0);
+    var hasDebuffs = (calculateDebuffImpact() > 20);
+    var hasNegative = hasNegativeEffects();
+
+    // Priority 1: ANTIDOTE for poison (especially critical HP situations)
+    if (hasPoison && isDefensiveChipAvailable(CHIP_ANTIDOTE) && inArray(chips, CHIP_ANTIDOTE)) {
+        debugW("DEFENSIVE SCENARIO: Poison detected, trying ANTIDOTE scenarios");
+        for (var tpAmount = tp; tpAmount >= 3; tpAmount--) {
+            if (ANTIDOTE_SCENARIOS[tpAmount] != null) {
+                debugW("DEFENSIVE SCENARIO: Selected ANTIDOTE scenario for " + tpAmount + " TP: [" + join(ANTIDOTE_SCENARIOS[tpAmount], ", ") + "]");
+                return ANTIDOTE_SCENARIOS[tpAmount];
+            }
+        }
+    }
+
+    // Priority 2: LIBERATION for debuffs or when ANTIDOTE not available
+    if ((hasDebuffs || hasNegative) && isDefensiveChipAvailable(CHIP_LIBERATION) && inArray(chips, CHIP_LIBERATION)) {
+        debugW("DEFENSIVE SCENARIO: Debuffs detected, trying LIBERATION scenarios");
+        for (var tpAmount = tp; tpAmount >= 5; tpAmount--) {
+            if (LIBERATION_SCENARIOS[tpAmount] != null) {
+                debugW("DEFENSIVE SCENARIO: Selected LIBERATION scenario for " + tpAmount + " TP: [" + join(LIBERATION_SCENARIOS[tpAmount], ", ") + "]");
+                return LIBERATION_SCENARIOS[tpAmount];
+            }
+        }
+    }
+
+    // Priority 3: Offensive LIBERATION against enemy buffs (if we have spare TP)
+    if (tp >= 8 && isDefensiveChipAvailable(CHIP_LIBERATION) && inArray(chips, CHIP_LIBERATION)) {
+        var enemies = getEnemies();
+        for (var i = 0; i < count(enemies); i++) {
+            var currentEnemy = enemies[i];
+            if (getLife(currentEnemy) > 0 && hasRemovableBuffs(currentEnemy)) {
+                debugW("DEFENSIVE SCENARIO: Enemy " + currentEnemy + " has removable buffs, using offensive LIBERATION");
+                return LIBERATION_SCENARIOS[tp >= 8 ? 8 : 5];
+            }
+        }
+    }
+
+    debugW("DEFENSIVE SCENARIO: No appropriate defensive scenario found");
+    return null;
+}
+
+// Calculate value of defensive scenario for comparison with offensive scenarios
+function calculateDefensiveScenarioValue(scenario) {
+    if (scenario == null) return 0;
+
+    var value = 0;
+    var priority = getDefensivePriority();
+
+    // Base value from priority
+    value += priority * 2; // High priority defensive actions are very valuable
+
+    // Bonus for specific defensive actions
+    for (var i = 0; i < count(scenario); i++) {
+        if (scenario[i] == CHIP_ANTIDOTE) {
+            var poisonDamage = calculatePoisonDamage();
+            value += poisonDamage; // Preventing poison damage
+            value += 30; // Healing bonus
+        } else if (scenario[i] == CHIP_LIBERATION) {
+            var debuffImpact = calculateDebuffImpact();
+            value += debuffImpact; // Restoring combat effectiveness
+        } else {
+            // Damage chips in defensive scenarios
+            value += 50; // Standard damage chip value
+        }
+    }
+
+    debugW("DEFENSIVE VALUE: Scenario [" + join(scenario, ", ") + "] has value " + value);
+    return value;
+}
+
+// === AoE SELF-DAMAGE VALIDATION ===
+
+// Check if using an AoE chip would damage ourselves
+function isChipSafeToUse(chip, targetEnemyCell) {
+    if (targetEnemyCell == null) {
+        debugW("AOE SAFETY: No target cell provided, assuming safe");
+        return true;
+    }
+
+    // Get chip area - this determines the AoE size
+    var chipArea = getChipArea(chip);
+    if (chipArea == null || chipArea <= 0) {
+        debugW("AOE SAFETY: Chip " + chip + " has no AoE (area=" + chipArea + "), safe to use");
+        return true; // Non-AoE chip
+    }
+
+    var myCurrentCell = getCell();
+    var distanceToTarget = getCellDistance(myCurrentCell, targetEnemyCell);
+
+    debugW("AOE SAFETY CHECK: Chip " + chip + " area=" + chipArea + ", distance to target=" + distanceToTarget);
+
+    // CHIP_TOXIN has area effect - check if we'd be caught in the blast
+    // AoE area affects cells around the target
+    if (chip == CHIP_TOXIN) {
+        // TOXIN affects cells within its area around the target
+        // If we're too close to the target, we'll poison ourselves
+        var safeDistance = chipArea + 1; // Need to be outside the AoE radius
+
+        if (distanceToTarget <= chipArea) {
+            debugW("AOE DANGER: TOXIN would hit self - distance " + distanceToTarget + " <= AoE area " + chipArea);
+            return false;
+        } else {
+            debugW("AOE SAFE: TOXIN safe to use - distance " + distanceToTarget + " > AoE area " + chipArea);
+            return true;
+        }
+    }
+
+    // For other AoE chips, add similar logic here
+    if (chip == CHIP_METEORITE || chip == CHIP_ICEBERG) {
+        // These also have AoE effects, check similarly
+        if (distanceToTarget <= chipArea) {
+            debugW("AOE DANGER: Chip " + chip + " would hit self - distance " + distanceToTarget + " <= AoE area " + chipArea);
+            return false;
+        }
+    }
+
+    debugW("AOE SAFE: Chip " + chip + " safe to use");
+    return true;
 }

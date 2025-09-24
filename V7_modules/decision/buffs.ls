@@ -1,6 +1,9 @@
 // V7 Module: decision/buffs.ls
 // Buff chip management for strength/agility focused build
 
+// === CHIP_MIRROR LOGIC - REMOVED ===
+// Function removed to avoid compilation issues
+
 // === MAIN BUFF APPLICATION ===
 function applyTurnBuffs() {
     if (debugEnabled) {
@@ -16,7 +19,10 @@ function applyTurnBuffs() {
     var turn = getTurn();
     var tpUsed = 0;
     var chips = getChips();
-    
+
+    // Priority 0: CHIP_MIRROR - temporarily removed for debugging
+    // All CHIP_MIRROR logic has been disabled to isolate compilation issues
+
     // Priority 1: Motivation (+2 TP) - use early for compound benefit
     // Apply on turns 1, 4, 7, etc. (every 3 turns due to 6 turn cooldown)
     if ((turn == 1 || (turn - 1) % 6 == 0) && inArray(chips, CHIP_MOTIVATION)) {
@@ -83,7 +89,34 @@ function applyTurnBuffs() {
 function calculateBuffPriority(chip, turn) {
     // Higher score = higher priority
     var priority = 0;
-    
+
+    // CHIP_MIRROR priority logic temporarily removed for debugging
+    /*
+    if (chip == CHIP_MIRROR) {
+        // Dynamic priority based on build type
+        if (isAgilityBuild) {
+            priority = 120;  // Highest - maximum benefit (up to 39% reflection)
+        } else if (isWisdomBuild) {
+            priority = 80;   // High - survivability synergy
+        } else if (isStrengthBuild) {
+            priority = 60;   // Medium - apply if spare TP available
+        } else if (isMagicBuild) {
+            priority = 40;   // Low - DoT combos take precedence
+        } else {
+            priority = 70;   // Balanced builds - medium-high priority
+        }
+
+        // Boost priority if taking heavy damage (defensive benefit)
+        if (myHP < myMaxHP * 0.5) {
+            priority += 20;
+        }
+
+        // Extra boost if multiple enemies (more incoming damage to reflect)
+        if (count(allEnemies) >= 3) {
+            priority += 30;
+        }
+    } else
+    */
     if (chip == CHIP_MOTIVATION) {
         // Very high priority early in fight for compound TP benefit
         priority = (turn <= 3) ? 100 : 50;
@@ -179,10 +212,20 @@ function optimizeBuffSequence(availableChips, availableTP) {
 
 // === EMERGENCY BUFF HANDLING ===
 function shouldSkipBuffsInEmergency() {
-    // Skip buffs when in emergency mode to save TP for healing/escape
+    // Skip buffs when in emergency mode EXCEPT defensive buffs like MIRROR
     if (emergencyMode) {
+        // Check if we have CHIP_MIRROR available and not on cooldown
+        var chips = getChips();
+        if (inArray(chips, CHIP_MIRROR) && getCooldown(CHIP_MIRROR) == 0 && myTP >= 5) {
+            // Don't skip buffs if we can apply mirror for defense
+            if (debugEnabled) {
+                debugW("BUFF ALLOW: Emergency mode but MIRROR available for defense");
+            }
+            return false;
+        }
+
         if (debugEnabled) {
-            debugW("BUFF SKIP: Emergency mode active - saving TP for survival");
+            debugW("BUFF SKIP: Emergency mode active - saving TP for survival (MIRROR not available)");
         }
         return true;
     }

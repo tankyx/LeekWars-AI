@@ -341,7 +341,7 @@ function quickDamageZoneCheck(targetEnemyCell) {
                 // Check if reachable by movement or teleport
                 if (distance <= myMP || (distance <= 12 && canUseChip(CHIP_TELEPORTATION, getCell()))) {
                     // Verify can actually attack from this position
-                    if (hasLOS(sampleCell, targetEnemyCell)) {
+                    if (checkLineOfSight(sampleCell, targetEnemyCell)) {
                         var weaponDistance = getCellDistance(sampleCell, targetEnemyCell);
                         if (weaponDistance >= minRange && weaponDistance <= maxRange) {
                             return true;
@@ -357,13 +357,13 @@ function quickDamageZoneCheck(targetEnemyCell) {
 
 // === TARGET PRIORITIZATION ===
 function prioritizeTargets() {
-    if (count(enemies) == 0) {
+    if (count(allEnemies) == 0) {
         return [];
     }
     
     // Calculate TTK and priority for each enemy
-    for (var i = 0; i < count(enemies); i++) {
-        var enemyEntity = enemies[i];
+    for (var i = 0; i < count(allEnemies); i++) {
+        var enemyEntity = allEnemies[i];
         
         if (getLife(enemyEntity) <= 0) {
             continue; // Skip dead enemies
@@ -408,8 +408,8 @@ function prioritizeTargets() {
     
     // Sort enemies by priority (lowest priority value = highest actual priority)
     var sortedEnemies = [];
-    for (var i = 0; i < count(enemies); i++) {
-        push(sortedEnemies, enemies[i]);
+    for (var i = 0; i < count(allEnemies); i++) {
+        push(sortedEnemies, allEnemies[i]);
     }
     
     // Simple bubble sort by priority
@@ -525,8 +525,8 @@ function evaluateAoEWeapon(weapon) {
         for (var j = 0; j < count(affectedCells); j++) {
             var cell = affectedCells[j];
             
-            for (var k = 0; k < count(enemies); k++) {
-                var enemyEntity = enemies[k];
+            for (var k = 0; k < count(allEnemies); k++) {
+                var enemyEntity = allEnemies[k];
                 
                 if (getLife(enemyEntity) > 0 && getCell(enemyEntity) == cell) {
                     var damage = estimateWeaponDamage(weapon, enemyEntity);
