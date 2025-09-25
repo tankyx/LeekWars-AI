@@ -305,10 +305,20 @@ function executeNormalTurn() {
     debugW("STEP 4: Starting pathfinding with " + count(damageArray) + " damage zones");
     // Use dual-map pathfinding when available (weapon-first, then chips)
     var pathResult = null;
-    if (currentWeaponDamageArray != null && currentChipDamageArray != null && (count(currentWeaponDamageArray) + count(currentChipDamageArray)) > 0) {
-        pathResult = findOptimalPathFromDualArrays(myCell, currentWeaponDamageArray, currentChipDamageArray);
-    } else {
-        pathResult = findOptimalPathFromArray(myCell, damageArray);
+    // Prefer the original array-based pathfinder for stability; use dual-array only as a hint.
+    pathResult = findOptimalPathFromArray(myCell, damageArray);
+    // If nothing useful found, try dual-array as a secondary search.
+    if (pathResult == null || (pathResult[3] == null)) {
+        var dual = null;
+        if (currentWeaponDamageArray != null && currentChipDamageArray != null && (count(currentWeaponDamageArray) + count(currentChipDamageArray)) > 0) {
+            dual = findOptimalPathFromDualArrays(myCell, currentWeaponDamageArray, currentChipDamageArray);
+        }
+        // Keep dual result only if it includes a recommended weapon or longer movement
+        var curLen = (pathResult != null && pathResult[1] != null) ? count(pathResult[1]) : 0;
+        var dualLen = (dual != null && dual[1] != null) ? count(dual[1]) : 0;
+        if (dual != null && (dual[3] != null || dualLen > curLen)) {
+            pathResult = dual;
+        }
     }
     debugW("STEP 4: Pathfinding completed, result=" + (pathResult == null ? "NULL" : "SUCCESS"));
     if (debugEnabled) {
@@ -528,6 +538,15 @@ function executeNormalTurn() {
             if (debugEnabled) {
                 debug("MOVEMENT SKIPPED: No valid path/teleport and no manual move");
             }
+        }
+    } else {
+        // No path at all: take a forward move toward target
+        var tgtEnt2 = (primaryTarget != null) ? primaryTarget : ((count(allEnemies) > 0) ? allEnemies[0] : null);
+        var tgtCell3 = (tgtEnt2 != null) ? getCell(tgtEnt2) : null;
+        if (tgtCell3 != null) {
+            var moved = moveTowardCells([tgtCell3], myMP);
+            if (moved > 0 && debugEnabled) { debugW("STEP 5: Manual forward move (no path) used MP=" + moved + " toward cell=" + tgtCell3); }
+            myCell = getCell(); myMP = getMP(); myTP = getTP();
         }
     }
     

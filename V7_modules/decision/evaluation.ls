@@ -35,20 +35,10 @@ function calculateMultiEnemyDamageZones() {
     var weapons = getWeapons();
     var hasWeapons = (weapons != null && count(weapons) > 0);
 
-    // OPERATIONS OPTIMIZATION: Use optimized calculation for multiple enemies
-    if (count(aliveEnemies) > 1 && hasWeapons) {
-        debugW("MULTI-ENEMY OPTIMIZATION: Using corridor-based calculation for " + count(aliveEnemies) + " enemies");
-        var maxOperations = 5000000; // Match original limit
-        var optimizedZones = calculateOptimizedDamageZones(aliveEnemies, weapons, maxOperations);
-
-        if (optimizedZones != null && count(optimizedZones) > 0) {
-            debugW("OPTIMIZATION SUCCESS: Generated " + count(optimizedZones) + " optimized damage zones");
-            return optimizedZones;
-        } else {
-            debugW("OPTIMIZATION FALLBACK: Using original calculation");
-            // Continue with original method below
-        }
-    }
+    // NOTE: Corridor optimization disabled to restore full zone marking and
+    // original movement behavior in solo/team fights. Keep the original
+    // calculation path so all zones are marked and aggregated consistently.
+    // if (count(aliveEnemies) > 1 && hasWeapons) { ... }
 
     // Original single-enemy focused calculation (preserved for compatibility)
     // Weapon availability checked
@@ -166,37 +156,32 @@ function calculateMultiEnemyDamageZones() {
                         }
                     }
                     
-                    // Mark damage zones visually on the map with weapon-specific colors
-                    // Show for entire fight for tactical advantage
-                        var markColor = 0; // Default black
-                        
-                        // Color by weapon type (using RGB values)
-                        // Distinct color per weapon type
-                        if (weapon == WEAPON_M_LASER) markColor = getColor(255, 0, 0);         // M-Laser - Red
-                        else if (weapon == WEAPON_RIFLE) markColor = getColor(255, 165, 0); // Rifle - Orange  
-                        else if (weapon == WEAPON_ENHANCED_LIGHTNINGER) markColor = getColor(128, 0, 128); // Enhanced Lightninger - Purple
-                        else if (weapon == WEAPON_KATANA) markColor = getColor(0, 0, 255);   // Katana - Blue
-                        else if (weapon == WEAPON_B_LASER) markColor = getColor(255, 20, 147); // B-Laser - Deep Pink
-                        else if (weapon == WEAPON_GRENADE_LAUNCHER) markColor = getColor(255, 140, 0);  // Grenade Launcher - Dark Orange
-                        else if (weapon == WEAPON_ELECTRISOR) markColor = getColor(0, 255, 255);  // Electrisor - Cyan
-                        else if (weapon == WEAPON_RHINO) markColor = getColor(139, 69, 19);  // Rhino - Saddle Brown
-                        else if (weapon == WEAPON_SWORD) markColor = getColor(50, 205, 50);  // Sword - Lime Green
-                        else if (weapon == WEAPON_NEUTRINO) markColor = getColor(255, 192, 203); // Neutrino - Pink
-                        else if (weapon == WEAPON_DESTROYER) markColor = getColor(75, 0, 130);   // Destroyer - Indigo
-                        else if (weapon == WEAPON_FLAME_THROWER) markColor = getColor(255, 69, 0);   // Flame Thrower - Red Orange
-                        else if (weapon == WEAPON_LASER) markColor = getColor(220, 20, 60);  // Laser - Crimson
-                        else markColor = getColor(255, 255, 0); // Unknown weapons - Yellow
-                        
-                        // Dim color if no Line of Sight (make it gray)
-                        if (!hasLoS) {
-                            markColor = getColor(128, 128, 128); // All non-LoS zones are gray
-                        }
-                        
-                        mark(attackPosition, markColor);
-                    
-                    if (getTurn() <= 3) {
-                        // Zone created (debug log removed to reduce output pollution)
-                    }
+                }
+
+                // Always mark computed cells for visualization, even if damage == 0
+                // Weapon-specific color, gray if no LoS or zero damage
+                var markColor = 0;
+                if (weapon == WEAPON_M_LASER) markColor = getColor(255, 0, 0);
+                else if (weapon == WEAPON_RIFLE) markColor = getColor(255, 165, 0);
+                else if (weapon == WEAPON_ENHANCED_LIGHTNINGER) markColor = getColor(128, 0, 128);
+                else if (weapon == WEAPON_KATANA) markColor = getColor(0, 0, 255);
+                else if (weapon == WEAPON_B_LASER) markColor = getColor(255, 20, 147);
+                else if (weapon == WEAPON_GRENADE_LAUNCHER) markColor = getColor(255, 140, 0);
+                else if (weapon == WEAPON_ELECTRISOR) markColor = getColor(0, 255, 255);
+                else if (weapon == WEAPON_RHINO) markColor = getColor(139, 69, 19);
+                else if (weapon == WEAPON_SWORD) markColor = getColor(50, 205, 50);
+                else if (weapon == WEAPON_NEUTRINO) markColor = getColor(255, 192, 203);
+                else if (weapon == WEAPON_DESTROYER) markColor = getColor(75, 0, 130);
+                else if (weapon == WEAPON_FLAME_THROWER) markColor = getColor(255, 69, 0);
+                else if (weapon == WEAPON_LASER) markColor = getColor(220, 20, 60);
+                else markColor = getColor(255, 255, 0);
+                if (!hasLoS || damage <= 0) {
+                    markColor = getColor(128, 128, 128);
+                }
+                mark(attackPosition, markColor);
+                
+                if (getTurn() <= 3) {
+                    // Cell visualized
                 }
                 }
             }
