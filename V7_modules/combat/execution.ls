@@ -72,7 +72,7 @@ function executeCombat(fromCell, recommendedWeapon) {
         
         // Check for AoE opportunities first
         var aoeOption = findBestAoETarget();
-        if (aoeOption != null && aoeOption.enemyCount >= 2 && tpRemaining >= getWeaponCost(aoeOption.weapon)) {
+        if (aoeOption != null && aoeOption["enemyCount"] >= 2 && tpRemaining >= getWeaponCost(aoeOption["weapon"])) {
             // AoE opportunity found
             tpRemaining = executeAoEAttack(aoeOption, tpRemaining);
         } else {
@@ -473,7 +473,7 @@ function isSelfBuffChip(chip) {
 
 // === AOE ATTACK EXECUTION ===
 function executeAoEAttack(aoeOption, tpRemaining) {
-    var weapon = aoeOption.weapon;
+    var weapon = aoeOption["weapon"];
     var weaponCost = getWeaponCost(weapon);
     
     if (tpRemaining < weaponCost) {
@@ -492,19 +492,30 @@ function executeAoEAttack(aoeOption, tpRemaining) {
         }
     }
     
-    // Execute AoE attack on primary target (will hit multiple enemies in AoE)
-    if (canUseWeapon(primaryTarget)) {
+    // Execute AoE attack on best shot cell (will hit multiple enemies in AoE)
+    // Prefer aiming at cell for AoE to maximize hits.
+    var shotCell = aoeOption["targetCell"];
+    var canShootCell = (shotCell != null) && checkLineOfSight(getCell(), shotCell);
+    if (canShootCell) {
         if (debugEnabled) {
-            if (debugEnabled) { debugW("AOE ATTACK: Using " + weapon + " targeting " + primaryTarget + " (affects " + aoeOption.enemyCount + " enemies)"); }
+            if (debugEnabled) { debugW("AOE ATTACK: Using " + weapon + " on cell " + shotCell + " (affects ~" + aoeOption["enemyCount"] + " enemies)"); }
         }
         
-        useWeapon(primaryTarget);
+        useWeaponOnCell(shotCell);
         recordWeaponUse(weapon);
         tpRemaining -= weaponCost;
         
         if (debugEnabled) {
             if (debugEnabled) { debugW("AOE SUCCESS: Used " + weapon + ", TP remaining: " + tpRemaining); }
         }
+    } else if (primaryTarget != null && canUseWeapon(primaryTarget)) {
+        // Fallback: target primary enemy directly if cell aiming not possible
+        if (debugEnabled) {
+            if (debugEnabled) { debugW("AOE ATTACK FALLBACK: Using " + weapon + " targeting entity " + primaryTarget); }
+        }
+        useWeapon(primaryTarget);
+        recordWeaponUse(weapon);
+        tpRemaining -= weaponCost;
     } else {
         if (debugEnabled) {
             if (debugEnabled) { debugW("AOE FAIL: Cannot use " + weapon + " on " + primaryTarget); }
@@ -1579,9 +1590,24 @@ function selectBestTarget(weapon) {
             return null;
         }
         
-        // Check alignment for line weapons (X or Y axis)
-        if (isLineWeapon(weapon) && !isOnSameLine(myCell, enemyCell)) {
-            return null;
+        // For line weapons, pick the enemy on-line that yields the best multi-hit sum
+        if (isLineWeapon(weapon)) {
+            var bestEnt = null;
+            var bestVal = -1;
+            for (var i = 0; i < count(allEnemies); i++) {
+                var e = allEnemies[i];
+                if (getLife(e) <= 0) continue;
+                var eCell = getCell(e);
+                if (eCell == null) continue;
+                var d = getCellDistance(myCell, eCell);
+                if (d < minRange || d > maxRange) continue;
+                if (!isOnSameLine(myCell, eCell)) continue;
+                if (!checkLineOfSight(myCell, eCell)) continue;
+                var val = calculateLineMultiTargetDamageFromCell(weapon, myCell, eCell);
+                if (val > bestVal) { bestVal = val; bestEnt = e; }
+            }
+            if (bestEnt != null) return bestEnt;
+            if (!isOnSameLine(myCell, enemyCell)) { return null; }
         }
         
         return enemy;

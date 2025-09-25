@@ -1965,10 +1965,12 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
     // Reuse teleportRange for weapon vantage exploration (already defined above)
     // (Cells gathered above if we returned early are fine; else re-iterate)
     // Keep independent loop for clarity
-    for (var range = 1; range <= teleportRange; range++) {
+    var teleBudget = 60; // cap total teleport candidates evaluated
+    for (var range = 1; range <= teleportRange && teleBudget > 0; range++) {
         var teleportCells = getCellsAtExactDistance(currentCell, range);
+        var strideT = max(1, floor(count(teleportCells) / 8));
         
-        for (var i = 0; i < count(teleportCells); i++) {
+        for (var i = 0; i < count(teleportCells) && teleBudget > 0; i += strideT) {
             var teleportCell = teleportCells[i];
             
             // Check if teleport destination is valid and chip usable for that cell
@@ -1988,6 +1990,7 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
                     bestOption = option;
                 }
             }
+            teleBudget--;
         }
     }
     
@@ -2039,10 +2042,11 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
         var maxR = getWeaponMaxRange(weap);
         var lt = getWeaponLaunchType(weap);
         // Sample ring cells at distances within weapon range
-        for (var d = minR; d <= maxR; d++) {
+        var vantageCap = 80; // hard cap across rings to avoid op overruns
+        for (var d = minR; d <= maxR && vantageCap > 0; d++) {
             var ring = getCellsAtExactDistance(tgt, d);
             var stride = max(1, floor(count(ring) / 20));
-            for (var i = 0; i < count(ring); i += stride) {
+            for (var i = 0; i < count(ring) && vantageCap > 0; i += stride) {
                 var vcell = ring[i];
                 if (vcell == null || vcell < 0 || vcell > 612) continue;
                 if (getCellContent(vcell) != CELL_EMPTY) continue;
@@ -2085,6 +2089,7 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
                     bestPath = path;
                     bestWeaponId = weap;
                 }
+                vantageCap--;
             }
         }
     }

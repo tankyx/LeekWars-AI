@@ -258,6 +258,12 @@ function calculateMultiEnemyDamageZones() {
                         operationsUsed++;
                         
                         var distanceToEnemy = getCellDistance(attackCell, currentEnemyCell);
+                        // Respect chip min/max range
+                        var cMin = getChipMinRange(chip.id);
+                        var cMax = getChipMaxRange(chip.id);
+                        if (distanceToEnemy < cMin || distanceToEnemy > cMax) {
+                            continue;
+                        }
                         
                         // Early-turn cone pruning for chip zones as well
                         if (getTurn() <= 3) {
@@ -276,22 +282,37 @@ function calculateMultiEnemyDamageZones() {
                             }
                             
                             if (hasLoSCheck) {
-                                // Calculate chip damage (use average)
+                                // Calculate chip base damage (use average)
                                 var chipDamage = (chip.minDmg + chip.maxDmg) / 2;
-                                
                                 // Apply magic scaling for magic builds
                                 if (isMagicBuild && myMagic != null) {
                                     chipDamage = chipDamage * (1 + myMagic / 100.0);
                                 }
-                                
-                                // Calculate uses (chips have no max uses limit usually)
+                                var areaShape = getChipAreaShapeNormalized(chip.id);
+                                var totalPerCast = 0;
+                                if (areaShape != null && areaShape != AREA_POINT) {
+                                    // AoE chip: aim at enemy cell; sum over all enemies within AoE shape
+                                    var multiSum = 0;
+                                    for (var ei = 0; ei < count(allEnemies); ei++) {
+                                        var ent = allEnemies[ei];
+                                        if (getLife(ent) <= 0) continue;
+                                        var eCell = getCell(ent);
+                                        if (eCell == null) continue;
+                                        if (!isCellInAoEShapeForShot(attackCell, currentEnemyCell, eCell, areaShape)) continue;
+                                        var percent = getAoEPercentAt(currentEnemyCell, eCell, areaShape);
+                                        multiSum += chipDamage * percent;
+                                    }
+                                    totalPerCast = multiSum;
+                                } else {
+                                    // Single target chip: damage to current enemy only
+                                    totalPerCast = chipDamage;
+                                }
+                                // Uses
                                 var tpUses = floor(myTP / chip.cost);
-                                var totalChipDamage = chipDamage * tpUses;
-                                
+                                var totalChipDamage = totalPerCast * tpUses;
                                 var entry = [attackCell, totalChipDamage, chip.id, currentEnemy];
                                 push(enemyDamageZones, entry);
                                 push(chipDamageZones, entry);
-                                
                                 if (getTurn() <= 2) {
                                     // Chip zone created
                                 }
@@ -545,6 +566,14 @@ function calculateWeaponDamageFromCell(weapon, fromCell, targetCell) {
         if (!isAligned) {
             return 0;
         }
+
+        // Multi-hit enhancement for line weapons (LASER/FLAME):
+        // If multiple enemies are aligned along the same axis and direction, 
+        // sum their expected damages (with a light AoE falloff around the targeted cell).
+        var multiLineDamage = calculateLineMultiTargetDamageFromCell(weapon, fromCell, targetCell);
+        if (multiLineDamage > 0) {
+            return multiLineDamage;
+        }
     }
     
     // Get base damage
@@ -621,11 +650,11 @@ function calculateAoEDamageZones(weapon, fromCell, targetCell) {
     var totalDamage = 0;
     var minRange = getWeaponMinRange(weapon);
     var maxRange = getWeaponMaxRange(weapon);
-    var aoeRadius = getWeaponArea(weapon);
+    var areaShape = getWeaponAreaShapeNormalized(weapon); // AREA_* constant or numeric radius
     
     // AoE damage calculation starting
     
-    // Check all cells we can shoot at within weapon range
+    // Check all cells we can shoot at within weapon range, and sum damage over ALL enemies per AoE shape
     for (var range = minRange; range <= maxRange; range++) {
         var targetCells = getCellsAtExactDistance(fromCell, range);
         
@@ -637,40 +666,39 @@ function calculateAoEDamageZones(weapon, fromCell, targetCell) {
                 continue;
             }
             
-            // Check if target enemy is within AoE radius of this shoot position
-            var splashDistance = getCellDistance(shootCell, targetCell);
-            
-            if (splashDistance <= aoeRadius) {
-                // Enemy will be hit by splash damage!
-                var baseDamage = 0;
-                var effects = getWeaponEffects(weapon);
-                
-                for (var e = 0; e < count(effects); e++) {
-                    if (effects[e][0] == 1) { // EFFECT_DAMAGE
-                        var minDmg = effects[e][1];
-                        var maxDmg = effects[e][2];
-                        baseDamage = (minDmg + maxDmg) / 2;
-                        break;
-                    }
+            // Base damage per enemy at the center
+            var baseDamage = 0;
+            var effects = getWeaponEffects(weapon);
+            for (var e = 0; e < count(effects); e++) {
+                if (effects[e][0] == 1) { // EFFECT_DAMAGE
+                    var minDmg = effects[e][1];
+                    var maxDmg = effects[e][2];
+                    baseDamage = (minDmg + maxDmg) / 2;
+                    break;
                 }
-                
-                if (baseDamage > 0) {
-                    // Apply strength scaling
-                    var scaledDamage = baseDamage * (1 + myStrength / 100.0);
-                    
-                    // Calculate multiple uses
-                    var maxUses = getWeaponMaxUses(weapon);
-                    var tpUses = floor(myTP / weaponCost);
-                    var actualUses = (maxUses > 0) ? min(tpUses, maxUses) : tpUses;
-                    
-                    var weaponDamage = scaledDamage * actualUses;
-                    
-                    // Take the best position (closest splash for maximum accuracy)
-                    if (weaponDamage > totalDamage) {
-                        totalDamage = weaponDamage;
-                        
-                        // AoE hit position found
-                    }
+            }
+            if (baseDamage == 0) continue;
+            var scaledBase = baseDamage * (1 + myStrength / 100.0);
+
+            // Compute total multi-enemy damage at this shot cell per AREA_* shape
+            var multiSum = 0;
+            for (var ei = 0; ei < count(allEnemies); ei++) {
+                var ent = allEnemies[ei];
+                if (getLife(ent) <= 0) continue;
+                var eCell = getCell(ent);
+                if (eCell == null) continue;
+                if (!isCellInAoEShapeForShot(fromCell, shootCell, eCell, areaShape)) continue;
+                var percent = getAoEPercentAt(shootCell, eCell, areaShape);
+                multiSum += scaledBase * percent;
+            }
+
+            if (multiSum > 0) {
+                var maxUses = getWeaponMaxUses(weapon);
+                var tpUses = floor(myTP / weaponCost);
+                var actualUses = (maxUses > 0) ? min(tpUses, maxUses) : tpUses;
+                var totalAtShot = multiSum * actualUses;
+                if (totalAtShot > totalDamage) {
+                    totalDamage = totalAtShot;
                 }
             }
         }
@@ -705,8 +733,8 @@ function calculateChipDamageZones() {
     
     // Prioritize high-damage chips over SPARK
     var damageChips = [
-        {id: CHIP_LIGHTNING, range: 10, damage: 400, cost: 4},
-        {id: CHIP_METEORITE, range: 8, damage: 350, cost: 5}
+        {id: CHIP_LIGHTNING, damage: 400, cost: 4},
+        {id: CHIP_METEORITE, damage: 350, cost: 5}
     ];
     
     // Calculating chip damage zones
@@ -726,7 +754,10 @@ function calculateChipDamageZones() {
             var currentEnemyCell = getCell(currentEnemy);
             
             // Check cells within movement + chip range
-            var maxSearchDistance = min(myMP + chipData.range, 20);
+            // Use actual chip max range from API
+            var cMax = getChipMaxRange(chipData.id);
+            var cMin = getChipMinRange(chipData.id);
+            var maxSearchDistance = min(myMP + cMax, 20);
             for (var d = 1; d <= maxSearchDistance; d++) {
                 var candidateCells = getCellsAtExactDistance(myCell, d);
 
@@ -734,8 +765,8 @@ function calculateChipDamageZones() {
                     var attackCell = candidateCells[i];
                     var distanceToEnemy = getCellDistance(attackCell, currentEnemyCell);
                     
-                    // Check if chip can reach enemy from this position
-                    if (distanceToEnemy <= chipData.range) {
+                    // Check if chip can reach enemy from this position (respect min/max)
+                    if (distanceToEnemy >= cMin && distanceToEnemy <= cMax) {
                         // SPARK doesn't need LOS, others do
                         var needsLOS = (chipData.id != CHIP_SPARK);
                         var hasLOSCheck = true;
@@ -764,6 +795,9 @@ function calculateChipDamageZones() {
 }
 
 // === UTILITY FUNCTIONS ===
+// Lightweight ring cache to avoid recomputing the same Manhattan rings.
+// Stored globally; initialize lazily on first use.
+global ringCache = null;
 function getCellsAtExactDistance(centerCell, distance) {
     var cells = [];
 
@@ -772,30 +806,34 @@ function getCellsAtExactDistance(centerCell, distance) {
         return cells;
     }
 
-    // Use LeekWars built-in coordinate system (-17 to +17 in both X and Y)
-    var centerX = getCellX(centerCell);
-    var centerY = getCellY(centerCell);
+    if (ringCache == null) { ringCache = [:]; }
+    // Cache hit?
+    var key = centerCell + ":" + distance;
+    if (ringCache[key] != null) {
+        return ringCache[key];
+    }
 
-    // Check all cells in a square around center
+    var cx = getCellX(centerCell);
+    var cy = getCellY(centerCell);
+
+    // Generate Manhattan ring: |dx| + |dy| == distance
     for (var dx = -distance; dx <= distance; dx++) {
-        for (var dy = -distance; dy <= distance; dy++) {
-            var targetX = centerX + dx;
-            var targetY = centerY + dy;
-
-            // Get cell from coordinates (LeekWars handles bounds automatically)
-            var targetCell = getCellFromXY(targetX, targetY);
-
-            if (targetCell != null && targetCell >= 0) {
-                var actualDistance = getCellDistance(centerCell, targetCell);
-
-                if (abs(actualDistance - distance) < 0.01) { // Use tolerance for floating-point comparison
-                    push(cells, targetCell);
-                }
-            }
+        var adx = abs(dx);
+        var dy = distance - adx;
+        var x1 = cx + dx;
+        var y1 = cy + dy;
+        var c1 = getCellFromXY(x1, y1);
+        if (c1 != null && c1 >= 0) { push(cells, c1); }
+        if (dy != 0) {
+            var y2 = cy - dy;
+            var c2 = getCellFromXY(x1, y2);
+            if (c2 != null && c2 >= 0) { push(cells, c2); }
         }
     }
 
-    return cells;
+    // Store in cache and return
+    ringCache[key] = cells;
+    return ringCache[key];
 }
 
 function checkLineOfSight(fromCell, toCell) {
@@ -850,4 +888,165 @@ function isWithinNinetyDegreeCone(myCell, axisCell, testCell) {
     var dot2 = dot * dot;
     // Inside cone if angle ≤ 45°: 2*dot^2 ≥ |u|^2 * |v|^2
     return (2 * dot2) >= (len2u * len2v);
+}
+
+// === AREA_* SHAPE SUPPORT ===
+function isCellInAoEShapeForShot(shooterCell, shotCell, testCell, areaVal) {
+    // Numeric fallback: treat as Manhattan circle radius
+    if (areaVal == null) return false;
+    if (areaVal == 0) return false;
+    var sx = getCellX(shotCell);
+    var sy = getCellY(shotCell);
+    var tx = getCellX(testCell);
+    var ty = getCellY(testCell);
+    var dx = tx - sx;
+    var dy = ty - sy;
+    var adx = abs(dx);
+    var ady = abs(dy);
+    
+    // Numeric radius (compat with existing wrapper): Circle (Manhattan) radius areaVal
+    if (areaVal == 1 || areaVal == 2 || areaVal == 3) {
+        return (abs(dx) + abs(dy)) <= areaVal;
+    }
+    
+    // Constants: compare against built-ins if available
+    if (areaVal == AREA_POINT) {
+        return (shotCell == testCell);
+    }
+    if (areaVal == AREA_CIRCLE_1 || areaVal == AREA_CIRCLE_2 || areaVal == AREA_CIRCLE_3) {
+        var r = (areaVal == AREA_CIRCLE_1) ? 1 : (areaVal == AREA_CIRCLE_2) ? 2 : 3;
+        return (abs(dx) + abs(dy)) <= r;
+    }
+    if (areaVal == AREA_SQUARE_1 || areaVal == AREA_SQUARE_2) {
+        var r2 = (areaVal == AREA_SQUARE_1) ? 1 : 2;
+        return max(adx, ady) <= r2;
+    }
+    if (areaVal == AREA_PLUS_1 || areaVal == AREA_PLUS_2 || areaVal == AREA_PLUS_3) {
+        var rp = (areaVal == AREA_PLUS_1) ? 1 : (areaVal == AREA_PLUS_2) ? 2 : 3;
+        return ((abs(dx) + abs(dy)) <= rp) && (dx == 0 || dy == 0);
+    }
+    if (areaVal == AREA_X_1 || areaVal == AREA_X_2 || areaVal == AREA_X_3) {
+        var rx = (areaVal == AREA_X_1) ? 1 : (areaVal == AREA_X_2) ? 2 : 3;
+        return (adx == ady && adx <= rx);
+    }
+    if (areaVal == AREA_LASER_LINE) {
+        // Laser line AoE: along the beam direction from shooter to shot (100% per cell, no falloff)
+        if (shooterCell == null) return false; // need direction
+        var fx = getCellX(shooterCell);
+        var fy = getCellY(shooterCell);
+        var dirX = sign(sx - fx);
+        var dirY = sign(sy - fy);
+        // Must be axis aligned
+        // Must be axis-aligned (exactly one axis non-zero direction)
+        if (!(((dirX == 0) != (dirY == 0)))) return false;
+        if (!isOnSameLine(shotCell, testCell)) return false;
+        // Same half-line direction from shot cell
+        if (dirX != 0 && sign(tx - sx) != dirX) return false;
+        if (dirY != 0 && sign(ty - sy) != dirY) return false;
+        return true;
+    }
+    
+    // Unknown constant: be safe and include center only
+    return (shotCell == testCell);
+}
+
+function getAoEPercentAt(centerCell, cell, areaVal) {
+    // Lasers (AREA_LASER_LINE) do not reduce
+    if (areaVal == AREA_LASER_LINE) return 1;
+    // Default falloff per spec
+    var dist = getCellDistance(centerCell, cell);
+    return max(0, 1 - 0.2 * dist);
+}
+
+// === LINE MULTI-HIT DAMAGE (LASERS/FLAME) ===
+// Sums damage over all aligned enemies in the direction from fromCell to targetCell.
+function calculateLineMultiTargetDamageFromCell(weapon, fromCell, targetCell) {
+    if (!isLineWeapon(weapon)) return 0;
+    // Range and LOS already validated by caller; re-check conservative gates
+    if (!checkLineOfSight(fromCell, targetCell)) return 0;
+    if (!isOnSameLine(fromCell, targetCell)) return 0;
+
+    var minRange = getWeaponMinRange(weapon);
+    var maxRange = getWeaponMaxRange(weapon);
+    var distance = getCellDistance(fromCell, targetCell);
+    if (distance < minRange || distance > maxRange) return 0;
+
+    // Base average damage for this weapon
+    var base = 0;
+    var eff = getWeaponEffects(weapon);
+    for (var i = 0; i < count(eff); i++) {
+        if (eff[i][0] == 1) { base = (eff[i][1] + eff[i][2]) / 2; break; }
+    }
+    if (base == 0) return 0;
+    var scaledBase = base * (1 + myStrength / 100.0);
+
+    // Determine shooting direction (toward targetCell)
+    var fx = getCellX(fromCell);
+    var fy = getCellY(fromCell);
+    var tx = getCellX(targetCell);
+    var ty = getCellY(targetCell);
+    var dirX = sign(tx - fx);
+    var dirY = sign(ty - fy);
+
+    // Multi-hit sum. Lasers deal 100% to every cell; non-laser line weapons use falloff from target.
+    var sum = 0;
+    for (var ei = 0; ei < count(allEnemies); ei++) {
+        var ent = allEnemies[ei];
+        if (getLife(ent) <= 0) continue;
+        var eCell = getCell(ent);
+        if (eCell == null) continue;
+        // Must be on same axis line
+        if (!isOnSameLine(fromCell, eCell)) continue;
+
+        // Ensure enemy lies in the same half-line direction as target
+        var ex = getCellX(eCell);
+        var ey = getCellY(eCell);
+        if (dirX != 0 && sign(ex - fx) != dirX) continue;
+        if (dirY != 0 && sign(ey - fy) != dirY) continue;
+
+        // Must be within weapon max range from shooter
+        var dFromShooter = getCellDistance(fromCell, eCell);
+        if (dFromShooter < minRange || dFromShooter > maxRange) continue;
+
+        // LOS to targetCell was required; for multi-hit line, assume pass-through on aligned enemies
+        // Lasers (and FLAME_THROWER): no reduction. Others: apply falloff relative to targeted enemy.
+        var percent = 1;
+        if (!(weapon == WEAPON_M_LASER || weapon == WEAPON_B_LASER || weapon == WEAPON_LASER || weapon == WEAPON_FLAME_THROWER)) {
+            var distCenter = getCellDistance(targetCell, eCell);
+            percent = max(0, 1 - 0.2 * distCenter);
+        }
+        sum += scaledBase * percent;
+    }
+
+    if (sum <= 0) return 0;
+    var maxUses = getWeaponMaxUses(weapon);
+    var wCost = getWeaponCost(weapon);
+    var uses = floor(myTP / wCost);
+    if (maxUses > 0) uses = min(uses, maxUses);
+    if (uses <= 0) return 0;
+    return sum * uses;
+}
+
+// sign utility for line direction
+function sign(v) { if (v > 0) return 1; if (v < 0) return -1; return 0; }
+// Map known weapons to proper AREA_* constants when wrapper returns numeric
+function getWeaponAreaShapeNormalized(weapon) {
+    var a = getWeaponArea(weapon);
+    // Enhanced Lightninger is a 3x3 square (AREA_SQUARE_1)
+    if (weapon == WEAPON_ENHANCED_LIGHTNINGER) return AREA_SQUARE_1;
+    // Lightninger (non-enhanced) is diagonal cross radius 1
+    if (weapon == WEAPON_LIGHTNINGER) return AREA_X_1;
+    // Grenade launcher is circle radius 2
+    if (weapon == WEAPON_GRENADE_LAUNCHER) return AREA_CIRCLE_2;
+    // Electrisor is circle radius 1
+    if (weapon == WEAPON_ELECTRISOR) return AREA_CIRCLE_1;
+    // Default: return raw value (numeric treated as circle radius)
+    return a;
+}
+
+// Normalize chip AoE shapes to AREA_* constants
+function getChipAreaShapeNormalized(chip) {
+    var a = getChipArea(chip);
+    if (chip == CHIP_TOXIN) return AREA_CIRCLE_2;
+    return a;
 }

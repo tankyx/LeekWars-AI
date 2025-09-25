@@ -494,7 +494,26 @@ function executeNormalTurn() {
         debugW("STEP 5: hasValidPath=" + hasValidPath + ", useTeleport=" + useTeleport);
         debugW("STEP 5: pathResult details - count=" + count(pathResult) + ", pathResult[1]=" + (pathResult[1] == null ? "NULL" : "count=" + count(pathResult[1])));
         
-        if (hasValidPath || useTeleport) {
+        // If path has no movement (length <= 1) and there is no immediate attack,
+        // proactively walk toward the primary target spending available MP.
+        var pathLen = (pathResult != null && pathResult[1] != null) ? count(pathResult[1]) : 0;
+        var manualMoved = false;
+        if ((pathLen <= 1) && (immediateWeapon == null)) {
+            var tgtEnt = (primaryTarget != null) ? primaryTarget : ((count(allEnemies) > 0) ? allEnemies[0] : null);
+            var tgtCell2 = (tgtEnt != null) ? getCell(tgtEnt) : null;
+            if (tgtCell2 != null) {
+                var spent = moveTowardCells([tgtCell2], myMP);
+                if (spent > 0) {
+                    manualMoved = true;
+                    myCell = getCell();
+                    myMP = getMP();
+                    myTP = getTP();
+                    if (debugEnabled) { debugW("STEP 5: Manual forward move used MP=" + spent + " toward cell=" + tgtCell2); }
+                }
+            }
+        }
+
+        if (!manualMoved && (hasValidPath || useTeleport)) {
             debugW("STEP 5: Executing movement");
             executeMovement(pathResult);
             
@@ -507,7 +526,7 @@ function executeNormalTurn() {
             }
         } else {
             if (debugEnabled) {
-                debug("MOVEMENT SKIPPED: No valid path or teleport available");
+                debug("MOVEMENT SKIPPED: No valid path/teleport and no manual move");
             }
         }
     }

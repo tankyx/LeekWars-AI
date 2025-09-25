@@ -467,7 +467,7 @@ function updatePrimaryTarget() {
         
         if (primaryTarget != newTarget) {
             if (debugEnabled) {
-                debugW("TARGET SWITCH: " + primaryTarget + " → " + newTarget);
+                debugW("TARGET SWITCH: " + primaryTarget + " -> " + newTarget);
             }
             primaryTarget = newTarget;
             
@@ -494,12 +494,15 @@ function findBestAoETarget() {
     
     for (var i = 0; i < count(weapons); i++) {
         var weapon = weapons[i];
-        
+        // Consider any weapon with non-point AoE (including Enhanced Lightninger, Grenade Launcher, Electrisor)
         if (getWeaponArea(weapon) > 0) { // AoE weapon
             var aoeOption = evaluateAoEWeapon(weapon);
-            if (aoeOption != null && aoeOption.score > bestAoEScore) {
-                bestAoEScore = aoeOption.score;
-                bestAoEOption = aoeOption;
+            if (aoeOption != null) {
+                var sc = aoeOption["score"];
+                if (sc != null && sc > bestAoEScore) {
+                    bestAoEScore = sc;
+                    bestAoEOption = aoeOption;
+                }
             }
         }
     }
@@ -509,49 +512,67 @@ function findBestAoETarget() {
 
 // === EVALUATE AOE WEAPON EFFECTIVENESS ===
 function evaluateAoEWeapon(weapon) {
-    if (primaryTarget == null || getLife(primaryTarget) <= 0) {
-        return null;
+    // Build best shot cell by scanning cells in range and summing damage across all enemies with falloff.
+    var originCell = getCell();
+    var minR = getWeaponMinRange(weapon);
+    var maxR = getWeaponMaxRange(weapon);
+    var area = getWeaponAreaShapeNormalized(weapon); // AREA_* constant or numeric radius
+    if (area == 0) return null; // Not an AoE weapon
+
+    var bestTargetCell = null;
+    var bestSum = 0;
+    var bestCount = 0;
+    var base = 0;
+    var effects = getWeaponEffects(weapon);
+    for (var e = 0; e < count(effects); e++) {
+        if (effects[e][0] == 1) { base = (effects[e][1] + effects[e][2]) / 2; break; }
     }
-    
-    var primaryCell = getCell(primaryTarget);
-    var weaponRange = getWeaponArea(weapon);
-    var totalDamage = 0;
-    var enemiesHit = [];
-    
-    // For Enhanced Lightninger (3x3 square area)
-    if (weapon == WEAPON_ENHANCED_LIGHTNINGER) {
-        var affectedCells = get3x3Area(primaryCell);
-        
-        for (var j = 0; j < count(affectedCells); j++) {
-            var cell = affectedCells[j];
-            
+    if (base == 0) return null;
+    var scaledBase = base * (1 + myStrength / 100.0);
+
+    for (var d = minR; d <= maxR; d++) {
+        var ring = getCellsAtExactDistance(originCell, d);
+        for (var i = 0; i < count(ring); i++) {
+            var shot = ring[i];
+            if (!checkLineOfSight(originCell, shot)) continue; // must see the shot cell
+            var sum = 0;
+            var hitCount = 0;
             for (var k = 0; k < count(allEnemies); k++) {
-                var enemyEntity = allEnemies[k];
-                
-                if (getLife(enemyEntity) > 0 && getCell(enemyEntity) == cell) {
-                    var damage = estimateWeaponDamage(weapon, enemyEntity);
-                    totalDamage += damage;
-                    push(enemiesHit, enemyEntity);
-                }
+                var ent = allEnemies[k];
+                if (getLife(ent) <= 0) continue;
+                var eCell = getCell(ent);
+                if (eCell == null) continue;
+                if (!isCellInAoEShapeForShot(originCell, shot, eCell, area)) continue;
+                var percent = getAoEPercentAt(shot, eCell, area);
+                sum += scaledBase * percent;
+                hitCount++;
+            }
+            if (sum > bestSum) {
+                bestSum = sum;
+                bestTargetCell = shot;
+                bestCount = hitCount;
             }
         }
     }
-    
-    var enemyCount = count(enemiesHit);
-    var score = totalDamage * enemyCount; // Bonus for hitting multiple enemies
-    
-    if (debugEnabled && enemyCount > 1) {
-        debugW("AOE OPTION: Weapon " + weapon + " can hit " + enemyCount + " enemies for " + totalDamage + " total damage (score: " + score + ")");
+
+    if (bestTargetCell == null || bestSum <= 0) return null;
+    var wCost = getWeaponCost(weapon);
+    var uses = floor(getTP() / wCost);
+    var maxUses = getWeaponMaxUses(weapon);
+    if (maxUses > 0) uses = min(uses, maxUses);
+    var totalDamage = bestSum * uses;
+    var score = totalDamage * max(1, bestCount);
+    if (debugEnabled && bestCount > 1) {
+        debugW("AOE OPTION: weapon=" + weapon + ", cell=" + bestTargetCell + ", enemies=" + bestCount + ", total=" + totalDamage);
     }
-    
-    return {
-        weapon: weapon,
-        targetCell: primaryCell,
-        enemies: enemiesHit,
-        totalDamage: totalDamage,
-        enemyCount: enemyCount,
-        score: score
-    };
+    var aoe = [:];
+    aoe["weapon"] = weapon;
+    aoe["targetCell"] = bestTargetCell;
+    aoe["enemies"] = null;
+    aoe["totalDamage"] = totalDamage;
+    aoe["enemyCount"] = bestCount;
+    aoe["score"] = score;
+    return aoe;
 }
 
 // === GET 3x3 AREA AROUND CELL ===
