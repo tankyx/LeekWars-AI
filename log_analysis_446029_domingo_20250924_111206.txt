@@ -1,0 +1,443 @@
+Fight Log Analysis
+==================
+Script: V7_main (ID: 446029)
+Opponent: Domingo - Balanced, 600 strength
+Date: 20250924_111206
+Total Fights: 2
+
+
+============================================================
+Fight 49404699 - LOSS
+URL: https://leekwars.com/fight/49404699
+============================================================
+
+[V6] GAME STATE: Our entity=0, our cell=352
+[V6] BUILD DETECTION: STR=540, MAG=0, AGI=0, WIS=610
+[V6] BUILD TYPE: STRENGTH (TP reserve for MIRROR: 7)
+[V6] STRENGTH BUILD: Will prioritize damage weapons
+[V6] ENEMY RETRIEVAL: Getting position for enemy entity 1
+[V6] ENEMY POSITION: Enemy 1 is at cell 366
+[V6] ENEMY SETUP: Entity 1 at cell 366 (we are at 352)
+
+========================================
+TURN 1
+========================================
+[V6] V7 AI STARTING - Turn 1
+[V6] GAME STATE: Our entity=0, our cell=352
+[V6] BUILD DETECTION: STR=540, MAG=0, AGI=0, WIS=870
+[V6] BUILD TYPE: STRENGTH (TP reserve for MIRROR: 7)
+[V6] STRENGTH BUILD: Will prioritize damage weapons
+[V6] ENEMY RETRIEVAL: Getting position for enemy entity 1
+[V6] ENEMY POSITION: Enemy 1 is at cell 366
+[V6] ENEMY SETUP: Entity 1 at cell 366 (we are at 352)
+[V6] [240]
+[V6] [241]
+[V6] [275]
+[V6] [242]
+[V6] [243]
+[V6] [244]
+[V6] [380]
+[V6] [415]
+[V6] [486]
+[V6] [487]
+[V6] [488]
+[V6] [222]
+[V6] [223]
+[V6] [257]
+[V6] [224]
+[V6] [226]
+[V6] [362]
+[V6] [227]
+[V6] [397]
+[V6] [432]
+[V6] [503]
+[V6] [504]
+[V6] [505]
+[V6] [506]
+[V6] [204]
+[V6] [205]
+[V6] [239]
+[V6] [206]
+[V6] [209]
+[V6] [379]
+[V6] [414]
+[V6] [520]
+[V6] [521]
+[V6] [522]
+[V6] [523]
+[V6] [348]
+[V6] [349]
+[V6] [383]
+[V6] [384]
+[V6] ENEMY-CENTRIC: Created 39 weapon damage zones around enemies
+[V6] CHIP INTEGRATION: Complete, total zones=39
+[V6] ENEMY-CENTRIC: Total 39 weapon+chip damage zones around enemies
+[V6] [352]
+[V6] [366]
+[V6] STEP 2: Checking immediate combat opportunity
+[V6] IMMEDIATE ATTACK: None found, proceeding to pathfinding
+[V6] STEP 3: Checking teleportation options
+[V6] STEP 4: Starting pathfinding with 39 damage zones
+[V6] STEP 4: Pathfinding completed, result=SUCCESS
+[V6] STEP 5: Checking movement execution, pathResult=EXISTS
+[V6] STEP 5: hasValidPath=true, useTeleport=false
+[V6] STEP 5: pathResult details - count=7, pathResult[1]=count=7
+[V6] STEP 5: Executing movement
+[V6] STEP 6: Starting combat phase
+[V6] STEP 6: recommendedWeapon=null
+[V6] STEP 6: Combat check - enemies=1, TP=7, myTP=7
+[V6] COMBAT: Using recommended weapon 47
+[V6] COMBAT: Calling tryPeekABooCombat
+[V6] PEEK-A-BOO: Starting with weapon=47, enemies=1, TP=7
+[V6] PEEK-A-BOO: Calling executeCombat with weapon=47, TP=7
+[V6] DEFENSIVE CHECK: Priority=0, TP=7
+[V6] DEFENSIVE: Low priority 0 - no defensive action needed
+[V6] DEFENSIVE NONE: No defensive scenario needed
+[V6] CHIP VALIDATION: canUseChip(33, 1) = false
+[V6] CHIP DEBUG: Chip 33 failed validation - checking reasons
+[V6] CHIP DEBUG: Range=2-5, Distance=22, HasLOS=true
+[V6] CHIP DEBUG: Cooldown=0, MaxUses=3, LaunchType=1, Area=4
+[V6] ERROR: Cannot use chip 33 on target 1 (cooldown or other issue)
+[V6] SCENARIO COMPLETE: 0/1 actions completed, 0 TP used
+[V6] ERROR: Scenario execution failed - no TP used, falling back to single weapon
+[V6] PEEK-A-BOO: executeCombat completed
+[V6] COMBAT: tryPeekABooCombat completed
+[V6] V7 AI FINISHED - Turn 1
+
+========================================
+TURN 2
+========================================
+[V6] V7 AI STARTING - Turn 2
+[V6] GAME STATE: Our entity=0, our cell=355
+[V6] BUILD DETECTION: STR=540, MAG=0, AGI=0, WIS=870
+[V6] BUILD TYPE: STRENGTH (TP reserve for MIRROR: 7)
+[V6] STRENGTH BUILD: Will prioritize damage weapons
+[V6] ENEMY RETRIEVAL: Getting position for enemy entity 1
+[V6] ENEMY POSITION: Enemy 1 is at cell 242
+[V6] ENEMY SETUP: Entity 1 at cell 242 (we are at 355)
+[V6] [152]
+[V6] [332]
+[V6] [221]
+[V6] [256]
+[V6] [291]
+[V6] [326]
+[V6] [364]
+[V6] [365]
+[V6] [366]
+[V6] [367]
+[V6] [203]
+[V6] [238]
+[V6] [273]
+[V6] [308]
+[V6] [343]
+[V6] [381]
+[V6] [382]
+[V6] [383]
+[V6] [384]
+[V6] [185]
+[V6] [220]
+[V6] [255]
+[V6] [290]
+[V6] [325]
+[V6] [398]
+[V6] [399]
+[V6] [400]
+[V6] [401]
+[V6] [402]
+[V6] [204]
+[V6] [239]
+[V6] [274]
+[V6] [309]
+[V6] [346]
+[V6] [347]
+[V6] [348]
+[V6] [349]
+[V6] [221]
+[V6] [256]
+[V6] [291]
+[V6] [326]
+[V6] [364]
+[V6] [365]
+[V6] [366]
+[V6] [367]
+[V6] [203]
+[V6] [238]
+[V6] [273]
+[V6] [308]
+[V6] [343]
+[V6] [381]
+[V6] [382]
+[V6] [383]
+[V6] [384]
+[V6] [185]
+[V6] [220]
+[V6] [255]
+[V6] [290]
+[V6] [325]
+[V6] [398]
+[V6] [399]
+[V6] [400]
+[V6] [401]
+[V6] [402]
+[V6] [167]
+[V6] [202]
+[V6] [237]
+[V6] [272]
+[V6] [307]
+[V6] [342]
+[V6] [415]
+[V6] [416]
+[V6] [417]
+[V6] [418]
+[V6] [419]
+[V6] [224]
+[V6] [259]
+[V6] [260]
+[V6] ENEMY-CENTRIC: Created 78 weapon damage zones around enemies
+[V6] CHIP INTEGRATION: Complete, total zones=206
+[V6] ENEMY-CENTRIC: Total 206 weapon+chip damage zones around enemies
+[V6] [355]
+[V6] [242]
+[V6] STEP 2: Checking immediate combat opportunity
+[V6] IMMEDIATE ATTACK: None found, proceeding to pathfinding
+[V6] STEP 3: Checking teleportation options
+[V6] STEP 4: Starting pathfinding with 206 damage zones
+[V6] STEP 4: Pathfinding completed, result=SUCCESS
+[V6] STEP 5: Checking movement execution, pathResult=EXISTS
+[V6] STEP 5: hasValidPath=true, useTeleport=false
+[V6] STEP 5: pathResult details - count=7, pathResult[1]=count=7
+[V6] STEP 5: Executing movement
+[V6] STEP 6: Starting combat phase
+[V6] STEP 6: recommendedWeapon=225
+[V6] STEP 6: Combat check - enemies=1, TP=23, myTP=23
+[V6] COMBAT: Using recommended weapon 225
+[V6] COMBAT: Calling tryPeekABooCombat
+[V6] PEEK-A-BOO: Starting with weapon=225, enemies=1, TP=23
+[V6] PEEK-A-BOO: Calling executeCombat with weapon=225, TP=23
+[V6] VALIDATION FAIL: Weapon 47 range 5-12 invalid for distance 15
+[V6] VALIDATION FAIL: Weapon 151 range 7-9 invalid for distance 15
+[V6] VALIDATION FAIL: Weapon 225 range 6-10 invalid for distance 15
+[V6] VALIDATION FAIL: Weapon 107 range 1-1 invalid for distance 15
+[V6] DEFENSIVE CHECK: Priority=0, TP=23
+
+... 452 more log entries ...
+
+============================================================
+Fight 49404703 - LOSS
+URL: https://leekwars.com/fight/49404703
+============================================================
+
+[V6] GAME STATE: Our entity=0, our cell=74
+[V6] BUILD DETECTION: STR=540, MAG=0, AGI=0, WIS=610
+[V6] BUILD TYPE: STRENGTH (TP reserve for MIRROR: 7)
+[V6] STRENGTH BUILD: Will prioritize damage weapons
+[V6] ENEMY RETRIEVAL: Getting position for enemy entity 1
+[V6] ENEMY POSITION: Enemy 1 is at cell 260
+[V6] ENEMY SETUP: Entity 1 at cell 260 (we are at 74)
+
+========================================
+TURN 1
+========================================
+[V6] V7 AI STARTING - Turn 1
+[V6] GAME STATE: Our entity=0, our cell=74
+[V6] BUILD DETECTION: STR=540, MAG=0, AGI=0, WIS=866
+[V6] BUILD TYPE: STRENGTH (TP reserve for MIRROR: 7)
+[V6] STRENGTH BUILD: Will prioritize damage weapons
+[V6] ENEMY RETRIEVAL: Getting position for enemy entity 1
+[V6] ENEMY POSITION: Enemy 1 is at cell 260
+[V6] ENEMY SETUP: Entity 1 at cell 260 (we are at 74)
+[V6] [136]
+[V6] [380]
+[V6] [118]
+[V6] [397]
+[V6] [398]
+[V6] [100]
+[V6] [415]
+[V6] [242]
+[V6] [277]
+[V6] ENEMY-CENTRIC: Created 9 weapon damage zones around enemies
+[V6] CHIP INTEGRATION: Complete, total zones=63
+[V6] ENEMY-CENTRIC: Total 63 weapon+chip damage zones around enemies
+[V6] [74]
+[V6] [260]
+[V6] STEP 2: Checking immediate combat opportunity
+[V6] IMMEDIATE ATTACK: None found, proceeding to pathfinding
+[V6] STEP 3: Checking teleportation options
+[V6] STEP 4: Starting pathfinding with 63 damage zones
+[V6] STEP 4: Pathfinding completed, result=SUCCESS
+[V6] STEP 5: Checking movement execution, pathResult=EXISTS
+[V6] STEP 5: hasValidPath=true, useTeleport=false
+[V6] STEP 5: pathResult details - count=7, pathResult[1]=count=7
+[V6] STEP 5: Executing movement
+[V6] STEP 6: Starting combat phase
+[V6] STEP 6: recommendedWeapon=107
+[V6] STEP 6: Combat check - enemies=1, TP=7, myTP=7
+[V6] COMBAT: Using recommended weapon 107
+[V6] COMBAT: Calling tryPeekABooCombat
+[V6] PEEK-A-BOO: Starting with weapon=107, enemies=1, TP=7
+[V6] PEEK-A-BOO: Calling executeCombat with weapon=107, TP=7
+[V6] DEFENSIVE CHECK: Priority=0, TP=7
+[V6] DEFENSIVE: Low priority 0 - no defensive action needed
+[V6] DEFENSIVE NONE: No defensive scenario needed
+[V6] CHIP VALIDATION: canUseChip(33, 1) = false
+[V6] CHIP DEBUG: Chip 33 failed validation - checking reasons
+[V6] CHIP DEBUG: Range=2-5, Distance=16, HasLOS=false
+[V6] CHIP DEBUG: Cooldown=0, MaxUses=3, LaunchType=1, Area=4
+[V6] ERROR: Cannot use chip 33 on target 1 (cooldown or other issue)
+[V6] SCENARIO COMPLETE: 0/1 actions completed, 0 TP used
+[V6] ERROR: Scenario execution failed - no TP used, falling back to single weapon
+[V6] PEEK-A-BOO: executeCombat completed
+[V6] COMBAT: tryPeekABooCombat completed
+[V6] V7 AI FINISHED - Turn 1
+
+========================================
+TURN 2
+========================================
+[V6] V7 AI STARTING - Turn 2
+[V6] GAME STATE: Our entity=0, our cell=182
+[V6] BUILD DETECTION: STR=540, MAG=0, AGI=0, WIS=866
+[V6] BUILD TYPE: STRENGTH (TP reserve for MIRROR: 7)
+[V6] STRENGTH BUILD: Will prioritize damage weapons
+[V6] ENEMY RETRIEVAL: Getting position for enemy entity 1
+[V6] ENEMY POSITION: Enemy 1 is at cell 187
+[V6] ENEMY SETUP: Entity 1 at cell 187 (we are at 182)
+[V6] [236]
+[V6] [218]
+[V6] [49]
+[V6] [253]
+[V6] [235]
+[V6] [219]
+[V6] [236]
+[V6] [218]
+[V6] [49]
+[V6] [253]
+[V6] [235]
+[V6] [217]
+[V6] [252]
+[V6] [170]
+[V6] [204]
+[V6] ENEMY-CENTRIC: Created 15 weapon damage zones around enemies
+[V6] CHIP INTEGRATION: Complete, total zones=244
+[V6] ENEMY-CENTRIC: Total 244 weapon+chip damage zones around enemies
+[V6] [182]
+[V6] [187]
+[V6] STEP 2: Checking immediate combat opportunity
+[V6] IMMEDIATE ATTACK: None found, proceeding to pathfinding
+[V6] STEP 3: Checking teleportation options
+[V6] STEP 4: Starting pathfinding with 244 damage zones
+[V6] STEP 4: Pathfinding completed, result=SUCCESS
+[V6] STEP 5: Checking movement execution, pathResult=EXISTS
+[V6] STEP 5: hasValidPath=true, useTeleport=false
+[V6] STEP 5: pathResult details - count=7, pathResult[1]=count=5
+[V6] STEP 5: Executing movement
+[V6] STEP 6: Starting combat phase
+[V6] STEP 6: recommendedWeapon=225
+[V6] STEP 6: Combat check - enemies=1, TP=23, myTP=23
+[V6] COMBAT: Using recommended weapon 225
+[V6] COMBAT: Calling tryPeekABooCombat
+[V6] PEEK-A-BOO: Starting with weapon=225, enemies=1, TP=23
+[V6] PEEK-A-BOO: Calling executeCombat with weapon=225, TP=23
+[V6] ENEMY ASSOCIATION: Using associated target 1 with weapon 225
+[V6] VALIDATION FAIL: Line weapon 47 not aligned (dx=2, dy=-4)
+[V6] VALIDATION FAIL: Weapon 151 range 7-9 invalid for distance 6
+[V6] VALIDATION FAIL: Chip 33 range 2-5 invalid for distance 6
+[V6] VALIDATION FAIL: Weapon 107 range 1-1 invalid for distance 6
+[V6] DEFENSIVE CHECK: Priority=0, TP=23
+[V6] DEFENSIVE: Low priority 0 - no defensive action needed
+[V6] DEFENSIVE NONE: No defensive scenario needed
+[V6] CHIP VALIDATION: canUseChip(18, 1) = true
+[V6] CHIP VALIDATION: canUseChip(14, 1) = false
+[V6] CHIP DEBUG: Chip 14 failed validation - checking reasons
+[V6] CHIP DEBUG: Range=0-5, Distance=6, HasLOS=true
+[V6] CHIP DEBUG: Cooldown=5, MaxUses=-1, LaunchType=7, Area=1
+[V6] ERROR: Cannot use chip 14 on target 1 (cooldown or other issue)
+[V6] SCENARIO COMPLETE: 1/7 actions completed, 3 TP used
+[V6] ENEMY ASSOCIATION: Using associated target 1 with weapon 225
+[V6] VALIDATION FAIL: Line weapon 47 not aligned (dx=2, dy=-4)
+[V6] VALIDATION FAIL: Weapon 151 range 7-9 invalid for distance 6
+[V6] VALIDATION FAIL: Weapon 107 range 1-1 invalid for distance 6
+[V6] DEFENSIVE CHECK: Priority=0, TP=23
+[V6] DEFENSIVE: Low priority 0 - no defensive action needed
+[V6] DEFENSIVE NONE: No defensive scenario needed
+[V6] SCENARIO COMPLETE: 2/2 actions completed, 19 TP used
+[V6] PEEK-A-BOO: executeCombat completed
+[V6] COMBAT: tryPeekABooCombat completed
+[V6] V7 AI FINISHED - Turn 2
+
+========================================
+TURN 3
+========================================
+[V6] V7 AI STARTING - Turn 3
+[V6] GAME STATE: Our entity=0, our cell=255
+[V6] BUILD DETECTION: STR=540, MAG=0, AGI=0, WIS=610
+[V6] BUILD TYPE: STRENGTH (TP reserve for MIRROR: 7)
+[V6] STRENGTH BUILD: Will prioritize damage weapons
+[V6] ENEMY RETRIEVAL: Getting position for enemy entity 1
+[V6] ENEMY POSITION: Enemy 1 is at cell 185
+[V6] ENEMY SETUP: Entity 1 at cell 185 (we are at 255)
+[V6] [100]
+[V6] [270]
+[V6] [83]
+[V6] [287]
+[V6] [66]
+[V6] [304]
+[V6] [49]
+[V6] [321]
+[V6] [32]
+[V6] [338]
+[V6] [15]
+[V6] [355]
+[V6] [63]
+[V6] [64]
+[V6] [65]
+[V6] [66]
+[V6] [304]
+[V6] [305]
+[V6] [45]
+[V6] [47]
+[V6] [251]
+[V6] [48]
+[V6] [49]
+[V6] [321]
+[V6] [322]
+[V6] [259]
+[V6] [30]
+[V6] [268]
+[V6] [31]
+[V6] [32]
+[V6] [338]
+[V6] [339]
+[V6] [80]
+[V6] [81]
+[V6] [82]
+[V6] [252]
+[V6] [83]
+[V6] [287]
+[V6] [288]
+[V6] [290]
+[V6] [63]
+[V6] [64]
+[V6] [65]
+[V6] [66]
+[V6] [304]
+[V6] [305]
+[V6] [45]
+[V6] [47]
+[V6] [251]
+[V6] [48]
+[V6] [49]
+[V6] [321]
+[V6] [322]
+[V6] [259]
+[V6] [30]
+[V6] [268]
+[V6] [31]
+[V6] [32]
+[V6] [338]
+[V6] [339]
+[V6] [10]
+[V6] [13]
+[V6] [14]
+[V6] [15]
+
+... 643 more log entries ...

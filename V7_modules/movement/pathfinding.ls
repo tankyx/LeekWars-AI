@@ -23,21 +23,29 @@ function createPathResult(targetCell, path, damage, weaponId, reachable, distanc
 function findOptimalPathFromArray(currentCell, damageArray) {
     // Pathfinding array processed
     
-    // Sort array by damage potential (highest first)
-    var sortedArray = sortArrayByDamage(damageArray);
+    // Sort array by damage potential (highest first); filter out dead enemies cheaply first
+    var aliveDamageArray = [];
+    for (var di = 0; di < count(damageArray); di++) {
+        var de = damageArray[di];
+        if (de == null) continue;
+        if (count(de) > 3) { var en = de[3]; if (en != null && getLife(en) <= 0) continue; }
+        push(aliveDamageArray, de);
+    }
+    var sortedArray = sortArrayByDamage(aliveDamageArray);
+    // Unified behavior for all builds: rely solely on the damage array
     
-    // Try single-turn A* first to each high-damage cell
+    // Try single-turn A* first to each high-damage cell (weapon-only)
     // Trying top damage cells
     
     for (var i = 0; i < min(MAX_PATHFIND_CELLS, count(sortedArray)); i++) {
         var targetData = sortedArray[i];
         var targetCell = targetData[0];
         var expectedDamage = targetData[1];
-        var weaponId = targetData[2]; // Get weapon/chip ID from damage calculation
-
-        // Only pass weapon IDs, not chip IDs, to prevent setWeapon errors
-        if (weaponId != null && !isWeapon(weaponId)) {
-            weaponId = null; // Don't recommend chips as weapons
+        var weaponId = targetData[2]; // weapon/chip ID from damage calculation
+        // Skip chip-only zones in the primary pass so we don't march to
+        // non-weapon cells and then have no attack available.
+        if (weaponId == null || !isWeapon(weaponId)) {
+            continue;
         }
         
         // Trying pathfinding to damage cell
@@ -53,7 +61,313 @@ function findOptimalPathFromArray(currentCell, damageArray) {
             // Path attempt failed
         }
     }
+
+    // Secondary single-turn pass: allow chip zones only if no weapon-vantage
+    for (var i = 0; i < min(MAX_PATHFIND_CELLS, count(sortedArray)); i++) {
+        var t2 = sortedArray[i];
+        if (t2 == null) continue;
+        var t2cell = t2[0];
+        var t2dmg = t2[1];
+        var t2wid = t2[2];
+        if (t2wid != null && isWeapon(t2wid)) continue; // weapon pass already tried
+        var pathc = aStar(currentCell, t2cell, myMP);
+        if (pathc != null && count(pathc) <= myMP + 1) {
+            // Carry the chip id as the recommended action so combat can use it
+            return createPathResult(t2cell, pathc, t2dmg, t2wid, true, count(pathc) - 1, false);
+        }
+    }
     
+    // Secondary pass: prefer any reachable damage cell within MP (by distance),
+    // not just the top-by-damage ones. This fixes cases where a slightly lower
+    // damage but reachable cell is ignored.
+    var reachableCandidates = [];
+    for (var ri = 0; ri < count(aliveDamageArray); ri++) {
+        var rd = aliveDamageArray[ri];
+        if (rd == null || count(rd) < 3) continue;
+        var rcell = rd[0];
+        var rdam = rd[1];
+        var rweap = rd[2];
+        if (rweap != null && !isWeapon(rweap)) continue;
+        if (getCellDistance(currentCell, rcell) <= myMP) {
+            // Maintain a small top list by damage
+            if (count(reachableCandidates) < 20) {
+                push(reachableCandidates, rd);
+            } else {
+                // Insert if better than the smallest in list
+                var minIdx = 0;
+                for (var mi = 1; mi < count(reachableCandidates); mi++) {
+                    if (reachableCandidates[mi][1] < reachableCandidates[minIdx][1]) {
+                        minIdx = mi;
+                    }
+                }
+                if (rdam > reachableCandidates[minIdx][1]) {
+                    reachableCandidates[minIdx] = rd;
+                }
+            }
+        }
+    }
+    // Try A* to those reachable-by-distance candidates, highest damage first
+    if (count(reachableCandidates) > 0) {
+        // Sort desc by damage
+        for (var i = 0; i < count(reachableCandidates) - 1; i++) {
+            for (var j = i + 1; j < count(reachableCandidates); j++) {
+                if (reachableCandidates[j][1] > reachableCandidates[i][1]) {
+                    var tmp = reachableCandidates[i];
+                    reachableCandidates[i] = reachableCandidates[j];
+                    reachableCandidates[j] = tmp;
+                }
+            }
+        }
+        for (var ci = 0; ci < count(reachableCandidates); ci++) {
+            var cand = reachableCandidates[ci];
+            var tCell = cand[0];
+            var tDmg = cand[1];
+            var tWeap = cand[2];
+            var path2 = aStar(currentCell, tCell, myMP);
+            if (path2 != null && count(path2) <= myMP + 1) {
+                return createPathResult(tCell, path2, tDmg, tWeap, true, count(path2) - 1, false);
+            }
+        }
+    }
+
+    // MAGIC-BUILD TARGETED FALLBACK: walk toward nearest FLAME/DESTROYER vantage (multi-turn)
+    if (isMagicBuild && enemyCell != null) {
+        var bestPathLen = 9999;
+        var bestPath = null;
+        var bestCell = null;
+        var maxProbe = min(100, count(sortedArray));
+        for (var i = 0; i < maxProbe; i++) {
+            var e = sortedArray[i];
+            if (e == null || count(e) < 3) continue;
+            var cell = e[0];
+            var wid = e[2];
+            if (wid != WEAPON_FLAME_THROWER && wid != WEAPON_DESTROYER) continue;
+            // Probe a longer A* to plan multi-turn closing
+            var p = aStar(currentCell, cell, myMP * 6);
+            if (p != null && count(p) > 1) {
+                var plen = count(p) - 1;
+                if (plen < bestPathLen) {
+                    bestPathLen = plen;
+                    bestPath = p;
+                    bestCell = cell;
+                }
+            }
+        }
+        if (bestPath != null) {
+            var steps = min(myMP, count(bestPath) - 1);
+            var moveTo = bestPath[steps];
+            var actual2 = [];
+            for (var s = 0; s <= steps; s++) { push(actual2, bestPath[s]); }
+            return createPathResult(moveTo, actual2, 0, null, steps <= myMP, steps, false);
+        }
+    }
+
+    // LAST-MILE ALIGNMENT (MAGIC + FLAME): if we are already in 6–8 but misaligned, spend 1 MP to align
+    if (isMagicBuild && enemyCell != null && inArray(getWeapons(), WEAPON_FLAME_THROWER)) {
+        var distBand = getCellDistance(currentCell, enemyCell);
+        if (distBand >= 6 && distBand <= 8 && !isOnSameLine(currentCell, enemyCell)) {
+            var neigh = getWalkableNeighbors(currentCell);
+            var bestAlign = null;
+            var bestScore = -9999;
+            for (var ni = 0; ni < count(neigh); ni++) {
+                var n = neigh[ni];
+                if (getCellContent(n) != CELL_EMPTY) continue;
+                var d = getCellDistance(n, enemyCell);
+                if (d < 2 || d > 8) continue; // FLAME range
+                if (!isOnSameLine(n, enemyCell)) continue;
+                if (!lineOfSight(n, enemyCell)) continue;
+                // Prefer safer alignment positions
+                var eid = estimateIncomingDamageAtCell(n);
+                var score = 200 - eid; // low EID better
+                if (score > bestScore) { bestScore = score; bestAlign = n; }
+            }
+            if (bestAlign != null) {
+                var pathAlign = [currentCell, bestAlign];
+                return createPathResult(bestAlign, pathAlign, 0, WEAPON_FLAME_THROWER, true, 1, false);
+            }
+        }
+    }
+
+    // LAST-MILE NUDGE (MAGIC + DESTROYER): step into 1–6 with LoS (or fix LoS) using 1 MP
+    if (isMagicBuild && enemyCell != null && inArray(getWeapons(), WEAPON_DESTROYER)) {
+        var distD = getCellDistance(currentCell, enemyCell);
+        var needCloser = (distD == 7); // one step away from range
+        var needLoSFix = (distD >= 1 && distD <= 6 && !lineOfSight(currentCell, enemyCell));
+        if (needCloser || needLoSFix) {
+            var neighD = getWalkableNeighbors(currentCell);
+            var bestD = null;
+            var bestDScore = -9999;
+            for (var di = 0; di < count(neighD); di++) {
+                var n2 = neighD[di];
+                if (getCellContent(n2) != CELL_EMPTY) continue;
+                var d2 = getCellDistance(n2, enemyCell);
+                if (d2 < 1 || d2 > 6) continue; // DESTROYER range
+                if (!lineOfSight(n2, enemyCell)) continue; // needs LoS
+                // Prefer safer squares with lower EID
+                var eid2 = estimateIncomingDamageAtCell(n2);
+                var score2 = 220 - eid2; // slight bias over FLAME align
+                if (score2 > bestDScore) { bestDScore = score2; bestD = n2; }
+            }
+            if (bestD != null) {
+                var pathD = [currentCell, bestD];
+                return createPathResult(bestD, pathD, 0, WEAPON_DESTROYER, true, 1, false);
+            }
+        }
+    }
+
+    // No single-turn path found - consider M-LASER alignment first if equipped
+    // MAGIC CLOSE-IN BAND CHASE: if we still have no actionable path, greedily step toward
+    // DESTROYER/FLAME/VENOM bands even without a precomputed damage zone.
+    if (isMagicBuild && enemyCell != null) {
+        var distNow = getCellDistance(currentCell, enemyCell);
+        // Target bands in order of priority: ≤6 (DESTROYER), ≤8 (FLAME), ≤10 (VENOM)
+        var targets = [6, 8, 10];
+        for (var ti = 0; ti < count(targets); ti++) {
+            var band = targets[ti];
+            if (distNow <= band) continue;
+            var ring = getCellsAtExactDistance(enemyCell, band);
+            var stride = max(1, floor(count(ring) / 24));
+            var bestCell = null;
+            var bestScore = -99999;
+            for (var ri = 0; ri < count(ring); ri += stride) {
+                var cell = ring[ri];
+                if (cell == null || cell < 0 || cell > 612) continue;
+                if (getCellContent(cell) != CELL_EMPTY) continue;
+                var p = aStar(currentCell, cell, myMP);
+                if (p == null || count(p) <= 1) continue;
+                // Prefer LoS to enemy and lower EID
+                var los = lineOfSight(cell, enemyCell) ? 1 : 0;
+                var eid = estimateIncomingDamageAtCell(cell);
+                var score = 100 * los - eid;
+                if (score > bestScore) { bestScore = score; bestCell = cell; }
+            }
+            if (bestCell != null) {
+                var path = aStar(currentCell, bestCell, myMP);
+                if (path != null && count(path) > 1) {
+                    return createPathResult(path[min(myMP, count(path) - 1)], path, 0, null, true, min(myMP, count(path) - 1), false);
+                }
+            }
+        }
+        // If no band cell is reachable, step toward enemy to reduce distance
+        var toward = aStar(currentCell, enemyCell, myMP);
+        if (toward != null && count(toward) > 1) {
+            return createPathResult(toward[min(myMP, count(toward) - 1)], toward, 0, null, false, min(myMP, count(toward) - 1), false);
+        }
+    }
+    var myWeaponsForAlign = getWeapons();
+    if (enemyCell != null && myWeaponsForAlign != null && inArray(myWeaponsForAlign, WEAPON_M_LASER)) {
+        var alignTarget = findMLaserAlignmentPosition();
+        if (alignTarget != null) {
+            var alignPath = aStar(currentCell, alignTarget, myMP);
+            if (alignPath != null && count(alignPath) > 1) {
+                var moveToCell = alignPath[min(myMP, count(alignPath) - 1)];
+                return createPathResult(moveToCell, alignPath, 0, WEAPON_M_LASER, getCellDistance(currentCell, moveToCell) <= myMP, getCellDistance(currentCell, moveToCell), false);
+            }
+        }
+    }
+
+    // KEEP-OUT VS STRENGTH BUILDS: if we can't attack this turn, bias stepping to 7–10 ring with cover
+    if (primaryTarget != null && enemyCell != null) {
+        var enemyStr = getStrength(primaryTarget);
+        var enemyMag = getMagic(primaryTarget);
+        var enemyAgi = getAgility(primaryTarget);
+        var isStrengthEnemy = (enemyStr > max(enemyMag, enemyAgi) + 100);
+        if (isStrengthEnemy) {
+            var myWs = getWeapons();
+            var hasNonMelee = false;
+            for (var i = 0; i < count(myWs); i++) {
+                if (getWeaponMaxRange(myWs[i]) >= 5) { hasNonMelee = true; break; }
+            }
+            if (hasNonMelee) {
+                var bestKeepCell = null;
+                var bestKeepScore = -9999;
+                var topCells = [];
+                var topScores = [];
+                // Evaluate ring distances 7..10
+                for (var d = 7; d <= 10; d++) {
+                    var ring = getCellsAtExactDistance(enemyCell, d);
+                    // Sample ring to cap operations (max ~24 samples per ring)
+                    var stride = max(1, floor(count(ring) / 24));
+                    for (var r = 0; r < count(ring); r += stride) {
+                        var cell = ring[r];
+                        if (cell == null || cell < 0 || cell > 612) continue;
+                        if (getCellContent(cell) != CELL_EMPTY) continue;
+                        // Approximate path length by Manhattan/hex distance; confirm with A* only for winner
+                        var pathLen = getCellDistance(currentCell, cell);
+                        var reachable = (pathLen <= myMP);
+                        // Cover and LOS metrics
+                        var cover = countAdjacentObstacles(cell);
+                        var hasLOS = lineOfSight(cell, enemyCell);
+                        // Score: prefer reachable, more cover, no LOS, and shorter path
+                        var score = 0;
+                        if (reachable) score += 200; else score += 50;
+                        score += min(cover * 10, 40);
+                        if (!hasLOS) score += 60; // bonus to break LOS
+                        score += max(0, 30 - pathLen); // closer to us is better
+                        // Poke bonus: if we can shoot from here with a mid/long weapon and EID is acceptable
+                        if (hasLOS) {
+                            var myWs2 = getWeapons();
+                            var poke = false;
+                            for (var pw = 0; pw < count(myWs2); pw++) {
+                                var wpn = myWs2[pw];
+                                if (getWeaponMaxRange(wpn) >= 5) {
+                                    var inRange = (getCellDistance(cell, enemyCell) >= getWeaponMinRange(wpn) && getCellDistance(cell, enemyCell) <= getWeaponMaxRange(wpn));
+                                    if (inRange) { poke = true; break; }
+                                }
+                            }
+                            if (poke) {
+                                var eidHere = estimateIncomingDamageAtCell(cell);
+                                if (eidHere < 250) score += 60; else if (eidHere < 400) score += 30; // modest poke bonus
+                            }
+                        }
+                        if (score > bestKeepScore) { bestKeepScore = score; bestKeepCell = cell; }
+                        // Maintain top-3 candidates for refinement
+                        if (count(topCells) < 3) {
+                            push(topCells, cell);
+                            push(topScores, score);
+                        } else {
+                            var minIdx = 0;
+                            for (var ti = 1; ti < 3; ti++) { if (topScores[ti] < topScores[minIdx]) minIdx = ti; }
+                            if (score > topScores[minIdx]) { topCells[minIdx] = cell; topScores[minIdx] = score; }
+                        }
+                    }
+                }
+                // Refine top candidates by estimating enemy A* steps to LoS on the cell
+                if (count(topCells) > 0) {
+                    var refinedBestCell = bestKeepCell;
+                    var refinedBestScore = bestKeepScore;
+                    var emp = getMP(primaryTarget);
+                    for (var ti = 0; ti < count(topCells); ti++) {
+                        var c = topCells[ti];
+                        var base = topScores[ti];
+                        var refinedSteps = refinedStepsForEnemyToGainLoS(primaryTarget, c);
+                        var delta = refinedSteps - emp;
+                        var bonus = (delta <= 0) ? -20 : min(delta * 12, 60);
+                        var total = base + bonus;
+                        if (total > refinedBestScore) {
+                            refinedBestScore = total;
+                            refinedBestCell = c;
+                        }
+                    }
+                    bestKeepCell = refinedBestCell;
+                    bestKeepScore = refinedBestScore;
+                }
+                if (bestKeepCell != null) {
+                    // Mark chosen hiding/keep-out cell
+                    markText(bestKeepCell, "H", getColor(0, 128, 255), 10);
+                    var kp = aStar(currentCell, bestKeepCell, myMP * 2);
+                    if (kp != null && count(kp) > 1) {
+                        var steps = min(myMP, count(kp) - 1);
+                        var moveTo = kp[steps];
+                        var actual = [];
+                        for (var s = 0; s <= steps; s++) { push(actual, kp[s]); }
+                        return createPathResult(moveTo, actual, 0, null, steps <= myMP, steps, false);
+                    }
+                }
+            }
+        }
+    }
+
     // No single-turn path found - move toward best damage zone
     // No single-turn paths found, moving toward damage zone
     
@@ -164,8 +478,10 @@ function findOptimalPathFromArray(currentCell, damageArray) {
             // Moving steps toward target position
 
             // ALWAYS move if we can - even if we can't attack immediately, we're making progress
+            // Do NOT set a recommended weapon when we cannot attack this turn to avoid
+            // starting combat with an unreachable weapon choice.
             if (stepsToTake > 0) {
-                return createPathResult(moveToCell, actualPath, 0, bestWeapon, false, stepsToTake, false);
+                return createPathResult(moveToCell, actualPath, 0, null, false, stepsToTake, false);
             }
         }
     }
@@ -314,6 +630,222 @@ function findOptimalPathFromArray(currentCell, damageArray) {
 
     // Return null if no path found
     return null;
+}
+
+// === DUAL-MAP PATHFINDING (WEAPON-FIRST, THEN CHIPS) ===
+function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
+    // 1) Try weapon vantages first (full scan up to cap)
+    var weaponSorted = sortArrayByDamage(weaponArray);
+    for (var i = 0; i < min(MAX_PATHFIND_CELLS, count(weaponSorted)); i++) {
+        var w = weaponSorted[i];
+        if (w == null) continue;
+        var tCell = w[0];
+        var dmg = w[1];
+        var wid = (count(w) > 2) ? w[2] : null;
+        if (wid == null || !isWeapon(wid)) continue;
+        var p = aStar(currentCell, tCell, myMP);
+        if (p != null && count(p) <= myMP + 1) {
+            return createPathResult(tCell, p, dmg, wid, true, count(p) - 1, false);
+        }
+    }
+    // 2) Greedy fallback: any reachable weapon vantage within MP by distance
+    for (var j = 0; j < count(weaponArray); j++) {
+        var we = weaponArray[j];
+        if (we == null) continue;
+        var wc = we[0];
+        var ww = (count(we) > 2) ? we[2] : null;
+        if (ww == null || !isWeapon(ww)) continue;
+        if (getCellDistance(currentCell, wc) <= myMP) {
+            var p2 = aStar(currentCell, wc, myMP);
+            if (p2 != null && count(p2) > 1) {
+                return createPathResult(wc, p2, we[1], ww, true, count(p2) - 1, false);
+            }
+        }
+    }
+    // 2a) Search within MP for a strong weapon vantage (multi-step), prefer FLAME/DESTROYER
+    if (isMagicBuild && primaryTarget != null) {
+        var tgtCell = getCell(primaryTarget);
+        if (tgtCell != null) {
+            var bestVCell = null;
+            var bestVPath = null;
+            var bestVScore = -99999;
+            // DESTROYER band 1..6
+            for (var d = 1; d <= 6; d++) {
+                var ring = getCellsAtExactDistance(tgtCell, d);
+                var stride = max(1, floor(count(ring) / 20));
+                for (var r = 0; r < count(ring); r += stride) {
+                    var c = ring[r];
+                    if (c == null || getCellContent(c) != CELL_EMPTY) continue;
+                    if (!lineOfSight(c, tgtCell)) continue;
+                    var pathD = aStar(currentCell, c, myMP);
+                    if (pathD == null || count(pathD) <= 1) continue;
+                    var pathLen = count(pathD) - 1;
+                    if (pathLen > myMP) continue;
+                    // Score: prefer shorter path, lower EID, and LoS
+                    var eid = estimateIncomingDamageAtCell(c);
+                    var score = 300 - pathLen * 10 - eid;
+                    if (score > bestVScore) { bestVScore = score; bestVCell = c; bestVPath = pathD; }
+                }
+            }
+            // FLAME band 2..8 (aligned & LoS)
+            for (var d2 = 2; d2 <= 8; d2++) {
+                var ring2 = getCellsAtExactDistance(tgtCell, d2);
+                var stride2 = max(1, floor(count(ring2) / 20));
+                for (var r2 = 0; r2 < count(ring2); r2 += stride2) {
+                    var c2 = ring2[r2];
+                    if (c2 == null || getCellContent(c2) != CELL_EMPTY) continue;
+                    if (!isOnSameLine(c2, tgtCell)) continue;
+                    if (!lineOfSight(c2, tgtCell)) continue;
+                    var pathF = aStar(currentCell, c2, myMP);
+                    if (pathF == null || count(pathF) <= 1) continue;
+                    var lenF = count(pathF) - 1;
+                    if (lenF > myMP) continue;
+                    // Combo-aware score: TOXIN safe boost, else VENOM boost
+                    var eidF = estimateIncomingDamageAtCell(c2);
+                    var scoreF = 290 - lenF * 10 - eidF;
+                    var chips = getChips();
+                    var dist = getCellDistance(c2, tgtCell);
+                    if (inArray(chips, CHIP_TOXIN)) {
+                        var area = getChipArea(CHIP_TOXIN);
+                        var minR = getChipMinRange(CHIP_TOXIN);
+                        var maxR = getChipMaxRange(CHIP_TOXIN);
+                        if (dist >= minR && dist <= maxR && dist > area) scoreF += 80;
+                    } else if (inArray(chips, CHIP_VENOM)) {
+                        var vmin = getChipMinRange(CHIP_VENOM);
+                        var vmax = getChipMaxRange(CHIP_VENOM);
+                        if (dist >= vmin && dist <= vmax) scoreF += 50;
+                    }
+                    if (scoreF > bestVScore) { bestVScore = scoreF; bestVCell = c2; bestVPath = pathF; }
+                }
+            }
+            if (bestVPath != null) {
+                // Prefer DESTROYER if selected from 1..6 band else FLAME
+                var wsel = null;
+                var distSel = getCellDistance(bestVCell, tgtCell);
+                if (distSel >= 1 && distSel <= 6) wsel = WEAPON_DESTROYER; else wsel = WEAPON_FLAME_THROWER;
+                return createPathResult(bestVCell, bestVPath, 0, wsel, true, count(bestVPath) - 1, false);
+            }
+        }
+    }
+
+    // 2b) Last-mile weapon alignment before chips (prefer weapon over chip when 1 MP away)
+    if (isMagicBuild && primaryTarget != null) {
+        var tgtCellLM = getCell(primaryTarget);
+        if (tgtCellLM != null) {
+            var distBand = getCellDistance(currentCell, tgtCellLM);
+            // FLAME: align in 6–8 band if misaligned
+            if (inArray(getWeapons(), WEAPON_FLAME_THROWER) && distBand >= 6 && distBand <= 8 && !isOnSameLine(currentCell, tgtCellLM)) {
+                var neigh = getWalkableNeighbors(currentCell);
+                var bestAlign = null;
+                var bestScore = -9999;
+                for (var ni = 0; ni < count(neigh); ni++) {
+                    var n = neigh[ni];
+                    if (getCellContent(n) != CELL_EMPTY) continue;
+                    var d = getCellDistance(n, tgtCellLM);
+                    if (d < 2 || d > 8) continue; // FLAME range
+                    if (!isOnSameLine(n, tgtCellLM)) continue;
+                    if (!lineOfSight(n, tgtCellLM)) continue;
+                    var eid = estimateIncomingDamageAtCell(n);
+                    var score = 200 - eid;
+                    if (score > bestScore) { bestScore = score; bestAlign = n; }
+                }
+                if (bestAlign != null) {
+                    var pathAlign = [currentCell, bestAlign];
+                    return createPathResult(bestAlign, pathAlign, 0, WEAPON_FLAME_THROWER, true, 1, false);
+                }
+                // Fallback: if no aligned+LoS neighbor, nudge toward alignment within FLAME band
+                var bestNudge = null;
+                var bestNudgeScore = -9999;
+                var curDX = getCellX(tgtCellLM) - getCellX(currentCell);
+                var curDY = getCellY(tgtCellLM) - getCellY(currentCell);
+                for (var ni2 = 0; ni2 < count(neigh); ni2++) {
+                    var n3 = neigh[ni2];
+                    if (getCellContent(n3) != CELL_EMPTY) continue;
+                    var d3 = getCellDistance(n3, tgtCellLM);
+                    if (d3 < 2 || d3 > 8) continue; // keep in band
+                    var ndx = getCellX(tgtCellLM) - getCellX(n3);
+                    var ndy = getCellY(tgtCellLM) - getCellY(n3);
+                    // Score how much this step reduces misalignment (minimize min(|dx|,|dy|) then EID)
+                    var misBefore = min(abs(curDX), abs(curDY));
+                    var misAfter = min(abs(ndx), abs(ndy));
+                    var improve = misBefore - misAfter;
+                    if (improve <= 0) continue;
+                    var eid3 = estimateIncomingDamageAtCell(n3);
+                    var s3 = improve * 100 - eid3;
+                    if (s3 > bestNudgeScore) { bestNudgeScore = s3; bestNudge = n3; }
+                }
+                if (bestNudge != null) {
+                    var pathN = [currentCell, bestNudge];
+                    return createPathResult(bestNudge, pathN, 0, WEAPON_FLAME_THROWER, true, 1, false);
+                }
+            }
+            // DESTROYER: step into 1–6 with LoS or fix LoS within 1 MP
+            if (inArray(getWeapons(), WEAPON_DESTROYER)) {
+                var needCloser = (distBand == 7);
+                var needLoSFix = (distBand >= 1 && distBand <= 6 && !lineOfSight(currentCell, tgtCellLM));
+                if (needCloser || needLoSFix) {
+                    var neighD = getWalkableNeighbors(currentCell);
+                    var bestD = null;
+                    var bestDScore = -9999;
+                    for (var di = 0; di < count(neighD); di++) {
+                        var n2 = neighD[di];
+                        if (getCellContent(n2) != CELL_EMPTY) continue;
+                        var d2 = getCellDistance(n2, tgtCellLM);
+                        if (d2 < 1 || d2 > 6) continue;
+                        if (!lineOfSight(n2, tgtCellLM)) continue;
+                        var eid2 = estimateIncomingDamageAtCell(n2);
+                        var score2 = 220 - eid2;
+                        if (score2 > bestDScore) { bestDScore = score2; bestD = n2; }
+                    }
+                    if (bestD != null) {
+                        var pathD = [currentCell, bestD];
+                        return createPathResult(bestD, pathD, 0, WEAPON_DESTROYER, true, 1, false);
+                    }
+                }
+            }
+        }
+    }
+    // 3) Try chip vantages (carry chip id so combat can use it)
+    var chipSorted = sortChipArrayByDamage(chipArray);
+    for (var k = 0; k < min(MAX_PATHFIND_CELLS, count(chipSorted)); k++) {
+        var c = chipSorted[k];
+        if (c == null) continue;
+        var cc = c[0];
+        var cdmg = c[1];
+        var cid = (count(c) > 2) ? c[2] : null;
+        if (cid == null || cid < CHIP_LIGHTNING) continue;
+        var cp = aStar(currentCell, cc, myMP);
+        if (cp != null && count(cp) <= myMP + 1) {
+            return createPathResult(cc, cp, cdmg, cid, true, count(cp) - 1, false);
+        }
+    }
+    // 4) Existing greedy band-chasing logic for MAGIC and generic fallbacks
+    return findOptimalPathFromArray(currentCell, currentDamageArray);
+}
+
+// Simple sort by damage (desc) for chip arrays
+function sortChipArrayByDamage(arr) {
+    var a2 = [];
+    for (var i = 0; i < count(arr); i++) {
+        var e = arr[i];
+        if (e == null || count(e) < 2) continue;
+        var cellId = e[0];
+        var dmg = e[1];
+        if (cellId >= 0 && cellId <= 612 && dmg > 0) {
+            push(a2, [cellId, dmg, (count(e) > 2) ? e[2] : null, (count(e) > 3) ? e[3] : null]);
+        }
+    }
+    // selection sort by damage desc
+    for (var i = 0; i < count(a2) - 1; i++) {
+        var maxIdx = i;
+        for (var j = i + 1; j < count(a2); j++) {
+            if (a2[j][1] > a2[maxIdx][1]) { maxIdx = j; }
+        }
+        if (maxIdx != i) {
+            var tmp = a2[i]; a2[i] = a2[maxIdx]; a2[maxIdx] = tmp;
+        }
+    }
+    return a2;
 }
 
 // === ARRAY SORTING FUNCTION ===
@@ -515,7 +1047,7 @@ function aStar(startCell, goalCell, maxDistance) {
     fScore[startCell] = heuristic(startCell, goalCell);
     
     var searchCount = 0;
-    var maxSearchSteps = 100; // Prevent infinite loops
+    var maxSearchSteps = 300; // Prevent premature failures on larger maps
     
     while (count(openSet) > 0 && searchCount < maxSearchSteps) {
         searchCount++;
@@ -772,6 +1304,83 @@ function getWalkableNeighbors(cell) {
     return neighbors;
 }
 
+// === MAGIC VANTAGE SEEKING (FLAME/DESTROYER/CHEMS) ===
+function findMagicApproachPath(currentCell, targetCell) {
+    // Build a small set of candidate vantages around the enemy for:
+    // - FLAME_THROWER: 2..8 with LoS
+    // - DESTROYER: 1..6 with LoS
+    // Score also prefers distances safe for TOXIN (outside chip area).
+
+    var bestReachable = null;
+    var bestReachScore = -99999;
+    var bestReachPath = null;
+    var bestReachWeapon = null;
+
+    var bestStep = null; // best overall candidate to step toward
+    var bestStepScore = -99999;
+    var toxinArea = getChipArea(CHIP_TOXIN);
+    if (toxinArea == null) toxinArea = 4;
+
+    // (No nested functions allowed in LeekScript) – compute score inline
+
+    // Sample FLAME ring 2..8 and DESTROYER ring 1..6
+    var rings = [];
+    for (var d = 2; d <= 8; d++) { push(rings, d); }
+    for (var d = 1; d <= 6; d++) { push(rings, d); }
+
+    // Limit ops with stride
+    for (var ri = 0; ri < count(rings); ri++) {
+        var d = rings[ri];
+        var ring = getCellsAtExactDistance(targetCell, d);
+        var stride = max(1, floor(count(ring) / 18));
+        for (var i = 0; i < count(ring); i += stride) {
+            var c = ring[i];
+            if (c == null || c < 0 || c > 612) continue;
+            if (getCellContent(c) != CELL_EMPTY) continue;
+            if (!checkLineOfSight(c, targetCell)) continue;
+            var s = 0;
+            if (d >= 2 && d <= 8) s += 1000; // FLAME range
+            if (d >= 1 && d <= 6) s += 400;  // DESTROYER range
+            if (d > toxinArea) s += 300; else s -= 500; // TOXIN safety
+            s += max(0, 10 - abs(6 - d)) * 10; // prefer mid-distance within band
+            // If reachable within MP this turn, check A*
+            if (getCellDistance(currentCell, c) <= myMP) {
+                var p = aStar(currentCell, c, myMP);
+                if (p != null && count(p) <= myMP + 1) {
+                    if (s > bestReachScore) {
+                        bestReachScore = s;
+                        bestReachPath = p;
+                        bestReachable = c;
+                        // Decide weapon to recommend from this vantage
+                        bestReachWeapon = (d >= 2 && d <= 8) ? WEAPON_FLAME_THROWER : ((d >= 1 && d <= 6) ? WEAPON_DESTROYER : null);
+                    }
+                }
+            }
+            // Track best step-to candidate (even if not reachable fully)
+            if (s > bestStepScore) { bestStepScore = s; bestStep = c; }
+        }
+    }
+
+    if (bestReachable != null && bestReachPath != null) {
+        // Found a reachable vantage this turn
+        return createPathResult(bestReachable, bestReachPath, 0, bestReachWeapon, true, count(bestReachPath) - 1, false);
+    }
+
+    // Otherwise, step toward best vantage
+    if (bestStep != null) {
+        var pathTo = aStar(currentCell, bestStep, myMP * 3);
+        if (pathTo != null && count(pathTo) > 1) {
+            var steps = min(myMP, count(pathTo) - 1);
+            var moveTo = pathTo[steps];
+            var actual = [];
+            for (var s = 0; s <= steps; s++) { push(actual, pathTo[s]); }
+            return createPathResult(moveTo, actual, 0, null, steps <= myMP, steps, false);
+        }
+    }
+
+    return null;
+}
+
 // === SIMPLE MOVEMENT (FALLBACK) ===
 function findMultiStepMovementToward(fromCell, toCell, maxMP) {
     var path = [fromCell];
@@ -896,10 +1505,9 @@ function executeMovement(pathResult) {
             if (debugEnabled) {
                 // Teleport successful
             }
-            
-            // Target cell reached after teleport - no additional movement needed
-            if (debugEnabled) {
-                // Teleport completed to target
+            // After teleport, perform post-teleport movement along provided path if any
+            if (pathResult[1] != null && count(pathResult[1]) > 1) {
+                executeNormalMovement(pathResult);
             }
         } else {
             if (debugEnabled) {
@@ -1190,15 +1798,150 @@ function findMultiTurnPath(currentCell, sortedArray) {
 
 // === TELEPORT + MOVEMENT FALLBACK ===
 function tryTeleportMovementFallback(currentCell, damageArray) {
-    // Only try if we have teleportation available
+    // Do not consider teleport in the first two turns
+    if (getTurn() <= 2) {
+        return null;
+    }
+    // Only try if we have teleportation equipped; validate per-destination later
     var chips = getChips();
-    if (!inArray(chips, CHIP_TELEPORTATION) || !canUseChip(CHIP_TELEPORTATION, currentCell)) {
+    if (!inArray(chips, CHIP_TELEPORTATION)) {
         if (debugEnabled) {
-            // Teleportation not available
+            // Teleportation chip not equipped
         }
         return null;
     }
-    
+
+    // 1) PRIORITY: Directly search teleport -> A* to top damage cells (highest → lowest)
+    // This strictly follows the requested strategy: for every teleportable cell,
+    // run A* to the best damage cells and pick the first viable plan.
+    // Limit to the 10 closest damage cells (weapon-based) to reduce operations
+    var maxDamageChecks = 10;
+    var closestDamage = [];
+    for (var i = 0; i < count(damageArray); i++) {
+        var e = damageArray[i];
+        if (e == null || count(e) < 3) continue;
+        var c = e[0];
+        var dmg = e[1];
+        var w = e[2];
+        if (c == null || c < 0 || c > 612) continue;
+        if (w == null || !isWeapon(w)) continue; // weapon-only
+        if (dmg <= 0) continue;
+        var dist = getCellDistance(currentCell, c);
+        // Insert into top-10 by distance (selection-style)
+        var inserted = false;
+        for (var k = 0; k < count(closestDamage); k++) {
+            if (dist < closestDamage[k][4]) { // compare distance
+                // shift right by manual insert
+                // Build a new array with insertion (LeekScript lacks insertAt)
+                var newArr = [];
+                for (var p = 0; p < k; p++) { push(newArr, closestDamage[p]); }
+                push(newArr, [c, dmg, w, (count(e) > 3 ? e[3] : null), dist]);
+                for (var p = k; p < count(closestDamage); p++) { push(newArr, closestDamage[p]); }
+                closestDamage = newArr;
+                inserted = true;
+                break;
+            }
+        }
+        if (!inserted) {
+            push(closestDamage, [c, dmg, w, (count(e) > 3 ? e[3] : null), dist]);
+        }
+        if (count(closestDamage) > maxDamageChecks) {
+            // truncate to 10 by dropping the farthest (last)
+            var trimmed = [];
+            for (var t = 0; t < maxDamageChecks; t++) { push(trimmed, closestDamage[t]); }
+            closestDamage = trimmed;
+        }
+    }
+    var teleportRange = 12; // CHIP_TELEPORTATION range
+    var bestDAPlan = null; // {tele: cell, path: [tele..vantage], dmg: n, weapon: id}
+
+    // Precompute and mark list of valid teleport destinations (light purple)
+    var teleportDests = [];
+    var COLOR_LIGHT_PURPLE = getColor(216, 191, 216); // Thistle-like light purple
+    for (var r = 1; r <= teleportRange; r++) {
+        var cellsAtR = getCellsAtExactDistance(currentCell, r);
+        for (var i = 0; i < count(cellsAtR); i++) {
+            var tc = cellsAtR[i];
+            if (tc == null || tc < 0 || tc > 612) continue;
+            if (getCellContent(tc) != CELL_EMPTY) continue;
+            if (!canUseChip(CHIP_TELEPORTATION, tc)) continue; // respects range & rules
+            // Mark every valid teleport destination
+            mark(tc, COLOR_LIGHT_PURPLE);
+            push(teleportDests, tc);
+        }
+    }
+
+    // Iterate damage cells from highest to lowest damage
+    for (var di = 0; di < min(maxDamageChecks, count(closestDamage)); di++) {
+        var entry = closestDamage[di];
+        if (entry == null || count(entry) < 3) continue;
+        var vantageCell = entry[0];
+        var vantageDamage = entry[1];
+        var vantageWeapon = entry[2];
+
+        // Prefer weapon-based damage cells (avoid chip-only bait)
+        if (vantageWeapon == null || !isWeapon(vantageWeapon)) continue;
+
+        // Ensure we can actually shoot from that vantage (alignment + LOS),
+        // using associated enemy if provided; otherwise primary target.
+        var enemyForVantage = (count(entry) > 3) ? entry[3] : primaryTarget;
+        var enemyCellForVantage = (enemyForVantage != null) ? getCell(enemyForVantage) : enemyCell;
+        if (enemyCellForVantage == null) continue;
+
+        // Probe each teleport destination to see if we can walk to vantage within MP
+        for (var ti = 0; ti < count(teleportDests); ti++) {
+            var teleCell = teleportDests[ti];
+
+            // Quick reject: if vantage == teleCell, skip A* cost and just validate TP and weapon
+            var path = null;
+            if (teleCell == vantageCell) {
+                path = [teleCell];
+            } else {
+                path = aStar(teleCell, vantageCell, myMP);
+            }
+            if (path == null || count(path) - 1 > myMP) continue; // can't reach this turn
+
+            // TP budget: teleport + optional weapon switch + one shot
+            var tpAfterTeleport = getTP() - getChipCost(CHIP_TELEPORTATION);
+            var switchCost = (getWeapon() != vantageWeapon) ? 1 : 0;
+            var tpForShot = tpAfterTeleport - switchCost;
+            if (tpForShot < getWeaponCost(vantageWeapon)) continue;
+
+            // Do not re-check geometry/alignment here; the damage array already
+            // encodes that this weapon can deal damage from vantageCell.
+
+            // This plan is viable; record and stop — we iterate damage from highest to lowest
+            bestDAPlan = {
+                tele: teleCell,
+                path: path,
+                dmg: vantageDamage,
+                weapon: vantageWeapon
+            };
+            break; // break tele loop; we found a viable tele for this top damage cell
+        }
+
+        if (bestDAPlan != null) break; // we selected the best damage cell we can realize
+    }
+
+    if (bestDAPlan != null) {
+        if (debugEnabled) {
+            debugW("TELEPORT→A*: teleport to " + bestDAPlan.tele + 
+                   ", then path to " + bestDAPlan.path[count(bestDAPlan.path) - 1] +
+                   " (dmg=" + bestDAPlan.dmg + ", weapon=" + bestDAPlan.weapon + ")");
+            markText(bestDAPlan.tele, "T", getColor(255, 0, 255), 8);
+            markText(bestDAPlan.path[count(bestDAPlan.path) - 1], "D", getColor(255, 128, 255), 8);
+        }
+        return createPathResult(
+            bestDAPlan.tele,     // teleport destination
+            bestDAPlan.path,     // post-teleport path (starts at tele cell)
+            bestDAPlan.dmg,      // expected damage
+            bestDAPlan.weapon,   // weapon to use
+            true,                // reachable
+            count(bestDAPlan.path) - 1,
+            true                 // useTeleport
+        );
+    }
+
     var bestOption = null;
     var bestScore = 0;
     
@@ -1207,22 +1950,31 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
     }
     
     // Try teleporting to various positions within range
-    var teleportRange = 12; // CHIP_TELEPORTATION range
+    // Reuse teleportRange for weapon vantage exploration (already defined above)
+    // (Cells gathered above if we returned early are fine; else re-iterate)
+    // Keep independent loop for clarity
     for (var range = 1; range <= teleportRange; range++) {
         var teleportCells = getCellsAtExactDistance(currentCell, range);
         
         for (var i = 0; i < count(teleportCells); i++) {
             var teleportCell = teleportCells[i];
             
-            // Check if teleport destination is valid
+            // Check if teleport destination is valid and chip usable for that cell
             var isWalkable = (getCellContent(teleportCell) == CELL_EMPTY);
             if (!isWalkable) continue;
+            var chipCost = getChipCost(CHIP_TELEPORTATION);
+            if (getTP() < chipCost) continue;
+            if (!canUseChip(CHIP_TELEPORTATION, teleportCell)) continue;
             
             // Calculate what we could achieve from this teleport position
             var option = evaluateTeleportPosition(teleportCell, damageArray);
-            if (option != null && option.score > bestScore) {
-                bestScore = option.score;
-                bestOption = option;
+            if (option != null) {
+                // Adjust score to account for TP cost for teleport
+                var adjusted = option.score - chipCost;
+                if (adjusted > bestScore) {
+                    bestScore = adjusted;
+                    bestOption = option;
+                }
             }
         }
     }
@@ -1236,10 +1988,10 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
                 markText(bestOption.targetCell, "MOVE", getColor(255, 128, 255), 8);
             }
         }
-        
+
         return createPathResult(
-            bestOption.targetCell,     // targetCell
-            bestOption.path,           // path
+            bestOption.teleportCell,   // teleport destination (fix)
+            bestOption.path,           // post-teleport path
             bestOption.damage,         // damage
             bestOption.weaponId,       // weaponId from teleport option
             true,                      // reachable
@@ -1256,63 +2008,71 @@ function tryTeleportMovementFallback(currentCell, damageArray) {
 }
 
 function evaluateTeleportPosition(teleportCell, damageArray) {
-    var bestDamage = 0;
+    // Evaluate all our weapons from teleportCell, allowing movement up to remaining MP
+    var bestScore = -99999;
     var bestCell = null;
     var bestPath = null;
     var bestWeaponId = null;
+    var remainingMP = myMP; // After teleport, all MP available
+    var availableTP = getTP() - getChipCost(CHIP_TELEPORTATION);
+    if (availableTP < 0) availableTP = 0;
     
-    // First, check if teleport cell itself gives good damage
-    for (var i = 0; i < count(damageArray); i++) {
-        var targetData = damageArray[i];
-        var targetCell = targetData[0];
-        var damage = targetData[1];
-        var weaponId = targetData[2];
-        
-        if (targetCell == teleportCell && damage > bestDamage) {
-            bestDamage = damage;
-            bestCell = teleportCell;
-            bestPath = [teleportCell];
-            bestWeaponId = weaponId;
-        }
-    }
+    var tgt = (primaryTarget != null) ? getCell(primaryTarget) : enemyCell;
+    if (tgt == null) return null;
     
-    // Then check cells reachable from teleport position
-    var remainingMP = myMP; // After teleport, we still have all MP for movement
-    
-    for (var i = 0; i < count(damageArray); i++) {
-        var targetData = damageArray[i];
-        var targetCell = targetData[0];
-        var damage = targetData[1];
-        var weaponId = targetData[2];
-        
-        if (damage <= bestDamage) continue; // Skip if not better than current best
-        
-        var pathFromTeleport = aStar(teleportCell, targetCell, remainingMP);
-        if (pathFromTeleport != null && count(pathFromTeleport) <= remainingMP + 1) {
-            bestDamage = damage;
-            bestCell = targetCell;
-            bestPath = pathFromTeleport;
-            bestWeaponId = weaponId;
-        }
-    }
-    
-    // If no damage cells reachable, try cover positions
-    if (bestDamage == 0) {
-        var coverCell = findCoverFromPosition(teleportCell, remainingMP);
-        if (coverCell != null) {
-            var pathToCover = aStar(teleportCell, coverCell, remainingMP);
-            if (pathToCover != null) {
-                // Score cover based on safety (distance from enemy + cover quality)
-                var coverScore = calculateCoverScore(coverCell);
-                return {
-                    teleportCell: teleportCell,
-                    targetCell: coverCell,
-                    path: pathToCover,
-                    damage: 0,
-                    weaponId: null, // No weapon for cover movement
-                    distance: count(pathToCover) - 1,
-                    score: coverScore * 0.5 // Cover worth less than damage
-                };
+    var weapons = getWeapons();
+    for (var w = 0; w < count(weapons); w++) {
+        var weap = weapons[w];
+        var minR = getWeaponMinRange(weap);
+        var maxR = getWeaponMaxRange(weap);
+        var lt = getWeaponLaunchType(weap);
+        // Sample ring cells at distances within weapon range
+        for (var d = minR; d <= maxR; d++) {
+            var ring = getCellsAtExactDistance(tgt, d);
+            var stride = max(1, floor(count(ring) / 20));
+            for (var i = 0; i < count(ring); i += stride) {
+                var vcell = ring[i];
+                if (vcell == null || vcell < 0 || vcell > 612) continue;
+                if (getCellContent(vcell) != CELL_EMPTY) continue;
+                // Alignment/LOS checks per launch type
+                if (lt == LAUNCH_TYPE_LINE || lt == LAUNCH_TYPE_LINE_INVERTED) {
+                    if (!isOnSameLine(vcell, tgt)) continue;
+                } else if (lt == LAUNCH_TYPE_STAR || lt == LAUNCH_TYPE_STAR_INVERTED) {
+                    // Enhanced Lightninger is normal; star only for regular
+                    if (weap != WEAPON_ENHANCED_LIGHTNINGER && !isValidStarPattern(vcell, tgt)) continue;
+                }
+                if (!checkLineOfSight(vcell, tgt)) continue;
+                // Can we walk from teleportCell to vcell with remaining MP?
+                var path = aStar(teleportCell, vcell, remainingMP);
+                if (path == null || count(path) - 1 > remainingMP) continue;
+                // Estimate damage output from vcell with this weapon
+                var switchCost = (getWeapon() != weap) ? 1 : 0;
+                var tpAvail = availableTP - switchCost;
+                var wCost = getWeaponCost(weap);
+                if (tpAvail < wCost) continue;
+                var uses = floor(tpAvail / wCost);
+                var maxUses = getWeaponMaxUses(weap);
+                if (maxUses > 0) uses = min(uses, maxUses);
+                if (uses <= 0) continue;
+                // Base damage estimate from effects
+                var effects = getWeaponEffects(weap);
+                var base = 0;
+                for (var e = 0; e < count(effects); e++) {
+                    if (effects[e][0] == 1) { base = (effects[e][1] + effects[e][2]) / 2; break; }
+                }
+                if (base == 0) base = wCost * 10;
+                var dmg = base * (1 + myStrength / 100.0) * uses;
+                // Safety via EID at vantage cell
+                var eid = estimateIncomingDamageAtCell(vcell);
+                var score = dmg - eid * 0.5;
+                // Small bonus for Enhanced Lightninger sweet spot
+                if (weap == WEAPON_ENHANCED_LIGHTNINGER && d >= 8 && d <= 10) score += 50;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestCell = vcell;
+                    bestPath = path;
+                    bestWeaponId = weap;
+                }
             }
         }
     }
@@ -1322,11 +2082,60 @@ function evaluateTeleportPosition(teleportCell, damageArray) {
             teleportCell: teleportCell,
             targetCell: bestCell,
             path: bestPath,
-            damage: bestDamage,
-            weaponId: bestWeaponId, // Pass best weapon ID
+            damage: max(0, floor(bestScore + 0.5)), // score includes EID; pass as heuristic damage
+            weaponId: bestWeaponId,
             distance: count(bestPath) - 1,
-            score: bestDamage + 10 // Base bonus for any viable option
+            score: bestScore
         };
+    }
+    
+    // If no weapon vantage found, fall back to chip/damageArray or cover logic (legacy)
+    var legacy = null;
+    var bestDamage = 0;
+    var bestLegacyCell = null;
+    var bestLegacyPath = null;
+    var bestLegacyWeapon = null;
+    for (var i = 0; i < count(damageArray); i++) {
+        var td = damageArray[i];
+        if (td == null || count(td) < 3) continue;
+        var tcell = td[0];
+        var dmg2 = td[1];
+        var wid = td[2];
+        if (tcell == teleportCell && dmg2 > bestDamage) {
+            bestDamage = dmg2; bestLegacyCell = teleportCell; bestLegacyPath = [teleportCell]; bestLegacyWeapon = wid;
+        }
+        var p2 = aStar(teleportCell, tcell, remainingMP);
+        if (p2 != null && count(p2) <= remainingMP + 1 && dmg2 > bestDamage) {
+            bestDamage = dmg2; bestLegacyCell = tcell; bestLegacyPath = p2; bestLegacyWeapon = wid;
+        }
+    }
+    if (bestLegacyCell != null) {
+        return {
+            teleportCell: teleportCell,
+            targetCell: bestLegacyCell,
+            path: bestLegacyPath,
+            damage: bestDamage,
+            weaponId: bestLegacyWeapon,
+            distance: count(bestLegacyPath) - 1,
+            score: bestDamage
+        };
+    }
+    
+    var coverCell = findCoverFromPosition(teleportCell, remainingMP);
+    if (coverCell != null) {
+        var pathToCover = aStar(teleportCell, coverCell, remainingMP);
+        if (pathToCover != null) {
+            var coverScore = calculateCoverScore(coverCell);
+            return {
+                teleportCell: teleportCell,
+                targetCell: coverCell,
+                path: pathToCover,
+                damage: 0,
+                weaponId: null,
+                distance: count(pathToCover) - 1,
+                score: coverScore * 0.5
+            };
+        }
     }
     
     return null;
@@ -1363,15 +2172,60 @@ function findCoverFromPosition(startCell, maxMP) {
 function calculateCoverScore(cell) {
     var score = 0;
     
-    // Base score: distance from enemy
+    // Base score: distance from primary enemy
     if (enemyCell != null) {
         score = getCellDistance(cell, enemyCell);
     }
     
-    // Bonus for adjacent obstacles (cover)
-    var obstacles = countAdjacentObstacles(cell);
-    score += obstacles * 2;
+    // Strong preference for breaking line of sight against enemies
+    var losBroken = 0;
+    var enemies = (count(allEnemies) > 0) ? allEnemies : [];
+    for (var i = 0; i < count(enemies); i++) {
+        var eCell = getCell(enemies[i]);
+        if (eCell != null && eCell >= 0) {
+            if (!checkLineOfSight(cell, eCell)) {
+                losBroken++;
+            }
+        }
+    }
+    // Each broken LOS is valuable; if no enemies list, fall back to primary enemy check
+    if (count(enemies) == 0 && enemyCell != null && !checkLineOfSight(cell, enemyCell)) {
+        losBroken = 1;
+    }
+    score += losBroken * 10; // reward breaking LOS broadly
     
+    // Bonus for adjacent obstacles (proxy for micro-cover); keep it small
+    var obstacles = countAdjacentObstacles(cell);
+    score += min(obstacles * 2, 6);
+
+    // New: measure how many steps enemies need to regain LoS on this cell
+    var minDeltaSteps = 0;
+    if (count(enemies) > 0) {
+        var bestDelta = -9999;
+        for (var i = 0; i < count(enemies); i++) {
+            var enemyEntity = enemies[i];
+            if (getLife(enemyEntity) <= 0) continue;
+            var steps = approxStepsForEnemyToGainLoS(enemyEntity, cell);
+            var emp = getMP(enemyEntity);
+            var delta = steps - emp; // positive means they need extra turns
+            if (bestDelta == -9999 || delta < bestDelta) {
+                bestDelta = delta; // be conservative: closest enemy
+            }
+        }
+        if (bestDelta != -9999) {
+            // If enemy can get LoS this turn (delta <= 0), penalize slightly; otherwise reward by 8 per step away
+            if (bestDelta <= 0) {
+                score -= 20;
+            } else {
+                score += min(bestDelta * 8, 40);
+            }
+        }
+    }
+
+    // Integrate EID (expected incoming damage) — penalize dangerous cells
+    var eid = estimateIncomingDamageAtCell(cell);
+    score -= min(floor(eid / 5), 60); // light penalty (don’t overwhelm other terms)
+
     // Penalty for being too close to map edges
     var x = getCellX(cell);
     var y = getCellY(cell);
@@ -1380,6 +2234,112 @@ function calculateCoverScore(cell) {
     }
     
     return score;
+}
+
+// === APPROXIMATE ENEMY STEPS TO REGAIN LoS ===
+// Estimate minimal number of steps an enemy needs to reach a cell that has LoS to targetCell.
+// Uses ring distance (ignores obstacles for speed) and validates LoS per ring cell.
+function approxStepsForEnemyToGainLoS(enemyEntity, targetCell) {
+    var eCell = getCell(enemyEntity);
+    if (eCell == null || eCell < 0) return 99;
+    
+    // Limit search to enemy MP + margin (cap to 12 for performance)
+    var emp = getMP(enemyEntity);
+    var maxStep = min(emp + 6, 12);
+    
+    for (var d = 0; d <= maxStep; d++) {
+        var ring = getCellsAtExactDistance(eCell, d);
+        for (var i = 0; i < count(ring); i++) {
+            var cell = ring[i];
+            if (cell == null || cell < 0 || cell > 612) continue;
+            if (getCellContent(cell) != CELL_EMPTY) continue;
+            if (checkLineOfSight(cell, targetCell)) {
+                return d; // minimal ring steps to gain LoS
+            }
+        }
+    }
+    return maxStep + 1; // Not found within budget; treat as far
+}
+
+// Refined steps to regain LoS using A* to sampled LoS vantage cells
+function refinedStepsForEnemyToGainLoS(enemyEntity, targetCell) {
+    var eCell = getCell(enemyEntity);
+    if (eCell == null || eCell < 0) return 99;
+    var emp = getMP(enemyEntity);
+    var maxStep = min(emp + 6, 12);
+    var best = 99;
+    for (var d = 0; d <= maxStep; d++) {
+        var ring = getCellsAtExactDistance(targetCell, d);
+        // Sample up to 20 cells per ring
+        var stride = max(1, floor(count(ring) / 20));
+        for (var i = 0; i < count(ring); i += stride) {
+            var vCell = ring[i];
+            if (vCell == null || vCell < 0 || vCell > 612) continue;
+            if (getCellContent(vCell) != CELL_EMPTY) continue;
+            if (!checkLineOfSight(vCell, targetCell)) continue;
+            var path = aStar(eCell, vCell, maxStep);
+            if (path != null) {
+                var steps = count(path) - 1;
+                if (steps < best) best = steps;
+            }
+        }
+        if (best <= d) break; // early exit if we already found a nearby vantage
+    }
+    return best;
+}
+
+// === EID ESTIMATION AT A HYPOTHETICAL CELL ===
+function estimateIncomingDamageAtCell(myTargetCell) {
+    if (count(allEnemies) == 0) return 0;
+    if (eidCache[myTargetCell] != null) return eidCache[myTargetCell];
+    var total = 0;
+    for (var i = 0; i < count(allEnemies); i++) {
+        var enemyEntity = allEnemies[i];
+        if (getLife(enemyEntity) <= 0) continue;
+        var enemyWeapons = getWeapons(enemyEntity);
+        var availableTP = getTP(enemyEntity);
+        var remainingTP = availableTP;
+        
+        // Weapons
+        for (var w = 0; w < count(enemyWeapons); w++) {
+            var weapon = enemyWeapons[w];
+            var cost = getWeaponCost(weapon);
+            if (remainingTP < cost) continue;
+            // Check reach from enemy to our hypothetical cell
+            var canReach = canWeaponReachTarget(weapon, getCell(enemyEntity), myTargetCell);
+            if (!canReach) continue;
+            var uses = getWeaponMaxUses(weapon);
+            var maxUses = (uses > 0) ? min(uses, floor(remainingTP / cost)) : floor(remainingTP / cost);
+            if (maxUses <= 0) continue;
+            // Rough base damage per use — reuse getWeaponBaseDamage if available via evaluation/config, else proxy by cost
+            var baseDmg = 0;
+            var effects = getWeaponEffects(weapon);
+            for (var e = 0; e < count(effects); e++) {
+                if (effects[e][0] == 1) { // EFFECT_DAMAGE
+                    baseDmg = (effects[e][1] + effects[e][2]) / 2;
+                    break;
+                }
+            }
+            if (baseDmg == 0) baseDmg = cost * 10; // fallback proxy
+            var enemyStat = max(getStrength(enemyEntity), getMagic(enemyEntity));
+            var dmgPerUse = baseDmg * (1 + enemyStat / 100.0);
+            // Apply our resistance
+            dmgPerUse = dmgPerUse * (1 - myResistance / 100.0);
+            total += dmgPerUse * maxUses;
+            remainingTP -= cost * maxUses;
+        }
+        // Chip lightning rough add (if enemy has TP)
+        if (remainingTP >= 4) {
+            // Only add if LOS and distance <= 10
+            var dist = getCellDistance(getCell(enemyEntity), myTargetCell);
+            if (dist <= 10 && lineOfSight(getCell(enemyEntity), myTargetCell)) {
+                total += 50 * (1 - myResistance / 100.0);
+            }
+        }
+    }
+    var val = floor(total + 0.5);
+    eidCache[myTargetCell] = val;
+    return val;
 }
 
 // === SMART WEAPON POSITIONING ===
@@ -1610,21 +2570,23 @@ function findWeaponSpecificPosition(currentCell, weapons, enemyCell) {
             
             // Weapon priority bonuses based on build type
             if (isMagicBuild) {
-                // MAGIC BUILD: DoT weapons as main DPS, DESTROYER for tactical debuffing
+                // MAGIC BUILD: Prioritize DESTROYER/FLAME/DOUBLE_GUN; devalue GRENADE_LAUNCHER
                 if (weapon == WEAPON_FLAME_THROWER) {
-                    score += 60; // Top priority for main DoT DPS
-                } else if (weapon == WEAPON_RHINO) {
-                    score += 50; // High DPS backup
-                } else if (weapon == WEAPON_ELECTRISOR) {
-                    score += 45; // AoE backup
+                    score += 80; // Highest (DoT primary)
                 } else if (weapon == WEAPON_DESTROYER) {
-                    score += 40; // Tactical debuff (lower than main DPS)
-                } else if (weapon == WEAPON_GRENADE_LAUNCHER) {
+                    score += 70; // Next (debuff)
+                } else if (weapon == WEAPON_DOUBLE_GUN) {
+                    score += 65; // Strong DoT stacking with cheap TP
+                } else if (weapon == WEAPON_ELECTRISOR) {
                     score += 35; // AoE backup
+                } else if (weapon == WEAPON_RHINO) {
+                    score += 30; // DPS backup
+                } else if (weapon == WEAPON_GRENADE_LAUNCHER) {
+                    score += 5;  // Lower priority for MAGIC
                 } else if (weapon == WEAPON_SWORD) {
-                    score += 30; // Melee backup
+                    score += 0;
                 } else if (weapon == WEAPON_KATANA) {
-                    score += 25; // Melee backup
+                    score += 0;
                 }
             } else {
                 // STRENGTH BUILD: Standard priorities
@@ -1682,24 +2644,66 @@ function getWeaponSortScore(entry) {
     // Base score is damage
     var score = damage;
     
-    // Add weapon priority bonuses based on build type
+    // Add weapon/chip priority bonuses based on build type
     if (weaponId != null) {
+        // Demote chip-only zones (chip ids start at CHIP_LIGHTNING)
+        if (weaponId >= CHIP_LIGHTNING) {
+            score -= 1000; // Prefer real weapons over chip-only zones by default
+        }
         if (isMagicBuild) {
-            // MAGIC BUILD: DoT weapons as main DPS, DESTROYER for tactical debuffing
-            if (weaponId == WEAPON_FLAME_THROWER) {
-                score += 1200; // Highest priority - main DoT DPS
+            // Magic builds: elevate poison chips as valid DPS vantages
+            if (weaponId == CHIP_TOXIN) {
+                score += 900; // AoE poison is core to DPS
+            } else if (weaponId == CHIP_VENOM) {
+                score += 700; // Single-target poison is strong too
+            }
+            // MAGIC BUILD: DESTROYER first (cycle), then DoT; devalue grenade launcher
+            if (weaponId == WEAPON_DESTROYER) {
+                score += 1300; // Highest priority for debuff-first cycle
+            } else if (weaponId == WEAPON_FLAME_THROWER) {
+                score += 1200; // Next: apply DoT
+                // Combo boost: prefer FLAME vantages where TOXIN is safe & in range
+                if (primaryTarget != null && count(entry) > 0) {
+                    var cellId = entry[0];
+                    var tgtCell = getCell(primaryTarget);
+                    var dist = getCellDistance(cellId, tgtCell);
+                    var chips = getChips();
+                    if (inArray(chips, CHIP_TOXIN)) {
+                        var toxinArea = getChipArea(CHIP_TOXIN);
+                        var toxinMax = getChipMaxRange(CHIP_TOXIN);
+                        var toxinMin = getChipMinRange(CHIP_TOXIN);
+                        var inRange = (dist >= toxinMin && dist <= toxinMax);
+                        var safeAoE = (dist > toxinArea);
+                        var hasLOS = lineOfSight(cellId, tgtCell);
+                        if (inRange && safeAoE && hasLOS) {
+                            score += 150; // boost FLAME cells that enable FLAME×2 + TOXIN
+                        }
+                    }
+                    // Secondary combo boost: if TOXIN is not possible, prefer VENOM-capable cells
+                    if (inArray(chips, CHIP_VENOM)) {
+                        var vMin = getChipMinRange(CHIP_VENOM);
+                        var vMax = getChipMaxRange(CHIP_VENOM);
+                        var vInRange = (dist >= vMin && dist <= vMax);
+                        var vHasLOS = lineOfSight(cellId, tgtCell);
+                        if (vInRange && vHasLOS) {
+                            score += 120; // boost for FLAME + VENOM follow-up
+                        }
+                    }
+                }
             } else if (weaponId == WEAPON_RHINO) {
                 score += 1100; // High DPS backup
             } else if (weaponId == WEAPON_ELECTRISOR) {
                 score += 1000; // Good DPS + AoE
             } else if (weaponId == WEAPON_DESTROYER) {
-                score += 900; // Tactical debuff (lower than main DPS)
+                score += 900; // (kept for completeness; should be caught above)
+            } else if (weaponId == WEAPON_DOUBLE_GUN) {
+                score += 1050; // Double Gun: strong DoT stacking for MAGIC
             } else if (weaponId == WEAPON_GRENADE_LAUNCHER) {
-                score += 800; // Decent DPS + AoE
+                score += 200; // Lower priority for MAGIC compared to DESTROYER/FLAME
             } else if (weaponId == WEAPON_B_LASER) {
                 score += 700; // Multi-use backup
             } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
-                score += 600; // Healing capability
+                score += 700; // Higher priority for Enhanced Lightninger vantage
             } else if (weaponId == WEAPON_M_LASER) {
                 score += 500; // Alignment required
             } else if (weaponId == WEAPON_RIFLE) {
@@ -1720,9 +2724,9 @@ function getWeaponSortScore(entry) {
             } else if (weaponId == WEAPON_B_LASER) {
                 score += 700; // Good priority - multi-use
             } else if (weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
-                score += 600; // Moderate priority - healing capability
+                score += 750; // Strong priority for reachable Enhanced Lightninger
             } else if (weaponId == WEAPON_M_LASER) {
-                score += 500; // Moderate priority - high damage but alignment required
+                score += 650; // Increased priority for non-magic builds
             } else if (weaponId == WEAPON_RIFLE) {
                 score += 400; // Lower priority - standard weapon
             } else if (weaponId == WEAPON_DESTROYER) {
@@ -1737,13 +2741,41 @@ function getWeaponSortScore(entry) {
         }
     }
     
+    // KEEP-OUT VS STRENGTH BUILDS: prefer safer distances when we have non-melee options
+    if (primaryTarget != null) {
+        var enemyStr = getStrength(primaryTarget);
+        var enemyMag = getMagic(primaryTarget);
+        var enemyAgi = getAgility(primaryTarget);
+        var isStrengthEnemy = (enemyStr > max(enemyMag, enemyAgi) + 100);
+        if (isStrengthEnemy) {
+            // Only apply if we carry at least one mid/long-range weapon
+            var myWeapons = getWeapons();
+            var hasNonMelee = false;
+            for (var i = 0; i < count(myWeapons); i++) {
+                if (getWeaponMaxRange(myWeapons[i]) >= 5) { hasNonMelee = true; break; }
+            }
+            if (hasNonMelee && count(entry) > 0) {
+                var cellId = entry[0];
+                var targetCell = getCell(primaryTarget);
+                var dist = getCellDistance(cellId, targetCell);
+                if (dist <= 3) {
+                    score -= 200; // Strong penalty for brawling range
+                } else if (dist <= 5) {
+                    score -= 100; // Mild penalty for skirmish range
+                } else if (dist >= 7 && dist <= 10) {
+                    score += 80;  // Bonus for safe mid-long range
+                }
+            }
+        }
+    }
+    
     // DISTANCE BONUS: For magic builds using FLAME_THROWER, prefer longer distances to stay out of enemy TOXIN range
     if (isMagicBuild && weaponId == WEAPON_FLAME_THROWER && count(entry) > 0) {
         var cellId = entry[0];
         if (primaryTarget != null) {
             var targetCell = getCell(primaryTarget);
             if (targetCell != null) {
-                var dist = getDistance(cellId, targetCell);
+                var dist = getCellDistance(cellId, targetCell);
                 // Bonus for distances 6-8 (max FLAME_THROWER range), penalty for close range
                 if (dist >= 6 && dist <= 8) {
                     score += 50; // Prefer max range for safety
@@ -1755,6 +2787,28 @@ function getWeaponSortScore(entry) {
             }
         }
     }
+
+    // EID penalty: downweight dangerous positions
+    if (count(entry) > 0) {
+        var posCell = entry[0];
+        var eidPos = estimateIncomingDamageAtCell(posCell);
+        score -= min(eidPos, 800); // strong but capped penalty
+    }
+
+    // M-LASER ALIGNMENT BONUS: Prefer aligned cells at near-optimal ranges
+    if (weaponId == WEAPON_M_LASER && primaryTarget != null && count(entry) > 0) {
+        var mlCell = entry[0];
+        var mlTarget = getCell(primaryTarget);
+        var mlDist = getCellDistance(mlCell, mlTarget);
+        if (isOnSameLine(mlCell, mlTarget)) {
+            if (mlDist >= 7 && mlDist <= 9) {
+                score += 100; // sweet spot
+            } else if (mlDist >= 5 && mlDist <= 12) {
+                score += 50;  // in-range alignment
+            }
+        }
+    }
     
     return score;
 }
+    // (Removed misplaced magic block outside function scope)

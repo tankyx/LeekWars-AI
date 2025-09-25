@@ -2,9 +2,9 @@
 """
 LeekWars Script Testing Tool
 Tests a specific script ID against standard test opponents (bots)
-Usage: python3 lw_test_script.py <script_id> <num_tests> [opponent]
+Usage: python3 lw_test_script.py <script_id> <num_tests> [opponent] [--leek <name>]
 Example: python3 lw_test_script.py 445124 10 domingo
-         python3 lw_test_script.py 445124 10 betalpha
+         python3 lw_test_script.py 445124 10 betalpha --leek RabiesLeek
 
 Available opponents:
   domingo  (-1): Balanced stats, 600 strength, 300 wisdom
@@ -86,7 +86,7 @@ class LeekWarsScriptTester:
                 return ai_info
         return None
     
-    def setup_test_scenario(self, script_id, bot_opponent):
+    def setup_test_scenario(self, script_id, bot_opponent, preferred_leek_name=None):
         """Create or get a test scenario for the script with specific bot opponent"""
         # First, get all existing test scenarios
         url = f"{BASE_URL}/test-scenario/get-all"
@@ -109,13 +109,22 @@ class LeekWarsScriptTester:
             # Create a new scenario if none exists
             print(f"📋 Creating new test scenario vs {bot_opponent['name']}...")
             
-            # Find the first available leek
+            # Find the chosen leek (by name) or fall back to the first available leek
             farmer_leeks = self.farmer.get('leeks', {})
             if not farmer_leeks:
                 print("❌ No leeks found in your account")
                 return None
-            
-            first_leek = list(farmer_leeks.values())[0]
+            # Try to find a leek by name
+            selected_leek = None
+            if preferred_leek_name:
+                for leek in farmer_leeks.values():
+                    if leek.get('name') == preferred_leek_name:
+                        selected_leek = leek
+                        break
+                if not selected_leek:
+                    print(f"⚠️ Leek named '{preferred_leek_name}' not found. Falling back to first leek.")
+            if not selected_leek:
+                selected_leek = list(farmer_leeks.values())[0]
             
             # Create scenario with specific bot opponent
             scenario_name = f"Test_{script_id}_vs_{bot_opponent['name']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -143,7 +152,7 @@ class LeekWarsScriptTester:
                 time.sleep(0.3)  # Avoid rate limiting
                 resp1 = self.session.post(f"{BASE_URL}/test-scenario/add-leek", data={
                     "scenario_id": scenario_id,
-                    "leek": first_leek['id'],
+                    "leek": selected_leek['id'],
                     "team": 0,
                     "ai": script_id
                 })
@@ -153,7 +162,7 @@ class LeekWarsScriptTester:
                     time.sleep(2)
                     resp1 = self.session.post(f"{BASE_URL}/test-scenario/add-leek", data={
                         "scenario_id": scenario_id,
-                        "leek": first_leek['id'],
+                        "leek": selected_leek['id'],
                         "team": 0,
                         "ai": script_id
                     })
@@ -558,9 +567,9 @@ class LeekWarsScriptTester:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python3 lw_test_script.py <script_id> <num_tests> [opponent]")
+        print("Usage: python3 lw_test_script.py <script_id> <num_tests> [opponent] [--leek <name>]")
         print("Example: python3 lw_test_script.py 445124 10")
-        print("         python3 lw_test_script.py 445124 10 domingo")
+        print("         python3 lw_test_script.py 445124 10 domingo --leek RabiesLeek")
         print("\nAvailable opponents:")
         for name, bot in BOTS.items():
             print(f"  {name:8} - {bot['desc']}")
@@ -574,8 +583,21 @@ def main():
         print("❌ Invalid arguments. Script ID and number of tests must be integers.")
         return 1
     
-    # Get bot opponent (default to domingo)
-    opponent_name = sys.argv[3].lower() if len(sys.argv) > 3 else "domingo"
+    # Parse optional args: opponent and --leek <name>
+    opponent_name = None
+    preferred_leek_name = None
+    i = 3
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == "--leek" and i + 1 < len(sys.argv):
+            preferred_leek_name = sys.argv[i + 1]
+            i += 2
+        else:
+            if opponent_name is None:
+                opponent_name = arg.lower()
+            i += 1
+    if opponent_name is None:
+        opponent_name = "domingo"
     
     if opponent_name not in BOTS:
         print(f"❌ Unknown opponent: {opponent_name}")
@@ -610,7 +632,13 @@ def main():
         return 1
     
     try:
-        # Run tests with specific opponent
+        # Run tests with specific opponent and preferred leek
+        # Temporarily wrap to pass preferred_leek_name down to setup
+        # (Monkey-patch run_tests to include the leek parameter)
+        original_setup = tester.setup_test_scenario
+        def setup_with_leek(script_id_p, bot_opponent_p):
+            return original_setup(script_id_p, bot_opponent_p, preferred_leek_name)
+        tester.setup_test_scenario = setup_with_leek
         tester.run_tests(script_id, num_tests, bot_opponent)
     except KeyboardInterrupt:
         print("\n\n⚠️ Interrupted by user")

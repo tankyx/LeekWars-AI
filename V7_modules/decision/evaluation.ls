@@ -54,7 +54,9 @@ function calculateMultiEnemyDamageZones() {
     // Weapon availability checked
 
     // NEW ENEMY-CENTRIC APPROACH: Generate zones around enemies at weapon ranges
-    var enemyDamageZones = []; // Array of [cell, damage, weaponId, enemyEntity]
+    var enemyDamageZones = []; // Combined: [cell, damage, weaponId, enemyEntity]
+    var weaponDamageZones = []; // Weapon-only
+    var chipDamageZones = [];   // Chip-only
     var operationsUsed = 0;
     var maxOperations = 5000000; // 5M operations - utilize our full budget
     
@@ -147,7 +149,14 @@ function calculateMultiEnemyDamageZones() {
                     // Only store non-LoS zones if they have significant incentive (> 50 damage)
                     // or if we have very few LoS zones
                     if (hasLoS || damage > 50) {
-                        push(enemyDamageZones, [attackPosition, damage, weapon, currentEnemy]);
+                        // Require axis alignment for line weapons to avoid infeasible MLASER/BLASER zones
+                        var lt = getWeaponLaunchType(weapon);
+                        var requiresAxisAlignment = (lt == LAUNCH_TYPE_LINE || lt == LAUNCH_TYPE_LINE_INVERTED);
+                        if (requiresAxisAlignment && !isOnSameLine(attackPosition, currentEnemyCell)) {
+                            // Skip non-aligned line-weapon zones
+                        } else {
+                            push(enemyDamageZones, [attackPosition, damage, weapon, currentEnemy]);
+                        }
                     }
                     
                     // Mark damage zones visually on the map with weapon-specific colors
@@ -198,7 +207,6 @@ function calculateMultiEnemyDamageZones() {
         // Define all available damage chips with their properties
         var chipData = [
             {id: CHIP_LIGHTNING, cost: 4, range: 10, minDmg: 35, maxDmg: 45},
-            {id: CHIP_SPARK, cost: 3, range: 12, minDmg: 24, maxDmg: 32},
             {id: CHIP_METEORITE, cost: 5, range: 8, minDmg: 45, maxDmg: 55},
             {id: CHIP_TOXIN, cost: 5, range: 7, minDmg: 25, maxDmg: 35},
             {id: CHIP_VENOM, cost: 4, range: 10, minDmg: 20, maxDmg: 28},
@@ -266,7 +274,9 @@ function calculateMultiEnemyDamageZones() {
                                 var tpUses = floor(myTP / chip.cost);
                                 var totalChipDamage = chipDamage * tpUses;
                                 
-                                push(enemyDamageZones, [attackCell, totalChipDamage, chip.id, currentEnemy]);
+                                var entry = [attackCell, totalChipDamage, chip.id, currentEnemy];
+                                push(enemyDamageZones, entry);
+                                push(chipDamageZones, entry);
                                 
                                 if (getTurn() <= 2) {
                                     // Chip zone created
@@ -289,7 +299,7 @@ function calculateMultiEnemyDamageZones() {
         for (var e = 0; e < count(aliveEnemies); e++) {
             var enemyPosition = getCell(aliveEnemies[e]);
             // Validate enemy cell before marking
-            if (enemyPosition >= 0 && enemyPosition <= 323) {
+            if (enemyPosition >= 0 && enemyPosition <= 612) {
                 mark(enemyPosition, getColor(0, 255, 0)); // Mark enemies in bright green for visibility
             }
         }
@@ -339,10 +349,25 @@ function calculateMultiEnemyDamageZones() {
     
     // Enemy-centric calculation complete - let main handle empty zones if needed
     
-    // PRIORITY 1: Return enemy-specific damage zones if we have weapons
-    if (hasWeapons && count(enemyDamageZones) > 0) {
-        // Returning enemy-specific damage zones
-        return enemyDamageZones; // [cell, damage, weaponId, enemyEntity]
+    // Store separated maps globally for pathfinding (weapon-first, chip-second)
+    // Partition enemyDamageZones by weapon/chip id
+    for (var i2 = 0; i2 < count(enemyDamageZones); i2++) {
+        var e = enemyDamageZones[i2];
+        if (e == null || count(e) < 3) continue;
+        var wid = e[2];
+        if (wid != null && wid >= CHIP_LIGHTNING) {
+            // chip
+            // already pushed above for chip entries from chip loops; weapon-generated chips shouldn't exist
+        } else {
+            push(weaponDamageZones, e);
+        }
+    }
+    currentWeaponDamageArray = weaponDamageZones;
+    currentChipDamageArray = chipDamageZones;
+
+    // PRIORITY 1: Return enemy-specific damage zones
+    if (count(enemyDamageZones) > 0) {
+        return enemyDamageZones;
     }
     
     // PRIORITY 2: Convert to array format for chip fallback compatibility
@@ -535,6 +560,24 @@ function calculateWeaponDamageFromCell(weapon, fromCell, targetCell) {
     var actualUses = (maxUses > 0) ? min(tpUses, maxUses) : tpUses;
     
     var totalDamage = scaledDamage * actualUses;
+
+    // Add estimated DoT contribution if weapon applies poison (e.g., DOUBLE_GUN)
+    var wEffects = getWeaponEffects(weapon);
+    for (var i = 0; i < count(wEffects); i++) {
+        var eff = wEffects[i];
+        var effType = eff[0];
+        var minVal = eff[1];
+        var maxVal = eff[2];
+        // EFFECT_POISON
+        if (effType == EFFECT_POISON) {
+            var avgPoison = (minVal + maxVal) / 2;
+            // Poison scales with magic per user design
+            var scaledPoison = avgPoison * (1 + myMagic / 100.0);
+            // Stack per use; assume 2 turns of effect as per weapon description
+            var perUseDoT = scaledPoison * 2;
+            totalDamage += perUseDoT * actualUses;
+        }
+    }
     
     // Natural weapon stats used without artificial bonuses
     
@@ -629,7 +672,7 @@ function getAvailableDamageChips() {
     
     for (var i = 0; i < count(chips); i++) {
         var chip = chips[i];
-        if (chip == CHIP_LIGHTNING || chip == CHIP_SPARK) {
+        if (chip == CHIP_LIGHTNING) {
             push(damageChips, chip);
         }
     }
@@ -649,8 +692,7 @@ function calculateChipDamageZones() {
     // Prioritize high-damage chips over SPARK
     var damageChips = [
         {id: CHIP_LIGHTNING, range: 10, damage: 400, cost: 4},
-        {id: CHIP_METEORITE, range: 8, damage: 350, cost: 5},
-        {id: CHIP_SPARK, range: 12, damage: 256, cost: 3}
+        {id: CHIP_METEORITE, range: 8, damage: 350, cost: 5}
     ];
     
     // Calculating chip damage zones

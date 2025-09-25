@@ -19,8 +19,8 @@ function executeCombat(fromCell, recommendedWeapon) {
     var weaponSwitches = 0;
     var maxWeaponSwitches = 3; // PREVENT infinite weapon switching
     
-    // Limit to single combat attempt when called from peek-a-boo to prevent weapon switching loops
-    var maxLoops = (fromCell == getCell()) ? 1 : maxCombatAttempts;
+    // Fixed attempt count now that peekaboo is removed
+    var maxLoops = maxCombatAttempts;
     
     while (tpRemaining >= 3 && count(getEnemies()) > 0 && combatAttempts < maxLoops) {
         combatAttempts++;
@@ -202,12 +202,17 @@ function executeCombat(fromCell, recommendedWeapon) {
                                 tpRemaining -= 1; // Account for weapon switch cost
                             }
 
-                            // Use the valid weapon
-                            if (canUseWeapon(targetToAttack)) {
+                            // Use the valid weapon repeatedly while it remains effective and TP allows
+                            var extraShots = 0;
+                            while (tpRemaining >= weaponCost && canUseWeapon(targetToAttack)) {
                                 useWeapon(targetToAttack);
                                 recordWeaponUse(validWeapon);
                                 tpRemaining -= weaponCost;
-                                // Fallback weapon used successfully
+                                extraShots++;
+                                // Guard against runaway loops; most weapons won’t need more than 2-3 uses here
+                                if (extraShots >= 3) break;
+                            }
+                            if (extraShots > 0) {
                                 consecutiveFailures = 0;
                             } else {
                                 // Fallback weapon failed - range/LOS issue
@@ -294,7 +299,7 @@ function executeCombat(fromCell, recommendedWeapon) {
         var dotApplied = (myTP - tpRemaining) >= 12; // FLAME_THROWER + FLAME_THROWER costs 12 TP
         
         if (dotApplied && mpRemaining >= 3) {
-            debugW("MAGIC TACTICS: DoT applied, attempting to flee from " + count(getEnemies()) + " enemies");
+            if (debugEnabled) { debugW("MAGIC TACTICS: DoT applied, attempting to flee from " + count(getEnemies()) + " enemies"); }
             
             // Find safest position away from all enemies
             var bestFleeCell = null;
@@ -303,7 +308,10 @@ function executeCombat(fromCell, recommendedWeapon) {
             
             for (var dx = -searchRadius; dx <= searchRadius; dx++) {
                 for (var dy = -searchRadius; dy <= searchRadius; dy++) {
-                    var testCell = currentCell + dx + dy * MAP_WIDTH;
+                    var testX = getCellX(currentCell) + dx;
+                    var testY = getCellY(currentCell) + dy;
+                    var testCell = getCellFromXY(testX, testY);
+                    if (testCell == null || testCell == -1) continue;
                     var distance = abs(dx) + abs(dy); // Manhattan distance
                     
                     if (distance == 0 || distance > mpRemaining) continue;
@@ -339,9 +347,9 @@ function executeCombat(fromCell, recommendedWeapon) {
             if (bestFleeCell != null && bestFleeCell != currentCell) {
                 var moveResult = moveToward(bestFleeCell);
                 if (moveResult > 0) {
-                    debugW("MAGIC FLEE: Moved toward cell " + bestFleeCell + " (score: " + bestFleeScore + ")");
+                    if (debugEnabled) { debugW("MAGIC FLEE: Moved toward cell " + bestFleeCell + " (score: " + bestFleeScore + ")"); }
                 } else {
-                    debugW("MAGIC FLEE: Failed to move toward " + bestFleeCell);
+                    if (debugEnabled) { debugW("MAGIC FLEE: Failed to move toward " + bestFleeCell); }
                 }
             }
         }
@@ -349,41 +357,64 @@ function executeCombat(fromCell, recommendedWeapon) {
         // HEALING PHASE: After fleeing, use remaining TP for healing if needed
         var remainingTPAfterFlee = getTP();
         var hpPercent = myHP / myMaxHP;
-        var safeDistance = getAverageEnemyDistance() >= 8; // Safe if average distance 8+
+        var safeDistance = getAverageEnemyDistance() >= 9; // Safer when average distance 9+
 
         if (remainingTPAfterFlee >= 5 && safeDistance) {
             var healingPriority = getHealingPriority();
-            debugW("MAGIC HEALING: HP=" + floor(hpPercent * 100) + "%, TP=" + remainingTPAfterFlee + ", Priority=" + healingPriority);
+
+            // Determine if an offensive action is still available from current cell
+            var offenseAvailableNow = false;
+            if (primaryTarget != null) {
+                var myPosNow = getCell();
+                var tgtPosNow = getCell(primaryTarget);
+                var distNow = getCellDistance(myPosNow, tgtPosNow);
+                var weapsNow = getWeapons();
+                if (!offenseAvailableNow && inArray(weapsNow, WEAPON_FLAME_THROWER)) {
+                    if (distNow >= 2 && distNow <= 8 && lineOfSight(myPosNow, tgtPosNow) && isOnSameLine(myPosNow, tgtPosNow)) offenseAvailableNow = true;
+                }
+                if (!offenseAvailableNow && inArray(weapsNow, WEAPON_DESTROYER)) {
+                    if (distNow >= 1 && distNow <= 6 && lineOfSight(myPosNow, tgtPosNow)) offenseAvailableNow = true;
+                }
+                var chipsNow = getChips();
+                if (!offenseAvailableNow && inArray(chipsNow, CHIP_TOXIN) && chipCooldowns[CHIP_TOXIN] <= 0) {
+                    if (distNow <= 7 && isChipSafeToUse(CHIP_TOXIN, tgtPosNow)) offenseAvailableNow = true;
+                }
+                if (!offenseAvailableNow && inArray(chipsNow, CHIP_VENOM) && chipCooldowns[CHIP_VENOM] <= 0) {
+                    if (distNow <= 10) offenseAvailableNow = true;
+                }
+            }
+
+            if (debugEnabled) { debugW("MAGIC HEALING: HP=" + floor(hpPercent * 100) + "%, TP=" + remainingTPAfterFlee + ", Priority=" + healingPriority + ", offenseAvailableNow=" + offenseAvailableNow); }
 
             // Critical: Use REGENERATION if available and HP very low
-            if (shouldUseHealingChip(CHIP_REGENERATION, 0.3) && remainingTPAfterFlee >= 8) {
-                debugW("MAGIC HEAL: Using REGENERATION (once per fight) at " + floor(hpPercent * 100) + "% HP");
+            if (shouldUseHealingChip(CHIP_REGENERATION, 0.35) && remainingTPAfterFlee >= 8) {
+                if (debugEnabled) { debugW("MAGIC HEAL: Using REGENERATION (once per fight) at " + floor(hpPercent * 100) + "% HP"); }
                 if (canUseChip(CHIP_REGENERATION, getEntity())) {
                     useChip(CHIP_REGENERATION, getEntity());
                     regenerationUsed = true;
                     tpRemaining -= 8;
-                    debugW("MAGIC HEAL: REGENERATION successful, TP remaining: " + tpRemaining);
+                    if (debugEnabled) { debugW("MAGIC HEAL: REGENERATION successful, TP remaining: " + tpRemaining); }
                 }
             }
-            // Moderate: Use REMISSION for reliable healing
-            else if (shouldUseHealingChip(CHIP_REMISSION, 0.5) && remainingTPAfterFlee >= 5) {
-                debugW("MAGIC HEAL: Using REMISSION at " + floor(hpPercent * 100) + "% HP");
+            // Moderate: Use REMISSION when below ~50% and no offense available now
+            else if (!offenseAvailableNow && shouldUseHealingChip(CHIP_REMISSION, 0.5) && remainingTPAfterFlee >= 5) {
+                if (debugEnabled) { debugW("MAGIC HEAL: Using REMISSION at " + floor(hpPercent * 100) + "% HP"); }
                 if (canUseChip(CHIP_REMISSION, getEntity())) {
                     useChip(CHIP_REMISSION, getEntity());
                     chipCooldowns[CHIP_REMISSION] = 1;
                     tpRemaining -= 5;
-                    debugW("MAGIC HEAL: REMISSION successful, TP remaining: " + tpRemaining);
+                    if (debugEnabled) { debugW("MAGIC HEAL: REMISSION successful, TP remaining: " + tpRemaining); }
                 }
             }
-            // Sustain: Use VACCINE for heal over time
-            else if (shouldUseHealingChip(CHIP_VACCINE, 0.7) && remainingTPAfterFlee >= 6) {
-                debugW("MAGIC HEAL: Using VACCINE for HoT at " + floor(hpPercent * 100) + "% HP");
+            // Sustain: Use VACCINE only below ~45% and no offense available now
+            else if (!offenseAvailableNow && shouldUseHealingChip(CHIP_VACCINE, 0.45) && remainingTPAfterFlee >= 6) {
+                if (debugEnabled) { debugW("MAGIC HEAL: Using VACCINE for HoT at " + floor(hpPercent * 100) + "% HP"); }
                 if (canUseChip(CHIP_VACCINE, getEntity())) {
                     useChip(CHIP_VACCINE, getEntity());
                     chipCooldowns[CHIP_VACCINE] = 4;
                     vaccineHoTTurnsLeft = 3;
                     tpRemaining -= 6;
-                    debugW("MAGIC HEAL: VACCINE successful, HoT for 3 turns, TP remaining: " + tpRemaining);
+                    if (debugEnabled) { debugW("MAGIC HEAL: VACCINE successful, HoT for 3 turns, TP remaining: " + tpRemaining); }
                 }
             }
         }
@@ -400,7 +431,7 @@ function executeCombat(fromCell, recommendedWeapon) {
             }
             
             if (count(nearbyEnemies) > 0) {
-                debugW("MAGIC TACTICS: Cannot flee effectively, using DESTROYER to debuff enemies");
+            if (debugEnabled) { debugW("MAGIC TACTICS: Cannot flee effectively, using DESTROYER to debuff enemies"); }
                 // Target strongest enemy first
                 var targetEnemy = nearbyEnemies[0];
                 var maxStrength = getStrength(targetEnemy);
@@ -414,7 +445,7 @@ function executeCombat(fromCell, recommendedWeapon) {
                 
                 if (setWeapon(WEAPON_DESTROYER)) {
                     useWeapon(getCell(targetEnemy));
-                    debugW("MAGIC DEBUFF: Used DESTROYER on strongest enemy (strength: " + maxStrength + ")");
+                    if (debugEnabled) { debugW("MAGIC DEBUFF: Used DESTROYER on strongest enemy (strength: " + maxStrength + ")"); }
                 }
             }
         }
@@ -432,7 +463,7 @@ function executeAoEAttack(aoeOption, tpRemaining) {
     
     if (tpRemaining < weaponCost) {
         if (debugEnabled) {
-            debugW("AOE SKIP: Insufficient TP for " + weapon);
+            if (debugEnabled) { debugW("AOE SKIP: Insufficient TP for " + weapon); }
         }
         return tpRemaining;
     }
@@ -442,14 +473,14 @@ function executeAoEAttack(aoeOption, tpRemaining) {
         setWeapon(weapon);
         tpRemaining -= 1; // Cost of weapon switch
         if (debugEnabled) {
-            debugW("AOE: Switched to weapon " + weapon);
+            if (debugEnabled) { debugW("AOE: Switched to weapon " + weapon); }
         }
     }
     
     // Execute AoE attack on primary target (will hit multiple enemies in AoE)
     if (canUseWeapon(primaryTarget)) {
         if (debugEnabled) {
-            debugW("AOE ATTACK: Using " + weapon + " targeting " + primaryTarget + " (affects " + aoeOption.enemyCount + " enemies)");
+            if (debugEnabled) { debugW("AOE ATTACK: Using " + weapon + " targeting " + primaryTarget + " (affects " + aoeOption.enemyCount + " enemies)"); }
         }
         
         useWeapon(primaryTarget);
@@ -457,11 +488,11 @@ function executeAoEAttack(aoeOption, tpRemaining) {
         tpRemaining -= weaponCost;
         
         if (debugEnabled) {
-            debugW("AOE SUCCESS: Used " + weapon + ", TP remaining: " + tpRemaining);
+            if (debugEnabled) { debugW("AOE SUCCESS: Used " + weapon + ", TP remaining: " + tpRemaining); }
         }
     } else {
         if (debugEnabled) {
-            debugW("AOE FAIL: Cannot use " + weapon + " on " + primaryTarget);
+            if (debugEnabled) { debugW("AOE FAIL: Cannot use " + weapon + " on " + primaryTarget); }
         }
     }
     
@@ -476,7 +507,7 @@ function executeUnifiedScenarioCombat(target, tpRemaining, mode) {
     
     if (actualTarget == null || getLife(actualTarget) <= 0) {
         if (mode == "legacy") {
-            debugW("COMBAT: No enemy found");
+            if (debugEnabled) { debugW("COMBAT: No enemy found"); }
         }
         return tpRemaining;
     }
@@ -490,12 +521,12 @@ function executeUnifiedScenarioCombat(target, tpRemaining, mode) {
     // Ensure scenario is always an array
     if (scenario == null) {
         scenario = [CHIP_LIGHTNING];
-        debugW("COMBAT: Using fallback scenario");
+        if (debugEnabled) { debugW("COMBAT: Using fallback scenario"); }
     }
     
     if (debugEnabled) {
         var targetDesc = (mode == "legacy") ? ("enemy at distance=" + distance) : ("target " + actualTarget + " at distance " + distance);
-        debugW("UNIFIED COMBAT: [" + join(scenario, ", ") + "] against " + targetDesc + ", TP=" + tpRemaining);
+        if (debugEnabled) { debugW("UNIFIED COMBAT: [" + join(scenario, ", ") + "] against " + targetDesc + ", TP=" + tpRemaining); }
     }
     
     // Execute scenario actions in sequence
@@ -507,7 +538,7 @@ function executeUnifiedScenarioCombat(target, tpRemaining, mode) {
         var tpBefore = tpRemaining;
         
         if (debugEnabled) {
-            debugW("COMBAT ACTION: " + action + " (isWeapon=" + isWeapon(action) + ", isChip=" + isChip(action) + ")");
+            if (debugEnabled) { debugW("COMBAT ACTION: " + action + " (isWeapon=" + isWeapon(action) + ", isChip=" + isChip(action) + ")"); }
         }
         
         if (isWeapon(action)) {
@@ -529,11 +560,11 @@ function executeUnifiedScenarioCombat(target, tpRemaining, mode) {
         if (actionSuccess) {
             successfulActions++;
             if (debugEnabled) {
-                debugW("COMBAT SUCCESS: Action " + action + " completed, TP: " + tpBefore + " -> " + tpRemaining);
+                if (debugEnabled) { debugW("COMBAT SUCCESS: Action " + action + " completed, TP: " + tpBefore + " -> " + tpRemaining); }
             }
         } else {
             if (debugEnabled) {
-                debugW("COMBAT FAIL: Action " + action + " failed, TP unchanged: " + tpRemaining);
+                if (debugEnabled) { debugW("COMBAT FAIL: Action " + action + " failed, TP unchanged: " + tpRemaining); }
             }
             // Stop executing more weapons if this one failed
             if (isWeapon(action)) {
@@ -546,7 +577,7 @@ function executeUnifiedScenarioCombat(target, tpRemaining, mode) {
         if (getLife(actualTarget) <= 0) {
             if (debugEnabled) {
                 var targetName = (mode == "legacy") ? "Enemy" : ("Target " + actualTarget);
-                debugW(targetName + " defeated!");
+                if (debugEnabled) { debugW(targetName + " defeated!"); }
             }
             break;
         }
@@ -579,8 +610,47 @@ function executeScenario(scenario, target, tpRemaining) {
         return tpRemaining;
     }
     
+    // Prefilter actions to avoid impossible steps (range/LOS/cooldown/TP)
+    scenario = prefilterScenarioActions(scenario, target, tpRemaining);
+    if (scenario == null || count(scenario) == 0) {
+        // First, try to apply DPS poison (TOXIN/VENOM) instead of giving up
+        var beforeTP = tpRemaining;
+        tpRemaining = tryApplyDpsPoison(target, tpRemaining);
+        if (tpRemaining < beforeTP) {
+            return tpRemaining; // We used poison chips; do not heal/teleport right away
+        }
+        // Then consider an offensive teleport if allowed
+        if (getTurn() > 2 && inArray(getChips(), CHIP_TELEPORTATION) && currentDamageArray != null && count(currentDamageArray) > 0) {
+            var teleEmpty = attemptOffensiveTeleport(tpRemaining);
+            if (teleEmpty[1]) { return teleEmpty[0]; }
+        }
+        return tpRemaining;
+    }
+    
+    // If expected damage from scenario is negligible, try offensive teleport instead of SPARK chains
+    var estDmg = estimateScenarioDamage(scenario, getCell(), getCell(target));
+    if (estDmg < 80 && getTurn() > 2 && inArray(getChips(), CHIP_TELEPORTATION)) {
+        var teleLow = attemptOffensiveTeleport(tpRemaining);
+        if (teleLow[1]) { return teleLow[0]; }
+    }
+    
     var successfulActions = 0;
     var originalTP = tpRemaining;
+    
+    // If scenario has no weapons or is SPARK-only, try offensive teleport to break stalemate
+    if (getTurn() > 2 && inArray(getChips(), CHIP_TELEPORTATION) && currentDamageArray != null && count(currentDamageArray) > 0) {
+        var hasWeaponAction = false;
+        var sparkOnly = true;
+        for (var si = 0; si < count(scenario); si++) {
+            var a = scenario[si];
+            if (isWeapon(a)) { hasWeaponAction = true; }
+            if (isChip(a) && a != CHIP_SPARK) { sparkOnly = false; }
+        }
+        if (!hasWeaponAction || sparkOnly) {
+            var teleRes = attemptOffensiveTeleport(tpRemaining);
+            if (teleRes[1]) { return teleRes[0]; }
+        }
+    }
     
     for (var i = 0; i < count(scenario) && tpRemaining >= 1; i++) {
         var action = scenario[i];
@@ -588,11 +658,11 @@ function executeScenario(scenario, target, tpRemaining) {
         
         // Only log individual actions if debug enabled
         if (debugEnabled) {
-            debugW("SCENARIO ACTION " + (i+1) + "/" + count(scenario) + ": " + action + " (TP=" + tpRemaining + ")");
+            if (debugEnabled) { debugW("SCENARIO ACTION " + (i+1) + "/" + count(scenario) + ": " + action + " (TP=" + tpRemaining + ")"); }
         }
         
         // Debug action type detection
-        debugW("ACTION DEBUG: action=" + action + ", isWeapon=" + isWeapon(action) + ", isChip=" + isChip(action));
+        if (debugEnabled) { debugW("ACTION DEBUG: action=" + action + ", isWeapon=" + isWeapon(action) + ", isChip=" + isChip(action)); }
         
         if (isWeapon(action)) {
             // Execute weapon action
@@ -603,9 +673,9 @@ function executeScenario(scenario, target, tpRemaining) {
                     if (tpRemaining >= weaponCost + 1) {
                         setWeapon(action);
                         tpRemaining--;
-                        debugW("SCENARIO: Switched to weapon " + action + " (-1 TP)");
+                        if (debugEnabled) { debugW("SCENARIO: Switched to weapon " + action + " (-1 TP)"); }
                     } else {
-                        debugW("SCENARIO: Not enough TP to switch to weapon " + action);
+                        if (debugEnabled) { debugW("SCENARIO: Not enough TP to switch to weapon " + action); }
                         break;
                     }
                 }
@@ -616,10 +686,7 @@ function executeScenario(scenario, target, tpRemaining) {
                     recordWeaponUse(action);
                     tpRemaining -= weaponCost;
                     successfulActions++;
-                    // Success - only log if debug enabled
-                    if (debugEnabled) {
-                        debugW("SCENARIO: Used weapon " + action + " (-" + weaponCost + " TP, remaining: " + tpRemaining + ")");
-                    }
+                    if (debugEnabled) { debugW("SCENARIO: Used weapon " + action + " (-" + weaponCost + " TP, remaining: " + tpRemaining + ")"); }
                 } else {
                     // Enhanced debug for weapon failures
                     var myPos = getCell();
@@ -632,9 +699,11 @@ function executeScenario(scenario, target, tpRemaining) {
                     var dy = targetY - myY;
                     var distance = getCellDistance(myPos, targetPos);
                     
-                    debugW("WEAPON FAIL: " + action + " from " + myPos + "(" + myX + "," + myY + ") to " + targetPos + "(" + targetX + "," + targetY + ")");
-                    debugW("WEAPON FAIL: Distance=" + distance + ", dx=" + dx + ", dy=" + dy + ", aligned=" + ((dx == 0) || (dy == 0)));
-                    debugW("WEAPON FAIL: LineOfSight=" + lineOfSight(myPos, targetPos, targetPos));
+                    if (debugEnabled) {
+                        debugW("WEAPON FAIL: " + action + " from " + myPos + "(" + myX + "," + myY + ") to " + targetPos + "(" + targetX + "," + targetY + ")");
+                        debugW("WEAPON FAIL: Distance=" + distance + ", dx=" + dx + ", dy=" + dy + ", aligned=" + ((dx == 0) || (dy == 0)));
+                        debugW("WEAPON FAIL: LineOfSight=" + lineOfSight(myPos, targetPos, targetPos));
+                    }
                     
                     break;
                 }
@@ -711,6 +780,7 @@ function executeScenario(scenario, target, tpRemaining) {
                     useChip(action, chipTarget);
                     tpRemaining -= chipCost;
                     successfulActions++;
+                    if (action == CHIP_SPARK) { sparkUsesThisTurn++; }
 
                     // Set cooldowns for chips after successful use
                     if (action == CHIP_LIBERATION) {
@@ -741,10 +811,10 @@ function executeScenario(scenario, target, tpRemaining) {
                     break;
                 }
             } else {
-                // ERROR: Always log insufficient TP for chips
-                debugW("ERROR: Not enough TP for chip " + action + " (need " + chipCost + ", have " + tpRemaining + ")");
-                break;
-            }
+            // ERROR: Always log insufficient TP for chips
+            debugW("ERROR: Not enough TP for chip " + action + " (need " + chipCost + ", have " + tpRemaining + ")");
+            break;
+        }
         } else {
             // Action is neither weapon nor chip
             debugW("ERROR: Unknown action type " + action + " - not weapon or chip");
@@ -760,8 +830,245 @@ function executeScenario(scenario, target, tpRemaining) {
     
     var totalTPUsed = originalTP - tpRemaining;
     debugW("SCENARIO COMPLETE: " + successfulActions + "/" + count(scenario) + " actions completed, " + totalTPUsed + " TP used");
-    
+
+    // DPS POISON PHASE: Ensure we opportunistically apply TOXIN/VENOM when possible
+    // These greatly contribute to sustained DPS on magic builds.
+    if (tpRemaining >= 4 && getLife(target) > 0) {
+        tpRemaining = tryApplyDpsPoison(target, tpRemaining);
+    }
+
     return tpRemaining;
+}
+
+// === SCENARIO PREFILTER ===
+// Remove actions that can't be executed from current position/TP to prevent 0-TP loops
+function prefilterScenarioActions(scenario, target, tpBudget) {
+    if (scenario == null || count(scenario) == 0) return scenario;
+    if (target == null || getLife(target) <= 0) return [];
+    
+    var filtered = [];
+    var tpRemaining = tpBudget;
+    var currentCell = getCell();
+    var targetCell = getCell(target);
+    
+    for (var i = 0; i < count(scenario); i++) {
+        var action = scenario[i];
+        
+        if (isWeapon(action)) {
+            var weapon = action;
+            var switchCost = (getWeapon() != weapon) ? 1 : 0;
+            var weaponCost = getWeaponCost(weapon);
+            var totalCost = weaponCost + switchCost;
+            
+            if (tpRemaining < totalCost) {
+                continue; // Can't afford switch + fire
+            }
+            
+            // Validate reach (range/LOS/alignment) from current cell
+            if (!canWeaponReachTarget(weapon, currentCell, targetCell)) {
+                // Skip weapon that can't reach; movement already occurred before scenario execution
+                continue;
+            }
+            
+            // Looks feasible — accept and deduct budget (don't actually switch here)
+            push(filtered, weapon);
+            tpRemaining -= totalCost;
+            
+        } else if (isChip(action)) {
+            var chip = action;
+            var chipCost = getChipCost(chip);
+            if (tpRemaining < chipCost) {
+                continue;
+            }
+            
+            // Determine a plausible chip target for validation
+            var chipTarget = target;
+            if (chip == CHIP_ANTIDOTE) {
+                chipTarget = getEntity();
+            } else if (chip == CHIP_LIBERATION) {
+                // Prefer self if we have negative effects, else try enemy
+                chipTarget = hasNegativeEffects() ? getEntity() : target;
+            }
+            
+            if (!canUseChip(chip, chipTarget)) {
+                continue; // Out of range/LOS/cooldown/etc.
+            }
+            // Limit SPARK usage per turn to avoid spam
+            if (chip == CHIP_SPARK && sparkUsesThisTurn >= 1) {
+                continue;
+            }
+            
+            push(filtered, chip);
+            tpRemaining -= chipCost;
+        }
+    }
+    
+    if (count(filtered) == 0) {
+        // Fallback: try a single valid weapon shot if any
+        var weapons = getWeapons();
+        var bestWeapon = null;
+        var bestScore = -1;
+        for (var w = 0; w < count(weapons); w++) {
+            var testW = weapons[w];
+            var switchCost = (getWeapon() != testW) ? 1 : 0;
+            var totalCost = getWeaponCost(testW) + switchCost;
+            if (tpRemaining >= totalCost && canWeaponReachTarget(testW, currentCell, targetCell)) {
+                var score = getWeaponCost(testW); // simple proxy for damage
+                if (score > bestScore) { bestScore = score; bestWeapon = testW; }
+            }
+        }
+        if (bestWeapon != null) {
+            return [bestWeapon];
+        }
+    }
+    
+    // Return pruned scenario
+    return filtered;
+}
+
+// === SCENARIO DAMAGE ESTIMATION ===
+function estimateScenarioDamage(scenario, fromCell, targetCell) {
+    var dmg = 0;
+    for (var i = 0; i < count(scenario); i++) {
+        var a = scenario[i];
+        if (isWeapon(a)) {
+            var effects = getWeaponEffects(a);
+            var base = 0;
+            for (var e = 0; e < count(effects); e++) {
+                if (effects[e][0] == 1) { base = (effects[e][1] + effects[e][2]) / 2; break; }
+            }
+            if (base == 0) base = getWeaponCost(a) * 10;
+            dmg += base * (1 + myStrength / 100.0);
+        } else if (isChip(a)) {
+            if (a == CHIP_LIGHTNING) dmg += 50 * (1 + myMagic / 100.0);
+            else if (a == CHIP_SPARK) dmg += 25 * (1 + myMagic / 100.0);
+        }
+    }
+    return floor(dmg + 0.5);
+}
+
+// === OFFENSIVE TELEPORT ATTACK ===
+// Attempts to teleport to a high-damage cell and attack immediately
+// Returns [tpRemaining, executed:boolean]
+function attemptOffensiveTeleport(tpRemaining) {
+    // Allow earlier teleports for MAGIC to break range bands sooner
+    if (isMagicBuild) {
+        if (getTurn() <= 1) return [tpRemaining, false];
+    } else {
+        if (getTurn() <= 2) return [tpRemaining, false];
+    }
+    var chips = getChips();
+    if (!inArray(chips, CHIP_TELEPORTATION)) return [tpRemaining, false];
+    var teleCost = getChipCost(CHIP_TELEPORTATION);
+    if (tpRemaining < teleCost + 5) return [tpRemaining, false];
+    if (primaryTarget == null || getLife(primaryTarget) <= 0) return [tpRemaining, false];
+    
+    // Build a unique set of candidate cells from currentDamageArray within teleport range
+    var uniqueCells = [:];
+    var candidates = [];
+    var consider = min(60, count(currentDamageArray));
+    for (var i = 0; i < consider; i++) {
+        var e = currentDamageArray[i];
+        if (e == null || count(e) < 1) continue;
+        var cell = e[0];
+        if (cell == null || cell < 0 || cell > 612) continue;
+        if (uniqueCells[cell] != null) continue;
+        var distT = getCellDistance(getCell(), cell);
+        if (distT < 1 || distT > 12) continue;
+        if (getCellContent(cell) != CELL_EMPTY) continue;
+        if (!canUseChip(CHIP_TELEPORTATION, cell)) continue;
+        uniqueCells[cell] = true;
+        push(candidates, cell);
+        if (count(candidates) >= 30) break;
+    }
+    
+    // Also add direct Enhanced Lightninger vantage cells: rings 6..10 around enemy
+    var tgtCell = getCell(primaryTarget);
+    for (var d = 6; d <= 10; d++) {
+        var ring = getCellsAtExactDistance(tgtCell, d);
+        var stride = max(1, floor(count(ring) / 24));
+        for (var ri = 0; ri < count(ring); ri += stride) {
+            var cell = ring[ri];
+            if (cell == null || cell < 0 || cell > 612) continue;
+            if (uniqueCells[cell] != null) continue;
+            if (getCellContent(cell) != CELL_EMPTY) continue;
+            if (getCellDistance(getCell(), cell) < 1 || getCellDistance(getCell(), cell) > 12) continue;
+            if (!lineOfSight(cell, tgtCell)) continue;
+            uniqueCells[cell] = true;
+            push(candidates, cell);
+            if (count(candidates) >= 50) break;
+        }
+        if (count(candidates) >= 50) break;
+    }
+    
+    var myWeapons = getWeapons();
+    var bestCell = null;
+    var bestWeapon = null;
+    var bestScore = -99999;
+    
+    for (var ci = 0; ci < count(candidates); ci++) {
+        var cell = candidates[ci];
+        // Evaluate each of our weapons from this cell
+        for (var wi = 0; wi < count(myWeapons); wi++) {
+            var weap = myWeapons[wi];
+            // Quick reachability check
+            var inRange = canWeaponReachTarget(weap, cell, tgtCell);
+            if (!inRange) continue;
+            
+            // Weapon-aware preference: require axis alignment for M-LASER
+            if (weap == WEAPON_M_LASER && !isOnSameLine(cell, tgtCell)) continue;
+            // Prefer star alignment for Lightninger if helper is available
+            if (weap == WEAPON_LIGHTNINGER) {
+                // Regular Lightninger uses star pattern; Enhanced does not
+                if (!isValidStarPattern(cell, tgtCell)) continue;
+            }
+            
+            // Estimate how much damage we can output after teleport (account for switch and TP)
+            var switchCost = (getWeapon() != weap) ? 1 : 0;
+            var tpAvail = tpRemaining - teleCost - switchCost;
+            if (tpAvail < 0) continue;
+            var wCost = getWeaponCost(weap);
+            var maxUses = getWeaponMaxUses(weap);
+            var uses = (wCost > 0) ? floor(tpAvail / wCost) : 0;
+            if (maxUses > 0) uses = min(uses, maxUses);
+            if (uses <= 0) continue;
+            // Estimate base damage per use from weapon effects
+            var effects = getWeaponEffects(weap);
+            var baseDmg = 0;
+            for (var ee = 0; ee < count(effects); ee++) {
+                if (effects[ee][0] == 1) { baseDmg = (effects[ee][1] + effects[ee][2]) / 2; break; }
+            }
+            if (baseDmg == 0) baseDmg = wCost * 10; // fallback proxy
+            var dmgOut = baseDmg * (1 + myStrength / 100.0) * uses;
+            
+            // Bonus for optimal M-LASER distance (7-9)
+            if (weap == WEAPON_M_LASER) {
+                var dml = getCellDistance(cell, tgtCell);
+                if (dml >= 7 && dml <= 9) dmgOut += 80;
+            }
+            
+            var eid = estimateIncomingDamageAtCell(cell);
+            var score = dmgOut - eid * 0.5;
+            if (score > bestScore) { bestScore = score; bestCell = cell; bestWeapon = weap; }
+        }
+    }
+    if (bestCell == null) return [tpRemaining, false];
+    var weaponCost = getWeaponCost(bestWeapon);
+    var switchCost = (getWeapon() != bestWeapon) ? 1 : 0;
+    if (tpRemaining < teleCost + switchCost + weaponCost) return [tpRemaining, false];
+    
+    useChip(CHIP_TELEPORTATION, bestCell);
+    myCell = getCell();
+    myTP = getTP();
+    tpRemaining = myTP;
+    if (getWeapon() != bestWeapon) { setWeapon(bestWeapon); tpRemaining--; myTP--; }
+    if (canUseWeapon(primaryTarget)) {
+        useWeapon(primaryTarget);
+        recordWeaponUse(bestWeapon);
+        tpRemaining -= weaponCost; myTP -= weaponCost;
+    }
+    markText(bestCell, "T", getColor(255, 0, 255), 10);
+    return [tpRemaining, true];
 }
 
 // === UNIFIED WEAPON EXECUTION ===
@@ -834,7 +1141,7 @@ function executeUnifiedWeaponAction(weapon, target, tpRemaining, mode) {
     
     // Enhanced Lightninger special handling for precalculated mode
     var canAttack = canUseWeapon(actualTarget);
-    if (!canAttack && mode == "precalc" && weapon == 225) { // Enhanced Lightninger
+    if (!canAttack && mode == "precalc" && weapon == WEAPON_ENHANCED_LIGHTNINGER) { // Enhanced Lightninger
         var hasLOSCheck = checkLineOfSight(myCell, targetCell);
         var inRange = (distance >= 6 && distance <= 10);
         if (hasLOSCheck && inRange && getTP() >= 9) {
@@ -1263,15 +1570,36 @@ function calculateAreaEffectScore(targetCell, weapon) {
 // === CHIP FALLBACK SYSTEM ===
 function tryChipFallback(target, tpRemaining) {
     if (debugEnabled) {
-        debugW("CHIP FALLBACK: Trying chips with " + tpRemaining + " TP remaining");
+        debugW("CHIP FALLBACK: Trying TOXIN/VENOM with " + tpRemaining + " TP remaining");
     }
-    
-    // NO CHIP FALLBACK: AI should move to weapon range instead of using weak chips
-    if (debugEnabled) {
-        // No chip fallback - should move to weapon range
+    var before = tpRemaining;
+    tpRemaining = tryApplyDpsPoison(target, tpRemaining);
+    return (before - tpRemaining) > 0; // return true if we used any TP
+}
+
+// === DPS POISON HELPER ===
+function tryApplyDpsPoison(target, tpRemaining) {
+    if (target == null || getLife(target) <= 0) return tpRemaining;
+    var chips = getChips();
+    var tgtCell = getCell(target);
+
+    // Prefer TOXIN first if safe (AoE) and available
+    if (inArray(chips, CHIP_TOXIN) && chipCooldowns[CHIP_TOXIN] <= 0) {
+        if (isChipSafeToUse(CHIP_TOXIN, tgtCell)) {
+            var costT = getChipCost(CHIP_TOXIN);
+            if (tpRemaining >= costT && canUseChip(CHIP_TOXIN, target)) {
+                tpRemaining = executeChipActionOnTarget(CHIP_TOXIN, target, tpRemaining);
+            }
+        }
     }
-    
-    return false; // No combat action taken - let movement system handle positioning
+    // Then VENOM (single target)
+    if (inArray(chips, CHIP_VENOM) && chipCooldowns[CHIP_VENOM] <= 0 && getLife(target) > 0) {
+        var costV = getChipCost(CHIP_VENOM);
+        if (tpRemaining >= costV && canUseChip(CHIP_VENOM, target)) {
+            tpRemaining = executeChipActionOnTarget(CHIP_VENOM, target, tpRemaining);
+        }
+    }
+    return tpRemaining;
 }
 
 // === TURN INITIALIZATION ===

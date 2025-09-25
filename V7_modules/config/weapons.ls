@@ -49,6 +49,13 @@ global GRENADE_SCENARIOS = [
     4: [CHIP_ROCKFALL]
 ];
 
+// === DOUBLE GUN SCENARIOS (Cost: 4 TP, Max 3 uses/turn, Range 2-7, Damage + Poison stack) ===
+global DOUBLE_GUN_SCENARIOS = [
+    12: [WEAPON_DOUBLE_GUN, WEAPON_DOUBLE_GUN, WEAPON_DOUBLE_GUN], // 3 uses = 12 TP
+    8:  [WEAPON_DOUBLE_GUN, WEAPON_DOUBLE_GUN],                    // 2 uses = 8 TP
+    4:  [WEAPON_DOUBLE_GUN]                                        // 1 use = 4 TP
+];
+
 // === B-LASER SCENARIOS (Cost: 5 TP, Max 3 uses/turn, Range 2-8, Line weapon) ===
 global BLASER_SCENARIOS = [
     15: [WEAPON_B_LASER, WEAPON_B_LASER, WEAPON_B_LASER], // 3 uses = 15 TP
@@ -704,6 +711,18 @@ function getBestScenarioForTP(tp, forCombat) {
         // No weapons - use chip-only scenario (use medium range as default)
         return getChipOnlyScenario(chips, tp, 8);
     }
+
+    // FAST-PATH: Prefer M-LASER if aligned, in range, and LOS clear (efficient 8 TP weapon)
+    if (inArray(weapons, WEAPON_M_LASER) && targetEnemyCell != null) {
+        var dist = getCellDistance(getCell(), targetEnemyCell);
+        var minR = getWeaponMinRange(WEAPON_M_LASER);
+        var maxR = getWeaponMaxRange(WEAPON_M_LASER);
+        if (dist >= minR && dist <= maxR && lineOfSight(getCell(), targetEnemyCell) && isOnSameLine(getCell(), targetEnemyCell)) {
+            var ml = MLASER_SCENARIOS[tp];
+            if (ml != null) return ml;
+            return MLASER_SCENARIOS[8]; // fallback single use
+        }
+    }
     
     var bestScenario = null;
     var bestValue = 0;
@@ -925,18 +944,16 @@ function buildMagicScenario(weapons, chips, availableTP, forCombat) {
         targetEnemyCell = getCell(allEnemies[0]);
     }
     
-    if (!inArray(weapons, WEAPON_FLAME_THROWER)) {
-        debugW("MAGIC FUNC: No FLAME_THROWER found, returning null");
-        return null;
-    }
+    // FLAME is optional – we can operate with DESTROYER/poisons alone.
+    var hasFlame = inArray(weapons, WEAPON_FLAME_THROWER);
     
-    // Check position validity for FLAME_THROWER if needed
+    // For FLAME, compute in-range flag; do not abort scenario building if out of range.
+    var currentDistance = (targetEnemyCell != null) ? getCellDistance(getCell(), targetEnemyCell) : 99;
+    var flameInRange = hasFlame && currentDistance >= 2 && currentDistance <= 8;
     if (forCombat == true) {
-        var currentDistance = getCellDistance(getCell(), targetEnemyCell);
         debugW("MAGIC FUNC: Position check - distance=" + currentDistance + ", forCombat=" + forCombat);
-        if (currentDistance < 2 || currentDistance > 8) {
-            debugW("MAGIC FUNC: Position invalid for FLAME_THROWER (range 2-8), returning null");
-            return null; // FLAME_THROWER range 2-8
+        if (!flameInRange) {
+            debugW("MAGIC FUNC: FLAME out of range now; will still consider DESTROYER/poisons");
         }
     }
     
@@ -967,100 +984,131 @@ function buildMagicScenario(weapons, chips, availableTP, forCombat) {
         debugW("MAGIC EFFECTS: enemy=" + primaryEnemy + ", hasDoT=" + enemyHasDoT + " (" + dotTurnsLeft + " turns), hasDebuff=" + enemyHasStrengthDebuff + " (" + debuffTurnsLeft + " turns)");
     }
     
-    // Build dynamic scenarios based on enemy effects
+    // Build dynamic scenarios based on enemy effects, in this order:
+    // 1) DESTROYER (debuff), 2) DoT (FLAME/poison), 3) Healing (added later), 4) simple backups
     var scenarios = [];
 
-    // High TP scenarios (17-18 TP)
-    if (!enemyHasDoT || dotTurnsLeft <= 1) {
-        // Priority: Apply DoT if missing or expiring soon
-        // Check AoE self-damage for TOXIN before adding scenario
-        if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
-            push(scenarios, {tp: 17, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_TOXIN]});
-        } else {
-            debugW("MAGIC SAFETY: Skipping TOXIN combo - would hit self at distance " + getCellDistance(getCell(), targetEnemyCell));
-            // Use VENOM as safer alternative
-            push(scenarios, {tp: 17, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM]});
-        }
-        push(scenarios, {tp: 16, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM]});
-    }
-    
+    // 1) DESTROYER-first options (apply strength debuff before DoT)
     if (!enemyHasStrengthDebuff || debuffTurnsLeft <= 1) {
-        // Priority: Apply strength debuff if missing or expiring soon  
-        push(scenarios, {tp: 18, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, WEAPON_DESTROYER]});
+        // High TP: double DESTROYER or DESTROYER + chip
+        push(scenarios, {tp: 12, actions: [WEAPON_DESTROYER, WEAPON_DESTROYER]});
+        push(scenarios, {tp: 10, actions: [WEAPON_DESTROYER, CHIP_LIGHTNING]});
+        push(scenarios, {tp: 6,  actions: [WEAPON_DESTROYER]});
     }
-    
-    // Always include backup scenarios
-    push(scenarios, {tp: 15, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_SPARK]});
-    push(scenarios, {tp: 12, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER]});
-    
-    // Medium TP scenarios (9-13 TP) - intelligent alternation
-    if (!enemyHasDoT || dotTurnsLeft <= 1) {
-        // Check AoE self-damage for TOXIN before adding scenario
-        if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
-            push(scenarios, {tp: 11, actions: [WEAPON_FLAME_THROWER, CHIP_TOXIN]});
-        } else {
-            debugW("MAGIC SAFETY: Skipping medium TP TOXIN combo - would hit self");
-            // Use VENOM as safer alternative
-            push(scenarios, {tp: 11, actions: [WEAPON_FLAME_THROWER, CHIP_VENOM]});
-        }
-        push(scenarios, {tp: 10, actions: [WEAPON_FLAME_THROWER, CHIP_VENOM]});
-    }
-    
-    if (!enemyHasStrengthDebuff || debuffTurnsLeft <= 1) {
-        push(scenarios, {tp: 13, actions: [WEAPON_FLAME_THROWER, WEAPON_DESTROYER]});
-    }
-    
-    push(scenarios, {tp: 9, actions: [WEAPON_FLAME_THROWER, CHIP_SPARK]});
-    
-    // Low TP scenarios (3-6 TP) - single actions based on priority
-    push(scenarios, {tp: 6, actions: [WEAPON_FLAME_THROWER]});
 
+    // 2) DoT options (FLAME + poison)
     if (!enemyHasDoT || dotTurnsLeft <= 1) {
-        // Check AoE self-damage for TOXIN before adding solo chip scenario
+        // High TP: double FLAME + poison
+        if (flameInRange) {
+            if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
+                push(scenarios, {tp: 17, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_TOXIN]});
+            } else {
+                push(scenarios, {tp: 17, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM]});
+            }
+            push(scenarios, {tp: 16, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_VENOM]});
+        }
+
+        // Medium TP: single FLAME + poison
+        if (flameInRange) {
+            if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
+                push(scenarios, {tp: 11, actions: [WEAPON_FLAME_THROWER, CHIP_TOXIN]});
+            } else {
+                push(scenarios, {tp: 11, actions: [WEAPON_FLAME_THROWER, CHIP_VENOM]});
+            }
+            push(scenarios, {tp: 10, actions: [WEAPON_FLAME_THROWER, CHIP_VENOM]});
+        }
+
+        // Low TP DoT chips
         if (isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
             push(scenarios, {tp: 5, actions: [CHIP_TOXIN]});
         } else {
-            debugW("MAGIC SAFETY: Skipping solo TOXIN - would hit self, using VENOM instead");
-            // Use VENOM as safer alternative for same TP cost as backup scenario
             push(scenarios, {tp: 5, actions: [CHIP_VENOM]});
         }
         push(scenarios, {tp: 4, actions: [CHIP_VENOM]});
     }
-    
-    if (!enemyHasStrengthDebuff || debuffTurnsLeft <= 1) {
-        push(scenarios, {tp: 6, actions: [WEAPON_DESTROYER]});
+
+    // 2b) DOUBLE_GUN options (stacking poison, cheap TP)
+    if (inArray(weapons, WEAPON_DOUBLE_GUN) && lineOfSight(getCell(), targetEnemyCell)) {
+        var dgDist = getCellDistance(getCell(), targetEnemyCell);
+        if (dgDist >= 2 && dgDist <= 7) {
+            // Prefer triple when TP allows, else double/single
+            push(scenarios, {tp: 12, actions: [WEAPON_DOUBLE_GUN, WEAPON_DOUBLE_GUN, WEAPON_DOUBLE_GUN]});
+            push(scenarios, {tp: 8,  actions: [WEAPON_DOUBLE_GUN, WEAPON_DOUBLE_GUN]});
+            push(scenarios, {tp: 4,  actions: [WEAPON_DOUBLE_GUN]});
+        }
+    }
+
+    // Backup FLAME-only shots (only when FLAME is in range)
+    if (flameInRange) {
+        push(scenarios, {tp: 15, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER, CHIP_SPARK]});
+        push(scenarios, {tp: 12, actions: [WEAPON_FLAME_THROWER, WEAPON_FLAME_THROWER]});
+        push(scenarios, {tp: 9,  actions: [WEAPON_FLAME_THROWER, CHIP_SPARK]});
+        push(scenarios, {tp: 6,  actions: [WEAPON_FLAME_THROWER]});
     }
     
+    // Final cheap fallback
     push(scenarios, {tp: 3, actions: [CHIP_SPARK]});
 
-    // HEALING SCENARIOS: Add healing when at safe distance and healing needed
-    var safeDistance = (targetEnemyCell != null) ? (getCellDistance(getCell(), targetEnemyCell) >= 8) : true;
+    // HEALING SCENARIOS: Gate strictly — only when truly needed or no offense possible
+    var safeDistance = (targetEnemyCell != null) ? (getCellDistance(getCell(), targetEnemyCell) >= 9) : true;
     var hpPercent = myHP / myMaxHP;
     var healingPriority = getHealingPriority();
 
-    if (safeDistance && healingPriority >= 20) {
-        debugW("MAGIC HEALING SCENARIOS: Adding healing options, HP=" + floor(hpPercent * 100) + "%, Priority=" + healingPriority);
+    // Determine if an offensive action is possible from current cell
+    var offenseAvailable = false;
+    var curCell = getCell();
+    if (targetEnemyCell != null) {
+        var distNow = getCellDistance(curCell, targetEnemyCell);
+        var weapsNow = getWeapons();
+        // FLAME/DESTROYER checks (alignment + LoS for line)
+        if (!offenseAvailable && inArray(weapsNow, WEAPON_FLAME_THROWER)) {
+            if (distNow >= 2 && distNow <= 8 && lineOfSight(curCell, targetEnemyCell) && isOnSameLine(curCell, targetEnemyCell)) {
+                offenseAvailable = true;
+            }
+        }
+        if (!offenseAvailable && inArray(weapsNow, WEAPON_DESTROYER)) {
+            if (distNow >= 1 && distNow <= 6 && lineOfSight(curCell, targetEnemyCell)) {
+                offenseAvailable = true;
+            }
+        }
+        // Poison chips as fallback offense
+        var chipsNow = chips;
+        if (!offenseAvailable && inArray(chipsNow, CHIP_TOXIN) && chipCooldowns[CHIP_TOXIN] <= 0) {
+            if (distNow <= 7 && isChipSafeToUse(CHIP_TOXIN, targetEnemyCell)) {
+                offenseAvailable = true;
+            }
+        }
+        if (!offenseAvailable && inArray(chipsNow, CHIP_VENOM) && chipCooldowns[CHIP_VENOM] <= 0) {
+            if (distNow <= 10) {
+                offenseAvailable = true;
+            }
+        }
+    }
+
+    // Only add healing if: critically low HP OR (no offense available and safe)
+    if ((hpPercent < 0.35) || (!offenseAvailable && safeDistance && healingPriority >= 20 && hpPercent < 0.60)) {
+        debugW("MAGIC HEALING SCENARIOS: Adding healing options, HP=" + floor(hpPercent * 100) + "%, Priority=" + healingPriority + ", offenseAvailable=" + offenseAvailable);
 
         // Critical healing: REGENERATION (once per fight)
-        if (hpPercent < 0.3 && !regenerationUsed && inArray(chips, CHIP_REGENERATION)) {
+        if (hpPercent < 0.35 && !regenerationUsed && inArray(chips, CHIP_REGENERATION)) {
             push(scenarios, {tp: 8, actions: [CHIP_REGENERATION]});
             debugW("MAGIC HEALING: Added REGENERATION scenario for critical HP");
         }
 
         // Moderate healing: REMISSION (repeatable, 1 turn CD)
-        if (hpPercent < 0.5 && isDefensiveChipAvailable(CHIP_REMISSION) && inArray(chips, CHIP_REMISSION)) {
+        if (hpPercent < 0.50 && isDefensiveChipAvailable(CHIP_REMISSION) && inArray(chips, CHIP_REMISSION)) {
             push(scenarios, {tp: 5, actions: [CHIP_REMISSION]});
             debugW("MAGIC HEALING: Added REMISSION scenario for moderate HP");
         }
 
-        // Sustained healing: VACCINE (HoT, 4 turn CD)
-        if (hpPercent < 0.7 && isDefensiveChipAvailable(CHIP_VACCINE) && inArray(chips, CHIP_VACCINE)) {
+        // Sustained healing: VACCINE (HoT, 4 turn CD) — only below 45%
+        if (hpPercent < 0.45 && isDefensiveChipAvailable(CHIP_VACCINE) && inArray(chips, CHIP_VACCINE)) {
             push(scenarios, {tp: 6, actions: [CHIP_VACCINE]});
             debugW("MAGIC HEALING: Added VACCINE scenario for sustained healing");
         }
 
         // Combo healing scenarios for high TP situations
-        if (hpPercent < 0.4) {
+        if (hpPercent < 0.40) {
             // Critical combo: REGENERATION + REMISSION (once per fight)
             if (!regenerationUsed && isDefensiveChipAvailable(CHIP_REMISSION) &&
                 inArray(chips, CHIP_REGENERATION) && inArray(chips, CHIP_REMISSION)) {
@@ -1068,7 +1116,7 @@ function buildMagicScenario(weapons, chips, availableTP, forCombat) {
                 debugW("MAGIC HEALING: Added REGENERATION + REMISSION combo for critical HP");
             }
 
-            // Sustain combo: REMISSION + VACCINE
+            // Sustain combo: REMISSION + VACCINE combo for sustained healing
             if (isDefensiveChipAvailable(CHIP_REMISSION) && isDefensiveChipAvailable(CHIP_VACCINE) &&
                 inArray(chips, CHIP_REMISSION) && inArray(chips, CHIP_VACCINE)) {
                 push(scenarios, {tp: 11, actions: [CHIP_REMISSION, CHIP_VACCINE]});
@@ -1115,7 +1163,10 @@ function buildMagicScenario(weapons, chips, availableTP, forCombat) {
             }
             
             if (canExecute) {
-                debugW("MAGIC BUILD: Selected scenario [" + join(scenario.actions, ", ") + "] for " + scenario.tp + " TP");
+                if (debugEnabled) {
+                    var head = (count(scenario.actions) > 0) ? scenario.actions[0] : -1;
+                    debugW("MAGIC BUILD: Selected scenario [" + join(scenario.actions, ", ") + "] (head=" + head + ", TP=" + scenario.tp + ")");
+                }
                 return scenario.actions;
             }
         }

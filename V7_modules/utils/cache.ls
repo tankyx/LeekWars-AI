@@ -4,6 +4,7 @@
 function clearCaches() {
     pathCache = [:];
     losCache = [:];
+    eidCache = [:];
 }
 
 function getCacheStats() {

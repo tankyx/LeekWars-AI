@@ -61,14 +61,18 @@ global enemyMP = 0;
 // === TACTICAL STATE ===
 global damageZones = [:];           // Map[cell -> damage_potential] (legacy)
 global currentDamageArray = [];     // NEW: Enhanced damage zones with enemy associations [cell, damage, weaponId, enemyEntity]
+global currentWeaponDamageArray = []; // Separated: weapon-only damage zones
+global currentChipDamageArray = [];   // Separated: chip-only damage zones
+global damageArrayTurn = -1;        // Turn number when currentDamageArray was computed
 global currentTarget = null;        // Current enemy target (legacy)
 global emergencyMode = false;       // Panic mode flag
 global debugEnabled = false;        // Debug output control - DISABLED for production (only errors/issues)
+global sparkUsesThisTurn = 0;       // Limit SPARK spam per turn
 
 // === CONSTANTS ===
 global EMERGENCY_HP_THRESHOLD = 0.25;  // Enter emergency mode below 25% HP
 global PEEK_COVER_BONUS = 0.1;         // 10% damage bonus per adjacent cover
-global MAX_PATHFIND_CELLS = 10;        // Limit A* search to top 10 damage cells
+global MAX_PATHFIND_CELLS = 20;        // Limit A* search to top 20 damage cells
 
 // === DANGEROUS ENEMY TARGETING CONSTANTS ===
 global THREAT_WEIGHT = 3;              // Weight for enemy threat in priority calculation
@@ -92,6 +96,7 @@ global pathCache = [:];             // Simple path caching
 global losCache = [:];              // Line of sight cache
 // Removed weapon tracking to avoid LeekScript variable conflicts
 global weaponSwitchCache = [:];     // Cache weapon compatibility checks
+global eidCache = [:];              // Cache EID per cell for this turn
 
 // === CHIP COOLDOWN TRACKING ===
 global chipCooldowns = [:];         // Map[chipId -> turnsRemaining]
@@ -113,6 +118,7 @@ function updateGameState() {
     
     // Initialize weapon usage tracking for new turn
     initWeaponUsageTracking();
+    sparkUsesThisTurn = 0; // reset SPARK usage counter
     
     // CRITICAL DEBUG: Verify we got our own position
     debugW("GAME STATE: Our entity=" + myLeek + ", our cell=" + myCell);
@@ -300,6 +306,7 @@ function getWeaponMaxUses(weapon) {
     if (weapon == WEAPON_DESTROYER) return 2;
     if (weapon == WEAPON_FLAME_THROWER) return 2;
     if (weapon == WEAPON_ELECTRISOR) return 2;
+    if (weapon == WEAPON_DOUBLE_GUN) return 3; // New: Double Gun has 3 uses/turn
     return 0; // 0 = unlimited uses
 }
 
@@ -358,10 +365,14 @@ function canWeaponReachTarget(weapon, fromCell, targetCell) {
         return false;
     }
     
-    // Check alignment for laser weapons
-    if (weapon == WEAPON_M_LASER || weapon == WEAPON_B_LASER || weapon == WEAPON_LASER || weapon == WEAPON_FLAME_THROWER) {
-        if (!isOnSameLine(fromCell, targetCell)) {
-            return false;
+    // Check alignment by launch type
+    var lt = getWeaponLaunchType(weapon);
+    if (lt == LAUNCH_TYPE_LINE || lt == LAUNCH_TYPE_LINE_INVERTED) {
+        if (!isOnSameLine(fromCell, targetCell)) { return false; }
+    } else if (lt == LAUNCH_TYPE_STAR || lt == LAUNCH_TYPE_STAR_INVERTED) {
+        // Enhanced Lightninger is NOT star pattern; only enforce for regular Lightninger
+        if (weapon != WEAPON_ENHANCED_LIGHTNINGER) {
+            if (!isValidStarPattern(fromCell, targetCell)) { return false; }
         }
     }
     
@@ -711,4 +722,3 @@ function shouldUseHealingChip(chip, hpThreshold) {
 
     return true; // All checks passed
 }
-

@@ -101,7 +101,7 @@ function executeNormalTurn() {
     // Clear previous turn's marks
     clearMarks();
     
-    // Step 1: Calculate multi-enemy damage zones with enemy associations
+    // Step 1: Calculate multi-enemy damage zones with enemy associations (compute once per turn)
     var damageArray = [];
     
     // SAFE: Damage calculation with defensive checks
@@ -112,7 +112,12 @@ function executeNormalTurn() {
     
     if (allEnemies != null && count(allEnemies) > 0) {
         debug("DAMAGE CALC: Starting with " + count(allEnemies) + " enemies");
-        damageArray = calculateMultiEnemyDamageZones();
+        if (damageArrayTurn != getTurn() || currentDamageArray == null || count(currentDamageArray) == 0) {
+            damageArray = calculateMultiEnemyDamageZones();
+            damageArrayTurn = getTurn();
+        } else {
+            damageArray = currentDamageArray; // reuse cached zones for this turn
+        }
         debug("DAMAGE CALC: Completed with " + count(damageArray) + " zones");
         
         // FALLBACK: If calculation returned empty, create basic zones
@@ -237,21 +242,29 @@ function executeNormalTurn() {
     // Step 2: Check for immediate close-range combat (KATANA priority)
     debugW("STEP 2: Checking immediate combat opportunity");
     var immediateAttack = checkImmediateCombatOpportunity();
+    var immediateWeapon = null;
+    var immediateDamage = 0;
     if (immediateAttack != null && count(immediateAttack) > 0 && immediateAttack[0] != null) {
-        debugW("IMMEDIATE ATTACK: Found weapon " + immediateAttack[0] + " for immediate use");
+        immediateWeapon = immediateAttack[0];
+        debugW("IMMEDIATE ATTACK: Found weapon " + immediateWeapon + " for immediate use");
+        // Estimate simple damage from current cell for comparison against path/tele plans
+        var tgt = (primaryTarget != null) ? getCell(primaryTarget) : null;
+        if (tgt != null) {
+            var effects = getWeaponEffects(immediateWeapon);
+            var base = 0;
+            for (var e = 0; e < count(effects); e++) {
+                if (effects[e][0] == 1) { base = (effects[e][1] + effects[e][2]) / 2; break; }
+            }
+            if (base == 0) { base = getWeaponCost(immediateWeapon) * 10; }
+            var switchCost = (getWeapon() != immediateWeapon) ? 1 : 0;
+            var tpAvail = max(0, getTP() - switchCost);
+            var uses = floor(tpAvail / getWeaponCost(immediateWeapon));
+            var maxUses = getWeaponMaxUses(immediateWeapon);
+            if (maxUses > 0) uses = min(uses, maxUses);
+            immediateDamage = floor(base * (1 + myStrength / 100.0) * uses + 0.5);
+        }
     } else {
         debugW("IMMEDIATE ATTACK: None found, proceeding to pathfinding");
-    }
-    
-    if (immediateAttack != null && count(immediateAttack) > 0 && immediateAttack[0] != null) {
-        // Use peek-a-boo for immediate attacks too - better resource utilization
-        tryPeekABooCombat(myCell, immediateAttack[0]); // immediateAttack[0] = weaponId
-        
-        // Step 2b: Hide and seek after combat (if MP remaining)
-        if (getMP() > 0) {
-            tryPostCombatHideAndSeek();
-        }
-        return; // Skip movement, we attacked from current position
     }
     
     // Step 3: Smart teleportation when movement fails or enemy needs finishing
@@ -274,10 +287,20 @@ function executeNormalTurn() {
     if (enemyNeedsFinishing || count(damageArray) < 3) {
         shouldConsiderTeleport = true;
     }
+    // Do not consider teleport in the first two turns
+    if (getTurn() <= 2) {
+        shouldConsiderTeleport = false;
+    }
     
     // Step 4: Find optimal path using A* with damage array
     debugW("STEP 4: Starting pathfinding with " + count(damageArray) + " damage zones");
-    var pathResult = findOptimalPathFromArray(myCell, damageArray);
+    // Use dual-map pathfinding when available (weapon-first, then chips)
+    var pathResult = null;
+    if (currentWeaponDamageArray != null && currentChipDamageArray != null && (count(currentWeaponDamageArray) + count(currentChipDamageArray)) > 0) {
+        pathResult = findOptimalPathFromDualArrays(myCell, currentWeaponDamageArray, currentChipDamageArray);
+    } else {
+        pathResult = findOptimalPathFromArray(myCell, damageArray);
+    }
     debugW("STEP 4: Pathfinding completed, result=" + (pathResult == null ? "NULL" : "SUCCESS"));
     if (debugEnabled) {
         if (pathResult == null) {
@@ -432,6 +455,25 @@ function executeNormalTurn() {
     // Step 5: Execute movement (if pathfinding found a valid path)
     debugW("STEP 5: Checking movement execution, pathResult=" + (pathResult == null ? "NULL" : "EXISTS"));
     if (pathResult != null) {
+        // Consider teleport+movement alternative if it yields immediate damage
+        if (getTurn() > 2) {
+            var teleAlt = tryTeleportMovementFallback(myCell, currentDamageArray);
+            if (teleAlt != null) {
+                var moveDamage = (count(pathResult) >= 3) ? pathResult[2] : 0;
+                var teleDamage = (count(teleAlt) >= 3) ? teleAlt[2] : 0;
+                if (teleDamage > moveDamage) {
+                    pathResult = teleAlt;
+                }
+            }
+        }
+        // Compare against immediate attack option; prefer whichever yields higher damage this turn
+        if (immediateWeapon != null) {
+            var planDamage = (count(pathResult) >= 3) ? pathResult[2] : 0;
+            if (immediateDamage >= planDamage) {
+                // Stick to immediate attack: build a no-move pathResult carrying the weapon
+                pathResult = [myCell, [myCell], immediateDamage, immediateWeapon, true, 0, false];
+            }
+        }
         // Check if pathResult has path property and it's not empty
         var hasValidPath = false;
         if (pathResult != null && count(pathResult) >= 7 && pathResult[1] != null && count(pathResult[1]) >= 1) {
@@ -467,16 +509,29 @@ function executeNormalTurn() {
     if (pathResult != null && count(pathResult) >= 7 && pathResult[3] != null) {
         recommendedWeapon = pathResult[3]; // pathResult[3] = weaponId
     }
-    debugW("STEP 6: recommendedWeapon=" + recommendedWeapon);
     
-    // FALLBACK: If no recommended weapon but we have damage zones, use best available weapon
-    if (recommendedWeapon == null && count(damageArray) > 0) {
-        var weapons = getWeapons();
-        if (weapons != null && count(weapons) > 0) {
-            recommendedWeapon = weapons[0]; // Use first available weapon
-            debug("FALLBACK WEAPON: Using " + recommendedWeapon + " since pathResult weapon is null");
+    // If no weapon recommended by pathfinding, try to find a weapon that can attack NOW
+    if (recommendedWeapon == null) {
+        var bestW = null;
+        var bestScore = -1;
+        var weaponsNow = getWeapons();
+        var tgt = (primaryTarget != null) ? primaryTarget : ((count(allEnemies)>0)? allEnemies[0] : null);
+        var tgtCell = (tgt != null) ? getCell(tgt) : null;
+        if (weaponsNow != null && tgtCell != null) {
+            for (var wi = 0; wi < count(weaponsNow); wi++) {
+                var w = weaponsNow[wi];
+                var switchCost = (getWeapon() != w) ? 1 : 0;
+                var tpAvail = getTP() - switchCost;
+                if (tpAvail < getWeaponCost(w)) continue;
+                if (!canWeaponReachTarget(w, myCell, tgtCell)) continue;
+                var score = getWeaponCost(w); // simple proxy for damage, avoids heavy calc
+                if (score > bestScore) { bestScore = score; bestW = w; }
+            }
         }
+        recommendedWeapon = bestW;
     }
+    
+    debugW("STEP 6: recommendedWeapon=" + recommendedWeapon);
     
     if (debugEnabled) {
         debug("COMBAT PHASE: Position=" + myCell + ", TP=" + myTP + ", MP=" + myMP + ", RecommendedWeapon=" + recommendedWeapon);
@@ -488,36 +543,34 @@ function executeNormalTurn() {
         debug("DAMAGE ZONES: Available=" + count(currentDamageArray));
     }
     
-    // Step 6: Enhanced Peek-a-Boo Combat Loop (ACTIVATED)
-    // This replaces the single executeCombat call with iterative attack-reposition cycles
-    if (debugEnabled) {
-        debug("EXECUTING PEEK-A-BOO: weapon=" + recommendedWeapon + ", fromCell=" + myCell);
-    }
+    // Step 6: Combat
+    if (debugEnabled) { debug("EXECUTING COMBAT: weapon=" + recommendedWeapon + ", fromCell=" + myCell); }
     
-    // GUARANTEED COMBAT: Always try combat if we have enemies and TP
-    // Refresh global TP variable before combat
+    // GUARANTEED COMBAT: Engage only if we have an actual shot; otherwise try offensive teleport
     myTP = getTP();
     debugW("STEP 6: Combat check - enemies=" + count(allEnemies) + ", TP=" + getTP() + ", myTP=" + myTP);
     if (count(allEnemies) > 0 && getTP() >= 3) {
-        if (recommendedWeapon != null) {
-            debugW("COMBAT: Using recommended weapon " + recommendedWeapon);
+        if (recommendedWeapon == null && inArray(getChips(), CHIP_TELEPORTATION)) {
+            var teleAttempt = attemptOffensiveTeleport(getTP());
+            if (teleAttempt[1]) {
+                // Teleport + attack executed by combat layer
+                myCell = getCell();
+                myTP = getTP();
+                if (debugEnabled) { debugW("COMBAT: Offensive teleport executed"); }
+            } else {
+                debugW("COMBAT: Skipping combat (no immediate shot and teleport not viable)");
+            }
         } else {
-            debugW("COMBAT: No recommended weapon, using fallback");
+            // Execute combat once; scenario builder will pick viable actions
+            debugW("COMBAT: Calling executeCombat with weapon=" + recommendedWeapon);
+            executeCombat(myCell, recommendedWeapon);
+            debugW("COMBAT: executeCombat completed");
         }
-        debugW("COMBAT: Calling tryPeekABooCombat");
-        tryPeekABooCombat(myCell, recommendedWeapon);
-        debugW("COMBAT: tryPeekABooCombat completed");
     } else {
         debugW("COMBAT IMPOSSIBLE: enemies=" + count(allEnemies) + ", TP=" + getTP());
     }
     
-    // Step 7: Final Hide and Seek tactics if MP remaining
-    if (getMP() > 0) {
-        if (debugEnabled) {
-            debug("HIDE-AND-SEEK: Executing post-combat repositioning");
-        }
-        tryPostCombatHideAndSeek();
-    }
+    // Step 7: No extra hide; movement and combat already completed.
     
     if (debugEnabled) {
         debug("TURN COMPLETE: Final TP=" + getTP() + ", Final MP=" + getMP());
@@ -786,185 +839,9 @@ function checkImmediateCombatOpportunity() {
     return null;
 }
 
-// === HIDE AND SEEK TACTICS ===
-function tryPostCombatHideAndSeek() {
-    var remainingMP = getMP();
-    if (remainingMP <= 0) {
-        if (debugEnabled) {
-            debug("HIDE & SEEK: No MP available");
-        }
-        return;
-    }
-    
-    if (debugEnabled) {
-        debug("HIDE & SEEK: Looking for hiding spots with " + remainingMP + " MP");
-    }
-    
-    // Find cells that break LOS with all alive enemies within MP range
-    var hideCells = [];
-    for (var dist = 1; dist <= remainingMP; dist++) {
-        var cells = getCellsAtExactDistance(myCell, dist);
-        for (var i = 0; i < count(cells); i++) {
-            var cell = cells[i];
-            if (getCellContent(cell) == CELL_EMPTY) {
-                // Check if this cell breaks LOS with all alive enemies
-                var breaksLOS = true;
-                for (var e = 0; e < count(allEnemies); e++) {
-                    if (getLife(allEnemies[e]) > 0) {
-                        if (checkLineOfSight(cell, getCell(allEnemies[e]))) {
-                            breaksLOS = false;
-                            break;
-                        }
-                    }
-                }
-                if (breaksLOS) {
-                    push(hideCells, cell);
-                }
-            }
-        }
-    }
-    
-    if (count(hideCells) == 0) {
-        if (debugEnabled) {
-            debug("HIDE & SEEK: No hiding spots found");
-        }
-        return;
-    }
-    
-    if (debugEnabled) {
-        debug("HIDE & SEEK: Found " + count(hideCells) + " potential hiding spots");
-    }
-    
-    // Pick best hiding spot (with most cover and distance from enemies)
-    var bestHide = hideCells[0];
-    var bestScore = 0;
-    
-    for (var i = 0; i < count(hideCells); i++) {
-        var cell = hideCells[i];
-        var score = 0;
-        
-        // Count adjacent obstacles for cover
-        var adjacentCells = getCellsAtExactDistance(cell, 1);
-        for (var j = 0; j < count(adjacentCells); j++) {
-            if (getCellContent(adjacentCells[j]) == CELL_OBSTACLE) {
-                score += 10; // Bonus for cover
-            }
-        }
-        
-        // Prefer cells farther from all enemies
-        var totalDistance = 0;
-        for (var e = 0; e < count(allEnemies); e++) {
-            if (getLife(allEnemies[e]) > 0) {
-                totalDistance += getCellDistance(cell, getCell(allEnemies[e]));
-            }
-        }
-        score += totalDistance;
-        
-        if (score > bestScore) {
-            bestScore = score;
-            bestHide = cell;
-        }
-    }
-    
-    // Move to hiding spot
-    var mpBefore = getMP();
-    var result = moveTowardCells([bestHide], getMP());
-    var mpUsed = mpBefore - getMP();
-    
-    if (debugEnabled) {
-        debug("HIDE & SEEK: Moved to cover at " + getCell() + " (used " + mpUsed + " MP, score: " + bestScore + ")");
-    }
-}
+// (Hide and seek removed)
 
-// === ENHANCED PEEK-A-BOO COMBAT LOOP ===
-function tryPeekABooCombat(startingFromCell, recommendedWeapon) {
-    debugW("PEEK-A-BOO: Starting with weapon=" + recommendedWeapon + ", enemies=" + count(allEnemies) + ", TP=" + getTP());
-    if (count(allEnemies) == 0) {
-        debugW("PEEK-A-BOO: No enemies available");
-        return;
-    }
-    
-    // If no recommended weapon, find the best available weapon
-    if (recommendedWeapon == null) {
-        var weapons = getWeapons();
-        if (weapons != null && count(weapons) > 0) {
-            recommendedWeapon = weapons[0]; // Use first available weapon as fallback
-            if (debugEnabled) {
-                debug("PEEK-A-BOO: No recommended weapon, using fallback weapon " + recommendedWeapon);
-            }
-        } else {
-            if (debugEnabled) {
-                debug("PEEK-A-BOO: No weapons available");
-            }
-            return;
-        }
-    }
-    
-    var cycleCount = 0;
-    var maxCycles = 4; // Maximum peek-a-boo cycles per turn
-    var initialTP = getTP();
-    var initialMP = getMP();
-    
-    if (debugEnabled) {
-        debug("PEEK-A-BOO: Starting with " + initialTP + " TP, " + initialMP + " MP, weapon=" + recommendedWeapon);
-    }
-    
-    // Guarantee at least one combat execution, then peek-a-boo if resources allow
-    var minCombatExecuted = false;
-    while ((cycleCount < 2 && getTP() >= 3) || !minCombatExecuted) { // Ensure at least one combat
-        cycleCount++;
-        
-        if (debugEnabled) {
-            debug("PEEK-A-BOO CYCLE " + cycleCount + ": Starting with TP=" + getTP() + ", MP=" + getMP());
-        }
-        
-        // Phase 1: Execute combat from current position
-        var tpBeforeCombat = getTP();
-        debugW("PEEK-A-BOO: Calling executeCombat with weapon=" + recommendedWeapon + ", TP=" + tpBeforeCombat);
-        executeCombat(getCell(), recommendedWeapon);
-        debugW("PEEK-A-BOO: executeCombat completed");
-        minCombatExecuted = true; // Mark that we've executed at least one combat
-        var tpAfterCombat = getTP();
-        var tpUsedInCombat = tpBeforeCombat - tpAfterCombat;
-        
-        if (debugEnabled) {
-            debug("PEEK-A-BOO CYCLE " + cycleCount + ": After combat TP=" + getTP() + ", MP=" + getMP() + ", TP used=" + tpUsedInCombat);
-        }
-        
-        // If we used significant TP in combat (successful attacks), consider ending peek-a-boo
-        if (tpUsedInCombat >= 7) { // If we used a weapon's worth of TP
-            if (debugEnabled) {
-                debug("PEEK-A-BOO: Significant combat executed (" + tpUsedInCombat + " TP), ending to prevent waste");
-            }
-            break;
-        }
-        
-        // Phase 2: Try to reposition for next cycle (only if we have enough resources)
-        if (getTP() >= 3 && getMP() >= 2 && cycleCount < 2) { // Lowered threshold
-            var repositioned = repositionForNextAttack();
-            if (!repositioned) {
-                // If we can't reposition beneficially, end peek-a-boo early
-                if (debugEnabled) {
-                    debug("PEEK-A-BOO CYCLE " + cycleCount + ": No beneficial reposition, ending");
-                }
-                break;
-            }
-        } else {
-            // Not enough resources for another cycle
-            if (debugEnabled) {
-                debug("PEEK-A-BOO CYCLE " + cycleCount + ": Insufficient resources for next cycle");
-            }
-            break;
-        }
-    }
-    
-    var totalTPUsed = initialTP - getTP();
-    var totalMPUsed = initialMP - getMP();
-    
-    if (debugEnabled) {
-        debug("PEEK-A-BOO COMPLETE: " + cycleCount + " cycles, used " + totalTPUsed + " TP, " + totalMPUsed + " MP");
-    }
-}
+// (Peekaboo removed)
 
 function shouldContinuePeekABoo() {
     // Don't continue if no enemies left
@@ -998,112 +875,7 @@ function shouldContinuePeekABoo() {
     return false;
 }
 
-function repositionForNextAttack() {
-    var currentMP = getMP();
-    if (currentMP <= 0) {
-        return false;
-    }
-    
-    var currentPos = getCell();
-    var bestPosition = null;
-    var bestScore = -1;
-    var reserveMP = 1; // Keep 1 MP for final hide-and-seek if needed
-    var usableMP = currentMP - reserveMP;
-    
-    if (usableMP <= 0) {
-        return false;
-    }
-    
-    if (debugEnabled) {
-        debug("REPOSITION: Evaluating positions within " + usableMP + " MP from " + currentPos);
-    }
-    
-    // Evaluate positions within our MP range
-    for (var dist = 1; dist <= usableMP; dist++) {
-        var cells = getCellsAtExactDistance(currentPos, dist);
-        for (var i = 0; i < count(cells); i++) {
-            var cell = cells[i];
-            if (getCellContent(cell) == CELL_EMPTY) {
-                var score = evaluatePositionForPeekABoo(cell);
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestPosition = cell;
-                }
-            }
-        }
-    }
-    
-    // Only move if we found a significantly better position
-    if (bestPosition != null && bestScore > 10) {
-        var mpBefore = getMP();
-        var result = moveTowardCells([bestPosition], usableMP);
-        var mpUsed = mpBefore - getMP();
-        
-        if (debugEnabled) {
-            debug("REPOSITION: Moved to " + getCell() + " (score: " + bestScore + ", used " + mpUsed + " MP)");
-        }
-        return true;
-    }
-    
-    return false;
-}
-
-function evaluatePositionForPeekABoo(cell) {
-    var score = 0;
-    
-    // Factor 1: Can we attack enemies from this position?
-    var attackPotential = 0;
-    var weapons = getWeapons();
-    
-    for (var w = 0; w < count(weapons); w++) {
-        var weapon = weapons[w];
-        if (getTP() >= getWeaponCost(weapon)) {
-            for (var e = 0; e < count(allEnemies); e++) {
-                var targetEnemy = allEnemies[e];
-                if (getLife(targetEnemy) > 0) {
-                    var targetEnemyCell = getCell(targetEnemy);
-                    var dist = getCellDistance(cell, targetEnemyCell);
-                    // Use simplified range check based on common weapon ranges
-                    var canAttack = false;
-                    if (weapon == WEAPON_RIFLE && dist >= 7 && dist <= 9) canAttack = true;
-                    else if (weapon == WEAPON_M_LASER && dist >= 5 && dist <= 12) canAttack = true;
-                    else if (weapon == WEAPON_KATANA && dist == 1) canAttack = true;
-                    else if (weapon == WEAPON_ENHANCED_LIGHTNINGER && dist >= 6 && dist <= 10) canAttack = true;
-                    else if (dist >= 1 && dist <= 10) canAttack = true; // Fallback for other weapons
-                    
-                    if (canAttack) {
-                        attackPotential += 50; // Base value for being able to attack
-                    }
-                }
-            }
-        }
-    }
-    score += attackPotential;
-    
-    // Factor 2: Safety - distance from enemies
-    var safetyScore = 0;
-    for (var e = 0; e < count(allEnemies); e++) {
-        var targetEnemy = allEnemies[e];
-        if (getLife(targetEnemy) > 0) {
-            var targetEnemyCell = getCell(targetEnemy);
-            var dist = getCellDistance(cell, targetEnemyCell);
-            safetyScore += dist; // Farther is safer
-        }
-    }
-    score += safetyScore;
-    
-    // Factor 3: Cover bonus - adjacent obstacles
-    var coverScore = 0;
-    var adjacentCells = getCellsAtExactDistance(cell, 1);
-    for (var i = 0; i < count(adjacentCells); i++) {
-        if (getCellContent(adjacentCells[i]) == CELL_OBSTACLE) {
-            coverScore += 15; // Bonus for each adjacent obstacle
-        }
-    }
-    score += coverScore;
-    
-    return score;
-}
+// (Peekaboo reposition and helpers removed)
 
 // Execute main game logic
 debugW("V7 AI STARTING - Turn " + getTurn());

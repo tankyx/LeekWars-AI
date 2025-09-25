@@ -1,85 +1,61 @@
-# Quick Start Guide
+# Quick Start Guide (V7)
 
-## Setup (First Time Only)
+## Setup (First Time)
 
-1. **Clone the repository:**
+1) Clone and enter:
 ```bash
 git clone https://github.com/yourusername/LeekWars-AI.git
 cd LeekWars-AI
 ```
 
-2. **Install dependencies and configure:**
+2) Install dependencies and configure credentials:
 ```bash
-./run.sh
-# Choose option 5 (setup)
+pip3 install -r requirements.txt
+mkdir -p ~/.config/leekwars
+printf '{"username":"YOUR_EMAIL","password":"YOUR_PASSWORD"}' > ~/.config/leekwars/config.json
 ```
 
 ## Daily Usage
 
-### From the LeekWars-AI folder:
-
-**Interactive Menu:**
+Upload V7 to LeekWars:
 ```bash
-./run.sh
+python3 tools/upload_v7.py
 ```
 
-**Direct Commands:**
+Run tests (example opponents: domingo, betalpha, tisma, guj, hachess, rex):
 ```bash
-# Upload V6 to LeekWars
-python3 tools/upload_v6_complete.py
+python3 tools/lw_test_script.py 446029 20 rex
+```
 
-# Test against specific opponent (15 rounds)
-python3 tools/lw_test_script.py 445497 15 rex
-
-# Test against all opponents (5 rounds each)
-for op in hachess rex betalpha tisma guj; do
-    python3 tools/lw_test_script.py 445497 5 $op
+Test all quickly:
+```bash
+for op in domingo betalpha tisma guj hachess rex; do
+  python3 tools/lw_test_script.py 446029 5 $op
 done
+```
+
+Ranked solo fights (example for leek 1):
+```bash
+python3 tools/lw_solo_fights_flexible.py 1 20 --quick
 ```
 
 ## Common Tasks
 
-### After Making Changes
-
-1. **Test locally:**
+After code changes, sanity test and upload:
 ```bash
-python3 tools/lw_test_script.py 445497 3 rex
+python3 tools/lw_test_script.py 446029 3 rex
+python3 tools/upload_v7.py
 ```
 
-2. **Upload to LeekWars:**
-```bash
-python3 tools/upload_v6_complete.py
-```
-
-3. **Push to GitHub:**
+Push to GitHub:
 ```bash
 git add .
-git commit -m "Your commit message"
+git commit -m "Describe your change"
 git push origin main
 ```
 
-### Debugging
-
-View fight details:
-```bash
-python3 tools/lw_get_fight_auth.py FIGHT_ID
-```
-
-## File Structure
-
-- `V6_modules/` - All AI source code
-- `tools/` - Python automation scripts
-- `run.sh` - Interactive management script
-
-## Current Performance
-
-- **Rex (Agile):** 60% win rate
-- **Hachess (Defensive):** 33% win rate
-- **Others:** Testing in progress
-
 ## Troubleshooting
 
-If upload fails:
-1. Check credentials in `~/.config/leekwars/config.json`
-2. Ensure you're in the LeekWars-AI folder
-3. Run `pip3 install -r requirements.txt`
+- Check credentials: `~/.config/leekwars/config.json`
+- Ensure dependencies installed: `pip3 install -r requirements.txt`
+- Logs saved under `fight_logs/<leek_id>/`
