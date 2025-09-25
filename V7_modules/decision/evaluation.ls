@@ -132,6 +132,13 @@ function calculateMultiEnemyDamageZones() {
                 attackPosition = floor(attackPosition + 0.5);
                 if (attackPosition < 0 || attackPosition > 612) continue;
                 
+                // Early-turn cone pruning to save ops: only consider cells within a 90° cone
+                if (getTurn() <= 3) {
+                    if (!isWithinNinetyDegreeCone(myCell, currentEnemyCell, attackPosition)) {
+                        continue;
+                    }
+                }
+                
                 // Always calculate damage - let pathfinding handle reachability
                 var distanceToPosition = getCellDistance(myCell, attackPosition);
                 
@@ -141,7 +148,7 @@ function calculateMultiEnemyDamageZones() {
                 // Damage calculated for position
                 
                 // Check Line of Sight for this position
-                var hasLoS = lineOfSight(attackPosition, currentEnemyCell);
+                var hasLoS = checkLineOfSight(attackPosition, currentEnemyCell);
                 
                 // Store zone if it provides significant damage or movement incentive
                 // Priority: LoS zones with real damage > non-LoS zones with incentive
@@ -252,13 +259,20 @@ function calculateMultiEnemyDamageZones() {
                         
                         var distanceToEnemy = getCellDistance(attackCell, currentEnemyCell);
                         
+                        // Early-turn cone pruning for chip zones as well
+                        if (getTurn() <= 3) {
+                            if (!isWithinNinetyDegreeCone(myCell, currentEnemyCell, attackCell)) {
+                                continue;
+                            }
+                        }
+                        
                         if (distanceToEnemy <= chip.range) {
                             // Check line of sight (SPARK doesn't need LoS)
                             var needsLOS = (chip.id != CHIP_SPARK);
                             var hasLoSCheck = true;
                             
                             if (needsLOS) {
-                                hasLoSCheck = lineOfSight(attackCell, currentEnemyCell);
+                            hasLoSCheck = checkLineOfSight(attackCell, currentEnemyCell);
                             }
                             
                             if (hasLoSCheck) {
@@ -493,7 +507,7 @@ function calculateWeaponDamageFromCell(weapon, fromCell, targetCell) {
     }
     
     // Check line of sight - no damage without LOS
-    if (!lineOfSight(fromCell, targetCell)) {
+    if (!checkLineOfSight(fromCell, targetCell)) {
         return 0;
     }
     
@@ -619,7 +633,7 @@ function calculateAoEDamageZones(weapon, fromCell, targetCell) {
             var shootCell = targetCells[i];
             
             // Must have line of sight to the shoot position
-            if (!lineOfSight(fromCell, shootCell)) {
+            if (!checkLineOfSight(fromCell, shootCell)) {
                 continue;
             }
             
@@ -727,7 +741,7 @@ function calculateChipDamageZones() {
                         var hasLOSCheck = true;
                         
                         if (needsLOS) {
-                            hasLOSCheck = lineOfSight(attackCell, currentEnemyCell);
+                            hasLOSCheck = checkLineOfSight(attackCell, currentEnemyCell);
                         }
                         
                         if (hasLOSCheck) {
@@ -785,7 +799,13 @@ function getCellsAtExactDistance(centerCell, distance) {
 }
 
 function checkLineOfSight(fromCell, toCell) {
-    return lineOfSight(fromCell, toCell);
+    // Use cached LOS wrapper for performance.
+    return cachedLineOfSight(fromCell, toCell, null);
+}
+
+function checkLineOfSightIgnore(fromCell, toCell, ignoreEntities) {
+    // Variant that forwards an ignore list (entity or array of entities).
+    return cachedLineOfSight(fromCell, toCell, ignoreEntities);
 }
 
 function countAdjacentObstacles(cell) {
@@ -805,4 +825,29 @@ function countAdjacentObstacles(cell) {
     }
     
     return obstacles;
+}
+
+// Cone filter utility: returns true if testCell lies within a 90° cone
+// centered on the vector from myCell -> axisCell (i.e., towards the enemy).
+// Uses a sqrt-free check: 2 * (u·v)^2 >= |u|^2 * |v|^2 (cos^2 45° = 1/2)
+function isWithinNinetyDegreeCone(myCell, axisCell, testCell) {
+    var mx = getCellX(myCell);
+    var my = getCellY(myCell);
+    var ax = getCellX(axisCell);
+    var ay = getCellY(axisCell);
+    var tx = getCellX(testCell);
+    var ty = getCellY(testCell);
+
+    var ux = ax - mx;
+    var uy = ay - my;
+    var vx = tx - mx;
+    var vy = ty - my;
+
+    var len2u = ux * ux + uy * uy;
+    var len2v = vx * vx + vy * vy;
+    if (len2u == 0 || len2v == 0) return true; // degenerate; don't filter
+    var dot = ux * vx + uy * vy;
+    var dot2 = dot * dot;
+    // Inside cone if angle ≤ 45°: 2*dot^2 ≥ |u|^2 * |v|^2
+    return (2 * dot2) >= (len2u * len2v);
 }

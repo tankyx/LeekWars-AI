@@ -230,7 +230,7 @@ function calculateOptimizedDamageZones(allEnemies, weapons, maxOperations) {
 
                     if (damage > 0) {
                         // LoS check (skip for tier 3 to save operations)
-                        var hasLoS = (tier >= 2) ? lineOfSight(attackPosition, targetCell) : true;
+                        var hasLoS = (tier >= 2) ? checkLineOfSight(attackPosition, targetCell) : true;
 
                         if (hasLoS || damage > 50) {
                             push(enemyDamageZones, [attackPosition, damage, weapon, targetEntity]);

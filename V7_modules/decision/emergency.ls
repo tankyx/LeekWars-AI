@@ -60,7 +60,7 @@ function isEmergencyMode() {
     var distanceToEnemy = getCellDistance(myCell, enemyCell);
     var inLightningerRange = distanceToEnemy >= 6 && distanceToEnemy <= 10;
     var hasTPForLightninger = myTP >= 9;
-    var canUseLightninger = hasLightninger && inLightningerRange && hasTPForLightninger && lineOfSight(myCell, enemyCell);
+    var canUseLightninger = hasLightninger && inLightningerRange && hasTPForLightninger && checkLineOfSight(myCell, enemyCell);
     
     var hasHealingOptions = canUseRegen || canUseLightninger;
     
@@ -404,7 +404,7 @@ function findTacticalPosition(weapon, weaponName) {
                 // Must be reachable and in weapon range
                 if (moveDistance <= myMP && enemyDistance >= minRange && enemyDistance <= maxRange) {
                     // Check LOS for ranged weapons (not Sword or Katana)
-                    if (weapon != WEAPON_SWORD && weapon != WEAPON_KATANA && !lineOfSight(cell, enemyCell)) {
+                    if (weapon != WEAPON_SWORD && weapon != WEAPON_KATANA && !checkLineOfSight(cell, enemyCell)) {
                         continue; // Need LOS for ranged weapons
                     }
                     

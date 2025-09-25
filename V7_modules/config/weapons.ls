@@ -233,7 +233,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         
         // FLAME_THROWER + TOXIN combo (DoT synergy - HIGHEST PRIORITY for magic builds)
         if (inArray(weapons, WEAPON_FLAME_THROWER) && inArray(allChips, CHIP_TOXIN)) {
-            if (distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+            if (distance >= 2 && distance <= 8 && checkLineOfSight(myCell, legacyEnemyCell)) {
                 // Using FLAME_THROWER + TOXIN DoT combo
                 // Enhanced combos for magic builds (FLAME_THROWER max 2 uses/turn)
                 // Check AoE safety for TOXIN combinations
@@ -250,7 +250,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         }
         
         // FLAME_THROWER priority for magic builds (main DoT DPS weapon)
-        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && checkLineOfSight(myCell, legacyEnemyCell)) {
             // Using FLAME_THROWER as main DoT DPS
             // Enhanced flame thrower scenarios for magic builds (max 2 uses/turn)
             if (tp >= 12) {
@@ -263,7 +263,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         }
         
         // DESTROYER priority for magic builds (tactical debuff weapon - secondary)
-        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && checkLineOfSight(myCell, legacyEnemyCell)) {
             // Using DESTROYER for tactical debuffing
             // DESTROYER scenarios for tactical debuffing
             if (tp >= 16) {
@@ -278,7 +278,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         }
         
         // FLAME_THROWER solo priority for magic builds (DoT weapon)
-        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && checkLineOfSight(myCell, legacyEnemyCell)) {
             // Using FLAME_THROWER for DoT damage
             return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
         }
@@ -302,7 +302,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     }
     
     // Rhino - high priority at 2-4 range (3x attacks for maximum DPS)
-    if (inArray(weapons, WEAPON_RHINO) && distance >= 2 && distance <= 4 && lineOfSight(myCell, legacyEnemyCell)) {
+    if (inArray(weapons, WEAPON_RHINO) && distance >= 2 && distance <= 4 && checkLineOfSight(myCell, legacyEnemyCell)) {
         return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
     }
     
@@ -318,7 +318,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         var dy = abs(enemyY - myY);
         
         // Prioritize Neutrino when diagonally aligned - cheap and effective!
-        if (dx == dy && dx != 0 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (dx == dy && dx != 0 && checkLineOfSight(myCell, legacyEnemyCell)) {
             return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
         }
     }
@@ -347,7 +347,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     var criticalHP = (currentHPPercent < 0.35); // Only below 35% HP (was 60%)
     
     // Enhanced Lightninger for CRITICAL healing - reduced threshold to favor M-Laser movement
-    if (criticalHP && inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && lineOfSight(myCell, legacyEnemyCell)) {
+    if (criticalHP && inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && checkLineOfSight(myCell, legacyEnemyCell)) {
         // CRITICAL HEALING: Enhanced Lightninger when desperately need +100 HP
         // Critical HP - using Enhanced Lightninger for healing
         return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[9];
@@ -355,7 +355,7 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     
     // Enhanced Lightninger - use only when M-Laser unavailable OR as pure fallback
     // Significantly reduced priority to encourage M-Laser positioning
-    if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && lineOfSight(myCell, legacyEnemyCell)) {
+    if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && checkLineOfSight(myCell, legacyEnemyCell)) {
         // Check if M-Laser could work with movement - prefer moving to M-Laser alignment
         var hasMlaser = inArray(weapons, WEAPON_M_LASER);
         if (!hasMlaser) {
@@ -377,22 +377,22 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     // Skip these for magic builds to prioritize DoT/debuff weapons
     if (!isMagicBuild) {
         // Destroyer - debuff weapon, good at close-mid range (normal priority for non-magic)
-        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && checkLineOfSight(myCell, legacyEnemyCell)) {
             return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
         }
         
         // Electrisor - AoE damage at range 7 (prioritize over single-target weapons)
-        if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && checkLineOfSight(myCell, legacyEnemyCell)) {
             return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
         }
         
         // Rifle - reliable mid-range damage
-        if (inArray(weapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9 && checkLineOfSight(myCell, legacyEnemyCell)) {
             return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
         }
         
         // Grenade Launcher - AoE damage at mid range
-        if (inArray(weapons, WEAPON_GRENADE_LAUNCHER) && distance >= 4 && distance <= 7 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_GRENADE_LAUNCHER) && distance >= 4 && distance <= 7 && checkLineOfSight(myCell, legacyEnemyCell)) {
             return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
         }
     } else {
@@ -400,19 +400,19 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         // Magic build - prioritizing DoT weapons over non-DoT
         
         // FLAME_THROWER gets priority over Grenade Launcher for magic builds
-        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && checkLineOfSight(myCell, legacyEnemyCell)) {
             // Using FLAME_THROWER over Grenade Launcher
             return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
         }
         
         // DESTROYER gets priority for magic builds
-        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && checkLineOfSight(myCell, legacyEnemyCell)) {
             // Using DESTROYER for debuff over other weapons
             return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
         }
         
         // Electrisor still useful for magic builds (AoE)
-        if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && lineOfSight(myCell, legacyEnemyCell)) {
+        if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && checkLineOfSight(myCell, legacyEnemyCell)) {
             return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
         }
     }
@@ -717,7 +717,7 @@ function getBestScenarioForTP(tp, forCombat) {
         var dist = getCellDistance(getCell(), targetEnemyCell);
         var minR = getWeaponMinRange(WEAPON_M_LASER);
         var maxR = getWeaponMaxRange(WEAPON_M_LASER);
-        if (dist >= minR && dist <= maxR && lineOfSight(getCell(), targetEnemyCell) && isOnSameLine(getCell(), targetEnemyCell)) {
+        if (dist >= minR && dist <= maxR && checkLineOfSight(getCell(), targetEnemyCell) && isOnSameLine(getCell(), targetEnemyCell)) {
             var ml = MLASER_SCENARIOS[tp];
             if (ml != null) return ml;
             return MLASER_SCENARIOS[8]; // fallback single use
@@ -1028,7 +1028,7 @@ function buildMagicScenario(weapons, chips, availableTP, forCombat) {
     }
 
     // 2b) DOUBLE_GUN options (stacking poison, cheap TP)
-    if (inArray(weapons, WEAPON_DOUBLE_GUN) && lineOfSight(getCell(), targetEnemyCell)) {
+    if (inArray(weapons, WEAPON_DOUBLE_GUN) && checkLineOfSight(getCell(), targetEnemyCell)) {
         var dgDist = getCellDistance(getCell(), targetEnemyCell);
         if (dgDist >= 2 && dgDist <= 7) {
             // Prefer triple when TP allows, else double/single
@@ -1062,12 +1062,12 @@ function buildMagicScenario(weapons, chips, availableTP, forCombat) {
         var weapsNow = getWeapons();
         // FLAME/DESTROYER checks (alignment + LoS for line)
         if (!offenseAvailable && inArray(weapsNow, WEAPON_FLAME_THROWER)) {
-            if (distNow >= 2 && distNow <= 8 && lineOfSight(curCell, targetEnemyCell) && isOnSameLine(curCell, targetEnemyCell)) {
+            if (distNow >= 2 && distNow <= 8 && checkLineOfSight(curCell, targetEnemyCell) && isOnSameLine(curCell, targetEnemyCell)) {
                 offenseAvailable = true;
             }
         }
         if (!offenseAvailable && inArray(weapsNow, WEAPON_DESTROYER)) {
-            if (distNow >= 1 && distNow <= 6 && lineOfSight(curCell, targetEnemyCell)) {
+            if (distNow >= 1 && distNow <= 6 && checkLineOfSight(curCell, targetEnemyCell)) {
                 offenseAvailable = true;
             }
         }

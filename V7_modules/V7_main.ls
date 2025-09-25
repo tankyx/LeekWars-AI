@@ -31,6 +31,15 @@ function main() {
     // Update game state
     updateGameState();
     // Game state updated
+
+    // Precompute a chunk of terrain LOS (terrain-only, cached across turns)
+    var losPairs = precomputeTerrainLOSChunk();
+    // Always log LOS precompute progress to make it visible in fight logs
+    if (!terrainLOSDone) {
+        debugW("LOS PRECOMP: processed=" + losPairs + " pairs, i=" + terrainLOSI + ", j=" + terrainLOSJ);
+    } else if (losPairs > 0) {
+        debugW("LOS PRECOMP: completed");
+    }
     
     // Update target priorities
     updatePrimaryTarget();

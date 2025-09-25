@@ -327,7 +327,7 @@ function executeCombat(fromCell, recommendedWeapon) {
                         totalEnemyDistance += enemyDistance;
                         
                         // Check if enemies have line of sight to this position
-                        if (lineOfSight(testCell, targetEnemyCell, targetEnemyCell)) {
+                        if (checkLineOfSight(testCell, targetEnemyCell)) {
                             hasLoS = true;
                         }
                     }
@@ -370,10 +370,10 @@ function executeCombat(fromCell, recommendedWeapon) {
                 var distNow = getCellDistance(myPosNow, tgtPosNow);
                 var weapsNow = getWeapons();
                 if (!offenseAvailableNow && inArray(weapsNow, WEAPON_FLAME_THROWER)) {
-                    if (distNow >= 2 && distNow <= 8 && lineOfSight(myPosNow, tgtPosNow) && isOnSameLine(myPosNow, tgtPosNow)) offenseAvailableNow = true;
+                    if (distNow >= 2 && distNow <= 8 && checkLineOfSight(myPosNow, tgtPosNow) && isOnSameLine(myPosNow, tgtPosNow)) offenseAvailableNow = true;
                 }
                 if (!offenseAvailableNow && inArray(weapsNow, WEAPON_DESTROYER)) {
-                    if (distNow >= 1 && distNow <= 6 && lineOfSight(myPosNow, tgtPosNow)) offenseAvailableNow = true;
+                    if (distNow >= 1 && distNow <= 6 && checkLineOfSight(myPosNow, tgtPosNow)) offenseAvailableNow = true;
                 }
                 var chipsNow = getChips();
                 if (!offenseAvailableNow && inArray(chipsNow, CHIP_TOXIN) && chipCooldowns[CHIP_TOXIN] <= 0) {
@@ -454,6 +454,21 @@ function executeCombat(fromCell, recommendedWeapon) {
     // Update our position after combat
     myCell = getCell();
     myMP = getMP();
+}
+
+// Identify chips that should always target self (heals and self-buffs)
+function isSelfBuffChip(chip) {
+    return chip == CHIP_VACCINE ||
+           chip == CHIP_REMISSION ||
+           chip == CHIP_REGENERATION ||
+           chip == CHIP_MOTIVATION ||
+           chip == CHIP_LEATHER_BOOTS ||
+           chip == CHIP_KNOWLEDGE ||
+           chip == CHIP_ARMORING ||
+           chip == CHIP_ELEVATION ||
+           chip == CHIP_SHIELD ||
+           chip == CHIP_PROTEIN ||
+           chip == CHIP_STRETCHING;
 }
 
 // === AOE ATTACK EXECUTION ===
@@ -702,7 +717,7 @@ function executeScenario(scenario, target, tpRemaining) {
                     if (debugEnabled) {
                         debugW("WEAPON FAIL: " + action + " from " + myPos + "(" + myX + "," + myY + ") to " + targetPos + "(" + targetX + "," + targetY + ")");
                         debugW("WEAPON FAIL: Distance=" + distance + ", dx=" + dx + ", dy=" + dy + ", aligned=" + ((dx == 0) || (dy == 0)));
-                        debugW("WEAPON FAIL: LineOfSight=" + lineOfSight(myPos, targetPos, targetPos));
+                        debugW("WEAPON FAIL: LineOfSight=" + checkLineOfSight(myPos, targetPos));
                     }
                     
                     break;
@@ -757,9 +772,68 @@ function executeScenario(scenario, target, tpRemaining) {
                         debugW("DEFENSIVE CHIP: LIBERATION targets self for effect reduction");
                     }
                 }
+                // Self-buffs/heals must target self
+                if (isSelfBuffChip(action)) {
+                    chipTarget = getEntity();
+                }
                 
+                // AoE safety: avoid chips that would hit ourselves (TOXIN/METEORITE/ICEBERG/ROCKFALL)
+                var aoeSafe = true;
+                // VENOM is single-target; never block it on AoE safety
+                var chipArea = getChipArea(action);
+                if (chipArea == null) chipArea = 0;
+                if (action != CHIP_VENOM && action != CHIP_TOXIN && chipArea > 0) {
+                    var tgtCell = getCell(chipTarget);
+                    if (!isChipSafeToUse(action, tgtCell)) {
+                        aoeSafe = false;
+                        debugW("AOE SAFETY: Skipping chip " + action + " (target too close; area=" + chipArea + ")");
+                    }
+                }
+
+                // Special handling for TOXIN: if unsafe, try to step out of AoE (1 MP) and then cast; if impossible, cast anyway
+                if (action == CHIP_TOXIN && chipArea > 0) {
+                    var tgtCellT = getCell(chipTarget);
+                    var distSelf = getCellDistance(getCell(), tgtCellT);
+                    if (distSelf <= chipArea) {
+                        var mpNow = getMP();
+                        if (mpNow > 0) {
+                            var neigh = getWalkableNeighbors(getCell());
+                            var best = null;
+                            var bestScore = -99999;
+                            var minR = getChipMinRange(CHIP_TOXIN);
+                            var maxR = getChipMaxRange(CHIP_TOXIN);
+                            for (var ni = 0; ni < count(neigh); ni++) {
+                                var n = neigh[ni];
+                                if (getCellContent(n) != CELL_EMPTY) continue;
+                                var d = getCellDistance(n, tgtCellT);
+                                if (d <= chipArea) continue; // must clear AoE
+                                if (d < minR || d > maxR) continue; // must be in range
+                                if (!checkLineOfSight(n, tgtCellT)) continue; // LoS needed
+                                // Prefer lower EID and minimal step (all 1 step here)
+                                var eid = estimateIncomingDamageAtCell(n);
+                                var score = 200 - eid;
+                                if (score > bestScore) { bestScore = score; best = n; }
+                            }
+                            if (best != null) {
+                                var used = moveTowardCells([best], 1);
+                                if (used > 0) {
+                                    debugW("TOXIN SAFETY: Stepped out of AoE to cell " + best + " before casting TOXIN");
+                                }
+                            }
+                        }
+                        // After attempted step, we proceed with the cast regardless of remaining proximity
+                    }
+                }
+
                 // Enhanced debugging for chip usage validation using built-in functions
-                var canUse = canUseChip(action, chipTarget);
+                var canUse = null;
+                if (action == CHIP_TOXIN) {
+                    canUse = canUseChip(action, chipTarget); // allow even if still unsafe
+                } else if (chipArea > 0 && action != CHIP_VENOM) {
+                    canUse = aoeSafe && canUseChip(action, chipTarget);
+                } else {
+                    canUse = canUseChip(action, chipTarget);
+                }
                 debugW("CHIP VALIDATION: canUseChip(" + action + ", " + chipTarget + ") = " + canUse);
                 if (!canUse) {
                     debugW("CHIP DEBUG: Chip " + action + " failed validation - checking reasons");
@@ -770,7 +844,7 @@ function executeScenario(scenario, target, tpRemaining) {
                     var launchType = getChipLaunchType(action);
                     var area = getChipArea(action);
                     var distance = getCellDistance(getCell(), getCell(chipTarget));
-                    var hasLOS = lineOfSight(getCell(), getCell(chipTarget));
+                    var hasLOS = checkLineOfSight(getCell(), getCell(chipTarget));
 
                     debugW("CHIP DEBUG: Range=" + minRange + "-" + maxRange + ", Distance=" + distance + ", HasLOS=" + hasLOS);
                     debugW("CHIP DEBUG: Cooldown=" + cooldown + ", MaxUses=" + maxUses + ", LaunchType=" + launchType + ", Area=" + area);
@@ -888,8 +962,19 @@ function prefilterScenarioActions(scenario, target, tpBudget) {
             } else if (chip == CHIP_LIBERATION) {
                 // Prefer self if we have negative effects, else try enemy
                 chipTarget = hasNegativeEffects() ? getEntity() : target;
+            } else if (isSelfBuffChip(chip)) {
+                chipTarget = getEntity();
             }
             
+            // AoE safety prefilter: avoid adding unsafe AoE chips (except for TOXIN, which we may step out for)
+            var area = getChipArea(chip);
+            // Do not block VENOM (single target) or TOXIN (we'll try to step out later)
+            if (chip != CHIP_VENOM && chip != CHIP_TOXIN && area != null && area > 0) {
+                var tgtCell2 = getCell(chipTarget);
+                if (!isChipSafeToUse(chip, tgtCell2)) {
+                    continue;
+                }
+            }
             if (!canUseChip(chip, chipTarget)) {
                 continue; // Out of range/LOS/cooldown/etc.
             }
@@ -993,7 +1078,7 @@ function attemptOffensiveTeleport(tpRemaining) {
             if (uniqueCells[cell] != null) continue;
             if (getCellContent(cell) != CELL_EMPTY) continue;
             if (getCellDistance(getCell(), cell) < 1 || getCellDistance(getCell(), cell) > 12) continue;
-            if (!lineOfSight(cell, tgtCell)) continue;
+            if (!checkLineOfSight(cell, tgtCell)) continue;
             uniqueCells[cell] = true;
             push(candidates, cell);
             if (count(candidates) >= 50) break;

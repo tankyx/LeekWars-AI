@@ -22,6 +22,7 @@ function createPathResult(targetCell, path, damage, weaponId, reachable, distanc
 // === MAIN PATHFINDING FUNCTION (ARRAY-BASED) ===
 function findOptimalPathFromArray(currentCell, damageArray) {
     // Pathfinding array processed
+    var localCap = terrainLOSDone ? MAX_PATHFIND_CELLS : 8;
     
     // Sort array by damage potential (highest first); filter out dead enemies cheaply first
     var aliveDamageArray = [];
@@ -37,7 +38,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
     // Try single-turn A* first to each high-damage cell (weapon-only)
     // Trying top damage cells
     
-    for (var i = 0; i < min(MAX_PATHFIND_CELLS, count(sortedArray)); i++) {
+    for (var i = 0; i < min(localCap, count(sortedArray)); i++) {
         var targetData = sortedArray[i];
         var targetCell = targetData[0];
         var expectedDamage = targetData[1];
@@ -63,7 +64,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
     }
 
     // Secondary single-turn pass: allow chip zones only if no weapon-vantage
-    for (var i = 0; i < min(MAX_PATHFIND_CELLS, count(sortedArray)); i++) {
+    for (var i = 0; i < min(localCap, count(sortedArray)); i++) {
         var t2 = sortedArray[i];
         if (t2 == null) continue;
         var t2cell = t2[0];
@@ -109,21 +110,22 @@ function findOptimalPathFromArray(currentCell, damageArray) {
     // Try A* to those reachable-by-distance candidates, highest damage first
     if (count(reachableCandidates) > 0) {
         // Sort desc by damage
-        for (var i = 0; i < count(reachableCandidates) - 1; i++) {
-            for (var j = i + 1; j < count(reachableCandidates); j++) {
-                if (reachableCandidates[j][1] > reachableCandidates[i][1]) {
-                    var tmp = reachableCandidates[i];
-                    reachableCandidates[i] = reachableCandidates[j];
-                    reachableCandidates[j] = tmp;
-                }
+    for (var i = 0; i < count(reachableCandidates) - 1; i++) {
+        for (var j = i + 1; j < count(reachableCandidates); j++) {
+            if (reachableCandidates[j][1] > reachableCandidates[i][1]) {
+                var tmp = reachableCandidates[i];
+                reachableCandidates[i] = reachableCandidates[j];
+                reachableCandidates[j] = tmp;
             }
         }
-        for (var ci = 0; ci < count(reachableCandidates); ci++) {
-            var cand = reachableCandidates[ci];
-            var tCell = cand[0];
-            var tDmg = cand[1];
-            var tWeap = cand[2];
-            var path2 = aStar(currentCell, tCell, myMP);
+    }
+    var rcLimit = terrainLOSDone ? count(reachableCandidates) : min(6, count(reachableCandidates));
+    for (var ci = 0; ci < rcLimit; ci++) {
+        var cand = reachableCandidates[ci];
+        var tCell = cand[0];
+        var tDmg = cand[1];
+        var tWeap = cand[2];
+        var path2 = aStar(currentCell, tCell, myMP);
             if (path2 != null && count(path2) <= myMP + 1) {
                 return createPathResult(tCell, path2, tDmg, tWeap, true, count(path2) - 1, false);
             }
@@ -162,8 +164,8 @@ function findOptimalPathFromArray(currentCell, damageArray) {
         }
     }
 
-    // LAST-MILE ALIGNMENT (MAGIC + FLAME): if we are already in 6–8 but misaligned, spend 1 MP to align
-    if (isMagicBuild && enemyCell != null && inArray(getWeapons(), WEAPON_FLAME_THROWER)) {
+    // LAST-MILE ALIGNMENT (MAGIC + FLAME): only when we have exactly 1 MP left; otherwise prefer full-path vantages
+    if (isMagicBuild && myMP == 1 && enemyCell != null && inArray(getWeapons(), WEAPON_FLAME_THROWER)) {
         var distBand = getCellDistance(currentCell, enemyCell);
         if (distBand >= 6 && distBand <= 8 && !isOnSameLine(currentCell, enemyCell)) {
             var neigh = getWalkableNeighbors(currentCell);
@@ -175,7 +177,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
                 var d = getCellDistance(n, enemyCell);
                 if (d < 2 || d > 8) continue; // FLAME range
                 if (!isOnSameLine(n, enemyCell)) continue;
-                if (!lineOfSight(n, enemyCell)) continue;
+                if (!checkLineOfSight(n, enemyCell)) continue;
                 // Prefer safer alignment positions
                 var eid = estimateIncomingDamageAtCell(n);
                 var score = 200 - eid; // low EID better
@@ -188,11 +190,11 @@ function findOptimalPathFromArray(currentCell, damageArray) {
         }
     }
 
-    // LAST-MILE NUDGE (MAGIC + DESTROYER): step into 1–6 with LoS (or fix LoS) using 1 MP
-    if (isMagicBuild && enemyCell != null && inArray(getWeapons(), WEAPON_DESTROYER)) {
+    // LAST-MILE NUDGE (MAGIC + DESTROYER): only when we have exactly 1 MP left; otherwise prefer full-path vantages
+    if (isMagicBuild && myMP == 1 && enemyCell != null && inArray(getWeapons(), WEAPON_DESTROYER)) {
         var distD = getCellDistance(currentCell, enemyCell);
         var needCloser = (distD == 7); // one step away from range
-        var needLoSFix = (distD >= 1 && distD <= 6 && !lineOfSight(currentCell, enemyCell));
+        var needLoSFix = (distD >= 1 && distD <= 6 && !checkLineOfSight(currentCell, enemyCell));
         if (needCloser || needLoSFix) {
             var neighD = getWalkableNeighbors(currentCell);
             var bestD = null;
@@ -202,7 +204,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
                 if (getCellContent(n2) != CELL_EMPTY) continue;
                 var d2 = getCellDistance(n2, enemyCell);
                 if (d2 < 1 || d2 > 6) continue; // DESTROYER range
-                if (!lineOfSight(n2, enemyCell)) continue; // needs LoS
+                if (!checkLineOfSight(n2, enemyCell)) continue; // needs LoS
                 // Prefer safer squares with lower EID
                 var eid2 = estimateIncomingDamageAtCell(n2);
                 var score2 = 220 - eid2; // slight bias over FLAME align
@@ -226,7 +228,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
             var band = targets[ti];
             if (distNow <= band) continue;
             var ring = getCellsAtExactDistance(enemyCell, band);
-            var stride = max(1, floor(count(ring) / 24));
+            var stride = max(1, floor(count(ring) / (terrainLOSDone ? 24 : 40)));
             var bestCell = null;
             var bestScore = -99999;
             for (var ri = 0; ri < count(ring); ri += stride) {
@@ -236,7 +238,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
                 var p = aStar(currentCell, cell, myMP);
                 if (p == null || count(p) <= 1) continue;
                 // Prefer LoS to enemy and lower EID
-                var los = lineOfSight(cell, enemyCell) ? 1 : 0;
+                var los = checkLineOfSight(cell, enemyCell) ? 1 : 0;
                 var eid = estimateIncomingDamageAtCell(cell);
                 var score = 100 * los - eid;
                 if (score > bestScore) { bestScore = score; bestCell = cell; }
@@ -297,7 +299,7 @@ function findOptimalPathFromArray(currentCell, damageArray) {
                         var reachable = (pathLen <= myMP);
                         // Cover and LOS metrics
                         var cover = countAdjacentObstacles(cell);
-                        var hasLOS = lineOfSight(cell, enemyCell);
+                        var hasLOS = checkLineOfSight(cell, enemyCell);
                         // Score: prefer reachable, more cover, no LOS, and shorter path
                         var score = 0;
                         if (reachable) score += 200; else score += 50;
@@ -635,8 +637,9 @@ function findOptimalPathFromArray(currentCell, damageArray) {
 // === DUAL-MAP PATHFINDING (WEAPON-FIRST, THEN CHIPS) ===
 function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
     // 1) Try weapon vantages first (full scan up to cap)
+    var localCap = terrainLOSDone ? MAX_PATHFIND_CELLS : 8;
     var weaponSorted = sortArrayByDamage(weaponArray);
-    for (var i = 0; i < min(MAX_PATHFIND_CELLS, count(weaponSorted)); i++) {
+    for (var i = 0; i < min(localCap, count(weaponSorted)); i++) {
         var w = weaponSorted[i];
         if (w == null) continue;
         var tCell = w[0];
@@ -649,7 +652,8 @@ function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
         }
     }
     // 2) Greedy fallback: any reachable weapon vantage within MP by distance
-    for (var j = 0; j < count(weaponArray); j++) {
+    var wLimit = terrainLOSDone ? count(weaponArray) : min(12, count(weaponArray));
+    for (var j = 0; j < wLimit; j++) {
         var we = weaponArray[j];
         if (we == null) continue;
         var wc = we[0];
@@ -672,11 +676,11 @@ function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
             // DESTROYER band 1..6
             for (var d = 1; d <= 6; d++) {
                 var ring = getCellsAtExactDistance(tgtCell, d);
-                var stride = max(1, floor(count(ring) / 20));
+                var stride = max(1, floor(count(ring) / (terrainLOSDone ? 20 : 36)));
                 for (var r = 0; r < count(ring); r += stride) {
                     var c = ring[r];
                     if (c == null || getCellContent(c) != CELL_EMPTY) continue;
-                    if (!lineOfSight(c, tgtCell)) continue;
+                    if (!checkLineOfSight(c, tgtCell)) continue;
                     var pathD = aStar(currentCell, c, myMP);
                     if (pathD == null || count(pathD) <= 1) continue;
                     var pathLen = count(pathD) - 1;
@@ -690,12 +694,12 @@ function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
             // FLAME band 2..8 (aligned & LoS)
             for (var d2 = 2; d2 <= 8; d2++) {
                 var ring2 = getCellsAtExactDistance(tgtCell, d2);
-                var stride2 = max(1, floor(count(ring2) / 20));
+                var stride2 = max(1, floor(count(ring2) / (terrainLOSDone ? 20 : 36)));
                 for (var r2 = 0; r2 < count(ring2); r2 += stride2) {
                     var c2 = ring2[r2];
                     if (c2 == null || getCellContent(c2) != CELL_EMPTY) continue;
                     if (!isOnSameLine(c2, tgtCell)) continue;
-                    if (!lineOfSight(c2, tgtCell)) continue;
+                    if (!checkLineOfSight(c2, tgtCell)) continue;
                     var pathF = aStar(currentCell, c2, myMP);
                     if (pathF == null || count(pathF) <= 1) continue;
                     var lenF = count(pathF) - 1;
@@ -744,7 +748,7 @@ function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
                     var d = getCellDistance(n, tgtCellLM);
                     if (d < 2 || d > 8) continue; // FLAME range
                     if (!isOnSameLine(n, tgtCellLM)) continue;
-                    if (!lineOfSight(n, tgtCellLM)) continue;
+                        if (!checkLineOfSight(n, tgtCellLM)) continue;
                     var eid = estimateIncomingDamageAtCell(n);
                     var score = 200 - eid;
                     if (score > bestScore) { bestScore = score; bestAlign = n; }
@@ -782,7 +786,7 @@ function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
             // DESTROYER: step into 1–6 with LoS or fix LoS within 1 MP
             if (inArray(getWeapons(), WEAPON_DESTROYER)) {
                 var needCloser = (distBand == 7);
-                var needLoSFix = (distBand >= 1 && distBand <= 6 && !lineOfSight(currentCell, tgtCellLM));
+            var needLoSFix = (distBand >= 1 && distBand <= 6 && !checkLineOfSight(currentCell, tgtCellLM));
                 if (needCloser || needLoSFix) {
                     var neighD = getWalkableNeighbors(currentCell);
                     var bestD = null;
@@ -792,7 +796,7 @@ function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
                         if (getCellContent(n2) != CELL_EMPTY) continue;
                         var d2 = getCellDistance(n2, tgtCellLM);
                         if (d2 < 1 || d2 > 6) continue;
-                        if (!lineOfSight(n2, tgtCellLM)) continue;
+                        if (!checkLineOfSight(n2, tgtCellLM)) continue;
                         var eid2 = estimateIncomingDamageAtCell(n2);
                         var score2 = 220 - eid2;
                         if (score2 > bestDScore) { bestDScore = score2; bestD = n2; }
@@ -807,7 +811,7 @@ function findOptimalPathFromDualArrays(currentCell, weaponArray, chipArray) {
     }
     // 3) Try chip vantages (carry chip id so combat can use it)
     var chipSorted = sortChipArrayByDamage(chipArray);
-    for (var k = 0; k < min(MAX_PATHFIND_CELLS, count(chipSorted)); k++) {
+    for (var k = 0; k < min(localCap, count(chipSorted)); k++) {
         var c = chipSorted[k];
         if (c == null) continue;
         var cc = c[0];
@@ -1036,6 +1040,13 @@ function aStar(startCell, goalCell, maxDistance) {
     if (pathCache[cacheKey] != null) {
         return pathCache[cacheKey];
     }
+
+    // Enforce per-turn A* call budget
+    var budget = terrainLOSDone ? PATH_ASTAR_BUDGET_DEFAULT : PATH_ASTAR_BUDGET_DURING_LOS;
+    if (aStarCallsThisTurn >= budget) {
+        return null;
+    }
+    aStarCallsThisTurn++;
     
     
     var openSet = [startCell];
@@ -1047,7 +1058,8 @@ function aStar(startCell, goalCell, maxDistance) {
     fScore[startCell] = heuristic(startCell, goalCell);
     
     var searchCount = 0;
-    var maxSearchSteps = 300; // Prevent premature failures on larger maps
+    // Tighten search while LOS precompute is in progress
+    var maxSearchSteps = terrainLOSDone ? 300 : 200;
     
     while (count(openSet) > 0 && searchCount < maxSearchSteps) {
         searchCount++;
@@ -1235,7 +1247,7 @@ function evaluateMLaserPosition(cell) {
         var losBlockedFromEnemies = 0;
         for (var e = 0; e < count(allEnemies); e++) {
             var targetEnemyCell = getCell(allEnemies[e]);
-            if (!lineOfSight(cell, targetEnemyCell, targetEnemyCell)) {
+            if (!checkLineOfSight(cell, targetEnemyCell)) {
                 losBlockedFromEnemies++;
             }
         }
@@ -2290,6 +2302,8 @@ function refinedStepsForEnemyToGainLoS(enemyEntity, targetCell) {
 
 // === EID ESTIMATION AT A HYPOTHETICAL CELL ===
 function estimateIncomingDamageAtCell(myTargetCell) {
+    // Skip heavy EID estimation while LOS precompute is in progress or early turns
+    if (!terrainLOSDone || getTurn() <= 3) return 0;
     if (count(allEnemies) == 0) return 0;
     if (eidCache[myTargetCell] != null) return eidCache[myTargetCell];
     var total = 0;
@@ -2332,7 +2346,7 @@ function estimateIncomingDamageAtCell(myTargetCell) {
         if (remainingTP >= 4) {
             // Only add if LOS and distance <= 10
             var dist = getCellDistance(getCell(enemyEntity), myTargetCell);
-            if (dist <= 10 && lineOfSight(getCell(enemyEntity), myTargetCell)) {
+            if (dist <= 10 && checkLineOfSight(getCell(enemyEntity), myTargetCell)) {
                 total += 50 * (1 - myResistance / 100.0);
             }
         }
@@ -2477,7 +2491,7 @@ function findBestWeaponPosition(currentCell, weapons) {
             }
             
             // Line of sight bonus
-            if (lineOfSight(cell, enemyCell)) {
+            if (checkLineOfSight(cell, enemyCell)) {
                 score += 20;
             }
             
@@ -2674,7 +2688,7 @@ function getWeaponSortScore(entry) {
                         var toxinMin = getChipMinRange(CHIP_TOXIN);
                         var inRange = (dist >= toxinMin && dist <= toxinMax);
                         var safeAoE = (dist > toxinArea);
-                        var hasLOS = lineOfSight(cellId, tgtCell);
+                        var hasLOS = checkLineOfSight(cellId, tgtCell);
                         if (inRange && safeAoE && hasLOS) {
                             score += 150; // boost FLAME cells that enable FLAME×2 + TOXIN
                         }
@@ -2684,7 +2698,7 @@ function getWeaponSortScore(entry) {
                         var vMin = getChipMinRange(CHIP_VENOM);
                         var vMax = getChipMaxRange(CHIP_VENOM);
                         var vInRange = (dist >= vMin && dist <= vMax);
-                        var vHasLOS = lineOfSight(cellId, tgtCell);
+                        var vHasLOS = checkLineOfSight(cellId, tgtCell);
                         if (vInRange && vHasLOS) {
                             score += 120; // boost for FLAME + VENOM follow-up
                         }

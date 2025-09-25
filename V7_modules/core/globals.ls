@@ -98,6 +98,18 @@ global losCache = [:];              // Line of sight cache
 global weaponSwitchCache = [:];     // Cache weapon compatibility checks
 global eidCache = [:];              // Cache EID per cell for this turn
 
+// === TERRAIN LOS (PERSISTENT ACROSS TURNS) ===
+global terrainLOS = [:];            // Map[start -> Map[end -> 0/1]]; upper-triangle storage
+global terrainLOSDone = false;      // True when full precompute finished
+global terrainLOSI = 0;             // Progress pointer (row)
+global terrainLOSJ = 1;             // Progress pointer (col)
+global LOS_PRECOMP_PAIRS_PER_TURN = 65000; // Process all pairs within ~3 turns (~2.0M ops/turn)
+
+// === PATHFINDING BUDGETS ===
+global PATH_ASTAR_BUDGET_DEFAULT = 60;     // Max A* calls per turn after LOS precompute
+global PATH_ASTAR_BUDGET_DURING_LOS = 20;  // Max A* calls per turn while LOS is building
+global aStarCallsThisTurn = 0;             // Counter reset each turn
+
 // === CHIP COOLDOWN TRACKING ===
 global chipCooldowns = [:];         // Map[chipId -> turnsRemaining]
 global lastChipUse = [:];          // Map[chipId -> turnUsed]
@@ -106,6 +118,14 @@ global lastChipUse = [:];          // Map[chipId -> turnUsed]
 function updateGameState() {
     myLeek = getEntity();
     myCell = getCell();
+
+    // Reset terrain LOS precompute at the start of each fight
+    if (getTurn() == 1) {
+        terrainLOS = [:];
+        terrainLOSDone = false;
+        terrainLOSI = 0;
+        terrainLOSJ = 1;
+    }
     
     // CRITICAL FIX: Validate our own position is within bounds
     if (myCell < 0 || myCell > 612) {
@@ -277,6 +297,9 @@ function updateGameState() {
 
     // Update DoT cycle tracking
     updateDoTTracking();
+
+    // Reset per-turn pathfinding budget
+    aStarCallsThisTurn = 0;
     if (chipCooldowns[CHIP_LIBERATION] != null && chipCooldowns[CHIP_LIBERATION] > 0) {
         chipCooldowns[CHIP_LIBERATION]--;
     }
@@ -357,8 +380,8 @@ function canWeaponReachTarget(weapon, fromCell, targetCell) {
         return false;
     }
     
-    // Check line of sight
-    if (!lineOfSight(fromCell, targetCell)) {
+    // Check line of sight (cached)
+    if (!checkLineOfSight(fromCell, targetCell)) {
         if (debugEnabled) {
             debugW("WEAPON REACH FAIL: No line of sight from " + fromCell + " to " + targetCell);
         }
