@@ -1,0 +1,321 @@
+/** Exporté le 9/30/2025, 3:01:55 PM **/
+
+/** 8.0/V8/field_map.lk **/
+
+include('game_entity.lk')
+
+class Cell {
+    _id
+    _isObstacle = false
+    _entityID = -1
+    _damage = 0
+    _hasLOS = false
+    _highestDamageWeapon = -1
+
+    constructor(id, isObstacle, entityID, damage, hasLOS, highestDamageWeapon) {
+        this._id = id
+        this._isObstacle = isObstacle
+        this._entityID = entityID
+        this._damage = damage
+        this._hasLOS = hasLOS
+        this._highestDamageWeapon = highestDamageWeapon
+    }
+}
+
+class Color {
+    _r = 0
+    _g = 0
+    _b = 0
+
+    constructor(r, g, b) {
+        this._r = r
+        this._g = g
+        this._b = b
+    }
+
+    getIntColor() {
+        return getColor(this._r, this._g, this._b)
+    }
+}
+
+class FieldMap {
+    cells = [:]
+    damageMap = [:]
+    entities = [:]
+
+    private static colors = [
+        new Color(255, 0, 0),    // Red
+        new Color(0, 255, 0),    // Green
+        new Color(0, 0, 255),    // Blue
+        new Color(255, 255, 0)   // Yellow
+    ]
+
+    private static x_offset = 18
+    private static y_offset = 17
+    private static up_right_offset = 18 - 17
+    private static down_right_offset = 18 + 17
+    private static down_left_offset = -1 * (18 - 17)
+    private static up_left_offset = -1 * (18 + 17)
+    private static base_cell = 308
+
+    constructor() {
+        var playerID = getEntity()
+        for (var i = 0; i < 613; i++) {
+            var isObs = isObstacle(i)
+            var entID = -1
+
+            if (isEntity(i)) {
+                entID = getEntityOnCell(i)
+
+                debug("Entity " + entID + " found at cell " + i)
+                debug("Player ID is " + playerID)
+                debug("Entity " + entID + " is " + (isAlly(entID) ? "an ally" : "an enemy"))
+                
+                if (entID == playerID || isAlly(entID)) {
+                    mapPut(this.entities, entID, new Player(i))
+                    debug("Player found at cell " + i)
+                }
+                else {
+                    mapPut(this.entities, entID, new Enemy(i))
+                    debug("Enemy found at cell " + i)
+                }
+            }
+
+            mapPut(this.cells, i, new Cell(i, isObs, entID, 0, false, -1))
+        }
+    }
+
+    updateMapEntities() {
+        for (var entity in this.entities) {
+            entity.updateEntity()
+        }
+    }
+
+    buildHitMap(oppCell, weapons, chips) {
+        clearMarks();
+        mapClear(this.damageMap)
+        var i = 0
+        for (var w in weapons) {
+            var minR = w._minRange
+            var maxR = w._maxRange
+            var launchType = w._launchType
+            var aoeType = w._aoeType
+            var hitCells = [:]
+
+            if (launchType == LAUNCH_TYPE_CIRCLE) {
+                debug("Calculating circle hits...")
+                hitCells = getCircleHits(oppCell, minR, maxR, aoeType, w)
+            }
+            else if (launchType == LAUNCH_TYPE_STAR) {
+                debug("Calculating star hits...")
+                hitCells = getStarHits(oppCell, minR, maxR, aoeType, w)
+            }
+            else if (launchType == LAUNCH_TYPE_LINE) {
+                debug("Calculating line hits...")
+                hitCells = getLineHits(oppCell, minR, maxR, aoeType, w)
+            }
+            else if (launchType == LAUNCH_TYPE_DIAGONAL) {
+                debug("Calculating diagonal hits...")
+                hitCells = getDiagonalHits(oppCell, minR, maxR, aoeType, w)
+            }
+            else {
+                debug("Unknown launch type: " + launchType + ". Skipping weapon.")
+                continue
+            }
+
+            this.damageMap = mapMerge(this.damageMap, hitCells)
+            
+            for (var c in this.damageMap) {
+                mark(c._id, FieldMap.colors[i].getIntColor(), 2)
+            }
+            
+            i++
+        }
+        return this.damageMap
+    }
+
+    getCellID(x, y) {
+        return FieldMap.base_cell + FieldMap.x_offset * x + FieldMap.y_offset * y
+    }
+
+    getPlayerEntity() {
+        return this.entities[getEntity()]
+    }
+
+    getPlayerPos() {
+        return this.entities[getEntity()]._cellPos
+    }
+
+    getAlliesSubMap() {
+        return mapFilter(entities, function(value, key, entities) {
+            return (value instanceof Player) && key != getEntity()
+        })
+    }
+
+    getEnemySubMap() {
+        return mapFilter(entities, function(value, key, entities) {
+            return (value instanceof Enemy)
+        })
+    }
+
+    getClosestEnemy() {
+        var playerPos = this.getPlayerPos()
+        var closestEnemy = null
+        var closestDist = 999
+
+        var enemies = this.getEnemySubMap()
+        for (var e in enemies) {
+            var dist = getCellDistance(playerPos, e._cellPos)
+
+            if (dist < closestDist) {
+                closestDist = dist
+                closestEnemy = e
+            }
+        }
+        return closestEnemy
+    }
+
+    getClosestHitCell() {
+        var playerPos = this.getPlayerPos()
+        var closestCell = -1
+        var closestDist = 999
+
+        for (var c in this.damageMap) {
+            var dist = getPathLength(playerPos, c._id)
+
+            if (dist < closestDist) {
+                closestDist = dist
+                closestCell = c
+            }
+        }
+        return closestCell
+    }
+
+    // Example of line damage of range 1 - 4
+    // . . . . x . . . .
+    // . . . . x . . . .
+    // . . . . x . . . .
+    // . . . . x . . . .
+    // x x x x E x x x x
+    // . . . . x . . . .
+    // . . . . x . . . .
+    // . . . . x . . . .
+    // . . . . x . . . .
+    getLineHits(cell, minR, maxR, aoeType, weapon) {
+        var hitCells = [:]
+        var curCell = cell
+        for (var dir = 0; dir < 4; dir++) {
+            for (var dist = minR; dist <= maxR; dist++) {
+                if (dir == 0) {         // Up
+                    curCell = cell - y_offset * dist
+                }
+                else if (dir == 1) {    // Right
+                    curCell = cell + x_offset * dist
+                }
+                else if (dir == 2) {    // Down
+                    curCell = cell + y_offset * dist
+                }
+                else if (dir == 3) {    // Left
+                    curCell = cell - x_offset * dist
+                }
+            }
+            var _hasLOS = lineOfSight(cell, curCell)
+            if (_hasLOS) {
+                mapPut(hitCells, curCell, new Cell(curCell, false, getEntityOnCell(cell), 0, true, weapon))
+            }
+        }
+        return hitCells
+    }
+
+    // Example of diagonal damage of range 2 - 6
+    // x . . . . . x
+    // . x . . . x .
+    // . . x . x . .
+    // . . . E . . .
+    // . . x . x . .
+    // . x . . . x .
+    // x . . . . . x
+    getDiagonalHits(cell, minR, maxR, aoeType, weapon) {
+        var hitCells = [:]
+        var curCell = cell
+        for (var dir = 0; dir < 4; dir++) {
+            for (var dist = minR; dist <= maxR; dist++) {
+                if (dir == 0) {
+                    curCell = cell + up_right_offset * dist
+                }
+                else if (dir == 1) {
+                    curCell = cell + down_right_offset * dist
+                }
+                else if (dir == 2) {
+                    curCell = cell + down_left_offset * dist
+                }
+                else if (dir == 3) {
+                    curCell = cell + up_left_offset * dist
+                }
+            }
+            var _hasLOS = lineOfSight(cell, curCell)
+            if (_hasLOS) {
+                mapPut(hitCells, curCell, new Cell(curCell, false, getEntityOnCell(cell), 0, true, weapon))
+            }
+        }
+        return hitCells
+    }
+
+    // Example of star damage of range 6 - 10
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . x . . . . . . . . . x . . . . . 
+    // . . . . . . x . . . . . . . x . . . . . . 
+    // . . . . . . . x . . . . . x . . . . . . .
+    // . . . . . . . . . . . . . . . . . . . . .
+    // . . . . . . . . . . . . . . . . . . . . .
+    // x x x x x . . . . . E . . . . . x x x x x
+    // . . . . . . . . . . . . . . . . . . . . .
+    // . . . . . . . . . . . . . . . . . . . .
+    // . . . . . . . x . . . . . x . . . . . . .
+    // . . . . . . x . . . . . . . x . . . . . .
+    // . . . . . x . . . . . . . . . x . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    // . . . . . . . . . . x . . . . . . . . . .
+    getStarHits(cell, minR, maxR, aoeType, weapon) {
+        var hitCells = [:]
+        hitCells = mapMerge(hitCells, getLineHits(cell, minR, maxR, aoeType, weapon))
+        hitCells = mapMerge(hitCells, getDiagonalHits(cell, minR, maxR, aoeType, weapon))
+        return hitCells
+    }
+
+    // Example of circle damage of range 3 - 5
+    // . . . . . x . . . . .
+    // . . . . x x x  . . . .
+    // . . . x x x x x . . .
+    // . . x x x . x x x . .
+    // . x x x . . . x x x .
+    // x x x . . E . . x x x
+    // . x x x . . . x x x .
+    // . . x x x . x x x . .
+    // . . . x x x x x . . .
+    // . . . . x x x . . . .
+    // . . . . . x . . . . .
+    getCircleHits(cell, minR, maxR, aoeType, weapon) {
+        var hitCells = [:]
+        for (var dx = -maxR; dx <= maxR; dx++) {
+            for (var dy = -maxR; dy <= maxR; dy++) {
+                var dist = abs(dx) + abs(dy)
+                if (dist >= minR && dist <= maxR) {
+                    var curCell = cell + FieldMap.x_offset * dx + FieldMap.y_offset * dy
+                    var _hasLOS = lineOfSight(cell, curCell)
+                    if (_hasLOS && curCell >= 0 && curCell < 613) {
+                        mapPut(hitCells, curCell, new Cell(curCell, false, getEntityOnCell(cell), 0, true, weapon))
+                    }
+                }
+            }
+        }
+        return hitCells
+    }
+}

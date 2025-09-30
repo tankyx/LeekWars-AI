@@ -1,0 +1,61 @@
+/** Exporté le 9/30/2025, 3:01:46 PM **/
+
+/** 8.0/V8/weapon.lk **/
+
+class Weapon {
+    _id = -1
+    _minRange = 0
+    _maxRange = 0
+    _debuffType = null
+    _cost = 0
+    _maxUse = 0
+    _launchType = -1
+    _aoeType = -1
+
+    constructor(id, minRange, maxRange, debuffType, cost, maxUse, launchType, aoeType) {
+        _id = id
+        _minRange = minRange
+        _maxRange = maxRange
+        _debuffType = debuffType
+        _cost = cost
+        _maxUse = maxUse
+        _launchType = launchType
+        _aoeType = aoeType
+    }
+}
+
+class Weapons {
+    constructor() {
+        buildAllWeaponsList()
+        getEquippedWeaponsSubMap()
+    }
+
+    weaponsList = [:]
+    playerEquippedWeapons = [:]
+
+    buildAllWeaponsList() {
+        var allWeapons = getAllWeapons()
+
+        for (var w in allWeapons) {
+            mapPut(weaponsList, w, new Weapon(
+                w,
+                getWeaponMinRange(w),
+                getWeaponMaxRange(w),
+                getWeaponEffects(w),
+                getWeaponCost(w),
+                getWeaponMaxUses(w),
+                getWeaponLaunchType(w),
+                getWeaponArea(w)
+            ));
+        }
+    }
+
+    getEquippedWeaponsSubMap() {
+        var equippedWeapons = getWeapons()
+
+        for (var w in equippedWeapons) {
+            debug("Adding weapon " + w + " to player's equipped weapons.")
+            mapPut(playerEquippedWeapons, w, weaponsList[w])
+        }
+    }
+}

@@ -1,0 +1,58 @@
+/** Exporté le 9/30/2025, 3:01:39 PM **/
+
+/** 8.0/V8/main.lk **/
+
+include('game_entity.lk')
+include('field_map.lk')
+include('weapon.lk')
+
+global _init = false
+global fieldMap = null
+global weapons = null
+global player = null
+
+if (!_init) {
+    init()
+    _init = true
+}
+
+main()
+
+function init() {
+    debug("Initializing...")
+    fieldMap = new FieldMap();
+    debug("Field map initialized.")
+    weapons = new Weapons();
+    debug("Weapons initialized.")
+    player = fieldMap.getPlayerEntity();
+    debug("Player entity initialized.")
+    debug("Initialization complete.")
+}
+
+function main() {
+    fieldMap.updateMapEntities()
+    var target = fieldMap.getClosestEnemy()
+    var equippedWeapons = weapons.playerEquippedWeapons
+
+    fieldMap.buildHitMap(target._cellPos, equippedWeapons, null)
+    var targetHitCell = fieldMap.getClosestHitCell();
+
+    if (targetHitCell._highestDamageWeapon._id != player._inUseWeapon) {
+        setWeapon(targetHitCell._highestDamageWeapon._id)
+    }
+
+    debug("Moving toward cell " + targetHitCell._id + " to attack with weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id))
+    moveTowardCell(targetHitCell._id)
+
+    debug("Attacking enemy at cell " + target._cellPos + " with weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id))
+    while (getTP() >= weapons.playerEquippedWeapons[targetHitCell._highestDamageWeapon._id]._cost) {
+        if (!canUseWeaponOnCell(targetHitCell._highestDamageWeapon._id, target._cellPos)) {
+            debug("Cannot use weapon on cell " + target._cellPos + ", breaking attack loop.")
+            break
+        }
+        else {
+            debug("Using weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id) + " on cell " + target._cellPos)
+            useWeaponOnCell(target._cellPos)
+        }
+    }
+}
