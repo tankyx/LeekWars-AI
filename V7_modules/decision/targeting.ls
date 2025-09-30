@@ -86,6 +86,9 @@ function getWeaponBaseDamage(weapon) {
     if (weapon == WEAPON_ENHANCED_LIGHTNINGER) return 95; // Base damage ~95
     if (weapon == WEAPON_RIFLE) return 76;                // Base damage ~76
     if (weapon == WEAPON_M_LASER) return 91;              // Base damage ~91
+    if (weapon == WEAPON_LASER) return 51;                // Base damage ~51
+    if (weapon == WEAPON_MAGNUM) return 33;               // Base damage ~33
+    if (weapon == WEAPON_PISTOL) return 18;               // Base damage ~18
     if (weapon == WEAPON_SWORD) return 55;                // Base damage ~55 (50-60 range)
     if (weapon == WEAPON_KATANA) return 77;               // Base damage ~77
     if (weapon == WEAPON_RHINO) return 90;                // Base damage ~90

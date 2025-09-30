@@ -321,17 +321,20 @@ function tryEmergencyMovement() {
     
     // Define weapon priorities with special position finders
     var weaponPriorities = [
-        {weapon: WEAPON_FLAME_THROWER, priority: 10, name: "Flame Thrower", special: "tactical"},
-        {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 9, name: "Enhanced Lightninger", special: "tactical"},
-        {weapon: WEAPON_NEUTRINO, priority: 8, name: "Neutrino", special: "diagonal"},
-        {weapon: WEAPON_DESTROYER, priority: 7, name: "Destroyer", special: "tactical"},
-        {weapon: WEAPON_RIFLE, priority: 6, name: "Rifle", special: "tactical"},
-        {weapon: WEAPON_M_LASER, priority: 5, name: "M-Laser", special: "alignment"},
+        {weapon: WEAPON_FLAME_THROWER, priority: 11, name: "Flame Thrower", special: "tactical"},
+        {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 10, name: "Enhanced Lightninger", special: "tactical"},
+        {weapon: WEAPON_NEUTRINO, priority: 9, name: "Neutrino", special: "diagonal"},
+        {weapon: WEAPON_DESTROYER, priority: 8, name: "Destroyer", special: "tactical"},
+        {weapon: WEAPON_RIFLE, priority: 7, name: "Rifle", special: "tactical"},
+        {weapon: WEAPON_M_LASER, priority: 6, name: "M-Laser", special: "alignment"},
+        {weapon: WEAPON_LASER, priority: 5, name: "Laser", special: "alignment"},
         {weapon: WEAPON_B_LASER, priority: 4, name: "B-Laser", special: "alignment"},
-        {weapon: WEAPON_RHINO, priority: 3, name: "Rhino", special: "tactical"},
-        {weapon: WEAPON_GRENADE_LAUNCHER, priority: 2, name: "Grenade Launcher", special: "tactical"},
-        {weapon: WEAPON_SWORD, priority: 1, name: "Sword", special: "tactical"},
-        {weapon: WEAPON_KATANA, priority: 0, name: "Katana", special: "tactical"}
+        {weapon: WEAPON_MAGNUM, priority: 3, name: "Magnum", special: "tactical"},
+        {weapon: WEAPON_PISTOL, priority: 2, name: "Pistol", special: "tactical"},
+        {weapon: WEAPON_RHINO, priority: 1, name: "Rhino", special: "tactical"},
+        {weapon: WEAPON_GRENADE_LAUNCHER, priority: 1, name: "Grenade Launcher", special: "tactical"},
+        {weapon: WEAPON_SWORD, priority: 0, name: "Sword", special: "tactical"},
+        {weapon: WEAPON_KATANA, priority: -1, name: "Katana", special: "tactical"}
     ];
     
     // Try weapons in priority order
@@ -440,7 +443,8 @@ function findAlignmentPosition(weapon) {
     var minRange = getWeaponMinRange(weapon);
     var maxRange = getWeaponMaxRange(weapon);
     var weaponName = (weapon == WEAPON_B_LASER) ? "B-Laser" : 
-                     (weapon == WEAPON_M_LASER) ? "M-Laser" : "Alignment";
+                     (weapon == WEAPON_M_LASER) ? "M-Laser" :
+                     (weapon == WEAPON_LASER) ? "Laser" : "Alignment";
     
     if (debugEnabled) {
         debugW("Finding " + weaponName + " alignment position (range " + minRange + "-" + maxRange + ")");
@@ -762,7 +766,7 @@ function tryDesperationAttack() {
     }
     
     // Execute combat with all remaining TP
-    executeCombat(myCell, null); // No pre-calculated weapon in emergency mode
+    executeCombat(myCell, null, null); // No pre-calculated weapon/package in emergency mode
     return true;
 }
 
@@ -895,12 +899,16 @@ function tryKitingAttack() {
     
     // Priority weapons with special handling
     var priorityWeapons = [
-        {weapon: WEAPON_FLAME_THROWER, priority: 5, special: "line"},
-        {weapon: WEAPON_B_LASER, priority: 4, special: "line"},
-        {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 3, special: "multi"},
-        {weapon: WEAPON_NEUTRINO, priority: 2, special: "diagonal"},
-        {weapon: WEAPON_DESTROYER, priority: 1, special: "normal"},
-        {weapon: WEAPON_RHINO, priority: 0, special: "normal"}
+        {weapon: WEAPON_FLAME_THROWER, priority: 6, special: "line"},
+        {weapon: WEAPON_M_LASER, priority: 5, special: "line"},
+        {weapon: WEAPON_LASER, priority: 4, special: "line"},
+        {weapon: WEAPON_B_LASER, priority: 3, special: "line"},
+        {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 2, special: "multi"},
+        {weapon: WEAPON_NEUTRINO, priority: 1, special: "diagonal"},
+        {weapon: WEAPON_DESTROYER, priority: 0, special: "normal"},
+        {weapon: WEAPON_MAGNUM, priority: -1, special: "normal"},
+        {weapon: WEAPON_PISTOL, priority: -2, special: "normal"},
+        {weapon: WEAPON_RHINO, priority: -3, special: "normal"}
     ];
     
     // Try priority weapons first

@@ -1,8 +1,8 @@
 // V7 Module: combat/execution.ls
 // Scenario-based combat execution
 
-// === ENHANCED MULTI-ENEMY COMBAT EXECUTION WITH ENEMY ASSOCIATIONS ===
-function executeCombat(fromCell, recommendedWeapon) {
+// === ENHANCED MULTI-ENEMY COMBAT EXECUTION WITH PACKAGE SUPPORT ===
+function executeCombat(fromCell, recommendedWeapon, packageActions) {
     if (count(allEnemies) == 0) {
         return;
     }
@@ -36,36 +36,49 @@ function executeCombat(fromCell, recommendedWeapon) {
         var targetToAttack = primaryTarget;
         var associatedWeapon = recommendedWeapon;
         
-        // Check if current cell has enemy associations from damage zones
-        // Checking enemy associations
-        var currentCellAssociation = findEnemyAssociationForCell(myCell);
-        if (currentCellAssociation != null) {
-            targetToAttack = currentCellAssociation[0];   // enemy
-            associatedWeapon = currentCellAssociation[1]; // weapon
-            debugW("ENEMY ASSOCIATION: Using associated target " + targetToAttack + " with weapon " + associatedWeapon);
+        // Check if current cell has enemy associations from damage zones (only if no packageActions)
+        var hasValidPackageActions = false;
+        if (packageActions != null) {
+            // Simple check: if packageActions is not a number, it's likely an array
+            if (!(packageActions + 0 == packageActions && packageActions > 0 && packageActions < 1000)) {
+                hasValidPackageActions = (count(packageActions) > 0);
+            }
+        }
+        if (!hasValidPackageActions) {
+            var currentCellAssociation = findEnemyAssociationForCell(myCell);
+            if (currentCellAssociation != null) {
+                targetToAttack = currentCellAssociation[0];   // enemy
+                associatedWeapon = currentCellAssociation[1]; // weapon
+                debugW("ENEMY ASSOCIATION: Using associated target " + targetToAttack + " with weapon " + associatedWeapon);
+            } else {
+                // No enemy associations found
+            }
         } else {
-            // No enemy associations found
+            debugW("PACKAGE PRIORITY: Skipping enemy associations, using packageActions with target " + targetToAttack);
         }
         
-        // If we don't have a recommended weapon, get scenario for current TP
-        if (recommendedWeapon == null) {
+        // PRIORITIZE pathfinding recommendation when available
+        var actionToUse = recommendedWeapon;
+
+        // Only fallback to scenario selection if no recommendation exists
+        if (actionToUse == null) {
             var scenario = getBestScenarioForTP(tpRemaining, true);
 
             // If no valid scenario, we should stop combat
             if (scenario == null || count(scenario) == 0) {
                 break;
             }
-            
-            // Use the first weapon from the scenario as recommended weapon
+
+            // Use the first action from the scenario
             for (var i = 0; i < count(scenario); i++) {
                 var action = scenario[i];
-                if (isWeapon(action)) {
-                    recommendedWeapon = action;
+                if (isWeapon(action) || isChip(action)) {
+                    actionToUse = action;
                     break;
                 }
             }
-            
-            if (recommendedWeapon == null) {
+
+            if (actionToUse == null) {
                 break;
             }
         }
@@ -79,94 +92,56 @@ function executeCombat(fromCell, recommendedWeapon) {
             // Single-target attack on primary target
             var tpBefore = tpRemaining;
             
-            // Scenario-based attack: recalculating optimal combinations
-            
-            // For strength builds: First check what weapons work at current distance
-            if (!isMagicBuild && primaryTarget != null) {
-                var currentDistance = getCellDistance(getCell(), getCell(primaryTarget));
-                // Checking best weapon for current distance
-                
-                // Find best weapon for current distance using equipped weapons
-                var bestWeaponForRange = null;
-                var bestWeaponDamage = 0;
-                var equippedWeapons = getWeapons();
-                for (var w = 0; w < count(equippedWeapons); w++) {
-                    var testWeapon = equippedWeapons[w];
-                    var minRange = getWeaponMinRange(testWeapon);
-                    var maxRange = getWeaponMaxRange(testWeapon);
-                    if (currentDistance >= minRange && currentDistance <= maxRange) {
-                        // Check alignment for M-Laser and line weapons
-                        var alignmentOK = true;
-                        var launchType = getWeaponLaunchType(testWeapon);
-                        if (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_LINE_INVERTED) {
-                            var myX = getCellX(getCell());
-                            var myY = getCellY(getCell());
-                            var targetX = getCellX(getCell(primaryTarget));
-                            var targetY = getCellY(getCell(primaryTarget));
-                            var dx = targetX - myX;
-                            var dy = targetY - myY;
-                            alignmentOK = (dx == 0) || (dy == 0); // Line weapons require X OR Y axis alignment
-                            // Line weapon alignment checked
-                        } else if (launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_DIAGONAL_INVERTED) {
-                            var myX = getCellX(getCell());
-                            var myY = getCellY(getCell());
-                            var targetX = getCellX(getCell(primaryTarget));
-                            var targetY = getCellY(getCell(primaryTarget));
-                            var dx = abs(targetX - myX);
-                            var dy = abs(targetY - myY);
-                            alignmentOK = (dx == dy && dx > 0); // Diagonal weapons require perfect diagonal alignment
-                            if (!alignmentOK) {
-                                // Diagonal weapon lacks alignment
-                            }
-                        } else if (launchType == LAUNCH_TYPE_STAR || launchType == LAUNCH_TYPE_STAR_INVERTED) {
-                            var myX = getCellX(getCell());
-                            var myY = getCellY(getCell());
-                            var targetX = getCellX(getCell(primaryTarget));
-                            var targetY = getCellY(getCell(primaryTarget));
-                            var dx = targetX - myX;
-                            var dy = targetY - myY;
-                            var lineAligned = (dx == 0) || (dy == 0);
-                            var diagAligned = (abs(dx) == abs(dy) && dx != 0);
-                            alignmentOK = lineAligned || diagAligned; // Star pattern: line OR diagonal
-                            if (!alignmentOK) {
-                                // Star weapon lacks alignment
-                            }
-                        }
-                        
-                        if (alignmentOK) {
-                            // Use weapon cost as damage proxy (higher cost usually = higher damage)
-                            var damage = getWeaponCost(testWeapon) * 10;
-                            // Weapon range and cost checked
-                            if (damage > bestWeaponDamage) {
-                                bestWeaponDamage = damage;
-                                bestWeaponForRange = testWeapon;
-                            }
-                        }
-                    }
-                }
-                
-                if (bestWeaponForRange != null) {
-                    // Using range-optimized weapon
-                    recommendedWeapon = bestWeaponForRange;
-                }
-            }
-            
-            // Get fresh scenario based on current position (after movement)
-            var scenario = getBestScenarioForTP(tpRemaining, true);
-            
+            // EXECUTE RECOMMENDED ACTION - trust pathfinding recommendation
             var actualTPUsed = 0;
             var newTPRemaining = tpRemaining;
-            
-            if (scenario != null && count(scenario) > 0) {
-                // Only log scenario selection if debug enabled
-                if (debugEnabled) {
-                    // Scenario selected for execution
-                }
-                newTPRemaining = executeScenario(scenario, targetToAttack, tpRemaining);
+
+            // NEW: Execute full package if available, otherwise single action
+            if (hasValidPackageActions) {
+                // Execute the complete weapon+chip package
+                var packageResult = executeActionPackage(packageActions, targetToAttack, tpRemaining);
+                var packageStatus = packageResult[0];  // -1 = cooldown failed, 0 = no execution, 1 = success
+                newTPRemaining = packageResult[1];     // remaining TP
                 actualTPUsed = tpRemaining - newTPRemaining;
-            } else {
-                // ERROR: No scenario available - always log this issue
-                debugW("ERROR: No combat scenario available for magic build with " + tpRemaining + " TP");
+
+                if (packageStatus == -1) {
+                    // Package failed due to chip cooldown - fall back to scenario generation
+                    debugW("PACKAGE COOLDOWN FALLBACK: Package failed, trying alternative scenario");
+                    var weapons = getWeapons();
+                    var scenario = getScenarioForLoadout(weapons, tpRemaining);
+                    if (scenario != null && count(scenario) > 0) {
+                        // Execute the fallback scenario
+                        var scenarioResult = executeActionPackage(scenario, targetToAttack, tpRemaining);
+                        newTPRemaining = scenarioResult[1];
+                        actualTPUsed = tpRemaining - newTPRemaining;
+                        if (debugEnabled && actualTPUsed > 0) {
+                            debugW("FALLBACK SCENARIO EXECUTED: Used " + count(scenario) + " actions, " + actualTPUsed + " TP");
+                        }
+                    } else {
+                        debugW("FALLBACK SCENARIO: No valid scenario available");
+                    }
+                } else if (debugEnabled && actualTPUsed > 0) {
+                    debugW("PACKAGE EXECUTED: Used " + count(packageActions) + " actions, " + actualTPUsed + " TP");
+                }
+            } else if (actionToUse != null) {
+                // Fallback to single action
+                if (isWeapon(actionToUse)) {
+                    newTPRemaining = executeRecommendedWeapon(actionToUse, targetToAttack, tpRemaining);
+                } else if (isChip(actionToUse)) {
+                    newTPRemaining = executeRecommendedChip(actionToUse, targetToAttack, tpRemaining);
+                }
+                actualTPUsed = tpRemaining - newTPRemaining;
+            }
+
+            // Fallback to scenario system only if recommended action failed
+            if (actualTPUsed == 0) {
+                var scenario = getBestScenarioForTP(tpRemaining, true);
+                if (scenario != null && count(scenario) > 0) {
+                    newTPRemaining = executeScenario(scenario, targetToAttack, tpRemaining);
+                    actualTPUsed = tpRemaining - newTPRemaining;
+                } else {
+                    debugW("ERROR: No combat scenario available with " + tpRemaining + " TP");
+                }
             }
             
             if (actualTPUsed > 0) {
@@ -1379,6 +1354,11 @@ function executeChipActionOnTarget(chip, target, tpRemaining) {
         if (debugEnabled) {
             debugW("VENOM cooldown set: 1 turn");
         }
+    } else if (chip == CHIP_STALACTITE) {
+        chipCooldowns[CHIP_STALACTITE] = 3; // 3 turn cooldown
+        if (debugEnabled) {
+            debugW("STALACTITE cooldown set: 3 turns");
+        }
     }
     
     if (debugEnabled) {
@@ -1432,7 +1412,11 @@ function tryUnifiedFallbackWeapons(target, tpRemaining, distance, useTarget) {
     var weaponPriorityMap = [
         {weapon: WEAPON_ENHANCED_LIGHTNINGER, priority: 800},
         {weapon: WEAPON_RIFLE, priority: 600},
+        {weapon: WEAPON_B_LASER, priority: 520},
+        {weapon: WEAPON_LASER, priority: 480},
         {weapon: WEAPON_M_LASER, priority: 400},
+        {weapon: WEAPON_MAGNUM, priority: 360},
+        {weapon: WEAPON_PISTOL, priority: 340},
         {weapon: WEAPON_SWORD, priority: 300},
         {weapon: WEAPON_KATANA, priority: 200}
     ];
@@ -1949,4 +1933,245 @@ function selectBestWeaponForEnemy(enemyEntity) {
     }
     
     return bestWeapon;
+}
+
+// === RECOMMENDED ACTION EXECUTION (NEW) ===
+// Execute a weapon recommended by pathfinding (trusts the recommendation)
+function executeRecommendedWeapon(weaponId, target, tpRemaining) {
+    if (weaponId == null || !isWeapon(weaponId)) {
+        return tpRemaining;
+    }
+
+    if (target == null || getLife(target) <= 0) {
+        return tpRemaining;
+    }
+
+    var weaponCost = getWeaponCost(weaponId);
+    var switchCost = (getWeapon() != weaponId) ? 1 : 0;
+    var totalCost = weaponCost + switchCost;
+
+    if (tpRemaining < totalCost) {
+        debugW("RECOMMENDED WEAPON: Not enough TP for " + weaponId + " (need " + totalCost + ", have " + tpRemaining + ")");
+        return tpRemaining;
+    }
+
+    // Switch weapon if needed
+    if (getWeapon() != weaponId) {
+        setWeapon(weaponId);
+        tpRemaining--;
+    }
+
+    // Execute weapon with multiple uses if possible
+    var maxUses = getWeaponMaxUses(weaponId);
+    var possibleUses = floor(tpRemaining / weaponCost);
+    var actualUses = (maxUses > 0) ? min(possibleUses, maxUses) : possibleUses;
+
+    var usesExecuted = 0;
+    for (var i = 0; i < actualUses; i++) {
+        if (tpRemaining >= weaponCost && getLife(target) > 0 && canUseWeapon(target)) {
+            useWeapon(target);
+            recordWeaponUse(weaponId);
+            tpRemaining -= weaponCost;
+            usesExecuted++;
+        } else {
+            break;
+        }
+    }
+
+    if (debugEnabled && usesExecuted > 0) {
+        debugW("RECOMMENDED WEAPON: Used " + weaponId + " " + usesExecuted + " times on " + target);
+    }
+
+    return tpRemaining;
+}
+
+// Execute a chip recommended by pathfinding (trusts the recommendation)
+function executeRecommendedChip(chipId, target, tpRemaining) {
+    if (chipId == null || !isChip(chipId)) {
+        return tpRemaining;
+    }
+
+    if (target == null || getLife(target) <= 0) {
+        return tpRemaining;
+    }
+
+    var chipCost = getChipCost(chipId);
+
+    if (tpRemaining < chipCost) {
+        debugW("RECOMMENDED CHIP: Not enough TP for " + chipId + " (need " + chipCost + ", have " + tpRemaining + ")");
+        return tpRemaining;
+    }
+
+    // For defensive chips, redirect to self
+    var chipTarget = target;
+    if (chipId == CHIP_ANTIDOTE || chipId == CHIP_REGENERATION || chipId == CHIP_VACCINE || chipId == CHIP_REMISSION) {
+        chipTarget = getEntity();
+    } else if (chipId == CHIP_LIBERATION) {
+        // LIBERATION can target self or enemy, decide based on conditions
+        chipTarget = hasNegativeEffects() ? getEntity() : target;
+    }
+
+    if (canUseChip(chipId, chipTarget)) {
+        useChip(chipId, chipTarget);
+        tpRemaining -= chipCost;
+
+        // Set cooldowns after successful use
+        if (chipId == CHIP_TOXIN) {
+            chipCooldowns[CHIP_TOXIN] = 2;
+        } else if (chipId == CHIP_VENOM) {
+            chipCooldowns[CHIP_VENOM] = 1;
+        } else if (chipId == CHIP_LIBERATION) {
+            chipCooldowns[CHIP_LIBERATION] = 5;
+        } else if (chipId == CHIP_ANTIDOTE) {
+            chipCooldowns[CHIP_ANTIDOTE] = 4;
+        }
+
+        if (debugEnabled) {
+            debugW("RECOMMENDED CHIP: Used " + chipId + " on " + chipTarget);
+        }
+    } else {
+        debugW("RECOMMENDED CHIP: Cannot use " + chipId + " on " + chipTarget);
+    }
+
+    return tpRemaining;
+}
+
+// === PACKAGE EXECUTION (NEW) ===
+// Execute a complete weapon+chip package in sequence
+function executeActionPackage(actions, target, tpRemaining) {
+    if (actions == null) {
+        return [0, tpRemaining]; // No actions to execute
+    }
+
+    // Check if actions is a number (invalid)
+    if (actions + 0 == actions && actions > 0 && actions < 1000) {
+        if (debugEnabled) {
+            debugW("PACKAGE ERROR: actions is not an array: " + actions);
+        }
+        return [0, tpRemaining]; // Invalid actions array
+    }
+
+    // Check if actions array is empty
+    if (count(actions) == 0) {
+        return [0, tpRemaining]; // Empty actions array
+    }
+
+    if (target == null || getLife(target) <= 0) {
+        return [0, tpRemaining]; // Invalid target
+    }
+
+    var originalTP = tpRemaining;
+
+    if (debugEnabled) {
+        debugW("PACKAGE START: Executing " + count(actions) + " actions with " + tpRemaining + " TP");
+        debugW("PACKAGE DEBUG: Target=" + target + ", actions=" + actions);
+    }
+
+    for (var i = 0; i < count(actions); i++) {
+        var action = actions[i];
+
+        if (getLife(target) <= 0) {
+            debugW("PACKAGE: Target defeated, stopping at action " + (i + 1));
+            break;
+        }
+
+        if (isWeapon(action)) {
+            // Switch weapon if needed
+            if (getWeapon() != action) {
+                if (tpRemaining < 1) break;
+                setWeapon(action);
+                tpRemaining--;
+            }
+
+            // Use weapon
+            var weaponCost = getWeaponCost(action);
+            if (tpRemaining >= weaponCost && canUseWeapon(target)) {
+                useWeapon(target);
+                recordWeaponUse(action);
+                tpRemaining -= weaponCost;
+                // Successful attack performed
+
+                if (debugEnabled) {
+                    debugW("PACKAGE: Used weapon " + action + " (" + weaponCost + " TP)");
+                }
+            } else {
+                var myPos = getCell();
+                var targetPos = getCell(target);
+                var distance = getCellDistance(myPos, targetPos);
+                var hasLoS = checkLineOfSight(myPos, targetPos);
+                var canUse = canUseWeapon(target);
+                debugW("PACKAGE: Cannot use weapon " + action + " - TP:" + tpRemaining + "/" + weaponCost + ", dist:" + distance + ", LoS:" + hasLoS + ", canUse:" + canUse);
+                break;
+            }
+        } else if (isChip(action)) {
+            // Use chip
+            var chipCost = getChipCost(action);
+            var chipTarget = target;
+
+            // Handle defensive chips
+            if (action == CHIP_ANTIDOTE || action == CHIP_REGENERATION || action == CHIP_VACCINE || action == CHIP_REMISSION) {
+                chipTarget = getEntity();
+            } else if (action == CHIP_LIBERATION) {
+                chipTarget = hasNegativeEffects() ? getEntity() : target;
+            }
+
+            // Check if chip is on cooldown
+            var chipOnCooldown = false;
+            if (action == CHIP_STALACTITE && chipCooldowns[CHIP_STALACTITE] > 0) {
+                chipOnCooldown = true;
+            } else if (action == CHIP_TOXIN && chipCooldowns[CHIP_TOXIN] > 0) {
+                chipOnCooldown = true;
+            } else if (action == CHIP_VENOM && chipCooldowns[CHIP_VENOM] > 0) {
+                chipOnCooldown = true;
+            } else if (action == CHIP_FLAME && chipCooldowns[CHIP_FLAME] > 0) {
+                chipOnCooldown = true;
+            } else if (action == CHIP_LIBERATION && chipCooldowns[CHIP_LIBERATION] > 0) {
+                chipOnCooldown = true;
+            } else if (action == CHIP_ANTIDOTE && chipCooldowns[CHIP_ANTIDOTE] > 0) {
+                chipOnCooldown = true;
+            }
+
+            if (chipOnCooldown) {
+                debugW("PACKAGE: Chip " + action + " is on cooldown (" + chipCooldowns[action] + " turns remaining)");
+                debugW("PACKAGE FALLBACK: Package failed due to chip cooldown - returning for scenario fallback");
+                return [-1, tpRemaining]; // Return special code indicating package failed due to cooldown
+            } else if (tpRemaining >= chipCost && canUseChip(action, chipTarget)) {
+                useChip(action, chipTarget);
+                tpRemaining -= chipCost;
+                // Successful attack performed
+
+                // Set cooldowns
+                if (action == CHIP_TOXIN) {
+                    chipCooldowns[CHIP_TOXIN] = 2;
+                } else if (action == CHIP_VENOM) {
+                    chipCooldowns[CHIP_VENOM] = 1;
+                } else if (action == CHIP_STALACTITE) {
+                    chipCooldowns[CHIP_STALACTITE] = 3;
+                } else if (action == CHIP_FLAME) {
+                    chipCooldowns[CHIP_FLAME] = 1;
+                } else if (action == CHIP_LIBERATION) {
+                    chipCooldowns[CHIP_LIBERATION] = 5;
+                } else if (action == CHIP_ANTIDOTE) {
+                    chipCooldowns[CHIP_ANTIDOTE] = 4;
+                }
+
+                if (debugEnabled) {
+                    debugW("PACKAGE: Used chip " + action + " on " + chipTarget + " (" + chipCost + " TP)");
+                }
+            } else {
+                debugW("PACKAGE: Cannot use chip " + action + " (need " + chipCost + ", have " + tpRemaining + ")");
+                break;
+            }
+        } else {
+            debugW("PACKAGE: Unknown action type: " + action);
+            break;
+        }
+    }
+
+    var tpUsed = originalTP - tpRemaining;
+    if (debugEnabled) {
+        debugW("PACKAGE COMPLETE: Used " + tpUsed + " TP total");
+    }
+
+    return [1, tpRemaining]; // Return success status and remaining TP
 }

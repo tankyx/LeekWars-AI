@@ -44,9 +44,15 @@ global lastDoTApplicationTurn = 0;   // Turn when we last applied DoT
 global enemyDoTRemainingTurns = 0;   // Enemy's remaining DoT turns
 global shouldReturnForDoT = false;   // Flag to return and reapply DoT
 
+// === PROGRESS TRACKING ===
+
 // === MULTI-ENEMY TRACKING ===
 global allEnemies = [];             // Array of all alive enemy entities
 global enemyData = [:];             // Map[enemyId -> {cell, hp, maxHp, ttk, priority, threat}]
+
+// === STALEMATE DETECTION ===
+global lastDistanceToEnemy = -1;    // Distance to primary enemy last turn
+global lastTurnAttacked = 0;        // Last turn we successfully attacked
 global primaryTarget = null;        // Current primary target (entity)
 global damageZonesPerEnemy = [:];   // Map[enemyId -> damageArray]
 
@@ -125,6 +131,7 @@ function updateGameState() {
         terrainLOSDone = false;
         terrainLOSI = 0;
         terrainLOSJ = 1;
+
     }
     
     // CRITICAL FIX: Validate our own position is within bounds
@@ -278,6 +285,9 @@ function updateGameState() {
     if (chipCooldowns[CHIP_VENOM] != null && chipCooldowns[CHIP_VENOM] > 0) {
         chipCooldowns[CHIP_VENOM]--;
     }
+    if (chipCooldowns[CHIP_STALACTITE] != null && chipCooldowns[CHIP_STALACTITE] > 0) {
+        chipCooldowns[CHIP_STALACTITE]--;
+    }
 
     // Update healing chip cooldowns
     if (chipCooldowns[CHIP_VACCINE] != null && chipCooldowns[CHIP_VACCINE] > 0) {
@@ -297,6 +307,7 @@ function updateGameState() {
 
     // Update DoT cycle tracking
     updateDoTTracking();
+
 
     // Reset per-turn pathfinding budget
     aStarCallsThisTurn = 0;
@@ -329,6 +340,7 @@ function getWeaponMaxUses(weapon) {
     if (weapon == WEAPON_DESTROYER) return 2;
     if (weapon == WEAPON_FLAME_THROWER) return 2;
     if (weapon == WEAPON_ELECTRISOR) return 2;
+    if (weapon == WEAPON_PISTOL) return 4;
     if (weapon == WEAPON_DOUBLE_GUN) return 3; // New: Double Gun has 3 uses/turn
     return 0; // 0 = unlimited uses
 }
@@ -745,3 +757,4 @@ function shouldUseHealingChip(chip, hpThreshold) {
 
     return true; // All checks passed
 }
+

@@ -13,7 +13,7 @@ include("decision/evaluation");
 include("decision/targeting");
 include("decision/emergency");
 include("decision/buffs");
-include("combat/execution");
+include("combat/execution")
 include("movement/pathfinding");
 include("utils/debug");
 include("utils/cache");
@@ -122,8 +122,15 @@ function executeNormalTurn() {
     if (allEnemies != null && count(allEnemies) > 0) {
         debug("DAMAGE CALC: Starting with " + count(allEnemies) + " enemies");
         if (damageArrayTurn != getTurn() || currentDamageArray == null || count(currentDamageArray) == 0) {
-            damageArray = calculateMultiEnemyDamageZones();
+            // NEW: Use package-based damage zones for better weapon+chip combinations
+            damageArray = calculatePackageBasedDamageZones();
             damageArrayTurn = getTurn();
+
+            // Fallback to individual action zones if packages failed
+            if (damageArray == null || count(damageArray) == 0) {
+                debugW("FALLBACK: Package zones empty, using individual action zones");
+                damageArray = calculateMultiEnemyDamageZones();
+            }
         } else {
             damageArray = currentDamageArray; // reuse cached zones for this turn
         }
@@ -248,9 +255,12 @@ function executeNormalTurn() {
         }
     }
     
-    // Step 2: Check for immediate close-range combat (KATANA priority)
+    // Step 2: Check for immediate close-range combat with emergency considerations
     debugW("STEP 2: Checking immediate combat opportunity");
+
+    // Check for immediate combat opportunity
     var immediateAttack = checkImmediateCombatOpportunity();
+
     var immediateWeapon = null;
     var immediateDamage = 0;
     if (immediateAttack != null && count(immediateAttack) > 0 && immediateAttack[0] != null) {
@@ -553,9 +563,16 @@ function executeNormalTurn() {
     // Step 6: Execute combat from final position
     debugW("STEP 6: Starting combat phase");
     var recommendedWeapon = null;
-    if (pathResult != null && count(pathResult) >= 7 && pathResult[3] != null) {
+    var packageActions = null;
+    if (pathResult != null && count(pathResult) >= 8) {
         recommendedWeapon = pathResult[3]; // pathResult[3] = weaponId
+        packageActions = pathResult[7];    // pathResult[7] = packageActions (NEW)
+        debugW("STEP 6: pathResult[7] packageActions=" + packageActions);
+    } else if (pathResult != null && count(pathResult) >= 7 && pathResult[3] != null) {
+        recommendedWeapon = pathResult[3]; // pathResult[3] = weaponId (backwards compatibility)
+        debugW("STEP 6: Using backwards compatibility, no packageActions");
     }
+    debugW("STEP 6: pathResult count=" + (pathResult != null ? count(pathResult) : "null"));
     
     // If no weapon recommended by pathfinding, try to find a weapon that can attack NOW
     if (recommendedWeapon == null) {
@@ -579,6 +596,12 @@ function executeNormalTurn() {
     }
     
     debugW("STEP 6: recommendedWeapon=" + recommendedWeapon);
+    if (pathResult != null) {
+        debugW("STEP 6: pathResult count=" + count(pathResult));
+        if (count(pathResult) >= 8) {
+            debugW("STEP 6: pathResult[7] packageActions=" + pathResult[7]);
+        }
+    }
     
     if (debugEnabled) {
         debug("COMBAT PHASE: Position=" + myCell + ", TP=" + myTP + ", MP=" + myMP + ", RecommendedWeapon=" + recommendedWeapon);
@@ -608,10 +631,41 @@ function executeNormalTurn() {
                 debugW("COMBAT: Skipping combat (no immediate shot and teleport not viable)");
             }
         } else {
-            // Execute combat once; scenario builder will pick viable actions
-            debugW("COMBAT: Calling executeCombat with weapon=" + recommendedWeapon);
-            executeCombat(myCell, recommendedWeapon);
-            debugW("COMBAT: executeCombat completed");
+            // If packageActions is null, use simple direct weapon attack instead of broken scenario system
+            if (packageActions == null && recommendedWeapon != null && isWeapon(recommendedWeapon)) {
+                debugW("COMBAT: packageActions null, using direct weapon attack with " + recommendedWeapon);
+                if (getWeapon() != recommendedWeapon) {
+                    setWeapon(recommendedWeapon);
+                    myTP -= 1; // weapon switch cost
+                }
+                var weaponCost = getWeaponCost(recommendedWeapon);
+                var maxUses = getWeaponMaxUses(recommendedWeapon);
+                var possibleUses = floor(myTP / weaponCost);
+                var actualUses = (maxUses > 0) ? min(possibleUses, maxUses) : possibleUses;
+                var target = (primaryTarget != null) ? primaryTarget : allEnemies[0];
+
+                for (var u = 0; u < actualUses && myTP >= weaponCost; u++) {
+                    if (target != null && getLife(target) > 0) {
+                        useWeapon(target);
+                        myTP -= weaponCost;
+                        debugW("COMBAT: Direct attack " + (u+1) + "/" + actualUses + " with weapon " + recommendedWeapon);
+                    }
+                }
+            } else {
+                // Execute combat once; scenario builder will pick viable actions
+                var packageActionsDesc = "null";
+                if (packageActions != null) {
+                    // Simple check: if packageActions is a number, it's invalid
+                    if (packageActions + 0 == packageActions && packageActions > 0 && packageActions < 1000) {
+                        packageActionsDesc = "invalid_type:" + packageActions;
+                    } else {
+                        packageActionsDesc = count(packageActions) + " actions";
+                    }
+                }
+                debugW("COMBAT: Calling executeCombat with weapon=" + recommendedWeapon + ", packageActions=" + packageActionsDesc);
+                executeCombat(myCell, recommendedWeapon, packageActions);
+                debugW("COMBAT: executeCombat completed");
+            }
         }
     } else {
         debugW("COMBAT IMPOSSIBLE: enemies=" + count(allEnemies) + ", TP=" + getTP());
@@ -885,6 +939,7 @@ function checkImmediateCombatOpportunity() {
     // No immediate opportunity found
     return null;
 }
+
 
 // (Hide and seek removed)
 

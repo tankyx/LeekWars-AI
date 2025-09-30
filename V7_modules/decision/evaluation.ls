@@ -73,14 +73,15 @@ function calculateMultiEnemyDamageZones() {
         else if (weapon == WEAPON_ENHANCED_LIGHTNINGER) weaponColorName = "Purple";
         else if (weapon == WEAPON_KATANA) weaponColorName = "Blue";
         else if (weapon == WEAPON_B_LASER) weaponColorName = "Deep Pink";
+                else if (weapon == WEAPON_LASER) weaponColorName = "Crimson";
+                else if (weapon == WEAPON_MAGNUM) weaponColorName = "Gold";
         else if (weapon == WEAPON_GRENADE_LAUNCHER) weaponColorName = "Dark Orange";
         else if (weapon == WEAPON_ELECTRISOR) weaponColorName = "Cyan";
         else if (weapon == WEAPON_RHINO) weaponColorName = "Brown";
-        else if (weapon == WEAPON_SWORD) weaponColorName = "Lime Green";
-        else if (weapon == WEAPON_NEUTRINO) weaponColorName = "Pink";
-        else if (weapon == WEAPON_DESTROYER) weaponColorName = "Indigo";
-        else if (weapon == WEAPON_FLAME_THROWER) weaponColorName = "Red Orange";
-        else if (weapon == WEAPON_LASER) weaponColorName = "Crimson";
+                else if (weapon == WEAPON_SWORD) weaponColorName = "Lime Green";
+                else if (weapon == WEAPON_NEUTRINO) weaponColorName = "Pink";
+                else if (weapon == WEAPON_DESTROYER) weaponColorName = "Indigo";
+                else if (weapon == WEAPON_FLAME_THROWER) weaponColorName = "Red Orange";
         
         // Processing weapon zones for all ranges
         
@@ -174,6 +175,7 @@ function calculateMultiEnemyDamageZones() {
                 else if (weapon == WEAPON_DESTROYER) markColor = getColor(75, 0, 130);
                 else if (weapon == WEAPON_FLAME_THROWER) markColor = getColor(255, 69, 0);
                 else if (weapon == WEAPON_LASER) markColor = getColor(220, 20, 60);
+                else if (weapon == WEAPON_MAGNUM) markColor = getColor(218, 165, 32);
                 else markColor = getColor(255, 255, 0);
                 if (!hasLoS || damage <= 0) {
                     markColor = getColor(128, 128, 128);
@@ -310,7 +312,18 @@ function calculateMultiEnemyDamageZones() {
         
         debugW("CHIP INTEGRATION: Complete, total zones=" + count(enemyDamageZones));
     }
-    
+
+    // If no zones created or early game, add approach zones for movement
+    if (count(enemyDamageZones) == 0 || getTurn() <= 3) {
+        var approachZones = createApproachZones(aliveEnemies);
+        for (var az = 0; az < count(approachZones); az++) {
+            push(enemyDamageZones, approachZones[az]);
+        }
+        if (count(approachZones) > 0) {
+            debugW("APPROACH INTEGRATION: Added " + count(approachZones) + " approach zones for early game");
+        }
+    }
+
     debugW("ENEMY-CENTRIC: Total " + count(enemyDamageZones) + " weapon+chip damage zones around enemies");
     
     // Mark current position and enemies for reference
@@ -1034,4 +1047,460 @@ function getChipAreaShapeNormalized(chip) {
     var a = getChipArea(chip);
     if (chip == CHIP_TOXIN) return AREA_CIRCLE_2;
     return a;
+}
+
+// === PACKAGE-BASED DAMAGE ZONE CALCULATION (NEW) ===
+// Calculates weapon+chip packages with synergy bonuses
+function calculatePackageBasedDamageZones() {
+    var packageZones = [];
+    var operationsUsed = 0;
+    var maxOperations = 3000000; // 3M operations budget for packages
+
+    if (allEnemies == null || count(allEnemies) == 0) {
+        return packageZones;
+    }
+
+    var aliveEnemies = [];
+    for (var i = 0; i < count(allEnemies); i++) {
+        if (getLife(allEnemies[i]) > 0) {
+            push(aliveEnemies, allEnemies[i]);
+        }
+    }
+
+    if (count(aliveEnemies) == 0) {
+        return packageZones;
+    }
+
+    // For each enemy, calculate the best packages from various positions
+    for (var e = 0; e < count(aliveEnemies) && operationsUsed < maxOperations; e++) {
+        var activeEnemy = aliveEnemies[e];
+        var targetCell = getCell(activeEnemy);
+
+        if (enemyData[activeEnemy] != null) {
+            targetCell = enemyData[activeEnemy].cell;
+        } else {
+            continue;
+        }
+
+        // Check positions within movement range for weapon packages
+        var searchRadius = min(myMP + 3, 8); // Don't search too far
+        for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (var dy = -searchRadius; dy <= searchRadius; dy++) {
+                if (operationsUsed > maxOperations) break;
+
+                var distance = abs(dx) + abs(dy);
+                if (distance == 0 || distance > myMP + 1) continue;
+
+                var testX = getCellX(myCell) + dx;
+                var testY = getCellY(myCell) + dy;
+                var testCell = getCellFromXY(testX, testY);
+
+                if (testCell == null || testCell == -1) continue;
+                if (getCellContent(testCell) != CELL_EMPTY) continue;
+
+                // Early-turn cone pruning
+                if (getTurn() <= 3) {
+                    if (!isWithinNinetyDegreeCone(myCell, targetCell, testCell)) {
+                        continue;
+                    }
+                }
+
+                // Evaluate best package from this position
+                var bestPackage = evaluateBestPackageFromPosition(testCell, activeEnemy, myTP);
+                if (bestPackage != null && bestPackage.totalDamage > 0) {
+                    // Store as [cell, totalDamage, primaryWeapon, packageActions, activeEnemy]
+                    push(packageZones, [
+                        testCell,
+                        bestPackage.totalDamage,
+                        bestPackage.primaryWeapon,
+                        bestPackage.actions,
+                        activeEnemy
+                    ]);
+                }
+
+                operationsUsed += 50; // Rough operation count
+            }
+        }
+    }
+
+    // Sort by total damage (highest first)
+    packageZones = sortPackageZonesByDamage(packageZones);
+
+    // Keep top 100 zones to prevent overflow
+    if (count(packageZones) > 100) {
+        var truncatedZones = [];
+        for (var i = 0; i < 100; i++) {
+            push(truncatedZones, packageZones[i]);
+        }
+        packageZones = truncatedZones;
+    }
+
+    debugW("PACKAGE ZONES: Created " + count(packageZones) + " weapon+chip package zones");
+    return packageZones;
+}
+
+// === CREATE APPROACH ZONES FOR EARLY GAME MOVEMENT ===
+function createApproachZones(enemies) {
+    var approachZones = [];
+    var weapons = getWeapons();
+
+    if (weapons == null || count(weapons) == 0) {
+        return approachZones;
+    }
+
+    for (var e = 0; e < count(enemies); e++) {
+        var currentEnemy = enemies[e];
+        if (currentEnemy == null || getLife(currentEnemy) <= 0) continue;
+
+        var currentEnemyCell = getCell(currentEnemy);
+
+        for (var w = 0; w < count(weapons); w++) {
+            var weapon = weapons[w];
+            var minRange = getWeaponMinRange(weapon);
+            var maxRange = getWeaponMaxRange(weapon);
+
+            // Use optimal range for positioning
+            var optimalRange = minRange;
+            if (weapon == WEAPON_RHINO) {
+                optimalRange = 3; // Middle of 2-4 range
+            } else if (weapon == WEAPON_ELECTRISOR) {
+                optimalRange = 7; // Exact range required
+            } else if (maxRange > minRange) {
+                optimalRange = floor((minRange + maxRange) / 2);
+            }
+
+            var cells = getCellsAtExactDistance(currentEnemyCell, optimalRange);
+
+            // Add a few approach cells for this weapon
+            for (var c = 0; c < min(8, count(cells)); c++) {
+                var cell = cells[c];
+                if (cell != null && getCellContent(cell) == CELL_EMPTY) {
+                    // Check line of sight requirement
+                    if (checkLineOfSight(cell, currentEnemyCell)) {
+                        // Add as low-priority movement zone
+                        push(approachZones, [cell, 1, weapon, null, currentEnemy]);
+                    }
+                }
+            }
+        }
+    }
+
+    debugW("APPROACH ZONES: Created " + count(approachZones) + " movement zones");
+    return approachZones;
+}
+
+// === EVALUATE BEST PACKAGE FROM POSITION ===
+function evaluateBestPackageFromPosition(position, targetEnemy, tpBudget) {
+    var weapons = getWeapons();
+    var bestPackage = null;
+    var bestDamage = 0;
+
+    // Try each weapon as the primary component
+    for (var w = 0; w < count(weapons); w++) {
+        var weapon = weapons[w];
+
+        // Check if weapon can hit from this position
+        if (!canWeaponReachEnemyFromPosition(weapon, position, targetEnemy)) {
+            continue;
+        }
+
+        // Build optimal package with this weapon as primary
+        var weaponPackage = buildOptimalPackageWithWeapon(weapon, position, targetEnemy, tpBudget);
+
+        if (weaponPackage != null && weaponPackage.totalDamage > bestDamage) {
+            bestDamage = weaponPackage.totalDamage;
+            bestPackage = weaponPackage;
+        }
+    }
+
+    // Only consider chip-only packages if no weapon works
+    if (bestPackage == null) {
+        var chipOnlyPackage = buildChipOnlyPackage(position, targetEnemy, tpBudget);
+        if (chipOnlyPackage != null) {
+            bestPackage = chipOnlyPackage;
+        }
+    }
+
+    return bestPackage;
+}
+
+// === BUILD OPTIMAL WEAPON+CHIP PACKAGE ===
+function buildOptimalPackageWithWeapon(weapon, position, targetEnemy, tpBudget) {
+    var actionPackage = {
+        primaryWeapon: weapon,
+        actions: [],
+        totalDamage: 0
+    };
+
+    var targetEnemyCell = getCell(targetEnemy);
+    var remainingTP = tpBudget;
+
+    // Account for weapon switch cost
+    if (getWeapon() != weapon) {
+        remainingTP -= 1;
+        if (remainingTP < 0) return null;
+    }
+
+    // Calculate weapon damage and uses
+    var weaponCost = getWeaponCost(weapon);
+    var maxUses = getWeaponMaxUses(weapon);
+    var possibleUses = floor(remainingTP / weaponCost);
+    var actualUses = (maxUses > 0) ? min(possibleUses, maxUses) : possibleUses;
+
+    if (actualUses <= 0) return null;
+
+    // Add weapon uses to package
+    var weaponDamage = calculateWeaponDamageFromPosition(weapon, position, targetEnemyCell);
+    for (var i = 0; i < actualUses; i++) {
+        push(actionPackage.actions, weapon);
+    }
+    actionPackage.totalDamage += weaponDamage * actualUses;
+    remainingTP -= actualUses * weaponCost;
+
+    // Add best chip combination based on build and remaining TP
+    if (isMagicBuild) {
+        // Magic builds: prioritize DoT/debuff synergies
+        var chipBonus = addMagicBuildChips(actionPackage, weapon, position, targetEnemy, remainingTP);
+        actionPackage.totalDamage += chipBonus.damage;
+        remainingTP -= chipBonus.tpUsed;
+    } else if (isStrengthBuild) {
+        // Strength builds: prioritize burst damage chips
+        var chipBonus = addStrengthBuildChips(actionPackage, position, targetEnemy, remainingTP);
+        actionPackage.totalDamage += chipBonus.damage;
+        remainingTP -= chipBonus.tpUsed;
+    } else {
+        // Balanced builds: basic chip addition
+        var chipBonus = addBasicChips(actionPackage, position, targetEnemy, remainingTP);
+        actionPackage.totalDamage += chipBonus.damage;
+        remainingTP -= chipBonus.tpUsed;
+    }
+
+    debugW("PACKAGE BUILD: Created package with " + count(actionPackage.actions) + " actions, damage=" + actionPackage.totalDamage);
+    return actionPackage;
+}
+
+// === MAGIC BUILD CHIP SYNERGIES ===
+function addMagicBuildChips(actionPackage, weapon, position, targetEnemy, remainingTP) {
+    var chipBonus = {damage: 0, tpUsed: 0};
+    var chips = getChips();
+    var targetEnemyCell = getCell(targetEnemy);
+
+    // FLAME_THROWER + TOXIN combo (highest priority for magic)
+    if (weapon == WEAPON_FLAME_THROWER && remainingTP >= 5) {
+        if (inArray(chips, CHIP_TOXIN) && chipCooldowns[CHIP_TOXIN] <= 0) {
+            if (canUseChipFromPosition(CHIP_TOXIN, position, targetEnemyCell)) {
+                push(actionPackage.actions, CHIP_TOXIN);
+                chipBonus.damage += calculateChipDamage(CHIP_TOXIN, targetEnemy) * 1.5; // 50% synergy bonus
+                chipBonus.tpUsed += 5;
+                remainingTP -= 5;
+            }
+        }
+    }
+
+    // DESTROYER + damage chip combo
+    if (weapon == WEAPON_DESTROYER && remainingTP >= 4) {
+        if (inArray(chips, CHIP_LIGHTNING)) {
+            push(actionPackage.actions, CHIP_LIGHTNING);
+            chipBonus.damage += calculateChipDamage(CHIP_LIGHTNING, targetEnemy) * 1.3; // Debuff amplification
+            chipBonus.tpUsed += 4;
+            remainingTP -= 4;
+        }
+    }
+
+    // DOUBLE_GUN + poison stacking
+    if (weapon == WEAPON_DOUBLE_GUN && remainingTP >= 4) {
+        if (inArray(chips, CHIP_VENOM) && chipCooldowns[CHIP_VENOM] <= 0) {
+            if (canUseChipFromPosition(CHIP_VENOM, position, enemyCell)) {
+                push(actionPackage.actions, CHIP_VENOM);
+                chipBonus.damage += calculateChipDamage(CHIP_VENOM, enemy) * 1.4; // Poison stack bonus
+                chipBonus.tpUsed += 4;
+                remainingTP -= 4;
+            }
+        }
+    }
+
+    // Add remaining TP chips if available
+    if (remainingTP >= 4 && inArray(chips, CHIP_LIGHTNING)) {
+        push(actionPackage.actions, CHIP_LIGHTNING);
+        chipBonus.damage += calculateChipDamage(CHIP_LIGHTNING, enemy);
+        chipBonus.tpUsed += 4;
+    } else if (remainingTP >= 3 && inArray(chips, CHIP_SPARK)) {
+        push(actionPackage.actions, CHIP_SPARK);
+        chipBonus.damage += calculateChipDamage(CHIP_SPARK, enemy);
+        chipBonus.tpUsed += 3;
+    }
+
+    return chipBonus;
+}
+
+// === STRENGTH BUILD CHIP ADDITIONS ===
+function addStrengthBuildChips(actionPackage, position, targetEnemy, remainingTP) {
+    var chipBonus = {damage: 0, tpUsed: 0};
+    var chips = getChips();
+    debugW("STRENGTH CHIPS: remainingTP=" + remainingTP + ", available chips=" + chips);
+    debugW("STRENGTH CHIPS: Looking for STALACTITE=" + CHIP_STALACTITE + ", FLAME=" + CHIP_FLAME);
+
+    // Strength builds: prioritize RHINO + chip combinations
+    // CHIP_STALACTITE has highest damage (64-67) but cooldown, prioritize first
+    if (remainingTP >= 6 && inArray(chips, CHIP_STALACTITE) && chipCooldowns[CHIP_STALACTITE] <= 0) {
+        push(actionPackage.actions, CHIP_STALACTITE);
+        chipBonus.damage += calculateChipDamage(CHIP_STALACTITE, targetEnemy) * 1.2; // 20% strength build bonus
+        chipBonus.tpUsed += 6;
+        remainingTP -= 6;
+        debugW("STRENGTH CHIPS: Added STALACTITE, damage=" + chipBonus.damage + ", tpUsed=" + chipBonus.tpUsed);
+    } else if (remainingTP >= 4 && inArray(chips, CHIP_FLAME)) {
+        // CHIP_FLAME as backup - 3 uses, good damage
+        push(actionPackage.actions, CHIP_FLAME);
+        chipBonus.damage += calculateChipDamage(CHIP_FLAME, targetEnemy) * 1.1; // 10% strength build bonus
+        chipBonus.tpUsed += 4;
+        remainingTP -= 4;
+        debugW("STRENGTH CHIPS: Added FLAME, damage=" + chipBonus.damage + ", tpUsed=" + chipBonus.tpUsed);
+    } else if (remainingTP >= 4 && inArray(chips, CHIP_LIGHTNING)) {
+        push(actionPackage.actions, CHIP_LIGHTNING);
+        chipBonus.damage += calculateChipDamage(CHIP_LIGHTNING, targetEnemy);
+        chipBonus.tpUsed += 4;
+        remainingTP -= 4;
+    }
+
+    if (remainingTP >= 3 && inArray(chips, CHIP_SPARK)) {
+        push(actionPackage.actions, CHIP_SPARK);
+        chipBonus.damage += calculateChipDamage(CHIP_SPARK, targetEnemy);
+        chipBonus.tpUsed += 3;
+    }
+
+    debugW("STRENGTH CHIPS: Final bonus - damage=" + chipBonus.damage + ", tpUsed=" + chipBonus.tpUsed);
+    return chipBonus;
+}
+
+// === BASIC CHIP ADDITIONS ===
+function addBasicChips(actionPackage, position, targetEnemy, remainingTP) {
+    var chipBonus = {damage: 0, tpUsed: 0};
+    var chips = getChips();
+
+    // Basic approach: add highest damage chip that fits
+    if (remainingTP >= 4 && inArray(chips, CHIP_LIGHTNING)) {
+        push(actionPackage.actions, CHIP_LIGHTNING);
+        chipBonus.damage += calculateChipDamage(CHIP_LIGHTNING, enemy);
+        chipBonus.tpUsed += 4;
+    } else if (remainingTP >= 3 && inArray(chips, CHIP_SPARK)) {
+        push(actionPackage.actions, CHIP_SPARK);
+        chipBonus.damage += calculateChipDamage(CHIP_SPARK, enemy);
+        chipBonus.tpUsed += 3;
+    }
+
+    return chipBonus;
+}
+
+// === CHIP-ONLY PACKAGE (FALLBACK) ===
+function buildChipOnlyPackage(position, targetEnemy, tpBudget) {
+    var chips = getChips();
+    var chipPackage = {
+        primaryWeapon: null, // No weapon
+        actions: [],
+        totalDamage: 0
+    };
+
+    // Add best available chips
+    var remainingTP = tpBudget;
+    if (remainingTP >= 4 && inArray(chips, CHIP_LIGHTNING)) {
+        push(chipPackage.actions, CHIP_LIGHTNING);
+        chipPackage.totalDamage += calculateChipDamage(CHIP_LIGHTNING, enemy);
+        remainingTP -= 4;
+    }
+
+    if (remainingTP >= 3 && inArray(chips, CHIP_SPARK)) {
+        push(chipPackage.actions, CHIP_SPARK);
+        chipPackage.totalDamage += calculateChipDamage(CHIP_SPARK, enemy);
+        remainingTP -= 3;
+    }
+
+    return (count(chipPackage.actions) > 0) ? chipPackage : null;
+}
+
+// === UTILITY FUNCTIONS FOR PACKAGES ===
+function canWeaponReachEnemyFromPosition(weapon, position, targetEnemy) {
+    var targetEnemyCell = getCell(targetEnemy);
+    var distance = getCellDistance(position, targetEnemyCell);
+    var minRange = getWeaponMinRange(weapon);
+    var maxRange = getWeaponMaxRange(weapon);
+
+    if (distance < minRange || distance > maxRange) return false;
+    if (!checkLineOfSight(position, targetEnemyCell)) return false;
+
+    // Check alignment requirements
+    var launchType = getWeaponLaunchType(weapon);
+    return checkAlignmentRequirement(launchType, position, targetEnemyCell);
+}
+
+function canUseChipFromPosition(chip, position, targetCell) {
+    var distance = getCellDistance(position, targetCell);
+    var minRange = getChipMinRange(chip);
+    var maxRange = getChipMaxRange(chip);
+
+    if (distance < minRange || distance > maxRange) return false;
+    if (!checkLineOfSight(position, targetCell)) return false;
+
+    return true;
+}
+
+function checkAlignmentRequirement(launchType, fromCell, targetCell) {
+    var fromX = getCellX(fromCell);
+    var fromY = getCellY(fromCell);
+    var targetX = getCellX(targetCell);
+    var targetY = getCellY(targetCell);
+    var dx = targetX - fromX;
+    var dy = targetY - fromY;
+
+    if (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_LINE_INVERTED) {
+        return (dx == 0) != (dy == 0); // XOR: exactly one axis
+    }
+
+    if (launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_DIAGONAL_INVERTED) {
+        return (abs(dx) == abs(dy)) && (dx != 0);
+    }
+
+    if (launchType == LAUNCH_TYPE_STAR || launchType == LAUNCH_TYPE_STAR_INVERTED) {
+        var isLine = (dx == 0) != (dy == 0);
+        var isDiagonal = (abs(dx) == abs(dy)) && (dx != 0);
+        return isLine || isDiagonal;
+    }
+
+    // Default: no special alignment needed
+    return true;
+}
+
+function calculateWeaponDamageFromPosition(weapon, position, targetCell) {
+    // Use existing weapon damage calculation
+    return calculateBaseWeaponDamage(weapon, position, targetCell);
+}
+
+function calculateChipDamage(chip, enemy) {
+    // Simplified chip damage calculation
+    var baseDamage = 0;
+    if (chip == CHIP_LIGHTNING) baseDamage = 40;
+    else if (chip == CHIP_SPARK) baseDamage = 25;
+    else if (chip == CHIP_TOXIN) baseDamage = 30;
+    else if (chip == CHIP_VENOM) baseDamage = 24;
+    else baseDamage = 20;
+
+    // Apply magic scaling for magic builds
+    if (isMagicBuild && myMagic != null) {
+        baseDamage *= (1 + myMagic / 100.0);
+    }
+
+    return floor(baseDamage);
+}
+
+function sortPackageZonesByDamage(zones) {
+    // Simple bubble sort by damage (highest first)
+    for (var i = 0; i < count(zones) - 1; i++) {
+        for (var j = 0; j < count(zones) - i - 1; j++) {
+            if (zones[j][1] < zones[j + 1][1]) {
+                var temp = zones[j];
+                zones[j] = zones[j + 1];
+                zones[j + 1] = temp;
+            }
+        }
+    }
+    return zones;
 }

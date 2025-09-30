@@ -1,6 +1,42 @@
 // V7 Module: config/weapons.ls
 // Pre-defined weapon and chip scenarios by TP amount
 
+// === CHIP COOLDOWN MANAGEMENT ===
+// Check if all chips in a scenario are available (not on cooldown)
+function areChipsAvailable(scenario) {
+    if (scenario == null || count(scenario) == 0) return true;
+
+    for (var i = 0; i < count(scenario); i++) {
+        var action = scenario[i];
+        if (isChip(action)) {
+            // Check specific chip cooldowns
+            if (action == CHIP_STALACTITE && chipCooldowns[CHIP_STALACTITE] > 0) {
+                return false;
+            }
+            if (action == CHIP_TOXIN && chipCooldowns[CHIP_TOXIN] > 0) {
+                return false;
+            }
+            if (action == CHIP_VENOM && chipCooldowns[CHIP_VENOM] > 0) {
+                return false;
+            }
+            // Add more specific cooldown checks as needed
+        }
+    }
+    return true;
+}
+
+// Get the best available scenario for a weapon, trying fallbacks if chips are on cooldown
+function getBestAvailableScenario(scenarioMap, maxTP) {
+    // Try scenarios from maxTP down to minimum, skipping unavailable chips
+    for (var tp = maxTP; tp >= 3; tp--) {
+        var scenario = scenarioMap[tp];
+        if (scenario != null && areChipsAvailable(scenario)) {
+            return scenario;
+        }
+    }
+    return null; // No valid scenario found
+}
+
 // === RIFLE SCENARIOS (using built-in constants) ===
 global RIFLE_SCENARIOS = [
     18: [WEAPON_RIFLE, WEAPON_RIFLE, CHIP_LIGHTNING], // 2 uses + chip = 18 TP
@@ -15,13 +51,18 @@ global RIFLE_SCENARIOS = [
 // === M-LASER SCENARIOS (Cost: 8 TP, Max 2 uses/turn, Range 5-12, Damage 90-100) ===
 global MLASER_SCENARIOS = [
     23: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_LIGHTNING, CHIP_SPARK], // 2 uses + 2 chips = 23 TP
+    22: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_STALACTITE],            // 2 uses + STALACTITE = 22 TP
     21: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_VENOM],                 // 2 uses + venom = 21 TP
-    20: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_LIGHTNING],             // 2 uses + lightning = 20 TP
+    20: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_FLAME],                 // 2 uses + FLAME = 20 TP
+    19: [WEAPON_M_LASER, WEAPON_M_LASER, CHIP_LIGHTNING],             // 2 uses + lightning = 19 TP (was 20)
     16: [WEAPON_M_LASER, WEAPON_M_LASER],                             // 2 uses = 16 TP
-    12: [WEAPON_M_LASER, CHIP_LIGHTNING],                             // 1 use + lightning = 12 TP  
+    14: [WEAPON_M_LASER, CHIP_STALACTITE],                            // 1 use + STALACTITE = 14 TP
+    12: [WEAPON_M_LASER, CHIP_FLAME],                                 // 1 use + FLAME = 12 TP
+    11: [WEAPON_M_LASER, CHIP_LIGHTNING],                             // 1 use + lightning = 11 TP (was 12)
     8: [WEAPON_M_LASER],                                              // 1 use = 8 TP
+    6: [CHIP_STALACTITE],
     5: [CHIP_METEORITE],
-    4: [CHIP_LIGHTNING],
+    4: [CHIP_FLAME, CHIP_LIGHTNING],
     3: [CHIP_SPARK]
 ];
 
@@ -56,6 +97,27 @@ global DOUBLE_GUN_SCENARIOS = [
     4:  [WEAPON_DOUBLE_GUN]                                        // 1 use = 4 TP
 ];
 
+// === MAGNUM SCENARIOS (Cost: 5 TP, Max 2 uses/turn, Range 1-8, LOS single target) ===
+global MAGNUM_SCENARIOS = [
+    15: [WEAPON_MAGNUM, WEAPON_MAGNUM, CHIP_METEORITE], // 2 uses + meteorite = 15 TP
+    14: [WEAPON_MAGNUM, WEAPON_MAGNUM, CHIP_LIGHTNING], // 2 uses + lightning = 14 TP
+    13: [WEAPON_MAGNUM, WEAPON_MAGNUM, CHIP_SPARK],     // 2 uses + spark = 13 TP
+    10: [WEAPON_MAGNUM, WEAPON_MAGNUM],                 // 2 uses = 10 TP
+    9:  [WEAPON_MAGNUM, CHIP_LIGHTNING],                // 1 use + lightning = 9 TP
+    8:  [WEAPON_MAGNUM, CHIP_SPARK],                    // 1 use + spark = 8 TP
+    5:  [WEAPON_MAGNUM],                                // 1 use = 5 TP
+    4:  [CHIP_LIGHTNING],
+    3:  [CHIP_SPARK]
+];
+
+// === PISTOL SCENARIOS (Cost: 3 TP, Max 4 uses/turn, Range 1-7) ===
+global PISTOL_SCENARIOS = [
+    12: [WEAPON_PISTOL, WEAPON_PISTOL, WEAPON_PISTOL, WEAPON_PISTOL], // 4 uses = 12 TP
+    9:  [WEAPON_PISTOL, WEAPON_PISTOL, WEAPON_PISTOL],                // 3 uses = 9 TP
+    6:  [WEAPON_PISTOL, WEAPON_PISTOL],                               // 2 uses = 6 TP
+    3:  [WEAPON_PISTOL]                                               // 1 use = 3 TP
+];
+
 // === B-LASER SCENARIOS (Cost: 5 TP, Max 3 uses/turn, Range 2-8, Line weapon) ===
 global BLASER_SCENARIOS = [
     15: [WEAPON_B_LASER, WEAPON_B_LASER, WEAPON_B_LASER], // 3 uses = 15 TP
@@ -66,36 +128,68 @@ global BLASER_SCENARIOS = [
     3: [CHIP_SPARK]
 ];
 
+// === LASER SCENARIOS (Cost: 6 TP, Max 2 uses/turn, Range 2-9, Line weapon) ===
+global LASER_SCENARIOS = [
+    18: [WEAPON_LASER, WEAPON_LASER, CHIP_STALACTITE], // 2 uses + STALACTITE = 18 TP
+    16: [WEAPON_LASER, WEAPON_LASER, CHIP_FLAME],       // 2 uses + FLAME = 16 TP
+    15: [WEAPON_LASER, WEAPON_LASER, CHIP_LIGHTNING],   // 2 uses + lightning = 15 TP (was 18)
+    14: [WEAPON_LASER, WEAPON_LASER, CHIP_SPARK],       // 2 uses + spark = 14 TP (was 15)
+    12: [WEAPON_LASER, WEAPON_LASER],                   // 2 uses = 12 TP
+    11: [WEAPON_LASER, CHIP_STALACTITE],                // 1 use + STALACTITE = 11 TP (was 10)
+    10: [WEAPON_LASER, CHIP_FLAME],                     // 1 use + FLAME = 10 TP
+    9:  [WEAPON_LASER, CHIP_LIGHTNING],                 // 1 use + lightning = 9 TP (was 10)
+    8:  [WEAPON_LASER, CHIP_SPARK],                     // 1 use + spark = 8 TP (was 9)
+    6:  [WEAPON_LASER],                                 // 1 use = 6 TP
+    5:  [CHIP_STALACTITE],                              // STALACTITE alone
+    4:  [CHIP_FLAME, CHIP_LIGHTNING],
+    3:  [CHIP_SPARK]
+];
+
 // === RHINO SCENARIOS (Cost: 5 TP, Max 3 uses/turn, Range 2-4, Single target) ===
 global RHINO_SCENARIOS = [
-    15: [WEAPON_RHINO, WEAPON_RHINO, WEAPON_RHINO], // 3 uses = 15 TP (optimal)
-    10: [WEAPON_RHINO, WEAPON_RHINO],               // 2 uses = 10 TP
-    8: [WEAPON_RHINO, CHIP_LIGHTNING],              // 1 use + chip = 8 TP
-    5: [WEAPON_RHINO],                              // 1 use = 5 TP
-    4: [CHIP_LIGHTNING],
+    21: [WEAPON_RHINO, WEAPON_RHINO, WEAPON_RHINO, CHIP_STALACTITE], // 3 RHINO + STALACTITE = 21 TP (ultimate)
+    19: [WEAPON_RHINO, WEAPON_RHINO, WEAPON_RHINO, CHIP_FLAME],      // 3 RHINO + FLAME = 19 TP (excellent)
+    15: [WEAPON_RHINO, WEAPON_RHINO, WEAPON_RHINO],                  // 3 uses = 15 TP (optimal)
+    16: [WEAPON_RHINO, WEAPON_RHINO, CHIP_STALACTITE],               // 2 RHINO + STALACTITE = 16 TP
+    14: [WEAPON_RHINO, WEAPON_RHINO, CHIP_FLAME],                    // 2 RHINO + FLAME = 14 TP
+    10: [WEAPON_RHINO, WEAPON_RHINO],                                // 2 uses = 10 TP
+    11: [WEAPON_RHINO, CHIP_STALACTITE],                             // 1 RHINO + STALACTITE = 11 TP
+    9: [WEAPON_RHINO, CHIP_FLAME],                                   // 1 RHINO + FLAME = 9 TP
+    8: [WEAPON_RHINO, CHIP_LIGHTNING],                               // 1 use + chip = 8 TP
+    5: [WEAPON_RHINO],                                               // 1 use = 5 TP
+    6: [CHIP_STALACTITE],
+    4: [CHIP_FLAME, CHIP_LIGHTNING],
     3: [CHIP_SPARK]
 ];
 
 // === GRENADE LAUNCHER SCENARIOS (Cost: 6 TP, Max 2 uses/turn, Range 4-7, Circle AoE) ===
 global GRENADE_LAUNCHER_SCENARIOS = [
-    16: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER, CHIP_LIGHTNING], // 2 uses + chip = 16 TP
+    18: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER, CHIP_STALACTITE], // 2 uses + STALACTITE = 18 TP
+    16: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER, CHIP_FLAME],      // 2 uses + FLAME = 16 TP
+    15: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER, CHIP_LIGHTNING], // 2 uses + lightning = 15 TP (was 16)
     12: [WEAPON_GRENADE_LAUNCHER, WEAPON_GRENADE_LAUNCHER],                 // 2 uses = 12 TP
-    10: [WEAPON_GRENADE_LAUNCHER, CHIP_LIGHTNING],                          // 1 use + chip = 10 TP
-    6: [WEAPON_GRENADE_LAUNCHER],                                           // 1 use = 6 TP
-    5: [CHIP_METEORITE],
-    4: [CHIP_LIGHTNING]
+    11: [WEAPON_GRENADE_LAUNCHER, CHIP_STALACTITE],                         // 1 use + STALACTITE = 11 TP (was 10)
+    10: [WEAPON_GRENADE_LAUNCHER, CHIP_FLAME],                              // 1 use + FLAME = 10 TP
+    9:  [WEAPON_GRENADE_LAUNCHER, CHIP_LIGHTNING],                          // 1 use + lightning = 9 TP (was 10)
+    6:  [WEAPON_GRENADE_LAUNCHER],                                          // 1 use = 6 TP
+    5:  [CHIP_STALACTITE, CHIP_METEORITE],                                  // STALACTITE/METEORITE alone
+    4:  [CHIP_FLAME, CHIP_LIGHTNING]
 ];
 
 // === ENHANCED LIGHTNINGER SCENARIOS (Cost: 9 TP, Max 2 uses/turn, Range 6-10, Damage 89-93 + 100 HP heal) ===
 global LIGHTNINGER_SCENARIOS = [
-    23: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_TOXIN],     // 2 uses + toxin = 23 TP
-    22: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_LIGHTNING], // 2 uses + lightning = 22 TP
-    21: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_SPARK],     // 2 uses + spark = 21 TP
+    23: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_TOXIN],      // 2 uses + toxin = 23 TP (MAX!)
+    22: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_FLAME],      // 2 uses + FLAME = 22 TP
+    21: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_LIGHTNING], // 2 uses + lightning = 21 TP
+    20: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER, CHIP_SPARK],     // 2 uses + spark = 20 TP
     18: [WEAPON_ENHANCED_LIGHTNINGER, WEAPON_ENHANCED_LIGHTNINGER],                 // 2 uses = 18 TP
-    13: [WEAPON_ENHANCED_LIGHTNINGER, CHIP_LIGHTNING],                              // 1 use + lightning = 13 TP
-    9: [WEAPON_ENHANCED_LIGHTNINGER],                                               // 1 use = 9 TP  
+    15: [WEAPON_ENHANCED_LIGHTNINGER, CHIP_STALACTITE],                             // 1 use + STALACTITE = 15 TP
+    13: [WEAPON_ENHANCED_LIGHTNINGER, CHIP_FLAME],                                  // 1 use + FLAME = 13 TP
+    12: [WEAPON_ENHANCED_LIGHTNINGER, CHIP_LIGHTNING],                              // 1 use + lightning = 12 TP
+    9: [WEAPON_ENHANCED_LIGHTNINGER],                                               // 1 use = 9 TP
+    6: [CHIP_STALACTITE],
     5: [CHIP_METEORITE],
-    4: [CHIP_LIGHTNING],
+    4: [CHIP_FLAME, CHIP_LIGHTNING],
     3: [CHIP_SPARK]
 ];
 
@@ -123,11 +217,16 @@ global SWORD_SCENARIOS = [
 
 // === ELECTRISOR SCENARIOS (Cost: 7 TP, Max 2 uses/turn, Range 7, Damage 70-80, Circle 1 AoE) ===
 global ELECTRISOR_SCENARIOS = [
-    18: [WEAPON_ELECTRISOR, WEAPON_ELECTRISOR, CHIP_LIGHTNING], // 2 uses + chip = 18 TP
+    20: [WEAPON_ELECTRISOR, WEAPON_ELECTRISOR, CHIP_STALACTITE], // 2 uses + STALACTITE = 20 TP
+    18: [WEAPON_ELECTRISOR, WEAPON_ELECTRISOR, CHIP_FLAME],      // 2 uses + FLAME = 18 TP
+    17: [WEAPON_ELECTRISOR, WEAPON_ELECTRISOR, CHIP_LIGHTNING], // 2 uses + lightning = 17 TP (was 18)
     14: [WEAPON_ELECTRISOR, WEAPON_ELECTRISOR],                 // 2 uses = 14 TP
-    11: [WEAPON_ELECTRISOR, CHIP_LIGHTNING],                    // 1 use + chip = 11 TP
+    13: [WEAPON_ELECTRISOR, CHIP_STALACTITE],                   // 1 use + STALACTITE = 13 TP
+    11: [WEAPON_ELECTRISOR, CHIP_FLAME],                        // 1 use + FLAME = 11 TP
+    10: [WEAPON_ELECTRISOR, CHIP_LIGHTNING],                    // 1 use + lightning = 10 TP (was 11)
     7: [WEAPON_ELECTRISOR],                                     // 1 use = 7 TP
-    4: [CHIP_LIGHTNING],
+    6: [CHIP_STALACTITE],
+    4: [CHIP_FLAME, CHIP_LIGHTNING],
     3: [CHIP_SPARK]
 ];
 
@@ -219,12 +318,14 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     
     // Sword - highest priority if in melee range (cheaper than Katana, 2x attacks)
     if (inArray(weapons, WEAPON_SWORD) && distance <= 1) {
-        return SWORD_SCENARIOS[tp] != null ? SWORD_SCENARIOS[tp] : SWORD_SCENARIOS[6];
+        var swordScenario = getBestAvailableScenario(SWORD_SCENARIOS, tp);
+        return swordScenario != null ? swordScenario : SWORD_SCENARIOS[6];
     }
     
     // Katana - fallback melee weapon if no sword
     if (inArray(weapons, WEAPON_KATANA) && distance <= 1) {
-        return KATANA_SCENARIOS[tp] != null ? KATANA_SCENARIOS[tp] : KATANA_SCENARIOS[7];
+        var katanaScenario = getBestAvailableScenario(KATANA_SCENARIOS, tp);
+        return katanaScenario != null ? katanaScenario : KATANA_SCENARIOS[7];
     }
     
     // MAGIC BUILD PRIORITY (DoT weapons as main DPS, DESTROYER for tactical debuffing)
@@ -280,7 +381,8 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         // FLAME_THROWER solo priority for magic builds (DoT weapon)
         if (inArray(weapons, WEAPON_FLAME_THROWER) && distance >= 2 && distance <= 8 && checkLineOfSight(myCell, legacyEnemyCell)) {
             // Using FLAME_THROWER for DoT damage
-            return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
+            var flameScenario = getBestAvailableScenario(FLAME_SCENARIOS, tp);
+            return flameScenario != null ? flameScenario : FLAME_SCENARIOS[6];
         }
         
         // Pure poison chip priority (DoT chips without line of sight requirement)
@@ -289,7 +391,8 @@ function getScenarioForLoadout_OLD(weapons, tp) {
             if (isHighMagicBuild && tp >= 17) {
                 return [CHIP_TOXIN, CHIP_TOXIN, CHIP_TOXIN]; // Triple toxin for very high magic
             }
-            return POISON_SCENARIOS[tp] != null ? POISON_SCENARIOS[tp] : POISON_SCENARIOS[5];
+            var poisonScenario = getBestAvailableScenario(POISON_SCENARIOS, tp);
+            return poisonScenario != null ? poisonScenario : POISON_SCENARIOS[5];
         }
         
         if (inArray(allChips, CHIP_VENOM) && distance <= 10) {
@@ -303,7 +406,8 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     
     // Rhino - high priority at 2-4 range (3x attacks for maximum DPS)
     if (inArray(weapons, WEAPON_RHINO) && distance >= 2 && distance <= 4 && checkLineOfSight(myCell, legacyEnemyCell)) {
-        return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
+        var rhinoScenario = getBestAvailableScenario(RHINO_SCENARIOS, tp);
+        return rhinoScenario != null ? rhinoScenario : RHINO_SCENARIOS[5];
     }
     
     // Neutrino - high priority at diagonal positions (3x attacks, low cost)
@@ -319,7 +423,8 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         
         // Prioritize Neutrino when diagonally aligned - cheap and effective!
         if (dx == dy && dx != 0 && checkLineOfSight(myCell, legacyEnemyCell)) {
-            return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
+            var neutrinoScenario = getBestAvailableScenario(NEUTRINO_SCENARIOS, tp);
+            return neutrinoScenario != null ? neutrinoScenario : NEUTRINO_SCENARIOS[4];
         }
     }
     
@@ -337,7 +442,8 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         
         // M-Laser aligned: IMMEDIATE priority - better TP efficiency than Enhanced Lightninger
         if ((xAligned || yAligned) && !(xAligned && yAligned)) {
-            return MLASER_SCENARIOS[tp] != null ? MLASER_SCENARIOS[tp] : MLASER_SCENARIOS[8];
+            var mlaserScenario = getBestAvailableScenario(MLASER_SCENARIOS, tp);
+            return mlaserScenario != null ? mlaserScenario : MLASER_SCENARIOS[8];
         }
         // Note: If M-Laser not aligned, we should consider moving to alignment rather than using Enhanced Lightninger
     }
@@ -350,7 +456,8 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     if (criticalHP && inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 6 && distance <= 10 && checkLineOfSight(myCell, legacyEnemyCell)) {
         // CRITICAL HEALING: Enhanced Lightninger when desperately need +100 HP
         // Critical HP - using Enhanced Lightninger for healing
-        return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[9];
+        var lightningerScenario = getBestAvailableScenario(LIGHTNINGER_SCENARIOS, tp);
+        return lightningerScenario != null ? lightningerScenario : LIGHTNINGER_SCENARIOS[9];
     }
     
     // Enhanced Lightninger - use only when M-Laser unavailable OR as pure fallback
@@ -360,13 +467,15 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         var hasMlaser = inArray(weapons, WEAPON_M_LASER);
         if (!hasMlaser) {
             // No M-Laser available, Enhanced Lightninger is fine
-            return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[9];
+            var lightningerScenario = getBestAvailableScenario(LIGHTNINGER_SCENARIOS, tp);
+        return lightningerScenario != null ? lightningerScenario : LIGHTNINGER_SCENARIOS[9];
         } else {
             // M-Laser available but not aligned - prefer Enhanced Lightninger only if MP too low to move
             if (myMP < 3) {
                 // Not enough MP to move for M-Laser alignment, use Enhanced Lightninger
                 // Low MP - using Enhanced Lightninger
-                return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[9];
+                var lightningerScenario = getBestAvailableScenario(LIGHTNINGER_SCENARIOS, tp);
+        return lightningerScenario != null ? lightningerScenario : LIGHTNINGER_SCENARIOS[9];
             }
             // Has MP to move for M-Laser alignment - skip Enhanced Lightninger to encourage movement
             // Encouraging M-Laser alignment movement
@@ -378,22 +487,26 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     if (!isMagicBuild) {
         // Destroyer - debuff weapon, good at close-mid range (normal priority for non-magic)
         if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && checkLineOfSight(myCell, legacyEnemyCell)) {
-            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+            var destroyerScenario = getBestAvailableScenario(DESTROYER_SCENARIOS, tp);
+            return destroyerScenario != null ? destroyerScenario : DESTROYER_SCENARIOS[6];
         }
         
         // Electrisor - AoE damage at range 7 (prioritize over single-target weapons)
         if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && checkLineOfSight(myCell, legacyEnemyCell)) {
-            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+            var electrisorScenario = getBestAvailableScenario(ELECTRISOR_SCENARIOS, tp);
+        return electrisorScenario != null ? electrisorScenario : ELECTRISOR_SCENARIOS[7];
         }
         
         // Rifle - reliable mid-range damage
         if (inArray(weapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9 && checkLineOfSight(myCell, legacyEnemyCell)) {
-            return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
+            var rifleScenario = getBestAvailableScenario(RIFLE_SCENARIOS, tp);
+            return rifleScenario != null ? rifleScenario : RIFLE_SCENARIOS[7];
         }
         
         // Grenade Launcher - AoE damage at mid range
         if (inArray(weapons, WEAPON_GRENADE_LAUNCHER) && distance >= 4 && distance <= 7 && checkLineOfSight(myCell, legacyEnemyCell)) {
-            return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+            var grenadeScenario = getBestAvailableScenario(GRENADE_LAUNCHER_SCENARIOS, tp);
+        return grenadeScenario != null ? grenadeScenario : GRENADE_LAUNCHER_SCENARIOS[6];
         }
     } else {
         // For MAGIC builds, prioritize DoT weapons in this section too
@@ -408,12 +521,14 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         // DESTROYER gets priority for magic builds
         if (inArray(weapons, WEAPON_DESTROYER) && distance >= 1 && distance <= 6 && checkLineOfSight(myCell, legacyEnemyCell)) {
             // Using DESTROYER for debuff over other weapons
-            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+            var destroyerScenario = getBestAvailableScenario(DESTROYER_SCENARIOS, tp);
+            return destroyerScenario != null ? destroyerScenario : DESTROYER_SCENARIOS[6];
         }
         
         // Electrisor still useful for magic builds (AoE)
         if (inArray(weapons, WEAPON_ELECTRISOR) && distance == 7 && checkLineOfSight(myCell, legacyEnemyCell)) {
-            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+            var electrisorScenario = getBestAvailableScenario(ELECTRISOR_SCENARIOS, tp);
+        return electrisorScenario != null ? electrisorScenario : ELECTRISOR_SCENARIOS[7];
         }
     }
     
@@ -430,7 +545,25 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         
         // Prioritize B-Laser when properly aligned - efficient weapon!
         if (xAligned != yAligned) {
-            return BLASER_SCENARIOS[tp] != null ? BLASER_SCENARIOS[tp] : BLASER_SCENARIOS[5];
+            var blaserScenario = getBestAvailableScenario(BLASER_SCENARIOS, tp);
+            return blaserScenario != null ? blaserScenario : BLASER_SCENARIOS[5];
+        }
+        // Note: If not aligned, continue to check other weapons
+    }
+
+    // Laser - longer range line weapon with full-line damage
+    if (inArray(weapons, WEAPON_LASER) && distance >= 2 && distance <= 9) {
+        var myX = getCellX(myCell);
+        var myY = getCellY(myCell);
+        var enemyX = getCellX(legacyEnemyCell);
+        var enemyY = getCellY(legacyEnemyCell);
+
+        var xAligned = (myX == enemyX);
+        var yAligned = (myY == enemyY);
+
+        if (xAligned != yAligned && checkLineOfSight(myCell, legacyEnemyCell)) {
+            var laserScenario = getBestAvailableScenario(LASER_SCENARIOS, tp);
+            return laserScenario != null ? laserScenario : LASER_SCENARIOS[6];
         }
         // Note: If not aligned, continue to check other weapons
     }
@@ -440,6 +573,9 @@ function getScenarioForLoadout_OLD(weapons, tp) {
     // Check which weapons could work at this distance (ignoring alignment/LOS for now)
     var canUseRifle = inArray(weapons, WEAPON_RIFLE) && distance >= 7 && distance <= 9;
     var canUseMlaser = inArray(weapons, WEAPON_M_LASER) && distance >= 6 && distance <= 10;  
+    var canUseLaser = inArray(weapons, WEAPON_LASER) && distance >= 2 && distance <= 9;
+    var canUseMagnum = inArray(weapons, WEAPON_MAGNUM) && distance >= 1 && distance <= 8;
+    var canUsePistol = inArray(weapons, WEAPON_PISTOL) && distance >= 1 && distance <= 7;
     var canUseLightninger = inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER) && distance >= 5 && distance <= 12;
     var canUseRegularLightninger = inArray(weapons, WEAPON_LIGHTNINGER) && distance >= 6 && distance <= 10;
     var canUseSword = inArray(weapons, WEAPON_SWORD) && distance <= 1;
@@ -466,37 +602,84 @@ function getScenarioForLoadout_OLD(weapons, tp) {
             // Magic fallback - FLAME_THROWER for DoT
             return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
         }
+
+        if (canUseLaser) {
+            var laserScenario = getBestAvailableScenario(LASER_SCENARIOS, tp);
+            return laserScenario != null ? laserScenario : LASER_SCENARIOS[6];
+        }
+
+        if (canUseMagnum) {
+            var magnumScenario = getBestAvailableScenario(MAGNUM_SCENARIOS, tp);
+            return magnumScenario != null ? magnumScenario : MAGNUM_SCENARIOS[5];
+        }
+
+        if (canUsePistol) {
+            var pistolScenario = getBestAvailableScenario(PISTOL_SCENARIOS, tp);
+            return pistolScenario != null ? pistolScenario : PISTOL_SCENARIOS[3];
+        }
     }
     
     // Standard weapon prioritization - but respect magic build preferences
     if (!isMagicBuild) {
         // Non-magic builds use standard order
         if (canUseRhino) {
-            return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
+            var rhinoScenario = getBestAvailableScenario(RHINO_SCENARIOS, tp);
+        return rhinoScenario != null ? rhinoScenario : RHINO_SCENARIOS[5];
+        }
+
+        if (canUseLaser) {
+            var laserScenario = getBestAvailableScenario(LASER_SCENARIOS, tp);
+            return laserScenario != null ? laserScenario : LASER_SCENARIOS[6];
         }
         
         if (canUseNeutrino) {
-            return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
+            var neutrinoScenario = getBestAvailableScenario(NEUTRINO_SCENARIOS, tp);
+            return neutrinoScenario != null ? neutrinoScenario : NEUTRINO_SCENARIOS[4];
         }
         
         if (canUseDestroyer) {
-            return DESTROYER_SCENARIOS[tp] != null ? DESTROYER_SCENARIOS[tp] : DESTROYER_SCENARIOS[6];
+            var destroyerScenario = getBestAvailableScenario(DESTROYER_SCENARIOS, tp);
+            return destroyerScenario != null ? destroyerScenario : DESTROYER_SCENARIOS[6];
         }
         
         if (canUseFlamethrower) {
-            return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
+            var flameScenario = getBestAvailableScenario(FLAME_SCENARIOS, tp);
+            return flameScenario != null ? flameScenario : FLAME_SCENARIOS[6];
         }
         
         if (canUseElectrisor) {
-            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+            var electrisorScenario = getBestAvailableScenario(ELECTRISOR_SCENARIOS, tp);
+        return electrisorScenario != null ? electrisorScenario : ELECTRISOR_SCENARIOS[7];
         }
-        
+
         if (canUseRifle) {
-            return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
+            var rifleScenario = getBestAvailableScenario(RIFLE_SCENARIOS, tp);
+            return rifleScenario != null ? rifleScenario : RIFLE_SCENARIOS[7];
         }
-        
+
+        if (canUseLaser) {
+            var laserScenario = getBestAvailableScenario(LASER_SCENARIOS, tp);
+            return laserScenario != null ? laserScenario : LASER_SCENARIOS[6];
+        }
+
+        if (canUseMagnum) {
+            var magnumScenario = getBestAvailableScenario(MAGNUM_SCENARIOS, tp);
+            return magnumScenario != null ? magnumScenario : MAGNUM_SCENARIOS[5];
+        }
+
+        if (canUsePistol) {
+            var pistolScenario = getBestAvailableScenario(PISTOL_SCENARIOS, tp);
+            return pistolScenario != null ? pistolScenario : PISTOL_SCENARIOS[3];
+        }
+
+        if (canUsePistol) {
+            var pistolScenario = getBestAvailableScenario(PISTOL_SCENARIOS, tp);
+            return pistolScenario != null ? pistolScenario : PISTOL_SCENARIOS[3];
+        }
+
         if (canUseGrenadeLauncher) {
-            return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+            var grenadeScenario = getBestAvailableScenario(GRENADE_LAUNCHER_SCENARIOS, tp);
+        return grenadeScenario != null ? grenadeScenario : GRENADE_LAUNCHER_SCENARIOS[6];
         }
     } else {
         // Magic builds: prioritize DoT and debuff weapons even in fallback
@@ -514,88 +697,127 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         
         // Other weapons as secondary fallback for magic builds
         if (canUseElectrisor) {
-            return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+            var electrisorScenario = getBestAvailableScenario(ELECTRISOR_SCENARIOS, tp);
+        return electrisorScenario != null ? electrisorScenario : ELECTRISOR_SCENARIOS[7];
         }
         
         if (canUseRhino) {
-            return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
+            var rhinoScenario = getBestAvailableScenario(RHINO_SCENARIOS, tp);
+        return rhinoScenario != null ? rhinoScenario : RHINO_SCENARIOS[5];
         }
         
         // Regular Lightninger - check star pattern requirement
         if (canUseRegularLightninger && isValidStarPattern(myCell, legacyEnemyCell)) {
             // Magic backup - using regular LIGHTNINGER
-            return REGULAR_LIGHTNINGER_SCENARIOS[tp] != null ? REGULAR_LIGHTNINGER_SCENARIOS[tp] : REGULAR_LIGHTNINGER_SCENARIOS[9];
+            var regularLightningerScenario = getBestAvailableScenario(REGULAR_LIGHTNINGER_SCENARIOS, tp);
+            return regularLightningerScenario != null ? regularLightningerScenario : REGULAR_LIGHTNINGER_SCENARIOS[9];
         }
         
         if (canUseNeutrino) {
-            return NEUTRINO_SCENARIOS[tp] != null ? NEUTRINO_SCENARIOS[tp] : NEUTRINO_SCENARIOS[4];
+            var neutrinoScenario = getBestAvailableScenario(NEUTRINO_SCENARIOS, tp);
+            return neutrinoScenario != null ? neutrinoScenario : NEUTRINO_SCENARIOS[4];
         }
         
         // Non-DoT weapons as last resort for magic builds
         if (canUseRifle) {
-            return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
+            var rifleScenario = getBestAvailableScenario(RIFLE_SCENARIOS, tp);
+            return rifleScenario != null ? rifleScenario : RIFLE_SCENARIOS[7];
         }
         
         if (canUseGrenadeLauncher) {
-            return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+            var grenadeScenario = getBestAvailableScenario(GRENADE_LAUNCHER_SCENARIOS, tp);
+        return grenadeScenario != null ? grenadeScenario : GRENADE_LAUNCHER_SCENARIOS[6];
+        }
+
+        if (canUseMagnum) {
+            var magnumScenario = getBestAvailableScenario(MAGNUM_SCENARIOS, tp);
+            return magnumScenario != null ? magnumScenario : MAGNUM_SCENARIOS[5];
+        }
+
+        if (canUsePistol) {
+            var pistolScenario = getBestAvailableScenario(PISTOL_SCENARIOS, tp);
+            return pistolScenario != null ? pistolScenario : PISTOL_SCENARIOS[3];
         }
     }
-    
+
     if (canUseBlaser) {
-        return BLASER_SCENARIOS[tp] != null ? BLASER_SCENARIOS[tp] : BLASER_SCENARIOS[5];
+        var blaserScenario = getBestAvailableScenario(BLASER_SCENARIOS, tp);
+        return blaserScenario != null ? blaserScenario : BLASER_SCENARIOS[5];
+    }
+
+    if (canUseLaser) {
+        var laserScenario = getBestAvailableScenario(LASER_SCENARIOS, tp);
+        return laserScenario != null ? laserScenario : LASER_SCENARIOS[6];
+    }
+
+    if (canUseMagnum) {
+        return MAGNUM_SCENARIOS[tp] != null ? MAGNUM_SCENARIOS[tp] : MAGNUM_SCENARIOS[5];
     }
     
     if (canUseMlaser) {
-        return MLASER_SCENARIOS[tp] != null ? MLASER_SCENARIOS[tp] : MLASER_SCENARIOS[9];
+        var mlaserScenario = getBestAvailableScenario(MLASER_SCENARIOS, tp);
+        return mlaserScenario != null ? mlaserScenario : MLASER_SCENARIOS[9];
     }
     
     if (canUseSword) {
-        return SWORD_SCENARIOS[tp] != null ? SWORD_SCENARIOS[tp] : SWORD_SCENARIOS[6];
+        var swordScenario = getBestAvailableScenario(SWORD_SCENARIOS, tp);
+        return swordScenario != null ? swordScenario : SWORD_SCENARIOS[6];
     }
     
     if (canUseKatana) {
-        return KATANA_SCENARIOS[tp] != null ? KATANA_SCENARIOS[tp] : KATANA_SCENARIOS[7];
+        var katanaScenario = getBestAvailableScenario(KATANA_SCENARIOS, tp);
+        return katanaScenario != null ? katanaScenario : KATANA_SCENARIOS[7];
     }
     
     if (canUseLightninger) {
-        return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[8];
+        var lightningerScenario = getBestAvailableScenario(LIGHTNINGER_SCENARIOS, tp);
+        return lightningerScenario != null ? lightningerScenario : LIGHTNINGER_SCENARIOS[8];
     }
     
     // Last resort - try any weapon regardless of range
     if (inArray(weapons, WEAPON_RHINO)) {
-        return RHINO_SCENARIOS[tp] != null ? RHINO_SCENARIOS[tp] : RHINO_SCENARIOS[5];
+        var rhinoScenario = getBestAvailableScenario(RHINO_SCENARIOS, tp);
+        return rhinoScenario != null ? rhinoScenario : RHINO_SCENARIOS[5];
     }
     
     if (inArray(weapons, WEAPON_B_LASER)) {
-        return BLASER_SCENARIOS[tp] != null ? BLASER_SCENARIOS[tp] : BLASER_SCENARIOS[5];
+        var blaserScenario = getBestAvailableScenario(BLASER_SCENARIOS, tp);
+        return blaserScenario != null ? blaserScenario : BLASER_SCENARIOS[5];
     }
     
     if (inArray(weapons, WEAPON_GRENADE_LAUNCHER)) {
-        return GRENADE_LAUNCHER_SCENARIOS[tp] != null ? GRENADE_LAUNCHER_SCENARIOS[tp] : GRENADE_LAUNCHER_SCENARIOS[6];
+        var grenadeScenario = getBestAvailableScenario(GRENADE_LAUNCHER_SCENARIOS, tp);
+        return grenadeScenario != null ? grenadeScenario : GRENADE_LAUNCHER_SCENARIOS[6];
     }
     
     if (inArray(weapons, WEAPON_ELECTRISOR)) {
-        return ELECTRISOR_SCENARIOS[tp] != null ? ELECTRISOR_SCENARIOS[tp] : ELECTRISOR_SCENARIOS[7];
+        var electrisorScenario = getBestAvailableScenario(ELECTRISOR_SCENARIOS, tp);
+        return electrisorScenario != null ? electrisorScenario : ELECTRISOR_SCENARIOS[7];
     }
     
     if (inArray(weapons, WEAPON_RIFLE)) {
-        return RIFLE_SCENARIOS[tp] != null ? RIFLE_SCENARIOS[tp] : RIFLE_SCENARIOS[7];
+        var rifleScenario = getBestAvailableScenario(RIFLE_SCENARIOS, tp);
+        return rifleScenario != null ? rifleScenario : RIFLE_SCENARIOS[7];
     }
     
     if (inArray(weapons, WEAPON_M_LASER)) {
-        return MLASER_SCENARIOS[tp] != null ? MLASER_SCENARIOS[tp] : MLASER_SCENARIOS[9];
+        var mlaserScenario = getBestAvailableScenario(MLASER_SCENARIOS, tp);
+        return mlaserScenario != null ? mlaserScenario : MLASER_SCENARIOS[9];
     }
     
     if (inArray(weapons, WEAPON_ENHANCED_LIGHTNINGER)) {
-        return LIGHTNINGER_SCENARIOS[tp] != null ? LIGHTNINGER_SCENARIOS[tp] : LIGHTNINGER_SCENARIOS[8];
+        var lightningerScenario = getBestAvailableScenario(LIGHTNINGER_SCENARIOS, tp);
+        return lightningerScenario != null ? lightningerScenario : LIGHTNINGER_SCENARIOS[8];
     }
     
     if (inArray(weapons, WEAPON_SWORD)) {
-        return SWORD_SCENARIOS[tp] != null ? SWORD_SCENARIOS[tp] : SWORD_SCENARIOS[6];
+        var swordScenario = getBestAvailableScenario(SWORD_SCENARIOS, tp);
+        return swordScenario != null ? swordScenario : SWORD_SCENARIOS[6];
     }
     
     if (inArray(weapons, WEAPON_KATANA)) {
-        return KATANA_SCENARIOS[tp] != null ? KATANA_SCENARIOS[tp] : KATANA_SCENARIOS[7];
+        var katanaScenario = getBestAvailableScenario(KATANA_SCENARIOS, tp);
+        return katanaScenario != null ? katanaScenario : KATANA_SCENARIOS[7];
     }
     
     // Existing weapons (for backward compatibility)
@@ -603,10 +825,12 @@ function getScenarioForLoadout_OLD(weapons, tp) {
         return FLAME_SCENARIOS[tp] != null ? FLAME_SCENARIOS[tp] : FLAME_SCENARIOS[6];
     }
     if (inArray(weapons, WEAPON_GRENADE_LAUNCHER)) {
-        return GRENADE_SCENARIOS[tp] != null ? GRENADE_SCENARIOS[tp] : GRENADE_SCENARIOS[7];
+        var grenadeScenario = getBestAvailableScenario(GRENADE_SCENARIOS, tp);
+        return grenadeScenario != null ? grenadeScenario : GRENADE_SCENARIOS[7];
     }
     if (inArray(weapons, WEAPON_B_LASER)) {
-        return BLASER_SCENARIOS[tp] != null ? BLASER_SCENARIOS[tp] : BLASER_SCENARIOS[5];
+        var blaserScenario = getBestAvailableScenario(BLASER_SCENARIOS, tp);
+        return blaserScenario != null ? blaserScenario : BLASER_SCENARIOS[5];
     }
     
     // LOW-TP STRATEGY: When TP < 7, encourage movement instead of weak chip attacks
@@ -718,9 +942,40 @@ function getBestScenarioForTP(tp, forCombat) {
         var minR = getWeaponMinRange(WEAPON_M_LASER);
         var maxR = getWeaponMaxRange(WEAPON_M_LASER);
         if (dist >= minR && dist <= maxR && checkLineOfSight(getCell(), targetEnemyCell) && isOnSameLine(getCell(), targetEnemyCell)) {
-            var ml = MLASER_SCENARIOS[tp];
+            var ml = getBestAvailableScenario(MLASER_SCENARIOS, tp);
             if (ml != null) return ml;
             return MLASER_SCENARIOS[8]; // fallback single use
+        }
+    }
+
+    if (inArray(weapons, WEAPON_LASER) && targetEnemyCell != null) {
+        var lDist = getCellDistance(getCell(), targetEnemyCell);
+        var lMin = getWeaponMinRange(WEAPON_LASER);
+        var lMax = getWeaponMaxRange(WEAPON_LASER);
+        if (lDist >= lMin && lDist <= lMax && checkLineOfSight(getCell(), targetEnemyCell) && isOnSameLine(getCell(), targetEnemyCell)) {
+            var ls = getBestAvailableScenario(LASER_SCENARIOS, tp);
+            if (ls != null) return ls;
+            return LASER_SCENARIOS[6];
+        }
+    }
+
+    if (inArray(weapons, WEAPON_PISTOL) && targetEnemyCell != null) {
+        var pDist = getCellDistance(getCell(), targetEnemyCell);
+        if (pDist >= 1 && pDist <= 7) {
+            var ps = getBestAvailableScenario(PISTOL_SCENARIOS, tp);
+            if (ps != null) return ps;
+            return PISTOL_SCENARIOS[3];
+        }
+    }
+
+    if (inArray(weapons, WEAPON_LASER) && targetEnemyCell != null) {
+        var lDist = getCellDistance(getCell(), targetEnemyCell);
+        var lMin = getWeaponMinRange(WEAPON_LASER);
+        var lMax = getWeaponMaxRange(WEAPON_LASER);
+        if (lDist >= lMin && lDist <= lMax && checkLineOfSight(getCell(), targetEnemyCell) && isOnSameLine(getCell(), targetEnemyCell)) {
+            var ls = getBestAvailableScenario(LASER_SCENARIOS, tp);
+            if (ls != null) return ls;
+            return LASER_SCENARIOS[6];
         }
     }
     
@@ -1229,16 +1484,19 @@ function calculateScenarioValue(scenario, primaryWeapon) {
         
         if (action == primaryWeapon) {
             // Weapon use - base value on damage potential
-            if (action == WEAPON_RHINO) value += 150; // High DPS, low cost
+                        if (action == WEAPON_RHINO) value += 150; // High DPS, low cost
             else if (action == WEAPON_M_LASER) value += 140; // Efficient damage
+            else if (action == WEAPON_LASER) value += 125; // Long line damage
             else if (action == WEAPON_ENHANCED_LIGHTNINGER) value += 120; // Damage + heal
-            else if (action == WEAPON_RIFLE) value += 110; // Reliable mid-range
             else if (action == WEAPON_FLAME_THROWER) value += 130; // DoT potential
-            else if (action == WEAPON_DESTROYER) value += 100; // Debuff value
+            else if (action == WEAPON_RIFLE) value += 110; // Reliable mid-range
+            else if (action == WEAPON_DESTROYER) value += 108; // Debuff value
+            else if (action == WEAPON_B_LASER) value += 110; // Cheap multi-use line weapon
             else if (action == WEAPON_ELECTRISOR) value += 115; // AoE damage
             else if (action == WEAPON_KATANA) value += 125; // High single damage
+            else if (action == WEAPON_MAGNUM) value += 90; // Mid-range burst + sustain
+            else if (action == WEAPON_PISTOL) value += 70; // Cheap ranged fallback
             else if (action == WEAPON_SWORD) value += 90; // Cheap melee
-            else if (action == WEAPON_B_LASER) value += 85; // Cheap line weapon
             else if (action == WEAPON_GRENADE_LAUNCHER) value += 95; // AoE
             else if (action == WEAPON_NEUTRINO) value += 80; // Diagonal specialist
             else value += 70; // Unknown weapon
