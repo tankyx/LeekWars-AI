@@ -245,17 +245,65 @@ class Strategy {
     }
 }
 
+// Using builtin moveAwayFrom(entityId, [mp]) from LeekScript API.
+
 class StrengthStrategy extends Strategy {
     constructor() {
         super()
     }
 
     createDefensiveScenario(target, targetHitCell) {
+        // Optional self-heal before moving away if chip is equipped and usable
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
+            var regenChip = arsenal.playerEquippedChips[CHIP_REGENERATION]
+            if (getCooldown(CHIP_REGENERATION, getEntity()) == 0 && getTP() >= regenChip._cost && getLife() < getTotalLife()) {
+                // Queue regen on self (executeScenario will cast on our cell)
+                this.createAttackAction(Action.ACTION_DIRECT, player, -1, CHIP_REGENERATION)
+            }
+        }
 
+        // Move away from the target using available MP
+        var usedMp = moveAwayFrom(target._id)
+        debug("moveAwayFrom used MP: " + usedMp)
+
+        // After moving, refresh entities/map and rebuild hit map
+        player.updateEntity()
+        fieldMap.updateMapEntities()
+        fieldMap.buildHitMap(target._cellPos)
+
+        // Check if we can shoot any weapon from the new position
+        var playerPos = player._cellPos
+        var playerTP = player._currTp
+
+        if (mapContainsKey(fieldMap.damageMap, playerPos)) {
+            var cell = fieldMap.damageMap[playerPos]
+            if (cell._highestDamageWeapon != -1) {
+                var w = cell._highestDamageWeapon
+                var needSwap = (getWeapon() != w._id)
+
+                if (needSwap && playerTP >= 1) {
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, w._id, -1)
+                    playerTP -= 1
+                }
+
+                var useCount = w._maxUse
+                while (playerTP >= w._cost && useCount > 0) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, w._id, -1)
+                    playerTP -= w._cost
+                    useCount -= 1
+                }
+            }
+        }
     }
 
     createOTKOScenario(target, targetHitCell) {
 
+    }
+
+    createAndExecuteDefensiveScenario(target) {
+        arrayClear(this._actions)
+        this.createDefensiveScenario(target, -1)
+        this.executeScenario()
     }
 }
 
