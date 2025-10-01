@@ -1,4 +1,4 @@
-/** Exporté le 10/1/2025, 2:35:16 PM **/
+/** Exporté le 10/1/2025, 4:37:42 PM **/
 
 /** 8.0/V8/field_map.lk **/
 
@@ -10,6 +10,8 @@ class Cell {
     _entityID = -1
     _weaponDamage = 0
     _chipDamage = 0
+    _totalDamage = 0
+    _bestType = -1
     _hasLOS = false
     _highestDamageWeapon = -1
     _highestDamageChip = -1
@@ -23,6 +25,9 @@ class Cell {
         this._hasLOS = hasLOS
         this._highestDamageWeapon = highestDamageWeapon
         this._highestDamageChip = highestDamageChip
+        this._totalDamage = weaponDamage + chipDamage
+        if (weaponDamage >= chipDamage && weaponDamage > 0) this._bestType = 0
+        else if (chipDamage > weaponDamage) this._bestType = 1
     }
 }
 
@@ -49,6 +54,7 @@ class FieldMap {
     playerEntity = null
 
     wColors = [:]
+    cColors = [:]
 
     private static x_offset = 18
     private static y_offset = 17
@@ -57,17 +63,27 @@ class FieldMap {
     private static down_left_offset = -1 * (18 - 17)
     private static up_left_offset = -1 * (18 + 17)
     private static base_cell = 308
+    private static board_cell_count = 613
 
     constructor() {
         var playerID = getEntity()
 
         var k = 1;
-        for (var w in arsenal.playerEquippedWeapons) {
-            mapPut(this.wColors, w._id, new Color((k * 50) % 255, (k * 80) % 255, (k * 110) % 255))
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var wObj = arsenal.playerEquippedWeapons[wid]
+            mapPut(this.wColors, wid, new Color((k * 50) % 255, (k * 80) % 255, (k * 110) % 255))
             k++;
         }
 
-        for (var i = 0; i < 613; i++) {
+        // Assign colors for chips (different palette shift)
+        var kc = 1;
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            var cObj = arsenal.playerEquippedChips[cid]
+            mapPut(this.cColors, cid, new Color((kc * 70) % 255, (kc * 40) % 255, (kc * 95) % 255))
+            kc++
+        }
+
+    for (var i = 0; i < FieldMap.board_cell_count; i++) {
             var isObs = isObstacle(i)
             var entID = -1
 
@@ -88,72 +104,77 @@ class FieldMap {
 
     updateMapEntities() {
         for (var entity in this.entities) {
-            entity.updateEntity()
+            if (entity != null) {
+                entity.updateEntity()
+            }
+        }
+    }
+
+    isDamageItem(item) {
+        return mapContainsKey(item._effects, EFFECT_DAMAGE) || mapContainsKey(item._effects, EFFECT_POISON)
+    }
+
+    buildSingleItemHitMap(localMap, oppCell, item, isWeapon) {
+        if (!this.isDamageItem(item)) {
+            return localMap
+        }
+        var minR = item._minRange
+        var maxR = item._maxRange
+        var launchType = item._launchType
+        var aoeType = item._aoeType
+        var weapon = isWeapon ? item : null
+        var chip = isWeapon ? null : item
+
+        if (launchType == LAUNCH_TYPE_CIRCLE) {
+            return getCircleHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        } else if (launchType == LAUNCH_TYPE_STAR) {
+            return getStarHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        } else if (launchType == LAUNCH_TYPE_LINE) {
+            return getLineHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        } else if (launchType == LAUNCH_TYPE_DIAGONAL) {
+            return getDiagonalHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        }
+        return localMap
+    }
+
+    markLocalHits(localMap, isWeapon) {
+        if (isWeapon) {
+            for (var c in localMap) {
+                if (c._highestDamageWeapon != -1 && mapContainsKey(this.wColors, c._highestDamageWeapon._id)) {
+                    mark(c._id, this.wColors[c._highestDamageWeapon._id].getIntColor(), 2)
+                    markText(c._id, floor(c._totalDamage), new Color(255, 255, 255).getIntColor(), 2)
+                }
+            }
+        } else {
+            for (var cc in localMap) {
+                if (cc._highestDamageChip != -1 && mapContainsKey(this.cColors, cc._highestDamageChip._id)) {
+                    mark(cc._id, this.cColors[cc._highestDamageChip._id].getIntColor(), 1)
+                    markText(cc._id, floor(cc._totalDamage), new Color(200, 255, 200).getIntColor(), 1)
+                }
+            }
         }
     }
 
     buildHitMap(oppCell) {
-        var hitCells = [:]
-        var i = 0
-        
-        clearMarks();
+        clearMarks()
         mapClear(this.damageMap)
 
-        for (var w in arsenal.playerEquippedWeapons) {
-            var minR = w._minRange
-            var maxR = w._maxRange
-            var launchType = w._launchType
-            var aoeType = w._aoeType
-
-            if (launchType == LAUNCH_TYPE_CIRCLE) {
-                hitCells = getCircleHits(hitCells, oppCell, minR, maxR, aoeType, w, null)
-            }
-            else if (launchType == LAUNCH_TYPE_STAR) {
-                hitCells = getStarHits(hitCells, oppCell, minR, maxR, aoeType, w, null)
-            }
-            else if (launchType == LAUNCH_TYPE_LINE) {
-                hitCells = getLineHits(hitCells, oppCell, minR, maxR, aoeType, w, null)
-            }
-            else if (launchType == LAUNCH_TYPE_DIAGONAL) {
-                hitCells = getDiagonalHits(hitCells, oppCell, minR, maxR, aoeType, w, null)
-            }
-            else {
-                continue
-            }
-
-            this.damageMap = mapMerge(this.damageMap, hitCells)
-            
-            for (var c in hitCells) {
-                mark(c._id, this.wColors[c._highestDamageWeapon._id].getIntColor(), 2)
-                markText(c._id, floor(c._weaponDamage), new Color(255, 255, 255).getIntColor(), 2)
-            }
-            
-            i++
+        // Weapons
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var wObj = arsenal.playerEquippedWeapons[wid]
+            var localWeaponMap = [:]
+            localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
+            this.damageMap = mapMerge(this.damageMap, localWeaponMap)
+            this.markLocalHits(localWeaponMap, true)
         }
 
-        for (var c in arsenal.playerEquippedChips) {
-            var minR = c._minRange
-            var maxR = c._maxRange
-            var launchType = c._launchType
-            var aoeType = c._aoeType
-
-            if (launchType == LAUNCH_TYPE_CIRCLE) {
-                hitCells = getCircleHits(hitCells, oppCell, minR, maxR, aoeType, null, c)
-            }
-            else if (launchType == LAUNCH_TYPE_STAR) {
-                hitCells = getStarHits(hitCells, oppCell, minR, maxR, aoeType, null, c)
-            }
-            else if (launchType == LAUNCH_TYPE_LINE) {
-                hitCells = getLineHits(hitCells, oppCell, minR, maxR, aoeType, null, c)
-            }
-            else if (launchType == LAUNCH_TYPE_DIAGONAL) {
-                hitCells = getDiagonalHits(hitCells, oppCell, minR, maxR, aoeType, null, c)
-            }
-            else {
-                continue
-            }
-
-            this.damageMap = mapMerge(this.damageMap, hitCells)
+        // Chips
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            var chipObj = arsenal.playerEquippedChips[cid]
+            var localChipMap = [:]
+            localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
+            this.damageMap = mapMerge(this.damageMap, localChipMap)
+            this.markLocalHits(localChipMap, false)
         }
         return this.damageMap
     }
@@ -243,7 +264,7 @@ class FieldMap {
             if (c._highestDamageWeapon == -1) {
                 continue
             }
-            
+
             if (c._highestDamageWeapon._id != weapon._id) {
                 continue
             }
@@ -284,26 +305,35 @@ class FieldMap {
         return closestCell
     }
 
+    getBestWeaponOrChipCell() {
+        var best = -1
+        var bestDmg = -1
+        for (var c in this.damageMap) {
+            if (c._totalDamage > bestDmg) {
+                bestDmg = c._totalDamage
+                best = c
+            }
+        }
+        return best
+    }
+
     getLineHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
         var curCell = cell
         for (var dir = 0; dir < 4; dir++) {
             for (var dist = minR; dist <= maxR; dist++) {
                 if (dir == 0) {
                     curCell = cell - y_offset * dist
-                }
-                else if (dir == 1) {
+                } else if (dir == 1) {
                     curCell = cell + x_offset * dist
-                }
-                else if (dir == 2) {
+                } else if (dir == 2) {
                     curCell = cell + y_offset * dist
-                }
-                else if (dir == 3) {
+                } else if (dir == 3) {
                     curCell = cell - x_offset * dist
                 }
-            }
-            var _hasLOS = lineOfSight(cell, curCell)
-            if (_hasLOS && curCell >= 0 && curCell < 613) {
-                updateHitCells(hitCells, curCell, weapon, chip)
+                var _hasLOS = lineOfSight(cell, curCell)
+                        if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
+                    updateHitCells(hitCells, curCell, weapon, chip)
+                }
             }
         }
         return hitCells
@@ -315,29 +345,29 @@ class FieldMap {
             for (var dist = minR; dist <= maxR; dist++) {
                 if (dir == 0) {
                     curCell = cell + up_right_offset * dist
-                }
-                else if (dir == 1) {
+                } else if (dir == 1) {
                     curCell = cell + down_right_offset * dist
-                }
-                else if (dir == 2) {
+                } else if (dir == 2) {
                     curCell = cell + down_left_offset * dist
-                }
-                else if (dir == 3) {
+                } else if (dir == 3) {
                     curCell = cell + up_left_offset * dist
                 }
-            }
-            var _hasLOS = lineOfSight(cell, curCell)
-            if (_hasLOS && curCell >= 0 && curCell < 613) {
-                updateHitCells(hitCells, curCell, weapon, chip) 
+                var _hasLOS = lineOfSight(cell, curCell)
+                        if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
+                    updateHitCells(hitCells, curCell, weapon, chip) 
+                }
             }
         }
         return hitCells
     }
 
     getStarHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
-        hitCells = mapMerge(hitCells, getLineHits(hitCells, cell, minR, maxR, aoeType, weapon))
-        hitCells = mapMerge(hitCells, getDiagonalHits(hitCells, cell, minR, maxR, aoeType, weapon))
-        return hitCells
+        var lineMap = [:]
+        lineMap = getLineHits(lineMap, cell, minR, maxR, aoeType, weapon, chip)
+        var diagMap = [:]
+        diagMap = getDiagonalHits(diagMap, cell, minR, maxR, aoeType, weapon, chip)
+        var merged = mapMerge(lineMap, diagMap)
+        return mapMerge(hitCells, merged)
     }
 
     getCircleHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
@@ -347,7 +377,7 @@ class FieldMap {
                 if (dist >= minR && dist <= maxR) {
                     var curCell = cell + FieldMap.x_offset * dx + FieldMap.y_offset * dy
                     var _hasLOS = lineOfSight(cell, curCell)
-                    if (_hasLOS && curCell >= 0 && curCell < 613) {
+                            if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
                         updateHitCells(hitCells, curCell, weapon, chip)
                     }
                 }
@@ -364,7 +394,7 @@ class FieldMap {
         if (weapon != null) {
             var scaledDamage = arsenal.getScaledDamage(player._strength, player._magic, player._wisdom, weapon._id)
             scaledDamage *= weapon._maxUse // assume we can hit with all uses
-            if (mapContains(hitCells, curCell)) {
+            if (mapContainsKey(hitCells, curCell)) {
                 if (hitCells[curCell]._weaponDamage < scaledDamage) {
                     hitCells[curCell]._weaponDamage = scaledDamage
                     hitCells[curCell]._highestDamageWeapon = weapon
@@ -377,17 +407,24 @@ class FieldMap {
         else if (chip != null) {
             var scaledDamage = arsenal.getScaledDamage(player._strength, player._magic, player._wisdom, chip._id)
             scaledDamage *= chip._maxUse // assume we can hit with all uses
-            if (mapContains(hitCells, curCell)) {
+            if (mapContainsKey(hitCells, curCell)) {
                 if (hitCells[curCell]._chipDamage < scaledDamage) {
                     hitCells[curCell]._chipDamage = scaledDamage
                     hitCells[curCell]._highestDamageChip = chip
                 }
             }
             else {
-                mapPut(hitCells, curCell, new Cell(curCell, false, getEntityOnCell(curCell), 0, scaledDamage, true, -1, chip._id))
+                // Store the chip object (not just its id) so later accesses to _highestDamageChip._id are valid
+                mapPut(hitCells, curCell, new Cell(curCell, false, getEntityOnCell(curCell), 0, scaledDamage, true, -1, chip))
             }
         }
-
+        // Recompute aggregate
+        if (mapContainsKey(hitCells, curCell)) {
+            var cellRef = hitCells[curCell]
+            cellRef._totalDamage = cellRef._weaponDamage + cellRef._chipDamage
+            if (cellRef._weaponDamage >= cellRef._chipDamage && cellRef._weaponDamage > 0) cellRef._bestType = 0
+            else if (cellRef._chipDamage > cellRef._weaponDamage) cellRef._bestType = 1
+        }
         return hitCells
     }
 }

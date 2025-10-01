@@ -1,4 +1,4 @@
-/** Exporté le 10/1/2025, 2:35:07 PM **/
+/** Exporté le 10/1/2025, 4:37:32 PM **/
 
 /** 8.0/V8/main.lk **/
 
@@ -61,7 +61,7 @@ function main() {
     debug("Build hit map operations: " + (ops2 - ops1))
 
     ops1 = getOperations()
-    var targetHitCell = fieldMap.getClosestHighestDmgHitCell();
+    var targetHitCell = fieldMap.getBestWeaponOrChipCell();
     ops2 = getOperations()
     debug("Get closest hit cell operations: " + (ops2 - ops1))
     debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))

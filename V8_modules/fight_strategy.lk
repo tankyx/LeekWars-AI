@@ -1,4 +1,4 @@
-/** Exporté le 10/1/2025, 2:35:14 PM **/
+/** Exporté le 10/1/2025, 4:37:38 PM **/
 
 /** 8.0/V8/fight_strategy.lk **/
 
@@ -111,23 +111,34 @@ class Strategy {
         playerPos = targetHitCell._id
         playerMP -= pathLength
 
-        // We check if we have the correct weapon equipped
-        if (getWeapon() != targetHitCell._highestDamageWeapon._id) {
-            if (playerTP < 1 + targetHitCell._highestDamageWeapon._cost) {
-                debug("Not enough TP to swap and use weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id))
-                debug("Player TP: " + playerTP + " Weapon cost: " + targetHitCell._highestDamageWeapon._cost)
-                return
+        // Decide primary offensive resource (weapon or chip) based on cell best type
+        if (targetHitCell._bestType == 0 && targetHitCell._highestDamageWeapon != -1) {
+            // Weapon path
+            if (getWeapon() != targetHitCell._highestDamageWeapon._id) {
+                if (playerTP < 1 + targetHitCell._highestDamageWeapon._cost) {
+                    debug("Not enough TP to swap and use weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id))
+                } else {
+                    createAttackAction(Action.ACTION_WEAPON_SWAP, target, targetHitCell._highestDamageWeapon._id, -1)
+                    playerTP -= 1
+                }
             }
-            createAttackAction(Action.ACTION_WEAPON_SWAP, target, targetHitCell._highestDamageWeapon._id, -1)
-            playerTP -= 1 // weapon swap cost
+            var useCount = targetHitCell._highestDamageWeapon._maxUse
+            while (playerTP >= targetHitCell._highestDamageWeapon._cost && useCount > 0) {
+                createAttackAction(Action.ACTION_DIRECT, target, targetHitCell._highestDamageWeapon._id, -1)
+                playerTP -= targetHitCell._highestDamageWeapon._cost
+                useCount -= 1
+            }
         }
-
-        // We check if we can attack the target from the target hit cell
-        var useCount = targetHitCell._highestDamageWeapon._maxUse
-        while (playerTP >= targetHitCell._highestDamageWeapon._cost && useCount > 0) {
-            createAttackAction(Action.ACTION_DIRECT, target, targetHitCell._highestDamageWeapon._id, -1)
-            playerTP -= targetHitCell._highestDamageWeapon._cost
-            useCount -= 1
+        else if (targetHitCell._bestType == 1 && targetHitCell._highestDamageChip != -1) {
+            // Chip path
+            var chipRef = targetHitCell._highestDamageChip
+            // Use chip as many times as allowed by TP and maxUse
+            var chipUses = chipRef._maxUse
+            while (playerTP >= chipRef._cost && chipUses > 0) {
+                createAttackAction(Action.ACTION_DIRECT, target, -1, chipRef._id)
+                playerTP -= chipRef._cost
+                chipUses -= 1
+            }
         }
 
         // No more TP or uses on Weapon, we check for other weapons
@@ -175,21 +186,29 @@ class Strategy {
             }
         }
 
-        // No more TP or uses on Weapons, we check for Chips
-        for (var c in arsenal.playerEquippedChips) {
-            if (playerTP < c._cost) {
-                debug("Skipping chip " + getChipName(c._id) + " since not enough TP for use")
-                debug("Player TP: " + playerTP + " Chip cost: " + c._cost)
-                continue
+        // Consider spare TP for secondary source (weapon after chip or chip after weapon)
+        if (playerTP > 0) {
+            if (targetHitCell._bestType == 0) {
+                // After weapon usage, try damaging chips
+                for (var c in arsenal.playerEquippedChips) {
+                    if (playerTP < c._cost) continue
+                    if (!mapContainsKey(c._effects, EFFECT_DAMAGE) && !mapContainsKey(c._effects, EFFECT_POISON)) continue
+                    createAttackAction(Action.ACTION_DIRECT, target, -1, c._id)
+                    playerTP -= c._cost
+                }
+            } else {
+                // After chip usage, attempt remaining weapon attacks with current or swap if efficient
+                var activeWeapon = getWeapon()
+                if (activeWeapon != null && mapContainsKey(arsenal.playerEquippedWeapons, activeWeapon)) {
+                    var aw = arsenal.playerEquippedWeapons[activeWeapon]
+                    var useCount2 = aw._maxUse
+                    while (playerTP >= aw._cost && useCount2 > 0) {
+                        createAttackAction(Action.ACTION_DIRECT, target, aw._id, -1)
+                        playerTP -= aw._cost
+                        useCount2 -= 1
+                    }
+                }
             }
-            if (!mapContainsKey(c._effects, EFFECT_DAMAGE) && !mapContainsKey(c._effects, EFFECT_POISON)) {
-                debug("Skipping chip " + getChipName(c._id) + " since it has no damage effect")
-                continue
-            }
-
-            // Use the chip on the target
-            createAttackAction(Action.ACTION_DIRECT, target, -1, c._id)
-            playerTP -= c._cost
         }
     }
 
