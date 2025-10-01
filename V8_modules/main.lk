@@ -1,15 +1,17 @@
-/** Exporté le 9/30/2025, 3:01:39 PM **/
+/** Exporté le 10/1/2025, 2:24:27 PM **/
 
 /** 8.0/V8/main.lk **/
 
 include('game_entity.lk')
 include('field_map.lk')
-include('weapon.lk')
+include('item.lk')
+include('fight_strategy.lk')
 
 global _init = false
 global fieldMap = null
-global weapons = null
+global arsenal = null
 global player = null
+global strategy = null
 
 if (!_init) {
     init()
@@ -19,40 +21,53 @@ if (!_init) {
 main()
 
 function init() {
-    debug("Initializing...")
+    var ops1 = getOperations()
+    player = Player(getCell())
+    arsenal = new Arsenal();
     fieldMap = new FieldMap();
-    debug("Field map initialized.")
-    weapons = new Weapons();
-    debug("Weapons initialized.")
-    player = fieldMap.getPlayerEntity();
-    debug("Player entity initialized.")
-    debug("Initialization complete.")
+
+
+    if (player._magic > player._strength) {
+        debug("Player seems to be a magic user.")
+        strategy = new MagicStrategy();
+    }
+    else {
+        debug("Player seems to be a physical user.")
+        strategy = new StrengthStrategy();
+    }
+
+    strategy.turnOneBuffs()
+    var ops2 = getOperations()
+    debug("Init operations: " + (ops2 - ops1))
 }
 
 function main() {
+    var ops1 = 0
+    var ops2 = 0
+
+    ops1 = getOperations()
+    player.updateEntity()
     fieldMap.updateMapEntities()
+    ops2 = getOperations()
+    debug("Update entities operations: " + (ops2 - ops1))
+    ops1 = getOperations()
     var target = fieldMap.getClosestEnemy()
-    var equippedWeapons = weapons.playerEquippedWeapons
+    ops2 = getOperations()
+    debug("Get closest enemy operations: " + (ops2 - ops1))
 
-    fieldMap.buildHitMap(target._cellPos, equippedWeapons, null)
-    var targetHitCell = fieldMap.getClosestHitCell();
+    ops1 = getOperations()
+    fieldMap.buildHitMap(target._cellPos)
+    ops2 = getOperations()
+    debug("Build hit map operations: " + (ops2 - ops1))
 
-    if (targetHitCell._highestDamageWeapon._id != player._inUseWeapon) {
-        setWeapon(targetHitCell._highestDamageWeapon._id)
-    }
+    ops1 = getOperations()
+    var targetHitCell = fieldMap.getClosestHighestDmgHitCell();
+    ops2 = getOperations()
+    debug("Get closest hit cell operations: " + (ops2 - ops1))
+    debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))
 
-    debug("Moving toward cell " + targetHitCell._id + " to attack with weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id))
-    moveTowardCell(targetHitCell._id)
-
-    debug("Attacking enemy at cell " + target._cellPos + " with weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id))
-    while (getTP() >= weapons.playerEquippedWeapons[targetHitCell._highestDamageWeapon._id]._cost) {
-        if (!canUseWeaponOnCell(targetHitCell._highestDamageWeapon._id, target._cellPos)) {
-            debug("Cannot use weapon on cell " + target._cellPos + ", breaking attack loop.")
-            break
-        }
-        else {
-            debug("Using weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id) + " on cell " + target._cellPos)
-            useWeaponOnCell(target._cellPos)
-        }
-    }
+    ops1 = getOperations()
+    strategy.createAndExecuteScenario(target, targetHitCell)
+    ops2 = getOperations()
+    debug("Create and execute scenario operations: " + (ops2 - ops1))
 }

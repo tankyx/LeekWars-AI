@@ -1,5 +1,86 @@
-/** Exporté le 9/30/2025, 3:01:50 PM **/
+/** Exporté le 10/1/2025, 2:24:32 PM **/
 
 /** 8.0/V8/game_entity.lk **/
 
-undefined
+class Entity {
+    _cellPos = 0
+    _maxHealth = 0
+    _currHealth = 0
+    _weapons = []
+    _inUseWeapon = -1
+    _chips = []
+    _id = -1
+    _strength = 0
+    _resistance = 0
+    _agility = 0
+    _wisdom = 0
+    _science = 0
+    _magic = 0
+    _relShield = 0
+    _absShield = 0
+    _cores = 0
+    _ram = 0
+    _frequency = 0
+    _currMp = 0
+    _maxMp = 0
+    _currTp = 0
+    _maxTp = 0
+    _statuses = []
+    _isAlive = true
+
+    constructor(cellPos) {
+        this._cellPos = cellPos
+
+        this._id = getEntityOnCell(cellPos)
+        this._maxHealth = getTotalLife(this._id)
+        this._currHealth = getLife(this._id)
+        this._weapons = getWeapons(this._id)
+        this._inUseWeapon = getWeapon(this._id)
+        this._chips = getChips(this._id)
+        this._strength = getStrength(this._id)
+        this._resistance = getResistance(this._id)
+        this._agility = getAgility(this._id)
+        this._wisdom = getWisdom(this._id)
+        this._science = getScience(this._id)
+        this._magic = getMagic(this._id)
+        this._relShield = getRelativeShield(this._id)
+        this._absShield = getAbsoluteShield(this._id)
+        this._cores = getCores(this._id)
+        this._ram = getRAM(this._id)
+        this._frequency = getFrequency(this._id)
+        this._currMp = getMP(this._id)
+        this._maxMp = getTotalMP(this._id)
+        this._currTp = getTP(this._id)
+        this._maxTp = getTotalTP(this._id)
+        this._statuses = getStates(this._id)
+        this._isAlive = isAlive(this._id)
+    }
+
+    updateEntity() {
+        debug("Updating entity " + getName(this._id))
+        debug("Cell pos was " + this._cellPos + ", now " + getCell(this._id))
+        
+        this._cellPos = getCell(this._id)
+        this._currHealth = getLife(this._id)
+        this._maxHealth = getTotalLife(this._id)
+        this._inUseWeapon = getWeapon(this._id)
+        this._currMp = getMP(this._id)
+        this._currTp = getTP(this._id)
+        this._statuses = getStates(this._id)
+        this._isAlive = isAlive(this._id)
+        this._relShield = getRelativeShield(this._id)
+        this._absShield = getAbsoluteShield(this._id)
+    }
+}
+
+class Player extends Entity {
+    constructor(cellPos) {
+        super(cellPos);
+    }
+}
+
+class Enemy extends Entity {
+    constructor(cellPos) {
+        super(cellPos);
+    }
+}

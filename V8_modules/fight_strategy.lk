@@ -1,0 +1,252 @@
+/** Exporté le 10/1/2025, 2:24:34 PM **/
+
+/** 8.0/V8/fight_strategy.lk **/
+
+class Action {
+    static NONE = -1
+    static ACTION_DIRECT = 0
+    static ACTION_DOT = 1
+    static ACTION_DEBUFF = 2
+    static ACTION_BUFF = 3
+    static ACTION_WEAPON_SWAP = 4
+    static MOVEMENT_APPROACH = 5
+    static MOVEMENT_OFFENSIVE = 6
+    static MOVEMENT_DEFENSIVE = 7
+    static MOVEMENT_OTKO = 8
+    static MOVEMENT_DOT_OFFENSIVE = 9
+    static MOVEMENT_DEBUFF = 10
+    static MOVEMENT_FLEE = 11
+    static MOVEMENT_HNS = 12 // Hide and Seek
+    static MOVEMENT_PAB = 13 // Peek-a-Boo
+
+    type = -1
+    weaponId = -1
+    chip = -1
+    targetCell = -1
+    targetEntity = -1
+
+    constructor(type, weaponId, chip, targetCell, targetEntity) {
+        this.type = type
+        this.weaponId = weaponId
+        this.chip = chip
+        this.targetCell = targetCell
+        this.targetEntity = targetEntity
+    }
+}
+
+class Strategy {
+    _actions = []
+    _playerTP = -1
+    _fieldMap = null
+
+    constructor() {
+        this._playerTP = getTP()
+    }
+
+    turnOneBuffs() {
+        debug("Applying turn one buffs if available")
+        debug("Dumping equipped chips:")
+        for (var c in mapKeys(arsenal.playerEquippedChips)) {
+            debug(" - " + getChipName(c))
+        }
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
+            debug("Using Knowledge chip")
+            useChip(CHIP_KNOWLEDGE, player._id)
+        }
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
+            debug("Using Armoring chip")
+            useChip(CHIP_ARMORING, player._id)
+        }
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
+            debug("Using Elevation chip")
+            useChip(CHIP_ELEVATION, player._id)
+        }
+        if (getWeapon() == null) {
+            setWeapon(arsenal.getHighestDamageWeapon())
+        }
+    }
+
+    createMovementAction(type, targetHitCellID, target) {
+        push(this._actions, new Action(
+            type,
+            -1,
+            -1,
+            targetHitCellID,
+            target
+        ))
+        debug("Planned movement action: Type " + type + " to cell " + targetHitCellID + " towards entity " + getName(target._id))
+    }
+
+    createAttackAction(type, target, weaponID = -1, chipID = -1) {
+        push(this._actions, new Action(
+            type,
+            weaponID,
+            chipID,
+            target._cellPos,
+            target
+        ))
+        debug("Planned attack action: Type " + type + " on entity " + getName(target._id) + " with weapon " + getWeaponName(weaponID) + " and chip " + getChipName(chipID))
+    }
+
+    createOffensiveScenario(target, targetHitCell) {
+        // First, we check if we can reach the target hit cell
+        var playerPos = player._cellPos
+        var playerMP = player._currMp
+        var playerTP = player._currTp
+        var pathLength = getPathLength(playerPos, targetHitCell._id)
+
+        debug("Player position: " + playerPos)
+        debug("Player MP: " + playerMP + " Player TP: " + playerTP)
+        debug("Path length to target hit cell: " + pathLength)
+
+        if (pathLength > playerMP) {
+            // Can't reach the target hit cell, we move as close as possible
+            createMovementAction(Action.MOVEMENT_APPROACH, targetHitCell._id, target)
+            debug("Can't reach target hit cell, moving as close as possible")
+            return;
+        }
+        // We can reach the target hit cell, we move there
+        createMovementAction(Action.MOVEMENT_OFFENSIVE, targetHitCell._id, target)
+
+        playerPos = targetHitCell._id
+        playerMP -= pathLength
+
+        // We check if we have the correct weapon equipped
+        if (getWeapon() != targetHitCell._highestDamageWeapon._id) {
+            if (playerTP < 1 + targetHitCell._highestDamageWeapon._cost) {
+                debug("Not enough TP to swap and use weapon " + getWeaponName(targetHitCell._highestDamageWeapon._id))
+                debug("Player TP: " + playerTP + " Weapon cost: " + targetHitCell._highestDamageWeapon._cost)
+                return
+            }
+            createAttackAction(Action.ACTION_WEAPON_SWAP, target, targetHitCell._highestDamageWeapon._id, -1)
+            playerTP -= 1 // weapon swap cost
+        }
+
+        // We check if we can attack the target from the target hit cell
+        var useCount = targetHitCell._highestDamageWeapon._maxUse
+        while (playerTP >= targetHitCell._highestDamageWeapon._cost && useCount > 0) {
+            createAttackAction(Action.ACTION_DIRECT, target, targetHitCell._highestDamageWeapon._id, -1)
+            playerTP -= targetHitCell._highestDamageWeapon._cost
+            useCount -= 1
+        }
+
+        // No more TP or uses on Weapon, we check for other weapons
+        for (var w in arsenal.playerEquippedWeapons) {
+            if (w._id == targetHitCell._highestDamageWeapon._id) {
+                debug("Skipping weapon " + getWeaponName(w._id) + " since it's already used")
+                continue
+            }
+            if (playerTP < w._cost + 1) {
+                debug("Skipping weapon " + getWeaponName(w._id) + " since not enough TP for swap and use")
+                debug("Player TP: " + playerTP + " Weapon cost: " + w._cost)
+                continue
+            }
+
+            debug("Checking weapon " + getWeaponName(w._id) + " for possible use")
+
+            // Use the field map to find other reachable hit cells for this weapon
+            var secondHitCell = fieldMap.getClosestHitCellForWeapon(w, target._cellPos)
+            if (secondHitCell == -1) {
+                debug("No reachable hit cell found for weapon " + getWeaponName(w._id))
+                continue
+            }
+
+            debug("Found reachable hit cell " + secondHitCell._id + " for weapon " + getWeaponName(w._id) + " with damage " + secondHitCell._weaponDamage)
+            // Move to the second hit cell
+            var secondPathLength = getPathLength(playerPos, secondHitCell._id)
+            if (secondPathLength <= playerMP) {
+                if (secondPathLength == 0) {
+                    debug("Already on second hit cell for weapon " + getWeaponName(w._id))
+                }
+                else {
+                    createMovementAction(Action.MOVEMENT_OFFENSIVE, secondHitCell._id, target)
+                    playerMP -= secondPathLength
+                }
+
+                // swap weapon
+                createAttackAction(Action.ACTION_WEAPON_SWAP, target, w._id, -1)
+                playerTP -= 1 // weapon swap cost
+                
+                // Attack the target
+                while (playerTP >= w._cost) {
+                    createAttackAction(Action.ACTION_DIRECT, target, w._id, -1)
+                    playerTP -= w._cost
+                }
+            }
+        }
+
+        // No more TP or uses on Weapons, we check for Chips
+        for (var c in arsenal.playerEquippedChips) {
+            if (playerTP < c._cost) {
+                debug("Skipping chip " + getChipName(c._id) + " since not enough TP for use")
+                debug("Player TP: " + playerTP + " Chip cost: " + c._cost)
+                continue
+            }
+            if (!mapContainsKey(c._effects, EFFECT_DAMAGE) && !mapContainsKey(c._effects, EFFECT_POISON)) {
+                debug("Skipping chip " + getChipName(c._id) + " since it has no damage effect")
+                continue
+            }
+
+            // Use the chip on the target
+            createAttackAction(Action.ACTION_DIRECT, target, -1, c._id)
+            playerTP -= c._cost
+        }
+    }
+
+    createAndExecuteScenario(target, targetHitCell) {
+        arrayClear(this._actions)
+        createOffensiveScenario(target, targetHitCell)
+        this.executeScenario()
+    }
+
+    executeScenario() {
+        for (var a in this._actions) {
+            if (a.type == Action.MOVEMENT_APPROACH || a.type == Action.MOVEMENT_OFFENSIVE || a.type == Action.MOVEMENT_DEFENSIVE || a.type == Action.MOVEMENT_OTKO) {
+                debug("Executing movement action to cell " + a.targetCell)
+                moveTowardCell(a.targetCell)
+            }
+            else if (a.type == Action.MOVEMENT_DOT_OFFENSIVE || a.type == Action.MOVEMENT_DEBUFF) {
+                debug("Executing movement action to cell " + a.targetCell)
+                moveTowardCell(a.targetCell)
+            }
+            else if (a.type == Action.ACTION_WEAPON_SWAP) {
+                debug("Swapping to weapon " + getWeaponName(a.weaponId))
+                setWeapon(a.weaponId)
+            }
+            else if (a.type == Action.ACTION_DIRECT || a.type == Action.ACTION_DOT || a.type == Action.ACTION_DEBUFF) {
+                debug("Executing attack action on entity " + a.targetEntity + " with weapon " + getWeaponName(a.weaponId))
+                if (a.chip != -1) {
+                    useChipOnCell(a.chip, a.targetEntity._cellPos)
+                }
+                else {
+                    useWeaponOnCell(a.targetEntity._cellPos)
+                }
+            }
+        }
+    }
+}
+
+class StrengthStrategy extends Strategy {
+    constructor() {
+        super()
+    }
+
+    createDefensiveScenario(target, targetHitCell) {
+
+    }
+
+    createOTKOScenario(target, targetHitCell) {
+
+    }
+}
+
+class MagicStrategy extends Strategy {
+    constructor() {
+        super()
+    }
+
+    createDebuffScenario() {
+
+    }
+}
+

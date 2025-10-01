@@ -1,0 +1,174 @@
+/** Exporté le 10/1/2025, 2:24:30 PM **/
+
+/** 8.0/V8/item.lk **/
+
+class EffectsInfos {
+    _minEffectAmount = 0
+    _maxEffectAmount = 0
+    _effectDuration = 0
+}
+
+class Item {
+    _id = -1
+    _minRange = 0
+    _maxRange = 0
+    _cost = 0
+    _maxUse = 0
+    _launchType = -1
+    _aoeType = -1
+    _effects = [:]
+
+    constructor(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType) {
+        _id = id
+        _minRange = minRange
+        _maxRange = maxRange
+        _cost = cost
+        _maxUse = maxUse
+        _launchType = launchType
+        _aoeType = aoeType
+
+        parseAllEffects(effects)
+    }
+
+    parseAllEffects(effects) {
+        for (var e in effects) {
+            var effectsInfos = new EffectsInfos()
+            effectsInfos._minEffectAmount += e[1]
+            effectsInfos._maxEffectAmount += e[2]
+            effectsInfos._effectDuration += e[3]
+
+            mapPut(this._effects, e[0], effectsInfos)
+        }
+    }
+}
+
+class Weapon extends Item {
+    constructor(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType) {
+        super(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType)
+    }
+}
+
+class Chip extends Item {
+    cooldown = -1
+
+    constructor(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType, cooldown) {
+        super(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType)
+        this.cooldown = cooldown
+    }
+}
+
+class Arsenal {
+    constructor() {
+        buildAllWeaponsList()
+        buildAllChipsList()
+        getEquippedWeaponsSubMap()
+        getEquippedChipsSubMap()
+    }
+
+    weaponsList = [:]
+    chipsList = [:]
+    playerEquippedWeapons = [:]
+    playerEquippedChips = [:]
+
+    buildAllWeaponsList() {
+        var allWeapons = getAllWeapons()
+
+        for (var w in allWeapons) {
+            mapPut(weaponsList, w, new Weapon(
+                w,
+                getWeaponMinRange(w),
+                getWeaponMaxRange(w),
+                getWeaponEffects(w),
+                getWeaponCost(w),
+                getWeaponMaxUses(w),
+                getWeaponLaunchType(w),
+                getWeaponArea(w)
+            ));
+        }
+    }
+
+    buildAllChipsList() {
+        var allChips = getAllChips()
+
+        for (var c in allChips) {
+            mapPut(chipsList, c, new Chip(
+                c,
+                getChipMinRange(c),
+                getChipMaxRange(c),
+                getChipEffects(c),
+                getChipCost(c),
+                getChipMaxUses(c),
+                getChipLaunchType(c),
+                getChipArea(c),
+                getCooldown(c, getEntity())
+            ));
+        }
+    }
+
+    getEquippedWeaponsSubMap() {
+        var equippedWeapons = getWeapons()
+
+        for (var w in equippedWeapons) {
+            mapPut(playerEquippedWeapons, w, weaponsList[w])
+        }
+    }
+
+    getEquippedChipsSubMap() {
+        var equippedChips = getChips()
+
+        for (var c in equippedChips) {
+            mapPut(playerEquippedChips, c, chipsList[c])
+        }
+    }
+
+    getScaledDamage(str, mag, wis, itemID) {
+        if (mapContainsKey(this.playerEquippedWeapons, itemID)) {
+            var weapon = this.playerEquippedWeapons[itemID]
+            var totalDamage = 0
+
+            
+            for (var e in mapKeys(weapon._effects)) {
+                if (e == EFFECT_DAMAGE) {
+                    var averageBaseDamage = (weapon._effects[e]._minEffectAmount + weapon._effects[e]._maxEffectAmount) / 2
+                    totalDamage += averageBaseDamage * (1 + (str / 100))
+                }
+                else if (e == EFFECT_POISON) {
+                    var averageBaseDamage = (weapon._effects[e]._minEffectAmount + weapon._effects[e]._maxEffectAmount) / 2
+                    var averageBaseDamageTotal = averageBaseDamage * weapon._effects[e]._effectDuration
+                    totalDamage += averageBaseDamageTotal * (1 + (mag / 100))
+                }
+                else {
+                    continue
+                }
+            }
+
+            // account for lifesteal
+            totalDamage += totalDamage * (wis / 1000)
+            return totalDamage
+        }
+        else if (mapContains(this.chipsList, itemID)) {
+            var chip = this.chipsList[itemID]
+            var totalDamage = 0
+
+            return totalDamage
+        }
+        else {
+            return -1
+        }
+    }
+
+    getHighestDamageWeapon() {
+        var highestDmg = -1
+        var highestDmgWeapon = null
+
+        for (var w in mapKeys(this.playerEquippedWeapons)) {
+            var dmg = this.getScaledDamage(w, player._strength, player._magic, player._wisdom)
+            if (dmg > highestDmg) {
+                highestDmg = dmg
+                highestDmgWeapon = w
+            }
+        }
+
+        return highestDmgWeapon
+    }
+}
