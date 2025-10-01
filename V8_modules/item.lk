@@ -1,4 +1,4 @@
-/** Exporté le 10/1/2025, 2:35:10 PM **/
+/** Exporté le 10/1/2025, 2:44:49 PM **/
 
 /** 8.0/V8/item.lk **/
 
@@ -121,40 +121,40 @@ class Arsenal {
         }
     }
 
-    getScaledDamage(str, mag, wis, itemID) {
-        if (mapContainsKey(this.playerEquippedWeapons, itemID)) {
-            var weapon = this.playerEquippedWeapons[itemID]
-            var totalDamage = 0
-
-            
-            for (var e in mapKeys(weapon._effects)) {
-                if (e == EFFECT_DAMAGE) {
-                    var averageBaseDamage = (weapon._effects[e]._minEffectAmount + weapon._effects[e]._maxEffectAmount) / 2
-                    totalDamage += averageBaseDamage * (1 + (str / 100))
-                }
-                else if (e == EFFECT_POISON) {
-                    var averageBaseDamage = (weapon._effects[e]._minEffectAmount + weapon._effects[e]._maxEffectAmount) / 2
-                    var averageBaseDamageTotal = averageBaseDamage * weapon._effects[e]._effectDuration
-                    totalDamage += averageBaseDamageTotal * (1 + (mag / 100))
-                }
-                else {
-                    continue
-                }
+    // Helper: compute base damage (without lifesteal) from a map of effects
+    computeEffectsBaseDamage(effectsMap, str, mag) {
+        var total = 0
+        for (var e in mapKeys(effectsMap)) {
+            var info = effectsMap[e]
+            if (e == EFFECT_DAMAGE) {
+                var avg = (info._minEffectAmount + info._maxEffectAmount) / 2
+                total += avg * (1 + (str / 100))
+            } else if (e == EFFECT_POISON) {
+                var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
+                var totalOverTime = avg2 * info._effectDuration
+                total += totalOverTime * (1 + (mag / 100))
             }
-
-            // account for lifesteal
-            totalDamage += totalDamage * (wis / 1000)
-            return totalDamage
         }
-        else if (mapContains(this.chipsList, itemID)) {
-            var chip = this.chipsList[itemID]
-            var totalDamage = 0
+        return total
+    }
 
-            return totalDamage
-        }
-        else {
+    // Refactored: unified damage calculation for weapons and chips
+    getScaledDamage(str, mag, wis, itemID) {
+        var isWeapon = mapContainsKey(this.playerEquippedWeapons, itemID)
+        var isChip = !isWeapon && mapContainsKey(this.chipsList, itemID) // fixed: use mapContainsKey
+
+        if (!isWeapon && !isChip) {
             return -1
         }
+
+        var item = isWeapon ? this.playerEquippedWeapons[itemID] : this.chipsList[itemID]
+        var totalDamage = this.computeEffectsBaseDamage(item._effects, str, mag)
+
+        // Lifesteal applies only to weapons (per original logic)
+        if (isWeapon) {
+            totalDamage += totalDamage * (wis / 1000)
+        }
+        return totalDamage
     }
 
     getHighestDamageWeapon() {
@@ -162,7 +162,8 @@ class Arsenal {
         var highestDmgWeapon = null
 
         for (var w in mapKeys(this.playerEquippedWeapons)) {
-            var dmg = this.getScaledDamage(w, player._strength, player._magic, player._wisdom)
+            // Fixed argument order: (str, mag, wis, itemID)
+            var dmg = this.getScaledDamage(player._strength, player._magic, player._wisdom, w)
             if (dmg > highestDmg) {
                 highestDmg = dmg
                 highestDmgWeapon = w
