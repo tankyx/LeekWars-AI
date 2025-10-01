@@ -1,4 +1,4 @@
-/** Exporté le 10/1/2025, 2:24:37 PM **/
+/** Exporté le 10/1/2025, 2:35:16 PM **/
 
 /** 8.0/V8/field_map.lk **/
 
@@ -234,12 +234,16 @@ class FieldMap {
         return closestCell
     }
 
-    getClosestHitCellForWeapon(weapon, targetPos) {
+    getClosestHitCellForWeapon(weapon) {
         var playerPos = player._cellPos
         var closestCell = -1
         var closestDist = 999
 
         for (var c in this.damageMap) {
+            if (c._highestDamageWeapon == -1) {
+                continue
+            }
+            
             if (c._highestDamageWeapon._id != weapon._id) {
                 continue
             }

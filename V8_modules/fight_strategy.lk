@@ -1,4 +1,4 @@
-/** Exporté le 10/1/2025, 2:24:34 PM **/
+/** Exporté le 10/1/2025, 2:35:14 PM **/
 
 /** 8.0/V8/fight_strategy.lk **/
 
@@ -145,7 +145,7 @@ class Strategy {
             debug("Checking weapon " + getWeaponName(w._id) + " for possible use")
 
             // Use the field map to find other reachable hit cells for this weapon
-            var secondHitCell = fieldMap.getClosestHitCellForWeapon(w, target._cellPos)
+            var secondHitCell = fieldMap.getClosestHitCellForWeapon(w)
             if (secondHitCell == -1) {
                 debug("No reachable hit cell found for weapon " + getWeaponName(w._id))
                 continue
