@@ -160,9 +160,76 @@ class StrengthStrategy extends Strategy {
         return true
     }
 
+    // Check if CHIP_LIBERATION is tactically valuable
+    shouldUseLiberation(target) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_LIBERATION)) return false
+
+        var cooldown = getCooldown(CHIP_LIBERATION, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 5) return false
+
+        // Check range to target
+        var dist = getCellDistance(player._cellPos, target._cellPos)
+        if (dist == null || dist > 6) return false
+
+        // Priority 1: Remove critical player debuffs (shackles reducing our combat effectiveness)
+        var hasDebuff = player.hasEffect(EFFECT_SHACKLE_TP) ||
+                       player.hasEffect(EFFECT_SHACKLE_STRENGTH) ||
+                       player.hasEffect(EFFECT_SHACKLE_MP) ||
+                       player.hasEffect(EFFECT_SHACKLE_AGILITY)
+
+        // Priority 2: Remove player poison if significant
+        var hasPoison = player.hasEffect(EFFECT_POISON)
+        var poisonRemaining = player.getEffectRemaining(EFFECT_POISON)
+
+        // Priority 3: Remove enemy buffs/shields
+        var enemyShielded = target._relShield > 15 || target._absShield > 30
+
+        // Use if we have critical debuffs OR poison with 3+ turns OR enemy heavily shielded
+        if (hasDebuff) {
+            debug("[LIBERATION] Should use to remove player debuffs")
+            return true
+        }
+        if (hasPoison && poisonRemaining >= 3) {
+            debug("[LIBERATION] Should use to reduce poison (remaining: " + poisonRemaining + " turns)")
+            return true
+        }
+        if (enemyShielded) {
+            debug("[LIBERATION] Should use to strip enemy shields (rel: " + target._relShield + "%, abs: " + target._absShield + ")")
+            return true
+        }
+
+        return false
+    }
+
     // Override offensive scenario for Strength builds: always prioritize weapons (highest weapon damage cell)
     // Only after exhausting primary + secondary weapons do we spend leftover TP on damage chips (sorted by per-use damage desc).
     createOffensiveScenario(target, targetHitCell) {
+        // Check for tactical CHIP_LIBERATION usage BEFORE combat
+        if (this.shouldUseLiberation(target)) {
+            // Use on enemy to remove their buffs, or on self to remove debuffs
+            var liberationTarget = target._cellPos
+            var hasPlayerDebuff = player.hasEffect(EFFECT_SHACKLE_TP) ||
+                                 player.hasEffect(EFFECT_SHACKLE_STRENGTH) ||
+                                 player.hasEffect(EFFECT_SHACKLE_MP) ||
+                                 player.hasEffect(EFFECT_SHACKLE_AGILITY) ||
+                                 player.hasEffect(EFFECT_POISON)
+
+            if (hasPlayerDebuff) {
+                liberationTarget = player._cellPos
+                debug("[STR] Using Liberation on self to remove debuffs")
+            } else {
+                debug("[STR] Using Liberation on enemy to remove buffs/shields")
+            }
+
+            this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_LIBERATION)
+            // Update action with correct target cell
+            this._actions[count(this._actions) - 1].targetCell = liberationTarget
+            player._currTp -= 5
+        }
+
         // Check for OTKO opportunity first (low HP enemies)
         var hpThreshold = min(target._maxHealth * 0.35, 500)  // 35% HP or 500 HP, whichever is lower
         if (target._currHealth <= hpThreshold) {

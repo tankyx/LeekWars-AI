@@ -1,11 +1,3 @@
-/** Exporté le 10/2/2025, 1:09:47 PM **/
-
-/** 8.0/V8/strategy/base_strategy.lk **/
-
-/** Exporté le 10/1/2025, 4:37:38 PM **/
-
-/** 8.0/V8/strategy/base_strategy.lk **/
-
 include('action.lk')
 
 class Strategy {
@@ -346,6 +338,12 @@ class Strategy {
                 }
                 else {
                     useWeaponOnCell(a.targetEntity._cellPos)
+                }
+            }
+            else if (a.type == Action.ACTION_BUFF) {
+                debug("Executing buff/utility chip " + getChipName(a.chip) + " on cell " + a.targetCell)
+                if (a.chip != -1) {
+                    useChip(a.chip, a.targetCell)
                 }
             }
         }
