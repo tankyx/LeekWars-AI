@@ -1,11 +1,3 @@
-/** Exporté le 10/2/2025, 1:09:43 PM **/
-
-/** 8.0/V8/field_map.lk **/
-
-/** Exporté le 10/1/2025, 4:37:42 PM **/
-
-/** 8.0/V8/field_map.lk **/
-
 include('game_entity.lk')
 
 class Cell {
@@ -729,5 +721,89 @@ class FieldMap {
         if (bestCell != player._cellPos) mark(bestCell, getColor(255, 200, 120), 3)
         debug("[HNS-APPROACH] bestCell=" + bestCell + " canAttack=" + bestCanAttack + " danger=" + bestDanger + " dist=" + bestDist + " currentDist=" + currentDist)
         return ['cell': bestCell, 'danger': bestDanger, 'canAttack': bestCanAttack, 'dist': bestDist]
+    }
+
+    // Find optimal teleport cell for OTKO (One-Turn Kill Opportunity)
+    // Returns: ['cell': cellID, 'damage': projectedDamage, 'canKill': boolean]
+    findOptimalTeleportCell(target) {
+        if (target == null) return null
+
+        var playerPos = player._cellPos
+        var bestCell = -1
+        var bestDamage = -1
+        var targetHP = target._currHealth
+
+        // Iterate through all cells within teleport range (1-12)
+        for (var cellId = 0; cellId < FieldMap.board_cell_count; cellId++) {
+            // Skip if cell is obstacle or occupied
+            if (isObstacle(cellId)) continue
+            if (isEntity(cellId)) continue
+
+            // Check if within teleport range (1-12 from player position)
+            var distFromPlayer = getCellDistance(playerPos, cellId)
+            if (distFromPlayer == null || distFromPlayer < 1 || distFromPlayer > 12) continue
+
+            // Calculate total shield-adjusted damage from this cell
+            var totalDamage = 0
+            var playerTP = player._currTp - 9  // Reserve 9 TP for teleport
+
+            // Check all equipped weapons
+            for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+                var wObj = arsenal.playerEquippedWeapons[wid]
+                if (wObj == null) continue
+
+                // Check if weapon can hit target from this cell
+                var distToTarget = getCellDistance(cellId, target._cellPos)
+                if (distToTarget == null) continue
+                if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                if (!lineOfSight(cellId, target._cellPos)) continue
+
+                // Calculate shield-adjusted damage
+                var weaponDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
+
+                // Account for TP cost and max uses
+                var tpBudget = playerTP
+                if (getWeapon() != wid) tpBudget -= 1  // Weapon swap cost
+                var uses = min(wObj._maxUse, floor(tpBudget / wObj._cost))
+                totalDamage += weaponDmg * uses
+            }
+
+            // Check all damage chips (if TP remains)
+            if (playerTP > 0) {
+                for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+                    var chipObj = arsenal.playerEquippedChips[cid]
+                    if (chipObj == null) continue
+                    if (cid == CHIP_TELEPORTATION) continue  // Already accounted for
+
+                    // Filter attack chips (damage or poison effects)
+                    if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
+
+                    // Check if chip can hit target from this cell
+                    var distChip = getCellDistance(cellId, target._cellPos)
+                    if (distChip == null) continue
+                    if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
+                    if (!lineOfSight(cellId, target._cellPos)) continue
+
+                    var chipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, cid, target)
+                    var tpRemain = playerTP - totalDamage  // Simplified: use remaining TP estimate
+                    if (tpRemain < chipObj._cost) continue
+                    var usesChip = min(chipObj._maxUse, floor(tpRemain / chipObj._cost))
+                    totalDamage += chipDmg * usesChip
+                }
+            }
+
+            // Update best cell if this one deals more damage
+            if (totalDamage > bestDamage) {
+                bestDamage = totalDamage
+                bestCell = cellId
+            }
+        }
+
+        if (bestCell == -1) return null
+
+        var canKill = (bestDamage >= targetHP)
+        debug("[OTKO-TELEPORT] bestCell=" + bestCell + " projectedDamage=" + bestDamage + " targetHP=" + targetHP + " canKill=" + canKill)
+
+        return ['cell': bestCell, 'damage': bestDamage, 'canKill': canKill]
     }
 }

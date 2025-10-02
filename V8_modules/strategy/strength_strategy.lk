@@ -1,11 +1,3 @@
-/** Exporté le 10/2/2025, 1:09:47 PM **/
-
-/** 8.0/V8/strategy/strength_strategy.lk **/
-
-/** Exporté le 10/1/2025, 4:37:38 PM **/
-
-/** 8.0/V8/strategy/strength_strategy.lk **/
-
 include('action.lk')
 include('base_strategy.lk')
 
@@ -15,12 +7,174 @@ class StrengthStrategy extends Strategy {
     }
 
     createOTKOScenario(target, targetHitCell) {
+        // Check if CHIP_TELEPORTATION is equipped
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            debug("[OTKO] Teleportation not equipped")
+            return false
+        }
 
+        // Check cooldown (0 = available)
+        var cooldown = getCooldown(CHIP_TELEPORTATION, getEntity())
+        if (cooldown > 0) {
+            debug("[OTKO] Teleportation on cooldown: " + cooldown + " turns")
+            return false
+        }
+
+        // Check minimum TP budget (9 for teleport + weapon costs)
+        var playerTP = player._currTp
+        if (playerTP < 15) {  // 9 + minimum 6 TP for one weapon use
+            debug("[OTKO] Insufficient TP for teleport OTKO: " + playerTP)
+            return false
+        }
+
+        // Find optimal teleport cell
+        var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+        if (teleportInfo == null) {
+            debug("[OTKO] No valid teleport cells found")
+            return false
+        }
+
+        // Only proceed if we can guarantee the kill
+        if (!teleportInfo['canKill']) {
+            debug("[OTKO] Projected damage insufficient for kill: " + teleportInfo['damage'] + " vs " + target._currHealth + " HP")
+            return false
+        }
+
+        var teleCell = teleportInfo['cell']
+        debug("[OTKO] Executing teleport OTKO to cell " + teleCell + " projected damage: " + teleportInfo['damage'])
+
+        // Execute teleportation
+        this.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_TELEPORTATION)
+        useChip(CHIP_TELEPORTATION, teleCell)
+        playerTP -= 9
+
+        // Update simulated player position
+        var playerPos = teleCell
+
+        // Execute weapon attacks from teleport position
+        // Build list of usable weapons sorted by shield-adjusted damage
+        var weaponDmgList = []
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var wObj = arsenal.playerEquippedWeapons[wid]
+            if (wObj == null) continue
+
+            // Check if weapon can hit target from teleport cell
+            var distToTarget = getCellDistance(teleCell, target._cellPos)
+            if (distToTarget == null) continue
+            if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+            if (!lineOfSight(teleCell, target._cellPos)) continue
+
+            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
+            push(weaponDmgList, ['weapon': wObj, 'netDmg': netDmg])
+        }
+
+        // Sort by descending net damage (selection sort)
+        for (var i = 0; i < count(weaponDmgList); i++) {
+            var bestIdx = i
+            for (var j = i + 1; j < count(weaponDmgList); j++) {
+                if (weaponDmgList[j]['netDmg'] > weaponDmgList[bestIdx]['netDmg']) bestIdx = j
+            }
+            if (bestIdx != i) {
+                var tmp = weaponDmgList[i]
+                weaponDmgList[i] = weaponDmgList[bestIdx]
+                weaponDmgList[bestIdx] = tmp
+            }
+        }
+
+        // Execute weapons in order of net damage
+        for (var wi = 0; wi < count(weaponDmgList); wi++) {
+            var wRec = weaponDmgList[wi]
+            var wObj = wRec['weapon']
+
+            // Swap weapon if needed
+            if (getWeapon() != wObj._id) {
+                if (playerTP >= 1 + wObj._cost) {
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
+                    playerTP -= 1
+                } else {
+                    continue  // Not enough TP to swap and use
+                }
+            }
+
+            // Use weapon maximum times
+            var uses = min(wObj._maxUse, floor(playerTP / wObj._cost))
+            while (uses > 0 && playerTP >= wObj._cost) {
+                this.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, -1)
+                playerTP -= wObj._cost
+                uses -= 1
+            }
+
+            if (playerTP <= 0) break
+        }
+
+        // Use damage chips with remaining TP
+        if (playerTP > 0) {
+            var chipDmgList = []
+            for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+                var chipObj = arsenal.playerEquippedChips[cid]
+                if (chipObj == null) continue
+                if (cid == CHIP_TELEPORTATION) continue
+
+                // Filter attack chips
+                if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
+
+                // Check range and LOS from teleport cell
+                var distChip = getCellDistance(teleCell, target._cellPos)
+                if (distChip == null) continue
+                if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
+                if (!lineOfSight(teleCell, target._cellPos)) continue
+
+                var netChipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, cid, target)
+                push(chipDmgList, ['chip': chipObj, 'netDmg': netChipDmg])
+            }
+
+            // Sort chips by net damage
+            for (var ci = 0; ci < count(chipDmgList); ci++) {
+                var bestCIdx = ci
+                for (var cj = ci + 1; cj < count(chipDmgList); cj++) {
+                    if (chipDmgList[cj]['netDmg'] > chipDmgList[bestCIdx]['netDmg']) bestCIdx = cj
+                }
+                if (bestCIdx != ci) {
+                    var tmpC = chipDmgList[ci]
+                    chipDmgList[ci] = chipDmgList[bestCIdx]
+                    chipDmgList[bestCIdx] = tmpC
+                }
+            }
+
+            // Execute chips
+            for (var chipIdx = 0; chipIdx < count(chipDmgList); chipIdx++) {
+                var cRec = chipDmgList[chipIdx]
+                var chipUse = cRec['chip']
+                if (playerTP < chipUse._cost) continue
+                var usesC = min(chipUse._maxUse, floor(playerTP / chipUse._cost))
+                while (usesC > 0 && playerTP >= chipUse._cost) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, chipUse._id)
+                    playerTP -= chipUse._cost
+                    usesC -= 1
+                }
+                if (playerTP <= 0) break
+            }
+        }
+
+        debug("[OTKO] OTKO scenario complete, remaining TP: " + playerTP)
+        return true
     }
 
     // Override offensive scenario for Strength builds: always prioritize weapons (highest weapon damage cell)
     // Only after exhausting primary + secondary weapons do we spend leftover TP on damage chips (sorted by per-use damage desc).
     createOffensiveScenario(target, targetHitCell) {
+        // Check for OTKO opportunity first (low HP enemies)
+        var hpThreshold = min(target._maxHealth * 0.35, 500)  // 35% HP or 500 HP, whichever is lower
+        if (target._currHealth <= hpThreshold) {
+            debug("[STR] Enemy HP below OTKO threshold: " + target._currHealth + " <= " + hpThreshold)
+            var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
+            if (otkoExecuted) {
+                debug("[STR] OTKO scenario executed successfully")
+                return  // OTKO actions planned, skip normal offensive logic
+            }
+            debug("[STR] OTKO not viable, falling back to normal offensive scenario")
+        }
+
         // Re-compute best pure weapon cell ignoring chip-only high damage cells.
         var bestWeaponCell = -1
         var bestWeaponDamage = -1

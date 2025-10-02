@@ -1,11 +1,3 @@
-/** Exporté le 10/2/2025, 1:09:51 PM **/
-
-/** 8.0/V8/item.lk **/
-
-/** Exporté le 10/1/2025, 4:37:34 PM **/
-
-/** 8.0/V8/item.lk **/
-
 class EffectsInfos {
     _minEffectAmount = 0
     _maxEffectAmount = 0
@@ -250,6 +242,24 @@ class Arsenal {
             remove(arr, bestIdx)
         }
         return sorted
+    }
+
+    // Calculate net damage against target accounting for shields
+    // Poison/DoT damage bypasses shields entirely; direct damage is reduced by relative/absolute shields
+    getNetDamageAgainstTarget(str, mag, wis, itemID, targetEntity) {
+        var bd = this.getDamageBreakdown(str, mag, wis, itemID)
+        var directDmg = bd['direct']
+        var dotDmg = bd['dot']
+
+        // Apply shields only to direct damage
+        var relShield = targetEntity._relShield / 100  // Convert percentage to decimal
+        var absShield = targetEntity._absShield
+
+        var netDirect = directDmg * (1 - relShield) - absShield
+        if (netDirect < 0) netDirect = 0  // Can't heal enemy
+
+        // Poison bypasses shields completely
+        return netDirect + dotDmg
     }
 
     getHighestDamageWeapon() {
