@@ -9,7 +9,10 @@
 include('game_entity.lk')
 include('field_map.lk')
 include('item.lk')
-include('fight_strategy.lk')
+include('strategy/action.lk')
+include('strategy/base_strategy.lk')
+include('strategy/strength_strategy.lk')
+include('strategy/magic_strategy.lk')
 
 global _init = false
 global fieldMap = null
