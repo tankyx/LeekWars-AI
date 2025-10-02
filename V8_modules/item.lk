@@ -117,18 +117,40 @@ class Arsenal {
         }
     }
 
+    // Helper: compute AoE damage modifier based on distance from impact center
+    // Returns percentage multiplier (0.0 to 1.0) using formula: max(0, 1 - 0.2 * distance)
+    computeAoEModifier(centerCell, targetCell, aoeType) {
+        // AREA_POINT (0) has no AoE - only center cell takes damage
+        if (aoeType == AREA_POINT) {
+            return (centerCell == targetCell) ? 1.0 : 0.0
+        }
+
+        // For all AoE types, center cell always takes 100% damage
+        if (centerCell == targetCell) return 1.0
+
+        var dist = getCellDistance(centerCell, targetCell)
+        if (dist == null) return 0.0
+
+        // Apply linear falloff: percentage = max(0, 1 - 0.2 * distance)
+        var percentage = 1.0 - 0.2 * dist
+        if (percentage < 0) percentage = 0
+
+        return percentage
+    }
+
     // Helper: compute base damage (without lifesteal) from a map of effects
-    computeEffectsBaseDamage(effectsMap, str, mag) {
+    // Optional aoeModifier parameter applies AoE falloff (default 1.0 = full damage)
+    computeEffectsBaseDamage(effectsMap, str, mag, aoeModifier = 1.0) {
         var total = 0
         for (var e in mapKeys(effectsMap)) {
             var info = effectsMap[e]
             if (e == EFFECT_DAMAGE) {
                 var avg = (info._minEffectAmount + info._maxEffectAmount) / 2
-                total += avg * (1 + (str / 100))
+                total += avg * (1 + (str / 100)) * aoeModifier
             } else if (e == EFFECT_POISON) {
                 var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
                 var totalOverTime = avg2 * info._effectDuration
-                total += totalOverTime * (1 + (mag / 100))
+                total += totalOverTime * (1 + (mag / 100)) * aoeModifier
             }
         }
         return total
@@ -156,7 +178,8 @@ class Arsenal {
     // New: provide separate breakdown for direct (immediate) vs dot (poison) damage per use/apply
     // directPerUse: average base damage (EFFECT_DAMAGE) scaled by STR (and lifesteal not included here)
     // dotPerApply: total poison damage over duration (EFFECT_POISON) scaled by MAG (applies at most once per target realistically)
-    getDamageBreakdown(str, mag, wis, itemID) {
+    // Optional parameters for AoE: centerCell (impact point), targetCell (cell taking damage)
+    getDamageBreakdown(str, mag, wis, itemID, centerCell = -1, targetCell = -1) {
         // Support both full inventory lists and equipped subsets for weapons & chips.
         var isWeapon = mapContainsKey(this.playerEquippedWeapons, itemID)
         // A chip can reside either in the global chipsList or only in playerEquippedChips.
@@ -165,17 +188,24 @@ class Arsenal {
         var isChip = !isWeapon && (chipInFull || chipInEquipped)
         if (!isWeapon && !isChip) return ['direct': 0, 'dot': 0, 'total': 0]
         var item = isWeapon ? this.playerEquippedWeapons[itemID] : (chipInFull ? this.chipsList[itemID] : this.playerEquippedChips[itemID])
+
+        // Calculate AoE modifier if both cells are provided
+        var aoeModifier = 1.0
+        if (centerCell != -1 && targetCell != -1) {
+            aoeModifier = this.computeAoEModifier(centerCell, targetCell, item._aoeType)
+        }
+
         var direct = 0
         var dot = 0
         for (var e in mapKeys(item._effects)) {
             var info = item._effects[e]
             if (e == EFFECT_DAMAGE) {
                 var avg = (info._minEffectAmount + info._maxEffectAmount) / 2
-                direct += avg * (1 + (str / 100))
+                direct += avg * (1 + (str / 100)) * aoeModifier
             } else if (e == EFFECT_POISON) {
                 var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
                 var totalOverTime = avg2 * info._effectDuration
-                dot += totalOverTime * (1 + (mag / 100))
+                dot += totalOverTime * (1 + (mag / 100)) * aoeModifier
             }
         }
         return ['direct': direct, 'dot': dot, 'total': direct + dot]

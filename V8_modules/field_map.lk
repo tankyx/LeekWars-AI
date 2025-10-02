@@ -119,6 +119,91 @@ class FieldMap {
         return mapContainsKey(item._effects, EFFECT_DAMAGE) || mapContainsKey(item._effects, EFFECT_POISON)
     }
 
+    // Get all cells affected by AoE around a center cell
+    // Returns array of cell IDs affected by the AoE pattern
+    getAoEAffectedCells(centerCell, aoeType) {
+        var affected = []
+
+        // AREA_POINT - only the center cell
+        if (aoeType == AREA_POINT) {
+            push(affected, centerCell)
+            return affected
+        }
+
+        // Always include center cell
+        push(affected, centerCell)
+
+        // AREA_CIRCLE_1, AREA_CIRCLE_2, AREA_CIRCLE_3
+        if (aoeType == AREA_CIRCLE_1 || aoeType == AREA_CIRCLE_2 || aoeType == AREA_CIRCLE_3) {
+            var radius = (aoeType == AREA_CIRCLE_1) ? 1 : ((aoeType == AREA_CIRCLE_2) ? 2 : 3)
+            for (var dx = -radius; dx <= radius; dx++) {
+                for (var dy = -radius; dy <= radius; dy++) {
+                    var dist = abs(dx) + abs(dy)
+                    if (dist > 0 && dist <= radius) {
+                        var cellId = centerCell + FieldMap.x_offset * dx + FieldMap.y_offset * dy
+                        if (cellId >= 0 && cellId < FieldMap.board_cell_count) {
+                            push(affected, cellId)
+                        }
+                    }
+                }
+            }
+        }
+        // AREA_PLUS_1, AREA_PLUS_2, AREA_PLUS_3 (cross pattern)
+        else if (aoeType == AREA_PLUS_1 || aoeType == AREA_PLUS_2 || aoeType == AREA_PLUS_3) {
+            var radius = (aoeType == AREA_PLUS_1) ? 1 : ((aoeType == AREA_PLUS_2) ? 2 : 3)
+            // Horizontal and vertical only
+            for (var d = 1; d <= radius; d++) {
+                var cells = [
+                    centerCell + FieldMap.x_offset * d,  // right
+                    centerCell - FieldMap.x_offset * d,  // left
+                    centerCell + FieldMap.y_offset * d,  // down
+                    centerCell - FieldMap.y_offset * d   // up
+                ]
+                for (var c in cells) {
+                    if (c >= 0 && c < FieldMap.board_cell_count) push(affected, c)
+                }
+            }
+        }
+        // AREA_X_1, AREA_X_2, AREA_X_3 (diagonal X pattern)
+        else if (aoeType == AREA_X_1 || aoeType == AREA_X_2 || aoeType == AREA_X_3) {
+            var radius = (aoeType == AREA_X_1) ? 1 : ((aoeType == AREA_X_2) ? 2 : 3)
+            // Diagonals only
+            for (var d = 1; d <= radius; d++) {
+                var cells = [
+                    centerCell + FieldMap.up_right_offset * d,
+                    centerCell + FieldMap.down_right_offset * d,
+                    centerCell + FieldMap.down_left_offset * d,
+                    centerCell + FieldMap.up_left_offset * d
+                ]
+                for (var c in cells) {
+                    if (c >= 0 && c < FieldMap.board_cell_count) push(affected, c)
+                }
+            }
+        }
+        // AREA_SQUARE_1, AREA_SQUARE_2
+        else if (aoeType == AREA_SQUARE_1 || aoeType == AREA_SQUARE_2) {
+            var radius = (aoeType == AREA_SQUARE_1) ? 1 : 2
+            for (var dx = -radius; dx <= radius; dx++) {
+                for (var dy = -radius; dy <= radius; dy++) {
+                    if (dx == 0 && dy == 0) continue // already added center
+                    var cellId = centerCell + FieldMap.x_offset * dx + FieldMap.y_offset * dy
+                    if (cellId >= 0 && cellId < FieldMap.board_cell_count) {
+                        push(affected, cellId)
+                    }
+                }
+            }
+        }
+        // AREA_LASER_LINE - handled differently (linear along shot path, not radial)
+        // For now, just return center cell - laser AoE needs special handling in weapon usage
+        else if (aoeType == AREA_LASER_LINE) {
+            // Laser AoE affects cells along the line of fire, not radially around target
+            // This requires knowing the shooting direction, so we'll handle it during actual shot
+            // For damage calculation purposes, treat as single target
+        }
+
+        return affected
+    }
+
     buildSingleItemHitMap(localMap, oppCell, item, isWeapon) {
         if (!this.isDamageItem(item)) {
             return localMap
@@ -206,7 +291,8 @@ class FieldMap {
             var listIDs = []
             for (var cellRef in localWeaponMap) {
                 if (cellRef._isObstacle) continue
-                this.updateHitCells(this.damageMap, cellRef._id, wObj, null)
+                // cellRef._id = shooting position, oppCell = target (AoE center)
+                this.updateHitCells(this.damageMap, cellRef._id, wObj, null, oppCell)
                 push(listIDs, cellRef._id)
             }
             debug("[HITMAP][WEAPON] " + getWeaponName(wObj._id) + " shooterCells=" + listIDs)
@@ -220,7 +306,8 @@ class FieldMap {
             for (var cellRef2 in localChipMap) {
                 if (cellRef2._isObstacle) continue
                 var bdDbg = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id) // retained (was previously assigned)
-                this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj)
+                // cellRef2._id = shooting position, oppCell = target (AoE center)
+                this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj, oppCell)
                 push(listCID, cellRef2._id)
             }
             debug("[HITMAP][CHIP] " + getChipName(chipObj._id) + " shooterCells=" + listCID)
@@ -419,7 +506,8 @@ class FieldMap {
                 }
                 var _hasLOS = lineOfSight(cell, curCell)
                         if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
-                    this.updateHitCells(hitCells, curCell, weapon, chip)
+                    // curCell = shooting position, cell = target (AoE center)
+                    this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                 }
             }
         }
@@ -441,7 +529,8 @@ class FieldMap {
                 }
                 var _hasLOS = lineOfSight(cell, curCell)
                         if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
-                    this.updateHitCells(hitCells, curCell, weapon, chip) 
+                    // curCell = shooting position, cell = target (AoE center)
+                    this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                 }
             }
         }
@@ -465,7 +554,8 @@ class FieldMap {
                     var curCell = cell + FieldMap.x_offset * dx + FieldMap.y_offset * dy
                     var _hasLOS = lineOfSight(cell, curCell)
                             if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
-                        this.updateHitCells(hitCells, curCell, weapon, chip)
+                        // curCell = shooting position, cell = target (AoE center)
+                        this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                     }
                 }
             }
@@ -473,13 +563,18 @@ class FieldMap {
         return hitCells
     }
 
-    updateHitCells(hitCells, curCell, weapon=null, chip=null) {
+    // Updated to support AoE damage calculations
+    // curCell: the cell we're shooting FROM
+    // targetCell: the cell we're aiming AT (center of AoE impact, typically oppCell)
+    // Note: With AoE, damage stored represents the total potential damage to primary target at targetCell
+    updateHitCells(hitCells, curCell, weapon=null, chip=null, targetCell=-1) {
         if (weapon == null && chip == null) {
             return hitCells
         }
 
         if (weapon != null) {
-            var breakdownW = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id)
+            // For AoE calculations: if targetCell provided, use it as center; otherwise assume single-target (no falloff)
+            var breakdownW = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id, targetCell, targetCell)
             var scaledDamage = breakdownW['total']
             scaledDamage *= weapon._maxUse // assume we can hit with all uses
             if (mapContainsKey(hitCells, curCell)) {
@@ -506,7 +601,8 @@ class FieldMap {
             }
         }
         else if (chip != null) {
-            var breakdownC = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chip._id)
+            // For AoE calculations: if targetCell provided, use it as center; otherwise assume single-target
+            var breakdownC = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chip._id, targetCell, targetCell)
             var scaledDamage = breakdownC['total']
             scaledDamage *= chip._maxUse // assume we can hit with all uses
             // Removed verbose integration debug to avoid log spam.
