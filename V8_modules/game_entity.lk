@@ -1,3 +1,7 @@
+/** Exporté le 10/2/2025, 1:09:50 PM **/
+
+/** 8.0/V8/game_entity.lk **/
+
 /** Exporté le 10/1/2025, 4:37:36 PM **/
 
 /** 8.0/V8/game_entity.lk **/
@@ -26,6 +30,7 @@ class Entity {
     _currTp = 0
     _maxTp = 0
     _statuses = []
+    _effectsActive = [] // runtime active effects from getEffects
     _isAlive = true
 
     constructor(cellPos) {
@@ -59,7 +64,7 @@ class Entity {
     updateEntity() {
         debug("Updating entity " + getName(this._id))
         debug("Cell pos was " + this._cellPos + ", now " + getCell(this._id))
-        
+
         this._cellPos = getCell(this._id)
         this._currHealth = getLife(this._id)
         this._maxHealth = getTotalLife(this._id)
@@ -70,6 +75,29 @@ class Entity {
         this._isAlive = isAlive(this._id)
         this._relShield = getRelativeShield(this._id)
         this._absShield = getAbsoluteShield(this._id)
+        // Refresh active effects each turn to detect antidote removals
+        this._effectsActive = getEffects(this._id)
+    }
+
+    hasEffect(effectId) {
+        if (this._effectsActive == null) return false
+        for (var e in this._effectsActive) {
+            if (e[0] == effectId) return true
+        }
+        return false
+    }
+
+    getEffectRemaining(effectId) {
+        if (this._effectsActive == null) return 0
+        for (var e in this._effectsActive) {
+            if (e[0] == effectId) {
+                // Assume structure [effectID, value, remainingDuration]
+                if (count(e) >= 3) return e[2]
+                // Fallback if duration not present
+                return 1
+            }
+        }
+        return 0
     }
 }
 

@@ -1,3 +1,7 @@
+/** Exporté le 10/2/2025, 1:09:43 PM **/
+
+/** 8.0/V8/field_map.lk **/
+
 /** Exporté le 10/1/2025, 4:37:42 PM **/
 
 /** 8.0/V8/field_map.lk **/
@@ -11,10 +15,14 @@ class Cell {
     _weaponDamage = 0
     _chipDamage = 0
     _totalDamage = 0
+    _directDamage = 0 // immediate damage portion
+    _dotDamage = 0 // cumulative DoT (poison) portion
     _bestType = -1
     _hasLOS = false
     _highestDamageWeapon = -1
     _highestDamageChip = -1
+    _weaponsList = [] // all weapons that can fire from this cell
+    _chipsList = []   // all chips that can fire from this cell
 
     constructor(id, isObstacle, entityID, weaponDamage, chipDamage, hasLOS, highestDamageWeapon, highestDamageChip) {
         this._id = id
@@ -55,6 +63,11 @@ class FieldMap {
 
     wColors = [:]
     cColors = [:]
+
+    // Per-turn cache for enemy accessible cells (to avoid recomputation across multiple HNS queries)
+    _enemyAccessCache = [] // array of ['enemy': Enemy, 'cells': array]
+    _enemyAccessCacheTurn = -1
+    _enemyAccessCacheIds = [] // parallel list of enemy IDs for quick invalidation
 
     private static x_offset = 18
     private static y_offset = 17
@@ -126,13 +139,13 @@ class FieldMap {
         var chip = isWeapon ? null : item
 
         if (launchType == LAUNCH_TYPE_CIRCLE) {
-            return getCircleHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+            return this.getCircleHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
         } else if (launchType == LAUNCH_TYPE_STAR) {
-            return getStarHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+            return this.getStarHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
         } else if (launchType == LAUNCH_TYPE_LINE) {
-            return getLineHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+            return this.getLineHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
         } else if (launchType == LAUNCH_TYPE_DIAGONAL) {
-            return getDiagonalHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+            return this.getDiagonalHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
         }
         return localMap
     }
@@ -141,15 +154,30 @@ class FieldMap {
         if (isWeapon) {
             for (var c in localMap) {
                 if (c._highestDamageWeapon != -1 && mapContainsKey(this.wColors, c._highestDamageWeapon._id)) {
+                    // Weapons: keep colored cell (layer 2). Remove numeric damage text per new spec.
                     mark(c._id, this.wColors[c._highestDamageWeapon._id].getIntColor(), 2)
-                    markText(c._id, floor(c._totalDamage), new Color(255, 255, 255).getIntColor(), 2)
                 }
             }
         } else {
             for (var cc in localMap) {
                 if (cc._highestDamageChip != -1 && mapContainsKey(this.cColors, cc._highestDamageChip._id)) {
-                    mark(cc._id, this.cColors[cc._highestDamageChip._id].getIntColor(), 1)
-                    markText(cc._id, floor(cc._totalDamage), new Color(200, 255, 200).getIntColor(), 1)
+                    // Chips: no colored fill now; instead place code text: C_{first2letters} in darker tone (layer 1)
+                    var chipId = cc._highestDamageChip._id
+                    var chipName = getChipName(chipId)
+                    var shortName = chipName
+                    // Attempt to slice first 2 letters (LeekScript substring(begin, end) semantics assumed)
+                    // Fallback: if substring fails (returns null) we keep full name.
+                    var temp = substring(chipName, 0, 2)
+                    if (temp != null) shortName = temp
+                    // Build code
+                    var code = "C_" + shortName
+                    // Darker color derived from base chip color
+                    var baseCol = this.cColors[chipId]
+                    var dr = max(0, baseCol._r - 60)
+                    var dg = max(0, baseCol._g - 60)
+                    var db = max(0, baseCol._b - 60)
+                    var darkInt = getColor(dr, dg, db)
+                    markText(cc._id, code, darkInt, 1)
                 }
             }
         }
@@ -158,25 +186,53 @@ class FieldMap {
     buildHitMap(oppCell) {
         clearMarks()
         mapClear(this.damageMap)
+    var playerPos = player._cellPos // keep for potential distance-based annotations (no pruning)
 
+        // Weapons - integrate directly into global damageMap to retain combined lists
+        this.integrateEquippedItemsIntoDamageMap(oppCell)
+        // After integration, optionally mark (re-using existing damageMap entries)
+        this.markLocalHits(this.damageMap, true)
+        this.markLocalHits(this.damageMap, false)
+        // Summary diagnostics: cells with chips vs weapon-only
+        var chipCells = []
+        var weaponOnlyCells = []
+        for (var dmCell in this.damageMap) {
+            if (count(dmCell._chipsList) > 0) push(chipCells, dmCell._id)
+            else if (count(dmCell._weaponsList) > 0) push(weaponOnlyCells, dmCell._id)
+        }
+        debug("[HITMAP][SUMMARY] chipCells=" + chipCells + " weaponOnlyCellsSample=" + (count(weaponOnlyCells) > 0 ? weaponOnlyCells : []))
+        return this.damageMap
+    }
+
+    // Helper: integrate all equipped weapons and chips maintaining original debug output ordering
+    integrateEquippedItemsIntoDamageMap(oppCell) {
         // Weapons
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
             var wObj = arsenal.playerEquippedWeapons[wid]
             var localWeaponMap = [:]
             localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
-            this.damageMap = mapMerge(this.damageMap, localWeaponMap)
-            this.markLocalHits(localWeaponMap, true)
+            var listIDs = []
+            for (var cellRef in localWeaponMap) {
+                if (cellRef._isObstacle) continue
+                this.updateHitCells(this.damageMap, cellRef._id, wObj, null)
+                push(listIDs, cellRef._id)
+            }
+            debug("[HITMAP][WEAPON] " + getWeaponName(wObj._id) + " shooterCells=" + listIDs)
         }
-
         // Chips
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
             var localChipMap = [:]
             localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
-            this.damageMap = mapMerge(this.damageMap, localChipMap)
-            this.markLocalHits(localChipMap, false)
+            var listCID = []
+            for (var cellRef2 in localChipMap) {
+                if (cellRef2._isObstacle) continue
+                var bdDbg = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id) // retained (was previously assigned)
+                this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj)
+                push(listCID, cellRef2._id)
+            }
+            debug("[HITMAP][CHIP] " + getChipName(chipObj._id) + " shooterCells=" + listCID)
         }
-        return this.damageMap
     }
 
     getCellID(x, y) {
@@ -308,13 +364,52 @@ class FieldMap {
     getBestWeaponOrChipCell() {
         var best = -1
         var bestDmg = -1
+        var bestDist = 99999
+        var playerPos = player._cellPos
         for (var c in this.damageMap) {
-            if (c._totalDamage > bestDmg) {
-                bestDmg = c._totalDamage
+            var dmg = c._totalDamage
+            var dist = getPathLength(playerPos, c._id)
+            if (dist == null) dist = 99999
+            if (dmg > bestDmg || (dmg == bestDmg && dist < bestDist)) {
+                bestDmg = dmg
+                best = c
+                bestDist = dist
+            }
+        }
+        return best
+    }
+
+    // New: provide a weighted best cell factoring in preference for DoT (poison) vs direct damage
+    // dotWeight: how many times more valuable total DoT is relative to the same amount of direct damage
+    // directWeight: weight multiplier for immediate damage (default 1)
+    getBestWeightedDamageCell(dotWeight, directWeight) {
+        var best = -1
+        var bestScore = -1
+        for (var c in this.damageMap) {
+            var score = c._directDamage * directWeight + c._dotDamage * dotWeight
+            if (score > bestScore) {
+                bestScore = score
                 best = c
             }
         }
         return best
+    }
+
+    // New: return array of cells where a specific chip (poison) or weapon is the highest damage source
+    getAllCellsForItem(item, isWeapon) {
+        var result = []
+        for (var c in this.damageMap) {
+            if (isWeapon) {
+                if (c._highestDamageWeapon != -1 && c._highestDamageWeapon._id == item._id) {
+                    push(result, c)
+                }
+            } else {
+                if (c._highestDamageChip != -1 && c._highestDamageChip._id == item._id) {
+                    push(result, c)
+                }
+            }
+        }
+        return result
     }
 
     getLineHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
@@ -332,7 +427,7 @@ class FieldMap {
                 }
                 var _hasLOS = lineOfSight(cell, curCell)
                         if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
-                    updateHitCells(hitCells, curCell, weapon, chip)
+                    this.updateHitCells(hitCells, curCell, weapon, chip)
                 }
             }
         }
@@ -354,7 +449,7 @@ class FieldMap {
                 }
                 var _hasLOS = lineOfSight(cell, curCell)
                         if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
-                    updateHitCells(hitCells, curCell, weapon, chip) 
+                    this.updateHitCells(hitCells, curCell, weapon, chip) 
                 }
             }
         }
@@ -363,9 +458,9 @@ class FieldMap {
 
     getStarHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
         var lineMap = [:]
-        lineMap = getLineHits(lineMap, cell, minR, maxR, aoeType, weapon, chip)
+        lineMap = this.getLineHits(lineMap, cell, minR, maxR, aoeType, weapon, chip)
         var diagMap = [:]
-        diagMap = getDiagonalHits(diagMap, cell, minR, maxR, aoeType, weapon, chip)
+        diagMap = this.getDiagonalHits(diagMap, cell, minR, maxR, aoeType, weapon, chip)
         var merged = mapMerge(lineMap, diagMap)
         return mapMerge(hitCells, merged)
     }
@@ -378,7 +473,7 @@ class FieldMap {
                     var curCell = cell + FieldMap.x_offset * dx + FieldMap.y_offset * dy
                     var _hasLOS = lineOfSight(cell, curCell)
                             if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
-                        updateHitCells(hitCells, curCell, weapon, chip)
+                        this.updateHitCells(hitCells, curCell, weapon, chip)
                     }
                 }
             }
@@ -392,30 +487,57 @@ class FieldMap {
         }
 
         if (weapon != null) {
-            var scaledDamage = arsenal.getScaledDamage(player._strength, player._magic, player._wisdom, weapon._id)
+            var breakdownW = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id)
+            var scaledDamage = breakdownW['total']
             scaledDamage *= weapon._maxUse // assume we can hit with all uses
             if (mapContainsKey(hitCells, curCell)) {
                 if (hitCells[curCell]._weaponDamage < scaledDamage) {
                     hitCells[curCell]._weaponDamage = scaledDamage
                     hitCells[curCell]._highestDamageWeapon = weapon
+                    // Replace direct/dot components for weapon path (stack each use)
+                    hitCells[curCell]._directDamage = breakdownW['direct'] * weapon._maxUse
+                    hitCells[curCell]._dotDamage += breakdownW['dot'] * weapon._maxUse
                 }
+                // record presence of weapon even if not highest damage
+                var already = false
+                for (var wIdx = 0; wIdx < count(hitCells[curCell]._weaponsList); wIdx++) {
+                    if (hitCells[curCell]._weaponsList[wIdx]._id == weapon._id) { already = true; break }
+                }
+                if (!already) push(hitCells[curCell]._weaponsList, weapon)
             }
             else {
-                mapPut(hitCells, curCell, new Cell(curCell, false, getEntityOnCell(curCell), scaledDamage, 0, true, weapon, -1))
+                var newCell = new Cell(curCell, false, getEntityOnCell(curCell), scaledDamage, 0, true, weapon, -1)
+                newCell._directDamage = breakdownW['direct'] * weapon._maxUse
+                newCell._dotDamage = breakdownW['dot'] * weapon._maxUse
+                push(newCell._weaponsList, weapon)
+                mapPut(hitCells, curCell, newCell)
             }
         }
         else if (chip != null) {
-            var scaledDamage = arsenal.getScaledDamage(player._strength, player._magic, player._wisdom, chip._id)
+            var breakdownC = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chip._id)
+            var scaledDamage = breakdownC['total']
             scaledDamage *= chip._maxUse // assume we can hit with all uses
+            // Removed verbose integration debug to avoid log spam.
             if (mapContainsKey(hitCells, curCell)) {
+                // Always accumulate stacking potential for poison-capable chips
+                hitCells[curCell]._directDamage += breakdownC['direct'] * chip._maxUse
+                hitCells[curCell]._dotDamage += breakdownC['dot'] * chip._maxUse
                 if (hitCells[curCell]._chipDamage < scaledDamage) {
                     hitCells[curCell]._chipDamage = scaledDamage
                     hitCells[curCell]._highestDamageChip = chip
                 }
-            }
-            else {
+                var alreadyC = false
+                for (var cIdx = 0; cIdx < count(hitCells[curCell]._chipsList); cIdx++) {
+                    if (hitCells[curCell]._chipsList[cIdx]._id == chip._id) { alreadyC = true; break }
+                }
+                if (!alreadyC) push(hitCells[curCell]._chipsList, chip)
+            } else {
+                var nc = new Cell(curCell, false, getEntityOnCell(curCell), 0, scaledDamage, true, -1, chip)
+                nc._directDamage = breakdownC['direct'] * chip._maxUse
+                nc._dotDamage = breakdownC['dot'] * chip._maxUse
+                push(nc._chipsList, chip)
                 // Store the chip object (not just its id) so later accesses to _highestDamageChip._id are valid
-                mapPut(hitCells, curCell, new Cell(curCell, false, getEntityOnCell(curCell), 0, scaledDamage, true, -1, chip))
+                mapPut(hitCells, curCell, nc)
             }
         }
         // Recompute aggregate
@@ -426,5 +548,186 @@ class FieldMap {
             else if (cellRef._chipDamage > cellRef._weaponDamage) cellRef._bestType = 1
         }
         return hitCells
+    }
+
+    // Build or reuse cached enemy accessible cells for this turn.
+    getEnemyAccess() {
+        var curTurn = getTurn()
+        var enemiesMap = this.getEnemySubMap()
+        var enemyIdsNow = mapKeys(enemiesMap)
+        // Rebuild conditions: turn changed OR enemy count changed OR any id mismatch
+        var needRebuild = (curTurn != this._enemyAccessCacheTurn)
+        if (!needRebuild && count(enemyIdsNow) != count(this._enemyAccessCacheIds)) needRebuild = true
+        if (!needRebuild) {
+            for (var i = 0; i < count(enemyIdsNow); i++) {
+                var found = false
+                for (var j = 0; j < count(this._enemyAccessCacheIds); j++) { if (enemyIdsNow[i] == this._enemyAccessCacheIds[j]) { found = true; break } }
+                if (!found) { needRebuild = true; break }
+            }
+        }
+        if (needRebuild) {
+            this._enemyAccessCache = []
+            this._enemyAccessCacheIds = []
+            for (var ei = 0; ei < count(enemyIdsNow); ei++) {
+                var eid = enemyIdsNow[ei]
+                var enemyObj = enemiesMap[eid]
+                if (enemyObj == null) continue
+                var eAcc = this.getAccessibleCells(enemyObj)
+                if (indexOf(eAcc, enemyObj._cellPos) == -1) push(eAcc, enemyObj._cellPos)
+                push(this._enemyAccessCache, ['enemy': enemyObj, 'cells': eAcc])
+                push(this._enemyAccessCacheIds, eid)
+            }
+            this._enemyAccessCacheTurn = curTurn
+            debug("[HNS][CACHE] Rebuilt enemy access cache size=" + count(this._enemyAccessCache))
+        }
+        return this._enemyAccessCache
+    }
+
+    // ---- Hide & Seek Support ----
+    // Compute all cells reachable this turn for a given entity (within current MP, non-obstacle, path exists)
+    getAccessibleCells(entity) {
+        var acc = []
+        if (entity == null) return acc
+        var mp = entity._currMp
+        var origin = entity._cellPos
+        // Iterate over board (613 cells) – acceptable cost; early continue on obstacles
+        for (var cid = 0; cid < FieldMap.board_cell_count; cid++) {
+            if (isObstacle(cid)) continue
+            // Quick distance lower bound: if Manhattan-like distance already > mp, skip (approx via getCellDistance)
+            var approx = getCellDistance(origin, cid)
+            if (approx == null || approx > mp) continue
+            var len = getPathLength(origin, cid)
+            if (len == null) continue
+            if (len <= mp) push(acc, cid)
+        }
+        return acc
+    }
+
+    // Evaluate best hiding cell: a cell is "safe" if NO enemy-accessible cell has line of sight to it.
+    // We return either a perfectly safe cell (danger=0) maximizing distance to nearest enemy, or if none safe,
+    // the cell with minimal danger (fewest LOS exposures) and then greatest distance.
+    findHideAndSeekCell() {
+        var enemyAccess = this.getEnemyAccess()
+        if (count(enemyAccess) == 0) return null
+        var playerAccessible = this.getAccessibleCells(player)
+        // Always include current position even if MP=0 (already in list normally)
+        if (indexOf(playerAccessible, player._cellPos) == -1) push(playerAccessible, player._cellPos)
+
+        // enemyAccess already built / cached
+
+        var bestCell = -1
+        var bestDanger = 99999
+        var bestDist = -1
+        var playerPos = player._cellPos
+
+        for (var i = 0; i < count(playerAccessible); i++) {
+            var cand = playerAccessible[i]
+            var danger = 0
+            var earlyStop = false
+            // For distance metric: distance to closest enemy origin cell (after movement they could be elsewhere but this is heuristic)
+            var closestEnemyDist = 999
+            for (var ea = 0; ea < count(enemyAccess); ea++) {
+                var enemyRef = enemyAccess[ea]['enemy']
+                if (enemyRef == null) continue
+                var eOrigDist = getCellDistance(cand, enemyRef._cellPos)
+                if (eOrigDist != null && eOrigDist < closestEnemyDist) closestEnemyDist = eOrigDist
+                var cellsArr = enemyAccess[ea]['cells']
+                for (var ec = 0; ec < count(cellsArr); ec++) {
+                    var eCell = cellsArr[ec]
+                    if (lineOfSight(eCell, cand)) {
+                        danger += 1
+                        if (danger > bestDanger && bestDanger == 0) { earlyStop = true; break }
+                    }
+                }
+                if (earlyStop) break
+            }
+            if (closestEnemyDist == 999) closestEnemyDist = 0 // fallback
+
+            // Selection logic:
+            // 1. Prefer lower danger
+            // 2. If equal danger, prefer greater closestEnemyDist
+            if (danger < bestDanger || (danger == bestDanger && closestEnemyDist > bestDist)) {
+                bestDanger = danger
+                bestCell = cand
+                bestDist = closestEnemyDist
+                // Perfect safe cell with maximal possible distance heuristic early cut: if danger == 0 and bestDist is near MP+enemy MP upper bound we still continue for potentially further safe cell.
+            }
+        }
+
+        if (bestCell == -1) return null
+        debug("[HNS] bestCell=" + bestCell + " danger=" + bestDanger + " dist=" + bestDist + " playerPos=" + playerPos)
+        // Mark chosen cell for visualization if different from current
+        if (bestCell != playerPos) mark(bestCell, getColor(120, 200, 255), 3)
+        return ['cell': bestCell, 'danger': bestDanger, 'safe': (bestDanger == 0)]
+    }
+
+    // Compute danger (LOS exposures) for a single cell, given precomputed enemy access arrays
+    private computeDangerForCell(cellId, enemyAccess) {
+        var danger = 0
+        for (var ea = 0; ea < count(enemyAccess); ea++) {
+            var cellsArr = enemyAccess[ea]['cells']
+            for (var ec = 0; ec < count(cellsArr); ec++) {
+                if (lineOfSight(cellsArr[ec], cellId)) { danger += 1 }
+            }
+        }
+        return danger
+    }
+
+    // Approach-oriented Hide & Seek: choose an accessible cell that gets closer (or maintains distance if already in range)
+    // while minimizing danger, and preferably allows an attack (weapon or chip) this turn.
+    // Returns map: ['cell': Cell, 'danger': int, 'canAttack': bool, 'dist': int]
+    findApproachHideAndSeekCell(target) {
+        if (target == null) return null
+        var enemyAccess = this.getEnemyAccess()
+        if (count(enemyAccess) == 0) return null
+        var playerAccessible = this.getAccessibleCells(player)
+        if (indexOf(playerAccessible, player._cellPos) == -1) push(playerAccessible, player._cellPos)
+        // enemyAccess already cached
+
+        var bestCell = -1
+        var bestDanger = 99999
+        var bestDist = 99999
+        var bestCanAttack = false
+        var targetPos = target._cellPos
+        var currentDist = getCellDistance(player._cellPos, targetPos)
+
+        for (var i = 0; i < count(playerAccessible); i++) {
+            var cand = playerAccessible[i]
+            // Restrict to cells we can path to (sanity) and within MP already enforced by getAccessibleCells
+            // Evaluate distance to target
+            var distTarget = getCellDistance(cand, targetPos)
+            if (distTarget == null) continue
+            var canAttack = false
+            // Only consider attack viability if this cell is in damageMap (already computed hit cells this turn)
+            if (mapContainsKey(this.damageMap, cand)) {
+                var cellRef = this.damageMap[cand]
+                // Attack possible if any highest damage weapon or chip is defined and LOS still valid
+                if (cellRef._highestDamageWeapon != -1) canAttack = true
+                else if (cellRef._highestDamageChip != -1) canAttack = true
+            }
+            // Skip cells that increase distance unless they allow an attack (maintain approach bias)
+            if (!canAttack && distTarget > currentDist) continue
+            var danger = this.computeDangerForCell(cand, enemyAccess)
+            // Ordering:
+            // 1. Prefer cells that can attack (canAttack true beats false)
+            // 2. Lower danger
+            // 3. Lower distance to target
+            // 4. If tie, prefer improving (distTarget < currentDist)
+            if (bestCell == -1) {
+                bestCell = cand; bestDanger = danger; bestDist = distTarget; bestCanAttack = canAttack; continue
+            }
+            if (canAttack && !bestCanAttack) {
+                bestCell = cand; bestDanger = danger; bestDist = distTarget; bestCanAttack = true; continue
+            }
+            if (canAttack == bestCanAttack) {
+                if (danger < bestDanger || (danger == bestDanger && distTarget < bestDist) || (danger == bestDanger && distTarget == bestDist && distTarget < currentDist && bestDist >= currentDist)) {
+                    bestCell = cand; bestDanger = danger; bestDist = distTarget; bestCanAttack = canAttack
+                }
+            }
+        }
+        if (bestCell == -1) return null
+        if (bestCell != player._cellPos) mark(bestCell, getColor(255, 200, 120), 3)
+        debug("[HNS-APPROACH] bestCell=" + bestCell + " canAttack=" + bestCanAttack + " danger=" + bestDanger + " dist=" + bestDist + " currentDist=" + currentDist)
+        return ['cell': bestCell, 'danger': bestDanger, 'canAttack': bestCanAttack, 'dist': bestDist]
     }
 }

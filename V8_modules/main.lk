@@ -1,3 +1,7 @@
+/** Exporté le 10/2/2025, 1:09:54 PM **/
+
+/** 8.0/V8/main.lk **/
+
 /** Exporté le 10/1/2025, 4:37:32 PM **/
 
 /** 8.0/V8/main.lk **/
@@ -67,7 +71,11 @@ function main() {
     debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))
 
     ops1 = getOperations()
-    strategy.createAndExecuteScenario(target, targetHitCell)
+    if (strategy instanceof MagicStrategy) {
+        strategy.createAndExecuteDotKite(target, targetHitCell)
+    } else {
+        strategy.createAndExecuteScenario(target, targetHitCell)
+    }
     ops2 = getOperations()
     debug("Create and execute scenario operations: " + (ops2 - ops1))
 }

@@ -1,3 +1,7 @@
+/** Exporté le 10/2/2025, 1:09:51 PM **/
+
+/** 8.0/V8/item.lk **/
+
 /** Exporté le 10/1/2025, 4:37:34 PM **/
 
 /** 8.0/V8/item.lk **/
@@ -155,6 +159,97 @@ class Arsenal {
             totalDamage += totalDamage * (wis / 1000)
         }
         return totalDamage
+    }
+
+    // New: provide separate breakdown for direct (immediate) vs dot (poison) damage per use/apply
+    // directPerUse: average base damage (EFFECT_DAMAGE) scaled by STR (and lifesteal not included here)
+    // dotPerApply: total poison damage over duration (EFFECT_POISON) scaled by MAG (applies at most once per target realistically)
+    getDamageBreakdown(str, mag, wis, itemID) {
+        // Support both full inventory lists and equipped subsets for weapons & chips.
+        var isWeapon = mapContainsKey(this.playerEquippedWeapons, itemID)
+        // A chip can reside either in the global chipsList or only in playerEquippedChips.
+        var chipInFull = mapContainsKey(this.chipsList, itemID)
+        var chipInEquipped = mapContainsKey(this.playerEquippedChips, itemID)
+        var isChip = !isWeapon && (chipInFull || chipInEquipped)
+        if (!isWeapon && !isChip) return ['direct': 0, 'dot': 0, 'total': 0]
+        var item = isWeapon ? this.playerEquippedWeapons[itemID] : (chipInFull ? this.chipsList[itemID] : this.playerEquippedChips[itemID])
+        var direct = 0
+        var dot = 0
+        for (var e in mapKeys(item._effects)) {
+            var info = item._effects[e]
+            if (e == EFFECT_DAMAGE) {
+                var avg = (info._minEffectAmount + info._maxEffectAmount) / 2
+                direct += avg * (1 + (str / 100))
+            } else if (e == EFFECT_POISON) {
+                var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
+                var totalOverTime = avg2 * info._effectDuration
+                dot += totalOverTime * (1 + (mag / 100))
+            }
+        }
+        return ['direct': direct, 'dot': dot, 'total': direct + dot]
+    }
+
+    // Return an array of poison chip objects sorted by descending dot damage
+    getPoisonChipsSorted(str, mag, wis) {
+        var arr = []
+        for (var cid in mapKeys(this.playerEquippedChips)) {
+            var chip = this.playerEquippedChips[cid]
+            if (!mapContainsKey(chip._effects, EFFECT_POISON)) continue
+            var bd = this.getDamageBreakdown(str, mag, wis, cid)
+            push(arr, ['chip': chip, 'dot': bd['dot'], 'direct': bd['direct'], 'total': bd['total']])
+        }
+        // Simple selection sort (LeekScript lacks higher-order sort)
+        var sorted = []
+        while (count(arr) > 0) {
+            var bestIdx = 0
+            var bestDot = arr[0]['dot']
+            for (var i = 1; i < count(arr); i++) {
+                if (arr[i]['dot'] > bestDot) {
+                    bestDot = arr[i]['dot']
+                    bestIdx = i
+                }
+            }
+            push(sorted, arr[bestIdx]['chip'])
+            remove(arr, bestIdx)
+        }
+        return sorted
+    }
+
+    // Return DoT-capable weapons sorted by descending dot component; include pure direct if no dot weapons
+    getDotWeaponsSorted(str, mag, wis) {
+        var arr = []
+        for (var wid in mapKeys(this.playerEquippedWeapons)) {
+            var w = this.playerEquippedWeapons[wid]
+            var bd = this.getDamageBreakdown(str, mag, wis, wid)
+            if (bd['dot'] > 0) {
+                push(arr, ['weapon': w, 'dot': bd['dot'], 'direct': bd['direct'], 'total': bd['total']])
+            }
+        }
+        if (count(arr) == 0) {
+            // fallback: use any weapons (direct focus)
+            for (var wid2 in mapKeys(this.playerEquippedWeapons)) {
+                var w2 = this.playerEquippedWeapons[wid2]
+                var bd2 = this.getDamageBreakdown(str, mag, wis, wid2)
+                push(arr, ['weapon': w2, 'dot': bd2['dot'], 'direct': bd2['direct'], 'total': bd2['total']])
+            }
+        }
+        // selection sort by dot then total
+        var sorted = []
+        while (count(arr) > 0) {
+            var bestIdx = 0
+            var bestDot = arr[0]['dot']
+            var bestTot = arr[0]['total']
+            for (var i = 1; i < count(arr); i++) {
+                if (arr[i]['dot'] > bestDot || (arr[i]['dot'] == bestDot && arr[i]['total'] > bestTot)) {
+                    bestDot = arr[i]['dot']
+                    bestTot = arr[i]['total']
+                    bestIdx = i
+                }
+            }
+            push(sorted, arr[bestIdx]['weapon'])
+            remove(arr, bestIdx)
+        }
+        return sorted
     }
 
     getHighestDamageWeapon() {
