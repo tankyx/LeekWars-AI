@@ -95,8 +95,12 @@ class FieldMap {
             if (isEntity(i)) {
                 entID = getEntityOnCell(i)
 
-                if (entID == playerID && isAlly(entID)) {
-                    mapPut(this.entities, entID, new Player(i))
+                if (isAlly(entID)) {
+                    if (entID == playerID) {
+                        mapPut(this.entities, entID, new Player(i))
+                    } else {
+                        mapPut(this.entities, entID, new Player(i)) // Ally teammate (treat as Player for now)
+                    }
                 }
                 else {
                     mapPut(this.entities, entID, new Enemy(i))
@@ -448,7 +452,7 @@ class FieldMap {
         for (var c in this.damageMap) {
             var dmg = c._totalDamage
             var dist = getPathLength(playerPos, c._id)
-            if (dist == null) dist = 99999
+            if (dist == null) continue  // Skip unreachable cells
             if (dmg > bestDmg || (dmg == bestDmg && dist < bestDist)) {
                 bestDmg = dmg
                 best = c

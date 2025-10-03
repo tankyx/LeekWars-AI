@@ -1,11 +1,3 @@
-/** Exporté le 10/2/2025, 1:09:47 PM **/
-
-/** 8.0/V8/strategy/magic_strategy.lk **/
-
-/** Exporté le 10/1/2025, 4:37:38 PM **/
-
-/** 8.0/V8/strategy/magic_strategy.lk **/
-
 include('action.lk')
 include('base_strategy.lk')
 
@@ -82,8 +74,12 @@ class MagicStrategy extends Strategy {
         }
         var baiting = MagicStrategy._baitMode[enemyId]
         debug("[ANTIDOTE][STATE] enemy=" + enemyId + " baiting=" + baiting + " inferredUse=" + inferredUse + " cd=" + antidoteCD + " prevRemain=" + prevRemain)
-        // Escalate out of bait mode if cleanse confirmed and cooldown running or repeated natural expiry stalling
-        if (baiting && wasPoisonedPrev && !poisonActive && prevRemain > 0 && antidoteCD > 0) {
+        // Escalate out of bait mode if Antidote is on cooldown (already used)
+        if (baiting && antidoteCD > 0) {
+            MagicStrategy._baitMode[enemyId] = false
+            baiting = false
+            debug("[ANTIDOTE][ESCALATE] Antidote on cooldown (cd=" + antidoteCD + ") -> full offensive mode")
+        } else if (baiting && wasPoisonedPrev && !poisonActive && prevRemain > 0 && antidoteCD > 0) {
             MagicStrategy._baitMode[enemyId] = false
             baiting = false
             debug("[ANTIDOTE][ESCALATE] Cleanse + cooldown -> full offensive")
@@ -342,6 +338,18 @@ class MagicStrategy extends Strategy {
                 push(this._actions, new Action(Action.ACTION_DIRECT, -1, chipP._id, target._cellPos, target))
                 player._currTp -= chipP._cost
                 willAttack = true
+            }
+        }
+        // Use CHIP_VACCINE for healing during attrition phase (after poison applied)
+        if (player._currTp > 0 && mapContainsKey(arsenal.playerEquippedChips, CHIP_VACCINE)) {
+            var hpPercent = (player._currHealth * 100) / player._maxHealth
+            if (hpPercent < 70) {
+                var vac = arsenal.playerEquippedChips[CHIP_VACCINE]
+                if (getCooldown(CHIP_VACCINE, player._id) == 0 && player._currTp >= vac._cost) {
+                    push(this._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_VACCINE, player._cellPos, player))
+                    player._currTp -= vac._cost
+                    debug("[DoT-KITE][HEAL] Using CHIP_VACCINE HP=" + floor(hpPercent) + "% TP=" + player._currTp)
+                }
             }
         }
         context['willAttack'] = willAttack
