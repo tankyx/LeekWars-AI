@@ -31,6 +31,82 @@ class AgilityStrategy extends Strategy {
         return -1
     }
 
+    // Check if CHIP_WARM_UP should be used (agility buff)
+    shouldUseWarmUp() {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP)) return false
+
+        var cooldown = getCooldown(CHIP_WARM_UP, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        // Need 7 TP for warm-up + 5-7 for MIRROR/THORN + attacks (14 TP minimum)
+        if (playerTP < 14) return false
+
+        // Check if we already have agility buff active
+        var hasAgiBuff = player.hasEffect(EFFECT_BUFF_AGILITY)
+        if (hasAgiBuff) {
+            var buffRemaining = player.getEffectRemaining(EFFECT_BUFF_AGILITY)
+            if (buffRemaining > 1) {
+                debug("[WARM_UP] Agility buff active with " + buffRemaining + " turns remaining")
+                return false
+            }
+            debug("[WARM_UP] Agility buff expiring in " + buffRemaining + " turn(s) - reapplying")
+            return true
+        }
+
+        debug("[WARM_UP] No agility buff active - applying")
+        return true
+    }
+
+    // Check if CHIP_ADRENALINE should be used tactically
+    shouldUseAdrenaline(requiredTP) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_ADRENALINE)) return false
+
+        var cooldown = getCooldown(CHIP_ADRENALINE, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        // Only use if we're short of required TP by 1-4 points (Adrenaline gives +4 net TP)
+        var shortage = requiredTP - playerTP
+        if (shortage >= 1 && shortage <= 4) {
+            debug("[ADRENALINE] Short " + shortage + " TP (have " + playerTP + " need " + requiredTP + ") - using Adrenaline")
+            return true
+        }
+
+        return false
+    }
+
+    // Check if CHIP_LEATHER_BOOTS should be used for positioning
+    shouldUseLeatherBoots(targetCell) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS)) return false
+
+        var cooldown = getCooldown(CHIP_LEATHER_BOOTS, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        // Need 3 TP for boots + at least 7 TP for attacks (10 TP minimum)
+        if (playerTP < 10) return false
+
+        // Check if we already have MP buff active
+        var hasMPBuff = player.hasEffect(EFFECT_BUFF_MP)
+        if (hasMPBuff) {
+            debug("[LEATHER_BOOTS] MP buff already active")
+            return false
+        }
+
+        // Only use if target cell is unreachable but within MP+2 range
+        var pathLen = getPathLength(player._cellPos, targetCell)
+        if (pathLen == null) return false
+
+        var playerMP = player._currMp
+        if (pathLen > playerMP && pathLen <= playerMP + 2) {
+            debug("[LEATHER_BOOTS] Target cell unreachable (need " + pathLen + " MP, have " + playerMP + ") - using boots")
+            return true
+        }
+
+        return false
+    }
+
     // Check if we should reapply damage return buff
     shouldReapplyReturnBuff() {
         var hasReturn = player.hasDamageReturn()
@@ -68,6 +144,23 @@ class AgilityStrategy extends Strategy {
         var playerPos = player._cellPos
         var playerMP = player._currMp
         var playerTP = player._currTp
+
+        // STEP 0: Apply CHIP_WARM_UP before damage return buff if needed
+        if (this.shouldUseWarmUp()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WARM_UP)
+            useChip(CHIP_WARM_UP, player._id)
+            playerTP -= 7
+            debug("[AGILITY] Applied CHIP_WARM_UP (+170-190 Agility for 3 turns)")
+        }
+
+        // STEP 0.5: Check for CHIP_LEATHER_BOOTS if target cell unreachable
+        if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
+            useChip(CHIP_LEATHER_BOOTS, player._id)
+            playerTP -= 3
+            playerMP += 2  // Immediate MP boost
+            debug("[AGILITY] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
+        }
 
         // STEP 1: Apply damage return buff (CHIP_MIRROR or CHIP_THORN) if needed
         // Only apply if we have enough TP left for attacks (minimum 7 TP: 1 swap + 6 weapon use)
@@ -112,6 +205,15 @@ class AgilityStrategy extends Strategy {
         if (bestWeaponCell == -1) {
             debug("[AGILITY] No valid weapon cell found, aborting offensive")
             return
+        }
+
+        // STEP 2.5: Check if CHIP_ADRENALINE can help with weapon spam
+        if (this.shouldUseAdrenaline(playerTP + 4)) {  // Check if +4 TP would enable more attacks
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
+            useChip(CHIP_ADRENALINE, player._id)
+            playerTP -= 1
+            playerTP += 5  // Net gain of 4 TP
+            debug("[AGILITY][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
         }
 
         // STEP 3: Execute shared weapon-focused combat logic (exclude CHIP_MIRROR/THORN from damage chips)

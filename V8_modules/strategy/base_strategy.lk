@@ -23,28 +23,50 @@ class Strategy {
         for (var c in mapKeys(arsenal.playerEquippedChips)) {
             debug(" - " + getChipName(c))
         }
-        // Agility build: prioritize damage return for tanky playstyle
+
+        // PRIORITY 1: Stat-based primary buffs (applied before other buffs for maximum effect)
+        // Strength build: Apply CHIP_STEROID for weapon damage boost
+        if (player._strength >= player._agility && player._strength >= player._magic) {
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
+                debug("Using CHIP_STEROID (strength build) - +150-170 Strength for 3 turns")
+                useChip(CHIP_STEROID, player._id)
+            }
+        }
+
+        // Agility build: Apply CHIP_WARM_UP before damage return buffs
         if (player._agility >= player._strength && player._agility >= player._magic) {
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP)) {
+                debug("Using CHIP_WARM_UP (agility build) - +170-190 Agility for 3 turns")
+                useChip(CHIP_WARM_UP, player._id)
+            }
+            // Then apply damage return for tanky playstyle
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)) {
-                debug("Using Mirror chip (agility build)")
+                debug("Using CHIP_MIRROR (agility build) - Damage return")
                 useChip(CHIP_MIRROR, player._id)
             }
         }
+
+        // PRIORITY 2: Universal stat buffs
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
-            debug("Using Knowledge chip")
+            debug("Using CHIP_KNOWLEDGE - Science/Magic boost")
             useChip(CHIP_KNOWLEDGE, player._id)
         }
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
-            debug("Using Armoring chip")
+            debug("Using CHIP_ARMORING - Resistance boost")
             useChip(CHIP_ARMORING, player._id)
         }
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
-            debug("Using Elevation chip")
+            debug("Using CHIP_ELEVATION - Wisdom boost")
             useChip(CHIP_ELEVATION, player._id)
         }
+
+        // PRIORITY 3: Weapon selection
         if (getWeapon() == null) {
             setWeapon(arsenal.getHighestDamageWeapon())
         }
+
+        // NOTE: CHIP_ADRENALINE is reserved for tactical mid-combat usage (not turn 1)
+        // NOTE: CHIP_LEATHER_BOOTS is reserved for positioning scenarios (not turn 1)
     }
 
     createMovementAction(type, targetHitCellID, target) {
@@ -491,7 +513,7 @@ class Strategy {
         this.executeScenario()
     }
 
-    // If below 25% HP, use defensive; else offensive
+    // If below 35% HP, use defensive; else offensive
     createAndExecuteScenario(target, targetHitCell) {
         arrayClear(this._actions)
 
@@ -506,12 +528,13 @@ class Strategy {
 
         // Only use defensive scenario if HP low AND we can still heal
         // Otherwise fight offensively (fleeing without healing is pointless)
-        if (getLife() * 4 < getTotalLife() && regenAvailable) {
-            debug("Low HP detected (<25%) and regeneration available, switching to defensive strategy")
+        // Threshold: 35% HP (getLife() * 100 / getTotalLife() < 35)
+        if (getLife() * 100 < getTotalLife() * 35 && regenAvailable) {
+            debug("Low HP detected (<35%) and regeneration available, switching to defensive strategy")
             this.createDefensiveScenario(target, targetHitCell)
         } else {
-            if (getLife() * 4 < getTotalLife()) {
-                debug("Low HP detected (<25%) but regeneration exhausted, fighting offensively")
+            if (getLife() * 100 < getTotalLife() * 35) {
+                debug("Low HP detected (<35%) but regeneration exhausted, fighting offensively")
             }
             this.createOffensiveScenario(target, targetHitCell)
         }

@@ -44,7 +44,21 @@ class StrengthStrategy extends Strategy {
         // Only proceed if we can guarantee the kill (or if target is chest - always prioritize chests)
         if (!teleportInfo['canKill'] && !(target instanceof Chest)) {
             debug("[OTKO] Projected damage insufficient for kill: " + teleportInfo['damage'] + " vs " + target._currHealth + " HP")
-            return false
+
+            // Check if CHIP_ADRENALINE can bridge the gap
+            if (this.shouldUseAdrenaline(15)) {  // Need at least 15 TP for meaningful OTKO
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
+                useChip(CHIP_ADRENALINE, player._id)
+                playerTP -= 1
+                playerTP += 5  // Net gain of 4 TP
+                debug("[OTKO][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
+                // Re-check if we can now kill
+                if (teleportInfo['damage'] < target._currHealth) {
+                    return false
+                }
+            } else {
+                return false
+            }
         }
 
         var teleCell = teleportInfo['cell']
@@ -168,6 +182,82 @@ class StrengthStrategy extends Strategy {
         return true
     }
 
+    // Check if CHIP_STEROID should be used (strength buff)
+    shouldUseSteroid() {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) return false
+
+        var cooldown = getCooldown(CHIP_STEROID, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        // Need 7 TP for buff + at least 8 TP for meaningful attacks (15 TP minimum)
+        if (playerTP < 15) return false
+
+        // Check if we already have strength buff active
+        var hasStrBuff = player.hasEffect(EFFECT_BUFF_STRENGTH)
+        if (hasStrBuff) {
+            var buffRemaining = player.getEffectRemaining(EFFECT_BUFF_STRENGTH)
+            if (buffRemaining > 1) {
+                debug("[STEROID] Strength buff active with " + buffRemaining + " turns remaining")
+                return false
+            }
+            debug("[STEROID] Strength buff expiring in " + buffRemaining + " turn(s) - reapplying")
+            return true
+        }
+
+        debug("[STEROID] No strength buff active - applying")
+        return true
+    }
+
+    // Check if CHIP_ADRENALINE should be used tactically
+    shouldUseAdrenaline(requiredTP) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_ADRENALINE)) return false
+
+        var cooldown = getCooldown(CHIP_ADRENALINE, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        // Only use if we're short of required TP by 1-4 points (Adrenaline gives +4 net TP)
+        var shortage = requiredTP - playerTP
+        if (shortage >= 1 && shortage <= 4) {
+            debug("[ADRENALINE] Short " + shortage + " TP (have " + playerTP + " need " + requiredTP + ") - using Adrenaline")
+            return true
+        }
+
+        return false
+    }
+
+    // Check if CHIP_LEATHER_BOOTS should be used for positioning
+    shouldUseLeatherBoots(targetCell) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS)) return false
+
+        var cooldown = getCooldown(CHIP_LEATHER_BOOTS, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        // Need 3 TP for boots + at least 7 TP for attacks (10 TP minimum)
+        if (playerTP < 10) return false
+
+        // Check if we already have MP buff active
+        var hasMPBuff = player.hasEffect(EFFECT_BUFF_MP)
+        if (hasMPBuff) {
+            debug("[LEATHER_BOOTS] MP buff already active")
+            return false
+        }
+
+        // Only use if target cell is unreachable but within MP+2 range
+        var pathLen = getPathLength(player._cellPos, targetCell)
+        if (pathLen == null) return false
+
+        var playerMP = player._currMp
+        if (pathLen > playerMP && pathLen <= playerMP + 2) {
+            debug("[LEATHER_BOOTS] Target cell unreachable (need " + pathLen + " MP, have " + playerMP + ") - using boots")
+            return true
+        }
+
+        return false
+    }
+
     // Check if CHIP_LIBERATION is tactically valuable
     shouldUseLiberation(target) {
         if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_LIBERATION)) return false
@@ -224,7 +314,24 @@ class StrengthStrategy extends Strategy {
             targetHitCell = fieldMap.buildHitMap(chest._cellPos)
         }
 
-        // Check for tactical CHIP_LIBERATION usage BEFORE combat
+        // PRIORITY 2: Apply CHIP_STEROID before combat if needed
+        if (this.shouldUseSteroid()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_STEROID)
+            useChip(CHIP_STEROID, player._id)
+            player._currTp -= 7
+            debug("[STR] Applied CHIP_STEROID (+150-170 Strength for 3 turns)")
+        }
+
+        // PRIORITY 3: Check for CHIP_LEATHER_BOOTS if target cell unreachable
+        if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
+            useChip(CHIP_LEATHER_BOOTS, player._id)
+            player._currTp -= 3
+            player._currMp += 2  // Immediate MP boost
+            debug("[STR] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
+        }
+
+        // PRIORITY 4: Check for tactical CHIP_LIBERATION usage BEFORE combat
         if (this.shouldUseLiberation(target)) {
             // Use on enemy to remove their buffs, or on self to remove debuffs
             var liberationTarget = target._cellPos
