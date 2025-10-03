@@ -1,0 +1,113 @@
+include('action.lk')
+include('base_strategy.lk')
+
+class AgilityStrategy extends Strategy {
+    constructor() {
+        super()
+    }
+
+    // Select best available damage return chip (priority: MIRROR > THORN)
+    selectBestReturnChip() {
+        // CHIP_MIRROR: 5-6% return, 3 turn duration, 5 TP cost
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)) {
+            var mirror = arsenal.playerEquippedChips[CHIP_MIRROR]
+            if (getCooldown(CHIP_MIRROR, player._id) == 0 && player._currTp >= mirror._cost) {
+                var returnVal = arsenal.getDamageReturnValue(player._agility, CHIP_MIRROR)
+                debug("[AGILITY] CHIP_MIRROR available: " + returnVal + "% return (scaled by agility)")
+                return CHIP_MIRROR
+            }
+        }
+
+        // CHIP_THORN: 3-4% return, 2 turn duration, 4 TP cost
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)) {
+            var thorn = arsenal.playerEquippedChips[CHIP_THORN]
+            if (getCooldown(CHIP_THORN, player._id) == 0 && player._currTp >= thorn._cost) {
+                var returnVal2 = arsenal.getDamageReturnValue(player._agility, CHIP_THORN)
+                debug("[AGILITY] CHIP_THORN available: " + returnVal2 + "% return (scaled by agility)")
+                return CHIP_THORN
+            }
+        }
+
+        return -1
+    }
+
+    // Check if we should reapply damage return buff
+    shouldReapplyReturnBuff() {
+        var hasReturn = player.hasDamageReturn()
+        var returnRemaining = player.getDamageReturnRemaining()
+
+        // No active return buff
+        if (!hasReturn) {
+            debug("[AGILITY] No damage return active - MUST reapply")
+            return true
+        }
+
+        // Return buff expiring soon (≤1 turn remaining)
+        if (returnRemaining <= 1) {
+            debug("[AGILITY] Damage return expiring in " + returnRemaining + " turn(s) - reapplying")
+            return true
+        }
+
+        debug("[AGILITY] Damage return active with " + returnRemaining + " turns remaining")
+        return false
+    }
+
+
+    // Override offensive scenario for agility builds
+    // Strategy: Apply CHIP_MIRROR/THORN damage return buff, then fight like strength builds
+    createOffensiveScenario(target, targetHitCell) {
+        var playerPos = player._cellPos
+        var playerMP = player._currMp
+        var playerTP = player._currTp
+
+        // STEP 1: Apply damage return buff (CHIP_MIRROR or CHIP_THORN) if needed
+        // Only apply if we have enough TP left for attacks (minimum 7 TP: 1 swap + 6 weapon use)
+        if (this.shouldReapplyReturnBuff()) {
+            var chipToUse = this.selectBestReturnChip()
+            if (chipToUse != -1) {
+                var chipObj = arsenal.playerEquippedChips[chipToUse]
+                var minAttackTP = 7  // Reserve TP for at least one weapon swap + use
+
+                // Only apply buff if we have enough TP for meaningful attacks after
+                if (playerTP >= chipObj._cost + minAttackTP) {
+                    debug("[AGILITY] Applying damage return chip: " + getChipName(chipToUse) + " (cost: " + chipObj._cost + " TP, remaining: " + (playerTP - chipObj._cost) + " TP)")
+                    this.createAttackAction(Action.ACTION_BUFF, player, -1, chipToUse)
+                    playerTP -= chipObj._cost
+                } else {
+                    debug("[AGILITY] Skipping buff reapplication - need TP for attacks (have " + playerTP + " TP, need " + (chipObj._cost + minAttackTP) + " TP)")
+                }
+            } else {
+                debug("[AGILITY] WARNING: No return chip available (MIRROR/THORN on cooldown or insufficient TP)")
+            }
+        }
+
+        // STEP 2: Select best weapon cell (weapon-focused like strength strategy)
+        var bestWeaponCell = -1
+        var bestWeaponDamage = -1
+        var bestDist = 99999
+        for (var c in fieldMap.damageMap) {
+            if (c._highestDamageWeapon == -1) continue  // Skip chip-only cells
+            var dist = getPathLength(playerPos, c._id)
+            if (dist == null) continue  // Skip completely unreachable cells
+            // Prefer higher weaponDamage, tie-break shorter distance
+            if (c._weaponDamage > bestWeaponDamage || (c._weaponDamage == bestWeaponDamage && dist < bestDist)) {
+                bestWeaponDamage = c._weaponDamage
+                bestWeaponCell = c
+                bestDist = dist
+            }
+        }
+        // Fallback to incoming targetHitCell if no weapon cell found
+        if (bestWeaponCell == -1 && targetHitCell != -1 && targetHitCell != null) {
+            bestWeaponCell = targetHitCell
+        }
+        if (bestWeaponCell == -1) {
+            debug("[AGILITY] No valid weapon cell found, aborting offensive")
+            return
+        }
+
+        // STEP 3: Execute shared weapon-focused combat logic (exclude CHIP_MIRROR/THORN from damage chips)
+        var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [CHIP_MIRROR, CHIP_THORN], "AGILITY")
+
+        debug("[AGILITY] Offensive scenario complete. Remaining TP: " + result['playerTP'] + ", MP: " + result['playerMP'])
+    }
+}

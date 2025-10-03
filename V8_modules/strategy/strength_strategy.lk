@@ -146,11 +146,12 @@ class StrengthStrategy extends Strategy {
                 var cRec = chipDmgList[chipIdx]
                 var chipUse = cRec['chip']
                 if (playerTP < chipUse._cost) continue
-                var usesC = min(chipUse._maxUse, floor(playerTP / chipUse._cost))
-                while (usesC > 0 && playerTP >= chipUse._cost) {
+                // Spam chip until max uses OR TP exhausted
+                var actualUsesC = 0
+                while (actualUsesC < chipUse._maxUse && playerTP >= chipUse._cost) {
                     this.createAttackAction(Action.ACTION_DIRECT, target, -1, chipUse._id)
                     playerTP -= chipUse._cost
-                    usesC -= 1
+                    actualUsesC += 1
                 }
                 if (playerTP <= 0) break
             }
@@ -265,140 +266,12 @@ class StrengthStrategy extends Strategy {
             return super.createOffensiveScenario(target, targetHitCell)
         }
 
-        // Optional: consider approach hide cell if it allows attack with same weaponDamage and is closer.
-        var hnsApproach = fieldMap.findApproachHideAndSeekCell(target)
-        if (hnsApproach != null && hnsApproach['canAttack'] && mapContainsKey(fieldMap.damageMap, hnsApproach['cell'])) {
-            var hCellObj = fieldMap.damageMap[hnsApproach['cell']]
-            if (hCellObj._highestDamageWeapon != -1) {
-                var distOrig = getPathLength(playerPos, bestWeaponCell._id)
-                var distH = getPathLength(playerPos, hCellObj._id)
-                if (distH != null && distOrig != null && hCellObj._weaponDamage >= bestWeaponCell._weaponDamage && distH < distOrig) {
-                    debug("[STR][HNS-APPROACH] Switching weapon cell to safer/closer cell " + hCellObj._id)
-                    bestWeaponCell = hCellObj
-                }
-            }
-        }
-
-        var pathLen = getPathLength(playerPos, bestWeaponCell._id)
+        // Execute shared weapon-focused combat logic (no chip exclusions for strength)
         var playerMP = player._currMp
         var playerTP = player._currTp
+        var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [], "STR")
 
-        if (pathLen == null) pathLen = 99999
-        if (pathLen > playerMP) {
-            // Move as close as possible (reuse generic approach movement)
-            this.createMovementAction(Action.MOVEMENT_APPROACH, bestWeaponCell._id, target)
-            debug("[STR] Approaching weapon cell (unreachable this turn) cell=" + bestWeaponCell._id)
-            // No attacks (can't reach) stop here.
-            return
-        }
-
-        if (pathLen > 0) {
-            this.createMovementAction(Action.MOVEMENT_OFFENSIVE, bestWeaponCell._id, target)
-            playerMP -= pathLen
-            playerPos = bestWeaponCell._id
-        } else {
-            debug("[STR] Already on best weapon cell " + bestWeaponCell._id)
-        }
-
-        // Primary weapon usage
-        var primaryWeapon = bestWeaponCell._highestDamageWeapon
-        if (primaryWeapon != -1 && primaryWeapon != null) {
-            if (getWeapon() != primaryWeapon._id) {
-                if (playerTP >= 1 + primaryWeapon._cost) {
-                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, primaryWeapon._id, -1)
-                    playerTP -= 1
-                } else {
-                    debug("[STR] Not enough TP to swap and use primary weapon " + getWeaponName(primaryWeapon._id))
-                }
-            }
-            var uses = primaryWeapon._maxUse
-            while (playerTP >= primaryWeapon._cost && uses > 0) {
-                this.createAttackAction(Action.ACTION_DIRECT, target, primaryWeapon._id, -1)
-                playerTP -= primaryWeapon._cost
-                uses -= 1
-            }
-        }
-
-        // Secondary weapons (similar to base but after primary only)
-        var primaryWid = (primaryWeapon != -1 && primaryWeapon != null) ? primaryWeapon._id : -1
-        var weaponIds = mapKeys(arsenal.playerEquippedWeapons)
-        for (var wi = 0; wi < count(weaponIds); wi++) {
-            var wid = weaponIds[wi]
-            var wObj = arsenal.playerEquippedWeapons[wid]
-            if (wObj == null) continue
-            if (wObj._id == primaryWid) continue
-            if (playerTP < wObj._cost + 1) continue // need swap + one use
-            // Check if we already are on a valid cell for this weapon; if not and have MP remaining we can attempt moving (but we already moved). Skip extra movement for simplicity.
-            // Just fire if current cell allows; else attempt to find closest cell within remaining MP.
-            var curCellObj = null
-            if (mapContainsKey(fieldMap.damageMap, playerPos)) curCellObj = fieldMap.damageMap[playerPos]
-            var canFireHere = false
-            if (curCellObj != null) {
-                for (var wL = 0; wL < count(curCellObj._weaponsList); wL++) { if (curCellObj._weaponsList[wL]._id == wObj._id) { canFireHere = true; break } }
-            }
-            if (!canFireHere) continue
-            this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
-            playerTP -= 1
-            var uses2 = wObj._maxUse
-            while (playerTP >= wObj._cost && uses2 > 0) {
-                this.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, -1)
-                playerTP -= wObj._cost
-                uses2 -= 1
-            }
-        }
-
-        // Finally: spend leftover TP on damage/poison chips sorted by per-use total damage (descending)
-        if (playerTP > 0) {
-            var dmgChips = []
-            var chipIds = mapKeys(arsenal.playerEquippedChips)
-            for (var ci = 0; ci < count(chipIds); ci++) {
-                var cid = chipIds[ci]
-                var chipObj = arsenal.playerEquippedChips[cid]
-                if (chipObj == null) continue
-                // Filter attack chips (damage or poison effects)
-                if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
-                // Range & LOS from bestWeaponCell (current position)
-                var distChip = getCellDistance(bestWeaponCell._id, target._cellPos)
-                if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
-                if (!lineOfSight(bestWeaponCell._id, target._cellPos)) continue
-                var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
-                push(dmgChips, ['chip': chipObj, 'per': bd['total']])
-            }
-            // Selection sort descending by per-use total
-            for (var i = 0; i < count(dmgChips); i++) {
-                var bestIdx = i
-                for (var j = i + 1; j < count(dmgChips); j++) { if (dmgChips[j]['per'] > dmgChips[bestIdx]['per']) bestIdx = j }
-                if (bestIdx != i) { var tmp = dmgChips[i]; dmgChips[i] = dmgChips[bestIdx]; dmgChips[bestIdx] = tmp }
-            }
-            for (var dc = 0; dc < count(dmgChips); dc++) {
-                var rec = dmgChips[dc]
-                var chipUse = rec['chip']
-                if (playerTP < chipUse._cost) continue
-                var usesC = min(chipUse._maxUse, floor(playerTP / chipUse._cost))
-                while (usesC > 0 && playerTP >= chipUse._cost) {
-                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, chipUse._id)
-                    playerTP -= chipUse._cost
-                    usesC -= 1
-                }
-                if (playerTP <= 0) break
-            }
-        }
-
-        // Post-offensive HNS relocation (reuse base logic portion)
-        if (playerMP > 0) {
-            var hnsInfo = fieldMap.findHideAndSeekCell()
-            if (hnsInfo != null) {
-                var hideCellId = hnsInfo['cell']
-                if (hideCellId != bestWeaponCell._id) {
-                    var legLen = getPathLength(bestWeaponCell._id, hideCellId)
-                    if (legLen != null && legLen <= playerMP) {
-                        debug("[STR][HNS] Adding hide move to cell " + hideCellId + " danger=" + hnsInfo['danger'])
-                        this.createMovementAction(Action.MOVEMENT_HNS, hideCellId, target)
-                        playerMP -= legLen
-                    }
-                }
-            }
-        }
+        debug("[STR] Offensive scenario complete. Remaining TP: " + result['playerTP'] + ", MP: " + result['playerMP'])
     }
 
 }

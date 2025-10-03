@@ -1,46 +1,56 @@
 # CLAUDE.md - LeekWars AI Development Guide
 
 ## Overview
-Development guide for LeekWars AI V7 system - streamlined, optimized combat AI.
+Development guide for LeekWars AI V8 system - modular, strategy-based combat AI with build-specific optimizations.
 
 ## Project Structure
 ```
 LeekWars-AI/
-├── V7_modules/          # V7 AI (10 modules, ~1,180 lines)
-│   ├── V7_main.ls      # Main entry point
-│   ├── core/globals.ls # Global state & multi-enemy tracking
-│   ├── config/weapons.ls # Weapon scenarios & TP mappings
-│   ├── decision/ (4)   # Emergency, evaluation, targeting, buffs
-│   ├── combat/execution.ls # Scenario-based combat
-│   ├── movement/pathfinding.ls # A* pathfinding
-│   └── utils/ (2)      # Debug & caching
+├── V8_modules/          # V8 AI (9 modules, ~3,134 lines)
+│   ├── main.lk         # Main entry point
+│   ├── game_entity.lk  # Player & enemy state tracking
+│   ├── field_map.lk    # Damage zones & tactical positioning
+│   ├── item.lk         # Weapon/chip definitions & damage calculations
+│   └── strategy/       # Build-specific strategies
+│       ├── action.lk           # Action type definitions
+│       ├── base_strategy.lk    # Base combat logic
+│       ├── strength_strategy.lk # Strength builds (weapon-focused)
+│       ├── magic_strategy.lk    # Magic builds (DoT kiting)
+│       └── agility_strategy.lk  # Agility builds (damage return)
+├── V7_modules/          # V7 AI (10 modules, ~1,180 lines) - LEGACY
 └── tools/              # Python automation
     ├── lw_test_script.py # Testing with log retrieval
-    └── upload_v7.py     # V7 deployment
+    └── upload_v8.py     # V8 deployment
 ```
 
-## 🎉 V7 SYSTEM STATUS - COMPLETE ✅
+## 🎉 V8 SYSTEM STATUS - ACTIVE DEVELOPMENT ⚡
 
-**V7 AI development COMPLETE** - All runtime issues resolved, fully operational combat system
+**V8 AI - Modular Strategy System** - Build-specific combat strategies with refactored agility support
 
-### Key Achievements
-- **Compact & Efficient**: 1,180 lines of optimized code
-- **Zero Crashes**: Performance optimized, all variable conflicts resolved
-- **Smart Combat**: Enemy-centric damage zones with A* pathfinding
-- **Advanced Tactics**: Peek-a-boo combat, hide-and-seek positioning, smart teleportation
+### Key Features
+- **Strategy Pattern**: Separate combat logic for Strength, Magic, and Agility builds
+- **Modular Design**: 9 modules, ~3,134 lines of maintainable code
+- **Build Detection**: Automatic strategy selection based on stat distribution
+- **Advanced Tactics**: Hide-and-seek positioning, OTKO teleportation, damage return mechanics
+
+### Recent Updates (October 2025)
+- **Agility Strategy Refactored**: Complete rewrite using strength strategy template
+- **Damage Return Optimization**: CHIP_MIRROR/THORN buff management before combat
+- **Chip Spam Bug Fixed**: All strategies now properly spam chips until TP exhausted
+- **Code Quality**: Reduced agility strategy complexity by 13% (237→206 lines)
 
 ---
 
 ## Key Commands
 
-### Upload AI System
+### Upload V8 AI System
 ```bash
-python3 tools/upload_v7.py
+python3 tools/upload_v8.py
 ```
 
 ### Test Fights
 ```bash
-# Test V7 AI: python3 tools/lw_test_script.py 446029 <fights> <opponent>
+# Test V8 AI: python3 tools/lw_test_script.py <leek_id> <fights> <opponent>
 python3 tools/lw_test_script.py 446029 20 domingo
 
 # Opponents: domingo, betalpha, tisma, guj, hachess, rex
@@ -52,14 +62,84 @@ python3 tools/lw_test_script.py 446029 20 domingo
 - **Analysis logs**: Root directory with pattern `log_analysis_<leek_id>_<opponent>_<timestamp>.txt`
 - **Debug files**: `debug_fight.py`, `debug_fight_simple.py` in root directory
 
-## V7 AI (Current) 
-- **10 modules, 1,180 lines** - Enemy-centric streamlined design
-- **Scenario-based combat** with TP-to-weapon mappings
-- **Smart emergency tactics** with weapon-optimal positioning
-- **Visual debugging** with color-coded damage zones
+---
+
+# V8 Technical Details
+
+## Build Strategies
+
+### Strength Strategy (strength_strategy.lk)
+**Philosophy:** Weapon-focused damage maximization
+- **Cell Selection**: Prioritizes highest weapon damage cells from field map
+- **Primary Weapon**: Uses cell's highest damage weapon to max uses
+- **Secondary Weapons**: Uses other equipped weapons from same cell
+- **Chip Usage**: Spends leftover TP on damage chips (sorted by damage)
+- **Special Features**: OTKO teleportation for low HP enemies, CHIP_LIBERATION tactical usage
+- **Combat Flow**: Move → Primary weapon spam → Secondary weapons → Damage chips → HNS
+
+### Magic Strategy (magic_strategy.lk)
+**Philosophy:** DoT kiting and ranged control
+- **Cell Selection**: Weighted toward DoT damage (1.5x multiplier)
+- **Primary Focus**: Apply poison chips, use DoT weapons
+- **Kiting Behavior**: Attack → Reposition away from enemies
+- **Special Features**: Multi-cycle DoT application, intelligent effect tracking
+- **Combat Flow**: Move → DoT chips → DoT weapons → Kite away
+
+### Agility Strategy (agility_strategy.lk) - REFACTORED OCTOBER 2025
+**Philosophy:** Strength strategy + damage return buffs
+- **Unique Feature**: CHIP_MIRROR (35.75% return) / CHIP_THORN (22.75% return) management
+- **Cell Selection**: Same as strength (highest weapon damage)
+- **Combat Flow**: Apply return buff → Strength strategy logic
+- **Code Reuse**: 95% shared with strength strategy, only adds buff management
+
+#### Agility Strategy Refactoring (October 2025)
+
+**Problem Identified:**
+- Over-engineered cell selection logic (ignored pre-calculated best cells)
+- Weapon sorting by maxUse instead of damage (backwards logic)
+- Missing HNS-approach cell consideration
+- Redundant position tracking variables
+- 237 lines vs strength's 196 lines for similar functionality
+
+**Solution Implemented:**
+- Complete rewrite using strength_strategy.lk as template
+- Removed custom weapon-only cell selection (lines 84-147 old code)
+- Removed maxUse-based weapon sorting (lines 168-185 old code)
+- Added HNS-approach safer cell checking (from strength strategy)
+- Simplified to: Apply CHIP_MIRROR/THORN → Use strength combat logic
+
+**Code Changes:**
+```
+Before: 237 lines, custom logic throughout
+After:  206 lines (13% reduction), strength-based with buff layer
+
+Structure:
+1. Apply CHIP_MIRROR/THORN if needed (unique to agility)
+2. Select best weapon cell (same as strength)
+3. Check HNS-approach for safer cells (same as strength)
+4. Movement to weapon cell (same as strength)
+5. Primary weapon usage (same as strength)
+6. Secondary weapons (same as strength)
+7. Damage chips (same as strength)
+8. Post-offensive HNS (same as strength)
+```
+
+**Bug Fixes Applied:**
+- Fixed chip spam bug in agility (already fixed)
+- Fixed chip spam bug in strength main offensive (lines 377-383)
+- Fixed chip spam bug in strength OTKO (lines 149-155)
+- **Issue**: Pre-calculated `usesC = min(maxUse, floor(TP/cost))` limited spam
+- **Fix**: Changed to `while (actualUsesC < maxUse && playerTP >= cost)`
+
+**Files Modified:**
+- `/V8_modules/strategy/agility_strategy.lk` - Complete `createOffensiveScenario()` rewrite
+- `/V8_modules/strategy/strength_strategy.lk` - Chip spam bug fixes (2 locations)
+
+**Testing Status:** ✅ Uploaded and operational (October 2025)
 
 ## Script ID
-- **V7**: 446029 (V7_main) - Current production
+- **V8**: 446029 (main.lk) - Current production
+- **V7**: LEGACY - No longer maintained
 
 ## Development Best Practices
 1. **Testing**: Run 10-20 fights per opponent for statistical significance
@@ -327,6 +407,20 @@ if (recommendedWeapon != null && isChip(recommendedWeapon)) {
 
 ---
 
-*Document Version: 13.0*
-*Last Updated: September 2025*
-*Status: V7 System Fully Operational with Complete Grid Coverage*
+# V7 System (LEGACY)
+
+V7 remains in the codebase for reference but is no longer actively developed. See sections above for V7 technical details, including:
+- Enemy-centric damage zones
+- A* pathfinding
+- Scenario-based combat
+- Magic build DoT prioritization
+- Grid system fixes
+- Effect tracking
+
+V7 served as the foundation for V8's strategy pattern architecture.
+
+---
+
+*Document Version: 14.0*
+*Last Updated: October 2025*
+*Status: V8 System Active - Agility Strategy Refactored & Operational*
