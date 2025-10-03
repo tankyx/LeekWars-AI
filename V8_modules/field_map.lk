@@ -375,6 +375,9 @@ class FieldMap {
 
         var chests = this.getChestSubMap()
         for (var c in chests) {
+            // Skip dead chests
+            if (isDead(c._id)) continue
+
             var dist = getCellDistance(playerPos, c._cellPos)
 
             if (dist < closestDist) {
