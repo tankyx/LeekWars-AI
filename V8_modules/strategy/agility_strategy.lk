@@ -56,6 +56,15 @@ class AgilityStrategy extends Strategy {
     // Override offensive scenario for agility builds
     // Strategy: Apply CHIP_MIRROR/THORN damage return buff, then fight like strength builds
     createOffensiveScenario(target, targetHitCell) {
+        // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
+        var chest = fieldMap.getClosestChest()
+        if (chest != null) {
+            debug("[CHEST] Chest detected! Switching target from enemy to chest (ID: " + chest._id + ")")
+            target = chest
+            // Rebuild hit map for chest position
+            targetHitCell = fieldMap.buildHitMap(chest._cellPos)
+        }
+
         var playerPos = player._cellPos
         var playerMP = player._currMp
         var playerTP = player._currTp

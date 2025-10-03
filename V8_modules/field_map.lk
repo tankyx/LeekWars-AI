@@ -95,7 +95,14 @@ class FieldMap {
             if (isEntity(i)) {
                 entID = getEntityOnCell(i)
 
-                if (isAlly(entID)) {
+                // Check entity type (chest, mob, bulb, turret, leek)
+                var entityType = getType(entID)
+
+                if (entityType == ENTITY_CHEST) {
+                    mapPut(this.entities, entID, new Chest(i))
+                    debug("[ENTITY] Chest detected at cell " + i + " (ID: " + entID + ")")
+                }
+                else if (isAlly(entID)) {
                     if (entID == playerID) {
                         mapPut(this.entities, entID, new Player(i))
                     } else {
@@ -338,6 +345,12 @@ class FieldMap {
         })
     }
 
+    getChestSubMap() {
+        return mapFilter(entities, function(value, key, entities) {
+            return (value instanceof Chest)
+        })
+    }
+
     getClosestEnemy() {
         var playerPos = player._cellPos
         var closestEnemy = null
@@ -353,6 +366,23 @@ class FieldMap {
             }
         }
         return closestEnemy
+    }
+
+    getClosestChest() {
+        var playerPos = player._cellPos
+        var closestChest = null
+        var closestDist = 999
+
+        var chests = this.getChestSubMap()
+        for (var c in chests) {
+            var dist = getCellDistance(playerPos, c._cellPos)
+
+            if (dist < closestDist) {
+                closestDist = dist
+                closestChest = c
+            }
+        }
+        return closestChest
     }
 
     getClosestHighestDmgHitCell() {
@@ -508,6 +538,10 @@ class FieldMap {
                 } else if (dir == 3) {
                     curCell = cell - x_offset * dist
                 }
+                // Verify actual game distance matches expected range
+                var actualDist = getCellDistance(cell, curCell)
+                if (actualDist == null || actualDist < minR || actualDist > maxR) continue
+
                 var _hasLOS = lineOfSight(cell, curCell)
                         if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
                     // curCell = shooting position, cell = target (AoE center)
@@ -531,6 +565,10 @@ class FieldMap {
                 } else if (dir == 3) {
                     curCell = cell + up_left_offset * dist
                 }
+                // Verify actual game distance matches expected range
+                var actualDist = getCellDistance(cell, curCell)
+                if (actualDist == null || actualDist < minR || actualDist > maxR) continue
+
                 var _hasLOS = lineOfSight(cell, curCell)
                         if (_hasLOS && curCell >= 0 && curCell < FieldMap.board_cell_count) {
                     // curCell = shooting position, cell = target (AoE center)

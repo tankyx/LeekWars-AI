@@ -1,11 +1,3 @@
-/** Exporté le 10/2/2025, 1:09:50 PM **/
-
-/** 8.0/V8/game_entity.lk **/
-
-/** Exporté le 10/1/2025, 4:37:36 PM **/
-
-/** 8.0/V8/game_entity.lk **/
-
 class Entity {
     _cellPos = 0
     _maxHealth = 0
@@ -99,6 +91,16 @@ class Entity {
         }
         return 0
     }
+
+    // Check if entity has damage return buff active
+    hasDamageReturn() {
+        return this.hasEffect(EFFECT_DAMAGE_RETURN)
+    }
+
+    // Get remaining turns of damage return buff
+    getDamageReturnRemaining() {
+        return this.getEffectRemaining(EFFECT_DAMAGE_RETURN)
+    }
 }
 
 class Player extends Entity {
@@ -108,6 +110,12 @@ class Player extends Entity {
 }
 
 class Enemy extends Entity {
+    constructor(cellPos) {
+        super(cellPos);
+    }
+}
+
+class Chest extends Entity {
     constructor(cellPos) {
         super(cellPos);
     }

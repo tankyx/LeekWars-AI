@@ -7,6 +7,13 @@ class StrengthStrategy extends Strategy {
     }
 
     createOTKOScenario(target, targetHitCell) {
+        // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
+        var chest = fieldMap.getClosestChest()
+        if (chest != null) {
+            debug("[CHEST-OTKO] Chest detected! Switching OTKO target from enemy to chest (ID: " + chest._id + ")")
+            target = chest
+        }
+
         // Check if CHIP_TELEPORTATION is equipped
         if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
             debug("[OTKO] Teleportation not equipped")
@@ -34,8 +41,8 @@ class StrengthStrategy extends Strategy {
             return false
         }
 
-        // Only proceed if we can guarantee the kill
-        if (!teleportInfo['canKill']) {
+        // Only proceed if we can guarantee the kill (or if target is chest - always prioritize chests)
+        if (!teleportInfo['canKill'] && !(target instanceof Chest)) {
             debug("[OTKO] Projected damage insufficient for kill: " + teleportInfo['damage'] + " vs " + target._currHealth + " HP")
             return false
         }
@@ -208,6 +215,15 @@ class StrengthStrategy extends Strategy {
     // Override offensive scenario for Strength builds: always prioritize weapons (highest weapon damage cell)
     // Only after exhausting primary + secondary weapons do we spend leftover TP on damage chips (sorted by per-use damage desc).
     createOffensiveScenario(target, targetHitCell) {
+        // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
+        var chest = fieldMap.getClosestChest()
+        if (chest != null) {
+            debug("[CHEST] Chest detected! Switching target from enemy to chest (ID: " + chest._id + ")")
+            target = chest
+            // Rebuild hit map for chest position
+            targetHitCell = fieldMap.buildHitMap(chest._cellPos)
+        }
+
         // Check for tactical CHIP_LIBERATION usage BEFORE combat
         if (this.shouldUseLiberation(target)) {
             // Use on enemy to remove their buffs, or on self to remove debuffs

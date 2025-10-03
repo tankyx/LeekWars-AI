@@ -33,6 +33,15 @@ class MagicStrategy extends Strategy {
 
     // ---- Refactored DoT kite orchestration ----
     createAndExecuteDotKite(target, targetHitCell) {
+        // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
+        var chest = fieldMap.getClosestChest()
+        if (chest != null) {
+            debug("[CHEST] Chest detected! Switching target from enemy to chest (ID: " + chest._id + ")")
+            target = chest
+            // Rebuild hit map for chest position
+            targetHitCell = fieldMap.buildHitMap(chest._cellPos)
+        }
+
         arrayClear(this._actions)
         target.updateEntity()
         player.updateEntity()
