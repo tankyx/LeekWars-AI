@@ -34,10 +34,13 @@ LeekWars-AI/
 - **Advanced Tactics**: Hide-and-seek positioning, OTKO teleportation, damage return mechanics
 
 ### Recent Updates (October 2025)
+- **Star Pattern Distance Fix**: Fixed lightninger/rifle range calculation using getCellDistance() validation
+- **Action Execution Bug Fixed**: Weapon attacks now use captured targetCell instead of stale entity position
+- **Chest Prioritization**: All strategies detect and prioritize chests, switching back to enemies after destruction
+- **Unreachable Position Handling**: Added executeAndFlushActions() for mid-scenario execution
 - **Agility Strategy Refactored**: Complete rewrite using strength strategy template
 - **Damage Return Optimization**: CHIP_MIRROR/THORN buff management before combat
 - **Chip Spam Bug Fixed**: All strategies now properly spam chips until TP exhausted
-- **Code Quality**: Reduced agility strategy complexity by 13% (237→206 lines)
 
 ---
 
@@ -136,6 +139,59 @@ Structure:
 - `/V8_modules/strategy/strength_strategy.lk` - Chip spam bug fixes (2 locations)
 
 **Testing Status:** ✅ Uploaded and operational (October 2025)
+
+## Critical Bug Fixes (October 2025)
+
+### Star Pattern Distance Calculation Bug
+**Problem:**
+- `getLineHits()` and `getDiagonalHits()` used arithmetic cell offsets without validating actual game distance
+- Cells marked as in-range when they were actually out of range (e.g., cell 181 at distance 12 for lightninger max range 10)
+- Arithmetic offset `cell + x_offset * dist` doesn't guarantee correct Chebyshev distance
+
+**Solution:**
+- Added `getCellDistance()` validation in both methods (field_map.lk lines 542-543, 569-570)
+- Filters cells to only those at actual weapon range before marking as damage cells
+- Code: `if (actualDist == null || actualDist < minR || actualDist > maxR) continue`
+
+**Impact:** Star pattern weapons (lightninger, rifle) now correctly identify all valid shooting positions
+
+### Stale Target Position Bug
+**Problem:**
+- Attack execution used `a.targetEntity._cellPos` which becomes stale after `executeAndFlushActions()`
+- Target entity state not refreshed when player state is updated mid-scenario
+- Caused weapon attacks to fail silently (wrong cell position)
+
+**Solution:**
+- Changed attack execution to use `a.targetCell` (captured at action creation time)
+- Modified base_strategy.lk lines 550, 553 from `a.targetEntity._cellPos` to `a.targetCell`
+
+**Impact:** Weapon and chip attacks now execute correctly after immediate movement
+
+### Chest Targeting After Destruction Bug
+**Problem:**
+- `getClosestChest()` returned dead chests (`isDead()` == true)
+- AI continued targeting destroyed chests instead of switching back to enemies
+- Infinite loop on dead chest entity
+
+**Solution:**
+- Added `isDead()` check in `getClosestChest()` (field_map.lk line 379)
+- Code: `if (isDead(c._id)) continue`
+- Returns null when all chests destroyed, strategies fall back to enemy targeting
+
+**Impact:** All strategies (Strength, Agility, Magic) properly resume enemy combat after chest loot collected
+
+### Unreachable Position Handling
+**Problem:**
+- When optimal weapon cell was unreachable, agility strategy applied buff then stopped
+- No TP spent on attacks from current position
+- Early return prevented any combat actions
+
+**Solution:**
+- Added `executeAndFlushActions()` method for mid-scenario execution (base_strategy.lk lines 567-571)
+- Executes movement immediately, updates game state, continues with weapons/chips from actual position
+- Tracks weapon state (`currentWeaponId`) to avoid unnecessary swaps
+
+**Impact:** Agility builds now properly spend TP on attacks even when optimal cell unreachable
 
 ## Script ID
 - **V8**: 446029 (main.lk) - Current production
@@ -421,6 +477,6 @@ V7 served as the foundation for V8's strategy pattern architecture.
 
 ---
 
-*Document Version: 14.0*
+*Document Version: 15.0*
 *Last Updated: October 2025*
-*Status: V8 System Active - Agility Strategy Refactored & Operational*
+*Status: V8 System Active - Critical Bug Fixes Deployed (Star Pattern, Action Execution, Chest Targeting)*
