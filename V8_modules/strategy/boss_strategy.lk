@@ -1,0 +1,162 @@
+include('action.lk')
+include('base_strategy.lk')
+
+// Boss Fight Strategy for Roi Fenouil
+// Handles two-phase boss fight: puzzle phase (crystal alignment) + combat phase
+class BossFightStrategy extends Strategy {
+    // Crystal tracking
+    _crystals = []  // Array of crystal entities
+    _grail = null   // Grail entity
+    _enemyKnights = []  // Enemy entities (Roi, Scribe, Chevaliers, Écuyers)
+    _king = null  // Roi Fenouil entity
+
+    // Puzzle state
+    _puzzleSolved = false
+    _enemiesVulnerable = false
+
+    // Crystal colors (detected from entity names or positions)
+    _crystalColors = [:] // Map: entityID -> color string ("red", "green", "blue", "yellow")
+
+    // Puzzle planning (calculated once on Turn 1)
+    _puzzlePlan = null  // Map: color -> {crystal: Entity, targetCell: int, aligned: bool}
+    _actionQueue = []   // Array of planned actions: [{type: "move"/"teleport"/"grapple"/"boxing", crystal: Entity, targetCell: int}]
+    _currentActionIndex = 0  // Index of next action to execute
+    _expectedTeleportCell = -1  // Track expected position after teleport (to verify completion next turn)
+
+    // Team coordination (static - shared across all leeks in fight)
+    static _puzzleSolverAssigned = false  // Has puzzle solver role been assigned?
+    static _puzzleSolverId = -1  // ID of leek solving puzzle
+    static _kingLastKnownCell = -1  // King's position (updated by distraction team)
+
+    // Instance role
+    _isPuzzleSolver = false  // Is this leek the puzzle solver?
+
+    constructor() {
+        super()
+    }
+
+    // Override turn one buffs for boss fight
+    turnOneBuffs() {
+        // TODO: Implement boss-specific turn one buffs
+    }
+
+    // Detect if this is a boss fight (Grail + crystals present)
+    static detectBossFight() {
+        // TODO: Implement boss fight detection
+        return false
+    }
+
+    // Initialize boss fight entities
+    initBossFight() {
+        // TODO: Implement boss fight initialization
+    }
+
+    // Assign team roles
+    assignTeamRoles() {
+        // TODO: Implement team role assignment
+    }
+
+    // Check if enemies are invulnerable
+    checkEnemyInvulnerability() {
+        // TODO: Implement invulnerability check
+        return false
+    }
+
+    // Detect crystal color
+    detectCrystalColor(crystal) {
+        // TODO: Implement crystal color detection
+        return "unknown"
+    }
+
+    // Get Grail gem positions
+    getGrailGemPositions() {
+        // TODO: Implement Grail gem position mapping
+        return [:]
+    }
+
+    // Calculate puzzle solution
+    calculatePuzzleSolution() {
+        // TODO: Implement puzzle solution calculation
+    }
+
+    // Build action plan
+    buildActionPlan() {
+        // TODO: Implement action plan building
+    }
+
+    // Execute next planned action
+    executeNextPlannedAction() {
+        // TODO: Implement action execution
+        return false
+    }
+
+    // Check crystal alignment
+    checkCrystalAlignment(crystal, targetCell) {
+        // TODO: Implement alignment check
+        return false
+    }
+
+    // Calculate required crystal position
+    calculateRequiredCrystalPosition(crystal, targetGemCell) {
+        // TODO: Implement position calculation
+        return -1
+    }
+
+    // Move crystal with CHIP_GRAPPLE
+    moveCrystalWithGrapple(crystal, targetCell) {
+        // TODO: Implement GRAPPLE logic
+        return false
+    }
+
+    // Move crystal with CHIP_BOXING_GLOVE
+    moveCrystalWithBoxingGlove(crystal, targetCell) {
+        // TODO: Implement BOXING_GLOVE logic
+        return false
+    }
+
+    // Distraction team strategy
+    distractKingPhase() {
+        // TODO: Implement distraction strategy
+        return false
+    }
+
+    // Solve puzzle phase
+    solvePuzzlePhase() {
+        // TODO: Implement puzzle solving
+    }
+
+    // Find best teleport cell near crystal
+    findBestTeleportCellNearCrystal(crystal) {
+        // TODO: Implement teleport cell finder
+        return -1
+    }
+
+    // Combat phase
+    combatPhase(targetHitCell) {
+        // TODO: Implement combat phase
+    }
+
+    // Select priority target
+    selectPriorityTarget() {
+        // TODO: Implement target selection
+        return null
+    }
+
+    // Check if CHIP_INVERSION should be used
+    shouldUseInversion(target) {
+        // TODO: Implement INVERSION check
+        return false
+    }
+
+    // Use CHIP_INVERSION
+    useInversion(target) {
+        // TODO: Implement INVERSION usage
+    }
+
+    // Override main scenario execution
+    createAndExecuteScenario(target, targetHitCell) {
+        // TODO: Implement boss fight scenario execution
+        // For now, fall back to base strategy
+        super.createOffensiveScenario(target, targetHitCell)
+    }
+}
