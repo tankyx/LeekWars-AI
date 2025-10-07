@@ -113,13 +113,13 @@ class AntidoteTracker {
                 var wObj = wRec['weapon']
                 if (player._currTp < 1) break
                 if (plannedWeapon != wObj._id && player._currTp >= 1) {
-                    strategy.createAttackAction(strategy.ACTION_WEAPON_SWAP, target, wObj._id, -1)
+                    strategy.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
                     player._currTp -= 1
                     plannedWeapon = wObj._id
                 }
                 var usesW = wRec['uses']
                 while (usesW > 0 && player._currTp >= wObj._cost) {
-                    strategy.createAttackAction(strategy.ACTION_DIRECT, target, wObj._id, -1)
+                    strategy.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, -1)
                     player._currTp -= wObj._cost
                     usesW -= 1
                     willAttack = true
@@ -133,7 +133,7 @@ class AntidoteTracker {
                 if (!AntidoteTracker.isBaitAllowedChip(pc._id)) continue
                 if (player._currTp < pc._cost) break
                 if (!strategy.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)) continue
-                strategy.createAttackAction(strategy.ACTION_DIRECT, target, -1, pc._id)
+                strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, pc._id)
                 player._currTp -= pc._cost
                 willAttack = true
             }
@@ -146,10 +146,10 @@ class AntidoteTracker {
                 if (strategy.inRangeAndLOS(targetHitCell._id, target._cellPos, toxinBait._minRange, toxinBait._maxRange)) {
                     var alreadyToxin = false
                     for (var aTox in strategy._actions) {
-                        if (aTox.type == strategy.ACTION_DIRECT && aTox.chip == CHIP_TOXIN) { alreadyToxin = true; break }
+                        if (aTox.type == Action.ACTION_DIRECT && aTox.chip == CHIP_TOXIN) { alreadyToxin = true; break }
                     }
                     if (!alreadyToxin) {
-                        strategy.createAttackAction(strategy.ACTION_DIRECT, target, -1, CHIP_TOXIN)
+                        strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_TOXIN)
                         player._currTp -= toxinBait._cost
                         willAttack = true
                         debug("[BAIT] Applied CHIP_TOXIN (5 TP)")
@@ -165,10 +165,10 @@ class AntidoteTracker {
                 if (strategy.inRangeAndLOS(targetHitCell._id, target._cellPos, bncBait._minRange, bncBait._maxRange)) {
                     var alreadyBNC = false
                     for (var aBNC in strategy._actions) {
-                        if (aBNC.type == strategy.ACTION_DEBUFF && aBNC.chip == CHIP_BALL_AND_CHAIN) { alreadyBNC = true; break }
+                        if (aBNC.type == Action.ACTION_DEBUFF && aBNC.chip == CHIP_BALL_AND_CHAIN) { alreadyBNC = true; break }
                     }
                     if (!alreadyBNC) {
-                        strategy.createAttackAction(strategy.ACTION_DEBUFF, target, -1, CHIP_BALL_AND_CHAIN)
+                        strategy.createAttackAction(Action.ACTION_DEBUFF, target, -1, CHIP_BALL_AND_CHAIN)
                         player._currTp -= bncBait._cost
                         willAttack = true
                         debug("[BAIT][DEBUFF] Applied BALL_AND_CHAIN (5 TP)")
@@ -183,10 +183,10 @@ class AntidoteTracker {
                 if (strategy.inRangeAndLOS(targetHitCell._id, target._cellPos, fracBait._minRange, fracBait._maxRange)) {
                     var alreadyFRAC = false
                     for (var aFRAC in strategy._actions) {
-                        if (aFRAC.type == strategy.ACTION_DEBUFF && aFRAC.chip == CHIP_FRACTURE) { alreadyFRAC = true; break }
+                        if (aFRAC.type == Action.ACTION_DEBUFF && aFRAC.chip == CHIP_FRACTURE) { alreadyFRAC = true; break }
                     }
                     if (!alreadyFRAC) {
-                        strategy.createAttackAction(strategy.ACTION_DEBUFF, target, -1, CHIP_FRACTURE)
+                        strategy.createAttackAction(Action.ACTION_DEBUFF, target, -1, CHIP_FRACTURE)
                         player._currTp -= fracBait._cost
                         willAttack = true
                         debug("[BAIT][DEBUFF] Applied FRACTURE (4 TP)")
