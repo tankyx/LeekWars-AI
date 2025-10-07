@@ -156,26 +156,7 @@ class Arsenal {
         return total
     }
 
-    // Refactored: unified damage calculation for weapons and chips
-    getScaledDamage(str, mag, wis, itemID) {
-        var isWeapon = mapContainsKey(this.playerEquippedWeapons, itemID)
-        var isChip = !isWeapon && mapContainsKey(this.chipsList, itemID) // fixed: use mapContainsKey
-
-        if (!isWeapon && !isChip) {
-            return -1
-        }
-
-        var item = isWeapon ? this.playerEquippedWeapons[itemID] : this.chipsList[itemID]
-        var totalDamage = this.computeEffectsBaseDamage(item._effects, str, mag)
-
-        // Lifesteal applies only to weapons (per original logic)
-        if (isWeapon) {
-            totalDamage += totalDamage * (wis / 1000)
-        }
-        return totalDamage
-    }
-
-    // New: provide separate breakdown for direct (immediate) vs dot (poison) damage per use/apply
+    // Provide separate breakdown for direct (immediate) vs dot (poison) damage per use/apply
     // directPerUse: average base damage (EFFECT_DAMAGE) scaled by STR (and lifesteal not included here)
     // dotPerApply: total poison damage over duration (EFFECT_POISON) scaled by MAG (applies at most once per target realistically)
     // Optional parameters for AoE: centerCell (impact point), targetCell (cell taking damage)
@@ -297,8 +278,8 @@ class Arsenal {
         var highestDmgWeapon = null
 
         for (var w in mapKeys(this.playerEquippedWeapons)) {
-            // Fixed argument order: (str, mag, wis, itemID)
-            var dmg = this.getScaledDamage(player._strength, player._magic, player._wisdom, w)
+            var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, w)
+            var dmg = bd['total']
             if (dmg > highestDmg) {
                 highestDmg = dmg
                 highestDmgWeapon = w

@@ -17,6 +17,86 @@ class Strategy {
         return true
     }
 
+    // Helper to check if chip is available (equipped, off cooldown, sufficient TP)
+    isChipAvailable(chipId, requiredTP = -1) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return false
+        if (getCooldown(chipId, player._id) > 0) return false
+        if (requiredTP > 0 && player._currTp < requiredTP) return false
+        return true
+    }
+
+    // Check if CHIP_ADRENALINE should be used tactically
+    // CHIP_ADRENALINE: 1 TP cost, +5 TP gain (net +4 TP)
+    // Use when short 1-4 TP for required action
+    shouldUseAdrenaline(requiredTP) {
+        if (!this.isChipAvailable(CHIP_ADRENALINE)) return false
+
+        var playerTP = player._currTp
+        // Only use if we're short of required TP by 1-4 points (Adrenaline gives +4 net TP)
+        var shortage = requiredTP - playerTP
+        if (shortage >= 1 && shortage <= 4) {
+            debug("[ADRENALINE] Short " + shortage + " TP (have " + playerTP + " need " + requiredTP + ") - using Adrenaline")
+            return true
+        }
+
+        return false
+    }
+
+    // Check if CHIP_LEATHER_BOOTS should be used for positioning
+    // CHIP_LEATHER_BOOTS: 3 TP cost, +2 MP for 2 turns
+    // targetCell: primary destination (attack position)
+    // secondaryCell: optional secondary destination (hide cell after attack)
+    // minRemainingTP: minimum TP needed after boots for meaningful actions
+    shouldUseLeatherBoots(targetCell, secondaryCell = -1, minRemainingTP = 7) {
+        if (!this.isChipAvailable(CHIP_LEATHER_BOOTS, 3)) return false
+
+        var playerTP = player._currTp
+        // Need TP for boots + at least minRemainingTP for attacks
+        if (playerTP < 3 + minRemainingTP) return false
+
+        // Check if we already have MP buff active
+        var hasMPBuff = player.hasEffect(EFFECT_BUFF_MP)
+        if (hasMPBuff) {
+            debug("[LEATHER_BOOTS] MP buff already active")
+            return false
+        }
+
+        var playerMP = player._currMp
+        var pathLen = getPathLength(player._cellPos, targetCell)
+        if (pathLen == null) return false
+
+        // Case 1: Simple check - target cell unreachable but within MP+2 range
+        if (secondaryCell == -1) {
+            if (pathLen > playerMP && pathLen <= playerMP + 2) {
+                debug("[LEATHER_BOOTS] Target cell unreachable (need " + pathLen + " MP, have " + playerMP + ") - using boots")
+                return true
+            }
+        }
+        // Case 2: Complex check - two destinations (attack + hide)
+        else {
+            var pathToSecondary = getPathLength(targetCell, secondaryCell)
+            if (pathToSecondary == null) return false
+
+            var totalNeeded = pathLen + pathToSecondary
+            if (totalNeeded > playerMP && totalNeeded <= playerMP + 2) {
+                debug("[LEATHER_BOOTS] Hide cell unreachable after attack (need " + totalNeeded + " MP, have " + playerMP + ") - using boots")
+                return true
+            }
+        }
+
+        return false
+    }
+
+    // Get strategy name for debug logging (override in subclasses)
+    getStrategyName() {
+        return "BASE"
+    }
+
+    // Strategy-specific debug helper (adds strategy prefix)
+    debugStrategy(message) {
+        debug("[" + this.getStrategyName() + "] " + message)
+    }
+
     // Find best reachable damage cell within MP budget
     // Returns Cell object from damageMap or null if no reachable cells
     findBestReachableDamageCell(maxMP) {

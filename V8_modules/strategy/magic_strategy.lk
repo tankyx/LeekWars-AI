@@ -6,6 +6,10 @@ class MagicStrategy extends Strategy {
         super()
     }
 
+    getStrategyName() {
+        return "MAGIC"
+    }
+
     // Static maps to persist across turns (enemy-focused state)
     static _prevPoisonRemaining = [:]        // enemyId -> previous remaining poison turns (last turn)
     static _recentAntidoteTurn = [:]         // enemyId -> last turn we inferred antidote usage
@@ -265,59 +269,7 @@ class MagicStrategy extends Strategy {
 
     }
 
-    // Check if CHIP_ADRENALINE should be used tactically
-    shouldUseAdrenaline(requiredTP) {
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_ADRENALINE)) return false
 
-        var cooldown = getCooldown(CHIP_ADRENALINE, getEntity())
-        if (cooldown > 0) return false
-
-        var playerTP = player._currTp
-        // Only use if we're short of required TP by 1-4 points (Adrenaline gives +4 net TP)
-        var shortage = requiredTP - playerTP
-        if (shortage >= 1 && shortage <= 4) {
-            debug("[ADRENALINE] Short " + shortage + " TP (have " + playerTP + " need " + requiredTP + ") - using Adrenaline")
-            return true
-        }
-
-        return false
-    }
-
-    // Check if CHIP_LEATHER_BOOTS should be used for kiting optimization
-    shouldUseLeatherBoots(attackCell, hideCell) {
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS)) return false
-
-        var cooldown = getCooldown(CHIP_LEATHER_BOOTS, getEntity())
-        if (cooldown > 0) return false
-
-        var playerTP = player._currTp
-        // Need 3 TP for boots + at least 5 TP for DoT chips (8 TP minimum)
-        if (playerTP < 8) return false
-
-        // Check if we already have MP buff active
-        var hasMPBuff = player.hasEffect(EFFECT_BUFF_MP)
-        if (hasMPBuff) {
-            debug("[LEATHER_BOOTS] MP buff already active")
-            return false
-        }
-
-        // Check if Hide&Seek cell is unreachable after attack movement
-        if (hideCell != null) {
-            var pathToAttack = getPathLength(player._cellPos, attackCell)
-            if (pathToAttack == null) pathToAttack = 0
-            var pathFromAttack = getPathLength(attackCell, hideCell)
-            if (pathFromAttack == null) return false
-
-            var totalNeeded = pathToAttack + pathFromAttack
-            var playerMP = player._currMp
-            if (totalNeeded > playerMP && totalNeeded <= playerMP + 2) {
-                debug("[LEATHER_BOOTS] Hide cell unreachable after attack (need " + totalNeeded + " MP, have " + playerMP + ") - using boots")
-                return true
-            }
-        }
-
-        return false
-    }
 
     // ---- Refactored DoT kite orchestration ----
     createAndExecuteDotKite(target, targetHitCell) {
@@ -501,7 +453,7 @@ class MagicStrategy extends Strategy {
 
         var hnsInfoPreCheck = fieldMap.findHideAndSeekCell()
         var hideCell = hnsInfoPreCheck != null ? hnsInfoPreCheck['cell'] : null
-        if (!shouldPrioritizeCombo && plannedAttackCell != -1 && this.shouldUseLeatherBoots(plannedAttackCell, hideCell)) {
+        if (!shouldPrioritizeCombo && plannedAttackCell != -1 && this.shouldUseLeatherBoots(plannedAttackCell, hideCell, 5)) {
             push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, player._cellPos, player))
             player._currTp -= 3
             player._currMp += 2  // Immediate MP boost

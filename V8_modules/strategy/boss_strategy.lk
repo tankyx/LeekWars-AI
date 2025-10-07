@@ -4,6 +4,10 @@ include('base_strategy.lk')
 // Boss Fight Strategy for Roi Fenouil
 // Handles two-phase boss fight: puzzle phase (crystal alignment) + combat phase
 class BossFightStrategy extends Strategy {
+    getStrategyName() {
+        return "BOSS"
+    }
+
     // Crystal tracking
     _crystals = []  // Array of crystal entities
     _grail = null   // Grail entity

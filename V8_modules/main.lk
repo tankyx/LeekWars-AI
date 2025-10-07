@@ -23,7 +23,6 @@ if (!_init) {
 main()
 
 function init() {
-    var ops1 = getOperations()
     player = Player(getCell())
     arsenal = new Arsenal();
     fieldMap = new FieldMap();
@@ -47,45 +46,27 @@ function init() {
     }
 
     strategy.turnOneBuffs()
-    var ops2 = getOperations()
-    debugC("Init operations: " + (ops2 - ops1), COLOR_GREEN)
 }
 
 function main() {
-    var ops1 = 0
-    var ops2 = 0
-
-    ops1 = getOperations()
     player.updateEntity()
     fieldMap.updateMapEntities()
-    ops2 = getOperations()
-    debugC("Update entities operations: " + (ops2 - ops1), COLOR_GREEN)
-    ops1 = getOperations()
+
     var target = fieldMap.getClosestEnemy()
-    ops2 = getOperations()
-    debugC("Get closest enemy operations: " + (ops2 - ops1), COLOR_GREEN)
 
-    ops1 = getOperations()
     fieldMap.buildHitMap(target._cellPos)
-    ops2 = getOperations()
-    debugC("Build hit map operations: " + (ops2 - ops1), COLOR_GREEN)
 
-    ops1 = getOperations()
     var targetHitCell = fieldMap.getBestWeaponOrChipCell();
-    ops2 = getOperations()
-    debugC("Get closest hit cell operations: " + (ops2 - ops1), COLOR_GREEN)
+
     if (targetHitCell != null && targetHitCell != -1) {
         debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))
     } else {
         debug("No valid attack cell found")
     }
 
-    ops1 = getOperations()
     if (strategy instanceof MagicStrategy) {
         strategy.createAndExecuteDotKite(target, targetHitCell)
     } else {
         strategy.createAndExecuteScenario(target, targetHitCell)
     }
-    ops2 = getOperations()
-    debugC("Create and execute scenario operations: " + (ops2 - ops1), COLOR_GREEN)
 }
