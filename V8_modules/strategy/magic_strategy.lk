@@ -145,7 +145,7 @@ class MagicStrategy extends Strategy {
         var hnsInfoPreCheck = fieldMap.findHideAndSeekCell()
         var hideCell = hnsInfoPreCheck != null ? hnsInfoPreCheck['cell'] : null
         if (!shouldPrioritizeCombo && plannedAttackCell != -1 && this.shouldUseLeatherBoots(plannedAttackCell, hideCell, 5)) {
-            push(this._actions, new Action(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS))
+            push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, player._cellPos, player))
             player._currTp -= 3
             player._currMp += 2
             debug("[DoT-KITE][LEATHER_BOOTS] Applied (+2 MP)")
@@ -216,7 +216,7 @@ class MagicStrategy extends Strategy {
             if (activeW != null && mapContainsKey(arsenal.playerEquippedWeapons, activeW)) {
                 var wObj = arsenal.playerEquippedWeapons[activeW]
                 if (player._currTp >= wObj._cost && this.inRangeAndLOS(targetHitCell._id, target._cellPos, wObj._minRange, wObj._maxRange)) {
-                    push(this._actions, new Action(Action.ACTION_DIRECT, target, wObj._id, -1))
+                    push(this._actions, new Action(Action.ACTION_DIRECT, wObj._id, -1, target._cellPos, target))
                     player._currTp -= wObj._cost
                     context['willAttack'] = true
                 }
@@ -277,7 +277,7 @@ class MagicStrategy extends Strategy {
         // Check CHIP_ADRENALINE for extra DoT chip usage
         if (player._currTp < 6 && player._currTp >= 2) {
             if (this.shouldUseAdrenaline(6)) {
-                push(this._actions, new Action(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE))
+                push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, player._cellPos, player))
                 player._currTp -= 1
                 player._currTp += 5
                 debug("[DoT-KITE][ADRENALINE] Used Adrenaline, now have " + player._currTp + " TP")
@@ -315,7 +315,7 @@ class MagicStrategy extends Strategy {
                 var covid = arsenal.playerEquippedChips[CHIP_COVID]
                 if (getCooldown(CHIP_COVID, player._id) == 0 && player._currTp >= covid._cost) {
                     if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, covid._minRange, covid._maxRange)) {
-                        push(this._actions, new Action(Action.ACTION_DIRECT, target, -1, CHIP_COVID))
+                        push(this._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, target._cellPos, target))
                         player._currTp -= covid._cost
                         willAttack = true
                         debug("[FULL][COVID] Applied (8 TP)")
@@ -328,7 +328,7 @@ class MagicStrategy extends Strategy {
                 var bnc = arsenal.playerEquippedChips[CHIP_BALL_AND_CHAIN]
                 if (getCooldown(CHIP_BALL_AND_CHAIN, player._id) == 0 && player._currTp >= bnc._cost) {
                     if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, bnc._minRange, bnc._maxRange)) {
-                        push(this._actions, new Action(Action.ACTION_DEBUFF, target, -1, CHIP_BALL_AND_CHAIN))
+                        push(this._actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_BALL_AND_CHAIN, target._cellPos, target))
                         player._currTp -= bnc._cost
                         willAttack = true
                         debug("[FULL][BALL_AND_CHAIN] Applied (5 TP)")
@@ -342,7 +342,7 @@ class MagicStrategy extends Strategy {
                 if (mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)) {
                     var boxing2 = arsenal.playerEquippedChips[CHIP_BOXING_GLOVE]
                     if (getCooldown(CHIP_BOXING_GLOVE, player._id) == 0 && player._currTp >= boxing2._cost) {
-                        push(this._actions, new Action(Action.ACTION_DIRECT, target, -1, CHIP_BOXING_GLOVE))
+                        push(this._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_BOXING_GLOVE, target._cellPos, target))
                         player._currTp -= boxing2._cost
                         willAttack = true
                         debug("[FULL][BOXING_GLOVE] Applied (2 TP) - pushing away")
@@ -355,7 +355,7 @@ class MagicStrategy extends Strategy {
                 var frac2 = arsenal.playerEquippedChips[CHIP_FRACTURE]
                 if (getCooldown(CHIP_FRACTURE, player._id) == 0 && player._currTp >= frac2._cost) {
                     if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, frac2._minRange, frac2._maxRange)) {
-                        push(this._actions, new Action(Action.ACTION_DEBUFF, target, -1, CHIP_FRACTURE))
+                        push(this._actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_FRACTURE, target._cellPos, target))
                         player._currTp -= frac2._cost
                         willAttack = true
                         debug("[FULL][FRACTURE] Applied (4 TP)")
@@ -374,7 +374,7 @@ class MagicStrategy extends Strategy {
 
                 // Swap if needed
                 if (plannedWeapon != wObj._id && player._currTp >= 1) {
-                    push(this._actions, new Action(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1))
+                    push(this._actions, new Action(Action.ACTION_WEAPON_SWAP, wObj._id, -1, target._cellPos, target))
                     player._currTp -= 1
                     plannedWeapon = wObj._id
                 }
@@ -382,7 +382,7 @@ class MagicStrategy extends Strategy {
                 // Spam weapon to max uses (ignore plan's conservative 'uses' value)
                 var actualUses = 0
                 while (actualUses < wObj._maxUse && player._currTp - reservedTPForCombo >= wObj._cost) {
-                    push(this._actions, new Action(Action.ACTION_DIRECT, target, wObj._id, -1))
+                    push(this._actions, new Action(Action.ACTION_DIRECT, wObj._id, -1, target._cellPos, target))
                     player._currTp -= wObj._cost
                     actualUses += 1
                     willAttack = true
@@ -398,7 +398,7 @@ class MagicStrategy extends Strategy {
                 var pc = chipsToUse[cidx]
                 if (player._currTp - reservedTPForCombo < pc._cost) break
                 if (!this.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)) continue
-                push(this._actions, new Action(Action.ACTION_DIRECT, target, -1, pc._id))
+                push(this._actions, new Action(Action.ACTION_DIRECT, -1, pc._id, target._cellPos, target))
                 player._currTp -= pc._cost
                 willAttack = true
                 debug("[FULL][CHIP] Used " + getChipName(pc._id) + " TP_left=" + player._currTp)
@@ -422,7 +422,7 @@ class MagicStrategy extends Strategy {
                 if (player._currTp - reservedTPForCombo < chipP._cost) continue
                 if (getCooldown(chipP._id, player._id) > 0) continue
                 if (!this.inRangeAndLOS(targetHitCell._id, target._cellPos, chipP._minRange, chipP._maxRange)) continue
-                push(this._actions, new Action(Action.ACTION_DIRECT, target, -1, chipP._id))
+                push(this._actions, new Action(Action.ACTION_DIRECT, -1, chipP._id, target._cellPos, target))
                 player._currTp -= chipP._cost
                 willAttack = true
             }
@@ -433,7 +433,7 @@ class MagicStrategy extends Strategy {
             var bncDebuff = arsenal.playerEquippedChips[CHIP_BALL_AND_CHAIN]
             if (getCooldown(CHIP_BALL_AND_CHAIN, player._id) == 0) {
                 if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, bncDebuff._minRange, bncDebuff._maxRange)) {
-                    push(this._actions, new Action(Action.ACTION_DEBUFF, target, -1, CHIP_BALL_AND_CHAIN))
+                    push(this._actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_BALL_AND_CHAIN, target._cellPos, target))
                     player._currTp -= bncDebuff._cost
                     willAttack = true
                     debug("[DoT-KITE][DEBUFF] Applied BALL_AND_CHAIN (5 TP)")
@@ -445,7 +445,7 @@ class MagicStrategy extends Strategy {
             var fracDebuff = arsenal.playerEquippedChips[CHIP_FRACTURE]
             if (getCooldown(CHIP_FRACTURE, player._id) == 0) {
                 if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, fracDebuff._minRange, fracDebuff._maxRange)) {
-                    push(this._actions, new Action(Action.ACTION_DEBUFF, target, -1, CHIP_FRACTURE))
+                    push(this._actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_FRACTURE, target._cellPos, target))
                     player._currTp -= fracDebuff._cost
                     willAttack = true
                     debug("[DoT-KITE][DEBUFF] Applied FRACTURE (4 TP)")
