@@ -191,7 +191,8 @@ class ComboSystem {
         if (boxingCell == null) boxingCell = newEnemyPos
 
         debug("[GRAPPLE-COVID] Step 3: BOXING_GLOVE (2 TP) - pushing from " + newEnemyPos + " toward " + boxingCell)
-        useChipOnCell(CHIP_BOXING_GLOVE, boxingCell)
+        // BOXING_GLOVE must target enemy's CURRENT position, not push destination
+        useChipOnCell(CHIP_BOXING_GLOVE, newEnemyPos)
         player._currTp -= 2
 
         // Update enemy position after push
