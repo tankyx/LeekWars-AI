@@ -10,6 +10,12 @@ include('magic_poison_planner.lk')
 // DoT kiting strategy with antidote baiting, GRAPPLE-COVID combo, and poison planning
 
 class MagicStrategy extends Strategy {
+    // Antidote tracking state (per-fight instance variables)
+    _prevPoisonRemaining = [:]  // enemyId -> previous remaining poison turns
+    _recentAntidoteTurn = [:]   // enemyId -> last turn we inferred antidote usage
+    _baitMode = [:]             // enemyId -> bool (true = baiting, false = full offensive)
+    _baitStartTurn = [:]        // enemyId -> turn number when baiting started
+
     constructor() {
         super()
     }
@@ -25,15 +31,13 @@ class MagicStrategy extends Strategy {
     createAndExecuteDotKite(target, targetHitCell) {
         arrayClear(this._actions)
 
-        // Check if we should use defensive scenario instead (low HP + regeneration)
-        var regenAvailable = false
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
-            var regenCooldown = getCooldown(CHIP_REGENERATION, getEntity())
-            regenAvailable = (regenCooldown == 0)
-        }
+        // Check if we should use defensive scenario instead (low HP + healing available)
+        var hpPercent = (getLife() * 100) / getTotalLife()
+        var healChip = this.selectBestHealingChip(hpPercent)
+        var healAvailable = (healChip != null)
 
-        if (getLife() * 100 < getTotalLife() * 35 && regenAvailable) {
-            debug("[MAGIC] Low HP (<35%) and regeneration available, switching to defensive")
+        if (hpPercent < 35 && healAvailable) {
+            debug("[MAGIC] Low HP (<35%) and " + healChip['name'] + " available, switching to defensive")
             this.createDefensiveScenario(target, targetHitCell)
             this.executeScenario()
             return
@@ -56,8 +60,8 @@ class MagicStrategy extends Strategy {
 
         var enemyId = target._id
 
-        // Update antidote tracking
-        var antidoteState = AntidoteTracker.updateAntidoteState(target)
+        // Update antidote tracking (pass instance state)
+        var antidoteState = AntidoteTracker.updateAntidoteState(target, this._prevPoisonRemaining, this._recentAntidoteTurn, this._baitMode, this._baitStartTurn)
         var baiting = antidoteState['baiting']
         var enemyHasAntidote = antidoteState['enemyHasAntidote']
         var antidoteCD = getCooldown(CHIP_ANTIDOTE, enemyId)
@@ -88,7 +92,7 @@ class MagicStrategy extends Strategy {
 
         // If defensive, skip attacks and hide
         if (shouldPlayDefensive) {
-            var hnsInfo = fieldMap.findHideAndSeekCell()
+            var hnsInfo = fieldMap.findHideAndSeekCell("defensive")
             if (hnsInfo != null) {
                 var hideCell = hnsInfo['cell']
                 var pathLen = getPathLength(player._cellPos, hideCell)
@@ -134,7 +138,7 @@ class MagicStrategy extends Strategy {
         }
 
         // Try approach-HNS for better staging
-        var hnsStage = fieldMap.findApproachHideAndSeekCell(target)
+        var hnsStage = fieldMap.findHideAndSeekCell("approach", target)
         var poisonPlan = PoisonPlanner.selectBestPoisonCell(target)
 
         // Check CHIP_LEATHER_BOOTS before movement
@@ -142,7 +146,7 @@ class MagicStrategy extends Strategy {
         if (poisonPlan != null) plannedAttackCell = poisonPlan['cell']._id
         else if (targetHitCell != -1 && targetHitCell != null) plannedAttackCell = targetHitCell._id
 
-        var hnsInfoPreCheck = fieldMap.findHideAndSeekCell()
+        var hnsInfoPreCheck = fieldMap.findHideAndSeekCell("defensive")
         var hideCell = hnsInfoPreCheck != null ? hnsInfoPreCheck['cell'] : null
         if (!shouldPrioritizeCombo && plannedAttackCell != -1 && this.shouldUseLeatherBoots(plannedAttackCell, hideCell, 5)) {
             push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, player._cellPos, player))
@@ -207,7 +211,7 @@ class MagicStrategy extends Strategy {
         if (baiting) {
             AntidoteTracker.createBaitOffensive(target, poisonPlan, context, this)
         } else {
-            this.createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, shouldPrioritizeCombo)
+            this.createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, shouldPrioritizeCombo, false)
         }
 
         // Opportunistic poke if no attack scheduled
@@ -229,7 +233,7 @@ class MagicStrategy extends Strategy {
         if (targetHitCell != -1 && targetHitCell != null) pathToAttack = getPathLength(player._cellPos, targetHitCell._id)
         if (pathToAttack == null) pathToAttack = 0
 
-        var hnsInfoKite = fieldMap.findHideAndSeekCell()
+        var hnsInfoKite = fieldMap.findHideAndSeekCell("defensive")
         var addedHide = false
         if (hnsInfoKite != null) {
             var hideCellIdK = hnsInfoKite['cell']
@@ -268,7 +272,7 @@ class MagicStrategy extends Strategy {
     // FULL OFFENSIVE (After antidote burned)
     // ====================================================================
 
-    createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, comboPositioned) {
+    createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, comboPositioned, baiting) {
         debug("[FULL] ===== ENTERED FULL OFFENSIVE MODE =====")
         var targetHitCell = context['targetHitCell']
         var plannedWeapon = context['plannedWeapon']
@@ -284,28 +288,31 @@ class MagicStrategy extends Strategy {
             }
         }
 
-        // Reserve TP for GRAPPLE-COVID combo if available
+        // Reserve TP for GRAPPLE-COVID combo if available (only when NOT baiting)
         var reservedTPForCombo = 0
-        debug("[FULL] Checking GRAPPLE-COVID combo...")
-        var canExecuteNow = ComboSystem.canUseGrappleCovidCombo(target)
+        debug("[FULL] Checking GRAPPLE-COVID combo... baiting=" + baiting)
+        var canExecuteNow = !baiting && ComboSystem.canUseGrappleCovidCombo(target)
         if (canExecuteNow) {
             var hasBNC = mapContainsKey(arsenal.playerEquippedChips, CHIP_BALL_AND_CHAIN)
             var cdBNC = hasBNC ? getCooldown(CHIP_BALL_AND_CHAIN, player._id) : 1
             var includeBNC = hasBNC && cdBNC == 0 && player._currTp >= 18
             reservedTPForCombo = includeBNC ? 18 : 13
             debug("[FULL][GRAPPLE-COVID] Combo available NOW - reserving " + reservedTPForCombo + " TP (BNC=" + includeBNC + ")")
+        } else if (baiting) {
+            debug("[FULL][GRAPPLE-COVID] Skipping combo - still baiting antidote")
         } else if (comboPositioned) {
             debug("[FULL][GRAPPLE-COVID] Moving to combo cell - will execute NEXT turn")
         } else {
             debug("[FULL][GRAPPLE-COVID] Combo NOT available")
         }
 
-        // PRIORITY 1: GRAPPLE-COVID combo (13-18 TP)
+        // PRIORITY 1: GRAPPLE-COVID combo (13-18 TP) - only when NOT baiting
         if (canExecuteNow) {
             debug("[FULL][GRAPPLE-COVID] Executing combo NOW!")
             ComboSystem.executeGrappleCovidCombo(target)
             context['comboExecuted'] = true
             willAttack = true
+            reservedTPForCombo = 0  // Clear reservation - TP already spent
         }
         // PRIORITY 2: Close-range COVID sequence (enemy within 0-2 range)
         else if (ComboSystem.isWithinCovidRange(target._cellPos)) {
@@ -392,16 +399,45 @@ class MagicStrategy extends Strategy {
                 }
             }
 
-            // THEN use poison chips with remaining TP
+            // THEN use poison chips with remaining TP (once per turn)
             var chipsToUse = poisonPlan['chips']
+            debug("[FULL][CHIP-LIST] Found " + count(chipsToUse) + " chips in poison plan, TP available=" + (player._currTp - reservedTPForCombo))
             for (var cidx = 0; cidx < count(chipsToUse); cidx++) {
                 var pc = chipsToUse[cidx]
-                if (player._currTp - reservedTPForCombo < pc._cost) break
-                if (!this.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)) continue
+                debug("[FULL][CHIP-CHECK] " + getChipName(pc._id) + " cost=" + pc._cost + " cd=" + getCooldown(pc._id, player._id) + " TP=" + (player._currTp - reservedTPForCombo))
+                if (player._currTp - reservedTPForCombo < pc._cost) {
+                    debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - insufficient TP")
+                    break
+                }
+                if (getCooldown(pc._id, player._id) > 0) {
+                    debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - on cooldown")
+                    continue
+                }
+                if (!this.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)) {
+                    debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - out of range/LOS")
+                    continue
+                }
+
+                // Check AoE safety and reposition if needed
+                var aoeCheck = this.checkAoESafety(pc._id, target._cellPos)
+                if (!aoeCheck['safe'] && aoeCheck['needsRepositioning']) {
+                    var safeCell = this.findSafeCellForAoE(pc._id, target._cellPos)
+                    if (safeCell != -1) {
+                        debug("[FULL][CHIP-REPOSITION] Moving to safe cell " + safeCell + " for " + getChipName(pc._id))
+                        this.createMovementAction(Action.MOVEMENT_APPROACH, safeCell, target)
+                        this.executeAndFlushActions()
+                        player.updateEntity()
+                        targetHitCell = fieldMap.buildHitMap(target._cellPos)
+                    } else {
+                        debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - no safe cell found")
+                        continue
+                    }
+                }
+
                 push(this._actions, new Action(Action.ACTION_DIRECT, -1, pc._id, target._cellPos, target))
                 player._currTp -= pc._cost
                 willAttack = true
-                debug("[FULL][CHIP] Used " + getChipName(pc._id) + " TP_left=" + player._currTp)
+                debug("[FULL][CHIP-USED] " + getChipName(pc._id) + " TP_left=" + player._currTp)
             }
         }
 
@@ -422,9 +458,26 @@ class MagicStrategy extends Strategy {
                 if (player._currTp - reservedTPForCombo < chipP._cost) continue
                 if (getCooldown(chipP._id, player._id) > 0) continue
                 if (!this.inRangeAndLOS(targetHitCell._id, target._cellPos, chipP._minRange, chipP._maxRange)) continue
+
+                // Check AoE safety and reposition if needed
+                var aoeFallback = this.checkAoESafety(chipP._id, target._cellPos)
+                if (!aoeFallback['safe'] && aoeFallback['needsRepositioning']) {
+                    var safeCellFB = this.findSafeCellForAoE(chipP._id, target._cellPos)
+                    if (safeCellFB != -1) {
+                        debug("[FULL][FALLBACK-REPOSITION] Moving to safe cell " + safeCellFB + " for " + getChipName(chipP._id))
+                        this.createMovementAction(Action.MOVEMENT_APPROACH, safeCellFB, target)
+                        this.executeAndFlushActions()
+                        player.updateEntity()
+                        targetHitCell = fieldMap.buildHitMap(target._cellPos)
+                    } else {
+                        continue
+                    }
+                }
+
                 push(this._actions, new Action(Action.ACTION_DIRECT, -1, chipP._id, target._cellPos, target))
                 player._currTp -= chipP._cost
                 willAttack = true
+                debug("[FULL][FALLBACK-CHIP] Used " + getChipName(chipP._id) + " TP_left=" + player._currTp)
             }
         }
 

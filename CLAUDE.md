@@ -240,8 +240,19 @@ Abstract base class providing:
 
 **Special Features:**
 - **GRAPPLE-COVID Combo**: High-damage burst with pull → poison → push mechanics
+  - **GRAPPLE Mechanics** (CHIP_GRAPPLE):
+    - Pulls enemy toward a target cell (NOT directly to player)
+    - Target cell calculated as: `playerPos - direction * 2` (distance 2 from player)
+    - Distance 2 required for BOXING_GLOVE min range (cannot use at distance 1)
+    - Uses direction vector from enemy to player (normalized to -1, 0, or 1)
+  - **BOXING_GLOVE Mechanics** (CHIP_BOXING_GLOVE):
+    - Range 2-8 measured from CASTER position (not from enemy)
+    - Targets a destination cell (NOT the enemy entity directly)
+    - Only works on horizontal OR vertical lines (NOT diagonals)
+    - Push calculation: `destCell = playerPos + direction * distFromPlayer`
+    - Loop tries distances 8→2 from player, picks furthest with LOS
+    - Example: Player at (1,7), enemy at (1,5) → can push to (1,-1) at distance 8
   - Immediate execution pattern (not queued) to handle position updates between chips
-  - BOXING_GLOVE only works on horizontal/vertical lines (NOT diagonals)
   - Uses `lineOfSight()` to find valid push cells without obstacles
   - BALL_AND_CHAIN optional (executes if equipped + off cooldown + 19 TP available)
 - **Antidote Baiting System**: Detects when enemy uses CHIP_ANTIDOTE by tracking poison duration
@@ -482,6 +493,40 @@ Low HP → Use REGENERATION
 - Maximizes MP usage (moves toward safety after attacking)
 - Correct weapon selection based on actual post-movement distance
 
+### 11. AoE Self-Damage Prevention (January 2026)
+**Problem:**
+- Magic strategy self-inflicted poison with TOXIN/PLAGUE at close range
+- BALL_AND_CHAIN and FRACTURE self-debuffed the AI
+- No validation that AoE chips would hit player in blast radius
+
+**Solution:**
+- Added `checkAoESafety(chipId, targetCell)` method (base_strategy.lk lines 22-44)
+  - Returns `{safe: bool, needsRepositioning: bool}`
+  - Uses `getAoEAffectedCells()` to check if player in blast radius
+- Added `findSafeCellForAoE(chipId, targetCell)` method (base_strategy.lk lines 46-94)
+  - Finds closest reachable cell (within MP) outside AoE radius
+  - Validates chip can still be used from safe cell (range + LOS)
+  - Prefers closest cell to minimize MP usage
+- Integrated into all chip usage points:
+  - magic_strategy.lk: Full offensive and fallback chip loops
+  - magic_antidote_tracker.lk: Bait offensive chips (TOXIN, PLAGUE, BALL_AND_CHAIN, FRACTURE)
+
+**Flow:**
+```
+Check TOXIN usage at range 1 (AoE AREA_CIRCLE_1)
+→ Player at 150, target at 117
+→ checkAoESafety(): player in AoE radius
+→ findSafeCellForAoE(): found cell 134 (distance 2 from player)
+→ Move to 134 → Use TOXIN from safe position
+→ Enemy poisoned, player safe
+```
+
+**Impact:**
+- Eliminates self-poison from TOXIN/PLAGUE
+- Prevents self-debuffs from BALL_AND_CHAIN/FRACTURE
+- Automatic repositioning maintains chip usage (doesn't skip)
+- AI intelligently moves minimum distance to safety before using AoE chips
+
 ---
 
 ## Development Workflow
@@ -651,6 +696,6 @@ python3 tools/lw_test_script.py 446029 20 domingo
 
 ---
 
-*Document Version: 18.0*
+*Document Version: 19.0*
 *Last Updated: January 2026*
-*Status: V8 System Active - Fighting Retreat & Emergency Movement Implemented*
+*Status: V8 System Active - GRAPPLE-COVID Combo, AoE Self-Damage Prevention, Antidote Baiting*

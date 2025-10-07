@@ -19,6 +19,80 @@ class Strategy {
         return true
     }
 
+    // Check if using a chip with AoE at targetCell would hit the player
+    // Returns map: {safe: bool, needsRepositioning: bool}
+    checkAoESafety(chipId, targetCell) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return ['safe': false, 'needsRepositioning': false]
+        var chip = arsenal.playerEquippedChips[chipId]
+
+        // No AoE = always safe
+        if (chip._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
+
+        // Get AoE affected cells
+        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType)
+
+        // Check if player is in AoE
+        var playerPos = player._cellPos
+        for (var i = 0; i < count(aoeCells); i++) {
+            if (aoeCells[i] == playerPos) {
+                debug("[AOE-CHECK] WARNING: " + getChipName(chipId) + " would hit player at " + playerPos + " (target=" + targetCell + ") - need repositioning")
+                return ['safe': false, 'needsRepositioning': true]
+            }
+        }
+
+        return ['safe': true, 'needsRepositioning': false]
+    }
+
+    // Find closest safe cell to use AoE chip without self-damage
+    // Returns cell ID or -1 if no safe cell found
+    findSafeCellForAoE(chipId, targetCell) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return -1
+        var chip = arsenal.playerEquippedChips[chipId]
+
+        var playerPos = player._cellPos
+        var playerMP = player._currMp
+        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType)
+
+        var bestCell = -1
+        var bestDist = 99999
+
+        // Check all cells reachable with current MP
+        for (var cellId = 0; cellId < 613; cellId++) {
+            if (isObstacle(cellId)) continue
+
+            // Must be reachable
+            var pathLen = getPathLength(playerPos, cellId)
+            if (pathLen == null || pathLen > playerMP) continue
+
+            // Must NOT be in AoE
+            var inAoE = false
+            for (var a = 0; a < count(aoeCells); a++) {
+                if (aoeCells[a] == cellId) {
+                    inAoE = true
+                    break
+                }
+            }
+            if (inAoE) continue
+
+            // Must have range and LOS to target from this cell
+            if (!this.inRangeAndLOS(cellId, targetCell, chip._minRange, chip._maxRange)) continue
+
+            // Prefer closest cell to current position
+            if (pathLen < bestDist) {
+                bestDist = pathLen
+                bestCell = cellId
+            }
+        }
+
+        if (bestCell != -1) {
+            debug("[AOE-REPOSITION] Found safe cell " + bestCell + " for " + getChipName(chipId) + " (dist=" + bestDist + ")")
+        } else {
+            debug("[AOE-REPOSITION] No safe cell found for " + getChipName(chipId) + " within " + playerMP + " MP")
+        }
+
+        return bestCell
+    }
+
     // Validate attack geometry from position with item (weapon or chip)
     // Returns: map with {valid: bool, distance: int}
     // Use this for comprehensive item-aware validation
@@ -183,6 +257,37 @@ class Strategy {
         return false
     }
 
+    // Calculate optimal kiting distance for DoT/ranged strategies
+    // Returns: map with min/max/optimal kite distances
+    calculateOptimalKiteDistance(target) {
+        var enemyMaxRange = 0
+        var playerMaxRange = 0
+
+        // Find enemy's longest weapon range
+        var enemyWeapons = getWeapons(target._id)
+        if (enemyWeapons != null) {
+            for (var ew = 0; ew < count(enemyWeapons); ew++) {
+                var ewRange = getWeaponMaxRange(enemyWeapons[ew])
+                if (ewRange > enemyMaxRange) enemyMaxRange = ewRange
+            }
+        }
+
+        // Find player's longest weapon range
+        for (var pw in mapKeys(arsenal.playerEquippedWeapons)) {
+            var pwObj = arsenal.playerEquippedWeapons[pw]
+            if (pwObj._maxRange > playerMaxRange) playerMaxRange = pwObj._maxRange
+        }
+
+        // Optimal kite: outside enemy range, inside player range
+        var minKite = enemyMaxRange + 1  // Just out of enemy reach
+        var maxKite = playerMaxRange     // Still able to attack
+        var optimalKite = minKite + 1    // Safe buffer
+
+        debug("[KITE-CALC] Enemy max range: " + enemyMaxRange + ", Player max range: " + playerMaxRange + ", Optimal: " + optimalKite + " (range " + minKite + "-" + maxKite + ")")
+
+        return ['min': minKite, 'max': maxKite, 'optimal': optimalKite, 'enemyRange': enemyMaxRange, 'playerRange': playerMaxRange]
+    }
+
     // Get strategy name for debug logging (override in subclasses)
     getStrategyName() {
         return "BASE"
@@ -191,6 +296,45 @@ class Strategy {
     // Strategy-specific debug helper (adds strategy prefix)
     debugStrategy(message) {
         debug("[" + this.getStrategyName() + "] " + message)
+    }
+
+    // Select best healing chip based on HP% and chip availability
+    // Returns: {chipId: int, name: string, priority: int} or null
+    selectBestHealingChip(hpPercent) {
+        var currentHP = getLife()
+        var maxHP = getTotalLife()
+        var missingHP = maxHP - currentHP
+        var currentTP = getTP()
+
+        // Priority 1: CHIP_REMISSION (instant heal, cheap, short CD)
+        // Best for: Emergency (< 35% HP) OR small damage (< 120 missing HP)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
+            if (getCooldown(CHIP_REMISSION, getEntity()) == 0 && currentTP >= 5) {
+                if (hpPercent < 35 || missingHP < 120) {
+                    return ['chipId': CHIP_REMISSION, 'name': "REMISSION", 'priority': 1]
+                }
+            }
+        }
+
+        // Priority 2: CHIP_SERUM (HoT AoE, high total healing, expensive)
+        // Best for: Moderate-heavy damage (35-70% HP) AND sufficient TP (8 TP)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_SERUM)) {
+            if (getCooldown(CHIP_SERUM, getEntity()) == 0 && currentTP >= 8) {
+                if (hpPercent >= 35 && hpPercent < 70) {
+                    return ['chipId': CHIP_SERUM, 'name': "SERUM", 'priority': 2]
+                }
+            }
+        }
+
+        // Priority 3: CHIP_REGENERATION (fallback)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
+            var regen = arsenal.playerEquippedChips[CHIP_REGENERATION]
+            if (getCooldown(CHIP_REGENERATION, getEntity()) == 0 && currentTP >= regen._cost) {
+                return ['chipId': CHIP_REGENERATION, 'name': "REGENERATION", 'priority': 3]
+            }
+        }
+
+        return null
     }
 
     // Find best reachable damage cell within MP budget
@@ -354,7 +498,7 @@ class Strategy {
             }
         }
         // BEFORE committing to original target cell, see if an approach-hide cell is superior (can still attack + less danger)
-        var hnsApproach = fieldMap.findApproachHideAndSeekCell(target)
+        var hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
         if (hnsApproach != null) {
             // Replace target cell if it allows attack or if original target not set
             var adopt = false
@@ -529,7 +673,7 @@ class Strategy {
         var currentWeaponId = this._currentWeaponId  // Use tracked weapon state
 
         // HNS-approach cell check (safer positioning)
-        var hnsApproach = fieldMap.findApproachHideAndSeekCell(target)
+        var hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
         if (hnsApproach != null && hnsApproach['canAttack'] && mapContainsKey(fieldMap.damageMap, hnsApproach['cell'])) {
             var hCellObj = fieldMap.damageMap[hnsApproach['cell']]
             if (hCellObj._highestDamageWeapon != -1) {
@@ -607,17 +751,43 @@ class Strategy {
                     }
                 }
 
-                // Still no reachable cells - move toward enemy to close distance
+                // Still no reachable cells - move to approach-HNS cell (tactical positioning)
                 if (reachableCell == null) {
-                    debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - moving toward enemy")
-                    if (playerMP > 0) {
+                    debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - using approach-HNS positioning")
+
+                    var hnsFallback = fieldMap.findHideAndSeekCell("approach", target)
+                    if (hnsFallback != null && playerMP > 0) {
+                        var hnsCell = hnsFallback['cell']
+                        var hnsPathLen = getPathLength(playerPos, hnsCell)
+
+                        if (hnsPathLen != null && hnsPathLen <= playerMP && hnsCell != playerPos) {
+                            debug("[" + debugPrefix + "] Moving to approach-HNS cell " + hnsCell + " (danger=" + hnsFallback['danger'] + " canAttack=" + hnsFallback['canAttack'] + " dist=" + hnsFallback['dist'] + ")")
+                            this.createMovementAction(Action.MOVEMENT_HNS, hnsCell, target)
+                            this.executeAndFlushActions()
+                            playerPos = player._cellPos
+                            playerMP = player._currMp
+                            playerTP = player._currTp
+                            currentWeaponId = getWeapon()
+                            debug("[" + debugPrefix + "] After HNS movement: pos=" + playerPos + " MP=" + playerMP)
+                        } else if (hnsPathLen != null && hnsPathLen > playerMP) {
+                            // HNS cell unreachable, move toward it
+                            debug("[" + debugPrefix + "] HNS cell unreachable (need " + hnsPathLen + " have " + playerMP + ") - moving toward it")
+                            this.createMovementAction(Action.MOVEMENT_APPROACH, hnsCell, target)
+                            this.executeAndFlushActions()
+                            playerPos = player._cellPos
+                            playerMP = player._currMp
+                            playerTP = player._currTp
+                            currentWeaponId = getWeapon()
+                        }
+                    } else if (playerMP > 0) {
+                        // Fallback: move toward enemy if HNS fails
+                        debug("[" + debugPrefix + "] HNS failed - moving toward enemy as last resort")
                         this.createMovementAction(Action.MOVEMENT_APPROACH, target._cellPos, target)
                         this.executeAndFlushActions()
                         playerPos = player._cellPos
                         playerMP = player._currMp
                         playerTP = player._currTp
                         currentWeaponId = getWeapon()
-                        debug("[" + debugPrefix + "] After approach movement: pos=" + playerPos + " MP=" + playerMP)
                     }
                 }
             }
@@ -777,11 +947,13 @@ class Strategy {
 
     // Base defensive scenario usable by all strategies
     createDefensiveScenario(target, targetHitCell) {
-        // Optional self-heal before moving away if chip is equipped and usable
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
-            var regenChip = arsenal.playerEquippedChips[CHIP_REGENERATION]
-            if (getCooldown(CHIP_REGENERATION, getEntity()) == 0 && getTP() >= regenChip._cost && getLife() < getTotalLife()) {
-                this.createAttackAction(Action.ACTION_DIRECT, player, -1, CHIP_REGENERATION)
+        // Smart healing chip selection before fleeing
+        if (getLife() < getTotalLife()) {
+            var hpPercent = (getLife() * 100) / getTotalLife()
+            var healChip = this.selectBestHealingChip(hpPercent)
+            if (healChip != null) {
+                debug("[HEAL] Using " + healChip['name'] + " (HP=" + floor(hpPercent) + "% priority=" + healChip['priority'] + ")")
+                this.createAttackAction(Action.ACTION_DIRECT, player, -1, healChip['chipId'])
             }
         }
 
@@ -937,16 +1109,14 @@ class Strategy {
 
         var hpPercent = (getLife() * 100) / getTotalLife()
 
-        // Default: HP < 35% AND regeneration available
+        // Default: HP < 35% AND any healing chip available
         if (hpPercent < 35) {
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
-                var regenCooldown = getCooldown(CHIP_REGENERATION, getEntity())
-                if (regenCooldown == 0) {
-                    debug("[EMERGENCY] Entering emergency mode (HP=" + floor(hpPercent) + "% regeneration available)")
-                    return true
-                }
+            var healChip = this.selectBestHealingChip(hpPercent)
+            if (healChip != null) {
+                debug("[EMERGENCY] Entering emergency mode (HP=" + floor(hpPercent) + "% " + healChip['name'] + " available)")
+                return true
             }
-            debug("[EMERGENCY] Low HP (" + floor(hpPercent) + "%) but no regeneration available")
+            debug("[EMERGENCY] Low HP (" + floor(hpPercent) + "%) but no healing chips available")
         }
 
         return false

@@ -1,0 +1,133 @@
+// Lightweight AI for low-level leeks
+// Focuses on minimal operations: move toward nearest enemy and fire a cheap weapon.
+
+function main() {
+    var enemy = getNearestEnemy();
+    if (enemy == null) {
+        return;
+    }
+
+    var enemyCell = getCell(enemy);
+    var myCell = getCell();
+    var weapons = getWeapons();
+    var weapon = selectLightweightWeapon(weapons);
+
+    if (weapon == null) {
+        // No weapon equipped – try a simple chip fallback
+        useLightweightChip(enemy);
+        return;
+    }
+
+    // Move until we can shoot or we run out of MP
+    ensureWeaponRange(weapon, enemyCell);
+    enemyCell = getCell(enemy); // Enemy may have moved due to teleport
+
+    // Switch weapon if needed
+    if (getWeapon() != weapon && getTP() > 0) {
+        if (setWeapon(weapon)) {
+            // Weapon changed successfully
+        }
+    }
+
+    // Fire as many times as possible
+    fireWeaponAt(weapon, enemy);
+}
+
+function checkLineOfSight(fromCell, toCell) {
+    return lineOfSight(fromCell, toCell);
+}
+
+function selectLightweightWeapon(weapons) {
+    if (weapons == null || count(weapons) == 0) return null;
+    var priorities = [WEAPON_PISTOL, WEAPON_SWORD, WEAPON_MAGNUM, WEAPON_B_LASER, WEAPON_RIFLE];
+    for (var i = 0; i < count(priorities); i++) {
+        if (inArray(weapons, priorities[i])) {
+            return priorities[i];
+        }
+    }
+    return weapons[0];
+}
+
+function ensureWeaponRange(weapon, enemyCell) {
+    var minRange = getWeaponMinRange(weapon);
+    var maxRange = getWeaponMaxRange(weapon);
+    while (getMP() > 0) {
+        var myCell = getCell();
+        var dist = getCellDistance(myCell, enemyCell);
+        var aligned = isLaunchAligned(weapon, myCell, enemyCell);
+        if (dist >= minRange && dist <= maxRange && aligned) {
+            break;
+        }
+        if (!stepToward(enemyCell)) {
+            break;
+        }
+    }
+}
+
+function isLaunchAligned(weapon, fromCell, targetCell) {
+    var launchType = getWeaponLaunchType(weapon);
+    if (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_LINE_INVERTED) {
+        return checkLineOfSight(fromCell, targetCell) && (getCellX(fromCell) == getCellX(targetCell) || getCellY(fromCell) == getCellY(targetCell));
+    }
+    if (launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_DIAGONAL_INVERTED) {
+        return checkLineOfSight(fromCell, targetCell) && (abs(getCellX(fromCell) - getCellX(targetCell)) == abs(getCellY(fromCell) - getCellY(targetCell)));
+    }
+    if (launchType == LAUNCH_TYPE_STAR || launchType == LAUNCH_TYPE_STAR_INVERTED) {
+        var sameLine = (getCellX(fromCell) == getCellX(targetCell) || getCellY(fromCell) == getCellY(targetCell));
+        var diagonal = (abs(getCellX(fromCell) - getCellX(targetCell)) == abs(getCellY(fromCell) - getCellY(targetCell)));
+        return checkLineOfSight(fromCell, targetCell) && (sameLine || diagonal);
+    }
+    return checkLineOfSight(fromCell, targetCell);
+}
+
+function stepToward(targetCell) {
+    var myCell = getCell();
+    var bestCell = myCell;
+    var bestDistance = getCellDistance(myCell, targetCell);
+    var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    var myX = getCellX(myCell);
+    var myY = getCellY(myCell);
+    for (var i = 0; i < 4; i++) {
+        var dx = dirs[i][0];
+        var dy = dirs[i][1];
+        var candidate = getCellFromXY(myX + dx, myY + dy);
+        if (candidate == null || candidate == -1) continue;
+        if (getCellContent(candidate) != CELL_EMPTY) continue;
+        var dist = getCellDistance(candidate, targetCell);
+        if (dist < bestDistance) {
+            bestDistance = dist;
+            bestCell = candidate;
+        }
+    }
+    if (bestCell == myCell) {
+        return false;
+    }
+    var moved = moveTowardCells([bestCell], 1);
+    return moved > 0;
+}
+
+function fireWeaponAt(weapon, enemy) {
+    var cost = getWeaponCost(weapon);
+    var maxUses = getWeaponMaxUses(weapon);
+    var uses = 0;
+    while (getTP() >= cost && (maxUses == 0 || uses < maxUses)) {
+        var myCell = getCell();
+        var enemyCell = getCell(enemy);
+        var dist = getCellDistance(myCell, enemyCell);
+        if (dist < getWeaponMinRange(weapon) || dist > getWeaponMaxRange(weapon)) break;
+        if (!isLaunchAligned(weapon, myCell, enemyCell)) break;
+        useWeapon(enemy);
+        uses++;
+        if (maxUses > 0 && uses >= maxUses) break;
+    }
+}
+
+function useLightweightChip(enemy) {
+    var chips = getChips();
+    if (chips == null || count(chips) == 0) return;
+    if (inArray(chips, CHIP_LIGHTNING) && getTP() >= 4) {
+        useChip(CHIP_LIGHTNING, enemy);
+    } else if (inArray(chips, CHIP_SPARK) && getTP() >= 3) {
+        useChip(CHIP_SPARK, enemy);
+    }
+}

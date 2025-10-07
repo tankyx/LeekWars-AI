@@ -8,17 +8,17 @@ include('action.lk')
 // Full offensive: Unleash all poisons after antidote is burned
 
 class AntidoteTracker {
-    // Static maps to persist across turns (enemy-focused state)
-    static _prevPoisonRemaining = [:]        // enemyId -> previous remaining poison turns
-    static _recentAntidoteTurn = [:]         // enemyId -> last turn we inferred antidote usage
-    static _baitMode = [:]                   // enemyId -> bool (true = baiting, false = full offensive)
+    // NOTE: State is now managed by MagicStrategy instance variables
+    // All methods accept state maps as parameters to avoid cross-fight pollution
 
-    // Chips allowed during bait mode (cheap poisons to force antidote)
+    // Chips allowed during bait mode (poisons to force antidote)
     static isBaitAllowedChip(chipId) {
-        // BAIT MODE: Only cheap chips to force antidote
-        // CHIP_TOXIN: cheap poison bait (5 TP)
-        // NOTE: PLAGUE and COVID saved for full offensive
+        // BAIT MODE: Use strong poisons to force antidote usage
+        // CHIP_TOXIN: cheap poison bait (5 TP, ~567 damage)
+        // CHIP_PLAGUE: strong poison bait (6 TP, ~1134 damage)
+        // NOTE: COVID reserved for combo only
         return chipId == CHIP_TOXIN
+            || chipId == CHIP_PLAGUE
             || chipId == CHIP_FRACTURE
             || chipId == CHIP_BALL_AND_CHAIN
     }
@@ -35,12 +35,13 @@ class AntidoteTracker {
     }
 
     // Update antidote tracking state for enemy
-    static updateAntidoteState(target) {
+    // Accepts state maps as parameters (managed by MagicStrategy instance)
+    static updateAntidoteState(target, prevPoisonRemaining, recentAntidoteTurn, baitMode, baitStartTurn) {
         var enemyId = target._id
         var poisonActive = target.hasEffect(EFFECT_POISON)
         var poisonRemaining = target.getEffectRemaining(EFFECT_POISON)
-        var wasPoisonedPrev = mapContainsKey(AntidoteTracker._prevPoisonRemaining, enemyId) && AntidoteTracker._prevPoisonRemaining[enemyId] >= 0
-        var prevRemain = wasPoisonedPrev ? AntidoteTracker._prevPoisonRemaining[enemyId] : -1
+        var wasPoisonedPrev = mapContainsKey(prevPoisonRemaining, enemyId) && prevPoisonRemaining[enemyId] >= 0
+        var prevRemain = wasPoisonedPrev ? prevPoisonRemaining[enemyId] : -1
         var curTurn = getTurn()
         var antidoteCD = getCooldown(CHIP_ANTIDOTE, enemyId)
         var inferredUse = AntidoteTracker.inferAntidoteUse(enemyId, prevRemain, poisonRemaining, wasPoisonedPrev, poisonActive)
@@ -55,47 +56,54 @@ class AntidoteTracker {
         }
 
         if (inferredUse) {
-            AntidoteTracker._recentAntidoteTurn[enemyId] = curTurn
-            AntidoteTracker._baitMode[enemyId] = false
+            recentAntidoteTurn[enemyId] = curTurn
+            baitMode[enemyId] = false
             debug("[ANTIDOTE][DETECT] Early cleanse (prevRemaining=" + prevRemain + ") enemy=" + enemyId + " turn=" + curTurn)
         }
 
         if (!enemyHasAntidote) {
-            AntidoteTracker._baitMode[enemyId] = false
+            baitMode[enemyId] = false
             if (!inferredUse) debug("[ANTIDOTE][CHECK] enemy=" + enemyId + " has NO antidote -> disabling bait mode")
         } else {
             // Initialize bait mode only on first encounter
-            if (!mapContainsKey(AntidoteTracker._baitMode, enemyId)) {
-                AntidoteTracker._baitMode[enemyId] = true
-                debug("[ANTIDOTE][INIT] enemy=" + enemyId + " has antidote -> entering bait mode")
+            if (!mapContainsKey(baitMode, enemyId)) {
+                baitMode[enemyId] = true
+                baitStartTurn[enemyId] = curTurn
+                debug("[ANTIDOTE][INIT] enemy=" + enemyId + " has antidote -> entering bait mode (turn=" + curTurn + ")")
             }
         }
 
-        var baiting = AntidoteTracker._baitMode[enemyId]
-        debug("[ANTIDOTE][STATE] enemy=" + enemyId + " baiting=" + baiting + " inferredUse=" + inferredUse + " cd=" + antidoteCD + " prevRemain=" + prevRemain)
+        var baiting = baitMode[enemyId]
+        var turnsBaiting = mapContainsKey(baitStartTurn, enemyId) ? (curTurn - baitStartTurn[enemyId]) : 0
+        debug("[ANTIDOTE][STATE] enemy=" + enemyId + " baiting=" + baiting + " inferredUse=" + inferredUse + " cd=" + antidoteCD + " prevRemain=" + prevRemain + " turnsBaiting=" + turnsBaiting)
 
         // Escalate out of bait mode if antidote is on cooldown
         if (baiting && antidoteCD > 0) {
-            AntidoteTracker._baitMode[enemyId] = false
+            baitMode[enemyId] = false
             baiting = false
             debug("[ANTIDOTE][ESCALATE] Antidote on cooldown (cd=" + antidoteCD + ") -> full offensive")
         } else if (baiting && wasPoisonedPrev && !poisonActive && prevRemain > 0 && antidoteCD > 0) {
-            AntidoteTracker._baitMode[enemyId] = false
+            baitMode[enemyId] = false
             baiting = false
             debug("[ANTIDOTE][ESCALATE] Cleanse + cooldown -> full offensive")
+        } else if (baiting && turnsBaiting >= 2) {
+            // Escalate after 2 turns of baiting (enemy didn't use antidote - either saving it or doesn't have it equipped)
+            baitMode[enemyId] = false
+            baiting = false
+            debug("[ANTIDOTE][ESCALATE] Baited for " + turnsBaiting + " turns with no antidote use -> full offensive")
         } else if (baiting && prevRemain == 1 && !poisonActive) {
-            if (!mapContainsKey(AntidoteTracker._recentAntidoteTurn, enemyId)) {
-                AntidoteTracker._recentAntidoteTurn[enemyId] = curTurn
-            } else if (curTurn - AntidoteTracker._recentAntidoteTurn[enemyId] >= 2) {
-                AntidoteTracker._baitMode[enemyId] = false
+            if (!mapContainsKey(recentAntidoteTurn, enemyId)) {
+                recentAntidoteTurn[enemyId] = curTurn
+            } else if (curTurn - recentAntidoteTurn[enemyId] >= 2) {
+                baitMode[enemyId] = false
                 baiting = false
                 debug("[ANTIDOTE][ESCALATE] Repeated natural expiry -> abandon bait mode")
             }
         }
 
         // Persist poison tracking
-        if (poisonActive) AntidoteTracker._prevPoisonRemaining[enemyId] = poisonRemaining
-        else AntidoteTracker._prevPoisonRemaining[enemyId] = -1
+        if (poisonActive) prevPoisonRemaining[enemyId] = poisonRemaining
+        else prevPoisonRemaining[enemyId] = -1
 
         return ['baiting': baiting, 'enemyHasAntidote': enemyHasAntidote]
     }
@@ -133,6 +141,22 @@ class AntidoteTracker {
                 if (!AntidoteTracker.isBaitAllowedChip(pc._id)) continue
                 if (player._currTp < pc._cost) break
                 if (!strategy.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)) continue
+
+                // Check AoE safety and reposition if needed
+                var aoeBait = strategy.checkAoESafety(pc._id, target._cellPos)
+                if (!aoeBait['safe'] && aoeBait['needsRepositioning']) {
+                    var safeCellBait = strategy.findSafeCellForAoE(pc._id, target._cellPos)
+                    if (safeCellBait != -1 && player._currMp > 0) {
+                        debug("[BAIT][REPOSITION] Moving to safe cell " + safeCellBait + " for " + getChipName(pc._id))
+                        strategy.createMovementAction(Action.MOVEMENT_APPROACH, safeCellBait, target)
+                        strategy.executeAndFlushActions()
+                        player.updateEntity()
+                        targetHitCell = context['targetHitCell']
+                    } else {
+                        continue
+                    }
+                }
+
                 strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, pc._id)
                 player._currTp -= pc._cost
                 willAttack = true
@@ -149,10 +173,26 @@ class AntidoteTracker {
                         if (aTox.type == Action.ACTION_DIRECT && aTox.chip == CHIP_TOXIN) { alreadyToxin = true; break }
                     }
                     if (!alreadyToxin) {
-                        strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_TOXIN)
-                        player._currTp -= toxinBait._cost
-                        willAttack = true
-                        debug("[BAIT] Applied CHIP_TOXIN (5 TP)")
+                        // Check AoE safety and reposition if needed
+                        var aoeToxin = strategy.checkAoESafety(CHIP_TOXIN, target._cellPos)
+                        if (!aoeToxin['safe'] && aoeToxin['needsRepositioning']) {
+                            var safeCellToxin = strategy.findSafeCellForAoE(CHIP_TOXIN, target._cellPos)
+                            if (safeCellToxin != -1 && player._currMp > 0) {
+                                debug("[BAIT][TOXIN-REPOSITION] Moving to safe cell " + safeCellToxin)
+                                moveTowardCell(safeCellToxin)
+                                player.updateEntity()
+                            } else {
+                                debug("[BAIT] TOXIN skipped - no safe cell")
+                            }
+                        }
+
+                        // Only use if still in range after potential movement
+                        if (strategy.inRangeAndLOS(player._cellPos, target._cellPos, toxinBait._minRange, toxinBait._maxRange)) {
+                            strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_TOXIN)
+                            player._currTp -= toxinBait._cost
+                            willAttack = true
+                            debug("[BAIT] Applied CHIP_TOXIN (5 TP)")
+                        }
                     }
                 }
             }
@@ -168,10 +208,23 @@ class AntidoteTracker {
                         if (aBNC.type == Action.ACTION_DEBUFF && aBNC.chip == CHIP_BALL_AND_CHAIN) { alreadyBNC = true; break }
                     }
                     if (!alreadyBNC) {
-                        strategy.createAttackAction(Action.ACTION_DEBUFF, target, -1, CHIP_BALL_AND_CHAIN)
-                        player._currTp -= bncBait._cost
-                        willAttack = true
-                        debug("[BAIT][DEBUFF] Applied BALL_AND_CHAIN (5 TP)")
+                        // Check AoE safety and reposition if needed
+                        var aoeBNC = strategy.checkAoESafety(CHIP_BALL_AND_CHAIN, target._cellPos)
+                        if (!aoeBNC['safe'] && aoeBNC['needsRepositioning']) {
+                            var safeCellBNC = strategy.findSafeCellForAoE(CHIP_BALL_AND_CHAIN, target._cellPos)
+                            if (safeCellBNC != -1 && player._currMp > 0) {
+                                debug("[BAIT][BNC-REPOSITION] Moving to safe cell " + safeCellBNC)
+                                moveTowardCell(safeCellBNC)
+                                player.updateEntity()
+                            }
+                        }
+
+                        if (strategy.inRangeAndLOS(player._cellPos, target._cellPos, bncBait._minRange, bncBait._maxRange)) {
+                            strategy.createAttackAction(Action.ACTION_DEBUFF, target, -1, CHIP_BALL_AND_CHAIN)
+                            player._currTp -= bncBait._cost
+                            willAttack = true
+                            debug("[BAIT][DEBUFF] Applied BALL_AND_CHAIN (5 TP)")
+                        }
                     }
                 }
             }
@@ -186,10 +239,23 @@ class AntidoteTracker {
                         if (aFRAC.type == Action.ACTION_DEBUFF && aFRAC.chip == CHIP_FRACTURE) { alreadyFRAC = true; break }
                     }
                     if (!alreadyFRAC) {
-                        strategy.createAttackAction(Action.ACTION_DEBUFF, target, -1, CHIP_FRACTURE)
-                        player._currTp -= fracBait._cost
-                        willAttack = true
-                        debug("[BAIT][DEBUFF] Applied FRACTURE (4 TP)")
+                        // Check AoE safety and reposition if needed
+                        var aoeFRAC = strategy.checkAoESafety(CHIP_FRACTURE, target._cellPos)
+                        if (!aoeFRAC['safe'] && aoeFRAC['needsRepositioning']) {
+                            var safeCellFRAC = strategy.findSafeCellForAoE(CHIP_FRACTURE, target._cellPos)
+                            if (safeCellFRAC != -1 && player._currMp > 0) {
+                                debug("[BAIT][FRACTURE-REPOSITION] Moving to safe cell " + safeCellFRAC)
+                                moveTowardCell(safeCellFRAC)
+                                player.updateEntity()
+                            }
+                        }
+
+                        if (strategy.inRangeAndLOS(player._cellPos, target._cellPos, fracBait._minRange, fracBait._maxRange)) {
+                            strategy.createAttackAction(Action.ACTION_DEBUFF, target, -1, CHIP_FRACTURE)
+                            player._currTp -= fracBait._cost
+                            willAttack = true
+                            debug("[BAIT][DEBUFF] Applied FRACTURE (4 TP)")
+                        }
                     }
                 }
             }

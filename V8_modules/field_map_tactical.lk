@@ -78,54 +78,115 @@ class FieldMap extends FieldMapPatterns {
     // HIDE & SEEK CELL SELECTION
     // ====================================================================
 
-    // Evaluate best hiding cell: minimize danger (LOS exposures) and maximize distance
-    findHideAndSeekCell() {
+    // Unified Hide & Seek cell evaluation
+    // mode: "defensive" (maximize distance) or "approach" (prefer attack cells)
+    // target: required for "approach" mode
+    findHideAndSeekCell(mode = "defensive", target = null) {
         var enemyAccess = this.getEnemyAccess()
         if (count(enemyAccess) == 0) return null
         var playerAccessible = this.getAccessibleCells(player)
         if (indexOf(playerAccessible, player._cellPos) == -1) push(playerAccessible, player._cellPos)
 
+        var isApproachMode = (mode == "approach")
+        var targetPos = isApproachMode ? target._cellPos : -1
+        var currentDist = isApproachMode ? getCellDistance(player._cellPos, targetPos) : -1
+
         var bestCell = -1
         var bestDanger = 99999
-        var bestDist = -1
+        var bestDist = isApproachMode ? 99999 : -1  // Approach: minimize, Defensive: maximize
+        var bestCanAttack = false
+        var bestCover = -1  // Cover score (0-8, higher is better)
         var playerPos = player._cellPos
 
         for (var i = 0; i < count(playerAccessible); i++) {
             var cand = playerAccessible[i]
-            var danger = 0
-            var earlyStop = false
-            var closestEnemyDist = 999
 
-            for (var ea = 0; ea < count(enemyAccess); ea++) {
-                var enemyRef = enemyAccess[ea]['enemy']
-                if (enemyRef == null) continue
-                var eOrigDist = getCellDistance(cand, enemyRef._cellPos)
-                if (eOrigDist != null && eOrigDist < closestEnemyDist) closestEnemyDist = eOrigDist
+            // Calculate distance metric
+            var distMetric = 0
+            if (isApproachMode) {
+                distMetric = getCellDistance(cand, targetPos)
+                if (distMetric == null) continue
+            } else {
+                // Defensive: distance to closest enemy
+                var closestEnemyDist = 999
+                for (var ea = 0; ea < count(enemyAccess); ea++) {
+                    var enemyRef = enemyAccess[ea]['enemy']
+                    if (enemyRef == null) continue
+                    var eOrigDist = getCellDistance(cand, enemyRef._cellPos)
+                    if (eOrigDist != null && eOrigDist < closestEnemyDist) closestEnemyDist = eOrigDist
+                }
+                distMetric = (closestEnemyDist == 999) ? 0 : closestEnemyDist
+            }
 
-                var cellsArr = enemyAccess[ea]['cells']
-                for (var ec = 0; ec < count(cellsArr); ec++) {
-                    var eCell = cellsArr[ec]
-                    if (lineOfSight(eCell, cand)) {
-                        danger += 1
-                        if (danger > bestDanger && bestDanger == 0) { earlyStop = true; break }
+            // Check if cell allows attack (approach mode only)
+            var canAttack = false
+            if (isApproachMode) {
+                // Skip cells that increase distance unless they allow attack
+                if (distMetric > currentDist) {
+                    if (mapContainsKey(this.damageMap, cand)) {
+                        var cellRef = this.damageMap[cand]
+                        if (cellRef._highestDamageWeapon != -1 || cellRef._highestDamageChip != -1) {
+                            canAttack = true
+                        }
+                    }
+                    if (!canAttack) continue
+                } else if (mapContainsKey(this.damageMap, cand)) {
+                    var cellRef = this.damageMap[cand]
+                    if (cellRef._highestDamageWeapon != -1 || cellRef._highestDamageChip != -1) {
+                        canAttack = true
                     }
                 }
-                if (earlyStop) break
             }
-            if (closestEnemyDist == 999) closestEnemyDist = 0
 
-            // Prefer lower danger, then greater distance
-            if (danger < bestDanger || (danger == bestDanger && closestEnemyDist > bestDist)) {
-                bestDanger = danger
+            // Calculate danger (LOS exposures) and cover score
+            var danger = this.computeDangerForCell(cand, enemyAccess)
+            var coverScore = this.evaluateCoverScore(cand)
+
+            // Scoring based on mode
+            var shouldUpdate = false
+            if (bestCell == -1) {
+                shouldUpdate = true
+            } else if (isApproachMode) {
+                // Approach mode: canAttack > lower danger > lower distance > higher cover
+                if (canAttack && !bestCanAttack) {
+                    shouldUpdate = true
+                } else if (canAttack == bestCanAttack) {
+                    if (danger < bestDanger ||
+                        (danger == bestDanger && distMetric < bestDist) ||
+                        (danger == bestDanger && distMetric == bestDist && coverScore > bestCover) ||
+                        (danger == bestDanger && distMetric == bestDist && coverScore == bestCover && distMetric < currentDist && bestDist >= currentDist)) {
+                        shouldUpdate = true
+                    }
+                }
+            } else {
+                // Defensive mode: lower danger > greater distance > higher cover
+                if (danger < bestDanger ||
+                    (danger == bestDanger && distMetric > bestDist) ||
+                    (danger == bestDanger && distMetric == bestDist && coverScore > bestCover)) {
+                    shouldUpdate = true
+                }
+            }
+
+            if (shouldUpdate) {
                 bestCell = cand
-                bestDist = closestEnemyDist
+                bestDanger = danger
+                bestDist = distMetric
+                bestCanAttack = canAttack
+                bestCover = coverScore
             }
         }
 
         if (bestCell == -1) return null
-        debug("[HNS] bestCell=" + bestCell + " danger=" + bestDanger + " dist=" + bestDist + " playerPos=" + playerPos)
-        if (bestCell != playerPos) mark(bestCell, getColor(120, 200, 255), 3)
-        return ['cell': bestCell, 'danger': bestDanger, 'safe': (bestDanger == 0)]
+
+        if (isApproachMode) {
+            if (bestCell != playerPos) mark(bestCell, getColor(255, 200, 120), 3)
+            debug("[HNS-" + mode + "] bestCell=" + bestCell + " canAttack=" + bestCanAttack + " danger=" + bestDanger + " dist=" + bestDist + " cover=" + bestCover + " currentDist=" + currentDist)
+            return ['cell': bestCell, 'danger': bestDanger, 'canAttack': bestCanAttack, 'dist': bestDist, 'cover': bestCover, 'safe': (bestDanger == 0)]
+        } else {
+            if (bestCell != playerPos) mark(bestCell, getColor(120, 200, 255), 3)
+            debug("[HNS-" + mode + "] bestCell=" + bestCell + " danger=" + bestDanger + " dist=" + bestDist + " cover=" + bestCover + " playerPos=" + playerPos)
+            return ['cell': bestCell, 'danger': bestDanger, 'safe': (bestDanger == 0), 'dist': bestDist, 'cover': bestCover]
+        }
     }
 
     // Compute danger (LOS exposures) for single cell
@@ -140,57 +201,24 @@ class FieldMap extends FieldMapPatterns {
         return danger
     }
 
-    // Approach-oriented HNS: get closer while minimizing danger
-    findApproachHideAndSeekCell(target) {
-        if (target == null) return null
-        var enemyAccess = this.getEnemyAccess()
-        if (count(enemyAccess) == 0) return null
-        var playerAccessible = this.getAccessibleCells(player)
-        if (indexOf(playerAccessible, player._cellPos) == -1) push(playerAccessible, player._cellPos)
+    // Evaluate cover quality (adjacent obstacles provide tactical advantage)
+    // Returns: 0-8 score (higher = more adjacent obstacles)
+    private evaluateCoverScore(cellId) {
+        var adjacentObstacles = 0
+        var cellX = getCellX(cellId)
+        var cellY = getCellY(cellId)
 
-        var bestCell = -1
-        var bestDanger = 99999
-        var bestDist = 99999
-        var bestCanAttack = false
-        var targetPos = target._cellPos
-        var currentDist = getCellDistance(player._cellPos, targetPos)
-
-        for (var i = 0; i < count(playerAccessible); i++) {
-            var cand = playerAccessible[i]
-            var distTarget = getCellDistance(cand, targetPos)
-            if (distTarget == null) continue
-
-            var canAttack = false
-            if (mapContainsKey(this.damageMap, cand)) {
-                var cellRef = this.damageMap[cand]
-                if (cellRef._highestDamageWeapon != -1) canAttack = true
-                else if (cellRef._highestDamageChip != -1) canAttack = true
-            }
-
-            // Skip cells that increase distance unless they allow attack
-            if (!canAttack && distTarget > currentDist) continue
-
-            var danger = this.computeDangerForCell(cand, enemyAccess)
-
-            // Ordering: canAttack > lower danger > lower distance
-            if (bestCell == -1) {
-                bestCell = cand; bestDanger = danger; bestDist = distTarget; bestCanAttack = canAttack; continue
-            }
-            if (canAttack && !bestCanAttack) {
-                bestCell = cand; bestDanger = danger; bestDist = distTarget; bestCanAttack = true; continue
-            }
-            if (canAttack == bestCanAttack) {
-                if (danger < bestDanger || (danger == bestDanger && distTarget < bestDist) || (danger == bestDanger && distTarget == bestDist && distTarget < currentDist && bestDist >= currentDist)) {
-                    bestCell = cand; bestDanger = danger; bestDist = distTarget; bestCanAttack = canAttack
-                }
+        // Check all 8 adjacent cells (using cell coordinate system)
+        var offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
+        for (var o = 0; o < count(offsets); o++) {
+            var neighborCell = getCellFromXY(cellX + offsets[o][0], cellY + offsets[o][1])
+            if (neighborCell != null && isObstacle(neighborCell)) {
+                adjacentObstacles += 1
             }
         }
-
-        if (bestCell == -1) return null
-        if (bestCell != player._cellPos) mark(bestCell, getColor(255, 200, 120), 3)
-        debug("[HNS-APPROACH] bestCell=" + bestCell + " canAttack=" + bestCanAttack + " danger=" + bestDanger + " dist=" + bestDist + " currentDist=" + currentDist)
-        return ['cell': bestCell, 'danger': bestDanger, 'canAttack': bestCanAttack, 'dist': bestDist]
+        return adjacentObstacles
     }
+
 
     // ====================================================================
     // OTKO TELEPORTATION SUPPORT
@@ -214,6 +242,7 @@ class FieldMap extends FieldMapPatterns {
 
             var totalDamage = 0
             var playerTP = player._currTp - 9  // Reserve 9 TP for teleport
+            var tpSpent = 0  // Track TP consumed (weapons + chips)
 
             // Check all equipped weapons
             for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
@@ -226,14 +255,18 @@ class FieldMap extends FieldMapPatterns {
                 if (!lineOfSight(cellId, target._cellPos)) continue
 
                 var weaponDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
-                var tpBudget = playerTP
-                if (getWeapon() != wid) tpBudget -= 1
-                var uses = min(wObj._maxUse, floor(tpBudget / wObj._cost))
+                var tpBudget = playerTP - tpSpent
+                var swapCost = (getWeapon() != wid) ? 1 : 0
+                if (tpBudget <= swapCost) continue
+                var uses = min(wObj._maxUse, floor((tpBudget - swapCost) / wObj._cost))
+                if (uses <= 0) continue
                 totalDamage += weaponDmg * uses
+                tpSpent += swapCost + uses * wObj._cost
             }
 
             // Check damage chips if TP remains
-            if (playerTP > 0) {
+            var tpRemaining = playerTP - tpSpent
+            if (tpRemaining > 0) {
                 for (var cid in mapKeys(arsenal.playerEquippedChips)) {
                     var chipObj = arsenal.playerEquippedChips[cid]
                     if (chipObj == null) continue
@@ -247,10 +280,12 @@ class FieldMap extends FieldMapPatterns {
                     if (!lineOfSight(cellId, target._cellPos)) continue
 
                     var chipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, cid, target)
-                    var tpRemain = playerTP - totalDamage
-                    if (tpRemain < chipObj._cost) continue
-                    var usesChip = min(chipObj._maxUse, floor(tpRemain / chipObj._cost))
+                    var tpBudgetChip = playerTP - tpSpent
+                    if (tpBudgetChip < chipObj._cost) continue
+                    var usesChip = min(chipObj._maxUse, floor(tpBudgetChip / chipObj._cost))
+                    if (usesChip <= 0) continue
                     totalDamage += chipDmg * usesChip
+                    tpSpent += usesChip * chipObj._cost
                 }
             }
 

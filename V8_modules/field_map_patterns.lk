@@ -7,6 +7,10 @@ include('field_map_core.lk')
 class FieldMapPatterns extends FieldMapCore {
     damageMap = [:]
 
+    // Damage map caching system
+    _damageMapCache = [:]        // Cached damage map
+    _lastCacheKey = ""           // Cache key: "enemyID_cellPos"
+
     private static x_offset = 18
     private static y_offset = 17
     private static up_right_offset = 18 - 17
@@ -158,6 +162,19 @@ class FieldMapPatterns extends FieldMapCore {
     }
 
     buildHitMap(oppCell) {
+        // Cache key: enemyID_cellPosition
+        var enemyId = getEntityOnCell(oppCell)
+        if (enemyId == null) enemyId = -1
+        var cacheKey = enemyId + "_" + oppCell
+
+        // Return cached damage map if valid
+        if (this._lastCacheKey == cacheKey && this._lastCacheKey != "") {
+            this.damageMap = this._damageMapCache
+            debug("[CACHE] Using cached damage map for enemy " + enemyId + " at cell " + oppCell)
+            return this.damageMap
+        }
+
+        // Build new damage map
         clearMarks()
         mapClear(this.damageMap)
 
@@ -174,6 +191,12 @@ class FieldMapPatterns extends FieldMapCore {
             else if (count(dmCell._weaponsList) > 0) push(weaponOnlyCells, dmCell._id)
         }
         debug("[HITMAP][SUMMARY] chipCells=" + chipCells + " weaponOnlyCellsSample=" + (count(weaponOnlyCells) > 0 ? weaponOnlyCells : []))
+
+        // Cache the new damage map
+        this._damageMapCache = this.damageMap
+        this._lastCacheKey = cacheKey
+        debug("[CACHE] Cached damage map for " + cacheKey)
+
         return this.damageMap
     }
 

@@ -234,33 +234,50 @@ class LeekWarsScriptTester:
     def get_fight_result(self, fight_id):
         """Get the result of a fight"""
         time.sleep(0.3)  # Reduced wait time for fight to complete
-        
+
         url = f"{BASE_URL}/fight/get/{fight_id}"
-        
+
         # Retry a few times as fight might still be processing
         for attempt in range(3):
             if attempt > 0:
                 time.sleep(0.3)
-            
+
             response = self.session.get(url)
-            
+
             if response.status_code == 200:
                 try:
                     data = response.json()
                     # The fight data IS the response (no wrapper)
                     fight_data = data
                     winner = fight_data.get("winner")
-                    leeks = fight_data.get("leeks1", []) + fight_data.get("leeks2", [])
-                    
+                    leeks1 = fight_data.get("leeks1", [])
+                    leeks2 = fight_data.get("leeks2", [])
+                    leeks = leeks1 + leeks2
+
                     # If winner is not set, fight might still be processing
                     if winner is None:
                         print("Winner not set yet, retrying...")
                         continue
-                    
-                    # Determine if we won (team 1 is our team)
-                    our_team = 1  # Team IDs are 1 and 2
-                    result = "DRAW" if winner == 0 else ("WIN" if winner == our_team else "LOSS")
-                    
+
+                    # Determine which team we're on by checking our farmer's leeks
+                    farmer_leek_ids = [int(lid) for lid in self.farmer.get('leeks', {}).keys()]
+                    our_team = None
+                    for leek in leeks1:
+                        if leek['id'] in farmer_leek_ids:
+                            our_team = 1
+                            break
+                    if our_team is None:
+                        for leek in leeks2:
+                            if leek['id'] in farmer_leek_ids:
+                                our_team = 2
+                                break
+
+                    # Determine result
+                    if our_team is None:
+                        result = "UNKNOWN"  # Shouldn't happen
+                    else:
+                        result = "DRAW" if winner == 0 else ("WIN" if winner == our_team else "LOSS")
+
                     return {
                         "fight_id": fight_id,
                         "result": result,
