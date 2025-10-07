@@ -890,9 +890,39 @@ class Strategy {
     }
 
     // If below 35% HP, use defensive; else offensive
+    // Check if we have lethal damage available this turn (enemy killable)
+    // Returns true if enemy HP < our potential damage output
+    hasLethalOpportunity(target) {
+        if (target == null) return false
+
+        var enemyHP = getLife(target._id)
+        var playerTP = player._currTp
+
+        // Rough estimate: assume we can deal ~150 damage with 15+ TP (weapon spam + chips)
+        // This is conservative - actual damage often higher
+        if (playerTP >= 15 && enemyHP < 500) {
+            debug("[LETHAL] Enemy low HP (HP=" + enemyHP + ") with available TP=" + playerTP + " - prioritizing kill")
+            return true
+        }
+
+        // Very low HP enemies (< 200) killable with less TP
+        if (playerTP >= 8 && enemyHP < 200) {
+            debug("[LETHAL] Enemy very low HP (HP=" + enemyHP + ") with TP=" + playerTP + " - prioritizing kill")
+            return true
+        }
+
+        return false
+    }
+
     // Check if should enter emergency/defensive mode
     // Override in strategies for custom logic
-    shouldEnterEmergencyMode() {
+    shouldEnterEmergencyMode(target) {
+        // NEVER enter emergency if we have lethal damage (can kill enemy this turn)
+        if (this.hasLethalOpportunity(target)) {
+            debug("[EMERGENCY] Lethal opportunity detected - skipping emergency mode")
+            return false
+        }
+
         var hpPercent = (getLife() * 100) / getTotalLife()
 
         // Default: HP < 35% AND regeneration available
@@ -920,8 +950,8 @@ class Strategy {
     createAndExecuteScenario(target, targetHitCell) {
         arrayClear(this._actions)
 
-        // Check for emergency mode first
-        if (this.shouldEnterEmergencyMode()) {
+        // Check for emergency mode first (lethal check happens inside)
+        if (this.shouldEnterEmergencyMode(target)) {
             this.createEmergencyScenario(target, targetHitCell)
         } else {
             this.createOffensiveScenario(target, targetHitCell)
