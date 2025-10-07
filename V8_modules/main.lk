@@ -52,7 +52,10 @@ function main() {
     player.updateEntity()
     fieldMap.updateMapEntities()
 
-    var target = fieldMap.getClosestEnemy()
+    // Use intelligent target selection (prioritize low HP + debuffed enemies)
+    var target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
+    // Fallback to closest if priority selection fails
+    if (target == null) target = fieldMap.getClosestEnemy()
 
     fieldMap.buildHitMap(target._cellPos)
 

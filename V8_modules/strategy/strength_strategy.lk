@@ -187,7 +187,12 @@ class StrengthStrategy extends Strategy {
     // Check if CHIP_STEROID should be used (strength buff)
     shouldUseSteroid() {
         // CHIP_STEROID: 7 TP cost, need 15 TP minimum (7 + 8 for attacks)
-        return this.shouldApplyStatBuff(CHIP_STEROID, EFFECT_BUFF_STRENGTH, 15)
+        if (!this.shouldApplyStatBuff(CHIP_STEROID, EFFECT_BUFF_STRENGTH, 15)) return false
+
+        // Validate TP budget (7 TP for STEROID + minimum for attacks)
+        if (!this.validateTPBudget(7)) return false
+
+        return true
     }
 
 

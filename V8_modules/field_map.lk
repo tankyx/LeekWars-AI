@@ -386,6 +386,84 @@ class FieldMap {
         return closestEnemy
     }
 
+    // Select optimal target based on tactical criteria
+    // criteria: optional map {prioritizeLowest: "hp"|"distance", bonusForDebuffed: bool, penalizeBuffed: bool}
+    selectOptimalTarget(criteria = null) {
+        var enemyMap = this.getEnemySubMap()
+        var enemies = mapValues(enemyMap)  // Convert map to array
+        if (count(enemies) == 0) return null
+        if (count(enemies) == 1) return enemies[0]
+
+        // Default criteria
+        var priorityMode = criteria != null && mapContainsKey(criteria, 'prioritizeLowest') ? criteria['prioritizeLowest'] : "hp"
+        var penalizeBuffed = criteria != null && mapContainsKey(criteria, 'penalizeBuffed') ? criteria['penalizeBuffed'] : false
+        var bonusForDebuffed = criteria != null && mapContainsKey(criteria, 'bonusForDebuffed') ? criteria['bonusForDebuffed'] : false
+
+        var bestTarget = null
+        var bestScore = -99999
+        var playerPos = player._cellPos
+
+        for (var e in enemies) {
+            if (isDead(e._id)) continue
+
+            var score = 0
+            var dist = getCellDistance(playerPos, e._cellPos)
+            if (dist == null) continue
+
+            // HP priority: favor low HP targets (easier kills)
+            var enemyHP = getLife(e._id)
+            var enemyMaxHP = getTotalLife(e._id)
+            var hpPercent = (enemyHP * 100) / enemyMaxHP
+
+            if (priorityMode == "hp") {
+                // Lower HP = higher score (100 - hpPercent)
+                score += (100 - hpPercent) * 2  // Weight: 0-200 points
+                // Distance penalty (closer = better)
+                score -= dist * 5  // -5 per cell distance
+            } else {
+                // Distance priority
+                score -= dist * 10
+                // HP bonus (still prefer low HP)
+                score += (100 - hpPercent)
+            }
+
+            // Bonus for debuffed enemies (POISON, SHACKLE_TP, etc.)
+            if (bonusForDebuffed) {
+                var effects = getEffects(e._id)
+                if (effects != null) {
+                    for (var eff in effects) {
+                        if (eff[0] == EFFECT_POISON) score += 30  // Poisoned = priority
+                        if (eff[0] == EFFECT_SHACKLE_TP) score += 20  // Low TP = vulnerable
+                        if (eff[0] == EFFECT_SHACKLE_MP) score += 15  // Low mobility
+                    }
+                }
+            }
+
+            // Penalty for buffed enemies (BUFF_STRENGTH, shields, etc.)
+            if (penalizeBuffed) {
+                if (e._absShield > 50 || e._relShield > 20) score -= 25  // Heavily shielded
+                var effsBuff = getEffects(e._id)
+                if (effsBuff != null) {
+                    for (var effB in effsBuff) {
+                        if (effB[0] == EFFECT_BUFF_STRENGTH) score -= 20  // High damage threat
+                        if (effB[0] == EFFECT_DAMAGE_RETURN) score -= 15  // Damage return = risky
+                    }
+                }
+            }
+
+            if (score > bestScore) {
+                bestScore = score
+                bestTarget = e
+            }
+        }
+
+        if (bestTarget != null) {
+            debug("[TARGET-PRIORITY] Selected enemy " + bestTarget._id + " (score=" + floor(bestScore) + " HP=" + floor((getLife(bestTarget._id) * 100) / getTotalLife(bestTarget._id)) + "%)")
+        }
+
+        return bestTarget
+    }
+
     getClosestChest() {
         var playerPos = player._cellPos
         var closestChest = null

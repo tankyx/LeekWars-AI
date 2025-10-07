@@ -38,7 +38,12 @@ class AgilityStrategy extends Strategy {
     // Check if CHIP_WARM_UP should be used (agility buff)
     shouldUseWarmUp() {
         // CHIP_WARM_UP: 7 TP cost, need 14 TP minimum (7 + 5-7 for MIRROR/THORN + attacks)
-        return this.shouldApplyStatBuff(CHIP_WARM_UP, EFFECT_BUFF_AGILITY, 14)
+        if (!this.shouldApplyStatBuff(CHIP_WARM_UP, EFFECT_BUFF_AGILITY, 14)) return false
+
+        // Validate TP budget (7 TP for WARM_UP + minimum for attacks)
+        if (!this.validateTPBudget(7)) return false
+
+        return true
     }
 
 
