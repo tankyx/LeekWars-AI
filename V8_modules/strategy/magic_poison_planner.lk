@@ -1,0 +1,319 @@
+// ====================================================================
+// POISON PLANNING SYSTEM
+// ====================================================================
+// Selects optimal cell for maximizing stacked poison DoT damage
+// Considers weapon DoT potential, poison chip availability, TP/MP budgets
+
+class PoisonPlanner {
+    // Plan best reachable cell to maximize stacked poison DoT value
+    // Returns map: ['cell': Cell, 'chips': poisonChipsArray, 'weapons': weaponArray]
+    static selectBestPoisonCell(target) {
+        var verbosePlan = false
+        var bestCell = -1
+        var bestAdjustedScore = -1
+        var bestChips = []
+        var bestWeapons = []
+        var bestRemainingTP = -1
+        var bestPathLen = 9999
+        var playerPos = player._cellPos
+        var mpAvail = player._currMp
+        var tpAvail = player._currTp
+        var penaltyNoWeaponFactor = 0.15
+
+        // Pre-scan: check if any DoT weapon is reachable
+        var weaponPreferred = false
+        var requireWeaponIfAvailable = true
+        for (var preC in fieldMap.damageMap) {
+            var pLen = getPathLength(playerPos, preC._id)
+            if (pLen == null || pLen > mpAvail) continue
+            if (preC._weaponsList == null) continue
+            for (var pw = 0; pw < count(preC._weaponsList); pw++) {
+                var wPre = preC._weaponsList[pw]
+                if (wPre == null) continue
+                var bdPre = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, wPre._id)
+                if (bdPre['dot'] <= 0) continue
+                var swapNeedPre = (getWeapon() != wPre._id)
+                var swapCostPre = swapNeedPre ? 1 : 0
+                if (tpAvail <= swapCostPre) continue
+                var maxUsePre = min(wPre._maxUse, floor((tpAvail - swapCostPre) / wPre._cost))
+                if (maxUsePre <= 0) continue
+                weaponPreferred = true
+                break
+            }
+            if (weaponPreferred) break
+        }
+        debug("[DoT-KITE][PLAN] weaponPreferred=" + weaponPreferred)
+
+        // Check if standing cell already offers high-dot weapon (bias towards staying)
+        var stayHighDot = false
+        if (mapContainsKey(fieldMap.damageMap, playerPos)) {
+            var stayCell = fieldMap.damageMap[playerPos]
+            if (stayCell._weaponsList != null) {
+                for (var sw = 0; sw < count(stayCell._weaponsList); sw++) {
+                    var swW = stayCell._weaponsList[sw]
+                    if (swW == null) continue
+                    var bdStay = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, swW._id)
+                    if (bdStay['dot'] > 0) { stayHighDot = true; break }
+                }
+            }
+        }
+
+        // Iterate over all damageMap cells
+        for (var c in fieldMap.damageMap) {
+            var pathLen = getPathLength(playerPos, c._id)
+            if (pathLen == null || pathLen > mpAvail) continue
+            var score = 0
+            var chipPlan = []
+            var weaponPlan = []
+            var remainingTP = tpAvail
+            if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] id=" + c._id + " pathLen=" + pathLen + " baseTP=" + remainingTP)
+
+            // Pre-scan poison chips to identify top chip for TP reservation
+            var topPoisonChip = null
+            var topPoisonDot = -1
+            var topPoisonTotal = 0
+            var topPoisonCost = 0
+            if (c._chipsList != null) {
+                for (var preLC = 0; preLC < count(c._chipsList); preLC++) {
+                    var preChip = c._chipsList[preLC]
+                    if (preChip == null) continue
+                    var bdPreChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, preChip._id)
+                    if (bdPreChip['dot'] <= 0) continue
+                    if (bdPreChip['dot'] > topPoisonDot) {
+                        topPoisonDot = bdPreChip['dot']
+                        topPoisonChip = preChip
+                        topPoisonTotal = bdPreChip['total']
+                        topPoisonCost = preChip._cost
+                    }
+                }
+            }
+
+            // WEAPON-FIRST: Use per-cell list (already geometry-validated)
+            if (c._weaponsList != null) {
+                var localDotWeapons = []
+                for (var lw = 0; lw < count(c._weaponsList); lw++) {
+                    var wLoc = c._weaponsList[lw]
+                    if (wLoc == null) continue
+                    var bdLoc = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, wLoc._id)
+                    if (bdLoc['dot'] <= 0) continue
+                    push(localDotWeapons, ['weapon': wLoc, 'total': bdLoc['total'], 'bd': bdLoc])
+                }
+
+                // Sort by total damage desc
+                for (var ii = 0; ii < count(localDotWeapons); ii++) {
+                    var bestIdx = ii
+                    for (var jj = ii + 1; jj < count(localDotWeapons); jj++) {
+                        if (localDotWeapons[jj]['total'] > localDotWeapons[bestIdx]['total']) bestIdx = jj
+                    }
+                    if (bestIdx != ii) {
+                        var tmp = localDotWeapons[ii]
+                        localDotWeapons[ii] = localDotWeapons[bestIdx]
+                        localDotWeapons[bestIdx] = tmp
+                    }
+                }
+
+                for (var lw2 = 0; lw2 < count(localDotWeapons); lw2++) {
+                    if (remainingTP <= 0) break
+                    var recW = localDotWeapons[lw2]
+                    var wDOT = recW['weapon']
+                    var bdW2 = recW['bd']
+
+                    if (!PoisonPlanner.inRangeAndLOS(c._id, target._cellPos, wDOT._minRange, wDOT._maxRange)) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipWeaponRange=" + getWeaponName(wDOT._id))
+                        continue
+                    }
+
+                    var swapNeededW = (getWeapon() != wDOT._id)
+                    var swapCostW = swapNeededW ? 1 : 0
+                    if (remainingTP <= swapCostW) continue
+                    var usableTP2 = remainingTP - swapCostW
+                    var maxWeaponUses2 = min(wDOT._maxUse, floor(usableTP2 / wDOT._cost))
+                    if (maxWeaponUses2 <= 0) continue
+
+                    // DYNAMIC WEAPON LIMIT: Cap at 1 use if poison chips available
+                    var hasPoisonChipAvailable = false
+                    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_COVID) && getCooldown(CHIP_COVID, player._id) == 0) {
+                        hasPoisonChipAvailable = true
+                    }
+                    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_PLAGUE) && getCooldown(CHIP_PLAGUE, player._id) == 0) {
+                        hasPoisonChipAvailable = true
+                    }
+                    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TOXIN) && getCooldown(CHIP_TOXIN, player._id) == 0) {
+                        hasPoisonChipAvailable = true
+                    }
+
+                    if (hasPoisonChipAvailable && maxWeaponUses2 > 1) {
+                        maxWeaponUses2 = 1
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] capWeaponUses=" + getWeaponName(wDOT._id))
+                    }
+
+                    // Reserve TP for top poison chip
+                    if (topPoisonChip != null && topPoisonCost > 0) {
+                        while (maxWeaponUses2 > 0 && (remainingTP - swapCostW - (maxWeaponUses2 * wDOT._cost)) < topPoisonCost) {
+                            maxWeaponUses2 -= 1
+                        }
+                        if (maxWeaponUses2 == 0) {
+                            if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] reserveForChip skipWeapon=" + getWeaponName(wDOT._id))
+                            continue
+                        }
+                    }
+
+                    var weaponContribution2 = maxWeaponUses2 * bdW2['total']
+                    score += weaponContribution2
+                    push(weaponPlan, ['weapon': wDOT, 'swap': swapNeededW, 'uses': maxWeaponUses2])
+                    remainingTP -= swapCostW + maxWeaponUses2 * wDOT._cost
+                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] +Weapon " + getWeaponName(wDOT._id) + " uses=" + maxWeaponUses2 + " add=" + floor(weaponContribution2) + " TP_left=" + remainingTP)
+                }
+            }
+
+            // Skip if weapon preferred but none scheduled
+            if (weaponPreferred && requireWeaponIfAvailable && count(weaponPlan) == 0) {
+                if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipNoWeapon id=" + c._id)
+                continue
+            }
+
+            // CHIP FOLLOW-UP: Spend remaining TP on poison chips
+            if (c._chipsList != null) {
+                var localPoisonChips = []
+                for (var lc = 0; lc < count(c._chipsList); lc++) {
+                    var chipObj = c._chipsList[lc]
+                    if (chipObj == null) continue
+                    var bdChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
+                    if (bdChip['dot'] <= 0) continue
+                    push(localPoisonChips, ['chip': chipObj, 'total': bdChip['total'], 'bd': bdChip])
+                }
+
+                // Sort by total damage desc
+                for (var ci = 0; ci < count(localPoisonChips); ci++) {
+                    var bestIdxC = ci
+                    for (var cj = ci + 1; cj < count(localPoisonChips); cj++) {
+                        if (localPoisonChips[cj]['total'] > localPoisonChips[bestIdxC]['total']) bestIdxC = cj
+                    }
+                    if (bestIdxC != ci) {
+                        var tmpC = localPoisonChips[ci]
+                        localPoisonChips[ci] = localPoisonChips[bestIdxC]
+                        localPoisonChips[bestIdxC] = tmpC
+                    }
+                }
+
+                // Ensure topPoisonChip is first if present
+                if (topPoisonChip != null && count(localPoisonChips) > 1) {
+                    var topIndex = -1
+                    for (var tpi = 0; tpi < count(localPoisonChips); tpi++) {
+                        if (localPoisonChips[tpi]['chip']._id == topPoisonChip._id) { topIndex = tpi; break }
+                    }
+                    if (topIndex > 0) {
+                        var hold = localPoisonChips[topIndex]
+                        remove(localPoisonChips, topIndex)
+                        insert(localPoisonChips, 0, hold)
+                    }
+                }
+
+                for (var lpc = 0; lpc < count(localPoisonChips); lpc++) {
+                    if (remainingTP <= 0) break
+                    var recC = localPoisonChips[lpc]
+                    var pc = recC['chip']
+                    if (getCooldown(pc._id, player._id) > 0) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipCD=" + getChipName(pc._id))
+                        continue
+                    }
+                    if (remainingTP < pc._cost) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipTP=" + getChipName(pc._id))
+                        continue
+                    }
+
+                    if (!PoisonPlanner.inRangeAndLOS(c._id, target._cellPos, pc._minRange, pc._maxRange)) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipGeometry=" + getChipName(pc._id))
+                        continue
+                    }
+
+                    var bdC2 = recC['bd']
+                    var maxUsesChip2 = min(pc._maxUse, floor(remainingTP / pc._cost))
+                    if (maxUsesChip2 <= 0) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipZeroUses=" + getChipName(pc._id))
+                        continue
+                    }
+
+                    score += maxUsesChip2 * bdC2['total']
+                    push(chipPlan, pc)
+                    remainingTP -= maxUsesChip2 * pc._cost
+                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] +Chip " + getChipName(pc._id) + " uses=" + maxUsesChip2 + " add=" + floor(maxUsesChip2 * bdC2['total']) + " TP_left=" + remainingTP)
+                }
+            }
+
+            // Penalty if weapon preferred but only chips scheduled
+            if (weaponPreferred && count(weaponPlan) == 0 && count(chipPlan) > 0) {
+                var penaltySafe = score * penaltyNoWeaponFactor
+                score -= penaltySafe
+                if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] penaltyNoWeapon cell=" + c._id + " penalty=" + floor(penaltySafe))
+            }
+
+            if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] finalScore=" + floor(score) + " chips=" + count(chipPlan) + " weapons=" + count(weaponPlan) + " TP_rem=" + remainingTP)
+
+            // Distance penalty (heavier if staying cell already viable)
+            var distFactor = stayHighDot ? 7 : 5
+            var distancePenalty = pathLen * distFactor
+            var adjustedScore = score - distancePenalty
+
+            if ((count(chipPlan) > 0 || (count(chipPlan) == 0 && count(weaponPlan) > 0))) {
+                if (adjustedScore > bestAdjustedScore || (adjustedScore == bestAdjustedScore && pathLen < bestPathLen)) {
+                    bestAdjustedScore = adjustedScore
+                    bestCell = c
+                    bestChips = chipPlan
+                    bestWeapons = weaponPlan
+                    bestRemainingTP = remainingTP
+                    bestPathLen = pathLen
+                    debug("[DoT-KITE][PLAN][BEST] cell=" + c._id + " rawScore=" + floor(score) + " adjScore=" + floor(adjustedScore) + " pathLen=" + pathLen + " penalty=" + distancePenalty + " stayHighDot=" + stayHighDot)
+                }
+            }
+        }
+
+        if (bestCell == -1) return null
+
+        if (bestCell != null) {
+            debug("[DoT-KITE][PLAN][CHOICE] cell=" + bestCell._id + " adjScore=" + floor(bestAdjustedScore) + " chips=" + count(bestChips) + " weapons=" + count(bestWeapons) + " pathLen=" + bestPathLen)
+
+            // Summarize weapons on chosen cell
+            var weaponSummary = ""
+            if (bestCell._weaponsList != null) {
+                for (var ws = 0; ws < count(bestCell._weaponsList); ws++) {
+                    var wSum = bestCell._weaponsList[ws]
+                    var bdWsum = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, wSum._id)
+                    var usesPlan = 0
+                    for (var pwL = 0; pwL < count(bestWeapons); pwL++) {
+                        if (bestWeapons[pwL]['weapon']._id == wSum._id) { usesPlan = bestWeapons[pwL]['uses']; break }
+                    }
+                    weaponSummary += (ws > 0 ? ", " : "") + getWeaponName(wSum._id) + ":d=" + floor(bdWsum['direct']) + "/p=" + floor(bdWsum['dot']) + "/t=" + floor(bdWsum['total']) + (usesPlan > 0 ? "x" + usesPlan : "")
+                }
+            }
+
+            // Summarize chips on chosen cell
+            var chipSummary = ""
+            if (bestCell._chipsList != null) {
+                for (var cs = 0; cs < count(bestCell._chipsList); cs++) {
+                    var cSum = bestCell._chipsList[cs]
+                    var bdCsum = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, cSum._id)
+                    if (bdCsum['dot'] <= 0) {
+                        chipSummary += (chipSummary != "" ? ", " : "") + getChipName(cSum._id) + "(no-dot d=" + floor(bdCsum['direct']) + ")"
+                        continue
+                    }
+                    chipSummary += (chipSummary != "" ? ", " : "") + getChipName(cSum._id) + ":d=" + floor(bdCsum['direct']) + "/p=" + floor(bdCsum['dot']) + "/t=" + floor(bdCsum['total'])
+                }
+            }
+            debug("[DoT-KITE][PLAN][CHOICE-DETAIL] cell=" + bestCell._id + " TP_rem_est=" + bestRemainingTP + " weapons={" + weaponSummary + "} chips={" + chipSummary + "}")
+        } else {
+            debug("[DoT-KITE][PLAN][CHOICE] bestCell null (no valid poison plan)")
+        }
+
+        return ['cell': bestCell, 'chips': bestChips, 'weapons': bestWeapons]
+    }
+
+    // Helper: Check if position can hit target with given range/LOS
+    static inRangeAndLOS(fromCell, targetCell, minRange, maxRange) {
+        var dist = getCellDistance(fromCell, targetCell)
+        if (dist == null) return false
+        if (dist < minRange || dist > maxRange) return false
+        if (!lineOfSight(fromCell, targetCell)) return false
+        return true
+    }
+}

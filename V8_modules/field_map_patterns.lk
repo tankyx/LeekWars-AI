@@ -1,0 +1,409 @@
+include('field_map_core.lk')
+
+// ====================================================================
+// FIELD MAP - PATTERNS (Hit Calculation & Damage Map Building)
+// ====================================================================
+
+class FieldMapPatterns extends FieldMapCore {
+    damageMap = [:]
+
+    private static x_offset = 18
+    private static y_offset = 17
+    private static up_right_offset = 18 - 17
+    private static down_right_offset = 18 + 17
+    private static down_left_offset = -1 * (18 - 17)
+    private static up_left_offset = -1 * (18 + 17)
+    private static board_cell_count = 613
+
+    constructor() {
+        super()
+    }
+
+    // ====================================================================
+    // PATTERN CALCULATION (Line, Diagonal, Star, Circle)
+    // ====================================================================
+
+    getLineHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
+        var curCell = cell
+        for (var dir = 0; dir < 4; dir++) {
+            for (var dist = minR; dist <= maxR; dist++) {
+                if (dir == 0) {
+                    curCell = cell - y_offset * dist
+                } else if (dir == 1) {
+                    curCell = cell + x_offset * dist
+                } else if (dir == 2) {
+                    curCell = cell + y_offset * dist
+                } else if (dir == 3) {
+                    curCell = cell - x_offset * dist
+                }
+                // Verify actual game distance matches expected range
+                var actualDist = getCellDistance(cell, curCell)
+                if (actualDist == null || actualDist < minR || actualDist > maxR) continue
+
+                var _hasLOS = lineOfSight(cell, curCell)
+                if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
+                    // curCell = shooting position, cell = target (AoE center)
+                    this.updateHitCells(hitCells, curCell, weapon, chip, cell)
+                }
+            }
+        }
+        return hitCells
+    }
+
+    getDiagonalHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
+        var curCell = cell
+        for (var dir = 0; dir < 4; dir++) {
+            for (var dist = minR; dist <= maxR; dist++) {
+                if (dir == 0) {
+                    curCell = cell + up_right_offset * dist
+                } else if (dir == 1) {
+                    curCell = cell + down_right_offset * dist
+                } else if (dir == 2) {
+                    curCell = cell + down_left_offset * dist
+                } else if (dir == 3) {
+                    curCell = cell + up_left_offset * dist
+                }
+                // Verify actual game distance matches expected range
+                var actualDist = getCellDistance(cell, curCell)
+                if (actualDist == null || actualDist < minR || actualDist > maxR) continue
+
+                var _hasLOS = lineOfSight(cell, curCell)
+                if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
+                    // curCell = shooting position, cell = target (AoE center)
+                    this.updateHitCells(hitCells, curCell, weapon, chip, cell)
+                }
+            }
+        }
+        return hitCells
+    }
+
+    getStarHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
+        var lineMap = [:]
+        lineMap = this.getLineHits(lineMap, cell, minR, maxR, aoeType, weapon, chip)
+        var diagMap = [:]
+        diagMap = this.getDiagonalHits(diagMap, cell, minR, maxR, aoeType, weapon, chip)
+        var merged = mapMerge(lineMap, diagMap)
+        return mapMerge(hitCells, merged)
+    }
+
+    getCircleHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
+        for (var dx = -maxR; dx <= maxR; dx++) {
+            for (var dy = -maxR; dy <= maxR; dy++) {
+                var dist = abs(dx) + abs(dy)
+                if (dist >= minR && dist <= maxR) {
+                    var curCell = cell + FieldMapPatterns.x_offset * dx + FieldMapPatterns.y_offset * dy
+                    var _hasLOS = lineOfSight(cell, curCell)
+                    if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
+                        // curCell = shooting position, cell = target (AoE center)
+                        this.updateHitCells(hitCells, curCell, weapon, chip, cell)
+                    }
+                }
+            }
+        }
+        return hitCells
+    }
+
+    // ====================================================================
+    // HIT MAP BUILDING
+    // ====================================================================
+
+    buildSingleItemHitMap(localMap, oppCell, item, isWeapon) {
+        if (!this.isDamageItem(item)) {
+            return localMap
+        }
+        var minR = item._minRange
+        var maxR = item._maxRange
+        var launchType = item._launchType
+        var aoeType = item._aoeType
+        var weapon = isWeapon ? item : null
+        var chip = isWeapon ? null : item
+
+        if (launchType == LAUNCH_TYPE_CIRCLE) {
+            return this.getCircleHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        } else if (launchType == LAUNCH_TYPE_STAR) {
+            return this.getStarHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        } else if (launchType == LAUNCH_TYPE_LINE) {
+            return this.getLineHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        } else if (launchType == LAUNCH_TYPE_DIAGONAL) {
+            return this.getDiagonalHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        }
+        return localMap
+    }
+
+    markLocalHits(localMap, isWeapon) {
+        if (isWeapon) {
+            for (var c in localMap) {
+                if (c._highestDamageWeapon != -1 && mapContainsKey(this.wColors, c._highestDamageWeapon._id)) {
+                    mark(c._id, this.wColors[c._highestDamageWeapon._id].getIntColor(), 2)
+                }
+            }
+        } else {
+            for (var cc in localMap) {
+                if (cc._highestDamageChip != -1 && mapContainsKey(this.cColors, cc._highestDamageChip._id)) {
+                    var chipId = cc._highestDamageChip._id
+                    var chipName = getChipName(chipId)
+                    var shortName = chipName
+                    var temp = substring(chipName, 0, 2)
+                    if (temp != null) shortName = temp
+                    var code = "C_" + shortName
+                    var baseCol = this.cColors[chipId]
+                    var dr = max(0, baseCol._r - 60)
+                    var dg = max(0, baseCol._g - 60)
+                    var db = max(0, baseCol._b - 60)
+                    var darkInt = getColor(dr, dg, db)
+                    markText(cc._id, code, darkInt, 1)
+                }
+            }
+        }
+    }
+
+    buildHitMap(oppCell) {
+        clearMarks()
+        mapClear(this.damageMap)
+
+        // Weapons - integrate directly into global damageMap
+        this.integrateEquippedItemsIntoDamageMap(oppCell)
+        this.markLocalHits(this.damageMap, true)
+        this.markLocalHits(this.damageMap, false)
+
+        // Summary diagnostics
+        var chipCells = []
+        var weaponOnlyCells = []
+        for (var dmCell in this.damageMap) {
+            if (count(dmCell._chipsList) > 0) push(chipCells, dmCell._id)
+            else if (count(dmCell._weaponsList) > 0) push(weaponOnlyCells, dmCell._id)
+        }
+        debug("[HITMAP][SUMMARY] chipCells=" + chipCells + " weaponOnlyCellsSample=" + (count(weaponOnlyCells) > 0 ? weaponOnlyCells : []))
+        return this.damageMap
+    }
+
+    // Integrate all equipped weapons and chips
+    integrateEquippedItemsIntoDamageMap(oppCell) {
+        // Weapons
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var wObj = arsenal.playerEquippedWeapons[wid]
+            var localWeaponMap = [:]
+            localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
+            var listIDs = []
+            for (var cellRef in localWeaponMap) {
+                if (cellRef._isObstacle) continue
+                this.updateHitCells(this.damageMap, cellRef._id, wObj, null, oppCell)
+                push(listIDs, cellRef._id)
+            }
+            debug("[HITMAP][WEAPON] " + getWeaponName(wObj._id) + " shooterCells=" + listIDs)
+        }
+        // Chips
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            var chipObj = arsenal.playerEquippedChips[cid]
+            var localChipMap = [:]
+            localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
+            var listCID = []
+            for (var cellRef2 in localChipMap) {
+                if (cellRef2._isObstacle) continue
+                var bdDbg = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
+                this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj, oppCell)
+                push(listCID, cellRef2._id)
+            }
+            debug("[HITMAP][CHIP] " + getChipName(chipObj._id) + " shooterCells=" + listCID)
+        }
+    }
+
+    // ====================================================================
+    // HIT CELL UPDATING (AoE-aware damage calculation)
+    // ====================================================================
+
+    // curCell: shooting position, targetCell: aim point (AoE center)
+    updateHitCells(hitCells, curCell, weapon=null, chip=null, targetCell=-1) {
+        if (weapon == null && chip == null) {
+            return hitCells
+        }
+
+        if (weapon != null) {
+            var breakdownW = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id, targetCell, targetCell)
+            var scaledDamage = breakdownW['total']
+            scaledDamage *= weapon._maxUse
+            if (mapContainsKey(hitCells, curCell)) {
+                if (hitCells[curCell]._weaponDamage < scaledDamage) {
+                    hitCells[curCell]._weaponDamage = scaledDamage
+                    hitCells[curCell]._highestDamageWeapon = weapon
+                    hitCells[curCell]._directDamage = breakdownW['direct'] * weapon._maxUse
+                    hitCells[curCell]._dotDamage += breakdownW['dot'] * weapon._maxUse
+                }
+                var already = false
+                for (var wIdx = 0; wIdx < count(hitCells[curCell]._weaponsList); wIdx++) {
+                    if (hitCells[curCell]._weaponsList[wIdx]._id == weapon._id) { already = true; break }
+                }
+                if (!already) push(hitCells[curCell]._weaponsList, weapon)
+            }
+            else {
+                var newCell = new Cell(curCell, false, getEntityOnCell(curCell), scaledDamage, 0, true, weapon, -1)
+                newCell._directDamage = breakdownW['direct'] * weapon._maxUse
+                newCell._dotDamage = breakdownW['dot'] * weapon._maxUse
+                push(newCell._weaponsList, weapon)
+                mapPut(hitCells, curCell, newCell)
+            }
+        }
+        else if (chip != null) {
+            var breakdownC = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chip._id, targetCell, targetCell)
+            var scaledDamage = breakdownC['total']
+            scaledDamage *= chip._maxUse
+            if (mapContainsKey(hitCells, curCell)) {
+                hitCells[curCell]._directDamage += breakdownC['direct'] * chip._maxUse
+                hitCells[curCell]._dotDamage += breakdownC['dot'] * chip._maxUse
+                if (hitCells[curCell]._chipDamage < scaledDamage) {
+                    hitCells[curCell]._chipDamage = scaledDamage
+                    hitCells[curCell]._highestDamageChip = chip
+                }
+                var alreadyC = false
+                for (var cIdx = 0; cIdx < count(hitCells[curCell]._chipsList); cIdx++) {
+                    if (hitCells[curCell]._chipsList[cIdx]._id == chip._id) { alreadyC = true; break }
+                }
+                if (!alreadyC) push(hitCells[curCell]._chipsList, chip)
+            } else {
+                var nc = new Cell(curCell, false, getEntityOnCell(curCell), 0, scaledDamage, true, -1, chip)
+                nc._directDamage = breakdownC['direct'] * chip._maxUse
+                nc._dotDamage = breakdownC['dot'] * chip._maxUse
+                push(nc._chipsList, chip)
+                mapPut(hitCells, curCell, nc)
+            }
+        }
+        // Recompute aggregate
+        if (mapContainsKey(hitCells, curCell)) {
+            var cellRef = hitCells[curCell]
+            cellRef._totalDamage = cellRef._weaponDamage + cellRef._chipDamage
+            if (cellRef._weaponDamage >= cellRef._chipDamage && cellRef._weaponDamage > 0) cellRef._bestType = 0
+            else if (cellRef._chipDamage > cellRef._weaponDamage) cellRef._bestType = 1
+        }
+        return hitCells
+    }
+
+    // ====================================================================
+    // DAMAGE CELL QUERIES
+    // ====================================================================
+
+    getClosestHighestDmgHitCell() {
+        var playerPos = player._cellPos
+        var closestCell = -1
+        var closestDist = 999
+        var highestDmg = -1
+
+        for (var c in this.damageMap) {
+            var dist = getPathLength(playerPos, c._id)
+            if (dist == null) continue
+
+            if (c._weaponDamage > highestDmg) {
+                highestDmg = c._weaponDamage
+                closestDist = dist
+                closestCell = c
+            }
+            else if (c._weaponDamage == highestDmg && dist < closestDist) {
+                closestDist = dist
+                closestCell = c
+            }
+        }
+
+        // If unreachable this turn, check for reachable alternative
+        if (closestCell != -1 && closestDist > player._currMp) {
+            var potentialCell = this.getClosestHitCell()
+            var dist = getPathLength(playerPos, potentialCell._id)
+
+            if (potentialCell != -1 && dist <= player._currMp) {
+                closestCell = potentialCell
+            }
+        }
+
+        return closestCell
+    }
+
+    getClosestHitCellForWeapon(weapon) {
+        var playerPos = player._cellPos
+        var closestCell = -1
+        var closestDist = 999
+
+        for (var c in this.damageMap) {
+            if (c._highestDamageWeapon == -1) continue
+            if (c._highestDamageWeapon._id != weapon._id) continue
+
+            var dist = getPathLength(playerPos, c._id)
+            if (dist == null) {
+                debug("No path to cell " + c._id)
+                continue
+            }
+
+            if (dist < closestDist && dist <= player._currMp) {
+                closestDist = dist
+                closestCell = c
+            }
+        }
+        return closestCell
+    }
+
+    getClosestHitCell() {
+        var playerPos = this.getPlayerPos()
+        var closestCell = -1
+        var closestDist = 999
+
+        for (var c in this.damageMap) {
+            var dist = getPathLength(playerPos, c._id)
+            if (dist == null) {
+                debug("No path to cell " + c._id)
+                continue
+            }
+
+            if (dist < closestDist) {
+                closestDist = dist
+                closestCell = c
+            }
+        }
+        return closestCell
+    }
+
+    getBestWeaponOrChipCell() {
+        var best = -1
+        var bestDmg = -1
+        var bestDist = 99999
+        var playerPos = player._cellPos
+        for (var c in this.damageMap) {
+            var dmg = c._totalDamage
+            var dist = getPathLength(playerPos, c._id)
+            if (dist == null) continue
+            if (dmg > bestDmg || (dmg == bestDmg && dist < bestDist)) {
+                bestDmg = dmg
+                best = c
+                bestDist = dist
+            }
+        }
+        return best
+    }
+
+    // Weighted best cell (DoT vs direct damage)
+    getBestWeightedDamageCell(dotWeight, directWeight) {
+        var best = -1
+        var bestScore = -1
+        for (var c in this.damageMap) {
+            var score = c._directDamage * directWeight + c._dotDamage * dotWeight
+            if (score > bestScore) {
+                bestScore = score
+                best = c
+            }
+        }
+        return best
+    }
+
+    // Get all cells where specific item is highest damage source
+    getAllCellsForItem(item, isWeapon) {
+        var result = []
+        for (var c in this.damageMap) {
+            if (isWeapon) {
+                if (c._highestDamageWeapon != -1 && c._highestDamageWeapon._id == item._id) {
+                    push(result, c)
+                }
+            } else {
+                if (c._highestDamageChip != -1 && c._highestDamageChip._id == item._id) {
+                    push(result, c)
+                }
+            }
+        }
+        return result
+    }
+}
