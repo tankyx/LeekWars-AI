@@ -2,7 +2,7 @@
 // GRAPPLE-COVID COMBO SYSTEM
 // ====================================================================
 // High-damage burst combo: GRAPPLE → COVID → BOXING_GLOVE → (optional) BALL_AND_CHAIN
-// Total: 14-19 TP depending on BALL_AND_CHAIN availability
+// Total: 13-18 TP depending on BALL_AND_CHAIN availability
 
 class ComboSystem {
     // Check if target is within COVID's natural range (0-2 cells)
@@ -57,9 +57,9 @@ class ComboSystem {
             return false
         }
 
-        // Need minimum 14 TP for core combo
-        if (player._currTp < 14) {
-            debug("[GRAPPLE-COVID][CHECK] FAIL: Insufficient TP (need 14 minimum, have " + player._currTp + ")")
+        // Need minimum 13 TP for core combo
+        if (player._currTp < 13) {
+            debug("[GRAPPLE-COVID][CHECK] FAIL: Insufficient TP (need 13 minimum, have " + player._currTp + ")")
             return false
         }
 
@@ -109,13 +109,13 @@ class ComboSystem {
     static executeGrappleCovidCombo(target) {
         var enemyPos = target._cellPos
         var playerPos = player._cellPos
-        var tpCost = 14  // Base: GRAPPLE(4) + COVID(8) + BOXING(2)
+        var tpCost = 13  // Base: GRAPPLE(3) + COVID(8) + BOXING(2)
 
         // Check if BALL_AND_CHAIN is available
         var hasBNC = mapContainsKey(arsenal.playerEquippedChips, CHIP_BALL_AND_CHAIN)
         var cdBNC = hasBNC ? getCooldown(CHIP_BALL_AND_CHAIN, player._id) : 1
-        var includeBNC = hasBNC && cdBNC == 0 && player._currTp >= 19
-        if (includeBNC) tpCost = 19
+        var includeBNC = hasBNC && cdBNC == 0 && player._currTp >= 18
+        if (includeBNC) tpCost = 18
 
         debug("[GRAPPLE-COVID] Starting " + tpCost + " TP combo from range " + getCellDistance(playerPos, enemyPos) + " (BNC=" + includeBNC + ")")
 
@@ -136,9 +136,9 @@ class ComboSystem {
         }
         if (grappleCell == null) grappleCell = playerPos
 
-        debug("[GRAPPLE-COVID] Step 1: GRAPPLE (4 TP) - pulling enemy from " + enemyPos + " toward " + grappleCell)
+        debug("[GRAPPLE-COVID] Step 1: GRAPPLE (3 TP) - pulling enemy from " + enemyPos + " toward " + grappleCell)
         useChipOnCell(CHIP_GRAPPLE, grappleCell)
-        player._currTp -= 4
+        player._currTp -= 3
 
         // Update enemy position after GRAPPLE
         target.updateEntity()
@@ -191,8 +191,7 @@ class ComboSystem {
         if (boxingCell == null) boxingCell = newEnemyPos
 
         debug("[GRAPPLE-COVID] Step 3: BOXING_GLOVE (2 TP) - pushing from " + newEnemyPos + " toward " + boxingCell)
-        // BOXING_GLOVE must target enemy's CURRENT position, not push destination
-        useChipOnCell(CHIP_BOXING_GLOVE, newEnemyPos)
+        useChipOnCell(CHIP_BOXING_GLOVE, boxingCell)
         player._currTp -= 2
 
         // Update enemy position after push

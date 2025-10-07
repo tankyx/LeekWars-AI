@@ -122,7 +122,7 @@ class MagicStrategy extends Strategy {
             var coreChipsReady = getCooldown(CHIP_GRAPPLE, player._id) == 0 &&
                                 getCooldown(CHIP_COVID, player._id) == 0 &&
                                 getCooldown(CHIP_BOXING_GLOVE, player._id) == 0
-            var hasTP = player._currTp >= 14
+            var hasTP = player._currTp >= 13
 
             if (hasCoreChips && coreChipsReady && hasTP) {
                 grappleCovidCell = ComboSystem.findGrappleCovidCell(target)
@@ -291,8 +291,8 @@ class MagicStrategy extends Strategy {
         if (canExecuteNow) {
             var hasBNC = mapContainsKey(arsenal.playerEquippedChips, CHIP_BALL_AND_CHAIN)
             var cdBNC = hasBNC ? getCooldown(CHIP_BALL_AND_CHAIN, player._id) : 1
-            var includeBNC = hasBNC && cdBNC == 0 && player._currTp >= 19
-            reservedTPForCombo = includeBNC ? 19 : 14
+            var includeBNC = hasBNC && cdBNC == 0 && player._currTp >= 18
+            reservedTPForCombo = includeBNC ? 18 : 13
             debug("[FULL][GRAPPLE-COVID] Combo available NOW - reserving " + reservedTPForCombo + " TP (BNC=" + includeBNC + ")")
         } else if (comboPositioned) {
             debug("[FULL][GRAPPLE-COVID] Moving to combo cell - will execute NEXT turn")
@@ -300,7 +300,7 @@ class MagicStrategy extends Strategy {
             debug("[FULL][GRAPPLE-COVID] Combo NOT available")
         }
 
-        // PRIORITY 1: GRAPPLE-COVID combo (14-19 TP)
+        // PRIORITY 1: GRAPPLE-COVID combo (13-18 TP)
         if (canExecuteNow) {
             debug("[FULL][GRAPPLE-COVID] Executing combo NOW!")
             ComboSystem.executeGrappleCovidCombo(target)
