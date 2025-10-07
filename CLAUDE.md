@@ -428,6 +428,60 @@ Abstract base class providing:
 - Weapons spam to max uses before chips
 - AI plays defensively when poison will secure kill, improving survival rate
 
+### 8. Battle Royale Dead Enemy Targeting Bug (January 2026)
+**Problem:**
+- `getClosestEnemy()` returned dead enemies in Battle Royale mode
+- AI continued targeting destroyed enemies with `_cellPos = null`
+- Caused null target cell errors and wasted TP on invalid attacks
+
+**Solution:**
+- Added `isDead()` check in `getClosestEnemy()` (field_map.lk line 377)
+- Code: `if (isDead(e._id)) continue`
+- Mirrors existing dead chest check in `getClosestChest()`
+
+**Impact:** AI correctly switches to alive enemies in Battle Royale, preventing null target bugs
+
+### 9. Unreachable Damage Cell Bug (January 2026)
+**Problem:**
+- When optimal weapon cell unreachable, AI moved toward it blindly
+- Ended up at intermediate position with no weapons in range
+- Wasted entire turn (TP unused) due to positional failure
+
+**Solution:**
+- Added `findBestReachableDamageCell(maxMP)` method (base_strategy.lk lines 20-47)
+- Finds highest damage cell within MP budget from damage map
+- Falls back to this cell when optimal cell unreachable
+- Added LEATHER_BOOTS emergency movement boost (+3 MP) when no reachable cells
+
+**Impact:** AI always moves to positions where attacks are guaranteed, eliminating "flee turns"
+
+### 10. Fighting Retreat Implementation (January 2026)
+**Problem:**
+- Defensive flee moved directly to safest cell (danger=0)
+- Safe cell often out of weapon range (e.g., distance 12 for range 1-4 weapon)
+- AI wasted TP trying to attack from unreachable position
+
+**Solution:**
+- Added `findBestDamageCellOnPath(targetCell, maxMP)` method (base_strategy.lk lines 49-95)
+- Gets full flee path, finds best damage cell along path within MP range
+- Stops at damage cell, validates weapons from actual position after movement
+- Attacks with correct weapon for current distance, then continues fleeing with remaining MP
+
+**Flow:**
+```
+Low HP → Use REGENERATION
+→ Find safe cell (e.g., 268, danger=0)
+→ Check flee path for damage cells
+→ Found cell 218 with weapons (4 cells away)
+→ Move to 218 → Attack with rifle (range 3-10, enemy at dist=7)
+→ Continue fleeing to 268 with remaining MP
+```
+
+**Impact:**
+- Maximizes TP usage during retreat (15+ TP spent on attacks instead of wasted)
+- Maximizes MP usage (moves toward safety after attacking)
+- Correct weapon selection based on actual post-movement distance
+
 ---
 
 ## Development Workflow
@@ -597,6 +651,6 @@ python3 tools/lw_test_script.py 446029 20 domingo
 
 ---
 
-*Document Version: 17.0*
-*Last Updated: December 2025*
-*Status: V8 System Active - GRAPPLE-COVID Combo & Poison Attrition Mode Implemented*
+*Document Version: 18.0*
+*Last Updated: January 2026*
+*Status: V8 System Active - Fighting Retreat & Emergency Movement Implemented*

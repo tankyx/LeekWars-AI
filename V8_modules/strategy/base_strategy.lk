@@ -17,6 +17,83 @@ class Strategy {
         return true
     }
 
+    // Find best reachable damage cell within MP budget
+    // Returns Cell object from damageMap or null if no reachable cells
+    findBestReachableDamageCell(maxMP) {
+        var playerPos = player._cellPos
+        var bestCell = null
+        var bestDamage = -1
+        var bestDist = 99999
+
+        for (var c in fieldMap.damageMap) {
+            var pathLen = getPathLength(playerPos, c._id)
+            if (pathLen == null || pathLen > maxMP) continue  // Skip unreachable cells
+
+            // Prioritize: 1) highest damage, 2) closest distance
+            if (c._totalDamage > bestDamage || (c._totalDamage == bestDamage && pathLen < bestDist)) {
+                bestDamage = c._totalDamage
+                bestCell = c
+                bestDist = pathLen
+            }
+        }
+
+        if (bestCell != null) {
+            debug("[REACHABLE-CELL] Found best reachable damage cell: " + bestCell._id + " damage=" + bestDamage + " dist=" + bestDist)
+        } else {
+            debug("[REACHABLE-CELL] No reachable damage cells within " + maxMP + " MP")
+        }
+
+        return bestCell
+    }
+
+    // Find best damage cell along path to target cell (for fighting retreat)
+    // Returns Cell object from damageMap that's on the path, or null if no damage cells on path
+    findBestDamageCellOnPath(targetCell, maxMP) {
+        var playerPos = player._cellPos
+
+        // Get FULL path to target (without MP limit to get all cells on path)
+        var pathCells = getPath(playerPos, targetCell)
+        if (pathCells == null || count(pathCells) == 0) {
+            debug("[FLEE-PATH] No path to target cell " + targetCell)
+            return null
+        }
+
+        var bestCell = null
+        var bestDamage = -1
+        var bestDist = 99999
+
+        // Check each cell on path (excluding start, only reachable cells)
+        for (var i = 0; i < count(pathCells); i++) {
+            var cell = pathCells[i]
+
+            // Skip current position
+            if (cell == playerPos) continue
+
+            // Check if cell is reachable with current MP
+            var distToCell = getPathLength(playerPos, cell)
+            if (distToCell == null || distToCell > maxMP) continue
+
+            // Check if this cell is in damage map
+            if (mapContainsKey(fieldMap.damageMap, cell)) {
+                var cellObj = fieldMap.damageMap[cell]
+                // Prioritize: 1) highest damage, 2) closest to current position
+                if (cellObj._totalDamage > bestDamage || (cellObj._totalDamage == bestDamage && distToCell < bestDist)) {
+                    bestDamage = cellObj._totalDamage
+                    bestCell = cellObj
+                    bestDist = distToCell
+                }
+            }
+        }
+
+        if (bestCell != null) {
+            debug("[FLEE-PATH] Found damage cell " + bestCell._id + " on flee path (damage=" + bestDamage + ", dist=" + bestDist + ")")
+        } else {
+            debug("[FLEE-PATH] No reachable damage cells on flee path to " + targetCell + " (maxMP=" + maxMP + ")")
+        }
+
+        return bestCell
+    }
+
     turnOneBuffs() {
         debug("Applying turn one buffs if available")
         debug("Dumping equipped chips:")
@@ -295,17 +372,79 @@ class Strategy {
         debug("[" + debugPrefix + "] Movement check: pathLen=" + pathLen + " playerMP=" + playerMP + " bestWeaponCell=" + bestWeaponCell._id + " playerPos=" + playerPos)
         var reachedWeaponCell = false
         if (pathLen > playerMP) {
-            // Move as close as possible (unreachable this turn)
-            this.createMovementAction(Action.MOVEMENT_APPROACH, bestWeaponCell._id, target)
-            debug("[" + debugPrefix + "] Approaching weapon cell (unreachable this turn) cell=" + bestWeaponCell._id)
+            // Best cell unreachable - find best reachable alternative
+            debug("[" + debugPrefix + "] Best cell " + bestWeaponCell._id + " unreachable (need " + pathLen + " MP, have " + playerMP + ")")
+            var reachableCell = this.findBestReachableDamageCell(playerMP)
 
-            // Execute movement immediately to get actual position
-            this.executeAndFlushActions()
-            playerPos = player._cellPos
-            playerMP = player._currMp
-            playerTP = player._currTp
-            currentWeaponId = getWeapon()  // Update current weapon after execution
-            debug("[" + debugPrefix + "] After movement execution: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP + " weapon=" + getWeaponName(currentWeaponId))
+            if (reachableCell != null && reachableCell._id != playerPos) {
+                // Move to best reachable damage cell
+                this.createMovementAction(Action.MOVEMENT_APPROACH, reachableCell._id, target)
+                debug("[" + debugPrefix + "] Moving to best reachable cell " + reachableCell._id + " (damage=" + reachableCell._totalDamage + ")")
+
+                // Execute movement immediately to get actual position
+                this.executeAndFlushActions()
+                playerPos = player._cellPos
+                playerMP = player._currMp
+                playerTP = player._currTp
+                currentWeaponId = getWeapon()
+                debug("[" + debugPrefix + "] After movement execution: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP + " weapon=" + getWeaponName(currentWeaponId))
+
+                // Check if we actually reached the reachable cell
+                if (playerPos == reachableCell._id) {
+                    reachedWeaponCell = true
+                    bestWeaponCell = reachableCell  // Update best cell to the one we reached
+                }
+            } else {
+                // No reachable damage cells - try LEATHER_BOOTS for emergency movement boost
+                debug("[" + debugPrefix + "] No reachable damage cells within " + playerMP + " MP")
+
+                var usedLeatherBoots = false
+                if (mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
+                    getCooldown(CHIP_LEATHER_BOOTS, player._id) == 0 &&
+                    playerTP >= 3) {
+                    // Use LEATHER_BOOTS for +3 MP boost
+                    debug("[" + debugPrefix + "] EMERGENCY: Using LEATHER_BOOTS for +3 MP (current: " + playerMP + ")")
+                    useChip(CHIP_LEATHER_BOOTS, player._id)
+                    playerTP -= 3
+                    playerMP = player._currMp  // Refresh MP after boots
+                    usedLeatherBoots = true
+
+                    // Re-check for reachable cells with boosted MP
+                    reachableCell = this.findBestReachableDamageCell(playerMP)
+
+                    if (reachableCell != null && reachableCell._id != playerPos) {
+                        // Found reachable cell with boosted MP!
+                        this.createMovementAction(Action.MOVEMENT_APPROACH, reachableCell._id, target)
+                        debug("[" + debugPrefix + "] Moving to reachable cell " + reachableCell._id + " (with LEATHER_BOOTS boost)")
+
+                        this.executeAndFlushActions()
+                        playerPos = player._cellPos
+                        playerMP = player._currMp
+                        playerTP = player._currTp
+                        currentWeaponId = getWeapon()
+                        debug("[" + debugPrefix + "] After boosted movement: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
+
+                        if (playerPos == reachableCell._id) {
+                            reachedWeaponCell = true
+                            bestWeaponCell = reachableCell
+                        }
+                    }
+                }
+
+                // Still no reachable cells - move toward enemy to close distance
+                if (reachableCell == null) {
+                    debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - moving toward enemy")
+                    if (playerMP > 0) {
+                        this.createMovementAction(Action.MOVEMENT_APPROACH, target._cellPos, target)
+                        this.executeAndFlushActions()
+                        playerPos = player._cellPos
+                        playerMP = player._currMp
+                        playerTP = player._currTp
+                        currentWeaponId = getWeapon()
+                        debug("[" + debugPrefix + "] After approach movement: pos=" + playerPos + " MP=" + playerMP)
+                    }
+                }
+            }
 
         } else if (pathLen > 0) {
             this.createMovementAction(Action.MOVEMENT_OFFENSIVE, bestWeaponCell._id, target)
@@ -318,6 +457,14 @@ class Strategy {
         }
 
         debug("[" + debugPrefix + "] After movement logic: reachedWeaponCell=" + reachedWeaponCell + " playerPos=" + playerPos + " playerMP=" + playerMP)
+
+        // Validate that current position has attack options (safety check)
+        if (!reachedWeaponCell && playerMP == 0) {
+            var curCellCheck = mapContainsKey(fieldMap.damageMap, playerPos) ? fieldMap.damageMap[playerPos] : null
+            if (curCellCheck == null || (count(curCellCheck._weaponsList) == 0 && count(curCellCheck._chipsList) == 0)) {
+                debug("[" + debugPrefix + "] WARNING: Ended at position " + playerPos + " with no attacks available!")
+            }
+        }
 
         // Primary weapon usage (only if we reached the weapon cell)
         var primaryWeapon = bestWeaponCell._highestDamageWeapon
@@ -462,14 +609,23 @@ class Strategy {
             }
         }
 
-        // Move away from the target using available MP (builtin API)
-        // Attempt hide-and-seek cell first (safer than a simple flee if available)
+        // FIGHTING RETREAT: Check flee path for damage cells, stop to attack if found
         var hns = fieldMap.findHideAndSeekCell()
         if (hns != null) {
             var hCell = hns['cell']
             if (hCell != player._cellPos) {
-                debug("[HNS] Executing defensive hide movement to cell " + hCell + " safe=" + hns['safe'] + " danger=" + hns['danger'])
-                this.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
+                // Check if there's a damage cell on the flee path
+                var damageCellOnPath = this.findBestDamageCellOnPath(hCell, player._currMp)
+
+                if (damageCellOnPath != null) {
+                    // Stop at damage cell to attack while fleeing
+                    debug("[FLEE-ATTACK] Stopping at damage cell " + damageCellOnPath._id + " on flee path (damage=" + damageCellOnPath._totalDamage + ")")
+                    this.createMovementAction(Action.MOVEMENT_HNS, damageCellOnPath._id, target)
+                } else {
+                    // No damage cells on path - flee directly to safe cell
+                    debug("[HNS] Executing defensive hide movement to cell " + hCell + " safe=" + hns['safe'] + " danger=" + hns['danger'])
+                    this.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
+                }
             } else {
                 debug("[HNS] Current cell already chosen as best hide cell (danger=" + hns['danger'] + ")")
             }
@@ -477,6 +633,9 @@ class Strategy {
             var usedMp = moveAwayFrom(target._id)
             debug("moveAwayFrom used MP: " + usedMp)
         }
+
+        // EXECUTE MOVEMENT IMMEDIATELY so we can validate weapons from actual position
+        this.executeAndFlushActions()
 
         // After moving, refresh
         player.updateEntity()
@@ -488,20 +647,60 @@ class Strategy {
 
         if (mapContainsKey(fieldMap.damageMap, playerPos)) {
             var cell = fieldMap.damageMap[playerPos]
-            if (cell._highestDamageWeapon != -1) {
-                var w = cell._highestDamageWeapon
-                var needSwap = (getWeapon() != w._id)
+
+            // Find best weapon that can ACTUALLY hit from current position
+            // (damage map may have stale weapon info if enemy moved)
+            var bestWeapon = null
+            var bestDamage = -1
+            var distToTarget = getCellDistance(playerPos, target._cellPos)
+
+            if (distToTarget != null && count(cell._weaponsList) > 0) {
+                for (var wIdx = 0; wIdx < count(cell._weaponsList); wIdx++) {
+                    var weapon = cell._weaponsList[wIdx]
+                    // Check if weapon can hit at current distance
+                    if (distToTarget >= weapon._minRange && distToTarget <= weapon._maxRange) {
+                        // Check line of sight
+                        if (lineOfSight(playerPos, target._cellPos)) {
+                            var dmg = arsenal.getScaledDamage(player._strength, player._magic, player._wisdom, weapon._id)
+                            if (dmg > bestDamage) {
+                                bestDamage = dmg
+                                bestWeapon = weapon
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bestWeapon != null) {
+                var needSwap = (getWeapon() != bestWeapon._id)
 
                 if (needSwap && playerTP >= 1) {
-                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, w._id, -1)
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, bestWeapon._id, -1)
                     playerTP -= 1
                 }
 
-                var useCount = w._maxUse
-                while (playerTP >= w._cost && useCount > 0) {
-                    this.createAttackAction(Action.ACTION_DIRECT, target, w._id, -1)
-                    playerTP -= w._cost
+                var useCount = bestWeapon._maxUse
+                while (playerTP >= bestWeapon._cost && useCount > 0) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, bestWeapon._id, -1)
+                    playerTP -= bestWeapon._cost
                     useCount -= 1
+                }
+            }
+        }
+
+        // Continue fleeing to original safe cell if we stopped at intermediate damage cell
+        // and still have MP remaining
+        if (hns != null) {
+            var finalSafeCell = hns['cell']
+            var currentPos = player._cellPos
+            var remainingMP = player._currMp
+
+            // If we're not at the final safe cell yet and have MP remaining
+            if (currentPos != finalSafeCell && remainingMP > 0) {
+                var distToSafe = getPathLength(currentPos, finalSafeCell)
+                if (distToSafe != null && distToSafe > 0) {
+                    debug("[FLEE-CONTINUE] Continuing flee to safe cell " + finalSafeCell + " (dist=" + distToSafe + ", MP=" + remainingMP + ")")
+                    this.createMovementAction(Action.MOVEMENT_HNS, finalSafeCell, target)
                 }
             }
         }

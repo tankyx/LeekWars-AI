@@ -373,6 +373,9 @@ class FieldMap {
 
         var enemies = this.getEnemySubMap()
         for (var e in enemies) {
+            // Skip dead enemies (Battle Royale fix)
+            if (isDead(e._id)) continue
+
             var dist = getCellDistance(playerPos, e._cellPos)
 
             if (dist < closestDist) {

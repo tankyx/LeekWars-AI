@@ -48,7 +48,7 @@ function init() {
 
     strategy.turnOneBuffs()
     var ops2 = getOperations()
-    debug("Init operations: " + (ops2 - ops1))
+    debugC("Init operations: " + (ops2 - ops1), COLOR_GREEN)
 }
 
 function main() {
@@ -59,21 +59,21 @@ function main() {
     player.updateEntity()
     fieldMap.updateMapEntities()
     ops2 = getOperations()
-    debug("Update entities operations: " + (ops2 - ops1))
+    debugC("Update entities operations: " + (ops2 - ops1), COLOR_GREEN)
     ops1 = getOperations()
     var target = fieldMap.getClosestEnemy()
     ops2 = getOperations()
-    debug("Get closest enemy operations: " + (ops2 - ops1))
+    debugC("Get closest enemy operations: " + (ops2 - ops1), COLOR_GREEN)
 
     ops1 = getOperations()
     fieldMap.buildHitMap(target._cellPos)
     ops2 = getOperations()
-    debug("Build hit map operations: " + (ops2 - ops1))
+    debugC("Build hit map operations: " + (ops2 - ops1), COLOR_GREEN)
 
     ops1 = getOperations()
     var targetHitCell = fieldMap.getBestWeaponOrChipCell();
     ops2 = getOperations()
-    debug("Get closest hit cell operations: " + (ops2 - ops1))
+    debugC("Get closest hit cell operations: " + (ops2 - ops1), COLOR_GREEN)
     if (targetHitCell != null && targetHitCell != -1) {
         debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))
     } else {
@@ -87,5 +87,5 @@ function main() {
         strategy.createAndExecuteScenario(target, targetHitCell)
     }
     ops2 = getOperations()
-    debug("Create and execute scenario operations: " + (ops2 - ops1))
+    debugC("Create and execute scenario operations: " + (ops2 - ops1), COLOR_GREEN)
 }
