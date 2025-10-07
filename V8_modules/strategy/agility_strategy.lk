@@ -37,29 +37,8 @@ class AgilityStrategy extends Strategy {
 
     // Check if CHIP_WARM_UP should be used (agility buff)
     shouldUseWarmUp() {
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP)) return false
-
-        var cooldown = getCooldown(CHIP_WARM_UP, getEntity())
-        if (cooldown > 0) return false
-
-        var playerTP = player._currTp
-        // Need 7 TP for warm-up + 5-7 for MIRROR/THORN + attacks (14 TP minimum)
-        if (playerTP < 14) return false
-
-        // Check if we already have agility buff active
-        var hasAgiBuff = player.hasEffect(EFFECT_BUFF_AGILITY)
-        if (hasAgiBuff) {
-            var buffRemaining = player.getEffectRemaining(EFFECT_BUFF_AGILITY)
-            if (buffRemaining > 1) {
-                debug("[WARM_UP] Agility buff active with " + buffRemaining + " turns remaining")
-                return false
-            }
-            debug("[WARM_UP] Agility buff expiring in " + buffRemaining + " turn(s) - reapplying")
-            return true
-        }
-
-        debug("[WARM_UP] No agility buff active - applying")
-        return true
+        // CHIP_WARM_UP: 7 TP cost, need 14 TP minimum (7 + 5-7 for MIRROR/THORN + attacks)
+        return this.shouldApplyStatBuff(CHIP_WARM_UP, EFFECT_BUFF_AGILITY, 14)
     }
 
 

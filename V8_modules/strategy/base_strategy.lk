@@ -4,9 +4,11 @@ class Strategy {
     _actions = []
     _playerTP = -1
     _fieldMap = null
+    _currentWeaponId = -1  // Track currently equipped weapon
 
     constructor() {
         this._playerTP = getTP()
+        this._currentWeaponId = getWeapon()
     }
 
     // Helper to centralize repeated distance and line-of-sight checks.
@@ -15,6 +17,24 @@ class Strategy {
         if (dist < minR || dist > maxR) return false
         if (!lineOfSight(fromCell, targetCell)) return false
         return true
+    }
+
+    // Validate attack geometry from position with item (weapon or chip)
+    // Returns: map with {valid: bool, distance: int}
+    // Use this for comprehensive item-aware validation
+    validateAttackGeometry(fromCell, targetCell, item) {
+        var dist = getCellDistance(fromCell, targetCell)
+        if (dist == null) return ['valid': false, 'distance': -1]
+
+        if (dist < item._minRange || dist > item._maxRange) {
+            return ['valid': false, 'distance': dist]
+        }
+
+        if (!lineOfSight(fromCell, targetCell)) {
+            return ['valid': false, 'distance': dist]
+        }
+
+        return ['valid': true, 'distance': dist]
     }
 
     // Helper to check if chip is available (equipped, off cooldown, sufficient TP)
@@ -85,6 +105,29 @@ class Strategy {
         }
 
         return false
+    }
+
+    // Generic stat buff check (consolidates STEROID, WARM_UP, etc.)
+    // chipId: CHIP_STEROID, CHIP_WARM_UP, etc.
+    // buffEffectId: EFFECT_BUFF_STRENGTH, EFFECT_BUFF_AGILITY, etc.
+    // minTP: minimum TP required (buff cost + attack reserve)
+    // minTurnsRemaining: reapply threshold (default 1)
+    shouldApplyStatBuff(chipId, buffEffectId, minTP, minTurnsRemaining = 1) {
+        if (!this.isChipAvailable(chipId)) return false
+
+        var playerTP = player._currTp
+        if (playerTP < minTP) return false
+
+        // Check if buff already active
+        if (player.hasEffect(buffEffectId)) {
+            var buffRemaining = player.getEffectRemaining(buffEffectId)
+            if (buffRemaining > minTurnsRemaining) {
+                return false  // Still active
+            }
+            return true  // Expiring soon, reapply
+        }
+
+        return true  // Not active, apply
     }
 
     // Get strategy name for debug logging (override in subclasses)
@@ -430,7 +473,7 @@ class Strategy {
     // Returns map with remaining MP/TP after combat
     // chipExclusionList: chips to exclude from damage chip usage (e.g., CHIP_MIRROR/THORN for agility)
     executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, chipExclusionList, debugPrefix) {
-        var currentWeaponId = getWeapon()  // Track currently equipped weapon
+        var currentWeaponId = this._currentWeaponId  // Use tracked weapon state
 
         // HNS-approach cell check (safer positioning)
         var hnsApproach = fieldMap.findApproachHideAndSeekCell(target)
@@ -840,6 +883,7 @@ class Strategy {
             else if (a.type == Action.ACTION_WEAPON_SWAP) {
                 debug("Swapping to weapon " + getWeaponName(a.weaponId))
                 setWeapon(a.weaponId)
+                this._currentWeaponId = a.weaponId  // Track weapon state
             }
             else if (a.type == Action.ACTION_DIRECT || a.type == Action.ACTION_DOT || a.type == Action.ACTION_DEBUFF) {
                 var currentPos = getCell()

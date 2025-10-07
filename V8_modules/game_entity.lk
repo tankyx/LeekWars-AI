@@ -71,25 +71,27 @@ class Entity {
         this._effectsActive = getEffects(this._id)
     }
 
-    hasEffect(effectId) {
-        if (this._effectsActive == null) return false
+    // Get full effect data for an effect ID
+    // Returns: [effectID, value, duration] or null if not active
+    getEffect(effectId) {
+        if (this._effectsActive == null) return null
         for (var e in this._effectsActive) {
-            if (e[0] == effectId) return true
+            if (e[0] == effectId) return e
         }
-        return false
+        return null
+    }
+
+    hasEffect(effectId) {
+        return this.getEffect(effectId) != null
     }
 
     getEffectRemaining(effectId) {
-        if (this._effectsActive == null) return 0
-        for (var e in this._effectsActive) {
-            if (e[0] == effectId) {
-                // Assume structure [effectID, value, remainingDuration]
-                if (count(e) >= 3) return e[2]
-                // Fallback if duration not present
-                return 1
-            }
-        }
-        return 0
+        var effect = this.getEffect(effectId)
+        if (effect == null) return 0
+        // Assume structure [effectID, value, remainingDuration]
+        if (count(effect) >= 3) return effect[2]
+        // Fallback if duration not present
+        return 1
     }
 
     // Check if entity has damage return buff active
@@ -119,14 +121,10 @@ class Entity {
 
     // Get effect value (not just duration)
     getEffectValue(effectId) {
-        if (this._effectsActive == null) return 0
-        for (var e in this._effectsActive) {
-            if (e[0] == effectId) {
-                // Assume structure [effectID, value, remainingDuration]
-                if (count(e) >= 2) return e[1]
-                return 0
-            }
-        }
+        var effect = this.getEffect(effectId)
+        if (effect == null) return 0
+        // Assume structure [effectID, value, remainingDuration]
+        if (count(effect) >= 2) return effect[1]
         return 0
     }
 }

@@ -1130,10 +1130,12 @@ class MagicStrategy extends Strategy {
                     var pc = recC['chip']
                     if (getCooldown(pc._id, player._id) > 0) { if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipCD=" + getChipName(pc._id)); continue }
                     if (remainingTP < pc._cost) { if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipTP=" + getChipName(pc._id)); continue }
-                    // Range/LOS sanity
-                    var distChip = getCellDistance(c._id, target._cellPos)
-                    if (distChip < pc._minRange || distChip > pc._maxRange) { if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipRange=" + getChipName(pc._id)); continue }
-                    if (!lineOfSight(c._id, target._cellPos)) { if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipLOS=" + getChipName(pc._id)); continue }
+                    // Range/LOS validation
+                    var validation = this.validateAttackGeometry(c._id, target._cellPos, pc)
+                    if (!validation['valid']) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipGeometry=" + getChipName(pc._id) + " dist=" + validation['distance'])
+                        continue
+                    }
                     var bdC2 = recC['bd']
                     var maxUsesChip2 = min(pc._maxUse, floor(remainingTP / pc._cost))
                     if (maxUsesChip2 <= 0) { if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipZeroUses=" + getChipName(pc._id)); continue }

@@ -186,29 +186,8 @@ class StrengthStrategy extends Strategy {
 
     // Check if CHIP_STEROID should be used (strength buff)
     shouldUseSteroid() {
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) return false
-
-        var cooldown = getCooldown(CHIP_STEROID, getEntity())
-        if (cooldown > 0) return false
-
-        var playerTP = player._currTp
-        // Need 7 TP for buff + at least 8 TP for meaningful attacks (15 TP minimum)
-        if (playerTP < 15) return false
-
-        // Check if we already have strength buff active
-        var hasStrBuff = player.hasEffect(EFFECT_BUFF_STRENGTH)
-        if (hasStrBuff) {
-            var buffRemaining = player.getEffectRemaining(EFFECT_BUFF_STRENGTH)
-            if (buffRemaining > 1) {
-                debug("[STEROID] Strength buff active with " + buffRemaining + " turns remaining")
-                return false
-            }
-            debug("[STEROID] Strength buff expiring in " + buffRemaining + " turn(s) - reapplying")
-            return true
-        }
-
-        debug("[STEROID] No strength buff active - applying")
-        return true
+        // CHIP_STEROID: 7 TP cost, need 15 TP minimum (7 + 8 for attacks)
+        return this.shouldApplyStatBuff(CHIP_STEROID, EFFECT_BUFF_STRENGTH, 15)
     }
 
 
