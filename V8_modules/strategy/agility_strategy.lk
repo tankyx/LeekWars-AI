@@ -148,7 +148,6 @@ class AgilityStrategy extends Strategy {
         // STEP 0: Apply CHIP_WARM_UP before damage return buff if needed
         if (this.shouldUseWarmUp()) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WARM_UP)
-            useChip(CHIP_WARM_UP, player._id)
             playerTP -= 7
             debug("[AGILITY] Applied CHIP_WARM_UP (+170-190 Agility for 3 turns)")
         }
@@ -156,7 +155,6 @@ class AgilityStrategy extends Strategy {
         // STEP 0.5: Check for CHIP_LEATHER_BOOTS if target cell unreachable
         if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
-            useChip(CHIP_LEATHER_BOOTS, player._id)
             playerTP -= 3
             playerMP += 2  // Immediate MP boost
             debug("[AGILITY] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
@@ -210,7 +208,6 @@ class AgilityStrategy extends Strategy {
         // STEP 2.5: Check if CHIP_ADRENALINE can help with weapon spam
         if (this.shouldUseAdrenaline(playerTP + 4)) {  // Check if +4 TP would enable more attacks
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
-            useChip(CHIP_ADRENALINE, player._id)
             playerTP -= 1
             playerTP += 5  // Net gain of 4 TP
             debug("[AGILITY][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")

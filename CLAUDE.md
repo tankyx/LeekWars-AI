@@ -218,24 +218,47 @@ Abstract base class providing:
 - `/V8_modules/strategy/agility_strategy.lk` (222 lines)
 
 #### **strategy/magic_strategy.lk** - Magic Builds
-**Philosophy:** DoT kiting and ranged control
+**Philosophy:** DoT kiting, burst combos, and poison attrition
 
 **Combat Flow:**
-1. Check for CHIP_KNOWLEDGE (wisdom/magic buff)
-2. Select best DoT cell (weighted 1.5x toward DoT damage)
-3. Apply DoT chips (CHIP_TOXIN, CHIP_VENOM, CHIP_PLAGUE)
-4. Use DoT weapons (WEAPON_FLAME_THROWER)
-5. Kite away from enemies (move to safe distance)
-6. Repeat if TP/MP remaining
+1. **Antidote Detection**: Track enemy antidote usage via poison duration changes
+   - Bait mode: Use weak poisons (TOXIN, FLAME_THROWER) to burn antidote cooldown
+   - Full offensive: After antidote used, apply strong poisons (COVID, PLAGUE)
+2. **Poison Attrition Mode**: If poison active and enemy vulnerable, hide instead of fighting
+   - Triggers when: poison will kill before antidote available, OR enemy HP < 30%, OR enemy HP < 50% with antidote on cooldown
+   - Skips all attacks, moves to Hide & Seek cell to avoid counterattack damage
+3. **GRAPPLE-COVID Combo** (range 3-8, requires horizontal/vertical alignment):
+   - GRAPPLE (4 TP): Pull enemy to range 1-2
+   - COVID (8 TP): Apply uncleansable poison (~450 damage over 7 turns)
+   - BOXING_GLOVE (2 TP): Push enemy away (max range 2-8 cells)
+   - BALL_AND_CHAIN (5 TP): Optional MP debuff if available
+   - Total: 14-19 TP burst combo
+4. **Weapon Spam First**: Use all weapon attacks before spending TP on chips
+5. **Poison Chips**: Apply remaining DoT chips (TOXIN, PLAGUE, VENOM)
+6. **Opportunistic Debuffs**: BALL_AND_CHAIN, FRACTURE with leftover TP
+7. **Kite/Hide**: Reposition to safe distance after attacks
 
 **Special Features:**
-- **DoT Priority**: Applies poison when enemy lacks effect or ≤ 1 turn remaining
-- **Kiting**: Moves away from enemies after each attack cycle
-- **Multi-cycle Combat**: Up to 2 attack-kite cycles per turn
+- **GRAPPLE-COVID Combo**: High-damage burst with pull → poison → push mechanics
+  - Immediate execution pattern (not queued) to handle position updates between chips
+  - BOXING_GLOVE only works on horizontal/vertical lines (NOT diagonals)
+  - Uses `lineOfSight()` to find valid push cells without obstacles
+  - BALL_AND_CHAIN optional (executes if equipped + off cooldown + 19 TP available)
+- **Antidote Baiting System**: Detects when enemy uses CHIP_ANTIDOTE by tracking poison duration
+  - Bait phase: Conserve strong poisons, use only TOXIN + FLAME_THROWER + DOUBLE_GUN
+  - Escalation: Switch to full offensive when antidote cooldown detected
+  - Smart detection: Tracks `prevPoisonRemaining` to catch early cleanses
+- **Poison Attrition Mode**: Defensive play when poison will secure kill
+  - Calculates `turnsBeforeAntidote = min(poisonRemaining, antidoteCooldown)`
+  - Estimates poison damage: `poisonDamagePerTurn * turnsBeforeAntidote`
+  - Hides if poison will kill before antidote can cleanse
+- **Weapon-First Execution**: Spams weapons to max uses BEFORE using chips
+  - Ignores poison plan's conservative weapon use estimates
+  - Ensures maximum TP expenditure on repeatable attacks
 - **Effect Tracking**: Uses `getEffects()` API for intelligent DoT management
 
 **Files:**
-- `/V8_modules/strategy/magic_strategy.lk` (lines TBD)
+- `/V8_modules/strategy/magic_strategy.lk` (~1,300 lines)
 
 #### **strategy/boss_strategy.lk** - Boss Fight Strategy (Skeleton)
 **Status:** Skeleton with TODO placeholders
@@ -322,6 +345,101 @@ Abstract base class providing:
   - agility_strategy.lk (already fixed)
 
 **Impact:** All strategies now properly spam chips until max uses or TP exhausted
+
+### 6. Magic Strategy Antidote Bait Loop Bug
+**Problem:**
+- Antidote detection logic reset to bait mode when antidote cooldown returned to 0 (lines 224-227)
+- Created infinite bait loop: bait → antidote used → detect cooldown ready → reset to bait mode
+- GRAPPLE-COVID combo never executed because strategy stayed in bait mode forever
+- PLAGUE incorrectly used in bait mode instead of being saved for full offensive
+
+**Solution:**
+- Removed reset-to-bait logic (lines 224-227) that forced `_baitMode[enemyId] = true` when `antidoteCD == 0`
+- Initialize bait mode only on first encounter, rely on escalation logic (lines 231-247) to exit
+- Removed CHIP_PLAGUE from `isBaitAllowedChip()` and bait mode logic
+- Bait mode now uses only: FLAME_THROWER + DOUBLE_GUN + TOXIN
+- Full offensive mode priorities: GRAPPLE-COVID combo FIRST (19 TP), then PLAGUE + weapons
+
+**Impact:** Magic strategy now correctly baits antidote, then executes GRAPPLE-COVID combo after antidote is detected on cooldown
+
+### 7. GRAPPLE-COVID Combo Implementation (December 2025)
+**Problem:**
+- GRAPPLE-COVID combo was planned but never executed correctly
+- Multiple issues: API function errors, stale position bugs, TP starvation, chip targeting failures
+
+**Solution - Multi-phase implementation:**
+
+**Phase 1: Combo Positioning System**
+- Added `findGrappleCovidCell()` to find optimal cells at range 3-8, on same line, with LOS
+- Uses `fieldMap.getAccessibleCells(player)` to get reachable cells within MP range
+- Scores cells preferring range 5-6 (middle of 3-8) and proximity to current position
+
+**Phase 2: Immediate Movement Execution**
+- Problem: Combo check happened from OLD position before movement executed
+- Solution: Added `executeAndFlushActions()` to move immediately when `shouldPrioritizeCombo = true`
+- Updates player position after movement, then checks combo availability from NEW position
+
+**Phase 3: TP Preservation**
+- Problem: LEATHER_BOOTS consumed 3 TP, leaving only 16/19 TP for combo
+- Solution: Skip LEATHER_BOOTS when `shouldPrioritizeCombo = true` to reserve full 19 TP
+
+**Phase 4: Optional BALL_AND_CHAIN**
+- Problem: BALL_AND_CHAIN cooldown blocked entire combo execution
+- Solution: Made BALL_AND_CHAIN optional
+  - Core combo: GRAPPLE + COVID + BOXING_GLOVE (14 TP minimum)
+  - Include BALL_AND_CHAIN only if equipped + off cooldown + 19 TP available
+  - Dynamically check at execution time, skip with debug log if unavailable
+
+**Phase 5: Immediate Chip Execution Pattern**
+- Problem: Queued actions had stale target positions after GRAPPLE moved enemy
+- Solution: Changed from queue pattern to immediate execution
+  - Execute GRAPPLE → update enemy position with `target.updateEntity()`
+  - Execute COVID on new position → Execute BOXING_GLOVE → Execute BALL_AND_CHAIN
+  - Each chip executes immediately, ensuring correct target cells
+
+**Phase 6: BOXING_GLOVE Horizontal/Vertical Alignment**
+- Problem: BOXING_GLOVE only works on horizontal OR vertical lines (NOT diagonals)
+- Solution: Added alignment detection
+  - Check `enemyY == playerY` (horizontal) or `enemyX == playerX` (vertical)
+  - Calculate push direction: away from player along same line
+  - Find furthest valid cell (8 cells max) with `lineOfSight()` to avoid obstacles
+  - Logs error if enemy not on horizontal/vertical line after GRAPPLE
+
+**Phase 7: Weapon Spam Execution Order**
+- Problem: Poison plan limited weapons to 1 use, then spent TP on chips, leaving 10 TP unused
+- Solution: Reordered execution in `createFullOffensiveDoT()`
+  - Spam weapons FIRST to max uses (ignore poison plan's conservative values)
+  - THEN use poison chips with remaining TP
+  - Ensures maximum TP expenditure on repeatable attacks before one-time chips
+
+**Phase 8: Poison Attrition Mode**
+- Problem: AI continued fighting even when poison would secure kill, taking unnecessary damage
+- Solution: Added defensive play when poison will win
+  - Calculate `turnsBeforeAntidote = min(poisonRemaining, antidoteCooldown)`
+  - Estimate `poisonDamageBeforeAntidote = poisonDamagePerTurn * turnsBeforeAntidote`
+  - Enter attrition mode if:
+    1. Poison will kill before antidote available OR
+    2. Enemy HP < 30% (very low) OR
+    3. Enemy HP < 50% AND antidote on cooldown
+  - Skip all attacks, move to Hide & Seek cell, let poison finish enemy
+
+**Impact:**
+- GRAPPLE-COVID combo now executes reliably (14-19 TP burst)
+- Weapons spam to max uses before chips
+- AI plays defensively when poison will secure kill, improving survival rate
+
+---
+
+## Development Workflow
+
+**IMPORTANT:** Code updates and testing are performed manually by the user:
+1. User edits files in `/V8_modules/` directory locally
+2. User manually uploads updated code to LeekWars website (AI editor)
+3. User runs test fights through LeekWars interface
+4. User reviews fight logs and provides feedback to Claude
+5. Claude analyzes logs and suggests fixes, user implements changes
+
+**Note:** Python automation scripts (`upload_v8.py`, `lw_test_script.py`) are NOT used. All uploads and testing done manually through LeekWars web interface.
 
 ---
 
@@ -479,6 +597,6 @@ python3 tools/lw_test_script.py 446029 20 domingo
 
 ---
 
-*Document Version: 16.0*
-*Last Updated: October 2025*
-*Status: V8 System Active - Architecture Documentation Complete*
+*Document Version: 17.0*
+*Last Updated: December 2025*
+*Status: V8 System Active - GRAPPLE-COVID Combo & Poison Attrition Mode Implemented*

@@ -22,6 +22,7 @@ class Action {
     static MOVEMENT_FLEE = 11
     static MOVEMENT_HNS = 12 // Hide and Seek
     static MOVEMENT_PAB = 13 // Peek-a-Boo
+    static ACTION_TELEPORT = 14 // Teleportation (targets cell, not entity)
 
     type = -1
     weaponId = -1

@@ -101,6 +101,34 @@ class Entity {
     getDamageReturnRemaining() {
         return this.getEffectRemaining(EFFECT_DAMAGE_RETURN)
     }
+
+    // Check if entity is invulnerable (boss fight Protection divine)
+    // Invulnerability is indicated by absolute shield effect or specific invulnerability buff
+    isInvulnerable() {
+        // Check for absolute shield at max value (indicates invulnerability)
+        if (this._absShield >= 9999) return true
+
+        // Check for invulnerability effect (EFFECT_ABSOLUTE_SHIELD at high values)
+        if (this.hasEffect(EFFECT_ABSOLUTE_SHIELD)) {
+            var shieldValue = this.getEffectValue(EFFECT_ABSOLUTE_SHIELD)
+            if (shieldValue >= 9999) return true
+        }
+
+        return false
+    }
+
+    // Get effect value (not just duration)
+    getEffectValue(effectId) {
+        if (this._effectsActive == null) return 0
+        for (var e in this._effectsActive) {
+            if (e[0] == effectId) {
+                // Assume structure [effectID, value, remainingDuration]
+                if (count(e) >= 2) return e[1]
+                return 0
+            }
+        }
+        return 0
+    }
 }
 
 class Player extends Entity {

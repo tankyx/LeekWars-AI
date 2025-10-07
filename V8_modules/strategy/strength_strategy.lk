@@ -48,7 +48,6 @@ class StrengthStrategy extends Strategy {
             // Check if CHIP_ADRENALINE can bridge the gap
             if (this.shouldUseAdrenaline(15)) {  // Need at least 15 TP for meaningful OTKO
                 this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
-                useChip(CHIP_ADRENALINE, player._id)
                 playerTP -= 1
                 playerTP += 5  // Net gain of 4 TP
                 debug("[OTKO][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
@@ -66,7 +65,6 @@ class StrengthStrategy extends Strategy {
 
         // Execute teleportation
         this.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_TELEPORTATION)
-        useChip(CHIP_TELEPORTATION, teleCell)
         playerTP -= 9
 
         // Update simulated player position
@@ -317,7 +315,6 @@ class StrengthStrategy extends Strategy {
         // PRIORITY 2: Apply CHIP_STEROID before combat if needed
         if (this.shouldUseSteroid()) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_STEROID)
-            useChip(CHIP_STEROID, player._id)
             player._currTp -= 7
             debug("[STR] Applied CHIP_STEROID (+150-170 Strength for 3 turns)")
         }
@@ -325,7 +322,6 @@ class StrengthStrategy extends Strategy {
         // PRIORITY 3: Check for CHIP_LEATHER_BOOTS if target cell unreachable
         if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
-            useChip(CHIP_LEATHER_BOOTS, player._id)
             player._currTp -= 3
             player._currMp += 2  // Immediate MP boost
             debug("[STR] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")

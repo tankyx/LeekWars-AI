@@ -563,16 +563,20 @@ class Strategy {
                 setWeapon(a.weaponId)
             }
             else if (a.type == Action.ACTION_DIRECT || a.type == Action.ACTION_DOT || a.type == Action.ACTION_DEBUFF) {
-                debug("Executing attack action on target cell " + a.targetCell + " with weapon " + getWeaponName(a.weaponId))
                 var currentPos = getCell()
                 var currentWeap = getWeapon()
                 var targetPos = a.targetCell
                 var dist = getCellDistance(currentPos, targetPos)
-                debug("Attack details: pos=" + currentPos + " weapon=" + getWeaponName(currentWeap) + " target=" + targetPos + " dist=" + dist + " TP=" + getTP())
+
+                // Debug action contents
+                debug("Executing attack action: type=" + a.type + " weaponId=" + a.weaponId + " chip=" + a.chip + " targetCell=" + a.targetCell)
+
                 if (a.chip != -1) {
+                    debug("Using chip " + getChipName(a.chip) + " on cell " + a.targetCell + " (TP=" + getTP() + ")")
                     useChipOnCell(a.chip, a.targetCell)
                 }
                 else {
+                    debug("Using weapon " + getWeaponName(a.weaponId) + " on cell " + a.targetCell + " (pos=" + currentPos + " dist=" + dist + " TP=" + getTP() + ")")
                     useWeaponOnCell(a.targetCell)
                 }
             }
@@ -580,6 +584,12 @@ class Strategy {
                 debug("Executing buff/utility chip " + getChipName(a.chip) + " on entity " + getName(a.targetEntity._id))
                 if (a.chip != -1) {
                     useChip(a.chip, a.targetEntity._id)
+                }
+            }
+            else if (a.type == Action.ACTION_TELEPORT) {
+                debug("Executing teleportation to cell " + a.targetCell)
+                if (a.chip == CHIP_TELEPORTATION) {
+                    useChip(a.chip, a.targetCell)
                 }
             }
         }

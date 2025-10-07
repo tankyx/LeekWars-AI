@@ -307,4 +307,31 @@ class Arsenal {
 
         return highestDmgWeapon
     }
+
+    // Calculate scaled damage return value based on agility
+    // Formula: FinalReturn = BaseReturn * (1 + Agility / 100)
+    getDamageReturnValue(agility, chipID) {
+        var baseMin = 0
+        var baseMax = 0
+
+        if (chipID == CHIP_MIRROR) {
+            baseMin = 5
+            baseMax = 6
+        } else if (chipID == CHIP_THORN) {
+            baseMin = 3
+            baseMax = 4
+        } else {
+            return 0
+        }
+
+        var baseAvg = (baseMin + baseMax) / 2.0
+        return baseAvg * (1 + agility / 100.0)
+    }
+
+    // Estimate total return damage per turn based on expected enemy DPS
+    // This helps prioritize return chip application
+    estimateReturnDamagePerTurn(agility, chipID, estimatedEnemyDPS) {
+        var returnPct = this.getDamageReturnValue(agility, chipID) / 100.0
+        return estimatedEnemyDPS * returnPct
+    }
 }

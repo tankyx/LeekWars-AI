@@ -110,7 +110,22 @@ class FieldMap {
                     }
                 }
                 else {
-                    mapPut(this.entities, entID, new Enemy(i))
+                    // Check if this is a boss fight entity (Grail or Crystal) by name
+                    var entityName = getName(entID)
+
+                    // Grail: exact name 'graal'
+                    if (entityName == "graal") {
+                        mapPut(this.entities, entID, new Enemy(i))
+                        debug("[ENTITY] Graal detected at cell " + i + " (ID: " + entID + ")")
+                    }
+                    // Crystals: exact names with color
+                    else if (entityName == "red_crystal" || entityName == "green_crystal" || entityName == "blue_crystal" || entityName == "yellow_crystal") {
+                        mapPut(this.entities, entID, new Enemy(i))
+                        debug("[ENTITY] Crystal '" + entityName + "' detected at cell " + i + " (ID: " + entID + ")")
+                    }
+                    else {
+                        mapPut(this.entities, entID, new Enemy(i))
+                    }
                 }
             }
 
