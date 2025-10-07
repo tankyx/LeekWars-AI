@@ -898,16 +898,28 @@ class Strategy {
         var enemyHP = getLife(target._id)
         var playerTP = player._currTp
 
-        // Rough estimate: assume we can deal ~150 damage with 15+ TP (weapon spam + chips)
-        // This is conservative - actual damage often higher
-        if (playerTP >= 15 && enemyHP < 500) {
-            debug("[LETHAL] Enemy low HP (HP=" + enemyHP + ") with available TP=" + playerTP + " - prioritizing kill")
+        // Aggressive thresholds based on weapon spam potential
+        // High TP (20+): Can spam multiple weapons for ~1800+ damage
+        if (playerTP >= 20 && enemyHP < 2000) {
+            debug("[LETHAL] High TP (TP=" + playerTP + ") enemy killable (HP=" + enemyHP + ") - prioritizing kill")
             return true
         }
 
-        // Very low HP enemies (< 200) killable with less TP
-        if (playerTP >= 8 && enemyHP < 200) {
-            debug("[LETHAL] Enemy very low HP (HP=" + enemyHP + ") with TP=" + playerTP + " - prioritizing kill")
+        // Medium TP (15-19): Can do ~1200-1500 damage with weapon spam
+        if (playerTP >= 15 && enemyHP < 1500) {
+            debug("[LETHAL] Medium TP (TP=" + playerTP + ") enemy low HP (HP=" + enemyHP + ") - prioritizing kill")
+            return true
+        }
+
+        // Low-medium TP (10-14): ~800-1000 damage potential
+        if (playerTP >= 10 && enemyHP < 1000) {
+            debug("[LETHAL] Enemy medium HP (HP=" + enemyHP + ") with TP=" + playerTP + " - prioritizing kill")
+            return true
+        }
+
+        // Low TP (5-9): ~400-600 damage
+        if (playerTP >= 5 && enemyHP < 600) {
+            debug("[LETHAL] Enemy low HP (HP=" + enemyHP + ") with low TP=" + playerTP + " - prioritizing kill")
             return true
         }
 
