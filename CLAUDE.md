@@ -271,22 +271,58 @@ Abstract base class providing:
 **Files:**
 - `/V8_modules/strategy/magic_strategy.lk` (~1,300 lines)
 
-#### **strategy/boss_strategy.lk** - Boss Fight Strategy (Skeleton)
-**Status:** Skeleton with TODO placeholders
+#### **strategy/boss_strategy.lk** - Boss Fight Strategy
+**Philosophy:** Coordinate team to solve crystal alignment puzzle, then engage in Phase 2 combat
 
-**Planned Features:**
-- Boss fight detection (Grail + 4 crystals)
-- Crystal puzzle solving (align colored rays to Grail gems)
-- Team coordination (1 puzzle solver + 3 distraction team)
-- CHIP_TELEPORTATION, CHIP_GRAPPLE, CHIP_BOXING_GLOVE, CHIP_INVERSION usage
+**Boss Fight Mechanics:**
+- **Grail** (center): Boss entity with 4 colored gems (red, green, blue, yellow)
+- **4 Crystals**: Movable entities that project colored rays
+  - Red crystal: Projects North ray → must be SOUTH of grail (below, same X)
+  - Blue crystal: Projects West ray → must be EAST of grail (right, same Y)
+  - Yellow crystal: Projects East ray → must be WEST of grail (left, same Y)
+  - Green crystal: Projects South ray → must be NORTH of grail (above, same X)
+- **Objective**: Align all 4 crystals to project rays onto matching grail gems → Grail self-destructs → Phase 2 combat
 
-**Current State:**
-- All methods stubbed with TODO comments
-- Falls back to `super.createOffensiveScenario()` for combat
-- Ready for future implementation
+**Combat Flow:**
+1. **Boss Detection**: `detectBossFight()` checks if grail entity present
+2. **Team Coordination**: Uses `getEntityTurnOrder()` to assign roles
+   - Get all allies with `getAllies()`
+   - Sort by turn order using bubble sort
+   - Assign crystals by relative position: 0→red, 1→blue, 2→yellow, 3→green
+   - Wraps around for 5+ allies (position % 4)
+3. **Phase 1 - Puzzle Solving**:
+   - Each leek moves their assigned crystal toward alignment
+   - Uses GRAPPLE (3-8 range, 3 TP) to pull crystals closer
+   - Uses BOXING_GLOVE (2-8 range, 2 TP) to push crystals away
+   - Repositions to optimal cells (on same horizontal/vertical line as crystal)
+   - Repeats until crystal aligned
+4. **Phase 2 - Combat**: After grail destroyed, all leeks fight normally using build-specific strategies
+
+**Crystal Movement System:**
+- **Path Visualization**: Each leek marks their crystal's path with `mark(cell, color)` (0=red, 1=blue, 2=green, 3=yellow)
+- **Alignment Validation**: `checkCrystalAlignment()` verifies crystal is on correct cardinal direction from grail
+- **Chip Selection Logic**:
+  - Calculate `shouldPull = crystalToTarget > playerToTarget`
+  - If true: use GRAPPLE to pull crystal closer to player (and closer to target)
+  - If false: use BOXING_GLOVE to push crystal away from player (toward target)
+- **Push Calculation**: Searches for furthest valid cell (8 cells max from crystal) with LOS from crystal position
+- **Pull Calculation**: Pulls to cell at distance 2 from player toward crystal (for BOXING_GLOVE min range)
+- **Critical Fix**: LOS validation from CRYSTAL to destination (not player to destination)
+- **One Chip Per Turn**: Chip effects execute at turn end, so crystal position only updates next turn
+
+**Positioning Helpers:**
+- `canUseMoveChipOnCrystal()`: Checks if player can use chip from current position (range 2-8, on same line)
+- `findOptimalMoveChipPosition()`: Finds best position to use GRAPPLE/BOXING_GLOVE (distance 3-8, on same horizontal/vertical line)
+- Initial repositioning: Moves to optimal cell before attempting chip use
+- Fallback movement: If no optimal cell reachable, moves toward crystal (will reposition next turn)
+
+**Team Role Assignment (Currently Unused):**
+- All leeks work on crystals (no dedicated combat specialists)
+- Role system exists but assigns all as puzzle solvers
+- Future enhancement: Could designate 1 combat specialist for Phase 2 preparation
 
 **Files:**
-- `/V8_modules/strategy/boss_strategy.lk` (162 lines)
+- `/V8_modules/strategy/boss_strategy.lk` (~710 lines)
 
 ---
 
@@ -696,6 +732,6 @@ python3 tools/lw_test_script.py 446029 20 domingo
 
 ---
 
-*Document Version: 19.0*
+*Document Version: 20.0*
 *Last Updated: January 2026*
-*Status: V8 System Active - GRAPPLE-COVID Combo, AoE Self-Damage Prevention, Antidote Baiting*
+*Status: V8 System Active - Boss Fight Strategy, GRAPPLE-COVID Combo, AoE Self-Damage Prevention*

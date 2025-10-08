@@ -11,6 +11,11 @@ class Strategy {
         this._currentWeaponId = getWeapon()
     }
 
+    // Override in subclasses to disable damage map building (e.g., boss fights)
+    shouldBuildDamageMap() {
+        return true
+    }
+
     // Helper to centralize repeated distance and line-of-sight checks.
     inRangeAndLOS(fromCell, targetCell, minR, maxR) {
         var dist = getCellDistance(fromCell, targetCell)

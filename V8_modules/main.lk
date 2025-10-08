@@ -57,14 +57,20 @@ function main() {
     // Fallback to closest if priority selection fails
     if (target == null) target = fieldMap.getClosestEnemy()
 
-    fieldMap.buildHitMap(target._cellPos)
+    var targetHitCell = null
 
-    var targetHitCell = fieldMap.getBestWeaponOrChipCell();
+    // Build damage map only if strategy requires it (skip for boss fights)
+    if (strategy.shouldBuildDamageMap()) {
+        fieldMap.buildHitMap(target._cellPos)
+        targetHitCell = fieldMap.getBestWeaponOrChipCell();
 
-    if (targetHitCell != null && targetHitCell != -1) {
-        debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))
+        if (targetHitCell != null && targetHitCell != -1) {
+            debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))
+        } else {
+            debug("No valid attack cell found")
+        }
     } else {
-        debug("No valid attack cell found")
+        debug("Skipping damage map build (not required for current strategy)")
     }
 
     if (strategy instanceof MagicStrategy) {
