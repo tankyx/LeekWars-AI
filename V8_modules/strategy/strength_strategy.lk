@@ -461,6 +461,54 @@ class StrengthStrategy extends Strategy {
         return false
     }
 
+    // Check if two cells are on same horizontal or vertical line
+    isOnSameLine(cell1, cell2) {
+        var x1 = getCellX(cell1)
+        var y1 = getCellY(cell1)
+        var x2 = getCellX(cell2)
+        var y2 = getCellY(cell2)
+        return (x1 == x2 || y1 == y2)  // Horizontal OR vertical
+    }
+
+    // Find optimal cell for GRAPPLE-HEAVY_SWORD combo (range 2-8, same line, LOS)
+    findGrappleHeavySwordCell(target) {
+        var bestCell = -1
+        var bestScore = -1
+
+        var reachableCells = fieldMap.getAccessibleCells(player)
+        for (var i = 0; i < count(reachableCells); i++) {
+            var cell = reachableCells[i]
+            var dist = getCellDistance(cell, target._cellPos)
+
+            // Must be in GRAPPLE range (2-8)
+            if (dist == null || dist < 2 || dist > 8) continue
+
+            // Must be on same horizontal/vertical line (GRAPPLE is laser, not diagonal)
+            if (!this.isOnSameLine(cell, target._cellPos)) continue
+
+            // Must have line of sight
+            if (!lineOfSight(cell, target._cellPos)) continue
+
+            // Score: prefer mid-range (4-6 sweet spot), closer to current position
+            var rangePenalty = abs(dist - 5) * 5  // Penalize distance from range 5
+            var distFromCurrent = getCellDistance(player._cellPos, cell)
+            if (distFromCurrent == null) continue
+
+            var score = 100 - rangePenalty - distFromCurrent
+
+            if (score > bestScore) {
+                bestScore = score
+                bestCell = cell
+            }
+        }
+
+        if (bestCell != -1) {
+            debug("[STR][GRAPPLE-HS] Found combo position: cell " + bestCell + " (score=" + bestScore + ")")
+        }
+
+        return bestCell
+    }
+
     // Check if GRAPPLE-HEAVY_SWORD combo should be used
     shouldUseGrappleHeavySword(target) {
         // Check if HEAVY_SWORD equipped
@@ -501,12 +549,19 @@ class StrengthStrategy extends Strategy {
                 return false
             }
 
+            // Check horizontal/vertical alignment (GRAPPLE is laser, not diagonal)
+            var aligned = this.isOnSameLine(player._cellPos, target._cellPos)
+            if (!aligned) {
+                debug("[STR][GRAPPLE-HS] Not on same line (diagonal), can't use GRAPPLE")
+                return false
+            }
+
             if (!lineOfSight(player._cellPos, target._cellPos)) {
                 debug("[STR][GRAPPLE-HS] No line of sight to enemy")
                 return false
             }
 
-            debug("[STR][GRAPPLE-HS] Combo ready: enemy at range " + dist + ", TP=" + playerTP)
+            debug("[STR][GRAPPLE-HS] Combo ready: aligned, range " + dist + ", TP=" + playerTP)
             return true
         }
 
@@ -646,6 +701,39 @@ class StrengthStrategy extends Strategy {
             player._currTp -= 3
             player._currMp += 2  // Immediate MP boost
             debug("[STR] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
+        }
+
+        // PRIORITY 8.4: Position for GRAPPLE-HEAVY_SWORD combo (proactive movement)
+        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD) &&
+            mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
+            getCooldown(CHIP_GRAPPLE, getEntity()) == 0 &&
+            player._currTp >= 18) {
+
+            var currentDist = getCellDistance(player._cellPos, target._cellPos)
+            var currentlyAligned = this.isOnSameLine(player._cellPos, target._cellPos)
+
+            // Only search for position if NOT already in combo range + aligned
+            if (currentDist == null || currentDist > 8 || currentDist < 2 || !currentlyAligned) {
+                debug("[STR][GRAPPLE-HS] Not in combo position (dist=" + currentDist + " aligned=" + currentlyAligned + "), searching for better cell")
+                var comboCell = this.findGrappleHeavySwordCell(target)
+
+                if (comboCell != -1) {
+                    var pathLen = getPathLength(player._cellPos, comboCell)
+                    if (pathLen != null && pathLen <= player._currMp) {
+                        debug("[STR][GRAPPLE-HS] Moving to combo position: cell " + comboCell + " (cost: " + pathLen + " MP)")
+                        this.createMovementAction(Action.MOVEMENT_APPROACH, comboCell, target)
+                        player._currMp -= pathLen
+                        player._cellPos = comboCell  // Update virtual position for combo execution
+                        debug("[STR][GRAPPLE-HS] Repositioned successfully, ready for combo")
+                    } else {
+                        debug("[STR][GRAPPLE-HS] Combo cell too far (pathLen=" + pathLen + " MP=" + player._currMp + ")")
+                    }
+                } else {
+                    debug("[STR][GRAPPLE-HS] No valid combo position found")
+                }
+            } else {
+                debug("[STR][GRAPPLE-HS] Already in combo range (dist=" + currentDist + "), will execute directly")
+            }
         }
 
         // PRIORITY 8.5: GRAPPLE-HEAVY_SWORD combo (pull enemy + apply vulnerability)
