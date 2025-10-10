@@ -68,7 +68,9 @@ class StrengthStrategy extends Strategy {
         debug("[OTKO] Executing teleport OTKO to cell " + teleCell + " projected damage: " + teleportInfo['damage'])
 
         // Execute teleportation
-        this.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_TELEPORTATION)
+        this.createAttackAction(Action.ACTION_TELEPORT, target, -1, CHIP_TELEPORTATION)
+        // Override targetCell to teleport destination (not target's position)
+        this._actions[count(this._actions) - 1].targetCell = teleCell
         playerTP -= 9
 
         // Update simulated player position
@@ -193,6 +195,21 @@ class StrengthStrategy extends Strategy {
         if (!this.validateTPBudget(7)) return false
 
         return true
+    }
+
+    // Check if player is in combat range (any enemy within distance 8)
+    isInCombatRange() {
+        var enemies = fieldMap.getEnemySubMap()
+        for (var e in enemies) {
+            if (isDead(e._id)) continue
+            var dist = getCellDistance(player._cellPos, e._cellPos)
+            if (dist != null && dist <= 8) {
+                debug("[STR][COMBAT-RANGE] Enemy ID=" + e._id + " at distance " + dist + " (in combat range)")
+                return true
+            }
+        }
+        debug("[STR][COMBAT-RANGE] No enemies within distance 8 (not in combat)")
+        return false
     }
 
     // Check if CHIP_ANTIDOTE should be used (poison removal + heal)
@@ -334,11 +351,13 @@ class StrengthStrategy extends Strategy {
             if (remaining > 1) return false  // Already have defensive buff active
         }
 
-        // Use when HP below 50%
-        var hpPercent = (player._currHealth * 100) / player._maxHealth
-        if (hpPercent >= 50) return false
+        // Use when in combat range (enemy within distance 8)
+        if (!this.isInCombatRange()) {
+            debug("[STR][FORTRESS] Not in combat range, skipping FORTRESS")
+            return false
+        }
 
-        debug("[STR][FORTRESS] HP at " + hpPercent + "%, should use FORTRESS")
+        debug("[STR][FORTRESS] In combat range, should use FORTRESS")
         return true
     }
 
@@ -364,11 +383,13 @@ class StrengthStrategy extends Strategy {
             if (remaining > 1) return false  // Already have defensive buff active
         }
 
-        // Use when HP below 60% (higher threshold than FORTRESS since it's weaker)
-        var hpPercent = (player._currHealth * 100) / player._maxHealth
-        if (hpPercent >= 60) return false
+        // Use when in combat range (enemy within distance 8)
+        if (!this.isInCombatRange()) {
+            debug("[STR][WALL] Not in combat range, skipping WALL")
+            return false
+        }
 
-        debug("[STR][WALL] HP at " + hpPercent + "%, should use WALL")
+        debug("[STR][WALL] In combat range, should use WALL")
         return true
     }
 
