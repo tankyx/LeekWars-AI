@@ -417,10 +417,11 @@ class StrengthStrategy extends Strategy {
         var hasPoison = player.hasEffect(EFFECT_POISON)
         var poisonRemaining = player.getEffectRemaining(EFFECT_POISON)
 
-        // Priority 3: Remove enemy buffs/shields
+        // Priority 3: Remove enemy buffs/shields/damage return
         var enemyShielded = target._relShield > 15 || target._absShield > 30
+        var enemyHasDamageReturn = target.hasEffect(EFFECT_DAMAGE_RETURN)
 
-        // Use if we have critical debuffs OR poison with 3+ turns OR enemy heavily shielded
+        // Use if we have critical debuffs OR poison with 3+ turns OR enemy heavily buffed
         if (hasDebuff) {
             debug("[LIBERATION] Should use to remove player debuffs")
             return true
@@ -431,6 +432,10 @@ class StrengthStrategy extends Strategy {
         }
         if (enemyShielded) {
             debug("[LIBERATION] Should use to strip enemy shields (rel: " + target._relShield + "%, abs: " + target._absShield + ")")
+            return true
+        }
+        if (enemyHasDamageReturn) {
+            debug("[LIBERATION] Should use to strip enemy damage return")
             return true
         }
 
