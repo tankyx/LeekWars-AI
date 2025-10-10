@@ -214,19 +214,34 @@ class StrengthStrategy extends Strategy {
 
     // Check if CHIP_ANTIDOTE should be used (poison removal + heal)
     shouldUseAntidote() {
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_ANTIDOTE)) return false
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_ANTIDOTE)) {
+            debug("[STR][ANTIDOTE] Not equipped")
+            return false
+        }
 
         var cooldown = getCooldown(CHIP_ANTIDOTE, getEntity())
-        if (cooldown > 0) return false
+        if (cooldown > 0) {
+            debug("[STR][ANTIDOTE] On cooldown: " + cooldown + " turns")
+            return false
+        }
 
         var playerTP = player._currTp
-        if (playerTP < 9) return false  // 3 TP for ANTIDOTE + 6 minimum for attacks
+        if (playerTP < 3) {
+            debug("[STR][ANTIDOTE] Insufficient TP: " + playerTP + " < 3")
+            return false
+        }
 
         // Check if poisoned
-        if (!player.hasEffect(EFFECT_POISON)) return false
+        if (!player.hasEffect(EFFECT_POISON)) {
+            debug("[STR][ANTIDOTE] Not poisoned")
+            return false
+        }
 
         var poisonRemaining = player.getEffectRemaining(EFFECT_POISON)
-        if (poisonRemaining < 2) return false  // Not worth it for 1 turn of poison
+        if (poisonRemaining < 2) {
+            debug("[STR][ANTIDOTE] Poison too weak: " + poisonRemaining + " turns remaining")
+            return false
+        }
 
         debug("[STR][ANTIDOTE] Poisoned with " + poisonRemaining + " turns remaining, should use ANTIDOTE")
         return true
@@ -454,7 +469,16 @@ class StrengthStrategy extends Strategy {
             targetHitCell = fieldMap.buildHitMap(chest._cellPos)
         }
 
-        // PRIORITY 2: CHIP_THERAPY - Emergency healing (HP < 40%)
+        // PRIORITY 2: CHIP_ANTIDOTE - Remove poison FIRST (ongoing damage removal > one-time heal)
+        if (this.shouldUseAntidote()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ANTIDOTE)
+            // Target self
+            this._actions[count(this._actions) - 1].targetCell = player._cellPos
+            player._currTp -= 3
+            debug("[STR] Applied CHIP_ANTIDOTE (remove poison + 25-35 HP heal)")
+        }
+
+        // PRIORITY 3: CHIP_THERAPY - Emergency healing (HP < 40%)
         if (this.shouldUseTherapy()) {
             var therapyTarget = this.findTherapyTarget()
             if (therapyTarget != null) {
@@ -466,15 +490,6 @@ class StrengthStrategy extends Strategy {
             }
         }
 
-        // PRIORITY 3: CHIP_ANTIDOTE - Remove poison (clears poison + 25-35 HP heal)
-        if (this.shouldUseAntidote()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ANTIDOTE)
-            // Target self
-            this._actions[count(this._actions) - 1].targetCell = player._cellPos
-            player._currTp -= 3
-            debug("[STR] Applied CHIP_ANTIDOTE (remove poison + 25-35 HP heal)")
-        }
-
         // PRIORITY 4: CHIP_INVERSION - Hybrid heal + damage setup (HP < 60%)
         if (this.shouldUseInversion(target)) {
             this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_INVERSION)
@@ -484,7 +499,7 @@ class StrengthStrategy extends Strategy {
             debug("[STR] Applied CHIP_INVERSION (50 HP heal + 20% vulnerability on enemy)")
         }
 
-        // PRIORITY 5: CHIP_FORTRESS - Defensive buff (HP < 50%, no poison)
+        // PRIORITY 5: CHIP_FORTRESS - Defensive buff (in combat range, no poison)
         if (this.shouldUseFortress()) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_FORTRESS)
             // Target self
@@ -493,7 +508,7 @@ class StrengthStrategy extends Strategy {
             debug("[STR] Applied CHIP_FORTRESS (7-8% damage reduction for 3 turns)")
         }
 
-        // PRIORITY 6: CHIP_WALL - Weaker defensive buff (HP < 60%, no poison, fallback)
+        // PRIORITY 6: CHIP_WALL - Weaker defensive buff (in combat range, no poison, fallback)
         if (this.shouldUseWall()) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WALL)
             // Target self
