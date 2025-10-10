@@ -631,6 +631,9 @@ class StrengthStrategy extends Strategy {
     // Override offensive scenario for Strength builds: always prioritize weapons (highest weapon damage cell)
     // Only after exhausting primary + secondary weapons do we spend leftover TP on damage chips (sorted by per-use damage desc).
     createOffensiveScenario(target, targetHitCell) {
+        // Track whether GRAPPLE-HEAVY_SWORD combo was executed
+        var comboExecuted = false
+
         // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
         var chest = fieldMap.getClosestChest()
         if (chest != null) {
@@ -750,6 +753,7 @@ class StrengthStrategy extends Strategy {
         if (this.shouldUseGrappleHeavySword(target)) {
             if (this.executeGrappleHeavySwordCombo(target)) {
                 debug("[STR] GRAPPLE-HEAVY_SWORD combo executed successfully")
+                comboExecuted = true  // FLAG: Skip weapon cell recalculation
                 // Continue to weapon spam to capitalize on vulnerability
             } else {
                 debug("[STR] GRAPPLE-HEAVY_SWORD combo failed")
@@ -789,6 +793,55 @@ class StrengthStrategy extends Strategy {
                 return  // OTKO actions planned, skip normal offensive logic
             }
             debug("[STR] OTKO not viable, falling back to normal offensive scenario")
+        }
+
+        // If GRAPPLE-HEAVY_SWORD combo executed, skip weapon cell recalculation
+        // Enemy is now adjacent with vulnerability applied - stay in position
+        if (comboExecuted) {
+            debug("[STR] Combo executed, using remaining TP from current position")
+
+            // Use remaining TP for any attacks from current position
+            var playerTP = player._currTp
+            var playerMP = player._currMp
+
+            // Try to use remaining LIGHTNINGER charges if in range
+            if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_ENHANCED_LIGHTNINGER)) {
+                var lightninger = arsenal.playerEquippedWeapons[WEAPON_ENHANCED_LIGHTNINGER]
+                var dist = getCellDistance(player._cellPos, target._cellPos)
+
+                // LIGHTNINGER range: 6-10 (enemy is adjacent after combo, likely out of range)
+                if (dist != null && dist >= 6 && dist <= 10 && playerTP >= 9) {
+                    debug("[STR][COMBO] Enemy at range " + dist + ", can use LIGHTNINGER")
+
+                    // Set weapon if needed
+                    if (getWeapon() != WEAPON_ENHANCED_LIGHTNINGER) {
+                        this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, WEAPON_ENHANCED_LIGHTNINGER, -1)
+                        playerTP -= 1
+                    }
+
+                    // Spam LIGHTNINGER with remaining TP
+                    var uses = min(lightninger._maxUse, floor(playerTP / 9))
+                    while (uses > 0 && playerTP >= 9) {
+                        this.createAttackAction(Action.ACTION_DIRECT, target, WEAPON_ENHANCED_LIGHTNINGER, -1)
+                        playerTP -= 9
+                        uses -= 1
+                    }
+
+                    player._currTp = playerTP
+                } else {
+                    debug("[STR][COMBO] Enemy at range " + dist + ", out of LIGHTNINGER range (6-10)")
+                }
+            }
+
+            // Add hide-and-seek repositioning with remaining MP
+            var hnsCell = fieldMap.findHideAndSeekCell(player._cellPos, playerMP, "defensive")
+            if (hnsCell != -1) {
+                debug("[STR][COMBO] Moving to hide-and-seek cell: " + hnsCell)
+                this.createMovementAction(Action.MOVEMENT_HNS, hnsCell, target)
+            }
+
+            debug("[STR] Combo offensive complete. Remaining TP: " + player._currTp + ", MP: " + player._currMp)
+            return  // Skip normal weapon cell calculation
         }
 
         // Re-compute best pure weapon cell ignoring chip-only high damage cells.
