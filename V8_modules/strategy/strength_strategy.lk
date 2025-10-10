@@ -348,6 +348,34 @@ class StrengthStrategy extends Strategy {
         return true
     }
 
+    // Calculate total TP needed for STEROID + GRAPPLE-HEAVY_SWORD combo
+    getComboRequiredTP() {
+        var requiredTP = 0
+
+        // STEROID cost (if available)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
+            var cooldown = getCooldown(CHIP_STEROID, getEntity())
+            if (cooldown == 0) {
+                requiredTP += 7  // STEROID
+            }
+        }
+
+        // GRAPPLE + HEAVY_SWORD cost
+        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD) &&
+            mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+            var grappleCooldown = getCooldown(CHIP_GRAPPLE, getEntity())
+            if (grappleCooldown == 0) {
+                requiredTP += 18  // GRAPPLE (3) + HEAVY_SWORD (15)
+            }
+        }
+
+        if (requiredTP > 0) {
+            debug("[STR][COMBO-TP] Combo requires " + requiredTP + " TP")
+        }
+
+        return requiredTP
+    }
+
     // Check if CHIP_FORTRESS should be used (defensive buff)
     shouldUseFortress() {
         if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_FORTRESS)) return false
@@ -701,11 +729,32 @@ class StrengthStrategy extends Strategy {
             debug("[STR] Applied CHIP_WALL (4-5% damage reduction for 2 turns)")
         }
 
-        // PRIORITY 7: Apply CHIP_STEROID before combat if needed
+        // PRIORITY 6.5: CHIP_ADRENALINE - TP boost for combo if needed
+        var comboRequiredTP = this.getComboRequiredTP()
+        if (comboRequiredTP > 0 && this.shouldUseAdrenaline(comboRequiredTP)) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
+            player._currTp -= 1
+            player._currTp += 5  // Immediate TP boost
+            debug("[STR] Applied CHIP_ADRENALINE for combo (+4 net TP, now have " + player._currTp + " TP)")
+        }
+
+        // PRIORITY 7: Apply CHIP_STEROID before combat if needed (skip if blocks combo)
         if (this.shouldUseSteroid()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_STEROID)
-            player._currTp -= 7
-            debug("[STR] Applied CHIP_STEROID (+150-170 Strength for 3 turns)")
+            var tpAfterSteroid = player._currTp - 7
+            var comboNeedsTP = 18  // GRAPPLE (3) + HEAVY_SWORD (15)
+
+            // Check if STEROID would prevent combo execution
+            var hasComboWeapons = mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD) &&
+                                  mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
+                                  getCooldown(CHIP_GRAPPLE, getEntity()) == 0
+
+            if (hasComboWeapons && tpAfterSteroid < comboNeedsTP) {
+                debug("[STR] Skipping STEROID to preserve TP for GRAPPLE-HEAVY_SWORD combo (have " + player._currTp + ", need " + comboNeedsTP + " after STEROID)")
+            } else {
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_STEROID)
+                player._currTp -= 7
+                debug("[STR] Applied CHIP_STEROID (+150-170 Strength for 3 turns)")
+            }
         }
 
         // PRIORITY 8: Check for CHIP_LEATHER_BOOTS if target cell unreachable
