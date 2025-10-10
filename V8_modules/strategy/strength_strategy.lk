@@ -461,6 +461,118 @@ class StrengthStrategy extends Strategy {
         return false
     }
 
+    // Check if GRAPPLE-HEAVY_SWORD combo should be used
+    shouldUseGrappleHeavySword(target) {
+        // Check if HEAVY_SWORD equipped
+        if (!mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)) {
+            debug("[STR][GRAPPLE-HS] HEAVY_SWORD not equipped")
+            return false
+        }
+
+        var playerTP = player._currTp
+        var dist = getCellDistance(player._cellPos, target._cellPos)
+        if (dist == null) return false
+
+        // Case 1: Enemy already adjacent (range 1) - just use HEAVY_SWORD
+        if (dist == 1) {
+            if (playerTP < 15) {
+                debug("[STR][GRAPPLE-HS] Enemy adjacent but insufficient TP: " + playerTP + " < 15")
+                return false
+            }
+            debug("[STR][GRAPPLE-HS] Enemy adjacent, will use HEAVY_SWORD directly")
+            return true
+        }
+
+        // Case 2: Enemy in GRAPPLE range (2-8) - use combo
+        if (dist >= 2 && dist <= 8) {
+            if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+                debug("[STR][GRAPPLE-HS] GRAPPLE not equipped, can't pull enemy")
+                return false
+            }
+
+            var cooldown = getCooldown(CHIP_GRAPPLE, getEntity())
+            if (cooldown > 0) {
+                debug("[STR][GRAPPLE-HS] GRAPPLE on cooldown: " + cooldown + " turns")
+                return false
+            }
+
+            if (playerTP < 18) {
+                debug("[STR][GRAPPLE-HS] Insufficient TP for combo: " + playerTP + " < 18")
+                return false
+            }
+
+            if (!lineOfSight(player._cellPos, target._cellPos)) {
+                debug("[STR][GRAPPLE-HS] No line of sight to enemy")
+                return false
+            }
+
+            debug("[STR][GRAPPLE-HS] Combo ready: enemy at range " + dist + ", TP=" + playerTP)
+            return true
+        }
+
+        // Enemy out of range
+        debug("[STR][GRAPPLE-HS] Enemy out of range: " + dist)
+        return false
+    }
+
+    // Execute GRAPPLE-HEAVY_SWORD combo (immediate execution pattern)
+    executeGrappleHeavySwordCombo(target) {
+        var playerTP = player._currTp
+        var dist = getCellDistance(player._cellPos, target._cellPos)
+
+        // Case 1: Enemy already adjacent - skip GRAPPLE
+        if (dist == 1) {
+            debug("[STR][GRAPPLE-HS] Enemy already adjacent, using HEAVY_SWORD directly")
+            setWeapon(WEAPON_HEAVY_SWORD)
+            useWeapon(target._cellPos)
+            player._currTp -= 15
+            debug("[STR][GRAPPLE-HS] Used HEAVY_SWORD (60 vulnerability applied)")
+            return true
+        }
+
+        // Case 2: Use GRAPPLE combo
+        // Calculate direction vector
+        var dx = getCellX(player._cellPos) - getCellX(target._cellPos)
+        var dy = getCellY(player._cellPos) - getCellY(target._cellPos)
+        if (dx != 0) dx = dx / abs(dx)
+        if (dy != 0) dy = dy / abs(dy)
+
+        // GRAPPLE target: pull to distance 1 (adjacent to player)
+        var grappleTargetX = getCellX(player._cellPos) - dx * 1
+        var grappleTargetY = getCellY(player._cellPos) - dy * 1
+        var grappleCell = getCellFromXY(grappleTargetX, grappleTargetY)
+        if (grappleCell == null) {
+            // Fallback: try player cell if adjacent cell invalid
+            grappleCell = player._cellPos
+        }
+
+        debug("[STR][GRAPPLE-HS] Using GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell)
+        useChipOnCell(CHIP_GRAPPLE, grappleCell)
+        player._currTp -= 3
+
+        // Update enemy position after GRAPPLE
+        target.updateEntity()
+        var newEnemyPos = target._cellPos
+        var distAfterGrapple = getCellDistance(player._cellPos, newEnemyPos)
+        debug("[STR][GRAPPLE-HS] Enemy pulled to: " + newEnemyPos + " (distance from player: " + distAfterGrapple + ")")
+
+        // Verify enemy is now adjacent
+        if (distAfterGrapple != 1) {
+            debug("[STR][GRAPPLE-HS] ERROR: Enemy not at range 1 after GRAPPLE (dist=" + distAfterGrapple + ")")
+            return false
+        }
+
+        debug("[STR][GRAPPLE-HS] GRAPPLE successful, enemy now at range 1")
+
+        // Use HEAVY_SWORD
+        setWeapon(WEAPON_HEAVY_SWORD)
+        useWeapon(newEnemyPos)
+        player._currTp -= 15
+
+        debug("[STR][GRAPPLE-HS] Combo complete! 60 absolute vulnerability applied, TP remaining: " + player._currTp)
+        return true
+    }
+
     // Override offensive scenario for Strength builds: always prioritize weapons (highest weapon damage cell)
     // Only after exhausting primary + secondary weapons do we spend leftover TP on damage chips (sorted by per-use damage desc).
     createOffensiveScenario(target, targetHitCell) {
@@ -534,6 +646,16 @@ class StrengthStrategy extends Strategy {
             player._currTp -= 3
             player._currMp += 2  // Immediate MP boost
             debug("[STR] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
+        }
+
+        // PRIORITY 8.5: GRAPPLE-HEAVY_SWORD combo (pull enemy + apply vulnerability)
+        if (this.shouldUseGrappleHeavySword(target)) {
+            if (this.executeGrappleHeavySwordCombo(target)) {
+                debug("[STR] GRAPPLE-HEAVY_SWORD combo executed successfully")
+                // Continue to weapon spam to capitalize on vulnerability
+            } else {
+                debug("[STR] GRAPPLE-HEAVY_SWORD combo failed")
+            }
         }
 
         // PRIORITY 9: Check for tactical CHIP_LIBERATION usage BEFORE combat
