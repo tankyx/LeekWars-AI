@@ -273,6 +273,10 @@ class StrengthStrategy extends Strategy {
     findTherapyTarget() {
         var playerPos = player._cellPos
 
+        // Get THERAPY chip object for AoE type
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_THERAPY)) return null
+        var therapyChip = arsenal.playerEquippedChips[CHIP_THERAPY]
+
         // Try to target an adjacent cell (range 1) to maximize chance of hitting self in AoE
         var adjacentCells = [
             getCellFromXY(getCellX(playerPos) + 1, getCellY(playerPos)),
@@ -289,7 +293,7 @@ class StrengthStrategy extends Strategy {
             if (dist == null || dist < 1 || dist > 5) continue
 
             // Check if player would be in the AoE (+ pattern radius 2)
-            var affectedCells = getAoEAffectedCells(CHIP_THERAPY, targetCell)
+            var affectedCells = fieldMap.getAoEAffectedCells(targetCell, therapyChip._aoeType)
             var playerInAoE = false
             for (var i = 0; i < count(affectedCells); i++) {
                 if (affectedCells[i] == playerPos) {
