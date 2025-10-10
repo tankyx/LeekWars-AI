@@ -195,7 +195,182 @@ class StrengthStrategy extends Strategy {
         return true
     }
 
+    // Check if CHIP_ANTIDOTE should be used (poison removal + heal)
+    shouldUseAntidote() {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_ANTIDOTE)) return false
 
+        var cooldown = getCooldown(CHIP_ANTIDOTE, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 9) return false  // 3 TP for ANTIDOTE + 6 minimum for attacks
+
+        // Check if poisoned
+        if (!player.hasEffect(EFFECT_POISON)) return false
+
+        var poisonRemaining = player.getEffectRemaining(EFFECT_POISON)
+        if (poisonRemaining < 2) return false  // Not worth it for 1 turn of poison
+
+        debug("[STR][ANTIDOTE] Poisoned with " + poisonRemaining + " turns remaining, should use ANTIDOTE")
+        return true
+    }
+
+    // Check if CHIP_THERAPY should be used (emergency healing)
+    shouldUseTherapy() {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_THERAPY)) return false
+
+        var cooldown = getCooldown(CHIP_THERAPY, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 13) return false  // 7 TP for THERAPY + 6 minimum for attacks
+
+        // Use when HP below 40% (emergency healing)
+        var hpPercent = (player._currHealth * 100) / player._maxHealth
+        if (hpPercent >= 40) return false
+
+        var hpMissing = player._maxHealth - player._currHealth
+        if (hpMissing < 50) return false  // Don't waste if only missing small amount of HP
+
+        debug("[STR][THERAPY] HP at " + hpPercent + "% (" + player._currHealth + "/" + player._maxHealth + "), should use THERAPY")
+        return true
+    }
+
+    // Find best cell to target with CHIP_THERAPY to heal self
+    // CHIP_THERAPY: Range 1-5, Area plus 2 (+ pattern with radius 2)
+    findTherapyTarget() {
+        var playerPos = player._cellPos
+
+        // Try to target an adjacent cell (range 1) to maximize chance of hitting self in AoE
+        var adjacentCells = [
+            getCellFromXY(getCellX(playerPos) + 1, getCellY(playerPos)),
+            getCellFromXY(getCellX(playerPos) - 1, getCellY(playerPos)),
+            getCellFromXY(getCellX(playerPos), getCellY(playerPos) + 1),
+            getCellFromXY(getCellX(playerPos), getCellY(playerPos) - 1)
+        ]
+
+        for (var targetCell in adjacentCells) {
+            if (targetCell == null) continue
+
+            // Check if this cell is valid and in range
+            var dist = getCellDistance(playerPos, targetCell)
+            if (dist == null || dist < 1 || dist > 5) continue
+
+            // Check if player would be in the AoE (+ pattern radius 2)
+            var affectedCells = getAoEAffectedCells(CHIP_THERAPY, targetCell)
+            var playerInAoE = false
+            for (var i = 0; i < count(affectedCells); i++) {
+                if (affectedCells[i] == playerPos) {
+                    playerInAoE = true
+                    break
+                }
+            }
+
+            if (playerInAoE) {
+                debug("[STR][THERAPY] Found valid therapy target cell: " + targetCell)
+                return targetCell
+            }
+        }
+
+        debug("[STR][THERAPY] No valid therapy target cell found")
+        return null
+    }
+
+    // Check if CHIP_INVERSION should be used (hybrid: heal + damage setup)
+    shouldUseInversion(target) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_INVERSION)) return false
+
+        var cooldown = getCooldown(CHIP_INVERSION, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 10) return false  // 4 TP for INVERSION + 6 minimum for attacks
+
+        // Use when HP below 60% (medium-low health)
+        var hpPercent = (player._currHealth * 100) / player._maxHealth
+        if (hpPercent >= 60) return false
+
+        // Check if enemy in line (horizontal or vertical) within range 1-14
+        var playerPos = player._cellPos
+        var targetPos = target._cellPos
+        var dist = getCellDistance(playerPos, targetPos)
+        if (dist == null || dist < 1 || dist > 14) return false
+
+        // Check horizontal or vertical alignment
+        var playerX = getCellX(playerPos)
+        var playerY = getCellY(playerPos)
+        var targetX = getCellX(targetPos)
+        var targetY = getCellY(targetPos)
+
+        var isAligned = (playerX == targetX) || (playerY == targetY)
+        if (!isAligned) return false
+
+        // Check line of sight
+        if (!lineOfSight(playerPos, targetPos)) return false
+
+        debug("[STR][INVERSION] HP at " + hpPercent + "%, enemy in line at distance " + dist + ", should use INVERSION")
+        return true
+    }
+
+    // Check if CHIP_FORTRESS should be used (defensive buff)
+    shouldUseFortress() {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_FORTRESS)) return false
+
+        var cooldown = getCooldown(CHIP_FORTRESS, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 12) return false  // 6 TP for FORTRESS + 6 minimum for attacks
+
+        // Don't use if poisoned (shields don't reduce poison damage)
+        if (player.hasEffect(EFFECT_POISON)) {
+            debug("[STR][FORTRESS] Skipping FORTRESS - player is poisoned (shields don't help)")
+            return false
+        }
+
+        // Check if effect already active
+        if (player.hasEffect(EFFECT_RELATIVE_SHIELD)) {
+            var remaining = player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
+            if (remaining > 1) return false  // Already have defensive buff active
+        }
+
+        // Use when HP below 50%
+        var hpPercent = (player._currHealth * 100) / player._maxHealth
+        if (hpPercent >= 50) return false
+
+        debug("[STR][FORTRESS] HP at " + hpPercent + "%, should use FORTRESS")
+        return true
+    }
+
+    // Check if CHIP_WALL should be used (weaker defensive buff)
+    shouldUseWall() {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_WALL)) return false
+
+        var cooldown = getCooldown(CHIP_WALL, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 9) return false  // 3 TP for WALL + 6 minimum for attacks
+
+        // Don't use if poisoned (shields don't reduce poison damage)
+        if (player.hasEffect(EFFECT_POISON)) {
+            debug("[STR][WALL] Skipping WALL - player is poisoned (shields don't help)")
+            return false
+        }
+
+        // Check if effect already active
+        if (player.hasEffect(EFFECT_RELATIVE_SHIELD)) {
+            var remaining = player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
+            if (remaining > 1) return false  // Already have defensive buff active
+        }
+
+        // Use when HP below 60% (higher threshold than FORTRESS since it's weaker)
+        var hpPercent = (player._currHealth * 100) / player._maxHealth
+        if (hpPercent >= 60) return false
+
+        debug("[STR][WALL] HP at " + hpPercent + "%, should use WALL")
+        return true
+    }
 
     // Check if CHIP_LIBERATION is tactically valuable
     shouldUseLiberation(target) {
@@ -253,14 +428,62 @@ class StrengthStrategy extends Strategy {
             targetHitCell = fieldMap.buildHitMap(chest._cellPos)
         }
 
-        // PRIORITY 2: Apply CHIP_STEROID before combat if needed
+        // PRIORITY 2: CHIP_THERAPY - Emergency healing (HP < 40%)
+        if (this.shouldUseTherapy()) {
+            var therapyTarget = this.findTherapyTarget()
+            if (therapyTarget != null) {
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_THERAPY)
+                // Update action with correct target cell
+                this._actions[count(this._actions) - 1].targetCell = therapyTarget
+                player._currTp -= 7
+                debug("[STR] Applied CHIP_THERAPY (75-80 HP heal)")
+            }
+        }
+
+        // PRIORITY 3: CHIP_ANTIDOTE - Remove poison (clears poison + 25-35 HP heal)
+        if (this.shouldUseAntidote()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ANTIDOTE)
+            // Target self
+            this._actions[count(this._actions) - 1].targetCell = player._cellPos
+            player._currTp -= 3
+            debug("[STR] Applied CHIP_ANTIDOTE (remove poison + 25-35 HP heal)")
+        }
+
+        // PRIORITY 4: CHIP_INVERSION - Hybrid heal + damage setup (HP < 60%)
+        if (this.shouldUseInversion(target)) {
+            this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_INVERSION)
+            // Target cell is enemy position (will swap)
+            this._actions[count(this._actions) - 1].targetCell = target._cellPos
+            player._currTp -= 4
+            debug("[STR] Applied CHIP_INVERSION (50 HP heal + 20% vulnerability on enemy)")
+        }
+
+        // PRIORITY 5: CHIP_FORTRESS - Defensive buff (HP < 50%, no poison)
+        if (this.shouldUseFortress()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_FORTRESS)
+            // Target self
+            this._actions[count(this._actions) - 1].targetCell = player._cellPos
+            player._currTp -= 6
+            debug("[STR] Applied CHIP_FORTRESS (7-8% damage reduction for 3 turns)")
+        }
+
+        // PRIORITY 6: CHIP_WALL - Weaker defensive buff (HP < 60%, no poison, fallback)
+        if (this.shouldUseWall()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WALL)
+            // Target self
+            this._actions[count(this._actions) - 1].targetCell = player._cellPos
+            player._currTp -= 3
+            debug("[STR] Applied CHIP_WALL (4-5% damage reduction for 2 turns)")
+        }
+
+        // PRIORITY 7: Apply CHIP_STEROID before combat if needed
         if (this.shouldUseSteroid()) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_STEROID)
             player._currTp -= 7
             debug("[STR] Applied CHIP_STEROID (+150-170 Strength for 3 turns)")
         }
 
-        // PRIORITY 3: Check for CHIP_LEATHER_BOOTS if target cell unreachable
+        // PRIORITY 8: Check for CHIP_LEATHER_BOOTS if target cell unreachable
         if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
             player._currTp -= 3
@@ -268,7 +491,7 @@ class StrengthStrategy extends Strategy {
             debug("[STR] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
         }
 
-        // PRIORITY 4: Check for tactical CHIP_LIBERATION usage BEFORE combat
+        // PRIORITY 9: Check for tactical CHIP_LIBERATION usage BEFORE combat
         if (this.shouldUseLiberation(target)) {
             // Use on enemy to remove their buffs, or on self to remove debuffs
             var liberationTarget = target._cellPos
