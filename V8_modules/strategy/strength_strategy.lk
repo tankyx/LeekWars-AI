@@ -663,11 +663,21 @@ class StrengthStrategy extends Strategy {
 
         // PRIORITY 4: CHIP_INVERSION - Hybrid heal + damage setup (HP < 60%)
         if (this.shouldUseInversion(target)) {
+            // Save positions before swap
+            var playerOldPos = player._cellPos
+            var targetOldPos = target._cellPos
+
             this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_INVERSION)
             // Target cell is enemy position (will swap)
             this._actions[count(this._actions) - 1].targetCell = target._cellPos
             player._currTp -= 4
+
+            // Update virtual positions after INVERSION (positions will swap)
+            player._cellPos = targetOldPos  // Player moves to enemy's position
+            target._cellPos = playerOldPos  // Enemy moves to player's position
+
             debug("[STR] Applied CHIP_INVERSION (50 HP heal + 20% vulnerability on enemy)")
+            debug("[STR][INVERSION] Position swap: player " + playerOldPos + " → " + player._cellPos + ", enemy " + targetOldPos + " → " + target._cellPos)
         }
 
         // PRIORITY 5: CHIP_FORTRESS - Defensive buff (in combat range, no poison)
