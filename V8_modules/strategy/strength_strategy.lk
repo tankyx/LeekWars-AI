@@ -320,11 +320,7 @@ class StrengthStrategy extends Strategy {
         if (cooldown > 0) return false
 
         var playerTP = player._currTp
-        if (playerTP < 10) return false  // 4 TP for INVERSION + 6 minimum for attacks
-
-        // Use when HP below 60% (medium-low health)
-        var hpPercent = (player._currHealth * 100) / player._maxHealth
-        if (hpPercent >= 60) return false
+        if (playerTP < 13) return false  // 4 TP for INVERSION + 9 minimum for one weapon attack
 
         // Check if enemy in line (horizontal or vertical) within range 1-14
         var playerPos = player._cellPos
@@ -344,7 +340,7 @@ class StrengthStrategy extends Strategy {
         // Check line of sight
         if (!lineOfSight(playerPos, targetPos)) return false
 
-        debug("[STR][INVERSION] HP at " + hpPercent + "%, enemy in line at distance " + dist + ", should use INVERSION")
+        debug("[STR][INVERSION] Enemy in line at distance " + dist + ", TP=" + playerTP + " (offensive usage)")
         return true
     }
 
@@ -607,29 +603,50 @@ class StrengthStrategy extends Strategy {
         if (dist == 1) {
             debug("[STR][GRAPPLE-HS] Enemy already adjacent, using HEAVY_SWORD directly")
             setWeapon(WEAPON_HEAVY_SWORD)
-            useWeapon(target._cellPos)
+            useWeaponOnCell(target._cellPos)
             player._currTp -= 15
             debug("[STR][GRAPPLE-HS] Used HEAVY_SWORD (60 vulnerability applied)")
             return true
         }
 
         // Case 2: Use GRAPPLE combo
-        // Calculate direction vector
-        var dx = getCellX(player._cellPos) - getCellX(target._cellPos)
-        var dy = getCellY(player._cellPos) - getCellY(target._cellPos)
-        if (dx != 0) dx = dx / abs(dx)
-        if (dy != 0) dy = dy / abs(dy)
+        // Calculate target cell for GRAPPLE: adjacent to player on same axis toward enemy
+        var playerX = getCellX(player._cellPos)
+        var playerY = getCellY(player._cellPos)
+        var enemyX = getCellX(target._cellPos)
+        var enemyY = getCellY(target._cellPos)
 
-        // GRAPPLE target: pull to distance 1 (adjacent to player)
-        var grappleTargetX = getCellX(player._cellPos) - dx * 1
-        var grappleTargetY = getCellY(player._cellPos) - dy * 1
-        var grappleCell = getCellFromXY(grappleTargetX, grappleTargetY)
-        if (grappleCell == null) {
+        var grappleCell = -1
+
+        if (playerY == enemyY) {
+            // Horizontal alignment - enemy on same row
+            if (enemyX < playerX) {
+                // Enemy is to the left
+                grappleCell = getCellFromXY(playerX - 1, playerY)
+            } else {
+                // Enemy is to the right
+                grappleCell = getCellFromXY(playerX + 1, playerY)
+            }
+        } else if (playerX == enemyX) {
+            // Vertical alignment - enemy on same column
+            if (enemyY < playerY) {
+                // Enemy is above
+                grappleCell = getCellFromXY(playerX, playerY - 1)
+            } else {
+                // Enemy is below
+                grappleCell = getCellFromXY(playerX, playerY + 1)
+            }
+        }
+
+        if (grappleCell == -1 || grappleCell == null) {
             // Fallback: try player cell if adjacent cell invalid
+            debug("[STR][GRAPPLE-HS] ERROR: Could not calculate adjacent cell on axis")
             grappleCell = player._cellPos
         }
 
-        debug("[STR][GRAPPLE-HS] Using GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell)
+        var alignment = (playerY == enemyY) ? "horizontal" : "vertical"
+        debug("[STR][GRAPPLE-HS] Player at (" + playerX + "," + playerY + ") Enemy at (" + enemyX + "," + enemyY + ") Alignment: " + alignment)
+        debug("[STR][GRAPPLE-HS] Using GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell + " (adjacent to player)")
         useChipOnCell(CHIP_GRAPPLE, grappleCell)
         player._currTp -= 3
 
@@ -649,7 +666,7 @@ class StrengthStrategy extends Strategy {
 
         // Use HEAVY_SWORD
         setWeapon(WEAPON_HEAVY_SWORD)
-        useWeapon(newEnemyPos)
+        useWeaponOnCell(newEnemyPos)
         player._currTp -= 15
 
         debug("[STR][GRAPPLE-HS] Combo complete! 60 absolute vulnerability applied, TP remaining: " + player._currTp)
@@ -671,105 +688,16 @@ class StrengthStrategy extends Strategy {
             targetHitCell = fieldMap.buildHitMap(chest._cellPos)
         }
 
-        // PRIORITY 2: CHIP_ANTIDOTE - Remove poison FIRST (ongoing damage removal > one-time heal)
-        if (this.shouldUseAntidote()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ANTIDOTE)
-            // Target self
-            this._actions[count(this._actions) - 1].targetCell = player._cellPos
-            player._currTp -= 3
-            debug("[STR] Applied CHIP_ANTIDOTE (remove poison + 25-35 HP heal)")
-        }
+        // PRIORITY 2: GRAPPLE-HEAVY_SWORD combo check FIRST (before defensive chips consume TP)
+        // Position for combo if needed, then execute
+        var comboAttempted = false  // Track if combo was attempted (prevents INVERSION waste)
 
-        // PRIORITY 3: CHIP_THERAPY - Emergency healing (HP < 40%)
-        if (this.shouldUseTherapy()) {
-            var therapyTarget = this.findTherapyTarget()
-            if (therapyTarget != null) {
-                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_THERAPY)
-                // Update action with correct target cell
-                this._actions[count(this._actions) - 1].targetCell = therapyTarget
-                player._currTp -= 7
-                debug("[STR] Applied CHIP_THERAPY (75-80 HP heal)")
-            }
-        }
-
-        // PRIORITY 4: CHIP_INVERSION - Hybrid heal + damage setup (HP < 60%)
-        if (this.shouldUseInversion(target)) {
-            // Save positions before swap
-            var playerOldPos = player._cellPos
-            var targetOldPos = target._cellPos
-
-            this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_INVERSION)
-            // Target cell is enemy position (will swap)
-            this._actions[count(this._actions) - 1].targetCell = target._cellPos
-            player._currTp -= 4
-
-            // Update virtual positions after INVERSION (positions will swap)
-            player._cellPos = targetOldPos  // Player moves to enemy's position
-            target._cellPos = playerOldPos  // Enemy moves to player's position
-
-            debug("[STR] Applied CHIP_INVERSION (50 HP heal + 20% vulnerability on enemy)")
-            debug("[STR][INVERSION] Position swap: player " + playerOldPos + " → " + player._cellPos + ", enemy " + targetOldPos + " → " + target._cellPos)
-        }
-
-        // PRIORITY 5: CHIP_FORTRESS - Defensive buff (in combat range, no poison)
-        if (this.shouldUseFortress()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_FORTRESS)
-            // Target self
-            this._actions[count(this._actions) - 1].targetCell = player._cellPos
-            player._currTp -= 6
-            debug("[STR] Applied CHIP_FORTRESS (7-8% damage reduction for 3 turns)")
-        }
-
-        // PRIORITY 6: CHIP_WALL - Weaker defensive buff (in combat range, no poison, fallback)
-        if (this.shouldUseWall()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WALL)
-            // Target self
-            this._actions[count(this._actions) - 1].targetCell = player._cellPos
-            player._currTp -= 3
-            debug("[STR] Applied CHIP_WALL (4-5% damage reduction for 2 turns)")
-        }
-
-        // PRIORITY 6.5: CHIP_ADRENALINE - TP boost for combo if needed
-        var comboRequiredTP = this.getComboRequiredTP()
-        if (comboRequiredTP > 0 && this.shouldUseAdrenaline(comboRequiredTP)) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
-            player._currTp -= 1
-            player._currTp += 5  // Immediate TP boost
-            debug("[STR] Applied CHIP_ADRENALINE for combo (+4 net TP, now have " + player._currTp + " TP)")
-        }
-
-        // PRIORITY 7: Apply CHIP_STEROID before combat if needed (skip if blocks combo)
-        if (this.shouldUseSteroid()) {
-            var tpAfterSteroid = player._currTp - 7
-            var comboNeedsTP = 18  // GRAPPLE (3) + HEAVY_SWORD (15)
-
-            // Check if STEROID would prevent combo execution
-            var hasComboWeapons = mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD) &&
-                                  mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
-                                  getCooldown(CHIP_GRAPPLE, getEntity()) == 0
-
-            if (hasComboWeapons && tpAfterSteroid < comboNeedsTP) {
-                debug("[STR] Skipping STEROID to preserve TP for GRAPPLE-HEAVY_SWORD combo (have " + player._currTp + ", need " + comboNeedsTP + " after STEROID)")
-            } else {
-                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_STEROID)
-                player._currTp -= 7
-                debug("[STR] Applied CHIP_STEROID (+150-170 Strength for 3 turns)")
-            }
-        }
-
-        // PRIORITY 8: Check for CHIP_LEATHER_BOOTS if target cell unreachable
-        if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
-            player._currTp -= 3
-            player._currMp += 2  // Immediate MP boost
-            debug("[STR] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
-        }
-
-        // PRIORITY 8.4: Position for GRAPPLE-HEAVY_SWORD combo (proactive movement)
         if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD) &&
             mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
             getCooldown(CHIP_GRAPPLE, getEntity()) == 0 &&
             player._currTp >= 18) {
+
+            comboAttempted = true  // Set flag: combo will be attempted (MP committed to positioning)
 
             var currentDist = getCellDistance(player._cellPos, target._cellPos)
             var currentlyAligned = this.isOnSameLine(player._cellPos, target._cellPos)
@@ -796,20 +724,80 @@ class StrengthStrategy extends Strategy {
             } else {
                 debug("[STR][GRAPPLE-HS] Already in combo range (dist=" + currentDist + "), will execute directly")
             }
-        }
 
-        // PRIORITY 8.5: GRAPPLE-HEAVY_SWORD combo (pull enemy + apply vulnerability)
-        if (this.shouldUseGrappleHeavySword(target)) {
-            if (this.executeGrappleHeavySwordCombo(target)) {
-                debug("[STR] GRAPPLE-HEAVY_SWORD combo executed successfully")
-                comboExecuted = true  // FLAG: Skip weapon cell recalculation
-                // Continue to weapon spam to capitalize on vulnerability
-            } else {
-                debug("[STR] GRAPPLE-HEAVY_SWORD combo failed")
+            // Execute combo immediately after positioning
+            if (this.shouldUseGrappleHeavySword(target)) {
+                if (this.executeGrappleHeavySwordCombo(target)) {
+                    debug("[STR] GRAPPLE-HEAVY_SWORD combo executed successfully")
+                    comboExecuted = true  // FLAG: Skip weapon cell recalculation
+                    // Continue to weapon spam to capitalize on vulnerability
+                } else {
+                    debug("[STR] GRAPPLE-HEAVY_SWORD combo failed")
+                }
             }
         }
 
-        // PRIORITY 9: Check for tactical CHIP_LIBERATION usage BEFORE combat
+        // PRIORITY 3: CHIP_ANTIDOTE - Remove poison (ongoing damage removal > one-time heal)
+        if (this.shouldUseAntidote()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ANTIDOTE)
+            // Target self
+            this._actions[count(this._actions) - 1].targetCell = player._cellPos
+            player._currTp -= 3
+            debug("[STR] Applied CHIP_ANTIDOTE (remove poison + 25-35 HP heal)")
+        }
+
+        // PRIORITY 4: CHIP_THERAPY - Emergency healing (only if HP critically low < 25%)
+        var hpPercent = (player._currHealth * 100) / player._maxHealth
+        if (hpPercent < 25 && this.shouldUseTherapy()) {
+            var therapyTarget = this.findTherapyTarget()
+            if (therapyTarget != null) {
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_THERAPY)
+                // Update action with correct target cell
+                this._actions[count(this._actions) - 1].targetCell = therapyTarget
+                player._currTp -= 7
+                debug("[STR] Applied CHIP_THERAPY (75-80 HP heal)")
+            }
+        }
+
+        // PRIORITY 5: CHIP_INVERSION - Offensive hybrid (heal + 20% vulnerability, ONLY if can attack after)
+        // Skip if combo attempted (MP already committed to positioning, swap would strand us)
+        if (!comboAttempted && this.shouldUseInversion(target)) {
+            // Save positions before swap
+            var playerOldPos = player._cellPos
+            var targetOldPos = target._cellPos
+
+            this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_INVERSION)
+            // Target cell is enemy position (will swap)
+            this._actions[count(this._actions) - 1].targetCell = target._cellPos
+            player._currTp -= 4
+
+            // Update virtual positions after INVERSION (positions will swap)
+            player._cellPos = targetOldPos  // Player moves to enemy's position
+            target._cellPos = playerOldPos  // Enemy moves to player's position
+
+            debug("[STR] Applied CHIP_INVERSION (50 HP heal + 20% vulnerability on enemy)")
+            debug("[STR][INVERSION] Position swap: player " + playerOldPos + " → " + player._cellPos + ", enemy " + targetOldPos + " → " + target._cellPos)
+        }
+
+        // PRIORITY 6: CHIP_FORTRESS - Defensive buff (in combat range, no poison)
+        if (this.shouldUseFortress()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_FORTRESS)
+            // Target self
+            this._actions[count(this._actions) - 1].targetCell = player._cellPos
+            player._currTp -= 6
+            debug("[STR] Applied CHIP_FORTRESS (7-8% damage reduction for 3 turns)")
+        }
+
+        // PRIORITY 7: CHIP_WALL - Weaker defensive buff (in combat range, no poison, fallback)
+        if (this.shouldUseWall()) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WALL)
+            // Target self
+            this._actions[count(this._actions) - 1].targetCell = player._cellPos
+            player._currTp -= 3
+            debug("[STR] Applied CHIP_WALL (4-5% damage reduction for 2 turns)")
+        }
+
+        // PRIORITY 8: Check for tactical CHIP_LIBERATION usage BEFORE combat
         if (this.shouldUseLiberation(target)) {
             // Use on enemy to remove their buffs, or on self to remove debuffs
             var liberationTarget = target._cellPos
@@ -883,8 +871,8 @@ class StrengthStrategy extends Strategy {
             }
 
             // Add hide-and-seek repositioning with remaining MP
-            var hnsCell = fieldMap.findHideAndSeekCell(player._cellPos, playerMP, "defensive")
-            if (hnsCell != -1) {
+            var hnsCell = fieldMap.findHideAndSeekCell("defensive", target)
+            if (hnsCell != -1 && hnsCell != null) {
                 debug("[STR][COMBO] Moving to hide-and-seek cell: " + hnsCell)
                 this.createMovementAction(Action.MOVEMENT_HNS, hnsCell, target)
             }

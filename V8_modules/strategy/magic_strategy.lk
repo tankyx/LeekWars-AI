@@ -119,7 +119,8 @@ class MagicStrategy extends Strategy {
         // Cell planning: Check for GRAPPLE-COVID combo opportunity
         var grappleCovidCell = -1
         var shouldPrioritizeCombo = false
-        if (!baiting) {
+        var antidoteSafe = (antidoteCD > 0 || !enemyHasAntidote)
+        if (!baiting && antidoteSafe) {
             var hasCoreChips = mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
                               mapContainsKey(arsenal.playerEquippedChips, CHIP_COVID) &&
                               mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)
@@ -132,14 +133,26 @@ class MagicStrategy extends Strategy {
                 grappleCovidCell = ComboSystem.findGrappleCovidCell(target)
                 if (grappleCovidCell != -1) {
                     shouldPrioritizeCombo = true
-                    debug("[COMBO-POSITIONING] Found optimal GRAPPLE-COVID cell: " + grappleCovidCell)
+                    debug("[COMBO-POSITIONING] Found optimal GRAPPLE-COVID cell: " + grappleCovidCell + " (antidoteCD=" + antidoteCD + ")")
                 }
             }
+        } else if (!antidoteSafe) {
+            debug("[COMBO-POSITIONING] Skipping - enemy antidote available (CD=" + antidoteCD + ")")
         }
 
         // Try approach-HNS for better staging
         var hnsStage = fieldMap.findHideAndSeekCell("approach", target)
         var poisonPlan = PoisonPlanner.selectBestPoisonCell(target)
+
+        // PRIORITY 0: CHIP_MUTATION buff (Turn 2+ for survivability)
+        if (getTurn() >= 2 && mapContainsKey(arsenal.playerEquippedChips, CHIP_MUTATION)) {
+            var mutationCD = getCooldown(CHIP_MUTATION, player._id)
+            if (mutationCD == 0 && player._currTp >= 7) {
+                push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_MUTATION, player._cellPos, player))
+                player._currTp -= 7
+                debug("[DoT-KITE][MUTATION] Applied (+15-20 max HP, 7 TP)")
+            }
+        }
 
         // Check CHIP_LEATHER_BOOTS before movement
         var plannedAttackCell = -1
@@ -211,7 +224,7 @@ class MagicStrategy extends Strategy {
         if (baiting) {
             AntidoteTracker.createBaitOffensive(target, poisonPlan, context, this)
         } else {
-            this.createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, shouldPrioritizeCombo, false)
+            this.createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, shouldPrioritizeCombo, antidoteCD, enemyHasAntidote)
         }
 
         // Opportunistic poke if no attack scheduled
@@ -272,7 +285,7 @@ class MagicStrategy extends Strategy {
     // FULL OFFENSIVE (After antidote burned)
     // ====================================================================
 
-    createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, comboPositioned, baiting) {
+    createFullOffensiveDoT(target, poisonPlan, context, poisonActive, poisonRemaining, comboPositioned, antidoteCD, enemyHasAntidote) {
         debug("[FULL] ===== ENTERED FULL OFFENSIVE MODE =====")
         var targetHitCell = context['targetHitCell']
         var plannedWeapon = context['plannedWeapon']
@@ -288,25 +301,26 @@ class MagicStrategy extends Strategy {
             }
         }
 
-        // Reserve TP for GRAPPLE-COVID combo if available (only when NOT baiting)
+        // Reserve TP for GRAPPLE-COVID combo if available (only when antidote on cooldown or unavailable)
         var reservedTPForCombo = 0
-        debug("[FULL] Checking GRAPPLE-COVID combo... baiting=" + baiting)
-        var canExecuteNow = !baiting && ComboSystem.canUseGrappleCovidCombo(target)
+        var antidoteSafe = (antidoteCD > 0 || !enemyHasAntidote)
+        debug("[FULL] Checking GRAPPLE-COVID combo... antidoteCD=" + antidoteCD + " enemyHasAntidote=" + enemyHasAntidote + " antidoteSafe=" + antidoteSafe)
+        var canExecuteNow = antidoteSafe && ComboSystem.canUseGrappleCovidCombo(target)
         if (canExecuteNow) {
             var hasBNC = mapContainsKey(arsenal.playerEquippedChips, CHIP_BALL_AND_CHAIN)
             var cdBNC = hasBNC ? getCooldown(CHIP_BALL_AND_CHAIN, player._id) : 1
             var includeBNC = hasBNC && cdBNC == 0 && player._currTp >= 18
             reservedTPForCombo = includeBNC ? 18 : 13
             debug("[FULL][GRAPPLE-COVID] Combo available NOW - reserving " + reservedTPForCombo + " TP (BNC=" + includeBNC + ")")
-        } else if (baiting) {
-            debug("[FULL][GRAPPLE-COVID] Skipping combo - still baiting antidote")
+        } else if (!antidoteSafe) {
+            debug("[FULL][GRAPPLE-COVID] Skipping combo - enemy antidote available (CD=" + antidoteCD + ")")
         } else if (comboPositioned) {
             debug("[FULL][GRAPPLE-COVID] Moving to combo cell - will execute NEXT turn")
         } else {
             debug("[FULL][GRAPPLE-COVID] Combo NOT available")
         }
 
-        // PRIORITY 1: GRAPPLE-COVID combo (13-18 TP) - only when NOT baiting
+        // PRIORITY 1: GRAPPLE-COVID combo (13-18 TP) - only when antidote safe
         if (canExecuteNow) {
             debug("[FULL][GRAPPLE-COVID] Executing combo NOW!")
             ComboSystem.executeGrappleCovidCombo(target)
@@ -314,8 +328,8 @@ class MagicStrategy extends Strategy {
             willAttack = true
             reservedTPForCombo = 0  // Clear reservation - TP already spent
         }
-        // PRIORITY 2: Close-range COVID sequence (enemy within 0-2 range)
-        else if (ComboSystem.isWithinCovidRange(target._cellPos)) {
+        // PRIORITY 2: Close-range COVID sequence (enemy within 0-2 range, antidote safe)
+        else if (antidoteSafe && ComboSystem.isWithinCovidRange(target._cellPos)) {
             debug("[FULL][COVID-RANGE] Enemy at close range, applying COVID sequence")
 
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_COVID)) {
@@ -478,6 +492,37 @@ class MagicStrategy extends Strategy {
                 player._currTp -= chipP._cost
                 willAttack = true
                 debug("[FULL][FALLBACK-CHIP] Used " + getChipName(chipP._id) + " TP_left=" + player._currTp)
+            }
+        }
+
+        // NOVA DAMAGE CHIPS (reduce max HP for attrition)
+        var enemyHP = getLife(target._id)
+        var enemyMaxHP = getTotalLife(target._id)
+        var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
+
+        // DESINTEGRATION: High impact nova (use if enemy HP < 75%)
+        if (enemyHPPercent < 75 && player._currTp >= 8 && mapContainsKey(arsenal.playerEquippedChips, CHIP_DESINTEGRATION)) {
+            var desint = arsenal.playerEquippedChips[CHIP_DESINTEGRATION]
+            if (getCooldown(CHIP_DESINTEGRATION, player._id) == 0) {
+                if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, desint._minRange, desint._maxRange)) {
+                    push(this._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_DESINTEGRATION, target._cellPos, target))
+                    player._currTp -= desint._cost
+                    willAttack = true
+                    debug("[DoT-KITE][NOVA] Applied DESINTEGRATION (70-80 nova, 8 TP) - enemy at " + floor(enemyHPPercent) + "% HP")
+                }
+            }
+        }
+
+        // ALTERATION: Low cost nova (use if enemy HP < 100%)
+        if (enemyHPPercent < 100 && player._currTp >= 3 && mapContainsKey(arsenal.playerEquippedChips, CHIP_ALTERATION)) {
+            var alter = arsenal.playerEquippedChips[CHIP_ALTERATION]
+            if (getCooldown(CHIP_ALTERATION, player._id) == 0) {
+                if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, alter._minRange, alter._maxRange)) {
+                    push(this._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_ALTERATION, target._cellPos, target))
+                    player._currTp -= alter._cost
+                    willAttack = true
+                    debug("[DoT-KITE][NOVA] Applied ALTERATION (18-20 nova, 3 TP) - enemy at " + floor(enemyHPPercent) + "% HP")
+                }
             }
         }
 

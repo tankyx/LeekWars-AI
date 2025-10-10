@@ -31,21 +31,23 @@ function init() {
     if (BossFightStrategy.detectBossFight()) {
         debug("Boss fight detected! Using BossFightStrategy")
         strategy = new BossFightStrategy();
+        // Don't call turnOneBuffs() for boss fights - need TP for puzzle chips
     }
     else if (player._agility > player._strength && player._agility > player._magic) {
         debug("Player is agility-focused (agility: " + player._agility + ", strength: " + player._strength + ", magic: " + player._magic + ")")
         strategy = new AgilityStrategy();
+        strategy.turnOneBuffs()
     }
     else if (player._magic > player._strength) {
         debug("Player seems to be a magic user.")
         strategy = new MagicStrategy();
+        strategy.turnOneBuffs()
     }
     else {
         debug("Player seems to be a physical user.")
         strategy = new StrengthStrategy();
+        strategy.turnOneBuffs()
     }
-
-    strategy.turnOneBuffs()
 }
 
 function main() {

@@ -479,7 +479,8 @@ class Strategy {
             targetHitCellID,
             target
         ))
-        debug("Planned movement action: Type " + type + " to cell " + targetHitCellID + " towards entity " + getName(target._id))
+        var targetName = target != null ? getName(target._id) : "none"
+        debug("Planned movement action: Type " + type + " to cell " + targetHitCellID + " towards entity " + targetName)
     }
 
     createAttackAction(type, target, weaponID = -1, chipID = -1) {

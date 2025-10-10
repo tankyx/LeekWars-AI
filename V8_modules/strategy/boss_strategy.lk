@@ -210,162 +210,6 @@ class BossFightStrategy extends Strategy {
     }
 
     // ============================================================
-    // CRYSTAL MOVEMENT EXECUTOR
-    // ============================================================
-
-    // Move crystal using GRAPPLE or BOXING_GLOVE
-    // Returns true if chip was used successfully
-    moveCrystalToAlignment(crystalEntity, targetCell) {
-        var playerPos = getCell()
-        var crystalPos = getCell(crystalEntity)
-        var playerX = getCellX(playerPos)
-        var playerY = getCellY(playerPos)
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
-
-        // Check if crystal is already at target position
-        var crystalToTarget = getCellDistance(crystalPos, targetCell)
-
-        if (crystalToTarget == 0 || crystalPos == targetCell) {
-            debug("✅ Crystal already at target!")
-            return true  // Already aligned
-        }
-
-        // Check if crystal and player are on same horizontal/vertical line
-        var isHorizontal = (crystalY == playerY)
-        var isVertical = (crystalX == playerX)
-
-        if (!isHorizontal && !isVertical) {
-            return false  // Need to reposition player first
-        }
-
-        var dist = getCellDistance(playerPos, crystalPos)
-
-        // Determine if we need to pull (GRAPPLE) or push (BOXING_GLOVE)
-        var playerToTarget = getCellDistance(playerPos, targetCell)
-
-        var shouldPull = crystalToTarget > playerToTarget
-
-        // Check chip availability (both are cell-targeted, not entity-targeted)
-        var hasGrapple = mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)
-        var hasBoxingGlove = mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)
-        var grappleCD = getCooldown(CHIP_GRAPPLE, getEntity())
-        var boxingCD = getCooldown(CHIP_BOXING_GLOVE, getEntity())
-        var grappleReady = hasGrapple && (grappleCD == 0)
-        var boxingReady = hasBoxingGlove && (boxingCD == 0)
-
-        // Validate effective range for BOXING_GLOVE push
-        // For push cells 1-8 beyond crystal to be in range 2-8 from player: dist + pushDist <= 8
-        // Maximum effective distance: 6 (allows push cells at distance 1-2 from crystal to be in range)
-        var maxEffectivePushDist = 6
-        if (!shouldPull && dist > maxEffectivePushDist) {
-            return false
-        }
-
-        if (shouldPull && dist >= 3 && dist <= 8 && grappleReady) {
-            // Use GRAPPLE (3-8 range, pulls crystal toward player)
-            // Try to pull to distance 1 first (adjacent), then distance 2 as fallback
-            var dirX = 0
-            var dirY = 0
-
-            if (isHorizontal) {
-                dirX = (crystalX > playerX) ? 1 : -1
-            } else {
-                dirY = (crystalY > playerY) ? 1 : -1
-            }
-
-            var pullTarget = null
-
-            // Try distance 1 first (adjacent to player)
-            var pullTargetX1 = playerX + dirX * 1
-            var pullTargetY1 = playerY + dirY * 1
-            var candidate1 = getCellFromXY(pullTargetX1, pullTargetY1)
-
-            if (candidate1 != null && (isEmptyCell(candidate1) || !isObstacle(candidate1))) {
-                pullTarget = candidate1
-            } else {
-                // Fallback: try distance 2
-                var pullTargetX2 = playerX + dirX * 2
-                var pullTargetY2 = playerY + dirY * 2
-                var candidate2 = getCellFromXY(pullTargetX2, pullTargetY2)
-
-                if (candidate2 != null && (isEmptyCell(candidate2) || !isObstacle(candidate2))) {
-                    pullTarget = candidate2
-                }
-            }
-
-            if (pullTarget != null) {
-                debug("✅ GRAPPLE → " + pullTarget)
-                useChipOnCell(CHIP_GRAPPLE, pullTarget)
-                return true
-            }
-        } else if (!shouldPull && boxingReady) {
-            // Use BOXING_GLOVE (range 2-8 from PLAYER to target cell, pushes crystal TOWARD target)
-            // Calculate direction FROM crystal TO target (this is the push direction)
-            var targetX = getCellX(targetCell)
-            var targetY = getCellY(targetCell)
-
-            var dirX = 0
-            var dirY = 0
-
-            if (isHorizontal) {
-                // Push in X direction (toward target)
-                dirX = (targetX > crystalX) ? 1 : -1
-            } else {
-                // Push in Y direction (toward target)
-                dirY = (targetY > crystalY) ? 1 : -1
-            }
-
-            // Check if player is on correct side for pushing
-            var playerSideX = (playerX > crystalX) ? 1 : ((playerX < crystalX) ? -1 : 0)
-            var playerSideY = (playerY > crystalY) ? 1 : ((playerY < crystalY) ? -1 : 0)
-
-            var isCorrectSide = false
-            if (isHorizontal) {
-                isCorrectSide = (playerSideX == -dirX)  // Player opposite side from target
-            } else {
-                isCorrectSide = (playerSideY == -dirY)
-            }
-
-            if (!isCorrectSide) {
-                return false
-            }
-
-            // Calculate push target: cell BEYOND crystal in target direction
-            var pushCell = null
-
-            for (var pushDist = 8; pushDist >= 1; pushDist--) {
-                var pushX = crystalX + dirX * pushDist
-                var pushY = crystalY + dirY * pushDist
-                var candidate = getCellFromXY(pushX, pushY)
-
-                if (candidate == null) {
-                    continue
-                }
-
-                // Check if player can reach this cell with BOXING_GLOVE (range 2-8 from player)
-                var distFromPlayer = getCellDistance(playerPos, candidate)
-                var isObst = isObstacle(candidate)
-
-                // BOXING_GLOVE: range 2-8 from player, target on same horizontal/vertical line
-                // Crystal being in the path is OK - that's what we want to push!
-                if (distFromPlayer != null && distFromPlayer >= 2 && distFromPlayer <= 8 && !isObst) {
-                    pushCell = candidate
-                    break
-                }
-            }
-
-            if (pushCell != null) {
-                debug("✅ BOXING_GLOVE → " + pushCell)
-                useChipOnCell(CHIP_BOXING_GLOVE, pushCell)
-                return true
-            }
-        }
-
-        return false
-    }
-
-    // ============================================================
     // TEAM COORDINATION
     // ============================================================
 
@@ -494,130 +338,14 @@ class BossFightStrategy extends Strategy {
     // POSITIONING HELPERS
     // ============================================================
 
-    // Check if player can use GRAPPLE/BOXING_GLOVE on crystal from current position
-    canUseMoveChipOnCrystal(playerPos, crystalPos) {
-        var dist = getCellDistance(playerPos, crystalPos)
-
-        // GRAPPLE: range 3-8 to crystal
-        // BOXING_GLOVE: any distance to crystal (range 2-8 is to target cell, not crystal)
-        if (dist < 1 || dist > 8) {
-            return false
-        }
-
-        // Check horizontal/vertical alignment
-        var playerX = getCellX(playerPos)
-        var playerY = getCellY(playerPos)
+    // Calculate which direction to push crystal (returns direction vector)
+    calculatePushDirection(crystalPos, targetPos) {
         var crystalX = getCellX(crystalPos)
         var crystalY = getCellY(crystalPos)
+        var targetX = getCellX(targetPos)
+        var targetY = getCellY(targetPos)
 
-        return (playerX == crystalX) || (playerY == crystalY)
-    }
-
-    // Find optimal position to use GRAPPLE/BOXING_GLOVE on crystal
-    // targetCell is where we want the crystal to end up
-    findOptimalMoveChipPosition(crystalPos, targetCell) {
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
-        var targetX = getCellX(targetCell)
-        var targetY = getCellY(targetCell)
-        var myPos = getCell()
-        var myMP = getMP()
-
-        // Calculate direction from crystal to target
-        var dirToTargetX = 0
-        var dirToTargetY = 0
-
-        if (targetX > crystalX) dirToTargetX = 1
-        else if (targetX < crystalX) dirToTargetX = -1
-
-        if (targetY > crystalY) dirToTargetY = 1
-        else if (targetY < crystalY) dirToTargetY = -1
-
-        // Build candidate positions, prioritizing PUSH side (opposite from target)
-        var pushCandidates = []   // Positions for pushing (opposite side from target)
-        var pullCandidates = []   // Positions for pulling (same side as target)
-
-        // Horizontal line (same Y)
-        // Search distances 1-6 (ensures push cells 1-8 beyond crystal stay in range 2-8 from player)
-        if (dirToTargetX != 0) {
-            for (var dist = 1; dist <= 6; dist++) {
-                // Push side: opposite from target direction
-                var pushX = crystalX - dirToTargetX * dist
-                var pushCell = getCellFromXY(pushX, crystalY)
-
-                if (pushCell != null && (isEmptyCell(pushCell) || pushCell == myPos)) {
-                    push(pushCandidates, pushCell)
-                }
-
-                // Pull side: same direction as target
-                var pullX = crystalX + dirToTargetX * dist
-                var pullCell = getCellFromXY(pullX, crystalY)
-
-                if (pullCell != null && (isEmptyCell(pullCell) || pullCell == myPos)) {
-                    push(pullCandidates, pullCell)
-                }
-            }
-        }
-
-        // Vertical line (same X)
-        if (dirToTargetY != 0) {
-            for (var dist = 1; dist <= 6; dist++) {
-                // Push side: opposite from target direction
-                var pushY = crystalY - dirToTargetY * dist
-                var pushCell = getCellFromXY(crystalX, pushY)
-
-                if (pushCell != null && (isEmptyCell(pushCell) || pushCell == myPos)) {
-                    push(pushCandidates, pushCell)
-                }
-
-                // Pull side: same direction as target
-                var pullY = crystalY + dirToTargetY * dist
-                var pullCell = getCellFromXY(crystalX, pullY)
-
-                if (pullCell != null && (isEmptyCell(pullCell) || pullCell == myPos)) {
-                    push(pullCandidates, pullCell)
-                }
-            }
-        }
-
-        // Prioritize PUSH side candidates (try those first)
-        // Prefer closer positions to crystal (distance 1-6) to ensure push cells stay in range
-        var bestCell = null
-        var bestDist = 999
-
-        // First try push candidates (ordered by distance from crystal, prefer closest reachable)
-        for (var cell in pushCandidates) {
-            var pathDist = getPathLength(myPos, cell)
-            if (pathDist != null && pathDist <= myMP && pathDist < bestDist) {
-                bestDist = pathDist
-                bestCell = cell
-            }
-        }
-
-        // If no push candidates reachable, try pull candidates
-        if (bestCell == null) {
-            for (var cell in pullCandidates) {
-                var pathDist = getPathLength(myPos, cell)
-                if (pathDist != null && pathDist <= myMP && pathDist < bestDist) {
-                    bestDist = pathDist
-                    bestCell = cell
-                }
-            }
-        }
-
-        return bestCell
-    }
-
-    // Find closest candidate cell for chip use (when optimal cell is unreachable)
-    // Prioritizes PUSH side (opposite from target)
-    findClosestCandidateCell(crystalPos, targetCell) {
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
-        var targetX = getCellX(targetCell)
-        var targetY = getCellY(targetCell)
-        var myPos = getCell()
-
-        // Calculate direction from crystal to target
+        // Calculate normalized direction (-1, 0, or 1 for each axis)
         var dirX = 0
         var dirY = 0
 
@@ -627,71 +355,49 @@ class BossFightStrategy extends Strategy {
         if (targetY > crystalY) dirY = 1
         else if (targetY < crystalY) dirY = -1
 
-        var pushCandidates = []
-        var pullCandidates = []
-
-        // Horizontal line (same Y)
-        // Search distances 1-6 (ensures push cells 1-8 beyond crystal stay in range 2-8 from player)
-        if (dirX != 0) {
-            for (var dist = 1; dist <= 6; dist++) {
-                // Push side (opposite from target)
-                var pushCell = getCellFromXY(crystalX - dirX * dist, crystalY)
-                if (pushCell != null && (isEmptyCell(pushCell) || pushCell == myPos)) {
-                    push(pushCandidates, pushCell)
-                }
-
-                // Pull side (toward target)
-                var pullCell = getCellFromXY(crystalX + dirX * dist, crystalY)
-                if (pullCell != null && (isEmptyCell(pullCell) || pullCell == myPos)) {
-                    push(pullCandidates, pullCell)
-                }
-            }
-        }
-
-        // Vertical line (same X)
-        if (dirY != 0) {
-            for (var dist = 1; dist <= 6; dist++) {
-                // Push side (opposite from target)
-                var pushCell = getCellFromXY(crystalX, crystalY - dirY * dist)
-                if (pushCell != null && (isEmptyCell(pushCell) || pushCell == myPos)) {
-                    push(pushCandidates, pushCell)
-                }
-
-                // Pull side (toward target)
-                var pullCell = getCellFromXY(crystalX, crystalY + dirY * dist)
-                if (pullCell != null && (isEmptyCell(pullCell) || pullCell == myPos)) {
-                    push(pullCandidates, pullCell)
-                }
-            }
-        }
-
-        // Find closest, prioritizing push candidates
-        var closestCell = null
-        var closestDist = 999
-
-        for (var cell in pushCandidates) {
-            var dist = getCellDistance(myPos, cell)
-            if (dist != null && dist < closestDist) {
-                closestDist = dist
-                closestCell = cell
-            }
-        }
-
-        // If no push candidates, try pull
-        if (closestCell == null) {
-            for (var cell in pullCandidates) {
-                var dist = getCellDistance(myPos, cell)
-                if (dist != null && dist < closestDist) {
-                    closestDist = dist
-                    closestCell = cell
-                }
-            }
-        }
-
-        debug("Closest candidate cell: " + closestCell + " (distance=" + closestDist + ", preferring PUSH side)")
-        return closestCell
+        return ['dirX': dirX, 'dirY': dirY]
     }
 
+    // Find best cell to push crystal toward target
+    // Returns cell on opposite side of crystal from target
+    findPushPosition(crystalPos, targetPos) {
+        var dir = this.calculatePushDirection(crystalPos, targetPos)
+        var crystalX = getCellX(crystalPos)
+        var crystalY = getCellY(crystalPos)
+
+        // Try cells on opposite side of crystal from target
+        // If target is NORTH (dirY=1), we want to be SOUTH (dirY=-1)
+        var pushFromX = crystalX - dir['dirX']
+        var pushFromY = crystalY - dir['dirY']
+
+        // Generate candidate cells (direct opposite + diagonals)
+        var candidates = []
+
+        // Direct opposite (best)
+        var directCell = getCellFromXY(pushFromX, pushFromY)
+        if (directCell != null) push(candidates, directCell)
+
+        // Diagonal alternatives if direct is blocked
+        if (dir['dirX'] != 0 && dir['dirY'] != 0) {
+            // Moving diagonally, try horizontal or vertical alternatives
+            var hCell = getCellFromXY(pushFromX, crystalY)
+            var vCell = getCellFromXY(crystalX, pushFromY)
+            if (hCell != null) push(candidates, hCell)
+            if (vCell != null) push(candidates, vCell)
+        }
+
+        // Check candidates for empty cells
+        for (var cell in candidates) {
+            if (isEmptyCell(cell)) {
+                return cell
+            }
+        }
+
+        return null
+    }
+
+    // Find optimal position to use GRAPPLE/BOXING_GLOVE on crystal
+    // targetCell is where we want the crystal to end up
     // Find safest cell (maximum distance from all entities)
     findSafestCell(myPos, entityIds) {
         var accessibleCells = fieldMap.getAccessibleCells(player)
@@ -722,13 +428,170 @@ class BossFightStrategy extends Strategy {
         return bestCell
     }
 
+    // Get all empty cells on crystal's horizontal or vertical axis
+    getCellsOnAxis(crystalPos, axisType) {
+        var cells = []
+        var crystalX = getCellX(crystalPos)
+        var crystalY = getCellY(crystalPos)
+
+        if (axisType == "VERTICAL") {
+            // All cells with same X coordinate (vertical line)
+            for (var y = -17; y <= 17; y++) {
+                var cell = getCellFromXY(crystalX, y)
+                if (cell != null && cell != crystalPos && isEmptyCell(cell)) {
+                    push(cells, cell)
+                }
+            }
+        } else {
+            // All cells with same Y coordinate (horizontal line)
+            for (var x = -17; x <= 17; x++) {
+                var cell = getCellFromXY(x, crystalY)
+                if (cell != null && cell != crystalPos && isEmptyCell(cell)) {
+                    push(cells, cell)
+                }
+            }
+        }
+
+        return cells
+    }
+
+    // Find reachable cell on axis within chip range
+    findReachableCellOnAxis(crystalPos, axisType, minRange, maxRange) {
+        var axisCells = this.getCellsOnAxis(crystalPos, axisType)
+        var accessible = fieldMap.getAccessibleCells(player)
+        var myPos = getCell()
+
+        var bestCell = null
+        var bestDist = 999
+
+        for (var cell in axisCells) {
+            // Check if reachable
+            var isReachable = false
+            for (var acc in accessible) {
+                if (acc == cell) {
+                    isReachable = true
+                    break
+                }
+            }
+
+            if (!isReachable) continue
+
+            // Check if in chip range from crystal
+            var distToCrystal = getCellDistance(cell, crystalPos)
+            if (distToCrystal < minRange || distToCrystal > maxRange) continue
+
+            // Find closest to player
+            var distToPlayer = getCellDistance(myPos, cell)
+            if (distToPlayer < bestDist) {
+                bestDist = distToPlayer
+                bestCell = cell
+            }
+        }
+
+        return bestCell
+    }
+
+    // Move toward axis line (reduce X or Y distance, not point distance)
+    moveTowardAxis(crystalPos, axisType) {
+        var accessible = fieldMap.getAccessibleCells(player)
+        var myPos = getCell()
+
+        if (axisType == "VERTICAL") {
+            // Need to reach X = crystalX
+            var targetX = getCellX(crystalPos)
+            var currentX = getCellX(myPos)
+
+            var bestCell = null
+            var bestXDist = abs(currentX - targetX)
+
+            for (var cell in accessible) {
+                var cellX = getCellX(cell)
+                var xDist = abs(cellX - targetX)
+
+                // Closer to target X coordinate?
+                if (xDist < bestXDist) {
+                    bestXDist = xDist
+                    bestCell = cell
+                }
+            }
+
+            if (bestCell != null) {
+                debug("Moving toward vertical axis X=" + targetX + " (current X=" + currentX + ")")
+                this.createMovementAction(Action.MOVEMENT_APPROACH, bestCell, null)
+                return true
+            }
+        } else {
+            // Need to reach Y = crystalY
+            var targetY = getCellY(crystalPos)
+            var currentY = getCellY(myPos)
+
+            var bestCell = null
+            var bestYDist = abs(currentY - targetY)
+
+            for (var cell in accessible) {
+                var cellY = getCellY(cell)
+                var yDist = abs(cellY - targetY)
+
+                // Closer to target Y coordinate?
+                if (yDist < bestYDist) {
+                    bestYDist = yDist
+                    bestCell = cell
+                }
+            }
+
+            if (bestCell != null) {
+                debug("Moving toward horizontal axis Y=" + targetY + " (current Y=" + currentY + ")")
+                this.createMovementAction(Action.MOVEMENT_APPROACH, bestCell, null)
+                return true
+            }
+        }
+
+        debug("No accessible cells to move toward axis")
+        return false
+    }
+
+    // Determine which axis alignment is needed (vertical or horizontal)
+    determineAxisType(crystalColor, grailPos) {
+        // Red: South of grail (vertical, below)
+        // Green: North of grail (vertical, above)
+        // Blue: East of grail (horizontal, right)
+        // Yellow: West of grail (horizontal, left)
+
+        if (crystalColor == "red" || crystalColor == "green") {
+            return "VERTICAL"
+        } else {
+            return "HORIZONTAL"
+        }
+    }
+
+    // Check if INVERSION would be beneficial
+    shouldUseInversion(playerPos, crystalPos, targetPos) {
+        var playerToTarget = getCellDistance(playerPos, targetPos)
+        var crystalToTarget = getCellDistance(crystalPos, targetPos)
+
+        // Player must be significantly closer to target (at least 3 cells)
+        // This makes the swap worthwhile
+        return playerToTarget < crystalToTarget - 2
+    }
+
     // ============================================================
     // SCENARIO IMPLEMENTATIONS
     // ============================================================
 
     // Puzzle solver scenario (move crystals to alignment)
     createPuzzleSolvingScenario(target) {
-        debug("=== PUZZLE SOLVER TURN ===")
+        // Use game's actual turn number for INVERSION availability
+        var gameTurn = getTurn()
+        debug("=== PUZZLE SOLVER TURN " + gameTurn + " ===")
+        debug("INVERSION available: " + (gameTurn % 2 == 0))
+
+        // DEBUG: Show equipped chips and current resources
+        var hasGrapple = mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)
+        var hasBoxing = mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)
+        var hasInversion = mapContainsKey(arsenal.playerEquippedChips, CHIP_INVERSION)
+        var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
+        debug("[CHIPS] GRAPPLE=" + hasGrapple + " BOXING=" + hasBoxing + " INVERSION=" + hasInversion + " TELEPORT=" + hasTeleport)
+        debug("[RESOURCES] TP=" + getTP() + " MP=" + getMP())
 
         var grail = this.findGrailEntity()
 
@@ -791,6 +654,8 @@ class BossFightStrategy extends Strategy {
             return
         }
 
+        debug("Working on " + myColor + " crystal: current=" + myCrystal.position + ", target=" + this.calculateCrystalTargetPosition(myCrystal.color, grailPos))
+
         // Check if already aligned
         if (this.checkCrystalAlignment(myCrystal.color, myCrystal.position, grailPos)) {
             debug(myColor + " crystal already aligned!")
@@ -805,45 +670,154 @@ class BossFightStrategy extends Strategy {
         // Visualize THIS crystal's path (each leek marks their own crystal)
         this.visualizeCrystalPath(myCrystal.color, myCrystal.position, targetCell)
 
-        // Position player for GRAPPLE/BOXING_GLOVE use
+        // CHIP-BASED CRYSTAL MOVEMENT STRATEGY
+        // Use GRAPPLE (pull) and BOXING_GLOVE (push) with correct cell targeting
         var playerPos = getCell()
         var crystalPos = myCrystal.position
+        var distToCrystal = getCellDistance(playerPos, crystalPos)
+        var crystalToTarget = getCellDistance(crystalPos, targetCell)
+        var axisType = this.determineAxisType(myCrystal.color, grailPos)
 
-        var needsRepositioning = !this.canUseMoveChipOnCrystal(playerPos, crystalPos)
+        debug("Player at " + playerPos + ", crystal at " + crystalPos + ", target at " + targetCell)
+        debug("Distance to crystal: " + distToCrystal + ", crystal to target: " + crystalToTarget + " cells")
+        debug("Axis type: " + axisType)
 
-        if (needsRepositioning) {
-            // Move to optimal position (on same line as crystal, prioritizing PUSH side)
-            var optimalCell = this.findOptimalMoveChipPosition(crystalPos, targetCell)
-            if (optimalCell != null && optimalCell != playerPos) {
-                this.createMovementAction(Action.MOVEMENT_APPROACH, optimalCell, target)
-                this.executeAndFlushActions()  // Move immediately
-            } else {
-                // No optimal position reachable - move toward closest candidate
-                var closestCandidate = this.findClosestCandidateCell(crystalPos, targetCell)
-                if (closestCandidate != null) {
-                    this.createMovementAction(Action.MOVEMENT_APPROACH, closestCandidate, target)
-                } else {
-                    this.createMovementAction(Action.MOVEMENT_APPROACH, crystalPos, target)
+        // Check if we're on the same axis (horizontal or vertical) as crystal
+        var playerX = getCellX(playerPos)
+        var playerY = getCellY(playerPos)
+        var crystalX = getCellX(crystalPos)
+        var crystalY = getCellY(crystalPos)
+        var onAxis = (playerX == crystalX) || (playerY == crystalY)
+
+        debug("On axis with crystal: " + onAxis + " (playerX=" + playerX + " crystalX=" + crystalX + " playerY=" + playerY + " crystalY=" + crystalY + ")")
+
+        // STRATEGY: If on axis and in range (1-8), use GRAPPLE or BOXING_GLOVE
+        // Both chips aim at TARGET CELL (where we want crystal to end up)
+        if (onAxis && distToCrystal >= 1 && distToCrystal <= 8) {
+            // Determine if we should PULL (GRAPPLE) or PUSH (BOXING_GLOVE)
+            // GRAPPLE works when we're PAST the target (farther from target than crystal)
+            // BOXING_GLOVE works when we're closer to crystal (before or same side)
+            var playerToTarget = getCellDistance(playerPos, targetCell)
+            var shouldPull = playerToTarget > crystalToTarget  // We're farther from target than crystal
+
+            debug("On axis and in range! shouldPull=" + shouldPull + " (playerToTarget=" + playerToTarget + " crystalToTarget=" + crystalToTarget + ")")
+
+            if (shouldPull && hasGrapple) {
+                // GRAPPLE: Pull crystal adjacent to player on the line toward target
+                // We want to pull crystal closer to its target position
+                // Calculate direction from crystal TO target
+                var targetX = getCellX(targetCell)
+                var targetY = getCellY(targetCell)
+                var dx = targetX - crystalX
+                var dy = targetY - crystalY
+                if (dx != 0) dx = dx / abs(dx)
+                if (dy != 0) dy = dy / abs(dy)
+
+                // Target cell: 1 step from crystal toward target
+                var grappleTargetX = crystalX + dx * 1
+                var grappleTargetY = crystalY + dy * 1
+                var grappleCell = getCellFromXY(grappleTargetX, grappleTargetY)
+
+                // Validate: must be empty and not player position
+                if (grappleCell == null || !isEmptyCell(grappleCell) || grappleCell == playerPos) {
+                    debug("GRAPPLE target cell invalid (occupied or null): " + grappleCell)
+                    grappleCell = null
                 }
-                return  // Move this turn, try chip next turn
+
+                var grappleCD = getCooldown(CHIP_GRAPPLE, getEntity())
+                if (grappleCell != null && grappleCD == 0 && getTP() >= 3) {
+                    debug("✅ Using GRAPPLE - pulling crystal toward target cell " + grappleCell + " (1 step closer)")
+                    var result = useChipOnCell(CHIP_GRAPPLE, grappleCell)
+                    debug("GRAPPLE result: " + result)
+                    return
+                } else {
+                    if (grappleCell == null) {
+                        debug("GRAPPLE skipped - no valid target cell")
+                    } else {
+                        debug("GRAPPLE not ready (CD=" + grappleCD + " TP=" + getTP() + ")")
+                    }
+                }
+            } else if (!shouldPull && hasBoxing) {
+                // BOXING_GLOVE: Push crystal away toward target
+                // Calculate direction from player to crystal (push direction)
+                var dx = crystalX - playerX
+                var dy = crystalY - playerY
+                if (dx != 0) dx = dx / abs(dx)
+                if (dy != 0) dy = dy / abs(dy)
+
+                // Target cell: crystal position + push direction (pushes away from player)
+                // Use distance 1-2 cells beyond crystal
+                var boxingTargetX = crystalX + dx * 1
+                var boxingTargetY = crystalY + dy * 1
+                var boxingCell = getCellFromXY(boxingTargetX, boxingTargetY)
+
+                if (boxingCell == null || !isEmptyCell(boxingCell)) {
+                    // Try 2 cells beyond
+                    boxingTargetX = crystalX + dx * 2
+                    boxingTargetY = crystalY + dy * 2
+                    boxingCell = getCellFromXY(boxingTargetX, boxingTargetY)
+                }
+
+                var boxingCD = getCooldown(CHIP_BOXING_GLOVE, getEntity())
+                if (boxingCD == 0 && getTP() >= 3 && distToCrystal >= 2 && boxingCell != null) {
+                    debug("✅ Using BOXING_GLOVE - pushing crystal toward cell " + boxingCell + " (away from player)")
+                    var result = useChipOnCell(CHIP_BOXING_GLOVE, boxingCell)
+                    debug("BOXING_GLOVE result: " + result)
+                    return
+                } else {
+                    debug("BOXING_GLOVE not ready (CD=" + boxingCD + " TP=" + getTP() + " dist=" + distToCrystal + " validCell=" + (boxingCell != null) + ")")
+                }
             }
         }
 
-        // Attempt crystal movement (once per turn - crystal moves at turn end)
-        var success = this.moveCrystalToAlignment(myCrystal.id, targetCell)
+        // FALLBACK: Move to get on axis with crystal in range 2-7
+        debug("Not in position to use chips - repositioning...")
 
-        if (!success) {
-            // Fallback: If chip failed, try to move closer for next turn
-            playerPos = getCell()  // Refresh position
-            var optimalCell = this.findOptimalMoveChipPosition(crystalPos, targetCell)
+        var accessible = fieldMap.getAccessibleCells(player)
+        var bestCell = null
+        var bestScore = -999
 
-            if (optimalCell != null && optimalCell != playerPos) {
-                this.createMovementAction(Action.MOVEMENT_APPROACH, optimalCell, target)
-            } else {
-                var closestCandidate = this.findClosestCandidateCell(crystalPos, targetCell)
-                if (closestCandidate != null && closestCandidate != playerPos) {
-                    this.createMovementAction(Action.MOVEMENT_APPROACH, closestCandidate, target)
+        // Find best cell that is:
+        // 1. On axis with crystal
+        // 2. In range 2-7 from crystal
+        // 3. Closest to current position
+        for (var cell in accessible) {
+            var cellX = getCellX(cell)
+            var cellY = getCellY(cell)
+            var cellDist = getCellDistance(cell, crystalPos)
+
+            var cellOnAxis = (cellX == crystalX) || (cellY == crystalY)
+
+            if (cellOnAxis && cellDist >= 2 && cellDist <= 7) {
+                // Prioritize closer distances (less movement)
+                var score = 100 - getCellDistance(playerPos, cell)
+                if (score > bestScore) {
+                    bestScore = score
+                    bestCell = cell
                 }
+            }
+        }
+
+        if (bestCell != null) {
+            debug("Moving to axis position: " + bestCell + " (will be on axis with crystal)")
+            this.createMovementAction(Action.MOVEMENT_APPROACH, bestCell, null)
+        } else {
+            // Can't reach axis - just move closer to crystal
+            debug("Cannot reach axis - moving closer to crystal")
+            var closestCell = null
+            var closestDist = 999
+
+            for (var cell in accessible) {
+                var dist = getCellDistance(cell, crystalPos)
+                if (dist < closestDist) {
+                    closestDist = dist
+                    closestCell = cell
+                }
+            }
+
+            if (closestCell != null && closestCell != playerPos) {
+                debug("Moving closer to crystal: " + closestCell)
+                this.createMovementAction(Action.MOVEMENT_APPROACH, closestCell, null)
             }
         }
     }
