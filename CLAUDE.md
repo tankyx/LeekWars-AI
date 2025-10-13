@@ -570,7 +570,112 @@ Check TOXIN usage at range 1 (AoE AREA_CIRCLE_1)
 - Automatic repositioning maintains chip usage (doesn't skip)
 - AI intelligently moves minimum distance to safety before using AoE chips
 
-### 12. Boss Fight Strategy Refactor - INVERSION Priority (January 2026)
+### 12. Nova Damage Chips Integration (January 2026)
+**Problem:**
+- Magic strategy lacked max HP reduction capabilities
+- No survivability buffs for extended fights
+- Missing attrition synergy with poison system
+
+**Solution:**
+- Added CHIP_MUTATION (Turn 2+ self-buff, lines 144-152 in magic_strategy.lk):
+  - Cost: 7 TP, Cooldown: 4 turns
+  - Effect: +15-20 max HP (scales with science)
+  - Applied Turn 2+ for survivability
+- Added CHIP_DESINTEGRATION (lines 499-510 in magic_strategy.lk):
+  - Cost: 8 TP, Range: 1-6 in line, Area: Square 1, Cooldown: 2 turns
+  - Effect: 70-80 nova damage (scales with science)
+  - Triggered when enemy HP < 75%
+- Added CHIP_ALTERATION (lines 512-523 in magic_strategy.lk):
+  - Cost: 3 TP, Range: 6-12, Cooldown: 1 turn
+  - Effect: 18-20 nova damage (scales with science)
+  - Triggered when enemy HP < 100%
+
+**Attrition Synergy:**
+```
+Poison reduces HP → Nova reduces max HP → Enemy trapped in lower HP%
+→ Poison more deadly → Nova more effective → Repeat
+```
+
+**Impact:** Magic strategy now has complete attrition toolkit, reducing enemy max HP pool while poison chips deal damage over time
+
+### 13. Antidote Baiting System Fix (January 2026)
+**Problem:**
+- Time-based escalation forced full offensive after 2 turns of baiting (lines 89-93 in old magic_antidote_tracker.lk)
+- AI used GRAPPLE-COVID combo even when enemy had antidote available (cd=0)
+- Enemy immediately cleansed COVID poison, wasting 18 TP combo
+
+**Solution:**
+- Removed time-based escalation logic (lines 89-93 deleted)
+- Bait mode now exits ONLY when:
+  1. Antidote detected on cooldown (`cd > 0`)
+  2. Cleanse detected (poison duration changes)
+  3. Enemy has no antidote (not equipped)
+  4. Repeated natural expiry (poison expires naturally 2+ times)
+- Added antidote safety checks to combo positioning (line 122 in magic_strategy.lk):
+  ```leekscript
+  var antidoteSafe = (antidoteCD > 0 || !enemyHasAntidote)
+  if (!baiting && antidoteSafe) {
+      // Check combo availability
+  }
+  ```
+- Added antidote safety checks to combo execution (lines 306-321 in magic_strategy.lk)
+- Added antidote safety to close-range COVID sequence (line 332)
+
+**Impact:** AI now persistently baits with TOXIN/PLAGUE until enemy actually uses antidote, then immediately capitalizes with GRAPPLE-COVID combo while it's on cooldown
+
+### 14. AoE Self-Damage Prevention Fix (January 2026)
+**Problem:**
+- Bait offensive used direct `moveTowardCell()` instead of action queue pattern (lines 182, 217, 247 in old magic_antidote_tracker.lk)
+- Sequence: Plan movement → Check AoE → Immediate reposition → Queued movement executes → Back in AoE range
+- Result: AI repositioned out of AoE, then moved back into it, self-inflicting poison/debuffs
+
+**Solution:**
+- Replaced direct `moveTowardCell()` with action queue pattern in all 3 locations:
+  ```leekscript
+  // OLD (broken):
+  moveTowardCell(safeCellToxin)
+  player.updateEntity()
+
+  // NEW (correct):
+  strategy.createMovementAction(Action.MOVEMENT_APPROACH, safeCellToxin, target)
+  strategy.executeAndFlushActions()
+  player.updateEntity()
+  targetHitCell = context['targetHitCell']
+  ```
+- Replaced invalid `continue` statements with skip flags (lines 171-195, 210-233, 247-270)
+- Fixed: TOXIN, BALL_AND_CHAIN, FRACTURE repositioning
+
+**Impact:** AI now properly repositions before using AoE chips, preventing self-damage from TOXIN poison and BALL_AND_CHAIN/FRACTURE debuffs
+
+### 15. Weapon Spam Fix in Bait Offensive (January 2026)
+**Problem:**
+- Bait offensive used poison plan's conservative `uses` estimate (lines 123-129 in old magic_antidote_tracker.lk)
+- Plan said "use weapon once" (for positioning purposes)
+- Execution followed plan literally, only attacking once with 21 TP available
+- Result: Wasted 16+ TP per turn during bait mode
+
+**Solution:**
+- Replaced conservative usage with spam loop (lines 123-130 in magic_antidote_tracker.lk):
+  ```leekscript
+  // OLD (only 1 use):
+  var usesW = wRec['uses']  // Plan estimate: 1
+  while (usesW > 0 && player._currTp >= wObj._cost) {
+      attack()
+      usesW -= 1  // Exits after 1 use
+  }
+
+  // NEW (spam until maxUse):
+  var actualUses = 0
+  while (actualUses < wObj._maxUse && player._currTp >= wObj._cost) {
+      attack()
+      actualUses += 1  // Continues until maxUse or TP exhausted
+  }
+  ```
+- Matches full offensive weapon spam behavior
+
+**Impact:** Bait mode now properly spends TP on weapons, dealing consistent damage while baiting antidote instead of wasting resources
+
+### 16. Boss Fight Strategy Refactor - INVERSION Priority (January 2026)
 **Problem:**
 - Old strategy had complex nested fallback systems (600+ lines)
 - `findOptimalMoveChipPosition()` + `findClosestCandidateCell()` + `moveCrystalToAlignment()` created stuck movement loops
@@ -785,10 +890,10 @@ python3 tools/lw_test_script.py 446029 20 domingo
 ---
 
 ## Script ID
-- **V8**: 446029 (main.lk) - Current production
+- **V8**: 447461 (main.lk in 8.0/V8/) - Current production (fresh upload January 2026)
 
 ---
 
-*Document Version: 21.0*
+*Document Version: 22.0*
 *Last Updated: January 2026*
-*Status: V8 System Active - Boss Fight INVERSION Strategy (Refactored), GRAPPLE-COVID Combo, AoE Self-Damage Prevention*
+*Status: V8 System Active - Nova Damage Integration, Antidote Baiting Fix, AoE Self-Damage Prevention, Weapon Spam Fix*
