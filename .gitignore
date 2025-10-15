@@ -12,6 +12,7 @@ build/
 
 # Config files with credentials
 config.json
+tools/config.json
 .config/
 
 # Test outputs
@@ -38,6 +39,5 @@ V6_integrated.ls
 fight_*.json
 report_*.json
 log_analysis_*
-
-# Tools folder (keep locally, not in repo)
-tools/
+fight_logs/
+*.db

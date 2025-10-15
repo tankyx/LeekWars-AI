@@ -17,883 +17,277 @@ LeekWars-AI/
 │       ├── strength_strategy.lk # Strength builds (weapon-focused)
 │       ├── magic_strategy.lk    # Magic builds (DoT kiting)
 │       ├── agility_strategy.lk  # Agility builds (damage return)
-│       └── boss_strategy.lk     # Boss fight strategy (skeleton)
+│       └── boss_strategy.lk     # Boss fight strategy
 └── tools/              # Python automation
     ├── lw_test_script.py # Testing with log retrieval
     └── upload_v8.py     # V8 deployment
 ```
-
----
 
 ## V8 System Architecture
 
 ### Core Philosophy: Action Queue Pattern
 
 V8 uses a **two-phase execution model**:
-
 1. **Planning Phase** - Strategy creates actions and queues them in `this._actions`
 2. **Execution Phase** - `executeScenario()` iterates through queue and executes via action executors
 
 **Key Principle:** Strategies NEVER call `useChip()`, `useWeapon()`, or `moveTowardCell()` directly during planning. All game-modifying operations happen in the execution phase.
 
-#### Why This Architecture?
-
-**Benefits:**
-- **Separation of Concerns**: Planning logic separate from execution
-- **Testability**: Action queues can be inspected before execution
-- **Consistency**: All strategies follow the same execution flow
-- **Debugging**: Actions visible in debug logs before execution
-- **State Management**: Player state (TP/MP/position) updated consistently
-
-**Example Flow:**
-```
-Strategy Planning:
-1. calculateBestCell() → finds optimal position
-2. createMovementAction() → queues movement
-3. createAttackAction() → queues weapon attack
-4. createAttackAction() → queues chip attack
-
-Execution Phase:
-5. executeScenario() loops through queue:
-   - ACTION_MOVEMENT → moveTowardCell()
-   - ACTION_DIRECT (weapon) → setWeapon() + useWeapon()
-   - ACTION_DIRECT (chip) → useChip()
-```
+**Why This Architecture?**
+- Separation of concerns (planning vs execution)
+- Testability (inspect actions before execution)
+- Consistency (all strategies follow same flow)
+- Debugging (actions visible in logs)
+- State management (TP/MP/position updated correctly)
 
 ### Module Breakdown
 
 #### **main.lk** - Entry Point & Strategy Selection
-- Detects build type (Strength/Magic/Agility/Boss)
-- Instantiates appropriate strategy class
-- Delegates all combat decisions to strategy
-
-**Build Detection:**
-```
-Strength: STR > MAG && STR > AGI
-Magic:    MAG > STR && MAG > AGI
-Agility:  AGI > STR && AGI > MAG
-Boss:     BossFightStrategy.detectBossFight() == true
-```
+Detects build type and instantiates appropriate strategy:
+- Strength: `STR > MAG && STR > AGI`
+- Magic: `MAG > STR && MAG > AGI`
+- Agility: `AGI > STR && AGI > MAG`
+- Boss: `BossFightStrategy.detectBossFight() == true`
 
 #### **game_entity.lk** - State Tracking
-- `Player` class: Current leek stats (HP, TP, MP, position, effects)
-- `Enemy` class: Enemy stats with shield/effect tracking
-- `Chest` class: Treasure chest entities
-- `updateEntity()`: Refreshes entity state from game API
-
-**Critical Methods:**
-- `hasEffect()` / `getEffectRemaining()` - Effect tracking
-- `hasDamageReturn()` - Agility strategy buff tracking
-- `updateEntity()` - Refreshes position/stats from game state
+Entity state management (`Player`, `Enemy`, `Chest` classes):
+- Tracks HP, TP, MP, position, effects, shields
+- `updateEntity()` refreshes state from game API
+- `hasEffect()` / `getEffectRemaining()` for effect tracking
 
 #### **field_map.lk** - Tactical Positioning
-- Calculates damage zones for all equipped weapons/chips
-- Builds hit maps showing optimal attack positions
-- Tracks obstacles, entities, and line-of-sight
-
-**Key Concepts:**
-- **Damage Map**: Pre-calculated cells showing weapon/chip damage potential
+Pre-calculates damage zones and optimal attack positions:
+- **Damage Map**: Cells showing weapon/chip damage potential
 - **Hit Cells**: Positions from which player can attack target
 - **Star Pattern**: Line/diagonal weapons (lightninger, rifle, laser)
 - **Circle Pattern**: AoE weapons (grenade launcher, electrisor)
-
-**Critical Bug Fix (October 2025):**
-- Star pattern distance validation using `getCellDistance()` (lines 542-543, 569-570)
-- Prevents marking cells as in-range when they're beyond weapon max range
+- Uses `getCellDistance()` for accurate range validation
 
 #### **item.lk** - Arsenal Management
-- `Arsenal` class: Manages equipped weapons & chips
+`Arsenal` class manages equipped weapons & chips:
 - Damage calculations with stat scaling
 - Shield penetration logic
-
-**Key Methods:**
-- `getNetDamageAgainstTarget()` - Calculates final damage after shields
-- `getDamageReturnValue()` - Agility damage return % calculation
-- `getHighestDamageWeapon()` - Fallback weapon selection
+- `getNetDamageAgainstTarget()` for final damage calculation
+- `getPoisonChipsSorted()` auto-detects all poison chips via `EFFECT_POISON`
 
 #### **strategy/action.lk** - Action Types
-Defines all action types for the queue system:
-```
-ACTION_DIRECT        = 0  // Direct weapon/chip attack
-ACTION_BUFF          = 1  // Buff chip (MIRROR, THORN, STEROID, etc.)
-ACTION_DEBUFF        = 2  // Debuff chip (LIBERATION, INVERSION, etc.)
-ACTION_MOVEMENT      = 3  // Movement actions
-ACTION_WEAPON_SWAP   = 4  // Weapon switching
-ACTION_TELEPORT      = 14 // Teleportation (special handling)
-
-MOVEMENT_APPROACH    = 10 // Move toward target
-MOVEMENT_KITE        = 11 // Move away from target
-MOVEMENT_HNS         = 12 // Hide and seek positioning
-```
-
-**Action Structure:**
-```
-class Action {
-    type         // Action type (see constants above)
-    weaponID     // Weapon ID (if weapon attack)
-    chip         // Chip ID (if chip attack)
-    targetCell   // Target cell (captured at creation time)
-    targetEntity // Target entity (reference only)
-}
-```
+Defines action types for queue system:
+- `ACTION_DIRECT` (0), `ACTION_BUFF` (1), `ACTION_DEBUFF` (2), `ACTION_MOVEMENT` (3), `ACTION_WEAPON_SWAP` (4)
+- `MOVEMENT_APPROACH` (10), `MOVEMENT_KITE` (11), `MOVEMENT_HNS` (12)
+- Action captures `targetCell` at creation time (prevents stale position bugs)
 
 #### **strategy/base_strategy.lk** - Base Combat Logic
 Abstract base class providing:
-- Action queue management (`this._actions`)
-- Action executors (converts actions to API calls)
-- Shared combat logic (weapon-focused offensive, HNS positioning)
-- Movement planning
-
-**Core Methods:**
-
-**Action Creation:**
-- `createAttackAction(type, target, targetCell, weaponOrChip)` - Queue attack
-- `createMovementAction(type, targetCell, target)` - Queue movement
-
-**Execution:**
-- `executeScenario()` - Main executor loop
-- `executeAndFlushActions()` - Mid-scenario execution for immediate state updates
-
-**Shared Combat Logic:**
-- `executeWeaponFocusedOffensive()` - Used by Strength & Agility strategies
+- Action queue management & execution
+- `executeWeaponFocusedOffensive()` - Shared by Strength & Agility
 - `findHideAndSeekCell()` - Post-combat repositioning
-- `moveTowardCell()` / `moveAwayFromEnemy()` - Movement helpers
-
-**Critical Bug Fix (October 2025):**
-- Attack execution uses `a.targetCell` instead of `a.targetEntity._cellPos` (lines 550, 553)
-- Prevents stale position bugs after `executeAndFlushActions()`
+- `checkAoESafety()` / `findSafeCellForAoE()` - Prevents self-damage
+- `executeAndFlushActions()` - Mid-scenario execution for immediate state updates
 
 #### **strategy/strength_strategy.lk** - Strength Builds
 **Philosophy:** Maximize weapon damage output
 
 **Combat Flow:**
-1. Check for CHIP_STEROID buff (apply if needed)
-2. Check for CHIP_LEATHER_BOOTS (mobility buff if target unreachable)
-3. Check for CHIP_LIBERATION (remove debuffs/enemy shields)
-4. Check for OTKO opportunity (low HP enemies)
-5. Select best weapon damage cell from field map
-6. Execute weapon-focused offensive:
-   - Move to weapon cell
-   - Spam primary weapon (highest damage) to max uses
-   - Use secondary weapons
-   - Spend leftover TP on damage chips (sorted by damage)
-7. Hide-and-seek repositioning
+1. Apply CHIP_STEROID buff (strength boost)
+2. Apply CHIP_LIBERATION (remove debuffs / strip enemy shields)
+3. Check OTKO opportunity (enemy HP < 35% or < 500 HP → teleport + weapon spam)
+4. Move to best weapon damage cell from field map
+5. Execute weapon-focused offensive (spam weapons, then damage chips)
+6. Hide-and-seek repositioning
 
 **Special Features:**
-- **OTKO Teleportation**: When enemy HP < 35% or < 500 HP, teleport + weapon spam
-- **CHIP_LIBERATION**: Tactical debuff removal (player) or shield stripping (enemy)
-- **CHIP_ADRENALINE**: +4 TP when short by 1-4 TP for attacks
-- **Weapon Spam**: Uses `while (actualUses < maxUse && TP >= cost)` for proper chip spam
-
-**Files:**
-- `/V8_modules/strategy/strength_strategy.lk` (397 lines)
+- OTKO teleportation for low HP enemies
+- CHIP_ADRENALINE for TP boost when short by 1-4 TP
+- Proper weapon spam: `while (uses < maxUse && TP >= cost)`
 
 #### **strategy/agility_strategy.lk** - Agility Builds
 **Philosophy:** Strength strategy + damage return buffs
 
 **Combat Flow:**
-1. Check for CHIP_WARM_UP (agility buff, apply if needed)
-2. Check for CHIP_LEATHER_BOOTS (mobility buff if target unreachable)
-3. **Check for damage return buff (CHIP_MIRROR or CHIP_THORN)**:
-   - CHIP_MIRROR: 35.75% damage return (5-6% base * agility scaling), 3 turns, 5 TP
-   - CHIP_THORN: 22.75% damage return (3-4% base * agility scaling), 2 turns, 4 TP
-   - Reapply if no active buff or remaining ≤ 1 turn
-4. Select best weapon damage cell (same as strength strategy)
-5. Check for CHIP_ADRENALINE (TP boost if needed)
-6. Execute weapon-focused offensive (shared with strength)
-7. Hide-and-seek repositioning
+1. Apply CHIP_WARM_UP (agility buff)
+2. Apply damage return buff (CHIP_MIRROR or CHIP_THORN)
+   - CHIP_MIRROR: 35.75% return, 3 turns, 5 TP
+   - CHIP_THORN: 22.75% return, 2 turns, 4 TP
+3. Execute weapon-focused offensive (shared with strength)
+4. Hide-and-seek repositioning
 
-**Key Differences from Strength:**
-- Adds damage return buff layer before combat
-- Uses CHIP_WARM_UP instead of CHIP_STEROID
-- 95% code reuse with strength strategy
-
-**Refactoring (October 2025):**
-- Complete rewrite using strength_strategy.lk as template
-- Eliminated custom cell selection logic (was ignoring pre-calculated best cells)
-- Fixed weapon sorting (was by maxUse instead of damage)
-- Reduced from 237 lines to 222 lines (6% reduction)
-
-**Files:**
-- `/V8_modules/strategy/agility_strategy.lk` (222 lines)
+**Key Differences:** Adds damage return layer before combat, uses CHIP_WARM_UP instead of CHIP_STEROID
 
 #### **strategy/magic_strategy.lk** - Magic Builds
 **Philosophy:** DoT kiting, burst combos, and poison attrition
 
 **Combat Flow:**
-1. **Antidote Detection**: Track enemy antidote usage via poison duration changes
-   - Bait mode: Use weak poisons (TOXIN, FLAME_THROWER) to burn antidote cooldown
-   - Full offensive: After antidote used, apply strong poisons (COVID, PLAGUE)
-2. **Poison Attrition Mode**: If poison active and enemy vulnerable, hide instead of fighting
-   - Triggers when: poison will kill before antidote available, OR enemy HP < 30%, OR enemy HP < 50% with antidote on cooldown
-   - Skips all attacks, moves to Hide & Seek cell to avoid counterattack damage
-3. **GRAPPLE-COVID Combo** (range 3-8, requires horizontal/vertical alignment):
-   - GRAPPLE (4 TP): Pull enemy to range 1-2
+1. **Antidote Detection** - Track enemy antidote usage via poison duration changes
+   - Bait mode: Use weak poisons (TOXIN, FLAME_THROWER, DOUBLE_GUN) to burn antidote
+   - Full offensive: After antidote on cooldown, apply strong poisons (COVID, PLAGUE)
+2. **Poison Attrition Mode** - Hide when poison will secure kill (enemy HP < 30%, or poison damage > HP before antidote available)
+3. **GRAPPLE-COVID Combo** (range 3-8, requires H/V alignment, 14-19 TP):
+   - GRAPPLE (4 TP): Pull enemy to distance 2
    - COVID (8 TP): Apply uncleansable poison (~450 damage over 7 turns)
-   - BOXING_GLOVE (2 TP): Push enemy away (max range 2-8 cells)
-   - BALL_AND_CHAIN (5 TP): Optional MP debuff if available
-   - Total: 14-19 TP burst combo
-4. **Weapon Spam First**: Use all weapon attacks before spending TP on chips
-5. **Poison Chips**: Apply remaining DoT chips (TOXIN, PLAGUE, VENOM)
-6. **Opportunistic Debuffs**: BALL_AND_CHAIN, FRACTURE with leftover TP
-7. **Kite/Hide**: Reposition to safe distance after attacks
+   - BOXING_GLOVE (2 TP): Push enemy away (range 2-8)
+   - BALL_AND_CHAIN (5 TP): Optional MP debuff
+4. **Weapon Spam** → **Poison Chips** → **Opportunistic Debuffs** → **Kite/Hide**
 
 **Special Features:**
-- **GRAPPLE-COVID Combo**: High-damage burst with pull → poison → push mechanics
-  - **GRAPPLE Mechanics** (CHIP_GRAPPLE):
-    - Pulls enemy toward a target cell (NOT directly to player)
-    - Target cell calculated as: `playerPos - direction * 2` (distance 2 from player)
-    - Distance 2 required for BOXING_GLOVE min range (cannot use at distance 1)
-    - Uses direction vector from enemy to player (normalized to -1, 0, or 1)
-  - **BOXING_GLOVE Mechanics** (CHIP_BOXING_GLOVE):
-    - Range 2-8 measured from CASTER position (not from enemy)
-    - Targets a destination cell (NOT the enemy entity directly)
-    - Only works on horizontal OR vertical lines (NOT diagonals)
-    - Push calculation: `destCell = playerPos + direction * distFromPlayer`
-    - Loop tries distances 8→2 from player, picks furthest with LOS
-    - Example: Player at (1,7), enemy at (1,5) → can push to (1,-1) at distance 8
-  - Immediate execution pattern (not queued) to handle position updates between chips
-  - Uses `lineOfSight()` to find valid push cells without obstacles
-  - BALL_AND_CHAIN optional (executes if equipped + off cooldown + 19 TP available)
-- **Antidote Baiting System**: Detects when enemy uses CHIP_ANTIDOTE by tracking poison duration
-  - Bait phase: Conserve strong poisons, use only TOXIN + FLAME_THROWER + DOUBLE_GUN
-  - Escalation: Switch to full offensive when antidote cooldown detected
-  - Smart detection: Tracks `prevPoisonRemaining` to catch early cleanses
-- **Poison Attrition Mode**: Defensive play when poison will secure kill
-  - Calculates `turnsBeforeAntidote = min(poisonRemaining, antidoteCooldown)`
-  - Estimates poison damage: `poisonDamagePerTurn * turnsBeforeAntidote`
-  - Hides if poison will kill before antidote can cleanse
-- **Weapon-First Execution**: Spams weapons to max uses BEFORE using chips
-  - Ignores poison plan's conservative weapon use estimates
-  - Ensures maximum TP expenditure on repeatable attacks
-- **Effect Tracking**: Uses `getEffects()` API for intelligent DoT management
+- **GRAPPLE-COVID Combo**: Pull → poison → push sequence with immediate execution (not queued)
+- **Antidote Baiting**: Tracks `prevPoisonRemaining` to detect early cleanses, escalates when cooldown detected
+- **Poison Attrition**: Hides when poison will kill (avoids counterattack damage)
+- **Nova Chips**: CHIP_MUTATION (+HP buff), CHIP_DESINTEGRATION, CHIP_ALTERATION (max HP reduction)
+- **AoE Safety**: Auto-repositions to avoid self-damage from TOXIN/PLAGUE/BALL_AND_CHAIN/FRACTURE
 
-**Files:**
-- `/V8_modules/strategy/magic_strategy.lk` (~1,300 lines)
-
-#### **strategy/boss_strategy.lk** - Boss Fight Strategy (REFACTORED January 2026)
-**Philosophy:** INVERSION-priority strategy with clean 3-step decision tree for crystal puzzle solving
+#### **strategy/boss_strategy.lk** - Boss Fight Strategy
+**Philosophy:** INVERSION-priority strategy with 3-step decision tree for crystal puzzle solving
 
 **Boss Fight Mechanics:**
-- **Grail** (center): Boss entity with 4 colored gems (red, green, blue, yellow)
-- **4 Crystals**: Movable entities that project colored rays
-  - Red crystal: Projects North ray → must be SOUTH of grail (below, same X)
-  - Blue crystal: Projects West ray → must be EAST of grail (right, same Y)
-  - Yellow crystal: Projects East ray → must be WEST of grail (left, same Y)
-  - Green crystal: Projects South ray → must be NORTH of grail (above, same X)
-- **Objective**: Align all 4 crystals to project rays onto matching grail gems → Grail self-destructs → Phase 2 combat
-
-**Available Chips:**
-- **CHIP_GRAPPLE**: Range 1-8 in line, 3 TP, 4 uses/turn - Pulls crystal toward target cell
-- **CHIP_BOXING_GLOVE**: Range 2-8 in line, 3 TP, 4 uses/turn - Pushes crystal toward target cell
-- **CHIP_INVERSION**: Range 1-14 in line, 4 TP, 4 uses/turn, **every other turn** (turns 2, 4, 6, 8...) - Swaps player and crystal positions
-- **CHIP_TELEPORTATION**: Any cell, 5 TP - Instant repositioning
+- **Grail** (center): Boss with 4 colored gems
+- **4 Crystals**: Movable entities projecting colored rays (must align with matching grail gems)
+  - Red → SOUTH of grail (below, same X)
+  - Blue → EAST of grail (right, same Y)
+  - Yellow → WEST of grail (left, same Y)
+  - Green → NORTH of grail (above, same X)
 
 **Combat Flow (3-Step Decision Tree):**
-1. **INVERSION Check** (even turns only):
-   - If player closer to target than crystal by 3+ cells → SWAP
-   - Enables instant crystal jumps (e.g., crystal 134 → 297 in 1 turn)
-2. **GRAPPLE/BOXING_GLOVE Check** (when on axis):
-   - Check if on same H/V line as crystal AND distance 1-8
-   - `shouldPull = playerToTarget < crystalToTarget`
-   - If pull: use GRAPPLE (pulls crystal toward player)
-   - If push: use BOXING_GLOVE (pushes crystal toward target)
-3. **Smart Positioning**:
-   - Odd turns (next turn has INVERSION): Move toward TARGET position
-   - Even turns (next turn uses GRAPPLE/BOXING): Move to AXIS cells (range 1-8 from crystal)
-   - Use TELEPORTATION if paths blocked
+1. **INVERSION Check** (even turns): Swap positions if player 3+ cells closer to target
+2. **GRAPPLE/BOXING_GLOVE Check**: Use chips if on axis and in range 1-8
+3. **Smart Positioning**: Move toward TARGET (odd turns) or AXIS cells (even turns)
 
-**New Helper Functions (January 2026 Refactor):**
-- `getCellsOnAxis(crystalPos, axisType)` - Returns all empty cells on H/V line
-- `findReachableCellOnAxis(crystalPos, axisType, minRange, maxRange)` - Filters by MP budget + chip range
-- `moveTowardAxis(crystalPos, axisType)` - Reduces X or Y distance (NOT point distance)
-- `shouldUseInversion(playerPos, crystalPos, targetPos)` - Checks if swap beneficial (3+ cell advantage)
-- `determineAxisType(crystalColor, grailPos)` - Returns "VERTICAL" or "HORIZONTAL"
+**Available Chips:**
+- **CHIP_GRAPPLE** (range 1-8, 4 TP): `useChipOnCell(CHIP_GRAPPLE, destinationCell)` - Target the DESTINATION cell where you want to pull the crystal TO (between player and crystal on same line)
+- **CHIP_BOXING_GLOVE** (range 2-8, 3 TP): `useChipOnCell(CHIP_BOXING_GLOVE, destinationCell)` - Target the DESTINATION cell where you want to push the crystal TO (beyond crystal, away from player on same line)
+- **CHIP_INVERSION** (range 1-14, 4 TP): `useChipOnCell(CHIP_INVERSION, crystalCell)` - Target the crystal's CURRENT cell to swap positions with it
+- **CHIP_TELEPORTATION** (5 TP): Emergency repositioning
 
-**Removed Functions (Old Complex System):**
-- ~~`findOptimalMoveChipPosition()`~~ - 91 lines removed
-- ~~`findClosestCandidateCell()`~~ - 130 lines removed
-- ~~`moveCrystalToAlignment()`~~ - 182 lines removed
-- **Total: 403 lines deleted**, replaced with clean 3-step tree
+**CRITICAL:** GRAPPLE and BOXING_GLOVE target the **destination cell** (where crystal will move TO), NOT the crystal's current position. INVERSION targets the crystal's current cell.
 
-**Current Performance (Fight #49613113):**
-- ✅ GRAPPLE: 39 uses
-- ✅ BOXING_GLOVE: 39 uses
-- ✅ Movement: 56/78 successful (71.8%)
-- ⏳ INVERSION: 0 uses (awaiting beneficial positions on even turns)
-- 📍 TELEPORT: 3 uses (minimal, chips working well)
-
-**Team Coordination:**
-- Uses `getEntityTurnOrder()` to assign crystals by turn position
-- 0→red, 1→blue, 2→yellow, 3→green (wraps for 5+ allies)
-- All leeks work on puzzle (role system exists but assigns all as solvers)
-
-**Files:**
-- `/V8_modules/strategy/boss_strategy.lk` (~950 lines, down from 1,110 after refactor)
+**Team Coordination:** Uses `getEntityTurnOrder()` to assign crystals (0→red, 1→blue, 2→yellow, 3→green)
 
 ---
 
-## Critical Bug Fixes (October 2025)
+## Critical Bug Fixes
 
-### 1. Star Pattern Distance Calculation Bug
-**Problem:**
-- `getLineHits()` and `getDiagonalHits()` used arithmetic cell offsets without validating actual game distance
-- Cells marked as in-range when actually out of range (e.g., cell 181 at distance 12 for lightninger max range 10)
-- Arithmetic offset `cell + x_offset * dist` doesn't guarantee correct Chebyshev distance
+### Field Map & Positioning
+**Star Pattern Distance Validation:** Added `getCellDistance()` validation to prevent marking out-of-range cells for star pattern weapons (lightninger, rifle, laser)
 
-**Solution:**
-- Added `getCellDistance()` validation in both methods (field_map.lk lines 542-543, 569-570)
-- Filters cells to only those at actual weapon range before marking as damage cells
-- Code: `if (actualDist == null || actualDist < minR || actualDist > maxR) continue`
+**Dead Entity Targeting:** Added `isDead()` checks in `getClosestEnemy()` and `getClosestChest()` to prevent targeting destroyed entities
 
-**Impact:** Star pattern weapons (lightninger, rifle) now correctly identify all valid shooting positions
+**Unreachable Damage Cells:** Added `findBestReachableDamageCell()` to find highest damage cell within MP budget, preventing wasted turns moving to unreachable positions
 
-### 2. Stale Target Position Bug
-**Problem:**
-- Attack execution used `a.targetEntity._cellPos` which becomes stale after `executeAndFlushActions()`
-- Target entity state not refreshed when player state is updated mid-scenario
-- Caused weapon attacks to fail silently (wrong cell position)
+**Fighting Retreat:** Added `findBestDamageCellOnPath()` to attack from damage cells along flee path, maximizing TP usage during retreat
 
-**Solution:**
-- Changed attack execution to use `a.targetCell` (captured at action creation time)
-- Modified base_strategy.lk lines 550, 553 from `a.targetEntity._cellPos` to `a.targetCell`
+### Action Queue & Execution
+**Stale Target Position:** Changed attack execution to use `a.targetCell` (captured at creation) instead of `a.targetEntity._cellPos` (can become stale after movement)
 
-**Impact:** Weapon and chip attacks now execute correctly after immediate movement
+**Mid-Scenario Execution:** Added `executeAndFlushActions()` for immediate movement execution when game state needs updating before continuing planning
 
-### 3. Chest Targeting After Destruction Bug
-**Problem:**
-- `getClosestChest()` returned dead chests (`isDead()` == true)
-- AI continued targeting destroyed chests instead of switching back to enemies
-- Infinite loop on dead chest entity
+**Chip Spam:** Changed from pre-calculated uses to `while (uses < maxUse && TP >= cost)` loop in all strategies
 
-**Solution:**
-- Added `isDead()` check in `getClosestChest()` (field_map.lk line 379)
-- Code: `if (isDead(c._id)) continue`
-- Returns null when all chests destroyed, strategies fall back to enemy targeting
+### Magic Strategy
+**GRAPPLE-COVID Combo:**
+- Added combo positioning system (`findGrappleCovidCell()` at range 3-8, H/V alignment)
+- Immediate chip execution (not queued) to handle position updates: GRAPPLE → COVID → BOXING_GLOVE → BALL_AND_CHAIN (optional)
+- TP preservation (skip LEATHER_BOOTS when combo available)
+- H/V alignment detection for BOXING_GLOVE push calculation
 
-**Impact:** All strategies (Strength, Agility, Magic) properly resume enemy combat after chest loot collected
+**Antidote Baiting:**
+- Removed time-based escalation (was forcing full offensive after 2 turns)
+- Bait mode exits only when: antidote on cooldown, cleanse detected, no antidote equipped, or repeated natural expiry
+- Added antidote safety checks to combo positioning and execution
+- Fixed weapon spam in bait mode (was using plan's conservative estimate instead of spamming to maxUse)
 
-### 4. Unreachable Position Handling
-**Problem:**
-- When optimal weapon cell was unreachable, agility strategy applied buff then stopped
-- No TP spent on attacks from current position
-- Early return prevented any combat actions
+**Poison Attrition:** Added defensive mode when poison will secure kill (hides to avoid counterattack damage)
 
-**Solution:**
-- Added `executeAndFlushActions()` method for mid-scenario execution (base_strategy.lk lines 567-571)
-- Executes movement immediately, updates game state, continues with weapons/chips from actual position
-- Tracks weapon state (`currentWeaponId`) to avoid unnecessary swaps
+**AoE Self-Damage Prevention:**
+- Added `checkAoESafety()` and `findSafeCellForAoE()` methods
+- Auto-repositions before using TOXIN/PLAGUE/BALL_AND_CHAIN/FRACTURE to avoid self-damage
+- Fixed bait offensive to use action queue pattern instead of direct `moveTowardCell()` (was causing reposition → queued movement → back in AoE)
 
-**Impact:** Agility builds now properly spend TP on attacks even when optimal cell unreachable
+**Nova Chips:** Added CHIP_MUTATION (+HP buff), CHIP_DESINTEGRATION, CHIP_ALTERATION (max HP reduction) for attrition synergy
 
-### 5. Chip Spam Bug
-**Problem:**
-- Pre-calculated `usesC = min(maxUse, floor(TP/cost))` limited chip spam
-- Chips used exactly once instead of spamming until TP exhausted
+### Boss Strategy
+**INVERSION Priority Refactor:**
+- Removed 403 lines of complex fallback code
+- Replaced with clean 3-step decision tree: INVERSION check → GRAPPLE/BOXING_GLOVE → Smart positioning
+- Fixed chip availability check (was using `canUseChipOnCell()` incorrectly)
+- Result: 0% chip usage → 78 chip uses per fight, TELEPORTATION reduced from 42 to 3
 
-**Solution:**
-- Changed to `while (actualUsesC < maxUse && playerTP >= cost)` loop
-- Fixed in 3 locations:
-  - strength_strategy.lk main offensive (lines 377-383)
-  - strength_strategy.lk OTKO (lines 149-155)
-  - agility_strategy.lk (already fixed)
-
-**Impact:** All strategies now properly spam chips until max uses or TP exhausted
-
-### 6. Magic Strategy Antidote Bait Loop Bug
-**Problem:**
-- Antidote detection logic reset to bait mode when antidote cooldown returned to 0 (lines 224-227)
-- Created infinite bait loop: bait → antidote used → detect cooldown ready → reset to bait mode
-- GRAPPLE-COVID combo never executed because strategy stayed in bait mode forever
-- PLAGUE incorrectly used in bait mode instead of being saved for full offensive
-
-**Solution:**
-- Removed reset-to-bait logic (lines 224-227) that forced `_baitMode[enemyId] = true` when `antidoteCD == 0`
-- Initialize bait mode only on first encounter, rely on escalation logic (lines 231-247) to exit
-- Removed CHIP_PLAGUE from `isBaitAllowedChip()` and bait mode logic
-- Bait mode now uses only: FLAME_THROWER + DOUBLE_GUN + TOXIN
-- Full offensive mode priorities: GRAPPLE-COVID combo FIRST (19 TP), then PLAGUE + weapons
-
-**Impact:** Magic strategy now correctly baits antidote, then executes GRAPPLE-COVID combo after antidote is detected on cooldown
-
-### 7. GRAPPLE-COVID Combo Implementation (December 2025)
-**Problem:**
-- GRAPPLE-COVID combo was planned but never executed correctly
-- Multiple issues: API function errors, stale position bugs, TP starvation, chip targeting failures
-
-**Solution - Multi-phase implementation:**
-
-**Phase 1: Combo Positioning System**
-- Added `findGrappleCovidCell()` to find optimal cells at range 3-8, on same line, with LOS
-- Uses `fieldMap.getAccessibleCells(player)` to get reachable cells within MP range
-- Scores cells preferring range 5-6 (middle of 3-8) and proximity to current position
-
-**Phase 2: Immediate Movement Execution**
-- Problem: Combo check happened from OLD position before movement executed
-- Solution: Added `executeAndFlushActions()` to move immediately when `shouldPrioritizeCombo = true`
-- Updates player position after movement, then checks combo availability from NEW position
-
-**Phase 3: TP Preservation**
-- Problem: LEATHER_BOOTS consumed 3 TP, leaving only 16/19 TP for combo
-- Solution: Skip LEATHER_BOOTS when `shouldPrioritizeCombo = true` to reserve full 19 TP
-
-**Phase 4: Optional BALL_AND_CHAIN**
-- Problem: BALL_AND_CHAIN cooldown blocked entire combo execution
-- Solution: Made BALL_AND_CHAIN optional
-  - Core combo: GRAPPLE + COVID + BOXING_GLOVE (14 TP minimum)
-  - Include BALL_AND_CHAIN only if equipped + off cooldown + 19 TP available
-  - Dynamically check at execution time, skip with debug log if unavailable
-
-**Phase 5: Immediate Chip Execution Pattern**
-- Problem: Queued actions had stale target positions after GRAPPLE moved enemy
-- Solution: Changed from queue pattern to immediate execution
-  - Execute GRAPPLE → update enemy position with `target.updateEntity()`
-  - Execute COVID on new position → Execute BOXING_GLOVE → Execute BALL_AND_CHAIN
-  - Each chip executes immediately, ensuring correct target cells
-
-**Phase 6: BOXING_GLOVE Horizontal/Vertical Alignment**
-- Problem: BOXING_GLOVE only works on horizontal OR vertical lines (NOT diagonals)
-- Solution: Added alignment detection
-  - Check `enemyY == playerY` (horizontal) or `enemyX == playerX` (vertical)
-  - Calculate push direction: away from player along same line
-  - Find furthest valid cell (8 cells max) with `lineOfSight()` to avoid obstacles
-  - Logs error if enemy not on horizontal/vertical line after GRAPPLE
-
-**Phase 7: Weapon Spam Execution Order**
-- Problem: Poison plan limited weapons to 1 use, then spent TP on chips, leaving 10 TP unused
-- Solution: Reordered execution in `createFullOffensiveDoT()`
-  - Spam weapons FIRST to max uses (ignore poison plan's conservative values)
-  - THEN use poison chips with remaining TP
-  - Ensures maximum TP expenditure on repeatable attacks before one-time chips
-
-**Phase 8: Poison Attrition Mode**
-- Problem: AI continued fighting even when poison would secure kill, taking unnecessary damage
-- Solution: Added defensive play when poison will win
-  - Calculate `turnsBeforeAntidote = min(poisonRemaining, antidoteCooldown)`
-  - Estimate `poisonDamageBeforeAntidote = poisonDamagePerTurn * turnsBeforeAntidote`
-  - Enter attrition mode if:
-    1. Poison will kill before antidote available OR
-    2. Enemy HP < 30% (very low) OR
-    3. Enemy HP < 50% AND antidote on cooldown
-  - Skip all attacks, move to Hide & Seek cell, let poison finish enemy
-
-**Impact:**
-- GRAPPLE-COVID combo now executes reliably (14-19 TP burst)
-- Weapons spam to max uses before chips
-- AI plays defensively when poison will secure kill, improving survival rate
-
-### 8. Battle Royale Dead Enemy Targeting Bug (January 2026)
-**Problem:**
-- `getClosestEnemy()` returned dead enemies in Battle Royale mode
-- AI continued targeting destroyed enemies with `_cellPos = null`
-- Caused null target cell errors and wasted TP on invalid attacks
-
-**Solution:**
-- Added `isDead()` check in `getClosestEnemy()` (field_map.lk line 377)
-- Code: `if (isDead(e._id)) continue`
-- Mirrors existing dead chest check in `getClosestChest()`
-
-**Impact:** AI correctly switches to alive enemies in Battle Royale, preventing null target bugs
-
-### 9. Unreachable Damage Cell Bug (January 2026)
-**Problem:**
-- When optimal weapon cell unreachable, AI moved toward it blindly
-- Ended up at intermediate position with no weapons in range
-- Wasted entire turn (TP unused) due to positional failure
-
-**Solution:**
-- Added `findBestReachableDamageCell(maxMP)` method (base_strategy.lk lines 20-47)
-- Finds highest damage cell within MP budget from damage map
-- Falls back to this cell when optimal cell unreachable
-- Added LEATHER_BOOTS emergency movement boost (+3 MP) when no reachable cells
-
-**Impact:** AI always moves to positions where attacks are guaranteed, eliminating "flee turns"
-
-### 10. Fighting Retreat Implementation (January 2026)
-**Problem:**
-- Defensive flee moved directly to safest cell (danger=0)
-- Safe cell often out of weapon range (e.g., distance 12 for range 1-4 weapon)
-- AI wasted TP trying to attack from unreachable position
-
-**Solution:**
-- Added `findBestDamageCellOnPath(targetCell, maxMP)` method (base_strategy.lk lines 49-95)
-- Gets full flee path, finds best damage cell along path within MP range
-- Stops at damage cell, validates weapons from actual position after movement
-- Attacks with correct weapon for current distance, then continues fleeing with remaining MP
-
-**Flow:**
-```
-Low HP → Use REGENERATION
-→ Find safe cell (e.g., 268, danger=0)
-→ Check flee path for damage cells
-→ Found cell 218 with weapons (4 cells away)
-→ Move to 218 → Attack with rifle (range 3-10, enemy at dist=7)
-→ Continue fleeing to 268 with remaining MP
-```
-
-**Impact:**
-- Maximizes TP usage during retreat (15+ TP spent on attacks instead of wasted)
-- Maximizes MP usage (moves toward safety after attacking)
-- Correct weapon selection based on actual post-movement distance
-
-### 11. AoE Self-Damage Prevention (January 2026)
-**Problem:**
-- Magic strategy self-inflicted poison with TOXIN/PLAGUE at close range
-- BALL_AND_CHAIN and FRACTURE self-debuffed the AI
-- No validation that AoE chips would hit player in blast radius
-
-**Solution:**
-- Added `checkAoESafety(chipId, targetCell)` method (base_strategy.lk lines 22-44)
-  - Returns `{safe: bool, needsRepositioning: bool}`
-  - Uses `getAoEAffectedCells()` to check if player in blast radius
-- Added `findSafeCellForAoE(chipId, targetCell)` method (base_strategy.lk lines 46-94)
-  - Finds closest reachable cell (within MP) outside AoE radius
-  - Validates chip can still be used from safe cell (range + LOS)
-  - Prefers closest cell to minimize MP usage
-- Integrated into all chip usage points:
-  - magic_strategy.lk: Full offensive and fallback chip loops
-  - magic_antidote_tracker.lk: Bait offensive chips (TOXIN, PLAGUE, BALL_AND_CHAIN, FRACTURE)
-
-**Flow:**
-```
-Check TOXIN usage at range 1 (AoE AREA_CIRCLE_1)
-→ Player at 150, target at 117
-→ checkAoESafety(): player in AoE radius
-→ findSafeCellForAoE(): found cell 134 (distance 2 from player)
-→ Move to 134 → Use TOXIN from safe position
-→ Enemy poisoned, player safe
-```
-
-**Impact:**
-- Eliminates self-poison from TOXIN/PLAGUE
-- Prevents self-debuffs from BALL_AND_CHAIN/FRACTURE
-- Automatic repositioning maintains chip usage (doesn't skip)
-- AI intelligently moves minimum distance to safety before using AoE chips
-
-### 12. Nova Damage Chips Integration (January 2026)
-**Problem:**
-- Magic strategy lacked max HP reduction capabilities
-- No survivability buffs for extended fights
-- Missing attrition synergy with poison system
-
-**Solution:**
-- Added CHIP_MUTATION (Turn 2+ self-buff, lines 144-152 in magic_strategy.lk):
-  - Cost: 7 TP, Cooldown: 4 turns
-  - Effect: +15-20 max HP (scales with science)
-  - Applied Turn 2+ for survivability
-- Added CHIP_DESINTEGRATION (lines 499-510 in magic_strategy.lk):
-  - Cost: 8 TP, Range: 1-6 in line, Area: Square 1, Cooldown: 2 turns
-  - Effect: 70-80 nova damage (scales with science)
-  - Triggered when enemy HP < 75%
-- Added CHIP_ALTERATION (lines 512-523 in magic_strategy.lk):
-  - Cost: 3 TP, Range: 6-12, Cooldown: 1 turn
-  - Effect: 18-20 nova damage (scales with science)
-  - Triggered when enemy HP < 100%
-
-**Attrition Synergy:**
-```
-Poison reduces HP → Nova reduces max HP → Enemy trapped in lower HP%
-→ Poison more deadly → Nova more effective → Repeat
-```
-
-**Impact:** Magic strategy now has complete attrition toolkit, reducing enemy max HP pool while poison chips deal damage over time
-
-### 13. Antidote Baiting System Fix (January 2026)
-**Problem:**
-- Time-based escalation forced full offensive after 2 turns of baiting (lines 89-93 in old magic_antidote_tracker.lk)
-- AI used GRAPPLE-COVID combo even when enemy had antidote available (cd=0)
-- Enemy immediately cleansed COVID poison, wasting 18 TP combo
-
-**Solution:**
-- Removed time-based escalation logic (lines 89-93 deleted)
-- Bait mode now exits ONLY when:
-  1. Antidote detected on cooldown (`cd > 0`)
-  2. Cleanse detected (poison duration changes)
-  3. Enemy has no antidote (not equipped)
-  4. Repeated natural expiry (poison expires naturally 2+ times)
-- Added antidote safety checks to combo positioning (line 122 in magic_strategy.lk):
-  ```leekscript
-  var antidoteSafe = (antidoteCD > 0 || !enemyHasAntidote)
-  if (!baiting && antidoteSafe) {
-      // Check combo availability
-  }
-  ```
-- Added antidote safety checks to combo execution (lines 306-321 in magic_strategy.lk)
-- Added antidote safety to close-range COVID sequence (line 332)
-
-**Impact:** AI now persistently baits with TOXIN/PLAGUE until enemy actually uses antidote, then immediately capitalizes with GRAPPLE-COVID combo while it's on cooldown
-
-### 14. AoE Self-Damage Prevention Fix (January 2026)
-**Problem:**
-- Bait offensive used direct `moveTowardCell()` instead of action queue pattern (lines 182, 217, 247 in old magic_antidote_tracker.lk)
-- Sequence: Plan movement → Check AoE → Immediate reposition → Queued movement executes → Back in AoE range
-- Result: AI repositioned out of AoE, then moved back into it, self-inflicting poison/debuffs
-
-**Solution:**
-- Replaced direct `moveTowardCell()` with action queue pattern in all 3 locations:
-  ```leekscript
-  // OLD (broken):
-  moveTowardCell(safeCellToxin)
-  player.updateEntity()
-
-  // NEW (correct):
-  strategy.createMovementAction(Action.MOVEMENT_APPROACH, safeCellToxin, target)
-  strategy.executeAndFlushActions()
-  player.updateEntity()
-  targetHitCell = context['targetHitCell']
-  ```
-- Replaced invalid `continue` statements with skip flags (lines 171-195, 210-233, 247-270)
-- Fixed: TOXIN, BALL_AND_CHAIN, FRACTURE repositioning
-
-**Impact:** AI now properly repositions before using AoE chips, preventing self-damage from TOXIN poison and BALL_AND_CHAIN/FRACTURE debuffs
-
-### 15. Weapon Spam Fix in Bait Offensive (January 2026)
-**Problem:**
-- Bait offensive used poison plan's conservative `uses` estimate (lines 123-129 in old magic_antidote_tracker.lk)
-- Plan said "use weapon once" (for positioning purposes)
-- Execution followed plan literally, only attacking once with 21 TP available
-- Result: Wasted 16+ TP per turn during bait mode
-
-**Solution:**
-- Replaced conservative usage with spam loop (lines 123-130 in magic_antidote_tracker.lk):
-  ```leekscript
-  // OLD (only 1 use):
-  var usesW = wRec['uses']  // Plan estimate: 1
-  while (usesW > 0 && player._currTp >= wObj._cost) {
-      attack()
-      usesW -= 1  // Exits after 1 use
-  }
-
-  // NEW (spam until maxUse):
-  var actualUses = 0
-  while (actualUses < wObj._maxUse && player._currTp >= wObj._cost) {
-      attack()
-      actualUses += 1  // Continues until maxUse or TP exhausted
-  }
-  ```
-- Matches full offensive weapon spam behavior
-
-**Impact:** Bait mode now properly spends TP on weapons, dealing consistent damage while baiting antidote instead of wasting resources
-
-### 16. Boss Fight Strategy Refactor - INVERSION Priority (January 2026)
-**Problem:**
-- Old strategy had complex nested fallback systems (600+ lines)
-- `findOptimalMoveChipPosition()` + `findClosestCandidateCell()` + `moveCrystalToAlignment()` created stuck movement loops
-- No GRAPPLE/BOXING_GLOVE usage (0 chip uses in testing)
-- 26% stuck movement rate
-- Ignored INVERSION chip (available every other turn)
-
-**Solution:**
-- Complete rewrite with INVERSION-priority approach
-- **Removed 403 lines** of complex fallback code:
-  - `findOptimalMoveChipPosition()` (91 lines)
-  - `findClosestCandidateCell()` (130 lines)
-  - `moveCrystalToAlignment()` (182 lines)
-- **Added new helpers**:
-  - `getCellsOnAxis(crystalPos, axisType)` - Finds all empty cells on H/V line
-  - `findReachableCellOnAxis(crystalPos, axisType, minRange, maxRange)` - Filters by MP + chip range
-  - `moveTowardAxis(crystalPos, axisType)` - Reduces X or Y distance (not point distance)
-  - `shouldUseInversion(playerPos, crystalPos, targetPos)` - Checks if swap beneficial
-  - `determineAxisType(crystalColor, grailPos)` - Returns VERTICAL or HORIZONTAL
-- **Clean 3-step decision tree**:
-  1. INVERSION check (even turns) → Swap if player 3+ cells closer to target
-  2. GRAPPLE/BOXING_GLOVE check → Use if on axis and in range 1-8
-  3. Smart positioning → Move toward TARGET (odd turns) or AXIS (even turns)
-- **Fixed chip availability check**:
-  - Was using `canUseChipOnCell()` incorrectly (returns false)
-  - Now checks: `hasChip && cooldown == 0 && TP >= 3` directly
-
-**Test Results (Fight #49613113):**
-- Before: 0 GRAPPLE, 0 BOXING_GLOVE, 26% stuck movements
-- After: 39 GRAPPLE, 39 BOXING_GLOVE, 72% successful movements
-- 78 total puzzle chip uses
-- TELEPORTATION reduced from 42 to 3 (chips working, less repositioning needed)
-
-**Impact:**
-- Boss fight strategy now functional (chips actively moving crystals)
-- 403 lines removed, cleaner codebase
-- Improved from 0% chip usage to 78 chip uses per fight
-- Movement success rate improved from 74% to 72% (marginal)
+**Chip Targeting Fix:**
+- Fixed BOXING_GLOVE and GRAPPLE to target DESTINATION cell (where crystal will move TO), not crystal's current position
+- Was targeting `crystalPos + direction` for BOXING_GLOVE, changed to target the actual destination cell
+- GRAPPLE now correctly targets the cell between player and crystal (pull destination)
+- INVERSION correctly targets crystal's current cell to swap with entity on that cell
+- Error -4 (invalid target) eliminated → chips now execute successfully
 
 ---
 
 ## Development Workflow
 
-**Automated Workflow (January 2026):**
-1. Claude edits files in `/V8_modules/` directory
-2. Claude uploads using `python3 tools/upload_v8.py`
-3. Claude runs test fights: `python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>` or `--scenario <name>`
-4. Claude analyzes fight logs automatically (saved to `fight_logs_*.json` and `log_analysis_*.txt`)
-5. Claude iterates on fixes based on log analysis
+**Automated Testing (January 2026):**
+1. Edit files in `/V8_modules/` → Upload: `python3 tools/upload_v8.py`
+2. Run tests: `python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>` or `--scenario graal`
+3. Analyze logs (saved to `fight_logs_*.json` and `log_analysis_*.txt`)
+4. Iterate on fixes
 
-**Available Test Opponents:**
-- `domingo` - Strength build
-- `betalpha` - Magic build
-- `tisma`, `guj`, `hachess`, `rex` - Various builds
-- `--scenario graal` - Boss fight scenario
-
-**Log Retrieval:**
-- Uses Bearer token authentication for `/api/fight/get-logs/{fight_id}`
-- Logs saved to: `fight_logs_<script_id>_<opponent>_<timestamp>.json`
-- Analysis saved to: `log_analysis_<script_id>_<opponent>_<timestamp>.txt`
-- Debug files: `debug_logs_<fight_id>.json`, `debug_fight_<fight_id>.json`
+**Available Test Opponents:** domingo (strength), betalpha (magic), tisma/guj/hachess/rex (various builds)
 
 ---
 
 ## Areas for Improvement
 
-### 1. **Action Queue Validation**
-**Issue:** No validation that queued actions are still valid before execution
-**Impact:** Actions may fail silently if enemy moves or dies
-**Proposed Fix:**
-- Add `validateAction(action)` method in base_strategy.lk
-- Check range, line-of-sight, TP/MP availability before execution
-- Skip invalid actions with debug warnings
+**Action Queue Validation:** Validate queued actions before execution (range, LOS, TP/MP availability)
 
-### 2. **Emergency Mode / Low HP Behavior**
-**Issue:** No dedicated low HP survival logic
-**Impact:** AI fights aggressively even when critically wounded
-**Proposed Fix:**
-- Add `createEmergencyScenario()` in base_strategy.lk
-- Prioritize CHIP_CURE, CHIP_BANDAGE, CHIP_REGENERATION
-- Defensive positioning (maximize distance from enemies)
-- Only attack if enemy is killable with remaining TP
+**Emergency Mode:** Add dedicated low HP survival logic (prioritize healing, defensive positioning)
 
-### 3. **Target Selection**
-**Issue:** Strategies attack first enemy found, no priority system
-**Impact:** May focus wrong targets (e.g., tank instead of squishy DPS)
-**Proposed Fix:**
-- Add `selectOptimalTarget()` method considering:
-  - Enemy HP (prioritize low HP for kills)
-  - Enemy threat (damage output, debuffs)
-  - Accessibility (range, line-of-sight)
-- Strength: Prioritize lowest HP
-- Magic: Prioritize targets without DoT
-- Agility: Prioritize high-HP targets (damage return scales with incoming damage)
+**Target Selection:** Implement priority system (Strength: lowest HP, Magic: no DoT, Agility: high HP)
 
-### 4. **Ally Coordination**
-**Issue:** No team coordination in multi-leek fights
-**Impact:** Allies may target same enemy, waste damage
-**Proposed Fix:**
-- Add static variables in main.lk for ally coordination:
-  - `static _targetPriority = [:]` - Map: enemyID → priority score
-  - `static _targetAssignments = [:]` - Map: allyID → targetID
-- Each leek claims target at turn start, others adjust accordingly
+**Ally Coordination:** Add static variables for target assignments in multi-leek fights
 
-### 5. **Resource Management Optimization**
-**Issue:** Strategies use buffs/teleport without checking if TP budget allows meaningful attacks after
-**Impact:** Turn wasted on buff with no follow-up damage
-**Proposed Fix:**
-- Add `calculateMinimumAttackTP()` method
-- Check `playerTP >= buffCost + minimumAttackTP` before applying buffs
-- Skip buffs if insufficient TP for attacks
+**Resource Management:** Check TP budget allows meaningful attacks after buffs/teleport
 
-### 6. **Magic Strategy Kiting Distance**
-**Issue:** Kiting distance hardcoded, may move too close or too far
-**Impact:** Still in enemy weapon range or too far for follow-up attacks
-**Proposed Fix:**
-- Calculate optimal kite distance based on:
-  - Enemy weapon ranges (max range of all equipped weapons)
-  - Player weapon ranges (stay within attack range)
-- Target: `enemyMaxRange + 1` to `playerMaxRange - 1`
+**Magic Kiting Distance:** Calculate optimal distance based on enemy/player weapon ranges
 
-### 7. **OTKO Teleportation Improvements**
-**Issue:** OTKO only considers weapon damage, ignores chip damage potential
-**Impact:** Misses OTKO opportunities when chip burst could secure kill
-**Proposed Fix:**
-- Modify `findOptimalTeleportCell()` to consider:
-  - Total burst damage (weapons + chips)
-  - AOE chip overlap (multiple enemies in range)
-- Execute OTKO if `totalBurst >= enemyHP`
+**OTKO Improvements:** Consider total burst damage (weapons + chips) instead of weapon-only
 
-### 8. **Hide-and-Seek Cell Selection**
-**Issue:** HNS cell selection prioritizes distance, may choose cells with no cover
-**Impact:** Post-combat positioning provides minimal defensive benefit
-**Proposed Fix:**
-- Add `evaluateCoverScore(cell)` considering:
-  - Adjacent obstacles (higher = better cover)
-  - Line-of-sight to enemies (fewer visible = better)
-  - Escape routes (multiple paths away = better)
-- Weight: `score = distance * 0.5 + coverScore * 0.5`
+**Hide-and-Seek Selection:** Add cover score (obstacles, LOS, escape routes) to distance metric
 
-### 9. **Weapon Swap Optimization**
-**Issue:** Strategies swap weapons even when current weapon is already optimal
-**Impact:** Wastes 1 TP per unnecessary swap
-**Proposed Fix:**
-- Track `currentWeaponId` in base_strategy.lk
-- Skip `createAttackAction(ACTION_WEAPON_SWAP)` if `getWeapon() == targetWeapon`
-- Already partially implemented in `executeAndFlushActions()`, extend to all scenarios
+**Weapon Swap Optimization:** Track current weapon, skip swap if already optimal
 
-### 10. **Field Map Caching**
-**Issue:** Damage map recalculated every turn even if enemy didn't move
-**Impact:** Unnecessary operations consumed, slower turn execution
-**Proposed Fix:**
-- Cache damage map with key: `enemyID_position`
-- Invalidate cache when enemy moves or weapons change
-- Reduces operations by ~30% in static positioning scenarios
+**Field Map Caching:** Cache damage map with key `enemyID_position`, invalidate on movement
 
 ---
 
 ## Key Commands
 
-### Upload V8 AI System
-```bash
-python3 tools/upload_v8.py
-```
+**Upload:** `python3 tools/upload_v8.py`
 
-### Test Fights
-```bash
-# Test V8 AI: python3 tools/lw_test_script.py <leek_id> <fights> <opponent>
-python3 tools/lw_test_script.py 446029 20 domingo
+**Test:** `python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>`
+- Example: `python3 tools/lw_test_script.py 20 447461 domingo`
+- Opponents: domingo (strength), betalpha (magic), tisma/guj/hachess/rex (various)
+- Boss: `--scenario graal`
 
-# Opponents: domingo, betalpha, tisma, guj, hachess, rex
-```
-
-### Accessing Fight Logs
-⚠️ **IMPORTANT**: Fight logs cannot be retrieved via URL/CURL. Use Python scripts which save logs locally:
-- **Fight logs saved to**: `fight_logs/<leek_id>/` directory
-- **Analysis logs**: Root directory with pattern `log_analysis_<leek_id>_<opponent>_<timestamp>.txt`
-- **Debug files**: `debug_fight.py`, `debug_fight_simple.py` in root directory
+**Logs:** Saved locally to `fight_logs_*.json` and `log_analysis_*.txt` (NOT accessible via URL/CURL)
 
 ---
 
 ## LeekScript Programming Notes
 
-### Built-in Constants
-- **All WEAPON_* constants are built-in**: `WEAPON_M_LASER`, `WEAPON_RIFLE`, `WEAPON_ENHANCED_LIGHTNINGER`, etc.
-- **All CHIP_* constants are built-in**: `CHIP_TOXIN`, `CHIP_VENOM`, `CHIP_SPARK`, `CHIP_LIGHTNING`, etc.
-- **Effect constants available**: `EFFECT_POISON`, `EFFECT_BUFF_STRENGTH`, `EFFECT_SHACKLE_TP`, etc.
-- **No need to define constants** - they're part of the LeekScript language
+**Built-in Constants:** All `WEAPON_*`, `CHIP_*`, `EFFECT_*` constants are part of LeekScript language (no need to define)
 
-### Coordinate System
-- **Map center**: [0, 0]
-- **Map corners**: [-17, 0], [17, 0], [0, -17], [0, 17]
-- **Total cells**: 0-612 in a 35x35 grid
-- **Built-in functions**: `getCellX()`, `getCellY()`, `getCellFromXY()` handle coordinate conversion
+**Coordinate System:** Map center [0,0], corners [-17,0] to [17,0], total 612 cells (35x35 grid)
 
-### Debugging & Logs
-- **Console logs**: Use `debug()` for AI debug output
-- **Fight logs location**: Saved locally by Python scripts, NOT accessible via URL/CURL
-- **Log files**: Check `fight_logs/` directory and root analysis files
+**Debugging:** Use `debug()` for AI output, check local log files for analysis
 
 ---
 
 ## Development Best Practices
 
-1. **Testing**: Run 10-20 fights per opponent for statistical significance
-2. **Incremental Changes**: Test after each modification
-3. **Log Analysis**: Use combat logs to identify win/loss patterns
-4. **Action Queue Discipline**: NEVER call `useChip()`, `useWeapon()`, `moveTowardCell()` directly in strategies
-5. **State Management**: Update player state variables (TP/MP/position) after queuing actions
-6. **Target Cell Capture**: Always capture `targetEntity._cellPos` at action creation time (prevents stale position bugs)
+1. Run 10-20 fights per opponent for statistical significance
+2. Test after each modification (incremental changes)
+3. NEVER call `useChip()`, `useWeapon()`, `moveTowardCell()` directly in strategies (use action queue)
+4. Update player state (TP/MP/position) after queuing actions
+5. Capture `targetEntity._cellPos` at action creation time (prevents stale position bugs)
 
 ---
 
-## Script ID
-- **V8**: 447461 (main.lk in 8.0/V8/) - Current production (fresh upload January 2026)
+**Script ID:** 447461 (V8 main.lk - Current production, January 2026)
 
----
-
-*Document Version: 22.0*
-*Last Updated: January 2026*
-*Status: V8 System Active - Nova Damage Integration, Antidote Baiting Fix, AoE Self-Damage Prevention, Weapon Spam Fix*
+*Document Version: 23.1 | Last Updated: January 2026*

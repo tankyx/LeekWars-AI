@@ -1,18 +1,12 @@
 include('action.lk')
 include('base_strategy.lk')
 
-// Boss Fight Strategy for Roi Fenouil
-// Handles two-phase boss fight: puzzle phase (crystal alignment) + combat phase
-// Team composition: 3 puzzle solvers + 1 combat specialist
+// Boss Fight Strategy - Approach-Based Crystal Placement
+// Uses pathfinding + cost optimization + LOS validation
 class BossFightStrategy extends Strategy {
     getStrategyName() {
         return "BOSS"
     }
-
-    // Team coordination (static - shared across all leeks in fight)
-    static _roleAssignments = [:]  // Map: entityId → role string
-    static _solverCount = 0        // Number of solvers assigned
-    static _crystalAssignments = [:] // Map: crystalColor → solverId
 
     constructor() {
         super()
@@ -21,6 +15,11 @@ class BossFightStrategy extends Strategy {
     // Disable damage map building in boss fights (performance + irrelevant for puzzle solving)
     shouldBuildDamageMap() {
         return false
+    }
+
+    // Override base strategy method to call custom executeTurn()
+    createAndExecuteScenario(target, targetHitCell) {
+        this.executeTurn()
     }
 
     // ============================================================
@@ -61,24 +60,28 @@ class BossFightStrategy extends Strategy {
                 push(crystals, {
                     id: e,
                     color: 'red',
+                    cardinal: 'S',  // Red projects North → must be South of grail
                     position: getCell(e)
                 })
             } else if (name == 'blue_crystal') {
                 push(crystals, {
                     id: e,
                     color: 'blue',
+                    cardinal: 'E',  // Blue projects West → must be East of grail
                     position: getCell(e)
                 })
             } else if (name == 'yellow_crystal') {
                 push(crystals, {
                     id: e,
                     color: 'yellow',
+                    cardinal: 'W',  // Yellow projects East → must be West of grail
                     position: getCell(e)
                 })
             } else if (name == 'green_crystal') {
                 push(crystals, {
                     id: e,
                     color: 'green',
+                    cardinal: 'N',  // Green projects South → must be North of grail
                     position: getCell(e)
                 })
             }
@@ -88,805 +91,716 @@ class BossFightStrategy extends Strategy {
     }
 
     // ============================================================
-    // ALIGNMENT VALIDATION
+    // RAY & LOS FUNCTIONS
     // ============================================================
 
-    // Check if a crystal is correctly aligned to project its ray onto the Grail
-    // Red: North ray → crystal must be SOUTH of grail (below, same X)
-    // Blue: West ray → crystal must be EAST of grail (right, same Y)
-    // Yellow: East ray → crystal must be WEST of grail (left, same Y)
-    // Green: South ray → crystal must be NORTH of grail (above, same X)
-    checkCrystalAlignment(crystalColor, crystalPos, grailPos) {
-        var grailX = getCellX(grailPos)
-        var grailY = getCellY(grailPos)
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
+    // Check if position is on correct ray from grail
+    onCorrectRay(pos, cardinal, grailPos) {
+        var px = getCellX(pos)
+        var py = getCellY(pos)
+        var gx = getCellX(grailPos)
+        var gy = getCellY(grailPos)
 
-        if (crystalColor == 'red') {
-            // Red: North ray → must be SOUTH of grail
-            return crystalX == grailX && crystalY < grailY
-        } else if (crystalColor == 'blue') {
-            // Blue: West ray → must be EAST of grail
-            return crystalY == grailY && crystalX > grailX
-        } else if (crystalColor == 'yellow') {
-            // Yellow: East ray → must be WEST of grail
-            return crystalY == grailY && crystalX < grailX
-        } else if (crystalColor == 'green') {
-            // Green: South ray → must be NORTH of grail
-            return crystalX == grailX && crystalY > grailY
+        if (cardinal == 'E') {
+            return py == gy && px > gx  // East: same Y, X greater
+        } else if (cardinal == 'W') {
+            return py == gy && px < gx  // West: same Y, X less
+        } else if (cardinal == 'N') {
+            return px == gx && py < gy  // North: same X, Y less (negative Y = up)
+        } else if (cardinal == 'S') {
+            return px == gx && py > gy  // South: same X, Y greater (positive Y = down)
         }
-
         return false
     }
 
-    // Check if all crystals are aligned (puzzle complete)
-    areAllCrystalsAligned() {
-        var grail = this.findGrailEntity()
-        if (grail == null) {
-            return true  // Grail destroyed, puzzle complete
+    // Get ray direction vector
+    rayDir(cardinal) {
+        if (cardinal == 'E') return {dx: 1, dy: 0}
+        else if (cardinal == 'W') return {dx: -1, dy: 0}
+        else if (cardinal == 'N') return {dx: 0, dy: 1}
+        else if (cardinal == 'S') return {dx: 0, dy: -1}
+        return {dx: 0, dy: 0}
+    }
+
+    // Find best single step direction toward target (L1 distance)
+    bestStepToward(fromPos, toPos) {
+        var fx = getCellX(fromPos)
+        var fy = getCellY(fromPos)
+        var tx = getCellX(toPos)
+        var ty = getCellY(toPos)
+
+        var dx = tx - fx
+        var dy = ty - fy
+
+        // Prefer axis with larger delta
+        if (abs(dx) > abs(dy)) {
+            return {dx: (dx > 0 ? 1 : -1), dy: 0}
+        } else if (abs(dy) > abs(dx)) {
+            return {dx: 0, dy: (dy > 0 ? 1 : -1)}
+        } else if (dx != 0) {
+            return {dx: (dx > 0 ? 1 : -1), dy: 0}  // Tie: prefer horizontal
+        } else if (dy != 0) {
+            return {dx: 0, dy: (dy > 0 ? 1 : -1)}
         }
+        return null  // Already at target
+    }
 
-        var grailPos = getCell(grail)
-        var crystals = this.findCrystalEntities()
-
-        for (var crystal in crystals) {
-            if (!this.checkCrystalAlignment(crystal.color, crystal.position, grailPos)) {
-                return false  // At least one crystal misaligned
-            }
-        }
-
-        return true  // All 4 crystals aligned
+    // Check if crystal is correctly placed (on ray + LOS to grail)
+    correctlyPlaced(crystalPos, cardinal, grailPos) {
+        return this.onCorrectRay(crystalPos, cardinal, grailPos) && lineOfSight(crystalPos, grailPos)
     }
 
     // ============================================================
-    // TARGET POSITION CALCULATOR
+    // MOVEMENT/TELEPORT PLANNER
     // ============================================================
 
-    // Calculate target position for crystal alignment
-    calculateCrystalTargetPosition(crystalColor, grailPos) {
-        var grailX = getCellX(grailPos)
-        var grailY = getCellY(grailPos)
-
-        var targetX = grailX
-        var targetY = grailY
-
-        // Try distance 3 first, then 2, then 1 as fallback
-        var distances = [3, 2, 1]
-
-        for (var dist in distances) {
-            if (crystalColor == 'red') {
-                // Red: Below grail (same X, Y - N)
-                targetX = grailX
-                targetY = grailY - dist
-            } else if (crystalColor == 'blue') {
-                // Blue: Right of grail (X + N, same Y)
-                targetX = grailX + dist
-                targetY = grailY
-            } else if (crystalColor == 'yellow') {
-                // Yellow: Left of grail (X - N, same Y)
-                targetX = grailX - dist
-                targetY = grailY
-            } else if (crystalColor == 'green') {
-                // Green: Above grail (same X, Y + N)
-                targetX = grailX
-                targetY = grailY + dist
-            }
-
-            var targetCell = getCellFromXY(targetX, targetY)
-
-            // Validate cell exists and is walkable
-            if (targetCell != null && (isEmptyCell(targetCell) || !isObstacle(targetCell))) {
-                return targetCell
-            }
+    // Plan approach to a required cell (returns action list with cost)
+    // Returns {actions: [...], cost: N} or null if unreachable
+    planApproach(playerPos, needCell) {
+        if (playerPos == needCell) {
+            return {actions: [], cost: 0}
         }
 
-        // Fallback: return grail position (should never happen)
-        return grailPos
-    }
-
-    // Visualize crystal movement path by marking cells with crystal color
-    visualizeCrystalPath(crystalColor, crystalPos, targetPos) {
-        // LeekScript mark color constants: RED=0, BLUE=1, GREEN=2, YELLOW=3
-        var markColor = 0  // Default red
-        if (crystalColor == 'red') markColor = 0
-        else if (crystalColor == 'blue') markColor = 1
-        else if (crystalColor == 'green') markColor = 2
-        else if (crystalColor == 'yellow') markColor = 3
-
-        // Get path from crystal to target
-        var path = getPath(crystalPos, targetPos)
-
+        // Get path for walking
+        var path = getPath(playerPos, needCell)
         if (path == null || count(path) == 0) {
-            debug("[VIZ] No path from " + crystalPos + " to " + targetPos)
-            return
+            return null  // Unreachable
         }
 
-        // Mark all cells along the path with crystal color
-        for (var i = 0; i < count(path); i++) {
-            mark(path[i], markColor)
+        var walkCost = count(path) - 1  // MP cost (path includes start cell)
+
+        // Check if teleportation is available and worthwhile
+        var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
+        var teleportRange = 10  // CHIP_TELEPORTATION max range
+        var teleportCost = 5    // TP cost
+
+        if (hasTeleport && getTP() >= teleportCost) {
+            // Check if we can teleport directly
+            var dist = getCellDistance(playerPos, needCell)
+            if (dist != null && dist <= teleportRange && lineOfSight(playerPos, needCell)) {
+                // Direct teleport
+                var teleportAction = {
+                    type: 'TELEPORT',
+                    targetCell: needCell,
+                    tpCost: teleportCost
+                }
+                // Cost: 5 TP * 2 weight = 10 MP-equivalent
+                var teleportEquivCost = teleportCost * 2
+
+                if (teleportEquivCost < walkCost) {
+                    return {actions: [teleportAction], cost: teleportEquivCost}
+                }
+            }
+
+            // Check walk + teleport hybrid
+            // Find closest cell on path that's within teleport range of goal
+            var bestHybrid = null
+            var bestHybridCost = 9999
+
+            for (var i = 0; i < count(path); i++) {
+                var anchorCell = path[i]
+                var distToGoal = getCellDistance(anchorCell, needCell)
+
+                if (distToGoal != null && distToGoal <= teleportRange && lineOfSight(anchorCell, needCell)) {
+                    var walkToAnchor = i  // MP cost to walk to anchor
+                    var hybridCost = walkToAnchor + (teleportCost * 2)  // MP + TP-equivalent
+
+                    if (hybridCost < bestHybridCost && hybridCost < walkCost) {
+                        bestHybridCost = hybridCost
+                        bestHybrid = {
+                            walkPath: path,
+                            walkSteps: walkToAnchor,
+                            teleportFrom: anchorCell,
+                            teleportTo: needCell
+                        }
+                    }
+                }
+            }
+
+            if (bestHybrid != null) {
+                var actions = []
+                if (bestHybrid['walkSteps'] > 0) {
+                    push(actions, {
+                        type: 'MOVE',
+                        targetCell: bestHybrid['teleportFrom'],
+                        mpCost: bestHybrid['walkSteps']
+                    })
+                }
+                push(actions, {
+                    type: 'TELEPORT',
+                    targetCell: bestHybrid['teleportTo'],
+                    tpCost: teleportCost
+                })
+                return {actions: actions, cost: bestHybridCost}
+            }
         }
 
-        debug("[VIZ] Marked " + count(path) + " cells " + crystalColor + " (crystal→target path)")
+        // Default: full walk
+        return {
+            actions: [{
+                type: 'MOVE',
+                targetCell: needCell,
+                mpCost: walkCost
+            }],
+            cost: walkCost
+        }
+    }
+
+    // ============================================================
+    // TOOL GEOMETRY VALIDATORS
+    // ============================================================
+
+    // Check if a cell is free (no crystal, no obstacle, no other player)
+    isCellFree(cell, crystals) {
+        if (cell == null) return false
+        if (!isEmptyCell(cell)) return false
+
+        // Check if any crystal occupies this cell
+        for (var c in crystals) {
+            if (c.position == cell) {
+                return false
+            }
+        }
+
+        // Check if any allied player occupies this cell
+        var allies = fieldMap.getAlliesSubMap()
+        for (var allyId in allies) {
+            if (getCell(allyId) == cell) {
+                return false
+            }
+        }
+
+        // Check if any enemy occupies this cell (shouldn't happen in boss fights, but be safe)
+        var enemies = fieldMap.getEnemySubMap()
+        for (var enemyId in enemies) {
+            if (getCell(enemyId) == cell) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    // PUSH: Player needs to be opposite side of crystal
+    needCellForPush(crystalPos, dir) {
+        var cx = getCellX(crystalPos)
+        var cy = getCellY(crystalPos)
+        return getCellFromXY(cx - dir['dx'], cy - dir['dy'])
+    }
+
+    canPushGeom(crystalPos, dir, crystals) {
+        var playerCell = this.needCellForPush(crystalPos, dir)
+        if (!this.isCellFree(playerCell, crystals)) {
+            return false
+        }
+
+        var cx = getCellX(crystalPos)
+        var cy = getCellY(crystalPos)
+        var crystalNext = getCellFromXY(cx + dir['dx'], cy + dir['dy'])
+        if (!this.isCellFree(crystalNext, crystals)) {
+            return false
+        }
+
+        return true
+    }
+
+    // GRAPPLE: Player needs to be ahead of crystal (pull toward player)
+    needCellForGrapple(crystalPos, dir) {
+        var cx = getCellX(crystalPos)
+        var cy = getCellY(crystalPos)
+        // Position ahead of crystal in direction we want to pull
+        return getCellFromXY(cx + dir['dx'], cy + dir['dy'])
+    }
+
+    canGrappleGeom(playerCell, crystalPos, dir, crystals) {
+        // Check if crystal can move in direction
+        var cx = getCellX(crystalPos)
+        var cy = getCellY(crystalPos)
+        var crystalNext = getCellFromXY(cx + dir['dx'], cy + dir['dy'])
+        if (!this.isCellFree(crystalNext, crystals)) {
+            return false
+        }
+
+        // Check range (1-8 for CHIP_GRAPPLE)
+        var dist = getCellDistance(playerCell, crystalPos)
+        if (dist == null || dist < 1 || dist > 8) {
+            return false
+        }
+
+        // Check LOS
+        if (!lineOfSight(playerCell, crystalPos)) {
+            return false
+        }
+
+        return true
+    }
+
+    // INVERSION: Swap player and crystal positions
+    needCellForInvert(crystalPos, dir) {
+        var cx = getCellX(crystalPos)
+        var cy = getCellY(crystalPos)
+        // Position is 1 step in desired direction (where crystal will move)
+        return getCellFromXY(cx + dir['dx'], cy + dir['dy'])
+    }
+
+    canInvertGeom(playerCell, crystalPos, crystals) {
+        // Check range (1-14 for CHIP_INVERSION)
+        var dist = getCellDistance(playerCell, crystalPos)
+        if (dist == null || dist < 1 || dist > 14) {
+            return false
+        }
+
+        // Check LOS
+        if (!lineOfSight(playerCell, crystalPos)) {
+            return false
+        }
+
+        // Check if crystal's current position is free for player to swap into
+        // (it always is, since crystal is there)
+        return true
+    }
+
+    // ============================================================
+    // ADVANCE PLANNER
+    // ============================================================
+
+    // Try to advance crystal in direction using approach planning
+    // Returns {tool: 'PUSH'|'GRAPPLE'|'INVERT', actions: [...], cost: N, dir: {dx,dy}} or null
+    tryAdvanceWithApproach(playerPos, crystal, dir, grailPos, allCrystals) {
+        var crystalPos = crystal.position
+        var candidates = []
+
+        // Check chip availability
+        var hasBoxing = mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)
+        var hasGrapple = mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)
+        var hasInversion = mapContainsKey(arsenal.playerEquippedChips, CHIP_INVERSION)
+
+        // Try PUSH (adjacent, from opposite side)
+        if (hasBoxing) {
+            if (this.canPushGeom(crystalPos, dir, allCrystals)) {
+                var needCell = this.needCellForPush(crystalPos, dir)
+                var approach = this.planApproach(playerPos, needCell)
+
+                if (approach != null) {
+                    var toolCost = 3 * 2  // 3 TP * 2 weight
+                    var totalCost = approach['cost'] + toolCost
+                    push(candidates, {
+                        tool: 'PUSH',
+                        actions: approach['actions'],
+                        needCell: needCell,
+                        cost: totalCost,
+                        dir: dir
+                    })
+                }
+            }
+        }
+
+        // Try GRAPPLE (ranged pull from ahead)
+        if (hasGrapple) {
+            var needCell = this.needCellForGrapple(crystalPos, dir)
+            if (this.isCellFree(needCell, allCrystals)) {
+                var approach = this.planApproach(playerPos, needCell)
+
+                if (approach != null && this.canGrappleGeom(needCell, crystalPos, dir, allCrystals)) {
+                    var toolCost = 4 * 2  // 4 TP * 2 weight
+                    var totalCost = approach['cost'] + toolCost
+                    push(candidates, {
+                        tool: 'GRAPPLE',
+                        actions: approach['actions'],
+                        needCell: needCell,
+                        cost: totalCost,
+                        dir: dir
+                    })
+                }
+            }
+        }
+
+        // Try INVERSION (swap positions)
+        if (hasInversion) {
+            var needCell = this.needCellForInvert(crystalPos, dir)
+            if (this.isCellFree(needCell, allCrystals)) {
+                var approach = this.planApproach(playerPos, needCell)
+
+                if (approach != null && this.canInvertGeom(needCell, crystalPos, allCrystals)) {
+                    var toolCost = 4 * 2  // 4 TP * 2 weight
+                    var totalCost = approach['cost'] + toolCost
+                    push(candidates, {
+                        tool: 'INVERSION',
+                        actions: approach['actions'],
+                        needCell: needCell,
+                        cost: totalCost,
+                        dir: dir
+                    })
+                }
+            }
+        }
+
+        // Select cheapest option
+        if (count(candidates) == 0) {
+            return null
+        }
+
+        var best = candidates[0]
+        for (var i = 1; i < count(candidates); i++) {
+            if (candidates[i]['cost'] < best['cost']) {
+                best = candidates[i]
+            }
+        }
+
+        return best
+    }
+
+    // ============================================================
+    // CRYSTAL PLACEMENT LOGIC
+    // ============================================================
+
+    // Place a single crystal using approach-based planning
+    placeCrystal(playerPos, crystal, grailPos, allCrystals) {
+        var crystalPos = crystal.position
+        var cardinal = crystal.cardinal
+        var myId = getEntity()
+
+        // Check if already correctly placed
+        if (this.correctlyPlaced(crystalPos, cardinal, grailPos)) {
+            debug("[PLACE] Crystal already placed correctly")
+            return true
+        }
+
+        debug("[PLACE] Starting placement for " + crystal.color + " at " + crystalPos)
+
+        // Phase A: Acquire correct ray
+        var phaseAAttempts = 0
+        var maxPhaseAAttempts = 10
+
+        var onRay = this.onCorrectRay(crystalPos, cardinal, grailPos)
+        var hasLOS = lineOfSight(crystalPos, grailPos)
+        debug("[PLACE] Phase check: onRay=" + onRay + " hasLOS=" + hasLOS)
+
+        while (!onRay && phaseAAttempts < maxPhaseAAttempts) {
+            phaseAAttempts++
+            debug("[PLACE-A] Phase A attempt " + phaseAAttempts + " (get " + crystal.color + " onto " + cardinal + " ray)")
+
+            // Calculate projection onto correct axis
+            var gx = getCellX(grailPos)
+            var gy = getCellY(grailPos)
+            var cx = getCellX(crystalPos)
+            var cy = getCellY(crystalPos)
+
+            var projCell = null
+            if (cardinal == 'N' || cardinal == 'S') {
+                // Vertical: match X
+                projCell = getCellFromXY(gx, cy)
+            } else {
+                // Horizontal: match Y
+                projCell = getCellFromXY(cx, gy)
+            }
+
+            var dir = this.bestStepToward(crystalPos, projCell)
+            if (dir == null) {
+                break
+            }
+
+            // Try to advance in best direction
+            var plan = this.tryAdvanceWithApproach(playerPos, crystal, dir, grailPos, allCrystals)
+
+            if (plan == null) {
+                debug("[PLACE-A] Primary direction failed, trying lateral detour")
+                // Try lateral detour
+                var alts = []
+                if (dir['dx'] != 0) {
+                    push(alts, {dx: 0, dy: 1})
+                    push(alts, {dx: 0, dy: -1})
+                } else {
+                    push(alts, {dx: 1, dy: 0})
+                    push(alts, {dx: -1, dy: 0})
+                }
+
+                for (var alt in alts) {
+                    plan = this.tryAdvanceWithApproach(playerPos, crystal, alt, grailPos, allCrystals)
+                    if (plan != null) break
+                }
+
+                if (plan == null) {
+                    debug("[PLACE-A] ❌ No valid plan found (player or crystal blocked)")
+                    return false
+                }
+            }
+
+            debug("[PLACE-A] ✅ Found plan: tool=" + plan['tool'] + " cost=" + plan['cost'] + " needCell=" + plan['needCell'])
+
+            // Execute plan
+            var success = this.executePlan(plan, crystal, myId)
+            if (!success) {
+                return false
+            }
+
+            // Update positions for next iteration
+            playerPos = getCell()
+            crystalPos = getCell(crystal.id)
+            crystal.position = crystalPos
+
+            // Check MP/TP budget
+            if (getMP() < 3 && getTP() < 4) {
+                return false
+            }
+        }
+
+        // Phase B: Slide along ray until LOS to grail
+        var phaseBAttempts = 0
+        var maxPhaseBAttempts = 10
+
+        var rd = this.rayDir(cardinal)
+
+        onRay = this.onCorrectRay(crystalPos, cardinal, grailPos)
+        hasLOS = lineOfSight(crystalPos, grailPos)
+        debug("[PLACE] Phase A complete. Now Phase B: onRay=" + onRay + " hasLOS=" + hasLOS)
+
+        while (onRay && !hasLOS && phaseBAttempts < maxPhaseBAttempts) {
+            phaseBAttempts++
+            debug("[PLACE-B] Phase B attempt " + phaseBAttempts + " (clear LOS for " + crystal.color + ")")
+
+            // Try forward along ray
+            var plan = this.tryAdvanceWithApproach(playerPos, crystal, rd, grailPos, allCrystals)
+
+            if (plan == null) {
+                // Try backward (if it improves LOS)
+                var backDir = {dx: -rd['dx'], dy: -rd['dy']}
+                var cx = getCellX(crystalPos)
+                var cy = getCellY(crystalPos)
+                var backCell = getCellFromXY(cx + backDir['dx'], cy + backDir['dy'])
+
+                if (backCell != null && lineOfSight(backCell, grailPos)) {
+                    plan = this.tryAdvanceWithApproach(playerPos, crystal, backDir, grailPos, allCrystals)
+                }
+
+                if (plan == null) {
+                    // Lateral detour
+                    var alts = []
+                    if (rd['dx'] != 0) {
+                        push(alts, {dx: 0, dy: 1})
+                        push(alts, {dx: 0, dy: -1})
+                    } else {
+                        push(alts, {dx: 1, dy: 0})
+                        push(alts, {dx: -1, dy: 0})
+                    }
+
+                    for (var alt in alts) {
+                        plan = this.tryAdvanceWithApproach(playerPos, crystal, alt, grailPos, allCrystals)
+                        if (plan != null) break
+                    }
+
+                    if (plan == null) {
+                        debug("[PLACE-B] ❌ No valid plan found (blocked)")
+                        return false
+                    }
+                }
+            }
+
+            debug("[PLACE-B] ✅ Found plan: tool=" + plan['tool'] + " cost=" + plan['cost'])
+
+            // Execute plan
+            var success = this.executePlan(plan, crystal, myId)
+            if (!success) {
+                return false
+            }
+
+            // Update positions
+            playerPos = getCell()
+            crystalPos = getCell(crystal.id)
+            crystal.position = crystalPos
+
+            // Check MP/TP budget
+            if (getMP() < 3 && getTP() < 4) {
+                return false
+            }
+        }
+
+        // Final check
+        crystalPos = getCell(crystal.id)
+        if (this.correctlyPlaced(crystalPos, cardinal, grailPos)) {
+            debug("[PLACE] ✅✅✅ CRYSTAL PLACEMENT COMPLETE for " + crystal.color)
+            return true
+        }
+
+        debug("[PLACE] ⚠️ Placement incomplete (out of resources or stuck)")
+        return false
+    }
+
+    // ============================================================
+    // PLAN EXECUTION
+    // ============================================================
+
+    // Execute a placement plan (movement + tool usage)
+    executePlan(plan, crystal, myId) {
+        debug("[EXEC] Starting plan execution: tool=" + plan['tool'] + " actions=" + count(plan['actions']))
+        var playerPos = getCell()
+
+        // Execute approach actions
+        for (var action in plan['actions']) {
+            if (action['type'] == 'MOVE') {
+                debug("[EXEC] Moving to cell " + action['targetCell'])
+                var result = moveTowardCell(action['targetCell'])
+                if (result < 0) {
+                    debug("[EXEC] ❌ Move failed with error " + result)
+                    return false
+                }
+                playerPos = getCell()
+            } else if (action['type'] == 'TELEPORT') {
+                debug("[EXEC] Teleporting to cell " + action['targetCell'])
+                var result = useChipOnCell(CHIP_TELEPORTATION, action['targetCell'])
+                if (result < 0) {
+                    debug("[EXEC] ❌ Teleport failed with error " + result)
+                    return false
+                }
+                playerPos = getCell()
+            }
+        }
+
+        // Execute tool usage
+        var crystalPos = crystal.position
+        var crystalId = crystal.id
+
+        // Recalculate direction from CURRENT player position (after movement) to crystal
+        var currentPlayerPos = getCell()
+        var px = getCellX(currentPlayerPos)
+        var py = getCellY(currentPlayerPos)
+        var cx = getCellX(crystalPos)
+        var cy = getCellY(crystalPos)
+
+        // Direction from player to crystal
+        var dx = 0
+        var dy = 0
+        if (cx > px) dx = 1
+        else if (cx < px) dx = -1
+        if (cy > py) dy = 1
+        else if (cy < py) dy = -1
+
+        if (plan['tool'] == 'PUSH') {
+            // BOXING_GLOVE: Push crystal AWAY from player (one cell beyond crystal)
+            var destCell = getCellFromXY(cx + dx, cy + dy)
+            debug("[EXEC] Using BOXING_GLOVE targeting destination cell " + destCell + " (player at " + currentPlayerPos + ", crystal at " + crystalPos + ")")
+            var result = useChipOnCell(CHIP_BOXING_GLOVE, destCell)
+            if (result < 0) {
+                debug("[EXEC] ❌ BOXING_GLOVE failed with error " + result)
+                return false
+            }
+            debug("[EXEC] ✅ BOXING_GLOVE success")
+        } else if (plan['tool'] == 'GRAPPLE') {
+            // GRAPPLE: Pull crystal TOWARD player (one cell closer to player)
+            var destCell = getCellFromXY(cx - dx, cy - dy)
+            debug("[EXEC] Using GRAPPLE targeting destination cell " + destCell + " (player at " + currentPlayerPos + ", crystal at " + crystalPos + ")")
+            var result = useChipOnCell(CHIP_GRAPPLE, destCell)
+            if (result < 0) {
+                debug("[EXEC] ❌ GRAPPLE failed with error " + result)
+                return false
+            }
+            debug("[EXEC] ✅ GRAPPLE success")
+        } else if (plan['tool'] == 'INVERSION') {
+            // INVERSION: Target the crystal's current cell (swap positions with entity on that cell)
+            debug("[EXEC] Using INVERSION on crystal's cell " + crystalPos)
+            var result = useChipOnCell(CHIP_INVERSION, crystalPos)
+            if (result < 0) {
+                debug("[EXEC] ❌ INVERSION failed with error " + result)
+                return false
+            }
+            debug("[EXEC] ✅ INVERSION success")
+        }
+
+        debug("[EXEC] ✅ Plan execution complete")
+        return true
     }
 
     // ============================================================
     // TEAM COORDINATION
     // ============================================================
 
-    // Assign team role (3 solvers + 1 combat specialist)
-    assignTeamRole() {
-        var myId = getEntity()
+    // Assign crystals using deterministic turn-order-based assignment
+    assignCrystalToSolver(myId, crystals, grailPos) {
+        // Get all allied players (including self) from fieldMap
+        var alliesMap = fieldMap.getAlliesSubMap()
+        var allyIds = [myId]  // Start with self
 
-        // Check if I already have an assigned role
-        if (BossFightStrategy._roleAssignments[myId] != null) {
-            return BossFightStrategy._roleAssignments[myId]
+        // Add all other allies (mapKeys returns entity IDs)
+        var otherAllies = mapKeys(alliesMap)
+        for (var i = 0; i < count(otherAllies); i++) {
+            push(allyIds, otherAllies[i])
         }
 
-        // Get my stats and equipment
-        var hasGrapple = mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)
-        var hasBoxingGlove = mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)
-        var mySTR = getStrength()
-        var myWIS = getWisdom()
-        var myAGI = getAgility()
-
-        // Check if I'm a combat build (STR or WIS dominant)
-        var isCombatBuild = (mySTR > myAGI && mySTR > myWIS) ||
-                            (myWIS > myAGI && myWIS > mySTR)
-
-        // Assign combat specialist (1 max)
-        if (isCombatBuild && BossFightStrategy._solverCount >= 3) {
-            BossFightStrategy._roleAssignments[myId] = "COMBAT_SPECIALIST"
-            debug("Assigned as COMBAT_SPECIALIST (staying back for Phase 2)")
-            return "COMBAT_SPECIALIST"
-        }
-
-        // Assign puzzle solver (3 max, requires both chips)
-        if (hasGrapple && hasBoxingGlove && BossFightStrategy._solverCount < 3) {
-            BossFightStrategy._solverCount++
-            BossFightStrategy._roleAssignments[myId] = "PUZZLE_SOLVER"
-            debug("Assigned as PUZZLE_SOLVER #" + BossFightStrategy._solverCount)
-            return "PUZZLE_SOLVER"
-        }
-
-        // Fallback: become solver if slots available
-        if (BossFightStrategy._solverCount < 3) {
-            BossFightStrategy._solverCount++
-            BossFightStrategy._roleAssignments[myId] = "PUZZLE_SOLVER"
-            debug("Assigned as PUZZLE_SOLVER (fallback, missing chips)")
-            return "PUZZLE_SOLVER"
-        }
-
-        // Last resort: combat specialist
-        BossFightStrategy._roleAssignments[myId] = "COMBAT_SPECIALIST"
-        debug("Assigned as COMBAT_SPECIALIST (fallback)")
-        return "COMBAT_SPECIALIST"
-    }
-
-    // Assign crystal tasks using relative turn order among allies
-    assignCrystalTasks() {
-        var myId = getEntity()
-        var grail = this.findGrailEntity()
-
-        if (grail == null) {
-            return null  // No grail, puzzle complete
-        }
-
-        var grailPos = getCell(grail)
-        var crystals = this.findCrystalEntities()
-
-        // Get all ally entities and sort by turn order
-        var allAllies = getAllies()
-        var alliesWithOrder = []
-
-        for (var ally in allAllies) {
-            var turnOrder = getEntityTurnOrder(ally)
-            push(alliesWithOrder, ['id': ally, 'order': turnOrder])
-        }
-
-        // Sort allies by turn order (bubble sort since no built-in sort)
-        for (var i = 0; i < count(alliesWithOrder); i++) {
-            for (var j = i + 1; j < count(alliesWithOrder); j++) {
-                if (alliesWithOrder[j]['order'] < alliesWithOrder[i]['order']) {
-                    var temp = alliesWithOrder[i]
-                    alliesWithOrder[i] = alliesWithOrder[j]
-                    alliesWithOrder[j] = temp
+        // Manual bubble sort by entity ID (ascending)
+        for (var i = 0; i < count(allyIds); i++) {
+            for (var j = i + 1; j < count(allyIds); j++) {
+                if (allyIds[j] < allyIds[i]) {
+                    var temp = allyIds[i]
+                    allyIds[i] = allyIds[j]
+                    allyIds[j] = temp
                 }
             }
         }
 
-        // Find my position in sorted list (0-based index)
-        var myPosition = -1
-        for (var i = 0; i < count(alliesWithOrder); i++) {
-            if (alliesWithOrder[i]['id'] == myId) {
-                myPosition = i
+        debug("[ASSIGN] All allies (sorted): " + allyIds)
+
+        // Find my index in the sorted ally list
+        var myIndex = -1
+        for (var i = 0; i < count(allyIds); i++) {
+            if (allyIds[i] == myId) {
+                myIndex = i
                 break
             }
         }
 
-        if (myPosition == -1) {
-            debug("ERROR: Could not find my position in ally list")
+        if (myIndex == -1) {
+            debug("[ASSIGN] ❌ Could not find self in ally list")
             return null
         }
 
-        // Assign crystal based on position: 0→red, 1→blue, 2→yellow, 3→green
-        // Wrap around for 5+ allies
-        var colorsByPosition = ['red', 'blue', 'yellow', 'green']
-        var colorIndex = myPosition % 4
-        var assignedColor = colorsByPosition[colorIndex]
+        // Map index to crystal color (deterministic assignment)
+        var colorMap = ['red', 'blue', 'yellow', 'green']
+        var myColor = colorMap[myIndex % 4]
 
-        debug("Ally position " + myPosition + " (of " + count(alliesWithOrder) + ") → " + assignedColor + " crystal")
+        debug("[ASSIGN] Ally index=" + myIndex + " (ID=" + myId + ") → assigned to " + myColor + " crystal")
 
-        // Check if this crystal still needs alignment
-        for (var crystal in crystals) {
-            if (crystal.color == assignedColor) {
-                // Check if already aligned
-                if (this.checkCrystalAlignment(crystal.color, crystal.position, grailPos)) {
-                    debug(assignedColor + " crystal already aligned, nothing to do")
+        // Find my assigned crystal
+        for (var c in crystals) {
+            if (c.color == myColor) {
+                // Check if it still needs work
+                if (!this.correctlyPlaced(c.position, c.cardinal, grailPos)) {
+                    debug("[ASSIGN] ✅ Working on " + myColor + " crystal")
+                    return c
+                } else {
+                    debug("[ASSIGN] ✅ My crystal (" + myColor + ") already correctly placed")
                     return null
                 }
-
-                debug("Assigned " + assignedColor + " crystal")
-                return assignedColor
             }
         }
 
-        debug("ERROR: Crystal " + assignedColor + " not found")
+        debug("[ASSIGN] ⚠ Could not find " + myColor + " crystal")
         return null
     }
 
     // ============================================================
-    // POSITIONING HELPERS
+    // MAIN STRATEGY EXECUTION
     // ============================================================
 
-    // Calculate which direction to push crystal (returns direction vector)
-    calculatePushDirection(crystalPos, targetPos) {
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
-        var targetX = getCellX(targetPos)
-        var targetY = getCellY(targetPos)
+    executeTurn() {
+        var myId = getEntity()
 
-        // Calculate normalized direction (-1, 0, or 1 for each axis)
-        var dirX = 0
-        var dirY = 0
-
-        if (targetX > crystalX) dirX = 1
-        else if (targetX < crystalX) dirX = -1
-
-        if (targetY > crystalY) dirY = 1
-        else if (targetY < crystalY) dirY = -1
-
-        return ['dirX': dirX, 'dirY': dirY]
-    }
-
-    // Find best cell to push crystal toward target
-    // Returns cell on opposite side of crystal from target
-    findPushPosition(crystalPos, targetPos) {
-        var dir = this.calculatePushDirection(crystalPos, targetPos)
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
-
-        // Try cells on opposite side of crystal from target
-        // If target is NORTH (dirY=1), we want to be SOUTH (dirY=-1)
-        var pushFromX = crystalX - dir['dirX']
-        var pushFromY = crystalY - dir['dirY']
-
-        // Generate candidate cells (direct opposite + diagonals)
-        var candidates = []
-
-        // Direct opposite (best)
-        var directCell = getCellFromXY(pushFromX, pushFromY)
-        if (directCell != null) push(candidates, directCell)
-
-        // Diagonal alternatives if direct is blocked
-        if (dir['dirX'] != 0 && dir['dirY'] != 0) {
-            // Moving diagonally, try horizontal or vertical alternatives
-            var hCell = getCellFromXY(pushFromX, crystalY)
-            var vCell = getCellFromXY(crystalX, pushFromY)
-            if (hCell != null) push(candidates, hCell)
-            if (vCell != null) push(candidates, vCell)
-        }
-
-        // Check candidates for empty cells
-        for (var cell in candidates) {
-            if (isEmptyCell(cell)) {
-                return cell
-            }
-        }
-
-        return null
-    }
-
-    // Find optimal position to use GRAPPLE/BOXING_GLOVE on crystal
-    // targetCell is where we want the crystal to end up
-    // Find safest cell (maximum distance from all entities)
-    findSafestCell(myPos, entityIds) {
-        var accessibleCells = fieldMap.getAccessibleCells(player)
-        var bestCell = null
-        var bestScore = -999
-
-        for (var cell in accessibleCells) {
-            var minDist = 999
-
-            // Find minimum distance to any entity
-            for (var e in entityIds) {
-                var entityCell = getCell(e)
-                if (entityCell != null) {
-                    var dist = getCellDistance(cell, entityCell)
-                    if (dist < minDist) {
-                        minDist = dist
-                    }
-                }
-            }
-
-            // Higher score = farther from all entities
-            if (minDist > bestScore) {
-                bestScore = minDist
-                bestCell = cell
-            }
-        }
-
-        return bestCell
-    }
-
-    // Get all empty cells on crystal's horizontal or vertical axis
-    getCellsOnAxis(crystalPos, axisType) {
-        var cells = []
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
-
-        if (axisType == "VERTICAL") {
-            // All cells with same X coordinate (vertical line)
-            for (var y = -17; y <= 17; y++) {
-                var cell = getCellFromXY(crystalX, y)
-                if (cell != null && cell != crystalPos && isEmptyCell(cell)) {
-                    push(cells, cell)
-                }
-            }
-        } else {
-            // All cells with same Y coordinate (horizontal line)
-            for (var x = -17; x <= 17; x++) {
-                var cell = getCellFromXY(x, crystalY)
-                if (cell != null && cell != crystalPos && isEmptyCell(cell)) {
-                    push(cells, cell)
-                }
-            }
-        }
-
-        return cells
-    }
-
-    // Find reachable cell on axis within chip range
-    findReachableCellOnAxis(crystalPos, axisType, minRange, maxRange) {
-        var axisCells = this.getCellsOnAxis(crystalPos, axisType)
-        var accessible = fieldMap.getAccessibleCells(player)
-        var myPos = getCell()
-
-        var bestCell = null
-        var bestDist = 999
-
-        for (var cell in axisCells) {
-            // Check if reachable
-            var isReachable = false
-            for (var acc in accessible) {
-                if (acc == cell) {
-                    isReachable = true
-                    break
-                }
-            }
-
-            if (!isReachable) continue
-
-            // Check if in chip range from crystal
-            var distToCrystal = getCellDistance(cell, crystalPos)
-            if (distToCrystal < minRange || distToCrystal > maxRange) continue
-
-            // Find closest to player
-            var distToPlayer = getCellDistance(myPos, cell)
-            if (distToPlayer < bestDist) {
-                bestDist = distToPlayer
-                bestCell = cell
-            }
-        }
-
-        return bestCell
-    }
-
-    // Move toward axis line (reduce X or Y distance, not point distance)
-    moveTowardAxis(crystalPos, axisType) {
-        var accessible = fieldMap.getAccessibleCells(player)
-        var myPos = getCell()
-
-        if (axisType == "VERTICAL") {
-            // Need to reach X = crystalX
-            var targetX = getCellX(crystalPos)
-            var currentX = getCellX(myPos)
-
-            var bestCell = null
-            var bestXDist = abs(currentX - targetX)
-
-            for (var cell in accessible) {
-                var cellX = getCellX(cell)
-                var xDist = abs(cellX - targetX)
-
-                // Closer to target X coordinate?
-                if (xDist < bestXDist) {
-                    bestXDist = xDist
-                    bestCell = cell
-                }
-            }
-
-            if (bestCell != null) {
-                debug("Moving toward vertical axis X=" + targetX + " (current X=" + currentX + ")")
-                this.createMovementAction(Action.MOVEMENT_APPROACH, bestCell, null)
-                return true
-            }
-        } else {
-            // Need to reach Y = crystalY
-            var targetY = getCellY(crystalPos)
-            var currentY = getCellY(myPos)
-
-            var bestCell = null
-            var bestYDist = abs(currentY - targetY)
-
-            for (var cell in accessible) {
-                var cellY = getCellY(cell)
-                var yDist = abs(cellY - targetY)
-
-                // Closer to target Y coordinate?
-                if (yDist < bestYDist) {
-                    bestYDist = yDist
-                    bestCell = cell
-                }
-            }
-
-            if (bestCell != null) {
-                debug("Moving toward horizontal axis Y=" + targetY + " (current Y=" + currentY + ")")
-                this.createMovementAction(Action.MOVEMENT_APPROACH, bestCell, null)
-                return true
-            }
-        }
-
-        debug("No accessible cells to move toward axis")
-        return false
-    }
-
-    // Determine which axis alignment is needed (vertical or horizontal)
-    determineAxisType(crystalColor, grailPos) {
-        // Red: South of grail (vertical, below)
-        // Green: North of grail (vertical, above)
-        // Blue: East of grail (horizontal, right)
-        // Yellow: West of grail (horizontal, left)
-
-        if (crystalColor == "red" || crystalColor == "green") {
-            return "VERTICAL"
-        } else {
-            return "HORIZONTAL"
-        }
-    }
-
-    // Check if INVERSION would be beneficial
-    shouldUseInversion(playerPos, crystalPos, targetPos) {
-        var playerToTarget = getCellDistance(playerPos, targetPos)
-        var crystalToTarget = getCellDistance(crystalPos, targetPos)
-
-        // Player must be significantly closer to target (at least 3 cells)
-        // This makes the swap worthwhile
-        return playerToTarget < crystalToTarget - 2
-    }
-
-    // ============================================================
-    // SCENARIO IMPLEMENTATIONS
-    // ============================================================
-
-    // Puzzle solver scenario (move crystals to alignment)
-    createPuzzleSolvingScenario(target) {
-        // Use game's actual turn number for INVERSION availability
-        var gameTurn = getTurn()
-        debug("=== PUZZLE SOLVER TURN " + gameTurn + " ===")
-        debug("INVERSION available: " + (gameTurn % 2 == 0))
-
-        // DEBUG: Show equipped chips and current resources
-        var hasGrapple = mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)
-        var hasBoxing = mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)
-        var hasInversion = mapContainsKey(arsenal.playerEquippedChips, CHIP_INVERSION)
-        var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
-        debug("[CHIPS] GRAPPLE=" + hasGrapple + " BOXING=" + hasBoxing + " INVERSION=" + hasInversion + " TELEPORT=" + hasTeleport)
-        debug("[RESOURCES] TP=" + getTP() + " MP=" + getMP())
-
+        // Find grail
         var grail = this.findGrailEntity()
-
         if (grail == null) {
-            debug("Grail destroyed, puzzle complete!")
             return
         }
 
         var grailPos = getCell(grail)
-        var grailX = getCellX(grailPos)
-        var grailY = getCellY(grailPos)
-
-        // Show grail and all crystal positions (once per puzzle start)
         var crystals = this.findCrystalEntities()
-        debug("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        debug("GRAIL: cell=" + grailPos + " (" + grailX + "," + grailY + ")")
-        debug("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-        for (var c in crystals) {
-            var targetCell = this.calculateCrystalTargetPosition(c.color, grailPos)
-            var dist = getCellDistance(c.position, targetCell)
-            var aligned = this.checkCrystalAlignment(c.color, c.position, grailPos)
-            var status = aligned ? "✅ ALIGNED" : ("❌ " + dist + " cells away")
-
-            debug(c.color + " crystal: current=" + c.position + " → target=" + targetCell + " " + status)
-        }
-        debug("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-        // Check alignment status
-        if (this.areAllCrystalsAligned()) {
-            debug("All crystals aligned! Waiting for Grail self-destruct...")
-            // Move to safe position
-            var safeCell = fieldMap.findHideAndSeekCell("defensive", null)
-            if (safeCell != null && safeCell != -1) {
-                this.createMovementAction(Action.MOVEMENT_HNS, safeCell, target)
-            }
-            return
-        }
-
-        // Get my assigned crystal
-        var myColor = this.assignCrystalTasks()
-
-        if (myColor == null) {
-            debug("No crystal available to work on")
-            // All crystals claimed by other solvers, stay back
-            return
-        }
-
-        // Find my crystal entity
-        var myCrystal = null
-        for (var c in crystals) {
-            if (c.color == myColor) {
-                myCrystal = c
-                break
-            }
-        }
-
+        // Assign crystal
+        var myCrystal = this.assignCrystalToSolver(myId, crystals, grailPos)
         if (myCrystal == null) {
-            debug("ERROR: Assigned crystal not found")
             return
         }
 
-        debug("Working on " + myColor + " crystal: current=" + myCrystal.position + ", target=" + this.calculateCrystalTargetPosition(myCrystal.color, grailPos))
-
-        // Check if already aligned
-        if (this.checkCrystalAlignment(myCrystal.color, myCrystal.position, grailPos)) {
-            debug(myColor + " crystal already aligned!")
-            // Release assignment, allow reclaiming
-            BossFightStrategy._crystalAssignments[myColor] = null
-            return
-        }
-
-        // Calculate target position
-        var targetCell = this.calculateCrystalTargetPosition(myCrystal.color, grailPos)
-
-        // Visualize THIS crystal's path (each leek marks their own crystal)
-        this.visualizeCrystalPath(myCrystal.color, myCrystal.position, targetCell)
-
-        // CHIP-BASED CRYSTAL MOVEMENT STRATEGY
-        // Use GRAPPLE (pull) and BOXING_GLOVE (push) with correct cell targeting
+        // Place crystal
         var playerPos = getCell()
-        var crystalPos = myCrystal.position
-        var distToCrystal = getCellDistance(playerPos, crystalPos)
-        var crystalToTarget = getCellDistance(crystalPos, targetCell)
-        var axisType = this.determineAxisType(myCrystal.color, grailPos)
-
-        debug("Player at " + playerPos + ", crystal at " + crystalPos + ", target at " + targetCell)
-        debug("Distance to crystal: " + distToCrystal + ", crystal to target: " + crystalToTarget + " cells")
-        debug("Axis type: " + axisType)
-
-        // Check if we're on the same axis (horizontal or vertical) as crystal
-        var playerX = getCellX(playerPos)
-        var playerY = getCellY(playerPos)
-        var crystalX = getCellX(crystalPos)
-        var crystalY = getCellY(crystalPos)
-        var onAxis = (playerX == crystalX) || (playerY == crystalY)
-
-        debug("On axis with crystal: " + onAxis + " (playerX=" + playerX + " crystalX=" + crystalX + " playerY=" + playerY + " crystalY=" + crystalY + ")")
-
-        // STRATEGY: If on axis and in range (1-8), use GRAPPLE or BOXING_GLOVE
-        // Both chips aim at TARGET CELL (where we want crystal to end up)
-        if (onAxis && distToCrystal >= 1 && distToCrystal <= 8) {
-            // Determine if we should PULL (GRAPPLE) or PUSH (BOXING_GLOVE)
-            // GRAPPLE works when we're PAST the target (farther from target than crystal)
-            // BOXING_GLOVE works when we're closer to crystal (before or same side)
-            var playerToTarget = getCellDistance(playerPos, targetCell)
-            var shouldPull = playerToTarget > crystalToTarget  // We're farther from target than crystal
-
-            debug("On axis and in range! shouldPull=" + shouldPull + " (playerToTarget=" + playerToTarget + " crystalToTarget=" + crystalToTarget + ")")
-
-            if (shouldPull && hasGrapple) {
-                // GRAPPLE: Pull crystal adjacent to player on the line toward target
-                // We want to pull crystal closer to its target position
-                // Calculate direction from crystal TO target
-                var targetX = getCellX(targetCell)
-                var targetY = getCellY(targetCell)
-                var dx = targetX - crystalX
-                var dy = targetY - crystalY
-                if (dx != 0) dx = dx / abs(dx)
-                if (dy != 0) dy = dy / abs(dy)
-
-                // Target cell: 1 step from crystal toward target
-                var grappleTargetX = crystalX + dx * 1
-                var grappleTargetY = crystalY + dy * 1
-                var grappleCell = getCellFromXY(grappleTargetX, grappleTargetY)
-
-                // Validate: must be empty and not player position
-                if (grappleCell == null || !isEmptyCell(grappleCell) || grappleCell == playerPos) {
-                    debug("GRAPPLE target cell invalid (occupied or null): " + grappleCell)
-                    grappleCell = null
-                }
-
-                var grappleCD = getCooldown(CHIP_GRAPPLE, getEntity())
-                if (grappleCell != null && grappleCD == 0 && getTP() >= 3) {
-                    debug("✅ Using GRAPPLE - pulling crystal toward target cell " + grappleCell + " (1 step closer)")
-                    var result = useChipOnCell(CHIP_GRAPPLE, grappleCell)
-                    debug("GRAPPLE result: " + result)
-                    return
-                } else {
-                    if (grappleCell == null) {
-                        debug("GRAPPLE skipped - no valid target cell")
-                    } else {
-                        debug("GRAPPLE not ready (CD=" + grappleCD + " TP=" + getTP() + ")")
-                    }
-                }
-            } else if (!shouldPull && hasBoxing) {
-                // BOXING_GLOVE: Push crystal away toward target
-                // Calculate direction from player to crystal (push direction)
-                var dx = crystalX - playerX
-                var dy = crystalY - playerY
-                if (dx != 0) dx = dx / abs(dx)
-                if (dy != 0) dy = dy / abs(dy)
-
-                // Target cell: crystal position + push direction (pushes away from player)
-                // Use distance 1-2 cells beyond crystal
-                var boxingTargetX = crystalX + dx * 1
-                var boxingTargetY = crystalY + dy * 1
-                var boxingCell = getCellFromXY(boxingTargetX, boxingTargetY)
-
-                if (boxingCell == null || !isEmptyCell(boxingCell)) {
-                    // Try 2 cells beyond
-                    boxingTargetX = crystalX + dx * 2
-                    boxingTargetY = crystalY + dy * 2
-                    boxingCell = getCellFromXY(boxingTargetX, boxingTargetY)
-                }
-
-                var boxingCD = getCooldown(CHIP_BOXING_GLOVE, getEntity())
-                if (boxingCD == 0 && getTP() >= 3 && distToCrystal >= 2 && boxingCell != null) {
-                    debug("✅ Using BOXING_GLOVE - pushing crystal toward cell " + boxingCell + " (away from player)")
-                    var result = useChipOnCell(CHIP_BOXING_GLOVE, boxingCell)
-                    debug("BOXING_GLOVE result: " + result)
-                    return
-                } else {
-                    debug("BOXING_GLOVE not ready (CD=" + boxingCD + " TP=" + getTP() + " dist=" + distToCrystal + " validCell=" + (boxingCell != null) + ")")
-                }
-            }
-        }
-
-        // FALLBACK: Move to get on axis with crystal in range 2-7
-        debug("Not in position to use chips - repositioning...")
-
-        var accessible = fieldMap.getAccessibleCells(player)
-        var bestCell = null
-        var bestScore = -999
-
-        // Find best cell that is:
-        // 1. On axis with crystal
-        // 2. In range 2-7 from crystal
-        // 3. Closest to current position
-        for (var cell in accessible) {
-            var cellX = getCellX(cell)
-            var cellY = getCellY(cell)
-            var cellDist = getCellDistance(cell, crystalPos)
-
-            var cellOnAxis = (cellX == crystalX) || (cellY == crystalY)
-
-            if (cellOnAxis && cellDist >= 2 && cellDist <= 7) {
-                // Prioritize closer distances (less movement)
-                var score = 100 - getCellDistance(playerPos, cell)
-                if (score > bestScore) {
-                    bestScore = score
-                    bestCell = cell
-                }
-            }
-        }
-
-        if (bestCell != null) {
-            debug("Moving to axis position: " + bestCell + " (will be on axis with crystal)")
-            this.createMovementAction(Action.MOVEMENT_APPROACH, bestCell, null)
-        } else {
-            // Can't reach axis - just move closer to crystal
-            debug("Cannot reach axis - moving closer to crystal")
-            var closestCell = null
-            var closestDist = 999
-
-            for (var cell in accessible) {
-                var dist = getCellDistance(cell, crystalPos)
-                if (dist < closestDist) {
-                    closestDist = dist
-                    closestCell = cell
-                }
-            }
-
-            if (closestCell != null && closestCell != playerPos) {
-                debug("Moving closer to crystal: " + closestCell)
-                this.createMovementAction(Action.MOVEMENT_APPROACH, closestCell, null)
-            }
-        }
-    }
-
-    // Combat specialist scenario (stay back, conserve TP)
-    createCombatSpecialistScenario(target) {
-        debug("=== COMBAT SPECIALIST (staying back for Phase 2) ===")
-
-        // Stay far from combat, conserve resources
-
-        // Priority 1: Stay alive (heal if needed)
-        if (getLife() < getTotalLife() * 0.5) {
-            // Use healing chips
-            if (canUseChip(CHIP_CURE, getEntity())) {
-                debug("Using CURE (low HP)")
-                useChip(CHIP_CURE, getEntity())
-            } else if (canUseChip(CHIP_REGENERATION, getEntity())) {
-                debug("Using REGENERATION (low HP)")
-                useChip(CHIP_REGENERATION, getEntity())
-            } else if (canUseChip(CHIP_BANDAGE, getEntity())) {
-                debug("Using BANDAGE (low HP)")
-                useChip(CHIP_BANDAGE, getEntity())
-            }
-        }
-
-        // Priority 2: Stay away from all entities (grail, crystals, enemies)
-        var allEntityIds = mapKeys(fieldMap.entities)
-        var myPos = getCell()
-
-        // Find safest cell (maximum distance from all entities)
-        var safeCell = this.findSafestCell(myPos, allEntityIds)
-
-        if (safeCell != null && safeCell != -1 && safeCell != myPos) {
-            debug("Moving to safe position: " + safeCell)
-            this.createMovementAction(Action.MOVEMENT_HNS, safeCell, target)
-        }
-
-        // Priority 3: DO NOT attack (conserve TP for Phase 2)
-        // DO NOT use buffs (save TP)
-        // Just wait for puzzle completion
-
-        debug("Conserving TP=" + getTP() + " for Phase 2 combat")
-    }
-
-    // ============================================================
-    // MAIN SCENARIO ROUTER
-    // ============================================================
-
-    // Override main scenario execution
-    createOffensiveScenario(target, targetHitCell) {
-        // Check if Grail still exists
-        var grail = this.findGrailEntity()
-
-        if (grail == null) {
-            // Phase 2: Grail destroyed, enemies vulnerable
-            debug("=== BOSS PHASE 2: COMBAT MODE ===")
-
-            // ALL team members now fight
-            // Fall back to build-specific strategies
-            return super.createOffensiveScenario(target, targetHitCell)
-        }
-
-        // Phase 1: Puzzle solving
-        var myRole = this.assignTeamRole()
-
-        if (myRole == "PUZZLE_SOLVER") {
-            return this.createPuzzleSolvingScenario(target)
-        } else if (myRole == "COMBAT_SPECIALIST") {
-            return this.createCombatSpecialistScenario(target)
-        }
+        this.placeCrystal(playerPos, myCrystal, grailPos, crystals)
     }
 }

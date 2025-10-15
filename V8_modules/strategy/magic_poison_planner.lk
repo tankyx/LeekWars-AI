@@ -203,9 +203,10 @@ class PoisonPlanner {
                         if (localPoisonChips[tpi]['chip']._id == topPoisonChip._id) { topIndex = tpi; break }
                     }
                     if (topIndex > 0) {
+                        // Swap top chip to front instead of remove+insert
                         var hold = localPoisonChips[topIndex]
-                        remove(localPoisonChips, topIndex)
-                        insert(localPoisonChips, 0, hold)
+                        localPoisonChips[topIndex] = localPoisonChips[0]
+                        localPoisonChips[0] = hold
                     }
                 }
 

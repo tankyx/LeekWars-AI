@@ -1,3 +1,9 @@
+// Declare globals FIRST so included files can reference them
+global _init = false
+global fieldMap = null
+global arsenal = null
+global player = null
+global strategy = null
 
 include('game_entity.lk')
 include('field_map_tactical.lk')
@@ -8,12 +14,6 @@ include('strategy/strength_strategy.lk')
 include('strategy/magic_strategy.lk')
 include('strategy/agility_strategy.lk')
 include('strategy/boss_strategy.lk')
-
-global _init = false
-global fieldMap = null
-global arsenal = null
-global player = null
-global strategy = null
 
 if (!_init) {
     init()
