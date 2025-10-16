@@ -15,6 +15,7 @@ from getpass import getpass
 import os
 import sys
 import argparse
+from config_loader import load_credentials
 
 BASE_URL = "https://leekwars.com/api"
 
@@ -672,7 +673,6 @@ def main():
     except Exception as e:
         print(f"\n❌ Error occurred: {e}")
         import traceback
-from config_loader import load_credentials
         traceback.print_exc()
         
     finally:

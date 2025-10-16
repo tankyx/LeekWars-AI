@@ -2,6 +2,10 @@
 """
 V8 upload script - Creates structure and uploads V8 modules
 Adapted from V7 uploader for the modular V8 architecture
+
+Usage:
+    python3 upload_v8.py              # Upload to main account
+    python3 upload_v8.py --account cure  # Upload to cure account
 """
 
 import os
@@ -9,6 +13,7 @@ import sys
 import json
 import time
 import requests
+import argparse
 from pathlib import Path
 from typing import Dict, Optional
 from config_loader import load_credentials
@@ -310,6 +315,12 @@ class V8Uploader:
             print("\n👋 Disconnected")
 
 def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Upload V8 modules to LeekWars')
+    parser.add_argument('--account', default='main', choices=['main', 'cure'],
+                        help='Account to use (main or cure, default: main)')
+    args = parser.parse_args()
+
     # Get V8_modules path relative to script location
     script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
     v8_dir = script_dir.parent / "V8_modules"
@@ -337,11 +348,12 @@ def main():
     print(f"📁 Source: {v8_dir}")
     print(f"📦 Total modules to upload: {total_modules}")
     print(f"🏗️  Architecture: Action queue pattern + build-specific strategies")
+    print(f"👤 Account: {args.account}")
 
     uploader = V8Uploader()
 
     # Login with credentials from config
-    email, password = load_credentials()
+    email, password = load_credentials(account=args.account)
     if not uploader.login(email, password):
         sys.exit(1)
 

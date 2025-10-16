@@ -2,8 +2,13 @@
 """
 LeekWars Auto Solo Fighter - Flexible Version
 Allows selection of specific leek and number of fights via command-line arguments
-Usage: python3 lw_solo_fights_flexible.py <leek_number> <num_fights>
-Example: python3 lw_solo_fights_flexible.py 2 25
+
+Usage: python3 lw_solo_fights_flexible.py <leek_number> <num_fights> [--quick] [--account <name>]
+
+Examples:
+  python3 lw_solo_fights_flexible.py 2 25
+  python3 lw_solo_fights_flexible.py 1 50 --quick
+  python3 lw_solo_fights_flexible.py 2 25 --account cure
 """
 
 import requests
@@ -591,19 +596,21 @@ def main():
     parser.add_argument('leek_number', type=int, help='Leek number to use (1, 2, or 3)')
     parser.add_argument('num_fights', type=int, help='Number of fights to run')
     parser.add_argument('--quick', action='store_true', help='Enable quick mode (minimal output)')
-    
+    parser.add_argument('--account', default='main', choices=['main', 'cure'],
+                        help='Account to use (main or cure, default: main)')
+
     args = parser.parse_args()
-    
+
     # Validate leek number
     if args.leek_number < 1 or args.leek_number > 4:
         print("❌ Error: Leek number must be between 1 and 4")
         return 1
-    
+
     # Validate fight count
     if args.num_fights < 1:
         print("❌ Error: Number of fights must be at least 1")
         return 1
-    
+
     print("="*60)
     print("LEEKWARS AUTO SOLO FIGHTER - FLEXIBLE VERSION")
     print("="*60)
@@ -611,13 +618,14 @@ def main():
     print(f"Fights to run: {args.num_fights}")
     if args.quick:
         print("Mode: Quick (minimal output)")
+    print(f"Account: {args.account}")
     print()
-    
+
     # Create fighter instance
     fighter = LeekWarsAutoFighter()
 
     # Get credentials from config
-    email, password = load_credentials()
+    email, password = load_credentials(account=args.account)
 
     # Login
     if not fighter.login(email, password):

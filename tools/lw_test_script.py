@@ -4,12 +4,13 @@ LeekWars Script Testing Tool
 Tests a specific script ID against standard test opponents (bots) or custom scenarios
 
 Usage:
-  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>]
-  Scenario mode: python3 lw_test_script.py <num_tests> --scenario <name>
+  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>] [--account <name>]
+  Scenario mode: python3 lw_test_script.py <num_tests> --scenario <name> [--account <name>]
 
 Examples:
   python3 lw_test_script.py 10 445124 domingo
   python3 lw_test_script.py 10 445124 betalpha --leek RabiesLeek
+  python3 lw_test_script.py 10 445124 domingo --account cure
   python3 lw_test_script.py 1 --scenario graal
 
 Available opponents:
@@ -19,6 +20,8 @@ Available opponents:
   guj      (-4): Tank, 5000 life
   hachess  (-5): Resistance focused, 600 resistance
   rex      (-6): Agility focused, 600 agility
+
+Accounts: main (default), cure
 
 Note: When using --scenario, the scenario must be pre-configured with map, leeks, AI, and opponents
 """
@@ -861,15 +864,17 @@ class LeekWarsScriptTester:
 def main():
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>]")
-        print("  Scenario mode: python3 lw_test_script.py <num_tests> --scenario <name>")
+        print("  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>] [--account <name>]")
+        print("  Scenario mode: python3 lw_test_script.py <num_tests> --scenario <name> [--account <name>]")
         print("\nExamples:")
         print("  python3 lw_test_script.py 10 445124 domingo")
         print("  python3 lw_test_script.py 10 445124 betalpha --leek RabiesLeek")
+        print("  python3 lw_test_script.py 10 445124 domingo --account cure")
         print("  python3 lw_test_script.py 1 --scenario graal")
         print("\nAvailable opponents:")
         for name, bot in BOTS.items():
             print(f"  {name:8} - {bot['desc']}")
+        print("\nAccounts: main (default), cure")
         print("\nDefault: domingo (if opponent not specified in regular mode)")
         print("Note: Scenario mode uses pre-configured scenario (map, leeks, AI, opponents)")
         return 1
@@ -880,11 +885,12 @@ def main():
         print("❌ Invalid argument. Number of tests must be an integer.")
         return 1
 
-    # Parse optional args: script_id, opponent, --leek <name>, and --scenario <name>
+    # Parse optional args: script_id, opponent, --leek <name>, --scenario <name>, and --account <name>
     script_id = None
     opponent_name = None
     preferred_leek_name = None
     scenario_name = None
+    account = "main"
     i = 2
     while i < len(sys.argv):
         arg = sys.argv[i]
@@ -893,6 +899,12 @@ def main():
             i += 2
         elif arg == "--scenario" and i + 1 < len(sys.argv):
             scenario_name = sys.argv[i + 1]
+            i += 2
+        elif arg == "--account" and i + 1 < len(sys.argv):
+            account = sys.argv[i + 1]
+            if account not in ["main", "cure"]:
+                print(f"❌ Invalid account: {account}. Must be 'main' or 'cure'")
+                return 1
             i += 2
         else:
             # Try to parse as script_id first (integer)
@@ -945,12 +957,13 @@ def main():
         print(f"Scenario: {scenario_name} (pre-configured)")
     else:
         print(f"Opponent: {bot_opponent['name']} - {bot_opponent['desc']}")
-    
+    print(f"Account: {account}")
+
     # Create tester instance
     tester = LeekWarsScriptTester()
 
     # Login credentials from config
-    email, password = load_credentials()
+    email, password = load_credentials(account=account)
 
     # Login
     if not tester.login(email, password):

@@ -2,7 +2,13 @@
 """
 LeekWars Auto Team Fighter - All Compositions Version
 Runs all available team fights for all team compositions automatically
-Usage: python3 lw_team_fights_all.py [--quick]
+
+Usage: python3 lw_team_fights_all.py [--quick] [--account <name>]
+
+Examples:
+  python3 lw_team_fights_all.py
+  python3 lw_team_fights_all.py --quick
+  python3 lw_team_fights_all.py --account cure
 """
 
 import requests
@@ -14,6 +20,7 @@ from getpass import getpass
 import os
 import sys
 import argparse
+from config_loader import load_credentials
 
 BASE_URL = "https://leekwars.com/api"
 
@@ -554,22 +561,25 @@ def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='LeekWars Auto Team Fighter - All Compositions')
     parser.add_argument('--quick', action='store_true', help='Enable quick mode (minimal output)')
-    
+    parser.add_argument('--account', default='main', choices=['main', 'cure'],
+                        help='Account to use (main or cure, default: main)')
+
     args = parser.parse_args()
-    
+
     print("="*60)
     print("LEEKWARS AUTO TEAM FIGHTER - ALL COMPOSITIONS")
     print("="*60)
     print("This script will run all available team fights for all compositions")
     if args.quick:
         print("Mode: Quick (minimal output)")
+    print(f"Account: {args.account}")
     print()
-    
+
     # Create fighter instance
     fighter = LeekWarsTeamFighter()
-    
+
     # Get credentials
-    email, password = load_credentials()
+    email, password = load_credentials(account=args.account)
     
     # Login
     if not fighter.login(email, password):
@@ -607,7 +617,6 @@ def main():
     except Exception as e:
         print(f"\n❌ Error occurred: {e}")
         import traceback
-from config_loader import load_credentials
         traceback.print_exc()
         
     finally:
