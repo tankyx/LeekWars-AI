@@ -25,6 +25,7 @@ import argparse
 import websocket
 import threading
 import ssl
+from config_loader import load_credentials
 
 BASE_URL = "https://leekwars.com/api"
 WS_URL = "wss://leekwars.com/ws"
@@ -754,7 +755,6 @@ def main():
     except Exception as e:
         print(f"\n❌ Error occurred: {e}")
         import traceback
-from config_loader import load_credentials
         traceback.print_exc()
         
     finally:
