@@ -36,7 +36,6 @@ FILES_TO_UPDATE = [
     "test_my_leeks.py",
     "test_specific_leek.py",
     "test_weapon_loadouts.py",
-    "upload_v7.py",
     "validate_local_file.py",
     "validate_script.py",
     "websocket_validator.py"

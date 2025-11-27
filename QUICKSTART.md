@@ -1,4 +1,4 @@
-# Quick Start Guide (V7)
+# Quick Start Guide (V8)
 
 ## Setup (First Time)
 
@@ -17,20 +17,20 @@ printf '{"username":"YOUR_EMAIL","password":"YOUR_PASSWORD"}' > ~/.config/leekwa
 
 ## Daily Usage
 
-Upload V7 to LeekWars:
+Upload V8 to LeekWars:
 ```bash
-python3 tools/upload_v7.py
+python3 tools/upload_v8.py
 ```
 
 Run tests (example opponents: domingo, betalpha, tisma, guj, hachess, rex):
 ```bash
-python3 tools/lw_test_script.py 446029 20 rex
+python3 tools/lw_test_script.py 447461 20 rex
 ```
 
 Test all quickly:
 ```bash
 for op in domingo betalpha tisma guj hachess rex; do
-  python3 tools/lw_test_script.py 446029 5 $op
+  python3 tools/lw_test_script.py 447461 5 $op
 done
 ```
 
@@ -43,8 +43,8 @@ python3 tools/lw_solo_fights_flexible.py 1 20 --quick
 
 After code changes, sanity test and upload:
 ```bash
-python3 tools/lw_test_script.py 446029 3 rex
-python3 tools/upload_v7.py
+python3 tools/lw_test_script.py 447461 3 rex
+python3 tools/upload_v8.py
 ```
 
 Push to GitHub:
@@ -59,3 +59,4 @@ git push origin main
 - Check credentials: `~/.config/leekwars/config.json`
 - Ensure dependencies installed: `pip3 install -r requirements.txt`
 - Logs saved under `fight_logs/<leek_id>/`
+- See `CLAUDE.md` for V8-specific development guidance

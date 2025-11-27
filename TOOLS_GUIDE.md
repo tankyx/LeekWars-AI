@@ -1,15 +1,15 @@
-# Tools Guide (V7)
+# Tools Guide (V8)
 
 ## Upload & Deployment
-- Upload V7: `python3 tools/upload_v7.py`
-- Update a single script: `python3 tools/lw_update_script.py V7_modules/V7_main.ls <script_id>`
-  - Example: `python3 tools/lw_update_script.py V7_modules/V7_main.ls 446029`
+- Upload V8: `python3 tools/upload_v8.py`
+- Update a single script: `python3 tools/lw_update_script.py V8_modules/main.lk <script_id>`
+  - Example: `python3 tools/lw_update_script.py V8_modules/main.lk 447461`
 - Retrieve a script: `python3 tools/lw_retrieve_script.py <script_id>`
 
 ## Testing & Combat
 - Bot tests (by script ID):
   - `python3 tools/lw_test_script.py <script_id> <num_tests> <opponent>`
-  - Example: `python3 tools/lw_test_script.py 446029 20 rex`
+  - Example: `python3 tools/lw_test_script.py 447461 20 rex`
 - Ranked solo fights:
   - `python3 tools/lw_solo_fights_flexible.py <leek_id> <count> [--quick]`
 - Team fights (all compositions):
