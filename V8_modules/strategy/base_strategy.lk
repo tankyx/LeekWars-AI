@@ -614,10 +614,21 @@ class Strategy {
         var enemies = fieldMap.getEnemySubMap()
         var chests = fieldMap.getChestSubMap()
 
+        // Convert maps to arrays for iteration
+        var enemyList = []
+        for (var eid in mapKeys(enemies)) {
+            push(enemyList, enemies[eid])
+        }
+        var chestList = []
+        for (var cid in mapKeys(chests)) {
+            push(chestList, chests[cid])
+        }
+
         // Boss fight detection (crystals + grail)
         var hasCrystals = false
         var hasGrail = false
-        for (var e in enemies) {
+        for (var i = 0; i < count(enemyList); i++) {
+            var e = enemyList[i]
             var name = getName(e._id)
             if (name == "Crystal" || name == "Cristal") hasCrystals = true
             if (name == "Grail" || name == "Graal") hasGrail = true
@@ -628,13 +639,14 @@ class Strategy {
         }
 
         // Chest fight (no enemies, only chests)
-        if (count(enemies) == 0 && count(chests) > 0) {
+        if (count(enemyList) == 0 && count(chestList) > 0) {
             debug("[FIGHT-TYPE] Chest fight detected")
             return "chest"
         }
 
         // PvP fight (enemy leeks)
-        for (var e2 in enemies) {
+        for (var j = 0; j < count(enemyList); j++) {
+            var e2 = enemyList[j]
             var entityType = getType(e2._id)
             if (entityType == ENTITY_LEEK) {
                 debug("[FIGHT-TYPE] PvP fight detected (enemy leek)")
