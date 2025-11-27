@@ -37,10 +37,16 @@ class MagicStrategy extends Strategy {
         var healAvailable = (healChip != null)
 
         if (hpPercent < 35 && healAvailable) {
-            debug("[MAGIC] Low HP (<35%) and " + healChip['name'] + " available, switching to defensive")
-            this.createDefensiveScenario(target, targetHitCell)
-            this.executeScenario()
-            return
+            // Verify healing can actually be executed before switching to defensive
+            var canHeal = this.verifyHealingExecutable(healChip)
+            if (canHeal) {
+                debug("[MAGIC] Low HP and healing possible, switching to defensive")
+                this.createDefensiveScenario(target, targetHitCell)
+                this.executeScenario()
+                return
+            } else {
+                debug("[MAGIC] Low HP but healing not possible, continuing offense")
+            }
         }
 
         // PRIORITY 1: Check for chest
@@ -553,5 +559,116 @@ class MagicStrategy extends Strategy {
 
         context['willAttack'] = willAttack
         context['plannedWeapon'] = plannedWeapon
+    }
+
+    // ====================================================================
+    // HEALING VERIFICATION HELPERS
+    // ====================================================================
+    // Fix for defensive mode race condition - verify healing can actually be executed
+    
+    // Verify that a healing chip can actually be executed (not just "available")
+    // Checks: cooldown, TP cost, range, and meaningful heal amount
+    function verifyHealingExecutable(healChip) {
+        if (healChip == null) {
+            debug("[HEAL-CHECK] No heal chip provided")
+            return false
+        }
+        
+        var chipId = healChip['chipId']
+        var chipCost = getChipCost(chipId)
+        
+        debug("[HEAL-CHECK] Verifying " + getChipName(chipId) + " (cost: " + chipCost + " TP, have: " + player._currTp + " TP)")
+        
+        // Check cooldown
+        var cooldown = getCooldown(chipId, player._id)
+        if (cooldown > 0) {
+            debug("[HEAL-CHECK] Chip on cooldown: " + cooldown + " turns")
+            return false
+        }
+        
+        // Check TP
+        if (player._currTp < chipCost) {
+            debug("[HEAL-CHECK] Insufficient TP: " + player._currTp + " < " + chipCost)
+            return false
+        }
+        
+        // Check range if applicable
+        var minRange = getChipMinRange(chipId)
+        var maxRange = getChipMaxRange(chipId)
+        if (minRange > 0 || maxRange > 0) {
+            var targetCell = this.findHealingTargetCell(chipId)
+            if (targetCell == -1) {
+                debug("[HEAL-CHECK] No valid target cell in range")
+                return false
+            }
+        }
+        
+        // Check if healing provides meaningful benefit
+        var healAmount = this.estimateHealingAmount(chipId)
+        if (healAmount < 50) {
+            debug("[HEAL-CHECK] Heal amount too low: " + healAmount + " HP")
+            return false
+        }
+        
+        debug("[HEAL-CHECK] Healing executable: chip=" + getChipName(chipId) + 
+              " TP=" + player._currTp + " heal=" + healAmount + " HP")
+        return true
+    }
+    
+    // Helper to find valid healing target cell
+    function findHealingTargetCell(chipId) {
+        var minRange = getChipMinRange(chipId)
+        var maxRange = getChipMaxRange(chipId)
+        
+        // Self-target chips (range 0)
+        if (minRange == 0 && maxRange == 0) {
+            debug("[HEAL-TARGET] Self-target chip, returning player position")
+            return player._cellPos
+        }
+        
+        // For AoE heals, find best position that includes player
+        if (getChipArea(chipId) > 0) {
+            return fieldMap.findBestAoEPosition(chipId, player._cellPos)
+        }
+        
+        // Single target heal - must target self or ally
+        // For now, assume self-target if in range
+        var distToSelf = 0  // Distance to self is always 0
+        if (distToSelf >= minRange && distToSelf <= maxRange) {
+            return player._cellPos
+        }
+        
+        debug("[HEAL-TARGET] No valid target found for chip: " + getChipName(chipId))
+        return -1
+    }
+    
+    // Helper to estimate healing amount from a chip
+    function estimateHealingAmount(chipId) {
+        var effects = getChipEffects(chipId)
+        var totalHeal = 0
+        
+        debug("[HEAL-ESTIMATE] Estimating heal for " + getChipName(chipId))
+        
+        for (var effect in effects) {
+            if (effect[0] == EFFECT_HEAL) {
+                totalHeal += effect[1]  // Direct heal value
+                debug("[HEAL-ESTIMATE] Direct heal: " + effect[1])
+            }
+            else if (effect[0] == EFFECT_HEAL_OVER_TIME) {
+                totalHeal += effect[1] * effect[2]  // Value * duration
+                debug("[HEAL-ESTIMATE] HoT: " + effect[1] + " * " + effect[2] + " = " + (effect[1] * effect[2]))
+            }
+        }
+        
+        // Scale with wisdom if it's a wisdom-based chip
+        var chipType = getChipType(chipId)
+        if (totalHeal > 0 && chipType == TYPE_WISDOM) {
+            var scaledHeal = totalHeal * (1 + player._wisdom / 1000)
+            debug("[HEAL-ESTIMATE] Scaled with wisdom (" + player._wisdom + "): " + totalHeal + " -> " + scaledHeal)
+            totalHeal = scaledHeal
+        }
+        
+        debug("[HEAL-ESTIMATE] Total estimated heal: " + totalHeal)
+        return totalHeal
     }
 }
