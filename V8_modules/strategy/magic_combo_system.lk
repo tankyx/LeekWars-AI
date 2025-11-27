@@ -101,7 +101,29 @@ class ComboSystem {
             return false
         }
 
-        debug("[GRAPPLE-COVID][CHECK] SUCCESS: All conditions met!")
+        // Check path between player and target (GRAPPLE can fail if obstacles block pull path)
+        var pathToTarget = getPath(player._cellPos, target._cellPos)
+        if (pathToTarget == null || count(pathToTarget) == 0) {
+            debug("[GRAPPLE-COVID][CHECK] FAIL: No valid path between player and target")
+            return false
+        }
+
+        // Calculate intermediate cell where enemy will be pulled to (distance 2 from player)
+        var dx = getCellX(player._cellPos) - getCellX(target._cellPos)
+        var dy = getCellY(player._cellPos) - getCellY(target._cellPos)
+        if (dx != 0) dx = dx / abs(dx)
+        if (dy != 0) dy = dy / abs(dy)
+        var pullTargetX = getCellX(player._cellPos) - dx * 2
+        var pullTargetY = getCellY(player._cellPos) - dy * 2
+        var pullCell = getCellFromXY(pullTargetX, pullTargetY)
+
+        // Validate pull destination is not an obstacle or occupied
+        if (pullCell == null || isObstacle(pullCell) || (isEntity(pullCell) && getEntityOnCell(pullCell) != target._id)) {
+            debug("[GRAPPLE-COVID][CHECK] FAIL: Pull destination " + pullCell + " is blocked (obstacle=" + isObstacle(pullCell) + " entity=" + isEntity(pullCell) + ")")
+            return false
+        }
+
+        debug("[GRAPPLE-COVID][CHECK] SUCCESS: All conditions met (path clear, pull destination valid)")
         return true
     }
 

@@ -344,6 +344,61 @@ class Strategy {
         debug("[" + this.getStrategyName() + "] " + message)
     }
 
+    // Select best target from available enemies based on strategy priorities
+    // Strength/Agility: Prioritize lowest HP (finish kills)
+    // Magic: Prioritize targets without DoT (fresh targets)
+    // Returns: best target entity or null if no valid targets
+    selectBestTarget() {
+        var enemies = fieldMap.getEnemySubMap()
+        var best = null
+        var bestScore = -1
+
+        for (var e in enemies) {
+            if (isDead(e._id)) continue
+            var score = 0
+
+            // Strength/Agility: Prioritize lowest HP (finish kills)
+            if (this.getStrategyName() == "STR" || this.getStrategyName() == "AGI") {
+                score = 10000 - e._currHealth  // Lower HP = higher score
+                debug("[TARGET-SELECTION][" + this.getStrategyName() + "] Enemy " + getName(e._id) + " HP-based score: " + score)
+            }
+            // Magic: Prioritize no DoT (fresh targets), then lowest HP
+            else if (this.getStrategyName() == "MAGIC") {
+                if (!e.hasEffect(EFFECT_POISON)) {
+                    score += 5000  // Big bonus for targets without poison
+                    debug("[TARGET-SELECTION][MAGIC] Enemy " + getName(e._id) + " no poison bonus: +5000")
+                }
+                score += (10000 - e._currHealth)  // Then consider HP
+            }
+            // Default: lowest HP
+            else {
+                score = 10000 - e._currHealth
+            }
+
+            // Universal: Prefer closer enemies (distance penalty)
+            var dist = getCellDistance(player._cellPos, e._cellPos)
+            if (dist != null) {
+                score -= dist * 10
+                debug("[TARGET-SELECTION] Enemy " + getName(e._id) + " distance penalty: -" + (dist * 10) + " (dist=" + dist + ")")
+            }
+
+            debug("[TARGET-SELECTION] Enemy " + getName(e._id) + " final score: " + score + " (HP=" + e._currHealth + ", dist=" + dist + ")")
+
+            if (score > bestScore) {
+                bestScore = score
+                best = e
+            }
+        }
+
+        if (best != null) {
+            debug("[TARGET-SELECTION] Selected target: " + getName(best._id) + " (score=" + bestScore + ")")
+        } else {
+            debug("[TARGET-SELECTION] No valid targets found")
+        }
+
+        return best
+    }
+
     // Select best healing chip based on HP% and chip availability
     // Returns: {chipId: int, name: string, priority: int} or null
     selectBestHealingChip(hpPercent) {
@@ -412,6 +467,99 @@ class Strategy {
         return bestCell
     }
 
+    // Project total damage output from a given cell with optional buff inclusion
+    // includeBuffs: if true, accounts for stat buffs like STEROID/WARM_UP
+    // fromCell: cell to calculate from (default: player's current position)
+    // availableTP: TP budget (default: player's current TP)
+    // Returns: projected total damage
+    projectTotalDamageOutput(includeBuffs = false, fromCell = -1, availableTP = -1, targetEntity = null) {
+        if (fromCell == -1) fromCell = player._cellPos
+        if (availableTP == -1) availableTP = player._currTp
+
+        var totalDamage = 0
+        var playerTP = availableTP
+        var buffBonus = 0
+
+        // Include pending buff effects if requested
+        if (includeBuffs) {
+            if (this.getStrategyName() == "STR") {
+                // Check if STEROID is available (equipped, off cooldown, sufficient TP)
+                if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID) &&
+                    getCooldown(CHIP_STEROID, player._id) == 0 &&
+                    !player.hasEffect(EFFECT_BUFF_STRENGTH)) {
+                    buffBonus = 160  // STEROID average boost
+                    playerTP -= 7
+                    debug("[DAMAGE-PROJECTION] Including STEROID buff: +160 STR, -7 TP")
+                }
+            }
+            else if (this.getStrategyName() == "AGI") {
+                // Check if WARM_UP is available (equipped, off cooldown, sufficient TP)
+                if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP) &&
+                    getCooldown(CHIP_WARM_UP, player._id) == 0 &&
+                    !player.hasEffect(EFFECT_BUFF_AGILITY)) {
+                    buffBonus = 180  // WARM_UP average boost (agility affects damage return, not direct damage)
+                    playerTP -= 7
+                    debug("[DAMAGE-PROJECTION] Including WARM_UP buff: +180 AGI, -7 TP")
+                }
+            }
+        }
+
+        // Calculate weapon spam damage from specified cell
+        if (mapContainsKey(fieldMap.damageMap, fromCell)) {
+            var cell = fieldMap.damageMap[fromCell]
+            for (var wIdx = 0; wIdx < count(cell._weaponsList); wIdx++) {
+                var w = cell._weaponsList[wIdx]
+                if (w == null) continue
+
+                // Validate range and LOS to target if specified
+                if (targetEntity != null) {
+                    var dist = getCellDistance(fromCell, targetEntity._cellPos)
+                    if (dist == null || dist < w._minRange || dist > w._maxRange) continue
+                    if (!lineOfSight(fromCell, targetEntity._cellPos)) continue
+                }
+
+                var uses = min(w._maxUse, floor(playerTP / w._cost))
+                if (uses > 0) {
+                    var netDmg = targetEntity != null ?
+                        arsenal.getNetDamageAgainstTarget(player._strength + buffBonus, player._magic, player._wisdom, w._id, targetEntity) :
+                        arsenal.getDamageBreakdown(player._strength + buffBonus, player._magic, player._wisdom, w._id)['total']
+                    totalDamage += netDmg * uses
+                    playerTP -= w._cost * uses
+                    debug("[DAMAGE-PROJECTION] " + getWeaponName(w._id) + " x" + uses + " = " + floor(netDmg * uses) + " damage")
+                }
+            }
+        }
+
+        // Add chip damage
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            var c = arsenal.playerEquippedChips[cid]
+            if (c == null) continue
+            if (playerTP < c._cost) continue
+            if (getCooldown(c._id, player._id) > 0) continue
+            if (!mapContainsKey(c._effects, EFFECT_DAMAGE) && !mapContainsKey(c._effects, EFFECT_POISON)) continue
+
+            // Validate range and LOS to target if specified
+            if (targetEntity != null) {
+                var distC = getCellDistance(fromCell, targetEntity._cellPos)
+                if (distC == null || distC < c._minRange || distC > c._maxRange) continue
+                if (!lineOfSight(fromCell, targetEntity._cellPos)) continue
+            }
+
+            var chipUses = min(c._maxUse, floor(playerTP / c._cost))
+            if (chipUses > 0) {
+                var netChipDmg = targetEntity != null ?
+                    arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, c._id, targetEntity) :
+                    arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, c._id)['total']
+                totalDamage += netChipDmg * chipUses
+                playerTP -= c._cost * chipUses
+                debug("[DAMAGE-PROJECTION] " + getChipName(c._id) + " x" + chipUses + " = " + floor(netChipDmg * chipUses) + " damage")
+            }
+        }
+
+        debug("[DAMAGE-PROJECTION] Total projected damage: " + floor(totalDamage) + " (from cell " + fromCell + ", TP used: " + (availableTP - playerTP) + ")")
+        return totalDamage
+    }
+
     // Find best damage cell along path to target cell (for fighting retreat)
     // Returns Cell object from damageMap that's on the path, or null if no damage cells on path
     findBestDamageCellOnPath(targetCell, maxMP) {
@@ -460,12 +608,75 @@ class Strategy {
         return bestCell
     }
 
+    // Detect fight type to determine if turn 1 buffs should be applied
+    // Returns: "pvp", "boss", "chest", "pve"
+    detectFightType() {
+        var enemies = fieldMap.getEnemySubMap()
+        var chests = fieldMap.getChestSubMap()
+
+        // Boss fight detection (crystals + grail)
+        var hasCrystals = false
+        var hasGrail = false
+        for (var e in enemies) {
+            var name = getName(e._id)
+            if (name == "Crystal" || name == "Cristal") hasCrystals = true
+            if (name == "Grail" || name == "Graal") hasGrail = true
+        }
+        if (hasCrystals && hasGrail) {
+            debug("[FIGHT-TYPE] Boss fight detected (crystals + grail)")
+            return "boss"
+        }
+
+        // Chest fight (no enemies, only chests)
+        if (count(enemies) == 0 && count(chests) > 0) {
+            debug("[FIGHT-TYPE] Chest fight detected")
+            return "chest"
+        }
+
+        // PvP fight (enemy leeks)
+        for (var e2 in enemies) {
+            var entityType = getType(e2._id)
+            if (entityType == ENTITY_LEEK) {
+                debug("[FIGHT-TYPE] PvP fight detected (enemy leek)")
+                return "pvp"
+            }
+        }
+
+        // PvE fight (mobs/bulbs/turrets)
+        debug("[FIGHT-TYPE] PvE fight detected (non-leek enemies)")
+        return "pve"
+    }
+
     turnOneBuffs() {
         debug("Applying turn one buffs if available")
         debug("Dumping equipped chips:")
         for (var c in mapKeys(arsenal.playerEquippedChips)) {
             debug(" - " + getChipName(c))
         }
+
+        // Detect fight type before applying buffs
+        var fightType = this.detectFightType()
+
+        // SKIP BUFFS for boss fights (need chips for crystal manipulation)
+        if (fightType == "boss") {
+            debug("[TURN1-BUFFS] Skipping all buffs - boss fight requires chips for crystal control")
+            if (getWeapon() == null) {
+                setWeapon(arsenal.getHighestDamageWeapon())
+            }
+            return
+        }
+
+        // SKIP BUFFS for chest fights (pure damage spam, buffs waste TP)
+        if (fightType == "chest") {
+            debug("[TURN1-BUFFS] Skipping all buffs - chest fight prioritizes damage spam")
+            if (getWeapon() == null) {
+                setWeapon(arsenal.getHighestDamageWeapon())
+            }
+            return
+        }
+
+        // Apply buffs for PvP and PvE fights
+        debug("[TURN1-BUFFS] Fight type: " + fightType + " - applying appropriate buffs")
 
         // PRIORITY 1: Stat-based primary buffs (applied before other buffs for maximum effect)
         // Strength build: Apply CHIP_STEROID for weapon damage boost
@@ -489,18 +700,22 @@ class Strategy {
             }
         }
 
-        // PRIORITY 2: Universal stat buffs
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
-            debug("Using CHIP_KNOWLEDGE - Science/Magic boost")
-            useChip(CHIP_KNOWLEDGE, player._id)
-        }
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
-            debug("Using CHIP_ARMORING - Resistance boost")
-            useChip(CHIP_ARMORING, player._id)
-        }
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
-            debug("Using CHIP_ELEVATION - Wisdom boost")
-            useChip(CHIP_ELEVATION, player._id)
+        // PRIORITY 2: Universal stat buffs (only in PvP fights for maximum value)
+        if (fightType == "pvp") {
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
+                debug("Using CHIP_KNOWLEDGE - Science/Magic boost")
+                useChip(CHIP_KNOWLEDGE, player._id)
+            }
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
+                debug("Using CHIP_ARMORING - Resistance boost")
+                useChip(CHIP_ARMORING, player._id)
+            }
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
+                debug("Using CHIP_ELEVATION - Wisdom boost")
+                useChip(CHIP_ELEVATION, player._id)
+            }
+        } else {
+            debug("[TURN1-BUFFS] Skipping universal buffs in " + fightType + " fight (save TP for damage)")
         }
 
         // PRIORITY 3: Weapon selection
@@ -1285,11 +1500,42 @@ class Strategy {
     // ====================================================================
     // Validate all queued actions before execution
     // Remove invalid actions to prevent wasting TP/MP on impossible actions
-    
-    
+
+    // Find alternative cell for failed movement action
+    // Returns: alternative cell ID or -1 if no alternative found
+    findAlternativeMovementCell(originalCell, maxMP) {
+        debug("[VALIDATION][FALLBACK] Searching for alternative to cell " + originalCell + " (MP=" + maxMP + ")")
+
+        // Strategy 1: Find closest reachable cell in damage map
+        var bestAlt = this.findBestReachableDamageCell(maxMP)
+        if (bestAlt != null) {
+            debug("[VALIDATION][FALLBACK] Found reachable damage cell: " + bestAlt._id + " (damage=" + bestAlt._totalDamage + ")")
+            return bestAlt._id
+        }
+
+        // Strategy 2: Move as close as possible to original target
+        var path = getPath(player._cellPos, originalCell)
+        if (path != null && count(path) > 0) {
+            // Find furthest reachable cell on path
+            for (var i = count(path) - 1; i >= 0; i--) {
+                var cell = path[i]
+                if (cell == player._cellPos) continue
+                var dist = getPathLength(player._cellPos, cell)
+                if (dist != null && dist <= maxMP) {
+                    debug("[VALIDATION][FALLBACK] Found partial path cell: " + cell + " (dist=" + dist + ")")
+                    return cell
+                }
+            }
+        }
+
+        debug("[VALIDATION][FALLBACK] No alternative found")
+        return -1
+    }
+
     validateAndFilterActions() {
         var validActions = []
         var initialActionCount = count(this._actions)
+        var fallbacksAdded = 0
 
         debug("[VALIDATION] Starting validation of " + initialActionCount + " actions")
 
@@ -1319,10 +1565,32 @@ class Strategy {
                         simulatedPos = action.targetCell  // Update simulated position
                         debug("[VALIDATION] Movement to " + action.targetCell + " updates simulated pos (cost: " + mpCost + " MP)")
                     } else {
-                        debug("[VALIDATION] Movement to " + action.targetCell + " requires " + mpCost + " MP but only have " + player._currMp + " - removing")
+                        debug("[VALIDATION] Movement to " + action.targetCell + " requires " + mpCost + " MP but only have " + player._currMp + " - checking fallback")
+                        // Try to find alternative cell
+                        var altCell = this.findAlternativeMovementCell(action.targetCell, player._currMp)
+                        if (altCell != -1) {
+                            action.targetCell = altCell
+                            push(validActions, action)
+                            simulatedPos = altCell
+                            fallbacksAdded += 1
+                            debug("[VALIDATION] Added fallback movement to " + altCell + " (original: " + action.targetCell + ")")
+                        } else {
+                            debug("[VALIDATION] No fallback found, removing movement action")
+                        }
                     }
                 } else {
-                    debug("[VALIDATION] No path from " + simulatedPos + " to " + action.targetCell + " - removing movement action")
+                    debug("[VALIDATION] No path from " + simulatedPos + " to " + action.targetCell + " - checking fallback")
+                    // Try to find alternative cell
+                    var altCell2 = this.findAlternativeMovementCell(action.targetCell, player._currMp)
+                    if (altCell2 != -1) {
+                        action.targetCell = altCell2
+                        push(validActions, action)
+                        simulatedPos = altCell2
+                        fallbacksAdded += 1
+                        debug("[VALIDATION] Added fallback movement to " + altCell2 + " (original unreachable)")
+                    } else {
+                        debug("[VALIDATION] No fallback found, removing movement action")
+                    }
                 }
                 continue
             }
@@ -1392,11 +1660,10 @@ class Strategy {
         }
         
         var removedCount = initialActionCount - count(validActions)
-        if (removedCount > 0) {
-            debug("[VALIDATION] Removed " + removedCount + " invalid actions, " + 
-                  count(validActions) + " remaining")
+        if (removedCount > 0 || fallbacksAdded > 0) {
+            debug("[VALIDATION] Removed " + removedCount + " invalid actions, added " + fallbacksAdded + " fallbacks, " + count(validActions) + " total actions remaining")
         }
-        
+
         this._actions = validActions
     }
 

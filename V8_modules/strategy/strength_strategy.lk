@@ -703,15 +703,37 @@ class StrengthStrategy extends Strategy {
 
         // PRIORITY 2: Check for OTKO opportunity FIRST (before GRAPPLE repositioning)
         // If OTKO is viable, skip GRAPPLE combo to preserve teleport positioning
-        var hpThreshold = min(target._maxHealth * 0.35, 500)  // 35% HP or 500 HP, whichever is lower
-        if (target._currHealth <= hpThreshold) {
-            debug("[STR] Enemy HP below OTKO threshold: " + target._currHealth + " <= " + hpThreshold)
-            var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
-            if (otkoExecuted) {
-                debug("[STR] OTKO scenario executed successfully")
-                return  // OTKO actions planned, skip normal offensive logic
+
+        // Use damage projection to determine if OTKO is actually possible (not just HP threshold)
+        var canTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                         getCooldown(CHIP_TELEPORTATION, getEntity()) == 0 &&
+                         player._currTp >= 15  // Minimum for teleport + attacks
+
+        if (canTeleport) {
+            // Find optimal teleport cell for damage calculation
+            var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+            if (teleportInfo != null) {
+                var teleCell = teleportInfo['cell']
+
+                // Project actual damage output from teleport cell (include STEROID if available)
+                var projectedDamage = this.projectTotalDamageOutput(true, teleCell, player._currTp - 9, target)
+                var enemyHP = target._currHealth
+
+                debug("[STR][OTKO-CHECK] Projected damage from teleport: " + floor(projectedDamage) + " vs enemy HP: " + enemyHP)
+
+                // OTKO is viable if projected damage >= enemy HP
+                if (projectedDamage >= enemyHP) {
+                    debug("[STR][OTKO] OTKO viable! Executing teleport scenario")
+                    var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
+                    if (otkoExecuted) {
+                        debug("[STR] OTKO scenario executed successfully")
+                        return  // OTKO actions planned, skip normal offensive logic
+                    }
+                    debug("[STR] OTKO execution failed, falling back to normal offensive scenario")
+                } else {
+                    debug("[STR][OTKO] OTKO not viable (insufficient damage), skipping teleport")
+                }
             }
-            debug("[STR] OTKO not viable, falling back to normal offensive scenario")
         }
 
         // PRIORITY 3: GRAPPLE-HEAVY_SWORD combo check (after OTKO, before defensive chips consume TP)

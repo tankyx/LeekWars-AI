@@ -231,21 +231,324 @@ Abstract base class providing:
 
 ---
 
-## Areas for Improvement
+## V8 Strategy Analysis & Improvement Plan
 
-**Action Queue Validation:** Validate queued actions before execution (range, LOS, TP/MP availability)
+### Strategy Performance Matrix
 
-**Emergency Mode:** Add dedicated low HP survival logic (prioritize healing, defensive positioning)
+| Strategy | Strengths | Critical Weaknesses | Priority Fixes |
+|----------|-----------|-------------------|----------------|
+| **Strength** | OTKO system, GRAPPLE-HS combo, defensive chips | OTKO threshold too simple, combo blocks OTKO, post-combo limited | Fix OTKO calculation, reorder combo logic |
+| **Magic** | Antidote baiting, GRAPPLE-COVID, poison attrition, AoE safety | Antidote state not persisted, no combo path validation, stuck in bait loop | Persist state, validate pull path, add burst mode |
+| **Agility** | Clean implementation, proper buff priority, TP validation | No unique tactics, doesn't leverage agility advantages | Add mobility tactics, evasive positioning |
+| **Base** | Validation system, fighting retreat, lethal detection | Validation removes without fallback, blind turn 1 buffs | Add fallback suggestions, smart buff detection |
 
-**Target Selection:** Implement priority system (Strength: lowest HP, Magic: no DoT, Agility: high HP)
+---
+
+### Strength Strategy Improvements
+
+**Critical Issues:**
+
+| Issue | Impact | Line Reference |
+|-------|--------|----------------|
+| OTKO threshold too simple (35% HP or 500 HP) | Wastes teleport CD when can't actually kill | strength_strategy.lk:706 |
+| Combo blocks OTKO even when viable | Logic order causes positioning → miss kill | strength_strategy.lk:721-764 |
+| Post-combo only checks LIGHTNINGER | Ignores other secondary weapons | strength_strategy.lk:862-888 |
+| INVERSION skipped if combo attempted | Misses heal+vulnerability opportunity | strength_strategy.lk:790 |
+| THERAPY limited to <25% HP | Too restrictive for safe healing | strength_strategy.lk:776 |
+
+**Implementation Priority:**
+
+```
+PRIORITY 1 (High Impact, Low Risk):
+✓ Fix OTKO damage calculation: Include STEROID buff in projection
+✓ Reorder combo vs OTKO: Check OTKO FIRST, only combo if OTKO fails
+✓ Add post-combo secondary weapon loop (not just LIGHTNINGER)
+
+PRIORITY 2 (Medium Impact):
+□ INVERSION conditional: Allow even after failed combo attempt
+□ Expand THERAPY threshold: 25-40% HP with threat assessment
+□ Add target selection: Prioritize lowest HP enemy (finish kills)
+
+PRIORITY 3 (Polish):
+□ FORTRESS/WALL threat-based: Check if enemy can attack this turn
+□ Validate combo pull path: Check obstacles before GRAPPLE
+```
+
+---
+
+### Magic Strategy Improvements
+
+**Critical Issues:**
+
+| Issue | Impact | Line Reference |
+|-------|--------|----------------|
+| Antidote state not persisted | Resets baiting logic every turn | magic_strategy.lk:14-17 |
+| Combo doesn't validate pull path | GRAPPLE fails if obstacles present | magic_strategy.lk:357-360 |
+| No burst mode vs persistent antidote | Stuck in bait loop against smart opponents | magic_strategy.lk:243-247 |
+| Kiting distance not optimized | Uses hide cells but not safe range calculation | magic_strategy.lk:268-292 |
+| DESINTEGRATION/ALTERATION thresholds arbitrary | 75%/100% thresholds ignore fight state | magic_strategy.lk:545-568 |
+
+**Implementation Priority:**
+
+```
+PRIORITY 1 (High Impact):
+✓ Persist antidote state: Use static variables across turns
+✓ Add combo path validation: Check getPath() before GRAPPLE
+✓ Implement burst mode: Switch to damage after 3+ bait turns
+
+PRIORITY 2 (Medium Impact):
+□ Calculate optimal kite range: Use base.calculateOptimalKiteDistance()
+□ Improve poison attrition: Compare (poison DPT * turns) vs enemy HP
+□ Add weapon-only fallback: Play like strength if poison chips on CD
+
+PRIORITY 3 (Optimization):
+□ Nova chip thresholds: Tie to remaining poison turns
+□ LEATHER_BOOTS reservation: Only skip if combo executes THIS turn
+```
+
+---
+
+### Agility Strategy Improvements
+
+**Critical Issues:**
+
+| Issue | Impact | Line Reference |
+|-------|--------|----------------|
+| No unique tactics | Just "strength + return buff" | agility_strategy.lk:4-162 |
+| Doesn't leverage agility advantages | Ignores dodge, mobility bonuses | agility_strategy.lk:75-161 |
+| Return buff timing conservative | Reapplies at ≤1 turn, could optimize | agility_strategy.lk:52-70 |
+| No threat-based buff decisions | Always applies regardless of enemy damage | agility_strategy.lk:106-123 |
+| Missing multi-target synergy | Return buff wasted in 1v1 | agility_strategy.lk:14-36 |
+
+**Implementation Priority:**
+
+```
+PRIORITY 1 (High Impact - Make Agility Unique):
+□ Add mobility advantage: LEATHER_BOOTS + MP for hit-and-run
+□ Implement evasive positioning: Prefer diagonal movements
+□ Return buff optimization: Apply BEFORE damage, track enemy TP
+
+PRIORITY 2 (Medium Impact):
+□ Smart buff timing: Apply when enemy has TP for attack
+□ Add ADRENALINE bridge: Use when 1-4 TP short of buff+spam
+□ Multi-enemy detection: Boost return priority in 2v1/3v1
+
+PRIORITY 3 (Polish):
+□ Return buff duration math: Don't reapply if fight ends in 1 turn
+□ Aggressive repositioning: Circle enemies to maximize return
+```
+
+---
+
+### Base Strategy Improvements
+
+**Critical Issues:**
+
+| Issue | Impact | Line Reference |
+|-------|--------|----------------|
+| Validation removes without fallback | Leaves strategies with no actions | base_strategy.lk:1290-1401 |
+| Turn 1 buffs applied blindly | Wastes buffs in wrong fight types | base_strategy.lk:463-513 |
+| Emergency mode fixed at 35% HP | Ignores lethal threats at higher HP | base_strategy.lk:1147-1167 |
+| Defensive always flees | Sometimes standing ground is better | base_strategy.lk:993-1100 |
+| Kiting distance unused | Calculated but no strategy uses it | base_strategy.lk:308-335 |
+
+**Implementation Priority:**
+
+```
+PRIORITY 1 (High Impact):
+✓ Validation with fallback: Suggest reachable alternatives
+✓ Smart turn 1 buffs: Detect fight type before applying
+✓ Threat-based emergency: Enter defensive if (damage * 2) > HP
+
+PRIORITY 2 (Core Improvements):
+□ Integrate kiting distance: Magic should use calculateOptimalKiteDistance()
+□ Defensive stance option: Stand ground if damage > enemy HP
+□ TP/MP simulation: Track consumed resources in validation
+
+PRIORITY 3 (Polish):
+□ Healing verification caching: Don't recalculate every check
+□ Ally coordination hooks: Static variables for target assignment
+```
+
+---
+
+### Cross-Strategy Improvements
+
+**1. Target Selection System** (affects ALL strategies)
+
+Add to `base_strategy.lk` around line 337:
+
+```leekscript
+selectBestTarget() {
+    var enemies = fieldMap.getEnemySubMap()
+    var best = null
+    var bestScore = -1
+
+    for (var e in enemies) {
+        if (isDead(e._id)) continue
+        var score = 0
+
+        // Strength/Agility: Prioritize lowest HP (finish kills)
+        if (this.getStrategyName() == "STR" || this.getStrategyName() == "AGI") {
+            score = 10000 - e._currHealth
+        }
+        // Magic: Prioritize no DoT (fresh targets)
+        else if (this.getStrategyName() == "MAGIC") {
+            if (!e.hasEffect(EFFECT_POISON)) score += 5000
+            score += (10000 - e._currHealth)
+        }
+
+        // Universal: Prefer closer enemies
+        var dist = getCellDistance(player._cellPos, e._cellPos)
+        if (dist != null) score -= dist * 10
+
+        if (score > bestScore) {
+            bestScore = score
+            best = e
+        }
+    }
+    return best
+}
+```
+
+**2. Resource Reservation System** (affects buffing logic)
+
+Add to `base_strategy.lk` around line 305:
+
+```leekscript
+calculateRequiredTPForTurn() {
+    var required = 0
+
+    // Reserve TP for known combos
+    if (this.getStrategyName() == "STR") {
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
+            mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)) {
+            required = 18  // GRAPPLE + HEAVY_SWORD
+        }
+    }
+    else if (this.getStrategyName() == "MAGIC") {
+        // Check if GRAPPLE-COVID combo available
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
+            mapContainsKey(arsenal.playerEquippedChips, CHIP_COVID)) {
+            required = 13
+        }
+    }
+
+    // Always reserve minimum weapon cost
+    required += this.calculateMinimumAttackTP()
+
+    return required
+}
+```
+
+**3. Damage Projection Accuracy**
+
+Add to `base_strategy.lk` around line 411:
+
+```leekscript
+projectTotalDamageOutput(includeBuffs = false) {
+    var totalDamage = 0
+    var playerTP = player._currTp
+    var buffBonus = 0
+
+    // Include pending buff effects if requested
+    if (includeBuffs) {
+        if (this.getStrategyName() == "STR" && this.shouldUseSteroid()) {
+            buffBonus = 160  // STEROID average boost
+            playerTP -= 7
+        }
+        else if (this.getStrategyName() == "AGI" && this.shouldUseWarmUp()) {
+            buffBonus = 180  // WARM_UP average boost (agility)
+            playerTP -= 7
+        }
+    }
+
+    // Calculate weapon spam damage from current position
+    if (mapContainsKey(fieldMap.damageMap, player._cellPos)) {
+        var cell = fieldMap.damageMap[player._cellPos]
+        for (var w in cell._weaponsList) {
+            var uses = min(w._maxUse, floor(playerTP / w._cost))
+            var bd = arsenal.getDamageBreakdown(
+                player._strength + buffBonus,
+                player._magic,
+                player._wisdom,
+                w._id
+            )
+            totalDamage += bd['total'] * uses
+            playerTP -= w._cost * uses
+        }
+    }
+
+    // Add chip damage
+    for (var c in arsenal.playerEquippedChips) {
+        if (playerTP < c._cost) continue
+        if (getCooldown(c._id, player._id) > 0) continue
+        if (!mapContainsKey(c._effects, EFFECT_DAMAGE) &&
+            !mapContainsKey(c._effects, EFFECT_POISON)) continue
+        var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, c._id)
+        totalDamage += bd['total']
+        playerTP -= c._cost
+    }
+
+    return totalDamage
+}
+```
+
+---
+
+### Implementation Roadmap
+
+**Week 1: Critical Fixes (January 27-31, 2026)**
+- [ ] Fix strength OTKO damage calculation (include buffs)
+- [ ] Add magic antidote state persistence (static vars)
+- [ ] Implement base target selection system
+- [ ] Add validation with fallback suggestions
+- [ ] Smart turn 1 buff detection
+
+**Week 2: Strategy-Specific (February 3-7, 2026)**
+- [ ] Magic burst mode vs persistent antidote
+- [ ] Agility unique mobility tactics
+- [ ] Strength combo path validation
+- [ ] Magic combo path validation (GRAPPLE obstacles)
+- [ ] Base threat-based emergency mode
+
+**Week 3: Cross-Strategy Enhancements (February 10-14, 2026)**
+- [ ] Resource reservation system
+- [ ] Damage projection accuracy
+- [ ] Kiting distance integration for magic
+- [ ] Post-combo secondary weapon loop (strength)
+- [ ] Return buff optimization (agility)
+
+**Week 4: Polish & Testing (February 17-21, 2026)**
+- [ ] INVERSION conditional logic (strength)
+- [ ] Nova chip threshold optimization (magic)
+- [ ] Multi-enemy detection (agility)
+- [ ] Defensive stance option (base)
+- [ ] Comprehensive integration testing
+
+**Testing Protocol:**
+- 20 fights per opponent per change
+- Compare win rate, average damage, survival rate
+- Log analysis for action validation rates
+- Regression testing on all 4 strategies
+
+---
+
+## Areas for Improvement (Legacy Notes)
+
+**Action Queue Validation:** ✓ Implemented with validation system, needs fallback suggestions
+
+**Emergency Mode:** Partially implemented, needs threat-based triggers
+
+**Target Selection:** Planned in cross-strategy improvements (Week 1)
 
 **Ally Coordination:** Add static variables for target assignments in multi-leek fights
 
-**Resource Management:** Check TP budget allows meaningful attacks after buffs/teleport
+**Resource Management:** ✓ Implemented with calculateMinimumAttackTP(), needs reservation system
 
-**Magic Kiting Distance:** Calculate optimal distance based on enemy/player weapon ranges
+**Magic Kiting Distance:** ✓ Calculated in base, needs integration in magic strategy
 
-**OTKO Improvements:** Consider total burst damage (weapons + chips) instead of weapon-only
+**OTKO Improvements:** Planned for Week 1 (include buffs in damage projection)
 
 **Hide-and-Seek Selection:** Add cover score (obstacles, LOS, escape routes) to distance metric
 

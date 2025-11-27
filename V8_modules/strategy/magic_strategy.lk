@@ -10,14 +10,27 @@ include('magic_poison_planner.lk')
 // DoT kiting strategy with antidote baiting, GRAPPLE-COVID combo, and poison planning
 
 class MagicStrategy extends Strategy {
-    // Antidote tracking state (per-fight instance variables)
-    _prevPoisonRemaining = [:]  // enemyId -> previous remaining poison turns
-    _recentAntidoteTurn = [:]   // enemyId -> last turn we inferred antidote usage
-    _baitMode = [:]             // enemyId -> bool (true = baiting, false = full offensive)
-    _baitStartTurn = [:]        // enemyId -> turn number when baiting started
+    // Antidote tracking state (STATIC - persists across turns)
+    private static _prevPoisonRemaining = [:]  // enemyId -> previous remaining poison turns
+    private static _recentAntidoteTurn = [:]   // enemyId -> last turn we inferred antidote usage
+    private static _baitMode = [:]             // enemyId -> bool (true = baiting, false = full offensive)
+    private static _baitStartTurn = [:]        // enemyId -> turn number when baiting started
+    private static _stateInitialized = false   // Track if state needs reset for new fight
 
     constructor() {
         super()
+
+        // Reset state at fight start (turn 1)
+        if (getTurn() == 1 || !MagicStrategy._stateInitialized) {
+            debug("[MAGIC][STATE] Initializing antidote tracking state for new fight")
+            MagicStrategy._prevPoisonRemaining = [:]
+            MagicStrategy._recentAntidoteTurn = [:]
+            MagicStrategy._baitMode = [:]
+            MagicStrategy._baitStartTurn = [:]
+            MagicStrategy._stateInitialized = true
+        } else {
+            debug("[MAGIC][STATE] Reusing persistent antidote state from previous turns")
+        }
     }
 
     getStrategyName() {
@@ -73,11 +86,23 @@ class MagicStrategy extends Strategy {
 
         var enemyId = target._id
 
-        // Update antidote tracking (pass instance state)
-        var antidoteState = AntidoteTracker.updateAntidoteState(target, this._prevPoisonRemaining, this._recentAntidoteTurn, this._baitMode, this._baitStartTurn)
+        // Update antidote tracking (pass STATIC state for persistence)
+        var antidoteState = AntidoteTracker.updateAntidoteState(target, MagicStrategy._prevPoisonRemaining, MagicStrategy._recentAntidoteTurn, MagicStrategy._baitMode, MagicStrategy._baitStartTurn)
         var baiting = antidoteState['baiting']
         var enemyHasAntidote = antidoteState['enemyHasAntidote']
         var antidoteCD = getCooldown(CHIP_ANTIDOTE, enemyId)
+
+        debug("[MAGIC][ANTIDOTE-STATE] Turn " + getTurn() + ": baiting=" + baiting + " enemyHasAntidote=" + enemyHasAntidote + " antidoteCD=" + antidoteCD)
+
+        // BURST MODE: If baiting for 3+ turns without success, switch to full offensive (avoid infinite bait loop)
+        if (baiting && mapContainsKey(MagicStrategy._baitStartTurn, enemyId)) {
+            var baitDuration = getTurn() - MagicStrategy._baitStartTurn[enemyId]
+            if (baitDuration >= 3) {
+                debug("[MAGIC][BURST-MODE] Baiting for " + baitDuration + " turns without antidote burn - forcing full offensive")
+                baiting = false
+                MagicStrategy._baitMode[enemyId] = false  // Update persistent state
+            }
+        }
 
         // POISON ATTRITION MODE: If poison will kill, hide and wait
         var shouldPlayDefensive = false
