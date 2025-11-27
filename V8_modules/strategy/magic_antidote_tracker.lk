@@ -77,7 +77,11 @@ class AntidoteTracker {
         var turnsBaiting = mapContainsKey(baitStartTurn, enemyId) ? (curTurn - baitStartTurn[enemyId]) : 0
         debug("[ANTIDOTE][STATE] enemy=" + enemyId + " baiting=" + baiting + " inferredUse=" + inferredUse + " cd=" + antidoteCD + " prevRemain=" + prevRemain + " turnsBaiting=" + turnsBaiting)
 
-        // Escalate out of bait mode ONLY when antidote is detected on cooldown or used
+        // Escalate out of bait mode when:
+        // 1. Antidote detected on cooldown (enemy used it)
+        // 2. Cleanse detected + cooldown (enemy used it)
+        // 3. Repeated natural expiry (enemy letting poison expire)
+        // 4. Too many turns in bait mode (enemy not reacting - give up)
         if (baiting && antidoteCD > 0) {
             baitMode[enemyId] = false
             baiting = false
@@ -94,6 +98,11 @@ class AntidoteTracker {
                 baiting = false
                 debug("[ANTIDOTE][ESCALATE] Repeated natural expiry -> abandon bait mode")
             }
+        } else if (baiting && turnsBaiting >= 4) {
+            // Give up on baiting after 4 turns if enemy isn't reacting
+            baitMode[enemyId] = false
+            baiting = false
+            debug("[ANTIDOTE][ESCALATE] Baited for " + turnsBaiting + " turns, enemy not using antidote -> full offensive")
         }
 
         // Persist poison tracking

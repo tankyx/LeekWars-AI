@@ -60,6 +60,13 @@ class MagicStrategy extends Strategy {
         target.updateEntity()
         player.updateEntity()
 
+        // Track planned offensive movement cell for fallback
+        var plannedOffensiveCell = -1
+
+        // Save starting TP/MP for validation (planning modifies these but validation needs originals)
+        var startingTP = player._currTp
+        var startingMP = player._currMp
+
         var poisonActive = target.hasEffect(EFFECT_POISON)
         var poisonRemaining = target.getEffectRemaining(EFFECT_POISON)
         debug("[DoT-KITE] Start poisonActive=" + poisonActive + " remaining=" + poisonRemaining + " TP=" + player._currTp + " MP=" + player._currMp)
@@ -226,6 +233,7 @@ class MagicStrategy extends Strategy {
             debug("[COMBO-POSITIONING] Movement complete, now at cell " + player._cellPos)
         } else if (targetHitCell != -1 && targetHitCell._id != player._cellPos) {
             push(this._actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, targetHitCell._id, target))
+            plannedOffensiveCell = targetHitCell._id  // Track for fallback
         } else if (targetHitCell != -1) {
             debug("[DoT-KITE] Already positioned on cell " + targetHitCell._id)
         }
@@ -289,7 +297,21 @@ class MagicStrategy extends Strategy {
         }
 
         debug("[DoT-KITE] Actions scheduled=" + count(this._actions) + " TP_end=" + player._currTp)
+
+        // Restore starting TP/MP for validation (planning used these for tracking but validation needs originals)
+        player._currTp = startingTP
+        player._currMp = startingMP
+
+        // Execute planned actions
+        var actionCountBefore = count(this._actions)
         this.executeScenario()
+
+        // FALLBACK: If validation removed offensive movement and we have MP, move toward target anyway
+        if (plannedOffensiveCell != -1 && actionCountBefore > 0 && count(this._actions) == 0 && player._currMp > 0) {
+            debug("[DoT-KITE][FALLBACK] All actions removed by validation, executing direct movement to " + plannedOffensiveCell)
+            var moveResult = moveTowardCell(plannedOffensiveCell)
+            debug("[DoT-KITE][FALLBACK] Movement result: " + getCell() + " (target was " + plannedOffensiveCell + ")")
+        }
     }
 
     // ====================================================================
