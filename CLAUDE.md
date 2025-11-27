@@ -231,6 +231,72 @@ Abstract base class providing:
 
 ---
 
+## Week 1 Implementation Summary (Completed)
+
+### Changes Deployed
+
+**Base Strategy (base_strategy.lk)**
+1. **projectTotalDamageOutput()** (lines 415-545)
+   - Accurate damage projection with optional buff inclusion
+   - Validates range/LOS for each weapon/chip from specified cell
+   - Used by Strength OTKO to determine if teleport will secure kill
+
+2. **selectBestTarget()** (lines 347-400)
+   - Strategy-specific target prioritization
+   - Strength/Agility: Lowest HP first (finish kills)
+   - Magic: Targets without DoT preferred (fresh targets)
+   - Universal distance penalty (prefer closer enemies)
+
+3. **findAlternativeMovementCell()** (lines 1429-1456)
+   - Finds fallback cells when primary target unreachable
+   - Strategy 1: Best reachable damage cell within MP budget
+   - Strategy 2: Furthest reachable cell on path to target
+
+4. **detectFightType()** (lines 611-660)
+   - Detects fight type: PvP, Boss, Chest, PvE
+   - Boss: Skips all buffs (need TP for GRAPPLE/INVERSION)
+   - Chest: Skips all buffs (pure damage spam)
+   - PvP: Applies all buffs (long fights)
+   - PvE: Skips universal buffs (save TP)
+
+5. **Enhanced validateAndFilterActions()** (lines 1458-1591)
+   - Adds fallback movements instead of removing invalid actions
+   - Tracks fallbacks added for debugging
+   - Prevents empty action queues
+
+**Strength Strategy (strength_strategy.lk)**
+- Improved OTKO check (lines 704-737)
+  - Uses projectTotalDamageOutput() instead of HP threshold
+  - Includes STEROID buff (+160 STR) in damage calculation
+  - Only triggers teleport when kill is guaranteed
+
+**Magic Strategy (magic_strategy.lk)**
+- Static antidote state (lines 13-34)
+  - Persists _prevPoisonRemaining, _recentAntidoteTurn, _baitMode, _baitStartTurn
+  - Resets on turn 1 or first initialization
+  - Enables accurate tracking across multiple turns
+
+- Burst mode (lines 97-105)
+  - Forces full offensive after 3 turns of unsuccessful baiting
+  - Prevents infinite bait loops vs persistent antidote users
+
+**Magic Combo System (magic_combo_system.lk)**
+- Path validation (lines 104-127)
+  - Checks getPath() between player and target
+  - Validates pull destination is not obstacle/occupied
+  - Prevents GRAPPLE failures due to blocked paths
+
+### Bug Fixes
+1. **Map iteration in detectFightType()** - Converted maps to arrays for proper iteration
+2. **Subclass method calls** - Replaced this.shouldUseSteroid() with direct availability checks
+
+### Testing Results
+- All modules compile without errors
+- No type incompatibility warnings
+- Ready for combat testing
+
+---
+
 ## V8 Strategy Analysis & Improvement Plan
 
 ### Strategy Performance Matrix
@@ -260,9 +326,9 @@ Abstract base class providing:
 
 ```
 PRIORITY 1 (High Impact, Low Risk):
-✓ Fix OTKO damage calculation: Include STEROID buff in projection
-✓ Reorder combo vs OTKO: Check OTKO FIRST, only combo if OTKO fails
-✓ Add post-combo secondary weapon loop (not just LIGHTNINGER)
+✅ Fix OTKO damage calculation: Include STEROID buff in projection (COMPLETED Week 1)
+□ Reorder combo vs OTKO: Check OTKO FIRST, only combo if OTKO fails
+□ Add post-combo secondary weapon loop (not just LIGHTNINGER)
 
 PRIORITY 2 (Medium Impact):
 □ INVERSION conditional: Allow even after failed combo attempt
@@ -292,9 +358,9 @@ PRIORITY 3 (Polish):
 
 ```
 PRIORITY 1 (High Impact):
-✓ Persist antidote state: Use static variables across turns
-✓ Add combo path validation: Check getPath() before GRAPPLE
-✓ Implement burst mode: Switch to damage after 3+ bait turns
+✅ Persist antidote state: Use static variables across turns (COMPLETED Week 1)
+✅ Add combo path validation: Check getPath() before GRAPPLE (COMPLETED Week 1)
+✅ Implement burst mode: Switch to damage after 3+ bait turns (COMPLETED Week 1)
 
 PRIORITY 2 (Medium Impact):
 □ Calculate optimal kite range: Use base.calculateOptimalKiteDistance()
@@ -356,9 +422,9 @@ PRIORITY 3 (Polish):
 
 ```
 PRIORITY 1 (High Impact):
-✓ Validation with fallback: Suggest reachable alternatives
-✓ Smart turn 1 buffs: Detect fight type before applying
-✓ Threat-based emergency: Enter defensive if (damage * 2) > HP
+✅ Validation with fallback: Suggest reachable alternatives (COMPLETED Week 1)
+✅ Smart turn 1 buffs: Detect fight type before applying (COMPLETED Week 1)
+□ Threat-based emergency: Enter defensive if (damage * 2) > HP
 
 PRIORITY 2 (Core Improvements):
 □ Integrate kiting distance: Magic should use calculateOptimalKiteDistance()
@@ -498,18 +564,20 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 ### Implementation Roadmap
 
-**Week 1: Critical Fixes (January 27-31, 2026)**
-- [ ] Fix strength OTKO damage calculation (include buffs)
-- [ ] Add magic antidote state persistence (static vars)
-- [ ] Implement base target selection system
-- [ ] Add validation with fallback suggestions
-- [ ] Smart turn 1 buff detection
+**Week 1: Critical Fixes (January 27-31, 2026) - ✅ COMPLETE**
+- [x] Fix strength OTKO damage calculation (include buffs)
+- [x] Add magic antidote state persistence (static vars)
+- [x] Implement base target selection system
+- [x] Add validation with fallback suggestions
+- [x] Smart turn 1 buff detection
+- [x] Fix map iteration bug in detectFightType()
+- [x] Fix subclass method call in projectTotalDamageOutput()
 
-**Week 2: Strategy-Specific (February 3-7, 2026)**
-- [ ] Magic burst mode vs persistent antidote
+**Week 2: Strategy-Specific (February 3-7, 2026) - 🔄 IN PROGRESS**
+- [x] Magic burst mode vs persistent antidote (completed in Week 1)
+- [x] Magic combo path validation (GRAPPLE obstacles - completed in Week 1)
 - [ ] Agility unique mobility tactics
 - [ ] Strength combo path validation
-- [ ] Magic combo path validation (GRAPPLE obstacles)
 - [ ] Base threat-based emergency mode
 
 **Week 3: Cross-Strategy Enhancements (February 10-14, 2026)**
@@ -593,4 +661,4 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 **Script ID:** 447461 (V8 main.lk - Current production, January 2026)
 
-*Document Version: 23.1 | Last Updated: January 2026*
+*Document Version: 24.0 | Last Updated: January 27, 2026 - Week 1 Implementation Complete*
