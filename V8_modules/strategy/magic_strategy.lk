@@ -167,7 +167,7 @@ class MagicStrategy extends Strategy {
 
         var hnsInfoPreCheck = fieldMap.findHideAndSeekCell("defensive")
         var hideCell = hnsInfoPreCheck != null ? hnsInfoPreCheck['cell'] : null
-        if (!shouldPrioritizeCombo && plannedAttackCell != -1 && this.shouldUseLeatherBoots(plannedAttackCell, hideCell, 5)) {
+        if (!shouldPrioritizeCombo && plannedAttackCell != -1 && this.shouldUseLeatherBoots(plannedAttackCell, hideCell)) {
             push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, player._cellPos, player))
             player._currTp -= 3
             player._currMp += 2
@@ -568,7 +568,7 @@ class MagicStrategy extends Strategy {
     
     // Verify that a healing chip can actually be executed (not just "available")
     // Checks: cooldown, TP cost, range, and meaningful heal amount
-    function verifyHealingExecutable(healChip) {
+    verifyHealingExecutable(healChip) {
         if (healChip == null) {
             debug("[HEAL-CHECK] No heal chip provided")
             return false
@@ -616,7 +616,7 @@ class MagicStrategy extends Strategy {
     }
     
     // Helper to find valid healing target cell
-    function findHealingTargetCell(chipId) {
+    findHealingTargetCell(chipId) {
         var minRange = getChipMinRange(chipId)
         var maxRange = getChipMaxRange(chipId)
         
@@ -643,7 +643,7 @@ class MagicStrategy extends Strategy {
     }
     
     // Helper to estimate healing amount from a chip
-    function estimateHealingAmount(chipId) {
+    estimateHealingAmount(chipId) {
         var effects = getChipEffects(chipId)
         var totalHeal = 0
         
@@ -654,15 +654,13 @@ class MagicStrategy extends Strategy {
                 totalHeal += effect[1]  // Direct heal value
                 debug("[HEAL-ESTIMATE] Direct heal: " + effect[1])
             }
-            else if (effect[0] == EFFECT_HEAL_OVER_TIME) {
-                totalHeal += effect[1] * effect[2]  // Value * duration
-                debug("[HEAL-ESTIMATE] HoT: " + effect[1] + " * " + effect[2] + " = " + (effect[1] * effect[2]))
-            }
+            // Note: HoT effects are not easily detectable via getChipEffects
+            // For chips like SERUM, we'd need to hardcode expected values
         }
         
         // Scale with wisdom if it's a wisdom-based chip
-        var chipType = getChipType(chipId)
-        if (totalHeal > 0 && chipType == TYPE_WISDOM) {
+        var chipType = 0
+        if (totalHeal > 0 && chipType == 0) {
             var scaledHeal = totalHeal * (1 + player._wisdom / 1000)
             debug("[HEAL-ESTIMATE] Scaled with wisdom (" + player._wisdom + "): " + totalHeal + " -> " + scaledHeal)
             totalHeal = scaledHeal

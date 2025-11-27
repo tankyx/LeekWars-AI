@@ -688,7 +688,20 @@ class StrengthStrategy extends Strategy {
             targetHitCell = fieldMap.buildHitMap(chest._cellPos)
         }
 
-        // PRIORITY 2: GRAPPLE-HEAVY_SWORD combo check FIRST (before defensive chips consume TP)
+        // PRIORITY 2: Check for OTKO opportunity FIRST (before GRAPPLE repositioning)
+        // If OTKO is viable, skip GRAPPLE combo to preserve teleport positioning
+        var hpThreshold = min(target._maxHealth * 0.35, 500)  // 35% HP or 500 HP, whichever is lower
+        if (target._currHealth <= hpThreshold) {
+            debug("[STR] Enemy HP below OTKO threshold: " + target._currHealth + " <= " + hpThreshold)
+            var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
+            if (otkoExecuted) {
+                debug("[STR] OTKO scenario executed successfully")
+                return  // OTKO actions planned, skip normal offensive logic
+            }
+            debug("[STR] OTKO not viable, falling back to normal offensive scenario")
+        }
+
+        // PRIORITY 3: GRAPPLE-HEAVY_SWORD combo check (after OTKO, before defensive chips consume TP)
         // Position for combo if needed, then execute
         var comboAttempted = false  // Track if combo was attempted (prevents INVERSION waste)
 
@@ -820,17 +833,8 @@ class StrengthStrategy extends Strategy {
             player._currTp -= 5
         }
 
-        // Check for OTKO opportunity first (low HP enemies)
-        var hpThreshold = min(target._maxHealth * 0.35, 500)  // 35% HP or 500 HP, whichever is lower
-        if (target._currHealth <= hpThreshold) {
-            debug("[STR] Enemy HP below OTKO threshold: " + target._currHealth + " <= " + hpThreshold)
-            var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
-            if (otkoExecuted) {
-                debug("[STR] OTKO scenario executed successfully")
-                return  // OTKO actions planned, skip normal offensive logic
-            }
-            debug("[STR] OTKO not viable, falling back to normal offensive scenario")
-        }
+        // OTKO check already done at beginning of function (PRIORITY 2)
+        // If we reach here, OTKO was not viable - proceed with normal offensive
 
         // If GRAPPLE-HEAVY_SWORD combo executed, skip weapon cell recalculation
         // Enemy is now adjacent with vulnerability applied - stay in position
