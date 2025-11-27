@@ -54,11 +54,16 @@ class StrengthStrategy extends Strategy {
                 this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
                 playerTP -= 1
                 playerTP += 5  // Net gain of 4 TP
+                player._currTp = playerTP  // Update player TP for recalculation
                 debug("[OTKO][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
-                // Re-check if we can now kill
-                if (teleportInfo['damage'] < target._currHealth) {
+
+                // RECALCULATE damage with new TP budget
+                teleportInfo = fieldMap.findOptimalTeleportCell(target)
+                if (teleportInfo == null || teleportInfo['damage'] < target._currHealth) {
+                    debug("[OTKO][ADRENALINE] Still insufficient damage after Adrenaline: " + (teleportInfo != null ? teleportInfo['damage'] : 0) + " vs " + target._currHealth + " HP")
                     return false
                 }
+                debug("[OTKO][ADRENALINE] Recalculated damage: " + teleportInfo['damage'] + " (can kill now)")
             } else {
                 return false
             }
@@ -647,7 +652,11 @@ class StrengthStrategy extends Strategy {
         var alignment = (playerY == enemyY) ? "horizontal" : "vertical"
         debug("[STR][GRAPPLE-HS] Player at (" + playerX + "," + playerY + ") Enemy at (" + enemyX + "," + enemyY + ") Alignment: " + alignment)
         debug("[STR][GRAPPLE-HS] Using GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell + " (adjacent to player)")
-        useChipOnCell(CHIP_GRAPPLE, grappleCell)
+        var grappleResult = useChipOnCell(CHIP_GRAPPLE, grappleCell)
+        if (grappleResult < 0) {
+            debug("[STR][GRAPPLE-HS] ERROR: GRAPPLE failed with result " + grappleResult + " - aborting combo")
+            return false
+        }
         player._currTp -= 3
 
         // Update enemy position after GRAPPLE
@@ -666,7 +675,11 @@ class StrengthStrategy extends Strategy {
 
         // Use HEAVY_SWORD
         setWeapon(WEAPON_HEAVY_SWORD)
-        useWeaponOnCell(newEnemyPos)
+        var heavySwordResult = useWeaponOnCell(newEnemyPos)
+        if (heavySwordResult < 0) {
+            debug("[STR][GRAPPLE-HS] ERROR: HEAVY_SWORD failed with result " + heavySwordResult)
+            return false
+        }
         player._currTp -= 15
 
         debug("[STR][GRAPPLE-HS] Combo complete! 60 absolute vulnerability applied, TP remaining: " + player._currTp)

@@ -4,11 +4,9 @@ class Strategy {
     _actions = []
     _playerTP = -1
     _fieldMap = null
-    _currentWeaponId = -1  // Track currently equipped weapon
 
     constructor() {
         this._playerTP = getTP()
-        this._currentWeaponId = getWeapon()
     }
 
     // Override in subclasses to disable damage map building (e.g., boss fights)
@@ -264,8 +262,9 @@ class Strategy {
         if (mapContainsKey(fieldMap.damageMap, playerPos)) {
             var cellObj = fieldMap.damageMap[playerPos]
             if (cellObj._weaponsList != null && count(cellObj._weaponsList) > 0) {
+                var currentWeapon = getWeapon()  // Query actual equipped weapon
                 for (var w in cellObj._weaponsList) {
-                    var swapCost = (this._currentWeaponId != w._id) ? 1 : 0
+                    var swapCost = (currentWeapon != w._id) ? 1 : 0
                     var totalCost = swapCost + w._cost
                     if (totalCost < minWeaponTP) {
                         minWeaponTP = totalCost
@@ -718,7 +717,7 @@ class Strategy {
     // Returns map with remaining MP/TP after combat
     // chipExclusionList: chips to exclude from damage chip usage (e.g., CHIP_MIRROR/THORN for agility)
     executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, chipExclusionList, debugPrefix) {
-        var currentWeaponId = this._currentWeaponId  // Use tracked weapon state
+        // Always query current weapon directly to avoid tracking desync
 
         // HNS-approach cell check (safer positioning)
         var hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
@@ -754,8 +753,7 @@ class Strategy {
                 playerPos = player._cellPos
                 playerMP = player._currMp
                 playerTP = player._currTp
-                currentWeaponId = getWeapon()
-                debug("[" + debugPrefix + "] After movement execution: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP + " weapon=" + getWeaponName(currentWeaponId))
+                debug("[" + debugPrefix + "] After movement execution: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP + " weapon=" + getWeaponName(getWeapon()))
 
                 // Check if we actually reached the reachable cell
                 if (playerPos == reachableCell._id) {
@@ -770,15 +768,23 @@ class Strategy {
                 if (mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
                     getCooldown(CHIP_LEATHER_BOOTS, player._id) == 0 &&
                     playerTP >= 3) {
-                    // Use LEATHER_BOOTS for +3 MP boost
-                    debug("[" + debugPrefix + "] EMERGENCY: Using LEATHER_BOOTS for +3 MP (current: " + playerMP + ")")
-                    useChip(CHIP_LEATHER_BOOTS, player._id)
-                    playerTP -= 3
-                    playerMP = player._currMp  // Refresh MP after boots
-                    usedLeatherBoots = true
+                    // Pre-check: will LEATHER_BOOTS actually help reach any cells?
+                    var boostedMP = playerMP + 2  // LEATHER_BOOTS gives +2 MP (not +3)
+                    var wouldReachCell = this.findBestReachableDamageCell(boostedMP)
 
-                    // Re-check for reachable cells with boosted MP
-                    reachableCell = this.findBestReachableDamageCell(playerMP)
+                    if (wouldReachCell != null) {
+                        // Use LEATHER_BOOTS for +2 MP boost
+                        debug("[" + debugPrefix + "] EMERGENCY: Using LEATHER_BOOTS for +2 MP (current: " + playerMP + ") to reach cell " + wouldReachCell._id)
+                        useChip(CHIP_LEATHER_BOOTS, player._id)
+                        playerTP -= 3
+                        playerMP = player._currMp  // Refresh MP after boots
+                        usedLeatherBoots = true
+
+                        // Re-check for reachable cells with boosted MP
+                        reachableCell = this.findBestReachableDamageCell(playerMP)
+                    } else {
+                        debug("[" + debugPrefix + "] LEATHER_BOOTS would not help reach any damage cells (boostedMP=" + boostedMP + "), skipping")
+                    }
 
                     if (reachableCell != null && reachableCell._id != playerPos) {
                         // Found reachable cell with boosted MP!
@@ -789,7 +795,6 @@ class Strategy {
                         playerPos = player._cellPos
                         playerMP = player._currMp
                         playerTP = player._currTp
-                        currentWeaponId = getWeapon()
                         debug("[" + debugPrefix + "] After boosted movement: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
 
                         if (playerPos == reachableCell._id) {
@@ -799,17 +804,20 @@ class Strategy {
                     }
                 }
 
-                // Still no reachable cells - move toward best damage cell or enemy
+                // Still no reachable cells - move toward best damage cell or enemy (execute directly, bypass validation)
                 if (reachableCell == null && playerMP > 0) {
                     debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - moving toward enemy")
 
-                    // Move toward the best weapon cell (get as close as possible)
-                    this.createMovementAction(Action.MOVEMENT_APPROACH, bestWeaponCell._id, target)
-                    this.executeAndFlushActions()
+                    // Move toward the best weapon cell (get as close as possible using moveTowardCell)
+                    // Execute directly instead of queueing to bypass validation (moveTowardCell handles partial movement)
+                    var moveResult = moveTowardCell(bestWeaponCell._id)
+                    debug("[" + debugPrefix + "] Direct approach movement result: " + moveResult)
+
+                    // Update state after movement
+                    player.updateEntity()
                     playerPos = player._cellPos
                     playerMP = player._currMp
                     playerTP = player._currTp
-                    currentWeaponId = getWeapon()
                     debug("[" + debugPrefix + "] After approach movement: pos=" + playerPos + " MP=" + playerMP)
 
                     // Check if we reached a damage cell after movement
@@ -843,6 +851,7 @@ class Strategy {
 
         // Primary weapon usage (only if we reached the weapon cell)
         var primaryWeapon = bestWeaponCell._highestDamageWeapon
+        var currentWeaponId = getWeapon()  // Query actual equipped weapon
         debug("[" + debugPrefix + "] Primary weapon: reachedWeaponCell=" + reachedWeaponCell + " primaryWeapon=" + (primaryWeapon != -1 && primaryWeapon != null ? getWeaponName(primaryWeapon._id) : "none") + " currentWeapon=" + getWeaponName(currentWeaponId) + " playerTP=" + playerTP)
         if (reachedWeaponCell && primaryWeapon != -1 && primaryWeapon != null) {
             if (currentWeaponId != primaryWeapon._id) {
@@ -850,7 +859,6 @@ class Strategy {
                 if (playerTP >= 1 + primaryWeapon._cost) {
                     this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, primaryWeapon._id, -1)
                     playerTP -= 1
-                    currentWeaponId = primaryWeapon._id  // Track weapon swap
                     debug("[" + debugPrefix + "] Created weapon swap action")
                 } else {
                     debug("[" + debugPrefix + "] Not enough TP to swap and use primary weapon " + getWeaponName(primaryWeapon._id))
@@ -884,11 +892,11 @@ class Strategy {
                 if (playerTP < wObj._cost) continue  // Need at least weapon cost
 
                 // Only swap if weapon not already equipped
-                if (currentWeaponId != wObj._id) {
+                var currentWeapon = getWeapon()  // Query actual equipped weapon
+                if (currentWeapon != wObj._id) {
                     if (playerTP < 1) continue  // Need 1 TP for swap
                     this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
                     playerTP -= 1
-                    currentWeaponId = wObj._id  // Track weapon swap
                 }
 
                 var uses2 = wObj._maxUse
@@ -944,6 +952,13 @@ class Strategy {
                 var rec = dmgChips[dc]
                 var chipUse = rec['chip']
                 if (playerTP < chipUse._cost) continue
+
+                // Check cooldown before attempting to use chip
+                if (getCooldown(chipUse._id, player._id) > 0) {
+                    debug("[" + debugPrefix + "] Chip " + getChipName(chipUse._id) + " on cooldown, skipping")
+                    continue
+                }
+
                 // Spam chip until max uses OR TP exhausted
                 var actualUsesC = 0
                 while (actualUsesC < chipUse._maxUse && playerTP >= chipUse._cost) {
@@ -1198,7 +1213,6 @@ class Strategy {
             else if (a.type == Action.ACTION_WEAPON_SWAP) {
                 debug("Swapping to weapon " + getWeaponName(a.weaponId))
                 setWeapon(a.weaponId)
-                this._currentWeaponId = a.weaponId  // Track weapon state
             }
             else if (a.type == Action.ACTION_DIRECT || a.type == Action.ACTION_DOT || a.type == Action.ACTION_DEBUFF) {
                 var currentPos = getCell()
@@ -1287,7 +1301,7 @@ class Strategy {
             var isValid = true
             var reason = ""
 
-            // Movement actions: always valid, update simulated position
+            // Movement actions: validate before updating simulated position
             if (action.type == Action.MOVEMENT_APPROACH ||
                 action.type == Action.MOVEMENT_OFFENSIVE ||
                 action.type == Action.MOVEMENT_DEFENSIVE ||
@@ -1295,12 +1309,34 @@ class Strategy {
                 action.type == Action.MOVEMENT_DOT_OFFENSIVE ||
                 action.type == Action.MOVEMENT_DEBUFF ||
                 action.type == Action.MOVEMENT_FLEE ||
-                action.type == Action.MOVEMENT_HNS ||
-                action.type == Action.ACTION_TELEPORT) {
-                push(validActions, action)
-                // Update simulated position for subsequent validations
-                simulatedPos = action.targetCell
-                debug("[VALIDATION] Movement/Teleport action updates simulated pos to " + simulatedPos)
+                action.type == Action.MOVEMENT_HNS) {
+                // Validate movement: check path exists and MP sufficient
+                var path = getPath(simulatedPos, action.targetCell)
+                if (path != null && count(path) > 0) {
+                    var mpCost = count(path) - 1  // Path includes start cell
+                    if (mpCost <= player._currMp) {
+                        push(validActions, action)
+                        simulatedPos = action.targetCell  // Update simulated position
+                        debug("[VALIDATION] Movement to " + action.targetCell + " updates simulated pos (cost: " + mpCost + " MP)")
+                    } else {
+                        debug("[VALIDATION] Movement to " + action.targetCell + " requires " + mpCost + " MP but only have " + player._currMp + " - removing")
+                    }
+                } else {
+                    debug("[VALIDATION] No path from " + simulatedPos + " to " + action.targetCell + " - removing movement action")
+                }
+                continue
+            }
+
+            // Teleport actions: validate range and obstacles
+            if (action.type == Action.ACTION_TELEPORT) {
+                var distTele = getCellDistance(simulatedPos, action.targetCell)
+                if (distTele != null && distTele >= 1 && distTele <= 12 && !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
+                    push(validActions, action)
+                    simulatedPos = action.targetCell  // Update simulated position
+                    debug("[VALIDATION] Teleport to " + action.targetCell + " updates simulated pos (dist: " + distTele + ")")
+                } else {
+                    debug("[VALIDATION] Teleport to " + action.targetCell + " invalid (dist=" + distTele + " obstacle=" + isObstacle(action.targetCell) + ") - removing")
+                }
                 continue
             }
             

@@ -902,13 +902,26 @@ class FieldMap {
             for (var ea = 0; ea < count(enemyAccess); ea++) {
                 var enemyRef = enemyAccess[ea]['enemy']
                 if (enemyRef == null) continue
+
+                // Calculate threat weight for this enemy (based on stats and HP)
+                var enemyHP = getLife(enemyRef._id)
+                var enemyMaxHP = getTotalLife(enemyRef._id)
+                var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
+                var enemyStrength = getStrength(enemyRef._id)
+                var enemyMagic = getMagic(enemyRef._id)
+
+                // Threat calculation: higher stats = more dangerous, low HP = less dangerous
+                var baseThreat = (enemyStrength + enemyMagic) / 200.0  // Normalize to ~1.0
+                var hpMultiplier = enemyHPPercent / 100.0  // Low HP = less threat
+                var threatWeight = max(0.1, baseThreat * hpMultiplier)  // Minimum 0.1 to avoid zero weight
+
                 var eOrigDist = getCellDistance(cand, enemyRef._cellPos)
                 if (eOrigDist != null && eOrigDist < closestEnemyDist) closestEnemyDist = eOrigDist
                 var cellsArr = enemyAccess[ea]['cells']
                 for (var ec = 0; ec < count(cellsArr); ec++) {
                     var eCell = cellsArr[ec]
                     if (lineOfSight(eCell, cand)) {
-                        danger += 1
+                        danger += threatWeight  // Weighted danger instead of +1
                         if (danger > bestDanger && bestDanger == 0) { earlyStop = true; break }
                     }
                 }
@@ -1014,8 +1027,35 @@ class FieldMap {
         var bestDamage = -1
         var targetHP = target._currHealth
 
-        // Iterate through all cells within teleport range (1-12)
-        for (var cellId = 0; cellId < FieldMap.board_cell_count; cellId++) {
+        // Build candidate cells: use damage map cells (already calculated as valid attack positions)
+        // This is much faster than iterating all 613 board cells
+        var candidateCells = []
+
+        // Add all cells from damage map (these are known attack positions)
+        for (var dmCell in this.damageMap) {
+            push(candidateCells, dmCell._id)
+        }
+
+        // If damage map is empty or very small, fall back to circular search around target
+        if (count(candidateCells) < 10) {
+            debug("[OTKO-TELEPORT] Damage map has few cells (" + count(candidateCells) + "), adding proximity search")
+            var searchRadius = 8
+            for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+                for (var dy = -searchRadius; dy <= searchRadius; dy++) {
+                    var dist = abs(dx) + abs(dy)
+                    if (dist < 1 || dist > searchRadius) continue
+                    var cellId = target._cellPos + FieldMap.x_offset * dx + FieldMap.y_offset * dy
+                    if (cellId >= 0 && cellId < FieldMap.board_cell_count && !isObstacle(cellId) && !isEntity(cellId)) {
+                        push(candidateCells, cellId)
+                    }
+                }
+            }
+        }
+
+        // Now evaluate each candidate cell
+        for (var idx = 0; idx < count(candidateCells); idx++) {
+            var cellId = candidateCells[idx]
+
             // Skip if cell is obstacle or occupied
             if (isObstacle(cellId)) continue
             if (isEntity(cellId)) continue

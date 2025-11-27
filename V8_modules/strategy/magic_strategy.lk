@@ -79,7 +79,12 @@ class MagicStrategy extends Strategy {
             var enemyMaxHP = getTotalLife(enemyId)
             var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
 
-            var poisonDamagePerTurn = player._magic * 0.5
+            // Get actual poison damage from effect value (more accurate than hardcoded estimate)
+            var poisonDamagePerTurn = target.getEffectValue(EFFECT_POISON)
+            if (poisonDamagePerTurn <= 0) {
+                // Fallback: estimate from magic if effect value unavailable
+                poisonDamagePerTurn = player._magic * 0.5
+            }
             var turnsUntilAntidote = antidoteCD
             if (!enemyHasAntidote) turnsUntilAntidote = 999
 
@@ -448,6 +453,14 @@ class MagicStrategy extends Strategy {
                         this.executeAndFlushActions()
                         player.updateEntity()
                         targetHitCell = fieldMap.buildHitMap(target._cellPos)
+
+                        // Re-validate safety after repositioning
+                        var recheckSafety = this.checkAoESafety(pc._id, target._cellPos)
+                        if (!recheckSafety['safe']) {
+                            debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - still unsafe after repositioning")
+                            continue
+                        }
+                        debug("[FULL][CHIP-SAFE] Repositioning successful, now safe to use " + getChipName(pc._id))
                     } else {
                         debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - no safe cell found")
                         continue
@@ -626,9 +639,11 @@ class MagicStrategy extends Strategy {
             return player._cellPos
         }
         
-        // For AoE heals, find best position that includes player
+        // For AoE heals, return player position (will be in AoE when cast on adjacent cell)
         if (getChipArea(chipId) > 0) {
-            return fieldMap.findBestAoEPosition(chipId, player._cellPos)
+            // Return player position as the target - actual heal logic should handle AoE
+            debug("[HEAL-TARGET] AoE heal chip, returning player position")
+            return player._cellPos
         }
         
         // Single target heal - must target self or ally
