@@ -75,6 +75,9 @@ function main() {
         debug("Skipping damage map build (not required for current strategy)")
     }
 
+    // WEEK 2: Build enemy threat map for tactical positioning
+    fieldMap.buildEnemyThreatMap()
+
     if (strategy instanceof MagicStrategy) {
         strategy.createAndExecuteDotKite(target, targetHitCell)
     } else {

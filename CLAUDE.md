@@ -297,6 +297,84 @@ Abstract base class providing:
 
 ---
 
+## Week 2 Implementation Summary (Completed)
+
+### Changes Deployed
+
+**Field Map Tactical (field_map_tactical.lk)**
+1. **Enemy Threat Map System** (lines 311-558)
+   - Movement-aware threat calculation (enemy can MOVE then ATTACK)
+   - Builds threat map from all reachable positions within enemy MP budget
+   - Caches threat map per turn with enemy position validation
+   - `getThreatAtCell()` returns total damage threat at any cell
+   - `getSafeCells()` finds zero-threat cells within MP budget
+   - `findBestTacticalCell()` balances damage vs threat with weight parameter
+
+2. **Field Map Core** (field_map_core.lk)
+   - Changed `x_offset` and `y_offset` from `private static` to `static` (public)
+   - Allows subclass FieldMap to access coordinate system for threat calculations
+
+**Base Strategy (base_strategy.lk)**
+1. **Threat-Based Emergency Mode** (lines 1372-1417)
+   - Priority 1: Immediate lethal threat (current threat ≥ player HP)
+   - Priority 2: Two-turn lethal (threat × 2 > player HP)
+   - Priority 3: High threat + medium HP (threat > 30% max HP and HP < 50%)
+   - Always skips emergency if lethal opportunity exists (hasLethalOpportunity)
+
+**Magic Strategy (magic_strategy.lk)**
+1. **Safe Kiting System** (lines 40-80)
+   - `findSafeKitingCell()` finds zero-threat cells with attack capability
+   - Prioritizes safe cells over standard hide-and-seek
+   - Allows attacking while completely safe from retaliation
+
+2. **Integration** (lines 336-350)
+   - Safe kiting used before standard kiting/hiding
+   - Falls back to hide-and-seek if no safe cells found
+
+**Agility Strategy (agility_strategy.lk)**
+1. **CHIP_LIBERATION Support** (lines 72-119)
+   - Removes critical player debuffs (SHACKLE_TP, SHACKLE_STRENGTH, etc.)
+   - Removes significant poison (≥3 turns remaining)
+   - Strips enemy shields (relative > 15% or absolute > 30)
+   - Counters enemy damage return buffs (Mirror vs Mirror)
+
+2. **Hit-and-Run Tactics** (lines 197-221)
+   - Threat-weighted cell scoring: `damage - (threat × weight)`
+   - Default 40% threat weight balances offense and defense
+   - Uses `findBestTacticalCell()` from field map
+
+**Strength Strategy (strength_strategy.lk)**
+1. **GRAPPLE-HEAVY_SWORD Path Validation** (lines 593-630)
+   - Validates clear path between player and target using `getPath()`
+   - Checks pull destination is not obstacle or occupied by another entity
+   - Prevents combo failures due to blocked paths
+
+2. **GRAPPLE Targeting Fix** (lines 662-690)
+   - **CRITICAL FIX:** Target opposite side of player from enemy
+   - GRAPPLE pulls first entity on line TOWARD target cell
+   - OLD: Targeted between player and enemy → no entity on short line → error -4
+   - NEW: Targets opposite side → pulls enemy toward that cell → brings enemy adjacent
+   - Example: Player (0,0), enemy (5,0) right → target (-2,0) left → pulls enemy toward (-2,0)
+
+**Main Entry Point (main.lk)**
+1. **Threat Map Build** (line 79)
+   - Calls `fieldMap.buildEnemyThreatMap()` after damage map build
+   - Provides threat data to all strategies for tactical positioning
+
+### Bug Fixes
+1. **LeekScript 4 API compatibility** - Replaced `getCellsInRadius()` with manual grid iteration
+2. **LeekScript 4 weapon effects** - Replaced `getWeaponMinScope/MaxScope` with `getWeaponEffects()`
+3. **Private static field access** - Made FieldMapCore coordinate offsets public for subclass access
+4. **GRAPPLE targeting** - Fixed to target opposite side of player (pulls enemy toward target)
+
+### Testing Results
+- All modules compile without errors
+- Fixed 5 compilation/runtime errors during implementation
+- GRAPPLE now successfully pulls enemies adjacent to player
+- Threat map provides accurate movement-aware positioning data
+
+---
+
 ## V8 Strategy Analysis & Improvement Plan
 
 ### Strategy Performance Matrix
@@ -573,12 +651,16 @@ projectTotalDamageOutput(includeBuffs = false) {
 - [x] Fix map iteration bug in detectFightType()
 - [x] Fix subclass method call in projectTotalDamageOutput()
 
-**Week 2: Strategy-Specific (February 3-7, 2026) - 🔄 IN PROGRESS**
+**Week 2: Strategy-Specific (February 3-7, 2026) - ✅ COMPLETE**
 - [x] Magic burst mode vs persistent antidote (completed in Week 1)
 - [x] Magic combo path validation (GRAPPLE obstacles - completed in Week 1)
-- [ ] Agility unique mobility tactics
-- [ ] Strength combo path validation
-- [ ] Base threat-based emergency mode
+- [x] Enemy threat map system (movement-aware threat calculation)
+- [x] Threat-based emergency mode (lethal detection, two-turn kill)
+- [x] Safe kiting for magic (zero-threat cell positioning)
+- [x] CHIP_LIBERATION support for agility
+- [x] Agility hit-and-run tactics (threat-weighted cell scoring)
+- [x] Strength GRAPPLE-HEAVY_SWORD path validation
+- [x] Fixed GRAPPLE targeting (target opposite side to pull enemy)
 
 **Week 3: Cross-Strategy Enhancements (February 10-14, 2026)**
 - [ ] Resource reservation system
@@ -604,19 +686,19 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 ## Areas for Improvement (Legacy Notes)
 
-**Action Queue Validation:** ✓ Implemented with validation system, needs fallback suggestions
+**Action Queue Validation:** ✅ COMPLETE - Implemented with validation system and fallback suggestions (Week 1)
 
-**Emergency Mode:** Partially implemented, needs threat-based triggers
+**Emergency Mode:** ✅ COMPLETE - Threat-based triggers implemented (immediate lethal, two-turn kill) (Week 2)
 
-**Target Selection:** Planned in cross-strategy improvements (Week 1)
+**Target Selection:** ✅ COMPLETE - Strategy-specific prioritization (lowest HP for STR/AGI, fresh targets for MAGIC) (Week 1)
+
+**Magic Kiting Distance:** ✅ COMPLETE - Safe kiting with zero-threat cell positioning (Week 2)
+
+**OTKO Improvements:** ✅ COMPLETE - Damage projection includes buff effects (Week 1)
 
 **Ally Coordination:** Add static variables for target assignments in multi-leek fights
 
 **Resource Management:** ✓ Implemented with calculateMinimumAttackTP(), needs reservation system
-
-**Magic Kiting Distance:** ✓ Calculated in base, needs integration in magic strategy
-
-**OTKO Improvements:** Planned for Week 1 (include buffs in damage projection)
 
 **Hide-and-Seek Selection:** Add cover score (obstacles, LOS, escape routes) to distance metric
 
@@ -661,4 +743,4 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 **Script ID:** 447461 (V8 main.lk - Current production, January 2026)
 
-*Document Version: 24.0 | Last Updated: January 27, 2026 - Week 1 Implementation Complete*
+*Document Version: 25.0 | Last Updated: February 3, 2026 - Week 2 Implementation Complete*

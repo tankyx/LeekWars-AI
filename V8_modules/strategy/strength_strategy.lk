@@ -590,7 +590,43 @@ class StrengthStrategy extends Strategy {
                 return false
             }
 
-            debug("[STR][GRAPPLE-HS] Combo ready: aligned, range " + dist + ", TP=" + playerTP)
+            // WEEK 2: Validate path is clear (no obstacles between player and target)
+            var pathToTarget = getPath(player._cellPos, target._cellPos)
+            if (pathToTarget == null || count(pathToTarget) == 0) {
+                debug("[STR][GRAPPLE-HS] No valid path to target (obstacles blocking)")
+                return false
+            }
+
+            // Calculate where enemy will land after GRAPPLE (cell adjacent to player)
+            var playerX = getCellX(player._cellPos)
+            var playerY = getCellY(player._cellPos)
+            var enemyX = getCellX(target._cellPos)
+            var enemyY = getCellY(target._cellPos)
+
+            var pullDestX = playerX
+            var pullDestY = playerY
+
+            if (playerY == enemyY) {
+                // Horizontal alignment
+                pullDestX = (enemyX > playerX) ? playerX + 1 : playerX - 1
+            } else {
+                // Vertical alignment
+                pullDestY = (enemyY > playerY) ? playerY + 1 : playerY - 1
+            }
+
+            var pullDestCell = getCellFromXY(pullDestX, pullDestY)
+            if (pullDestCell == null || isObstacle(pullDestCell)) {
+                debug("[STR][GRAPPLE-HS] Pull destination blocked (cell " + pullDestCell + ")")
+                return false
+            }
+
+            // Check if destination is occupied by another entity
+            if (isEntity(pullDestCell) && getEntityOnCell(pullDestCell) != target._id) {
+                debug("[STR][GRAPPLE-HS] Pull destination occupied by another entity")
+                return false
+            }
+
+            debug("[STR][GRAPPLE-HS] Combo ready: aligned, range " + dist + ", TP=" + playerTP + ", path clear")
             return true
         }
 
@@ -626,20 +662,20 @@ class StrengthStrategy extends Strategy {
         if (playerY == enemyY) {
             // Horizontal alignment - enemy on same row
             if (enemyX < playerX) {
-                // Enemy is to the left
-                grappleCell = getCellFromXY(playerX - 1, playerY)
+                // Enemy is to the left - target RIGHT of player (opposite side)
+                grappleCell = getCellFromXY(playerX + 2, playerY)
             } else {
-                // Enemy is to the right
-                grappleCell = getCellFromXY(playerX + 1, playerY)
+                // Enemy is to the right - target LEFT of player (opposite side)
+                grappleCell = getCellFromXY(playerX - 2, playerY)
             }
         } else if (playerX == enemyX) {
             // Vertical alignment - enemy on same column
             if (enemyY < playerY) {
-                // Enemy is above
-                grappleCell = getCellFromXY(playerX, playerY - 1)
+                // Enemy is above - target BELOW player (opposite side)
+                grappleCell = getCellFromXY(playerX, playerY + 2)
             } else {
-                // Enemy is below
-                grappleCell = getCellFromXY(playerX, playerY + 1)
+                // Enemy is below - target ABOVE player (opposite side)
+                grappleCell = getCellFromXY(playerX, playerY - 2)
             }
         }
 
@@ -651,7 +687,7 @@ class StrengthStrategy extends Strategy {
 
         var alignment = (playerY == enemyY) ? "horizontal" : "vertical"
         debug("[STR][GRAPPLE-HS] Player at (" + playerX + "," + playerY + ") Enemy at (" + enemyX + "," + enemyY + ") Alignment: " + alignment)
-        debug("[STR][GRAPPLE-HS] Using GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell + " (adjacent to player)")
+        debug("[STR][GRAPPLE-HS] Using GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell + " (opposite side of player)")
         var grappleResult = useChipOnCell(CHIP_GRAPPLE, grappleCell)
         if (grappleResult < 0) {
             debug("[STR][GRAPPLE-HS] ERROR: GRAPPLE failed with result " + grappleResult + " - aborting combo")
@@ -698,7 +734,8 @@ class StrengthStrategy extends Strategy {
             debug("[CHEST] Chest detected! Switching target from enemy to chest (ID: " + chest._id + ")")
             target = chest
             // Rebuild hit map for chest position
-            targetHitCell = fieldMap.buildHitMap(chest._cellPos)
+            fieldMap.buildHitMap(chest._cellPos)
+            targetHitCell = fieldMap.getBestWeaponOrChipCell()
         }
 
         // PRIORITY 2: Check for OTKO opportunity FIRST (before GRAPPLE repositioning)

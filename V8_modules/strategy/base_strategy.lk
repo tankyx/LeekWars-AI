@@ -1369,7 +1369,7 @@ class Strategy {
         return false
     }
 
-    // Check if should enter emergency/defensive mode
+    // Check if should enter emergency/defensive mode (WEEK 2: Threat-based)
     // Override in strategies for custom logic
     shouldEnterEmergencyMode(target) {
         // NEVER enter emergency if we have lethal damage (can kill enemy this turn)
@@ -1378,16 +1378,39 @@ class Strategy {
             return false
         }
 
-        var hpPercent = (getLife() * 100) / getTotalLife()
+        var playerHP = getLife()
+        var hpPercent = (playerHP * 100) / getTotalLife()
 
-        // Default: HP < 35% AND any healing chip available
+        // WEEK 2: Threat-based emergency detection
+        var currentThreat = fieldMap.getThreatAtCell(player._cellPos)
+
+        // Priority 1: Immediate lethal threat (enemy can kill us this turn)
+        if (currentThreat >= playerHP) {
+            debug("[EMERGENCY][THREAT] Current position LETHAL - threat: " + currentThreat + " vs HP: " + playerHP)
+            return true
+        }
+
+        // Priority 2: Two-turn lethal (enemy can kill us in 2 turns if we don't heal/flee)
+        if (currentThreat * 2 > playerHP) {
+            debug("[EMERGENCY][THREAT] Two-turn lethal detected - threat: " + currentThreat + " x2 = " + (currentThreat * 2) + " vs HP: " + playerHP)
+            return true
+        }
+
+        // Priority 3: High threat + low HP (threat > 30% of max HP and HP < 50%)
+        var maxHP = getTotalLife()
+        if (currentThreat > maxHP * 0.3 && hpPercent < 50) {
+            debug("[EMERGENCY][THREAT] High threat (" + currentThreat + ") + medium HP (" + floor(hpPercent) + "%)")
+            return true
+        }
+
+        // Fallback: Legacy HP threshold (HP < 35% AND healing available)
         if (hpPercent < 35) {
             var healChip = this.selectBestHealingChip(hpPercent)
             if (healChip != null) {
-                debug("[EMERGENCY] Entering emergency mode (HP=" + floor(hpPercent) + "% " + healChip['name'] + " available)")
+                debug("[EMERGENCY][HP] Entering emergency mode (HP=" + floor(hpPercent) + "% " + healChip['name'] + " available)")
                 return true
             }
-            debug("[EMERGENCY] Low HP (" + floor(hpPercent) + "%) but no healing chips available")
+            debug("[EMERGENCY] Low HP (" + floor(hpPercent) + "%) but no healing chips available, threat=" + currentThreat)
         }
 
         return false

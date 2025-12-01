@@ -69,6 +69,54 @@ class AgilityStrategy extends Strategy {
         return false
     }
 
+    // WEEK 2: Check if CHIP_LIBERATION is tactically valuable (same as strength)
+    shouldUseLiberation(target) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_LIBERATION)) return false
+
+        var cooldown = getCooldown(CHIP_LIBERATION, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 5) return false
+
+        // Check range to target
+        var dist = getCellDistance(player._cellPos, target._cellPos)
+        if (dist == null || dist > 6) return false
+
+        // Priority 1: Remove critical player debuffs (shackles reducing our combat effectiveness)
+        var hasDebuff = player.hasEffect(EFFECT_SHACKLE_TP) ||
+                       player.hasEffect(EFFECT_SHACKLE_STRENGTH) ||
+                       player.hasEffect(EFFECT_SHACKLE_MP) ||
+                       player.hasEffect(EFFECT_SHACKLE_AGILITY)
+
+        // Priority 2: Remove player poison if significant
+        var hasPoison = player.hasEffect(EFFECT_POISON)
+        var poisonRemaining = player.getEffectRemaining(EFFECT_POISON)
+
+        // Priority 3: Remove enemy buffs/shields/damage return
+        var enemyShielded = target._relShield > 15 || target._absShield > 30
+        var enemyHasDamageReturn = target.hasEffect(EFFECT_DAMAGE_RETURN)
+
+        // Use if we have critical debuffs OR poison with 3+ turns OR enemy heavily buffed
+        if (hasDebuff) {
+            debug("[AGI][LIBERATION] Should use to remove player debuffs")
+            return true
+        }
+        if (hasPoison && poisonRemaining >= 3) {
+            debug("[AGI][LIBERATION] Should use to reduce poison (remaining: " + poisonRemaining + " turns)")
+            return true
+        }
+        if (enemyShielded) {
+            debug("[AGI][LIBERATION] Should use to strip enemy shields (rel: " + target._relShield + "%, abs: " + target._absShield + ")")
+            return true
+        }
+        if (enemyHasDamageReturn) {
+            debug("[AGI][LIBERATION] Should use to strip enemy damage return (mirror vs mirror)")
+            return true
+        }
+
+        return false
+    }
 
     // Override offensive scenario for agility builds
     // Strategy: Apply CHIP_MIRROR/THORN damage return buff, then fight like strength builds
@@ -79,7 +127,8 @@ class AgilityStrategy extends Strategy {
             debug("[CHEST] Chest detected! Switching target from enemy to chest (ID: " + chest._id + ")")
             target = chest
             // Rebuild hit map for chest position
-            targetHitCell = fieldMap.buildHitMap(chest._cellPos)
+            fieldMap.buildHitMap(chest._cellPos)
+            targetHitCell = fieldMap.getBestWeaponOrChipCell()
         }
 
         var playerPos = player._cellPos
@@ -122,20 +171,53 @@ class AgilityStrategy extends Strategy {
             }
         }
 
-        // STEP 2: Select best weapon cell (weapon-focused like strength strategy)
-        var bestWeaponCell = -1
-        var bestWeaponDamage = -1
-        var bestDist = 99999
-        for (var c in fieldMap.damageMap) {
-            if (c._highestDamageWeapon == -1) continue  // Skip chip-only cells
-            var dist = getPathLength(playerPos, c._id)
-            if (dist == null) continue  // Skip completely unreachable cells
-            // Prefer higher weaponDamage, tie-break shorter distance
-            if (c._weaponDamage > bestWeaponDamage || (c._weaponDamage == bestWeaponDamage && dist < bestDist)) {
-                bestWeaponDamage = c._weaponDamage
-                bestWeaponCell = c
-                bestDist = dist
+        // WEEK 2 STEP 1.5: Check for tactical CHIP_LIBERATION usage BEFORE combat
+        if (this.shouldUseLiberation(target)) {
+            // Use on enemy to remove their buffs, or on self to remove debuffs
+            var liberationTarget = target._cellPos
+            var hasPlayerDebuff = player.hasEffect(EFFECT_SHACKLE_TP) ||
+                                 player.hasEffect(EFFECT_SHACKLE_STRENGTH) ||
+                                 player.hasEffect(EFFECT_SHACKLE_MP) ||
+                                 player.hasEffect(EFFECT_SHACKLE_AGILITY) ||
+                                 player.hasEffect(EFFECT_POISON)
+
+            if (hasPlayerDebuff) {
+                liberationTarget = player._cellPos
+                debug("[AGI] Using Liberation on self to remove debuffs")
+            } else {
+                debug("[AGI] Using Liberation on enemy to remove buffs/shields/damage return")
             }
+
+            this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_LIBERATION)
+            // Update action with correct target cell
+            this._actions[count(this._actions) - 1].targetCell = liberationTarget
+            playerTP -= 5
+        }
+
+        // STEP 2: WEEK 2 - Select best tactical cell (hit-and-run: damage vs threat)
+        // Agility builds leverage mobility to maximize damage while minimizing risk
+        var tacticalCell = fieldMap.findBestTacticalCell(playerMP, 0.4)  // Threat weighted 40% (less risk-averse than magic)
+
+        var bestWeaponCell = -1
+        if (tacticalCell != null && tacticalCell._highestDamageWeapon != -1) {
+            bestWeaponCell = tacticalCell
+            debug("[AGILITY][TACTICAL] Using threat-aware positioning: cell=" + tacticalCell._id + " damage=" + tacticalCell._totalDamage + " threat=" + fieldMap.getThreatAtCell(tacticalCell._id))
+        } else {
+            // Fallback: Select pure damage cell (legacy behavior)
+            var bestWeaponDamage = -1
+            var bestDist = 99999
+            for (var c in fieldMap.damageMap) {
+                if (c._highestDamageWeapon == -1) continue  // Skip chip-only cells
+                var dist = getPathLength(playerPos, c._id)
+                if (dist == null) continue  // Skip completely unreachable cells
+                // Prefer higher weaponDamage, tie-break shorter distance
+                if (c._weaponDamage > bestWeaponDamage || (c._weaponDamage == bestWeaponDamage && dist < bestDist)) {
+                    bestWeaponDamage = c._weaponDamage
+                    bestWeaponCell = c
+                    bestDist = dist
+                }
+            }
+            debug("[AGILITY][FALLBACK] Using pure damage cell (no tactical cell available)")
         }
         // Fallback to incoming targetHitCell if no weapon cell found
         if (bestWeaponCell == -1 && targetHitCell != -1 && targetHitCell != null) {

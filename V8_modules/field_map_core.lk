@@ -61,10 +61,10 @@ class FieldMapCore {
     wColors = [:]
     cColors = [:]
 
-    private static x_offset = 18
-    private static y_offset = 17
-    private static base_cell = 308
-    private static board_cell_count = 613
+    static x_offset = 18
+    static y_offset = 17
+    static base_cell = 308
+    static board_cell_count = 613
 
     constructor() {
         var playerID = getEntity()

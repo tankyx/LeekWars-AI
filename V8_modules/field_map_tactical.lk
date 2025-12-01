@@ -10,6 +10,11 @@ class FieldMap extends FieldMapPatterns {
     _enemyAccessCacheTurn = -1
     _enemyAccessCacheIds = []
 
+    // WEEK 2: Enemy threat map
+    enemyThreatMap = [:]
+    _threatMapCacheTurn = -1
+    _threatMapCacheEnemyPositions = [:]
+
     private static board_cell_count = 613
 
     constructor() {
@@ -301,5 +306,274 @@ class FieldMap extends FieldMapPatterns {
         debug("[OTKO-TELEPORT] bestCell=" + bestCell + " projectedDamage=" + bestDamage + " targetHP=" + targetHP + " canKill=" + canKill)
 
         return ['cell': bestCell, 'damage': bestDamage, 'canKill': canKill]
+    }
+
+    // ====================================================================
+    // ENEMY THREAT MAP SYSTEM (Week 2)
+    // ====================================================================
+
+    // Build threat map considering enemy movement + attack ranges
+    // Shows maximum damage player could take at each cell this turn
+    buildEnemyThreatMap() {
+        var currentTurn = getTurn()
+
+        // Check cache validity (invalidate if turn changed or enemies moved)
+        var cacheValid = (this._threatMapCacheTurn == currentTurn)
+        if (cacheValid) {
+            var enemies = this.getEnemySubMap()
+            for (var eid in mapKeys(enemies)) {
+                var enemy = enemies[eid]
+                if (mapContainsKey(this._threatMapCacheEnemyPositions, eid)) {
+                    if (this._threatMapCacheEnemyPositions[eid] != enemy._cellPos) {
+                        cacheValid = false
+                        debug("[THREAT-MAP] Cache invalid: enemy " + getName(eid) + " moved")
+                        break
+                    }
+                } else {
+                    cacheValid = false
+                    break
+                }
+            }
+        }
+
+        if (cacheValid) {
+            debug("[THREAT-MAP] Using cached threat map (turn " + currentTurn + ")")
+            return
+        }
+
+        // Rebuild threat map
+        debug("[THREAT-MAP] Building new threat map for turn " + currentTurn)
+        mapClear(this.enemyThreatMap)
+        mapClear(this._threatMapCacheEnemyPositions)
+
+        var enemies = this.getEnemySubMap()
+        var enemyCount = count(mapKeys(enemies))
+
+        if (enemyCount == 0) {
+            debug("[THREAT-MAP] No enemies detected")
+            return
+        }
+
+        for (var eid in mapKeys(enemies)) {
+            var enemy = enemies[eid]
+            if (isDead(eid)) continue
+
+            // Cache enemy position for validation
+            this._threatMapCacheEnemyPositions[eid] = enemy._cellPos
+
+            this.addEnemyThreatToMap(enemy)
+        }
+
+        this._threatMapCacheTurn = currentTurn
+
+        var threatenedCells = count(mapKeys(this.enemyThreatMap))
+        debug("[THREAT-MAP] Complete. " + threatenedCells + " cells threatened by " + enemyCount + " enemies")
+    }
+
+    // Add single enemy's threat to map (movement + attack ranges)
+    addEnemyThreatToMap(enemy) {
+        var enemyPos = enemy._cellPos
+        var enemyMP = enemy._currMp
+        var enemyWeapons = getWeapons(enemy._id)
+
+        debug("[THREAT-MAP] Processing enemy " + getName(enemy._id) + " at cell " + enemyPos + " (MP=" + enemyMP + ", weapons=" + count(enemyWeapons) + ")")
+
+        // STEP 1: Get all cells enemy can move to
+        var movementCells = this.getReachableCellsWithinMP(enemyPos, enemyMP)
+        debug("[THREAT-MAP]   Enemy can reach " + count(movementCells) + " cells")
+
+        var totalThreats = 0
+
+        // STEP 2: From each movement position, calculate attack ranges
+        for (var i = 0; i < count(movementCells); i++) {
+            var moveCell = movementCells[i]
+
+            // For each weapon, calculate which cells can be attacked from moveCell
+            for (var j = 0; j < count(enemyWeapons); j++) {
+                var weaponId = enemyWeapons[j]
+                var attackCells = this.getCellsInWeaponRange(moveCell, weaponId, enemy)
+
+                // Estimate damage for this weapon
+                var damage = this.estimateEnemyWeaponDamage(weaponId, enemy)
+
+                // Mark all attackable cells as threatened
+                for (var k = 0; k < count(attackCells); k++) {
+                    var targetCell = attackCells[k]
+
+                    if (!mapContainsKey(this.enemyThreatMap, targetCell)) {
+                        this.enemyThreatMap[targetCell] = 0
+                    }
+
+                    // Use MAX threat (enemy will position for best shot)
+                    if (damage > this.enemyThreatMap[targetCell]) {
+                        this.enemyThreatMap[targetCell] = damage
+                        totalThreats++
+                    }
+                }
+            }
+        }
+
+        debug("[THREAT-MAP]   Added " + totalThreats + " threat markers for " + getName(enemy._id))
+    }
+
+    // Get all cells reachable within MP budget
+    getReachableCellsWithinMP(startCell, maxMP) {
+        var reachable = []
+
+        // Use radius search for candidates (faster than exhaustive)
+        var radius = min(maxMP, 8)  // Cap at 8 to avoid huge searches
+
+        // Manual radius iteration (getCellsInRadius doesn't exist in LS4)
+        for (var dx = -radius; dx <= radius; dx++) {
+            for (var dy = -radius; dy <= radius; dy++) {
+                var dist = abs(dx) + abs(dy)
+                if (dist > radius) continue
+
+                var cellId = startCell + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
+                if (cellId < 0 || cellId >= FieldMap.board_cell_count) continue
+                if (isObstacle(cellId)) continue
+
+                var pathLen = getPathLength(startCell, cellId)
+                if (pathLen != null && pathLen <= maxMP) {
+                    push(reachable, cellId)
+                }
+            }
+        }
+
+        return reachable
+    }
+
+    // Get all cells attackable from a position with a specific weapon
+    getCellsInWeaponRange(fromCell, weaponId, enemy) {
+        var cells = []
+
+        // Get weapon info
+        var minRange = getWeaponMinRange(weaponId)
+        var maxRange = getWeaponMaxRange(weaponId)
+        var area = getWeaponArea(weaponId)
+
+        // Manual radius iteration (getCellsInRadius doesn't exist in LS4)
+        for (var dx = -maxRange; dx <= maxRange; dx++) {
+            for (var dy = -maxRange; dy <= maxRange; dy++) {
+                var cellId = fromCell + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
+                if (cellId < 0 || cellId >= FieldMap.board_cell_count) continue
+
+                var dist = getCellDistance(fromCell, cellId)
+                if (dist == null || dist < minRange || dist > maxRange) continue
+
+                // Check line of sight for line weapons
+                if (area == AREA_LASER_LINE) {
+                    if (!lineOfSight(fromCell, cellId)) continue
+                }
+
+                // Check alignment for circle weapons (simplified - assume can hit)
+                // Complex AoE validation would be expensive
+
+                push(cells, cellId)
+            }
+        }
+
+        return cells
+    }
+
+    // Estimate enemy weapon damage (conservative assumption)
+    estimateEnemyWeaponDamage(weaponId, enemy) {
+        // Get weapon effects to extract damage range
+        var effects = getWeaponEffects(weaponId)
+        var minDmg = 0
+        var maxDmg = 0
+
+        // Find EFFECT_DAMAGE in effects array
+        for (var i = 0; i < count(effects); i++) {
+            var effect = effects[i]
+            if (effect[0] == EFFECT_DAMAGE) {
+                minDmg = effect[1]
+                maxDmg = effect[2]
+                break
+            }
+        }
+
+        var baseDmg = (minDmg + maxDmg) / 2
+
+        // Check if enemy stats are available
+        var enemyStr = enemy._strength
+        var enemyMag = enemy._magic
+        var enemyWis = enemy._wisdom
+
+        // If stats available, estimate scaled damage
+        if (enemyStr != null && enemyStr > 0) {
+            // Strength weapon (simplified scaling)
+            var scaledDmg = baseDmg * (1 + enemyStr / 100)
+            return scaledDmg
+        } else if (enemyMag != null && enemyMag > 0) {
+            // Magic weapon (simplified scaling)
+            var scaledDmg = baseDmg * (1 + enemyMag / 100)
+            return scaledDmg
+        }
+
+        // Conservative fallback: assume 600 in primary stat (7x multiplier)
+        return baseDmg * 7
+    }
+
+    // Get threat level at a specific cell
+    getThreatAtCell(cellId) {
+        if (mapContainsKey(this.enemyThreatMap, cellId)) {
+            return this.enemyThreatMap[cellId]
+        }
+        return 0  // No threat = safe
+    }
+
+    // Find cells with zero or low threat
+    getSafeCells(maxMP, maxThreat = 0) {
+        var safe = []
+        var playerPos = player._cellPos
+
+        // Only check reachable cells (performance optimization)
+        var candidates = this.getReachableCellsWithinMP(playerPos, maxMP)
+
+        for (var i = 0; i < count(candidates); i++) {
+            var cell = candidates[i]
+
+            var threat = this.getThreatAtCell(cell)
+            if (threat <= maxThreat) {
+                push(safe, cell)
+            }
+        }
+
+        debug("[THREAT-MAP] Found " + count(safe) + " safe cells within " + maxMP + " MP (threat ≤ " + maxThreat + ")")
+        return safe
+    }
+
+    // Find best tactical cell (high damage, low threat)
+    findBestTacticalCell(maxMP, threatWeight = 0.5) {
+        var best = -1
+        var bestScore = -99999
+        var playerPos = player._cellPos
+
+        for (var cellId in mapKeys(this.damageMap)) {
+            var cell = this.damageMap[cellId]
+
+            var pathLen = getPathLength(playerPos, cell._id)
+            if (pathLen == null || pathLen > maxMP) continue
+
+            var ourDamage = cell._totalDamage
+            var threat = this.getThreatAtCell(cell._id)
+
+            // Score = our damage - (threat * weight)
+            // threatWeight: 0 = ignore threat, 1 = equal weight
+            var score = ourDamage - (threat * threatWeight)
+
+            if (score > bestScore) {
+                bestScore = score
+                best = cell
+            }
+        }
+
+        if (best != -1) {
+            var threat = this.getThreatAtCell(best._id)
+            debug("[THREAT-MAP] Best tactical cell: " + best._id + " (damage=" + best._totalDamage + ", threat=" + threat + ", score=" + bestScore + ")")
+        }
+
+        return best
     }
 }

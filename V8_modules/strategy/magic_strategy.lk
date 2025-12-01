@@ -38,6 +38,48 @@ class MagicStrategy extends Strategy {
     }
 
     // ====================================================================
+    // WEEK 2: SAFE KITING (Threat-Aware Positioning)
+    // ====================================================================
+
+    // Find safe cell where player can attack but enemy cannot reach
+    // Returns: {cell: cellId, damage: totalDamage} or null
+    findSafeKitingCell(target, maxMP) {
+        var safeCells = fieldMap.getSafeCells(maxMP, 0)  // Zero threat cells only
+
+        if (count(safeCells) == 0) {
+            debug("[SAFE-KITE] No zero-threat cells found within " + maxMP + " MP")
+            return null
+        }
+
+        var best = null
+        var bestDamage = -1
+
+        // Find safe cell with best damage potential
+        for (var i = 0; i < count(safeCells); i++) {
+            var cell = safeCells[i]
+
+            // Check if we can attack from this cell
+            if (mapContainsKey(fieldMap.damageMap, cell)) {
+                var damageCell = fieldMap.damageMap[cell]
+                var damage = damageCell._totalDamage
+
+                if (damage > bestDamage) {
+                    bestDamage = damage
+                    best = cell
+                }
+            }
+        }
+
+        if (best != null) {
+            debug("[SAFE-KITE] Found safe cell " + best + " with damage=" + bestDamage)
+            return ['cell': best, 'damage': bestDamage]
+        }
+
+        debug("[SAFE-KITE] No safe cells with attack potential")
+        return null
+    }
+
+    // ====================================================================
     // MAIN ORCHESTRATION
     // ====================================================================
 
@@ -67,7 +109,8 @@ class MagicStrategy extends Strategy {
         if (chest != null) {
             debug("[CHEST] Chest detected! Switching target (ID: " + chest._id + ")")
             target = chest
-            targetHitCell = fieldMap.buildHitMap(chest._cellPos)
+            fieldMap.buildHitMap(chest._cellPos)
+            targetHitCell = fieldMap.getBestWeaponOrChipCell()
         }
 
         target.updateEntity()
@@ -284,13 +327,28 @@ class MagicStrategy extends Strategy {
             }
         }
 
-        // Movement after attacks: prefer Hide & Seek
+        // Movement after attacks: WEEK 2 - Try safe kiting first, fallback to Hide & Seek
         var originalMP = player._currMp
         var pathToAttack = 0
         if (targetHitCell != -1 && targetHitCell != null) pathToAttack = getPathLength(player._cellPos, targetHitCell._id)
         if (pathToAttack == null) pathToAttack = 0
 
-        var hnsInfoKite = fieldMap.findHideAndSeekCell("defensive")
+        // WEEK 2: Try to find zero-threat cells first
+        var safeKiteInfo = this.findSafeKitingCell(target, originalMP - pathToAttack)
+        var hnsInfoKite = null
+
+        if (safeKiteInfo != null) {
+            // Use safe kiting cell (zero threat)
+            hnsInfoKite = ['cell': safeKiteInfo['cell'], 'danger': 0]
+            debug("[MAGIC][KITE] Using SAFE kiting cell (zero threat)")
+        } else {
+            // Fallback to standard Hide & Seek
+            hnsInfoKite = fieldMap.findHideAndSeekCell("defensive")
+            if (hnsInfoKite != null) {
+                debug("[MAGIC][KITE] Using standard H&S cell (danger=" + hnsInfoKite['danger'] + ")")
+            }
+        }
+
         var addedHide = false
         if (hnsInfoKite != null) {
             var hideCellIdK = hnsInfoKite['cell']
@@ -499,7 +557,8 @@ class MagicStrategy extends Strategy {
                         this.createMovementAction(Action.MOVEMENT_APPROACH, safeCell, target)
                         this.executeAndFlushActions()
                         player.updateEntity()
-                        targetHitCell = fieldMap.buildHitMap(target._cellPos)
+                        fieldMap.buildHitMap(target._cellPos)
+                        targetHitCell = fieldMap.getBestWeaponOrChipCell()
 
                         // Re-validate safety after repositioning
                         var recheckSafety = this.checkAoESafety(pc._id, target._cellPos)
@@ -548,7 +607,8 @@ class MagicStrategy extends Strategy {
                         this.createMovementAction(Action.MOVEMENT_APPROACH, safeCellFB, target)
                         this.executeAndFlushActions()
                         player.updateEntity()
-                        targetHitCell = fieldMap.buildHitMap(target._cellPos)
+                        fieldMap.buildHitMap(target._cellPos)
+                        targetHitCell = fieldMap.getBestWeaponOrChipCell()
                     } else {
                         continue
                     }
