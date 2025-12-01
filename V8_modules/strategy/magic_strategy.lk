@@ -292,6 +292,11 @@ class MagicStrategy extends Strategy {
             }
         }
 
+        // Mark chosen destination for visual debugging
+        if (targetHitCell != -1) {
+            fieldMap.markChosenDestinationAndPath(player._cellPos, targetHitCell._id)
+        }
+
         // Execute movement immediately if combo positioning
         if (shouldPrioritizeCombo && targetHitCell != -1 && targetHitCell._id != player._cellPos) {
             debug("[COMBO-POSITIONING] Executing immediate movement to combo cell " + targetHitCell._id)

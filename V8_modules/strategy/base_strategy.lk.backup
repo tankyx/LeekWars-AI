@@ -4,9 +4,11 @@ class Strategy {
     _actions = []
     _playerTP = -1
     _fieldMap = null
+    _currentWeaponId = -1  // Track currently equipped weapon
 
     constructor() {
         this._playerTP = getTP()
+        this._currentWeaponId = getWeapon()
     }
 
     // Override in subclasses to disable damage map building (e.g., boss fights)
@@ -100,11 +102,98 @@ class Strategy {
     // ACTION VALIDATION SYSTEM
     // ====================================================================
     // Fix for action validation - verify actions before execution to prevent wasting TP/MP
-
+    
+    // Validate all queued actions before execution
+    // Remove invalid actions to prevent wasting TP/MP on impossible actions
+    validateAndFilterActions() {
+        var validActions = []
+        var initialActionCount = count(this._actions)
+        
+        debug("[VALIDATION] Starting validation of " + initialActionCount + " actions")
+        
+        for (var i = 0; i < initialActionCount; i++) {
+            var action = this._actions[i]
+            var isValid = true
+            var reason = ""
+            
+            // Skip validation for movement actions (position changes are dynamic and validated during movement)
+            if (action.actionType == Action.MOVEMENT_APPROACH || 
+                action.actionType == Action.MOVEMENT_OFFENSIVE ||
+                action.actionType == Action.MOVEMENT_DEFENSIVE ||
+                action.actionType == Action.MOVEMENT_OTKO ||
+                action.actionType == Action.MOVEMENT_DOT_OFFENSIVE ||
+                action.actionType == Action.MOVEMENT_DEBUFF ||
+                action.actionType == Action.MOVEMENT_FLEE ||
+                action.actionType == Action.MOVEMENT_HNS ||
+                action.actionType == Action.MOVEMENT_KITE ||
+                action.actionType == Action.MOVEMENT_APPROACH) {
+                push(validActions, action)
+                continue
+            }
+            
+            // Validate target is still alive (for attacks/heals/buffs)
+            if (action.targetEntity != null && !action.targetEntity._isAlive) {
+                isValid = false
+                reason = "Target dead (ID: " + action.targetEntity._id + ")"
+            }
+            
+            // Validate TP availability for weapons
+            if (isValid && action.weaponId != -1) {
+                var weapon = arsenal.playerEquippedWeapons[action.weaponId]
+                if (weapon == null) {
+                    isValid = false
+                    reason = "Weapon not found: " + action.weaponId
+                }
+                else if (player._currTp < weapon._cost) {
+                    isValid = false
+                    reason = "Insufficient TP for weapon: need " + weapon._cost + ", have " + player._currTp
+                }
+            }
+            
+            // Validate TP availability and cooldown for chips
+            if (isValid && action.chipId != -1) {
+                var chipCost = getChipCost(action.chipId)
+                if (player._currTp < chipCost) {
+                    isValid = false
+                    reason = "Insufficient TP for chip: need " + chipCost + ", have " + player._currTp
+                }
+                else if (getCooldown(action.chipId, player._id) > 0) {
+                    isValid = false
+                    reason = "Chip on cooldown: " + getChipName(action.chipId)
+                }
+            }
+            
+            // Validate range and LOS for attacks and buffs
+            if (isValid && (action.actionType == Action.ACTION_DIRECT || 
+                           action.actionType == Action.ACTION_DOT ||
+                           action.actionType == Action.ACTION_DEBUFF ||
+                           action.actionType == Action.ACTION_BUFF)) {
+                if (!this.validateActionRangeAndLOS(action)) {
+                    isValid = false
+                    reason = "Out of range/LOS"
+                }
+            }
+            
+            // Log validation result
+            if (isValid) {
+                push(validActions, action)
+            } else {
+                debug("[VALIDATION] Removing invalid action [" + action.actionType + "] " + reason)
+            }
+        }
+        
+        var removedCount = initialActionCount - count(validActions)
+        if (removedCount > 0) {
+            debug("[VALIDATION] Removed " + removedCount + " invalid actions, " + 
+                  count(validActions) + " remaining")
+        }
+        
+        this._actions = validActions
+    }
+    
     // Helper to validate range and LOS for an action
-    // fromCell: position to validate from (can be simulated post-movement position)
-    validateActionRangeAndLOS(action, fromCell = -1) {
-        if (fromCell == -1) fromCell = player._cellPos
+    validateActionRangeAndLOS(action) {
+        var fromCell = player._cellPos
         var toCell = action.targetCell
         
         if (toCell == -1) return true  // No target cell to validate
@@ -118,8 +207,9 @@ class Strategy {
             if (weapon == null) return false
             minRange = weapon._minRange
             maxRange = weapon._maxRange
-        } else if (action.chip != -1) {
-            var chip = arsenal.playerEquippedChips[action.chip]
+        }
+        else if (action.chipId != -1) {
+            var chip = arsenal.playerEquippedChips[action.chipId]
             if (chip == null) return false
             minRange = chip._minRange
             maxRange = chip._maxRange
@@ -129,7 +219,7 @@ class Strategy {
         var dist = getCellDistance(fromCell, toCell)
         if (dist == null) return false
         if (dist < minRange || dist > maxRange) {
-            debug("[VALIDATION] Distance invalid from " + fromCell + " to " + toCell + ": " + dist + " (need " + minRange + "-" + maxRange + ")")
+            debug("[VALIDATION] Distance invalid: " + dist + " (need " + minRange + "-" + maxRange + ")")
             return false
         }
         
@@ -152,13 +242,13 @@ class Strategy {
             if (weapon != null) tpCost += weapon._cost
         }
         
-        if (action.chip != -1) {
-            tpCost += getChipCost(action.chip)
+        if (action.chipId != -1) {
+            tpCost += getChipCost(action.chipId)
         }
         
-        if (action.type == Action.MOVEMENT_OFFENSIVE ||
-            action.type == Action.MOVEMENT_HNS ||
-            action.type == Action.MOVEMENT_APPROACH) {
+        if (action.actionType == Action.MOVEMENT_OFFENSIVE || 
+            action.actionType == Action.MOVEMENT_HNS ||
+            action.actionType == Action.MOVEMENT_APPROACH) {
             var pathLen = getPathLength(player._cellPos, action.targetCell)
             if (pathLen != null && pathLen > player._currMp) return false
         }
@@ -192,11 +282,39 @@ class Strategy {
         return true
     }
 
+    // Check if CHIP_ADRENALINE should be used tactically
+    // CHIP_ADRENALINE: 1 TP cost, +5 TP gain (net +4 TP)
+    // Use when short 1-4 TP for required action
+    shouldUseAdrenaline(requiredTP) {
+        if (!this.isChipAvailable(CHIP_ADRENALINE)) return false
+
+        var playerTP = player._currTp
+        // Only use if we're short of required TP by 1-4 points (Adrenaline gives +4 net TP)
+        var shortage = requiredTP - playerTP
+        if (shortage >= 1 && shortage <= 4) {
+            debug("[ADRENALINE] Short " + shortage + " TP (have " + playerTP + " need " + requiredTP + ") - using Adrenaline")
+            return true
+        }
+
+        return false
+    }
+
     // Check if CHIP_LEATHER_BOOTS should be used for positioning
     // CHIP_LEATHER_BOOTS: 3 TP cost, +2 MP for 2 turns
     // targetCell: primary destination (attack position)
     // secondaryCell: optional secondary destination (hide cell after attack)
-    shouldUseLeatherBoots(targetCell, secondaryCell = -1) {
+    // minRemainingTP: minimum TP needed after boots for meaningful actions
+    shouldUseLeatherBoots(targetCell, secondaryCell = -1, minRemainingTP = 7) {
+        if (!this.isChipAvailable(CHIP_LEATHER_BOOTS, 3)) return false
+
+        var playerTP = player._currTp
+        // Validate TP budget (3 TP for boots + attacks)
+        if (!this.validateTPBudget(3)) return false
+
+        // Need TP for boots + at least minRemainingTP for attacks
+        if (playerTP < 3 + minRemainingTP) return false
+
+        // Check if we already have MP buff active
         var hasMPBuff = player.hasEffect(EFFECT_BUFF_MP)
         if (hasMPBuff) {
             debug("[LEATHER_BOOTS] MP buff already active")
@@ -262,9 +380,8 @@ class Strategy {
         if (mapContainsKey(fieldMap.damageMap, playerPos)) {
             var cellObj = fieldMap.damageMap[playerPos]
             if (cellObj._weaponsList != null && count(cellObj._weaponsList) > 0) {
-                var currentWeapon = getWeapon()  // Query actual equipped weapon
                 for (var w in cellObj._weaponsList) {
-                    var swapCost = (currentWeapon != w._id) ? 1 : 0
+                    var swapCost = (this._currentWeaponId != w._id) ? 1 : 0
                     var totalCost = swapCost + w._cost
                     if (totalCost < minWeaponTP) {
                         minWeaponTP = totalCost
@@ -344,61 +461,6 @@ class Strategy {
         debug("[" + this.getStrategyName() + "] " + message)
     }
 
-    // Select best target from available enemies based on strategy priorities
-    // Strength/Agility: Prioritize lowest HP (finish kills)
-    // Magic: Prioritize targets without DoT (fresh targets)
-    // Returns: best target entity or null if no valid targets
-    selectBestTarget() {
-        var enemies = fieldMap.getEnemySubMap()
-        var best = null
-        var bestScore = -1
-
-        for (var e in enemies) {
-            if (isDead(e._id)) continue
-            var score = 0
-
-            // Strength/Agility: Prioritize lowest HP (finish kills)
-            if (this.getStrategyName() == "STR" || this.getStrategyName() == "AGI") {
-                score = 10000 - e._currHealth  // Lower HP = higher score
-                debug("[TARGET-SELECTION][" + this.getStrategyName() + "] Enemy " + getName(e._id) + " HP-based score: " + score)
-            }
-            // Magic: Prioritize no DoT (fresh targets), then lowest HP
-            else if (this.getStrategyName() == "MAGIC") {
-                if (!e.hasEffect(EFFECT_POISON)) {
-                    score += 5000  // Big bonus for targets without poison
-                    debug("[TARGET-SELECTION][MAGIC] Enemy " + getName(e._id) + " no poison bonus: +5000")
-                }
-                score += (10000 - e._currHealth)  // Then consider HP
-            }
-            // Default: lowest HP
-            else {
-                score = 10000 - e._currHealth
-            }
-
-            // Universal: Prefer closer enemies (distance penalty)
-            var dist = getCellDistance(player._cellPos, e._cellPos)
-            if (dist != null) {
-                score -= dist * 10
-                debug("[TARGET-SELECTION] Enemy " + getName(e._id) + " distance penalty: -" + (dist * 10) + " (dist=" + dist + ")")
-            }
-
-            debug("[TARGET-SELECTION] Enemy " + getName(e._id) + " final score: " + score + " (HP=" + e._currHealth + ", dist=" + dist + ")")
-
-            if (score > bestScore) {
-                bestScore = score
-                best = e
-            }
-        }
-
-        if (best != null) {
-            debug("[TARGET-SELECTION] Selected target: " + getName(best._id) + " (score=" + bestScore + ")")
-        } else {
-            debug("[TARGET-SELECTION] No valid targets found")
-        }
-
-        return best
-    }
-
     // Select best healing chip based on HP% and chip availability
     // Returns: {chipId: int, name: string, priority: int} or null
     selectBestHealingChip(hpPercent) {
@@ -467,99 +529,6 @@ class Strategy {
         return bestCell
     }
 
-    // Project total damage output from a given cell with optional buff inclusion
-    // includeBuffs: if true, accounts for stat buffs like STEROID/WARM_UP
-    // fromCell: cell to calculate from (default: player's current position)
-    // availableTP: TP budget (default: player's current TP)
-    // Returns: projected total damage
-    projectTotalDamageOutput(includeBuffs = false, fromCell = -1, availableTP = -1, targetEntity = null) {
-        if (fromCell == -1) fromCell = player._cellPos
-        if (availableTP == -1) availableTP = player._currTp
-
-        var totalDamage = 0
-        var playerTP = availableTP
-        var buffBonus = 0
-
-        // Include pending buff effects if requested
-        if (includeBuffs) {
-            if (this.getStrategyName() == "STR") {
-                // Check if STEROID is available (equipped, off cooldown, sufficient TP)
-                if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID) &&
-                    getCooldown(CHIP_STEROID, player._id) == 0 &&
-                    !player.hasEffect(EFFECT_BUFF_STRENGTH)) {
-                    buffBonus = 160  // STEROID average boost
-                    playerTP -= 7
-                    debug("[DAMAGE-PROJECTION] Including STEROID buff: +160 STR, -7 TP")
-                }
-            }
-            else if (this.getStrategyName() == "AGI") {
-                // Check if WARM_UP is available (equipped, off cooldown, sufficient TP)
-                if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP) &&
-                    getCooldown(CHIP_WARM_UP, player._id) == 0 &&
-                    !player.hasEffect(EFFECT_BUFF_AGILITY)) {
-                    buffBonus = 180  // WARM_UP average boost (agility affects damage return, not direct damage)
-                    playerTP -= 7
-                    debug("[DAMAGE-PROJECTION] Including WARM_UP buff: +180 AGI, -7 TP")
-                }
-            }
-        }
-
-        // Calculate weapon spam damage from specified cell
-        if (mapContainsKey(fieldMap.damageMap, fromCell)) {
-            var cell = fieldMap.damageMap[fromCell]
-            for (var wIdx = 0; wIdx < count(cell._weaponsList); wIdx++) {
-                var w = cell._weaponsList[wIdx]
-                if (w == null) continue
-
-                // Validate range and LOS to target if specified
-                if (targetEntity != null) {
-                    var dist = getCellDistance(fromCell, targetEntity._cellPos)
-                    if (dist == null || dist < w._minRange || dist > w._maxRange) continue
-                    if (!lineOfSight(fromCell, targetEntity._cellPos)) continue
-                }
-
-                var uses = min(w._maxUse, floor(playerTP / w._cost))
-                if (uses > 0) {
-                    var netDmg = targetEntity != null ?
-                        arsenal.getNetDamageAgainstTarget(player._strength + buffBonus, player._magic, player._wisdom, w._id, targetEntity) :
-                        arsenal.getDamageBreakdown(player._strength + buffBonus, player._magic, player._wisdom, w._id)['total']
-                    totalDamage += netDmg * uses
-                    playerTP -= w._cost * uses
-                    debug("[DAMAGE-PROJECTION] " + getWeaponName(w._id) + " x" + uses + " = " + floor(netDmg * uses) + " damage")
-                }
-            }
-        }
-
-        // Add chip damage
-        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
-            var c = arsenal.playerEquippedChips[cid]
-            if (c == null) continue
-            if (playerTP < c._cost) continue
-            if (getCooldown(c._id, player._id) > 0) continue
-            if (!mapContainsKey(c._effects, EFFECT_DAMAGE) && !mapContainsKey(c._effects, EFFECT_POISON)) continue
-
-            // Validate range and LOS to target if specified
-            if (targetEntity != null) {
-                var distC = getCellDistance(fromCell, targetEntity._cellPos)
-                if (distC == null || distC < c._minRange || distC > c._maxRange) continue
-                if (!lineOfSight(fromCell, targetEntity._cellPos)) continue
-            }
-
-            var chipUses = min(c._maxUse, floor(playerTP / c._cost))
-            if (chipUses > 0) {
-                var netChipDmg = targetEntity != null ?
-                    arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, c._id, targetEntity) :
-                    arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, c._id)['total']
-                totalDamage += netChipDmg * chipUses
-                playerTP -= c._cost * chipUses
-                debug("[DAMAGE-PROJECTION] " + getChipName(c._id) + " x" + chipUses + " = " + floor(netChipDmg * chipUses) + " damage")
-            }
-        }
-
-        debug("[DAMAGE-PROJECTION] Total projected damage: " + floor(totalDamage) + " (from cell " + fromCell + ", TP used: " + (availableTP - playerTP) + ")")
-        return totalDamage
-    }
-
     // Find best damage cell along path to target cell (for fighting retreat)
     // Returns Cell object from damageMap that's on the path, or null if no damage cells on path
     findBestDamageCellOnPath(targetCell, maxMP) {
@@ -608,87 +577,12 @@ class Strategy {
         return bestCell
     }
 
-    // Detect fight type to determine if turn 1 buffs should be applied
-    // Returns: "pvp", "boss", "chest", "pve"
-    detectFightType() {
-        var enemies = fieldMap.getEnemySubMap()
-        var chests = fieldMap.getChestSubMap()
-
-        // Convert maps to arrays for iteration
-        var enemyList = []
-        for (var eid in mapKeys(enemies)) {
-            push(enemyList, enemies[eid])
-        }
-        var chestList = []
-        for (var cid in mapKeys(chests)) {
-            push(chestList, chests[cid])
-        }
-
-        // Boss fight detection (crystals + grail)
-        var hasCrystals = false
-        var hasGrail = false
-        for (var i = 0; i < count(enemyList); i++) {
-            var e = enemyList[i]
-            var name = getName(e._id)
-            if (name == "Crystal" || name == "Cristal") hasCrystals = true
-            if (name == "Grail" || name == "Graal") hasGrail = true
-        }
-        if (hasCrystals && hasGrail) {
-            debug("[FIGHT-TYPE] Boss fight detected (crystals + grail)")
-            return "boss"
-        }
-
-        // Chest fight (no enemies, only chests)
-        if (count(enemyList) == 0 && count(chestList) > 0) {
-            debug("[FIGHT-TYPE] Chest fight detected")
-            return "chest"
-        }
-
-        // PvP fight (enemy leeks)
-        for (var j = 0; j < count(enemyList); j++) {
-            var e2 = enemyList[j]
-            var entityType = getType(e2._id)
-            if (entityType == ENTITY_LEEK) {
-                debug("[FIGHT-TYPE] PvP fight detected (enemy leek)")
-                return "pvp"
-            }
-        }
-
-        // PvE fight (mobs/bulbs/turrets)
-        debug("[FIGHT-TYPE] PvE fight detected (non-leek enemies)")
-        return "pve"
-    }
-
     turnOneBuffs() {
         debug("Applying turn one buffs if available")
         debug("Dumping equipped chips:")
         for (var c in mapKeys(arsenal.playerEquippedChips)) {
             debug(" - " + getChipName(c))
         }
-
-        // Detect fight type before applying buffs
-        var fightType = this.detectFightType()
-
-        // SKIP BUFFS for boss fights (need chips for crystal manipulation)
-        if (fightType == "boss") {
-            debug("[TURN1-BUFFS] Skipping all buffs - boss fight requires chips for crystal control")
-            if (getWeapon() == null) {
-                setWeapon(arsenal.getHighestDamageWeapon())
-            }
-            return
-        }
-
-        // SKIP BUFFS for chest fights (pure damage spam, buffs waste TP)
-        if (fightType == "chest") {
-            debug("[TURN1-BUFFS] Skipping all buffs - chest fight prioritizes damage spam")
-            if (getWeapon() == null) {
-                setWeapon(arsenal.getHighestDamageWeapon())
-            }
-            return
-        }
-
-        // Apply buffs for PvP and PvE fights
-        debug("[TURN1-BUFFS] Fight type: " + fightType + " - applying appropriate buffs")
 
         // PRIORITY 1: Stat-based primary buffs (applied before other buffs for maximum effect)
         // Strength build: Apply CHIP_STEROID for weapon damage boost
@@ -712,22 +606,18 @@ class Strategy {
             }
         }
 
-        // PRIORITY 2: Universal stat buffs (only in PvP fights for maximum value)
-        if (fightType == "pvp") {
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
-                debug("Using CHIP_KNOWLEDGE - Science/Magic boost")
-                useChip(CHIP_KNOWLEDGE, player._id)
-            }
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
-                debug("Using CHIP_ARMORING - Resistance boost")
-                useChip(CHIP_ARMORING, player._id)
-            }
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
-                debug("Using CHIP_ELEVATION - Wisdom boost")
-                useChip(CHIP_ELEVATION, player._id)
-            }
-        } else {
-            debug("[TURN1-BUFFS] Skipping universal buffs in " + fightType + " fight (save TP for damage)")
+        // PRIORITY 2: Universal stat buffs
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
+            debug("Using CHIP_KNOWLEDGE - Science/Magic boost")
+            useChip(CHIP_KNOWLEDGE, player._id)
+        }
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
+            debug("Using CHIP_ARMORING - Resistance boost")
+            useChip(CHIP_ARMORING, player._id)
+        }
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
+            debug("Using CHIP_ELEVATION - Wisdom boost")
+            useChip(CHIP_ELEVATION, player._id)
         }
 
         // PRIORITY 3: Weapon selection
@@ -944,7 +834,7 @@ class Strategy {
     // Returns map with remaining MP/TP after combat
     // chipExclusionList: chips to exclude from damage chip usage (e.g., CHIP_MIRROR/THORN for agility)
     executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, chipExclusionList, debugPrefix) {
-        // Always query current weapon directly to avoid tracking desync
+        var currentWeaponId = this._currentWeaponId  // Use tracked weapon state
 
         // HNS-approach cell check (safer positioning)
         var hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
@@ -959,9 +849,6 @@ class Strategy {
                 }
             }
         }
-
-        // Mark chosen destination for visual debugging
-        fieldMap.markChosenDestinationAndPath(player._cellPos, bestWeaponCell._id)
 
         // Movement to weapon cell
         var pathLen = getPathLength(playerPos, bestWeaponCell._id)
@@ -983,7 +870,8 @@ class Strategy {
                 playerPos = player._cellPos
                 playerMP = player._currMp
                 playerTP = player._currTp
-                debug("[" + debugPrefix + "] After movement execution: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP + " weapon=" + getWeaponName(getWeapon()))
+                currentWeaponId = getWeapon()
+                debug("[" + debugPrefix + "] After movement execution: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP + " weapon=" + getWeaponName(currentWeaponId))
 
                 // Check if we actually reached the reachable cell
                 if (playerPos == reachableCell._id) {
@@ -998,23 +886,15 @@ class Strategy {
                 if (mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
                     getCooldown(CHIP_LEATHER_BOOTS, player._id) == 0 &&
                     playerTP >= 3) {
-                    // Pre-check: will LEATHER_BOOTS actually help reach any cells?
-                    var boostedMP = playerMP + 2  // LEATHER_BOOTS gives +2 MP (not +3)
-                    var wouldReachCell = this.findBestReachableDamageCell(boostedMP)
+                    // Use LEATHER_BOOTS for +3 MP boost
+                    debug("[" + debugPrefix + "] EMERGENCY: Using LEATHER_BOOTS for +3 MP (current: " + playerMP + ")")
+                    useChip(CHIP_LEATHER_BOOTS, player._id)
+                    playerTP -= 3
+                    playerMP = player._currMp  // Refresh MP after boots
+                    usedLeatherBoots = true
 
-                    if (wouldReachCell != null) {
-                        // Use LEATHER_BOOTS for +2 MP boost
-                        debug("[" + debugPrefix + "] EMERGENCY: Using LEATHER_BOOTS for +2 MP (current: " + playerMP + ") to reach cell " + wouldReachCell._id)
-                        useChip(CHIP_LEATHER_BOOTS, player._id)
-                        playerTP -= 3
-                        playerMP = player._currMp  // Refresh MP after boots
-                        usedLeatherBoots = true
-
-                        // Re-check for reachable cells with boosted MP
-                        reachableCell = this.findBestReachableDamageCell(playerMP)
-                    } else {
-                        debug("[" + debugPrefix + "] LEATHER_BOOTS would not help reach any damage cells (boostedMP=" + boostedMP + "), skipping")
-                    }
+                    // Re-check for reachable cells with boosted MP
+                    reachableCell = this.findBestReachableDamageCell(playerMP)
 
                     if (reachableCell != null && reachableCell._id != playerPos) {
                         // Found reachable cell with boosted MP!
@@ -1025,6 +905,7 @@ class Strategy {
                         playerPos = player._cellPos
                         playerMP = player._currMp
                         playerTP = player._currTp
+                        currentWeaponId = getWeapon()
                         debug("[" + debugPrefix + "] After boosted movement: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
 
                         if (playerPos == reachableCell._id) {
@@ -1034,27 +915,43 @@ class Strategy {
                     }
                 }
 
-                // Still no reachable cells - move toward best damage cell or enemy (execute directly, bypass validation)
-                if (reachableCell == null && playerMP > 0) {
-                    debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - moving toward enemy")
+                // Still no reachable cells - move to approach-HNS cell (tactical positioning)
+                if (reachableCell == null) {
+                    debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - using approach-HNS positioning")
 
-                    // Move toward the best weapon cell (get as close as possible using moveTowardCell)
-                    // Execute directly instead of queueing to bypass validation (moveTowardCell handles partial movement)
-                    var moveResult = moveTowardCell(bestWeaponCell._id)
-                    debug("[" + debugPrefix + "] Direct approach movement result: " + moveResult)
+                    var hnsFallback = fieldMap.findHideAndSeekCell("approach", target)
+                    if (hnsFallback != null && playerMP > 0) {
+                        var hnsCell = hnsFallback['cell']
+                        var hnsPathLen = getPathLength(playerPos, hnsCell)
 
-                    // Update state after movement
-                    player.updateEntity()
-                    playerPos = player._cellPos
-                    playerMP = player._currMp
-                    playerTP = player._currTp
-                    debug("[" + debugPrefix + "] After approach movement: pos=" + playerPos + " MP=" + playerMP)
-
-                    // Check if we reached a damage cell after movement
-                    if (mapContainsKey(fieldMap.damageMap, playerPos)) {
-                        reachedWeaponCell = true
-                        bestWeaponCell = fieldMap.damageMap[playerPos]
-                        debug("[" + debugPrefix + "] Reached damage cell " + playerPos + " after approach")
+                        if (hnsPathLen != null && hnsPathLen <= playerMP && hnsCell != playerPos) {
+                            debug("[" + debugPrefix + "] Moving to approach-HNS cell " + hnsCell + " (danger=" + hnsFallback['danger'] + " canAttack=" + hnsFallback['canAttack'] + " dist=" + hnsFallback['dist'] + ")")
+                            this.createMovementAction(Action.MOVEMENT_HNS, hnsCell, target)
+                            this.executeAndFlushActions()
+                            playerPos = player._cellPos
+                            playerMP = player._currMp
+                            playerTP = player._currTp
+                            currentWeaponId = getWeapon()
+                            debug("[" + debugPrefix + "] After HNS movement: pos=" + playerPos + " MP=" + playerMP)
+                        } else if (hnsPathLen != null && hnsPathLen > playerMP) {
+                            // HNS cell unreachable, move toward it
+                            debug("[" + debugPrefix + "] HNS cell unreachable (need " + hnsPathLen + " have " + playerMP + ") - moving toward it")
+                            this.createMovementAction(Action.MOVEMENT_APPROACH, hnsCell, target)
+                            this.executeAndFlushActions()
+                            playerPos = player._cellPos
+                            playerMP = player._currMp
+                            playerTP = player._currTp
+                            currentWeaponId = getWeapon()
+                        }
+                    } else if (playerMP > 0) {
+                        // Fallback: move toward enemy if HNS fails
+                        debug("[" + debugPrefix + "] HNS failed - moving toward enemy as last resort")
+                        this.createMovementAction(Action.MOVEMENT_APPROACH, target._cellPos, target)
+                        this.executeAndFlushActions()
+                        playerPos = player._cellPos
+                        playerMP = player._currMp
+                        playerTP = player._currTp
+                        currentWeaponId = getWeapon()
                     }
                 }
             }
@@ -1081,7 +978,6 @@ class Strategy {
 
         // Primary weapon usage (only if we reached the weapon cell)
         var primaryWeapon = bestWeaponCell._highestDamageWeapon
-        var currentWeaponId = getWeapon()  // Query actual equipped weapon
         debug("[" + debugPrefix + "] Primary weapon: reachedWeaponCell=" + reachedWeaponCell + " primaryWeapon=" + (primaryWeapon != -1 && primaryWeapon != null ? getWeaponName(primaryWeapon._id) : "none") + " currentWeapon=" + getWeaponName(currentWeaponId) + " playerTP=" + playerTP)
         if (reachedWeaponCell && primaryWeapon != -1 && primaryWeapon != null) {
             if (currentWeaponId != primaryWeapon._id) {
@@ -1089,6 +985,7 @@ class Strategy {
                 if (playerTP >= 1 + primaryWeapon._cost) {
                     this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, primaryWeapon._id, -1)
                     playerTP -= 1
+                    currentWeaponId = primaryWeapon._id  // Track weapon swap
                     debug("[" + debugPrefix + "] Created weapon swap action")
                 } else {
                     debug("[" + debugPrefix + "] Not enough TP to swap and use primary weapon " + getWeaponName(primaryWeapon._id))
@@ -1122,11 +1019,11 @@ class Strategy {
                 if (playerTP < wObj._cost) continue  // Need at least weapon cost
 
                 // Only swap if weapon not already equipped
-                var currentWeapon = getWeapon()  // Query actual equipped weapon
-                if (currentWeapon != wObj._id) {
+                if (currentWeaponId != wObj._id) {
                     if (playerTP < 1) continue  // Need 1 TP for swap
                     this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
                     playerTP -= 1
+                    currentWeaponId = wObj._id  // Track weapon swap
                 }
 
                 var uses2 = wObj._maxUse
@@ -1182,13 +1079,6 @@ class Strategy {
                 var rec = dmgChips[dc]
                 var chipUse = rec['chip']
                 if (playerTP < chipUse._cost) continue
-
-                // Check cooldown before attempting to use chip
-                if (getCooldown(chipUse._id, player._id) > 0) {
-                    debug("[" + debugPrefix + "] Chip " + getChipName(chipUse._id) + " on cooldown, skipping")
-                    continue
-                }
-
                 // Spam chip until max uses OR TP exhausted
                 var actualUsesC = 0
                 while (actualUsesC < chipUse._maxUse && playerTP >= chipUse._cost) {
@@ -1372,7 +1262,7 @@ class Strategy {
         return false
     }
 
-    // Check if should enter emergency/defensive mode (WEEK 2: Threat-based)
+    // Check if should enter emergency/defensive mode
     // Override in strategies for custom logic
     shouldEnterEmergencyMode(target) {
         // NEVER enter emergency if we have lethal damage (can kill enemy this turn)
@@ -1381,39 +1271,16 @@ class Strategy {
             return false
         }
 
-        var playerHP = getLife()
-        var hpPercent = (playerHP * 100) / getTotalLife()
+        var hpPercent = (getLife() * 100) / getTotalLife()
 
-        // WEEK 2: Threat-based emergency detection
-        var currentThreat = fieldMap.getThreatAtCell(player._cellPos)
-
-        // Priority 1: Immediate lethal threat (enemy can kill us this turn)
-        if (currentThreat >= playerHP) {
-            debug("[EMERGENCY][THREAT] Current position LETHAL - threat: " + currentThreat + " vs HP: " + playerHP)
-            return true
-        }
-
-        // Priority 2: Two-turn lethal (enemy can kill us in 2 turns if we don't heal/flee)
-        if (currentThreat * 2 > playerHP) {
-            debug("[EMERGENCY][THREAT] Two-turn lethal detected - threat: " + currentThreat + " x2 = " + (currentThreat * 2) + " vs HP: " + playerHP)
-            return true
-        }
-
-        // Priority 3: High threat + low HP (threat > 30% of max HP and HP < 50%)
-        var maxHP = getTotalLife()
-        if (currentThreat > maxHP * 0.3 && hpPercent < 50) {
-            debug("[EMERGENCY][THREAT] High threat (" + currentThreat + ") + medium HP (" + floor(hpPercent) + "%)")
-            return true
-        }
-
-        // Fallback: Legacy HP threshold (HP < 35% AND healing available)
+        // Default: HP < 35% AND any healing chip available
         if (hpPercent < 35) {
             var healChip = this.selectBestHealingChip(hpPercent)
             if (healChip != null) {
-                debug("[EMERGENCY][HP] Entering emergency mode (HP=" + floor(hpPercent) + "% " + healChip['name'] + " available)")
+                debug("[EMERGENCY] Entering emergency mode (HP=" + floor(hpPercent) + "% " + healChip['name'] + " available)")
                 return true
             }
-            debug("[EMERGENCY] Low HP (" + floor(hpPercent) + "%) but no healing chips available, threat=" + currentThreat)
+            debug("[EMERGENCY] Low HP (" + floor(hpPercent) + "%) but no healing chips available")
         }
 
         return false
@@ -1466,6 +1333,7 @@ class Strategy {
             else if (a.type == Action.ACTION_WEAPON_SWAP) {
                 debug("Swapping to weapon " + getWeaponName(a.weaponId))
                 setWeapon(a.weaponId)
+                this._currentWeaponId = a.weaponId  // Track weapon state
             }
             else if (a.type == Action.ACTION_DIRECT || a.type == Action.ACTION_DOT || a.type == Action.ACTION_DEBUFF) {
                 var currentPos = getCell()
@@ -1492,34 +1360,9 @@ class Strategy {
                 }
             }
             else if (a.type == Action.ACTION_TELEPORT) {
-                debug("Executing teleportation to cell " + a.targetCell + " chip=" + a.chip + " TP=" + getTP())
+                debug("Executing teleportation to cell " + a.targetCell)
                 if (a.chip == CHIP_TELEPORTATION) {
-                    var cooldown = getCooldown(a.chip, getEntity())
-                    var tpCost = getChipCost(a.chip)
-                    var currentPos = getCell()
-                    var dist = getCellDistance(currentPos, a.targetCell)
-
-                    debug("TELEPORTATION: cooldown=" + cooldown + " tpCost=" + tpCost + " havingTP=" + getTP())
-                    debug("TELEPORTATION: from=" + currentPos + " to=" + a.targetCell + " dist=" + dist)
-
-                    // Pre-flight checks
-                    var isObst = isObstacle(a.targetCell)
-                    var isEnt = isEntity(a.targetCell)
-                    debug("TELEPORTATION: target obstacle=" + isObst + " entity=" + isEnt)
-
-                    if (cooldown == 0 && getTP() >= tpCost) {
-                        if (isObst || isEnt) {
-                            debug("TELEPORTATION BLOCKED: target cell invalid (obstacle=" + isObst + " entity=" + isEnt + ")")
-                        } else if (dist == null || dist < 1 || dist > 12) {
-                            debug("TELEPORTATION BLOCKED: distance invalid (" + dist + ", need 1-12)")
-                        } else {
-                            // Use useChipOnCell for teleportation (targets a cell, not entity)
-                            var result = useChipOnCell(a.chip, a.targetCell)
-                            debug("TELEPORTATION result: " + result + " newPos=" + getCell())
-                        }
-                    } else {
-                        debug("TELEPORTATION FAILED: cooldown=" + cooldown + " TP=" + getTP() + "/" + tpCost)
-                    }
+                    useChip(a.chip, a.targetCell)
                 }
             }
         }
@@ -1538,111 +1381,30 @@ class Strategy {
     // ====================================================================
     // Validate all queued actions before execution
     // Remove invalid actions to prevent wasting TP/MP on impossible actions
-
-    // Find alternative cell for failed movement action
-    // Returns: alternative cell ID or -1 if no alternative found
-    findAlternativeMovementCell(originalCell, maxMP) {
-        debug("[VALIDATION][FALLBACK] Searching for alternative to cell " + originalCell + " (MP=" + maxMP + ")")
-
-        // Strategy 1: Find closest reachable cell in damage map
-        var bestAlt = this.findBestReachableDamageCell(maxMP)
-        if (bestAlt != null) {
-            debug("[VALIDATION][FALLBACK] Found reachable damage cell: " + bestAlt._id + " (damage=" + bestAlt._totalDamage + ")")
-            return bestAlt._id
-        }
-
-        // Strategy 2: Move as close as possible to original target
-        var path = getPath(player._cellPos, originalCell)
-        if (path != null && count(path) > 0) {
-            // Find furthest reachable cell on path
-            for (var i = count(path) - 1; i >= 0; i--) {
-                var cell = path[i]
-                if (cell == player._cellPos) continue
-                var dist = getPathLength(player._cellPos, cell)
-                if (dist != null && dist <= maxMP) {
-                    debug("[VALIDATION][FALLBACK] Found partial path cell: " + cell + " (dist=" + dist + ")")
-                    return cell
-                }
-            }
-        }
-
-        debug("[VALIDATION][FALLBACK] No alternative found")
-        return -1
-    }
-
+    
     validateAndFilterActions() {
         var validActions = []
         var initialActionCount = count(this._actions)
-        var fallbacksAdded = 0
-
+        
         debug("[VALIDATION] Starting validation of " + initialActionCount + " actions")
-
-        // Track simulated position for validation (movements update this)
-        var simulatedPos = player._cellPos
-
+        
         for (var i = 0; i < initialActionCount; i++) {
             var action = this._actions[i]
             var isValid = true
             var reason = ""
-
-            // Movement actions: validate before updating simulated position
-            if (action.type == Action.MOVEMENT_APPROACH ||
-                action.type == Action.MOVEMENT_OFFENSIVE ||
-                action.type == Action.MOVEMENT_DEFENSIVE ||
-                action.type == Action.MOVEMENT_OTKO ||
-                action.type == Action.MOVEMENT_DOT_OFFENSIVE ||
-                action.type == Action.MOVEMENT_DEBUFF ||
-                action.type == Action.MOVEMENT_FLEE ||
-                action.type == Action.MOVEMENT_HNS) {
-                // Validate movement: check path exists and MP sufficient
-                var path = getPath(simulatedPos, action.targetCell)
-                if (path != null && count(path) > 0) {
-                    var mpCost = count(path) - 1  // Path includes start cell
-                    if (mpCost <= player._currMp) {
-                        push(validActions, action)
-                        simulatedPos = action.targetCell  // Update simulated position
-                        debug("[VALIDATION] Movement to " + action.targetCell + " updates simulated pos (cost: " + mpCost + " MP)")
-                    } else {
-                        debug("[VALIDATION] Movement to " + action.targetCell + " requires " + mpCost + " MP but only have " + player._currMp + " - checking fallback")
-                        // Try to find alternative cell
-                        var altCell = this.findAlternativeMovementCell(action.targetCell, player._currMp)
-                        if (altCell != -1) {
-                            action.targetCell = altCell
-                            push(validActions, action)
-                            simulatedPos = altCell
-                            fallbacksAdded += 1
-                            debug("[VALIDATION] Added fallback movement to " + altCell + " (original: " + action.targetCell + ")")
-                        } else {
-                            debug("[VALIDATION] No fallback found, removing movement action")
-                        }
-                    }
-                } else {
-                    debug("[VALIDATION] No path from " + simulatedPos + " to " + action.targetCell + " - checking fallback")
-                    // Try to find alternative cell
-                    var altCell2 = this.findAlternativeMovementCell(action.targetCell, player._currMp)
-                    if (altCell2 != -1) {
-                        action.targetCell = altCell2
-                        push(validActions, action)
-                        simulatedPos = altCell2
-                        fallbacksAdded += 1
-                        debug("[VALIDATION] Added fallback movement to " + altCell2 + " (original unreachable)")
-                    } else {
-                        debug("[VALIDATION] No fallback found, removing movement action")
-                    }
-                }
-                continue
-            }
-
-            // Teleport actions: validate range and obstacles
-            if (action.type == Action.ACTION_TELEPORT) {
-                var distTele = getCellDistance(simulatedPos, action.targetCell)
-                if (distTele != null && distTele >= 1 && distTele <= 12 && !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
-                    push(validActions, action)
-                    simulatedPos = action.targetCell  // Update simulated position
-                    debug("[VALIDATION] Teleport to " + action.targetCell + " updates simulated pos (dist: " + distTele + ")")
-                } else {
-                    debug("[VALIDATION] Teleport to " + action.targetCell + " invalid (dist=" + distTele + " obstacle=" + isObstacle(action.targetCell) + ") - removing")
-                }
+            
+            // Skip validation for movement actions (position changes are dynamic and validated during movement)
+            if (action.actionType == Action.MOVEMENT_APPROACH || 
+                action.actionType == Action.MOVEMENT_OFFENSIVE ||
+                action.actionType == Action.MOVEMENT_DEFENSIVE ||
+                action.actionType == Action.MOVEMENT_OTKO ||
+                action.actionType == Action.MOVEMENT_DOT_OFFENSIVE ||
+                action.actionType == Action.MOVEMENT_DEBUFF ||
+                action.actionType == Action.MOVEMENT_FLEE ||
+                action.actionType == Action.MOVEMENT_HNS ||
+                action.actionType == Action.MOVEMENT_KITE ||
+                action.actionType == Action.MOVEMENT_APPROACH) {
+                push(validActions, action)
                 continue
             }
             
@@ -1666,24 +1428,24 @@ class Strategy {
             }
             
             // Validate TP availability and cooldown for chips
-            if (isValid && action.chip != -1) {
-                var chipCost = getChipCost(action.chip)
+            if (isValid && action.chipId != -1) {
+                var chipCost = getChipCost(action.chipId)
                 if (player._currTp < chipCost) {
                     isValid = false
                     reason = "Insufficient TP for chip: need " + chipCost + ", have " + player._currTp
                 }
-                else if (getCooldown(action.chip, player._id) > 0) {
+                else if (getCooldown(action.chipId, player._id) > 0) {
                     isValid = false
-                    reason = "Chip on cooldown: " + getChipName(action.chip)
+                    reason = "Chip on cooldown: " + getChipName(action.chipId)
                 }
             }
             
             // Validate range and LOS for attacks and buffs
-            if (isValid && (action.type == Action.ACTION_DIRECT ||
-                           action.type == Action.ACTION_DOT ||
-                           action.type == Action.ACTION_DEBUFF ||
-                           action.type == Action.ACTION_BUFF)) {
-                if (!this.validateActionRangeAndLOS(action, simulatedPos)) {
+            if (isValid && (action.actionType == Action.ACTION_DIRECT || 
+                           action.actionType == Action.ACTION_DOT ||
+                           action.actionType == Action.ACTION_DEBUFF ||
+                           action.actionType == Action.ACTION_BUFF)) {
+                if (!this.validateActionRangeAndLOS(action)) {
                     isValid = false
                     reason = "Out of range/LOS"
                 }
@@ -1693,32 +1455,81 @@ class Strategy {
             if (isValid) {
                 push(validActions, action)
             } else {
-                debug("[VALIDATION] Removing invalid action [" + action.type + "] " + reason)
+                debug("[VALIDATION] Removing invalid action [" + action.actionType + "] " + reason)
             }
         }
         
         var removedCount = initialActionCount - count(validActions)
-        if (removedCount > 0 || fallbacksAdded > 0) {
-            debug("[VALIDATION] Removed " + removedCount + " invalid actions, added " + fallbacksAdded + " fallbacks, " + count(validActions) + " total actions remaining")
+        if (removedCount > 0) {
+            debug("[VALIDATION] Removed " + removedCount + " invalid actions, " + 
+                  count(validActions) + " remaining")
         }
-
+        
         this._actions = validActions
     }
-
-    // Check if CHIP_ADRENALINE should be used tactically
-    // CHIP_ADRENALINE: 1 TP cost, +5 TP gain (net +4 TP)
-    // Use when short 1-4 TP for required action
-    shouldUseAdrenaline(requiredTP) {
-        if (!this.isChipAvailable(CHIP_ADRENALINE)) return false
-
-        var playerTP = player._currTp
-        // Only use if we're short of required TP by 1-4 points (Adrenaline gives +4 net TP)
-        var shortage = requiredTP - playerTP
-        if (shortage >= 1 && shortage <= 4) {
-            debug("[ADRENALINE] Short " + shortage + " TP (have " + playerTP + " need " + requiredTP + ") - using Adrenaline")
-            return true
+    
+    // Helper to validate range and LOS for an action
+    validateActionRangeAndLOS(action) {
+        var fromCell = player._cellPos
+        var toCell = action.targetCell
+        
+        if (toCell == -1) return true  // No target cell to validate
+        
+        // Get range based on weapon or chip
+        var minRange = 0
+        var maxRange = 999
+        
+        if (action.weaponId != -1) {
+            var weapon = arsenal.playerEquippedWeapons[action.weaponId]
+            if (weapon == null) return false
+            minRange = weapon._minRange
+            maxRange = weapon._maxRange
         }
-
-        return false
+        else if (action.chipId != -1) {
+            var chip = arsenal.playerEquippedChips[action.chipId]
+            if (chip == null) return false
+            minRange = chip._minRange
+            maxRange = chip._maxRange
+        }
+        
+        // Check distance
+        var dist = getCellDistance(fromCell, toCell)
+        if (dist == null) return false
+        if (dist < minRange || dist > maxRange) {
+            debug("[VALIDATION] Distance invalid: " + dist + " (need " + minRange + "-" + maxRange + ")")
+            return false
+        }
+        
+        // Check line of sight
+        if (!lineOfSight(fromCell, toCell)) {
+            debug("[VALIDATION] No line of sight from " + fromCell + " to " + toCell)
+            return false
+        }
+        
+        return true
+    }
+    
+    // Helper to check if player has resources for action
+    hasResourcesFor(action) {
+        var tpCost = 0
+        var mpCost = 0
+        
+        if (action.weaponId != -1) {
+            var weapon = arsenal.playerEquippedWeapons[action.weaponId]
+            if (weapon != null) tpCost += weapon._cost
+        }
+        
+        if (action.chipId != -1) {
+            tpCost += getChipCost(action.chipId)
+        }
+        
+        if (action.actionType == Action.MOVEMENT_OFFENSIVE || 
+            action.actionType == Action.MOVEMENT_HNS ||
+            action.actionType == Action.MOVEMENT_APPROACH) {
+            var pathLen = getPathLength(player._cellPos, action.targetCell)
+            if (pathLen != null && pathLen > player._currMp) return false
+        }
+        
+        return player._currTp >= tpCost
     }
 }

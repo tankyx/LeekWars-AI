@@ -161,6 +161,25 @@ class FieldMapPatterns extends FieldMapCore {
         }
     }
 
+    markChosenDestinationAndPath(playerPos, destinationCell) {
+        if (destinationCell != null && destinationCell != playerPos) {
+            var path = getPath(playerPos, destinationCell)
+            if (path != null) {
+                var pathLength = count(path)
+                if (pathLength > 0) {
+                    for (var pathCell in path) {
+                        if (pathCell != playerPos && pathCell != destinationCell) {
+                            var blueColor = getColor(100, 200, 255)
+                            mark(pathCell, blueColor, 2)
+                        }
+                    }
+                    var goldColor = getColor(255, 215, 0)
+                    mark(destinationCell, goldColor, 3)
+                }
+            }
+        }
+    }
+
     buildHitMap(oppCell) {
         // Cache key: enemyID_cellPosition
         var enemyId = getEntityOnCell(oppCell)
@@ -180,8 +199,6 @@ class FieldMapPatterns extends FieldMapCore {
 
         // Weapons - integrate directly into global damageMap
         this.integrateEquippedItemsIntoDamageMap(oppCell)
-        this.markLocalHits(this.damageMap, true)
-        this.markLocalHits(this.damageMap, false)
 
         // Summary diagnostics
         var chipCells = []
