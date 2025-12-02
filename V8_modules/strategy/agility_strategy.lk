@@ -199,7 +199,7 @@ class AgilityStrategy extends Strategy {
         var tacticalCell = fieldMap.findBestTacticalCell(playerMP, 0.4)  // Threat weighted 40% (less risk-averse than magic)
 
         var bestWeaponCell = -1
-        if (tacticalCell != null && tacticalCell._highestDamageWeapon != -1) {
+        if (tacticalCell != null && tacticalCell != -1 && tacticalCell._highestDamageWeapon != -1) {
             bestWeaponCell = tacticalCell
             debug("[AGILITY][TACTICAL] Using threat-aware positioning: cell=" + tacticalCell._id + " damage=" + tacticalCell._totalDamage + " threat=" + fieldMap.getThreatAtCell(tacticalCell._id))
         } else {
