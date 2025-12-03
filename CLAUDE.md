@@ -375,6 +375,64 @@ Abstract base class providing:
 
 ---
 
+## December 2025 Bug Fixes (Completed)
+
+### Critical Combat Bugs Fixed
+
+**Bug #1: Weapon Swap Validation Too Strict**
+- **Problem:** Validation was checking if player had full weapon cost (e.g., 9 TP for enhanced_lightninger) for weapon swap actions, instead of just 1 TP
+- **Impact:** After using FORTRESS (6 TP), weapon attacks were incorrectly removed during validation even when 16 TP remained
+- **Fix:** `base_strategy.lk:1671-1690`
+  - Separated weapon swap validation (requires 1 TP) from weapon attack validation (requires full cost)
+  - Added explicit check: `if (action.type == Action.ACTION_WEAPON_SWAP)`
+- **Result:** AI now correctly attacks after using defensive buffs
+
+**Bug #2: GRAPPLE-HEAVY_SWORD Syntax Error**
+- **Problem:** Used incorrect LeekScript API `useWeapon(weaponId, targetId)` which caused INVALID_PARAMETER_COUNT error
+- **Impact:** Combo failed to execute, causing script crashes
+- **Fix:** `strength_strategy.lk:645-646, 699-700`
+  - Changed from `useWeapon(WEAPON_HEAVY_SWORD, target._id)`
+  - To `setWeapon(WEAPON_HEAVY_SWORD)` + `useWeaponOnCell(target._cellPos)`
+- **Result:** Combo now executes successfully
+
+**Bug #3: Fighting Retreat Stranding**
+- **Problem:** `findBestReachableDamageCell()` picked highest damage cell without checking if escape route to safety was preserved
+- **Impact:** AI moved to high-damage cells (e.g., cell 170 with 1274 damage) but couldn't reach safe cell afterward, getting stranded in enemy threat zone
+- **Example:** Cell 136 → move to 170 (2 MP) → attack → 5 MP remaining, but safe cell 157 requires 13+ MP
+- **Fix:** `base_strategy.lk:620-674, 1367`
+  - Created new method `findDamageCellOnEscapeRoute(safeCell, maxMP)`
+  - Gets path from current position to safe cell
+  - Only considers damage cells ON this path
+  - Validates: `remainingMP >= distToSafeFromHere` before selecting cell
+  - Ensures escape route is preserved after stopping to attack
+- **Result:** AI now attacks from cells that maintain path to safety, preventing tactical stranding
+
+### Changes Made
+
+**File: V8_modules/strategy/base_strategy.lk**
+1. **Weapon Swap Validation** (lines 1671-1690)
+   - Split validation logic for weapon swaps vs weapon attacks
+   - Weapon swaps now correctly require 1 TP instead of full weapon cost
+
+2. **Fighting Retreat Escape Route** (lines 620-674)
+   - New method `findDamageCellOnEscapeRoute(safeCell, maxMP)`
+   - Replaced `findBestReachableDamageCell()` call with escape-route-aware version
+   - Validates remaining MP can reach safe cell after attacking
+
+**File: V8_modules/strategy/strength_strategy.lk**
+1. **GRAPPLE-HEAVY_SWORD API Fix** (lines 645-646, 699-700)
+   - Fixed `useWeapon()` syntax to use correct LeekScript 4 API
+   - Changed to `setWeapon() + useWeaponOnCell()` pattern
+
+### Testing Results
+- All modules compile without errors
+- GRAPPLE-HEAVY_SWORD combo executes successfully
+- Weapon attacks now trigger after FORTRESS/defensive buffs
+- Fighting retreat preserves escape route to safety
+- No tactical stranding in emergency scenarios
+
+---
+
 ## V8 Strategy Analysis & Improvement Plan
 
 ### Strategy Performance Matrix
@@ -741,6 +799,6 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 ---
 
-**Script ID:** 447461 (V8 main.lk - Current production, January 2026)
+**Script ID:** 447626 (V8 main.lk - Current production, December 2025)
 
-*Document Version: 25.0 | Last Updated: February 3, 2026 - Week 2 Implementation Complete*
+*Document Version: 26.0 | Last Updated: December 3, 2025 - Critical Bug Fixes Complete*
