@@ -407,6 +407,22 @@ Abstract base class providing:
   - Ensures escape route is preserved after stopping to attack
 - **Result:** AI now attacks from cells that maintain path to safety, preventing tactical stranding
 
+**Bug #4: Magic Strategy Validation Failure (MP=-1)**
+- **Problem:** Magic strategy's `createAndExecuteDotKite()` never initialized `this._originalTP` and `this._originalMP`, leaving them at default value -1
+- **Impact:** Validation system read MP=-1, causing all actions to fail validation checks with "requires X MP but only have -1" errors. Magic AI couldn't move or attack - completely broken.
+- **Fix:** `magic_strategy.lk:90-91`
+  - Added initialization at start of `createAndExecuteDotKite()`: `this._originalTP = player._currTp` and `this._originalMP = player._currMp`
+  - Removed obsolete manual restoration code that was trying to work around the missing initialization
+- **Result:** Magic strategy validation now works correctly, actions execute as planned
+
+**Bug #5: Strength Strategy updateEntity() Parameter Error**
+- **Problem:** Called `target.updateEntity(target._id)` with parameter, but `updateEntity()` method takes no parameters
+- **Impact:** Script crashed with "NoSuchFieldException: updateEntity" error after GRAPPLE-HEAVY_SWORD combo execution
+- **Fix:** `strength_strategy.lk:696, 786`
+  - Changed from `target.updateEntity(target._id)` to `target.updateEntity()`
+  - Fixed both occurrences in GRAPPLE-HEAVY_SWORD combo execution
+- **Result:** Combo executes without errors, enemy position updates correctly after GRAPPLE pull
+
 ### Changes Made
 
 **File: V8_modules/strategy/base_strategy.lk**
@@ -424,12 +440,25 @@ Abstract base class providing:
    - Fixed `useWeapon()` syntax to use correct LeekScript 4 API
    - Changed to `setWeapon() + useWeaponOnCell()` pattern
 
+2. **updateEntity() Parameter Error** (lines 696, 786)
+   - Removed incorrect parameter from `updateEntity()` calls
+   - Changed from `target.updateEntity(target._id)` to `target.updateEntity()`
+   - Method signature takes no parameters
+
+**File: V8_modules/strategy/magic_strategy.lk**
+1. **Validation Initialization** (lines 90-91)
+   - Added `this._originalTP = player._currTp` and `this._originalMP = player._currMp` at start of `createAndExecuteDotKite()`
+   - Ensures validation system has correct starting resources
+   - Removed obsolete manual restoration attempt (lines 389-391 deleted)
+
 ### Testing Results
 - All modules compile without errors
-- GRAPPLE-HEAVY_SWORD combo executes successfully
+- GRAPPLE-HEAVY_SWORD combo executes successfully without crashes
 - Weapon attacks now trigger after FORTRESS/defensive buffs
 - Fighting retreat preserves escape route to safety
 - No tactical stranding in emergency scenarios
+- Magic strategy validation now works correctly (actions no longer removed)
+- Magic AI can move, attack, and execute full combat strategy
 
 ---
 
@@ -801,4 +830,4 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 **Script ID:** 447626 (V8 main.lk - Current production, December 2025)
 
-*Document Version: 26.0 | Last Updated: December 3, 2025 - Critical Bug Fixes Complete*
+*Document Version: 27.0 | Last Updated: December 3, 2025 - Magic & Strength Strategy Bug Fixes*

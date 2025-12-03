@@ -86,6 +86,10 @@ class MagicStrategy extends Strategy {
     createAndExecuteDotKite(target, targetHitCell) {
         arrayClear(this._actions)
 
+        // Save original TP/MP before planning phase (for validation simulation)
+        this._originalTP = player._currTp
+        this._originalMP = player._currMp
+
         // Check if we should use defensive scenario instead (low HP + healing available)
         var hpPercent = (getLife() * 100) / getTotalLife()
         var healChip = this.selectBestHealingChip(hpPercent)
@@ -118,10 +122,6 @@ class MagicStrategy extends Strategy {
 
         // Track planned offensive movement cell for fallback
         var plannedOffensiveCell = -1
-
-        // Save starting TP/MP for validation (planning modifies these but validation needs originals)
-        var startingTP = player._currTp
-        var startingMP = player._currMp
 
         var poisonActive = target.hasEffect(EFFECT_POISON)
         var poisonRemaining = target.getEffectRemaining(EFFECT_POISON)
@@ -386,11 +386,7 @@ class MagicStrategy extends Strategy {
 
         debug("[DoT-KITE] Actions scheduled=" + count(this._actions) + " TP_end=" + player._currTp)
 
-        // Restore starting TP/MP for validation (planning used these for tracking but validation needs originals)
-        player._currTp = startingTP
-        player._currMp = startingMP
-
-        // Execute planned actions
+        // Execute planned actions (validation uses this._originalTP/MP set at method start)
         var actionCountBefore = count(this._actions)
         this.executeScenario()
 

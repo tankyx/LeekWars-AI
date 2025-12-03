@@ -693,7 +693,7 @@ class StrengthStrategy extends Strategy {
         player._currTp -= 3
 
         // Update enemy position after GRAPPLE
-        target.updateEntity(target._id)
+        target.updateEntity()
 
         // Execute HEAVY_SWORD immediately (enemy should now be adjacent)
         setWeapon(WEAPON_HEAVY_SWORD)
@@ -783,7 +783,7 @@ class StrengthStrategy extends Strategy {
                     comboExecuted = true  // FLAG: Skip weapon cell recalculation
 
                     // Update target position after GRAPPLE pull
-                    target.updateEntity(target._id)
+                    target.updateEntity()
 
                     // Continue with remaining TP for weapon spam
                 } else {
