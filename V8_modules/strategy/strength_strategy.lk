@@ -635,22 +635,21 @@ class StrengthStrategy extends Strategy {
         return false
     }
 
-    // Execute GRAPPLE-HEAVY_SWORD combo (immediate execution pattern)
+    // Execute GRAPPLE-HEAVY_SWORD combo immediately (not queued to avoid validation issues)
     executeGrappleHeavySwordCombo(target) {
-        var playerTP = player._currTp
         var dist = getCellDistance(player._cellPos, target._cellPos)
 
-        // Case 1: Enemy already adjacent - skip GRAPPLE
+        // Case 1: Enemy already adjacent - skip GRAPPLE, use HEAVY_SWORD only
         if (dist == 1) {
-            debug("[STR][GRAPPLE-HS] Enemy already adjacent, using HEAVY_SWORD directly")
+            debug("[STR][GRAPPLE-HS] Enemy already adjacent, using HEAVY_SWORD only")
             setWeapon(WEAPON_HEAVY_SWORD)
             useWeaponOnCell(target._cellPos)
             player._currTp -= 15
-            debug("[STR][GRAPPLE-HS] Used HEAVY_SWORD (60 vulnerability applied)")
+            debug("[STR][GRAPPLE-HS] HEAVY_SWORD executed (60 vulnerability), TP remaining: " + player._currTp)
             return true
         }
 
-        // Case 2: Use GRAPPLE combo
+        // Case 2: Enemy at range 2-8, use full GRAPPLE combo
         // Calculate target cell for GRAPPLE: adjacent to player on same axis toward enemy
         var playerX = getCellX(player._cellPos)
         var playerY = getCellY(player._cellPos)
@@ -662,20 +661,20 @@ class StrengthStrategy extends Strategy {
         if (playerY == enemyY) {
             // Horizontal alignment - enemy on same row
             if (enemyX < playerX) {
-                // Enemy is to the left - target RIGHT of player (opposite side)
-                grappleCell = getCellFromXY(playerX + 2, playerY)
+                // Enemy is to the left - target 1 cell LEFT of player (toward enemy)
+                grappleCell = getCellFromXY(playerX - 1, playerY)
             } else {
-                // Enemy is to the right - target LEFT of player (opposite side)
-                grappleCell = getCellFromXY(playerX - 2, playerY)
+                // Enemy is to the right - target 1 cell RIGHT of player (toward enemy)
+                grappleCell = getCellFromXY(playerX + 1, playerY)
             }
         } else if (playerX == enemyX) {
             // Vertical alignment - enemy on same column
             if (enemyY < playerY) {
-                // Enemy is above - target BELOW player (opposite side)
-                grappleCell = getCellFromXY(playerX, playerY + 2)
+                // Enemy is above - target 1 cell ABOVE player (toward enemy)
+                grappleCell = getCellFromXY(playerX, playerY - 1)
             } else {
-                // Enemy is below - target ABOVE player (opposite side)
-                grappleCell = getCellFromXY(playerX, playerY - 2)
+                // Enemy is below - target 1 cell BELOW player (toward enemy)
+                grappleCell = getCellFromXY(playerX, playerY + 1)
             }
         }
 
@@ -687,38 +686,21 @@ class StrengthStrategy extends Strategy {
 
         var alignment = (playerY == enemyY) ? "horizontal" : "vertical"
         debug("[STR][GRAPPLE-HS] Player at (" + playerX + "," + playerY + ") Enemy at (" + enemyX + "," + enemyY + ") Alignment: " + alignment)
-        debug("[STR][GRAPPLE-HS] Using GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell + " (opposite side of player)")
-        var grappleResult = useChipOnCell(CHIP_GRAPPLE, grappleCell)
-        if (grappleResult < 0) {
-            debug("[STR][GRAPPLE-HS] ERROR: GRAPPLE failed with result " + grappleResult + " - aborting combo")
-            return false
-        }
+        debug("[STR][GRAPPLE-HS] Executing GRAPPLE to pull enemy from range " + dist + " toward cell " + grappleCell)
+
+        // Execute GRAPPLE immediately
+        useChipOnCell(CHIP_GRAPPLE, grappleCell)
         player._currTp -= 3
 
         // Update enemy position after GRAPPLE
-        target.updateEntity()
-        var newEnemyPos = target._cellPos
-        var distAfterGrapple = getCellDistance(player._cellPos, newEnemyPos)
-        debug("[STR][GRAPPLE-HS] Enemy pulled to: " + newEnemyPos + " (distance from player: " + distAfterGrapple + ")")
+        target.updateEntity(target._id)
 
-        // Verify enemy is now adjacent
-        if (distAfterGrapple != 1) {
-            debug("[STR][GRAPPLE-HS] ERROR: Enemy not at range 1 after GRAPPLE (dist=" + distAfterGrapple + ")")
-            return false
-        }
-
-        debug("[STR][GRAPPLE-HS] GRAPPLE successful, enemy now at range 1")
-
-        // Use HEAVY_SWORD
+        // Execute HEAVY_SWORD immediately (enemy should now be adjacent)
         setWeapon(WEAPON_HEAVY_SWORD)
-        var heavySwordResult = useWeaponOnCell(newEnemyPos)
-        if (heavySwordResult < 0) {
-            debug("[STR][GRAPPLE-HS] ERROR: HEAVY_SWORD failed with result " + heavySwordResult)
-            return false
-        }
+        useWeaponOnCell(target._cellPos)
         player._currTp -= 15
 
-        debug("[STR][GRAPPLE-HS] Combo complete! 60 absolute vulnerability applied, TP remaining: " + player._currTp)
+        debug("[STR][GRAPPLE-HS] Combo executed: GRAPPLE → HEAVY_SWORD (60 vulnerability), TP remaining: " + player._currTp)
         return true
     }
 
@@ -782,42 +764,30 @@ class StrengthStrategy extends Strategy {
             getCooldown(CHIP_GRAPPLE, getEntity()) == 0 &&
             player._currTp >= 18) {
 
-            comboAttempted = true  // Set flag: combo will be attempted (MP committed to positioning)
-
+            // Check if already in combo position (dist 1-8, aligned on same line)
             var currentDist = getCellDistance(player._cellPos, target._cellPos)
             var currentlyAligned = this.isOnSameLine(player._cellPos, target._cellPos)
 
-            // Only search for position if NOT already in combo range + aligned
-            if (currentDist == null || currentDist > 8 || currentDist < 2 || !currentlyAligned) {
-                debug("[STR][GRAPPLE-HS] Not in combo position (dist=" + currentDist + " aligned=" + currentlyAligned + "), searching for better cell")
-                var comboCell = this.findGrappleHeavySwordCell(target)
-
-                if (comboCell != -1) {
-                    var pathLen = getPathLength(player._cellPos, comboCell)
-                    if (pathLen != null && pathLen <= player._currMp) {
-                        debug("[STR][GRAPPLE-HS] Moving to combo position: cell " + comboCell + " (cost: " + pathLen + " MP)")
-                        this.createMovementAction(Action.MOVEMENT_APPROACH, comboCell, target)
-                        player._currMp -= pathLen
-                        player._cellPos = comboCell  // Update virtual position for combo execution
-                        debug("[STR][GRAPPLE-HS] Repositioned successfully, ready for combo")
-                    } else {
-                        debug("[STR][GRAPPLE-HS] Combo cell too far (pathLen=" + pathLen + " MP=" + player._currMp + ")")
-                    }
-                } else {
-                    debug("[STR][GRAPPLE-HS] No valid combo position found")
-                }
+            // Only execute combo if already in valid position (no repositioning - combo uses immediate execution)
+            if (currentDist != null && currentDist >= 1 && currentDist <= 8 && currentlyAligned) {
+                debug("[STR][GRAPPLE-HS] In combo position (dist=" + currentDist + " aligned=true), will execute combo")
+                comboAttempted = true  // Set flag: combo will be attempted
             } else {
-                debug("[STR][GRAPPLE-HS] Already in combo range (dist=" + currentDist + "), will execute directly")
+                debug("[STR][GRAPPLE-HS] Not in combo position (dist=" + currentDist + " aligned=" + currentlyAligned + "), skipping combo")
             }
 
-            // Execute combo immediately after positioning
+            // Execute combo immediately (not queued to avoid validation issues with position changes)
             if (this.shouldUseGrappleHeavySword(target)) {
                 if (this.executeGrappleHeavySwordCombo(target)) {
                     debug("[STR] GRAPPLE-HEAVY_SWORD combo executed successfully")
                     comboExecuted = true  // FLAG: Skip weapon cell recalculation
-                    // Continue to weapon spam to capitalize on vulnerability
+
+                    // Update target position after GRAPPLE pull
+                    target.updateEntity(target._id)
+
+                    // Continue with remaining TP for weapon spam
                 } else {
-                    debug("[STR] GRAPPLE-HEAVY_SWORD combo failed")
+                    debug("[STR] GRAPPLE-HEAVY_SWORD combo execution failed")
                 }
             }
         }
@@ -949,8 +919,9 @@ class StrengthStrategy extends Strategy {
             // Add hide-and-seek repositioning with remaining MP
             var hnsCell = fieldMap.findHideAndSeekCell("defensive", target)
             if (hnsCell != -1 && hnsCell != null) {
-                debug("[STR][COMBO] Moving to hide-and-seek cell: " + hnsCell)
-                this.createMovementAction(Action.MOVEMENT_HNS, hnsCell, target)
+                var hideCellId = hnsCell['cell']
+                debug("[STR][COMBO] Moving to hide-and-seek cell: " + hideCellId + " (danger=" + hnsCell['danger'] + ")")
+                this.createMovementAction(Action.MOVEMENT_HNS, hideCellId, target)
             }
 
             debug("[STR] Combo offensive complete. Remaining TP: " + player._currTp + ", MP: " + player._currMp)
