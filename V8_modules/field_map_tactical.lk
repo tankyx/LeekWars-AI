@@ -354,6 +354,18 @@ class FieldMap extends FieldMapPatterns {
             return
         }
 
+        // PERFORMANCE: Skip threat map if total enemy MP is very high (too expensive)
+        var totalEnemyMP = 0
+        for (var eid in mapKeys(enemies)) {
+            var enemy = enemies[eid]
+            if (!isDead(eid)) totalEnemyMP += enemy._currMp
+        }
+        if (totalEnemyMP > 20) {
+            debug("[THREAT-MAP] SKIPPED - Total enemy MP too high (" + totalEnemyMP + ") - operations limit risk")
+            this._threatMapCacheTurn = currentTurn
+            return
+        }
+
         for (var eid in mapKeys(enemies)) {
             var enemy = enemies[eid]
             if (isDead(eid)) continue
@@ -371,6 +383,7 @@ class FieldMap extends FieldMapPatterns {
     }
 
     // Add single enemy's threat to map (movement + attack ranges)
+    // OPTIMIZED: Use simplified calculation to avoid operations limit
     addEnemyThreatToMap(enemy) {
         var enemyPos = enemy._cellPos
         var enemyMP = enemy._currMp
@@ -378,35 +391,45 @@ class FieldMap extends FieldMapPatterns {
 
         debug("[THREAT-MAP] Processing enemy " + getName(enemy._id) + " at cell " + enemyPos + " (MP=" + enemyMP + ", weapons=" + count(enemyWeapons) + ")")
 
-        // STEP 1: Get all cells enemy can move to
-        var movementCells = this.getReachableCellsWithinMP(enemyPos, enemyMP)
-        debug("[THREAT-MAP]   Enemy can reach " + count(movementCells) + " cells")
-
         var totalThreats = 0
 
-        // STEP 2: From each movement position, calculate attack ranges
-        for (var i = 0; i < count(movementCells); i++) {
-            var moveCell = movementCells[i]
+        // OPTIMIZED: Calculate threat from CURRENT position with extended weapon ranges
+        // Instead of calculating from ALL movement positions (too expensive)
+        // We extend weapon max range by enemy MP (approximates "move then shoot")
+        for (var j = 0; j < count(enemyWeapons); j++) {
+            var weaponId = enemyWeapons[j]
+            var minRange = getWeaponMinRange(weaponId)
+            var maxRange = getWeaponMaxRange(weaponId) + enemyMP  // Extend by movement range
+            var area = getWeaponArea(weaponId)
 
-            // For each weapon, calculate which cells can be attacked from moveCell
-            for (var j = 0; j < count(enemyWeapons); j++) {
-                var weaponId = enemyWeapons[j]
-                var attackCells = this.getCellsInWeaponRange(moveCell, weaponId, enemy)
+            // Estimate damage for this weapon
+            var damage = this.estimateEnemyWeaponDamage(weaponId, enemy)
 
-                // Estimate damage for this weapon
-                var damage = this.estimateEnemyWeaponDamage(weaponId, enemy)
+            // Cap search radius to avoid excessive operations
+            var searchRadius = min(maxRange, 10)
 
-                // Mark all attackable cells as threatened
-                for (var k = 0; k < count(attackCells); k++) {
-                    var targetCell = attackCells[k]
+            // Check cells in extended weapon range
+            for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+                for (var dy = -searchRadius; dy <= searchRadius; dy++) {
+                    var cellId = enemyPos + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
+                    if (cellId < 0 || cellId >= FieldMap.board_cell_count) continue
 
-                    if (!mapContainsKey(this.enemyThreatMap, targetCell)) {
-                        this.enemyThreatMap[targetCell] = 0
+                    var dist = getCellDistance(enemyPos, cellId)
+                    if (dist == null || dist > maxRange) continue
+
+                    // Skip cells too close (enemy would need to back up first)
+                    if (dist < minRange && dist < enemyMP) continue
+
+                    // For laser weapons, approximate LOS (skip detailed check to save ops)
+                    // For circle weapons, assume can hit if in range
+
+                    if (!mapContainsKey(this.enemyThreatMap, cellId)) {
+                        this.enemyThreatMap[cellId] = 0
                     }
 
                     // Use MAX threat (enemy will position for best shot)
-                    if (damage > this.enemyThreatMap[targetCell]) {
-                        this.enemyThreatMap[targetCell] = damage
+                    if (damage > this.enemyThreatMap[cellId]) {
+                        this.enemyThreatMap[cellId] = damage
                         totalThreats++
                     }
                 }

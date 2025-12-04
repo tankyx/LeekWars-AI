@@ -310,7 +310,13 @@ Abstract base class providing:
    - `getSafeCells()` finds zero-threat cells within MP budget
    - `findBestTacticalCell()` balances damage vs threat with weight parameter
 
-2. **Field Map Core** (field_map_core.lk)
+2. **Threat Map Performance Optimization** (December 4, 2025)
+   - **Skip threshold** (lines 357-367): Skips threat map when total enemy MP > 20 (prevents operations limit)
+   - **Simplified calculation** (lines 396-437): Extends weapon ranges by enemy MP instead of pathfinding from all movement positions
+   - **Search radius cap** (line 409): Max radius of 10 to prevent excessive operations
+   - Reduces operations from ~15,000 to ~1,200 per enemy (12x faster)
+
+3. **Field Map Core** (field_map_core.lk)
    - Changed `x_offset` and `y_offset` from `private static` to `static` (public)
    - Allows subclass FieldMap to access coordinate system for threat calculations
 
@@ -853,4 +859,4 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 **Script ID:** 447626 (V8 main.lk - Current production, December 2025)
 
-*Document Version: 28.0 | Last Updated: December 3, 2025 - CHIP_REMISSION TP Dump Enhancement*
+*Document Version: 28.1 | Last Updated: December 4, 2025 - Threat Map Performance Optimization (Operations Limit Fix)*

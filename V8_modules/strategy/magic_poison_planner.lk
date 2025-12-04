@@ -8,7 +8,7 @@ class PoisonPlanner {
     // Plan best reachable cell to maximize stacked poison DoT value
     // Returns map: ['cell': Cell, 'chips': poisonChipsArray, 'weapons': weaponArray]
     static selectBestPoisonCell(target) {
-        var verbosePlan = false
+        var verbosePlan = false  // Enable to debug chip planning
         var bestCell = -1
         var bestAdjustedScore = -1
         var bestChips = []
@@ -166,21 +166,24 @@ class PoisonPlanner {
                 }
             }
 
-            // Skip if weapon preferred but none scheduled
-            if (weaponPreferred && requireWeaponIfAvailable && count(weaponPlan) == 0) {
-                if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipNoWeapon id=" + c._id)
-                continue
-            }
+            // Allow chip-only cells (removed strict weapon requirement)
+            // Old logic skipped cells without weapons, preventing chip usage
+            // Now we only skip if BOTH weapons and chips are empty after planning
 
             // CHIP FOLLOW-UP: Spend remaining TP on poison chips
             if (c._chipsList != null) {
+                if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] Processing " + count(c._chipsList) + " chips, remainingTP=" + remainingTP)
                 var localPoisonChips = []
                 for (var lc = 0; lc < count(c._chipsList); lc++) {
                     var chipObj = c._chipsList[lc]
                     if (chipObj == null) continue
                     var bdChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
-                    if (bdChip['dot'] <= 0) continue
+                    if (bdChip['dot'] <= 0) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] Skipping " + getChipName(chipObj._id) + " (no DoT)")
+                        continue
+                    }
                     push(localPoisonChips, ['chip': chipObj, 'total': bdChip['total'], 'bd': bdChip])
+                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] Added " + getChipName(chipObj._id) + " to poison chips (dot=" + bdChip['dot'] + ")")
                 }
 
                 // Sort by total damage desc
@@ -210,46 +213,68 @@ class PoisonPlanner {
                     }
                 }
 
+                if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] Sorted " + count(localPoisonChips) + " poison chips, starting allocation with TP=" + remainingTP)
                 for (var lpc = 0; lpc < count(localPoisonChips); lpc++) {
-                    if (remainingTP <= 0) break
+                    if (remainingTP <= 0) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] Breaking chip loop: no TP remaining")
+                        break
+                    }
                     var recC = localPoisonChips[lpc]
                     var pc = recC['chip']
+                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] Evaluating " + getChipName(pc._id) + " cost=" + pc._cost + " TP=" + remainingTP + " CD=" + getCooldown(pc._id, player._id))
                     if (getCooldown(pc._id, player._id) > 0) {
                         if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipCD=" + getChipName(pc._id))
                         continue
                     }
                     if (remainingTP < pc._cost) {
-                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipTP=" + getChipName(pc._id))
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipTP=" + getChipName(pc._id) + " need=" + pc._cost + " have=" + remainingTP)
                         continue
                     }
 
                     if (!PoisonPlanner.inRangeAndLOS(c._id, target._cellPos, pc._minRange, pc._maxRange)) {
-                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipGeometry=" + getChipName(pc._id))
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipGeometry=" + getChipName(pc._id) + " from=" + c._id + " to=" + target._cellPos)
                         continue
                     }
 
                     var bdC2 = recC['bd']
-                    var maxUsesChip2 = min(pc._maxUse, floor(remainingTP / pc._cost))
-                    if (maxUsesChip2 <= 0) {
-                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipZeroUses=" + getChipName(pc._id))
+                    // DoT chips (poison) are single-use per turn, direct damage chips are spammable
+                    var chipUses = 1
+                    if (bdC2['dot'] > 0) {
+                        // Poison chips: single-use (can't stack same poison multiple times)
+                        chipUses = 1
+                    } else {
+                        // Direct damage chips: spammable like weapons
+                        chipUses = floor(remainingTP / pc._cost)
+                    }
+
+                    if (chipUses <= 0 || remainingTP < pc._cost) {
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] skipChipZeroUses=" + getChipName(pc._id) + " (insufficient TP)")
                         continue
                     }
 
-                    score += maxUsesChip2 * bdC2['total']
+                    score += chipUses * bdC2['total']
                     push(chipPlan, pc)
-                    remainingTP -= maxUsesChip2 * pc._cost
-                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] +Chip " + getChipName(pc._id) + " uses=" + maxUsesChip2 + " add=" + floor(maxUsesChip2 * bdC2['total']) + " TP_left=" + remainingTP)
+                    remainingTP -= chipUses * pc._cost
+                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] +Chip " + getChipName(pc._id) + " uses=" + chipUses + " add=" + floor(chipUses * bdC2['total']) + " TP_left=" + remainingTP)
                 }
             }
 
-            // Penalty if weapon preferred but only chips scheduled
+            // Small penalty if weapon preferred but only chips scheduled
+            // Reduced from 15% to 5% to allow chip-focused strategies
             if (weaponPreferred && count(weaponPlan) == 0 && count(chipPlan) > 0) {
-                var penaltySafe = score * penaltyNoWeaponFactor
+                var penaltySafe = score * 0.05  // Reduced from penaltyNoWeaponFactor (0.15)
                 score -= penaltySafe
                 if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] penaltyNoWeapon cell=" + c._id + " penalty=" + floor(penaltySafe))
             }
 
             if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] finalScore=" + floor(score) + " chips=" + count(chipPlan) + " weapons=" + count(weaponPlan) + " TP_rem=" + remainingTP)
+            if (verbosePlan && count(chipPlan) > 0) {
+                var chipNames = ""
+                for (var dbgC = 0; dbgC < count(chipPlan); dbgC++) {
+                    chipNames += (dbgC > 0 ? ", " : "") + getChipName(chipPlan[dbgC]._id)
+                }
+                debug("[DoT-KITE][PLAN][CELL] Chips in plan: " + chipNames)
+            }
 
             // Distance penalty (heavier if staying cell already viable)
             var distFactor = stayHighDot ? 7 : 5
@@ -267,6 +292,62 @@ class PoisonPlanner {
                     debug("[DoT-KITE][PLAN][BEST] cell=" + c._id + " rawScore=" + floor(score) + " adjScore=" + floor(adjustedScore) + " pathLen=" + pathLen + " penalty=" + distancePenalty + " stayHighDot=" + stayHighDot)
                 }
             }
+        }
+
+        // Fallback: If no cells reachable, try using chips from current position
+        if (bestCell == -1) {
+            if (verbosePlan) debug("[DoT-KITE][PLAN][FALLBACK] No cells within " + mpAvail + " MP, checking current position " + playerPos)
+            if (mapContainsKey(fieldMap.damageMap, playerPos)) {
+                var currCell = fieldMap.damageMap[playerPos]
+                var currChipPlan = []
+                var remainingTP = tpAvail
+
+                // Try to use poison chips from current position
+                if (currCell._chipsList != null) {
+                    var localPoisonChips = []
+                    for (var lc = 0; lc < count(currCell._chipsList); lc++) {
+                        var chipObj = currCell._chipsList[lc]
+                        if (chipObj == null) continue
+                        var bdChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
+                        if (bdChip['dot'] <= 0) continue
+                        push(localPoisonChips, ['chip': chipObj, 'total': bdChip['total'], 'bd': bdChip])
+                    }
+
+                    // Sort by total damage desc
+                    for (var ii = 0; ii < count(localPoisonChips); ii++) {
+                        var bestIdx = ii
+                        for (var jj = ii + 1; jj < count(localPoisonChips); jj++) {
+                            if (localPoisonChips[jj]['total'] > localPoisonChips[bestIdx]['total']) bestIdx = jj
+                        }
+                        if (bestIdx != ii) {
+                            var tmp = localPoisonChips[ii]
+                            localPoisonChips[ii] = localPoisonChips[bestIdx]
+                            localPoisonChips[bestIdx] = tmp
+                        }
+                    }
+
+                    // Add chips that fit TP budget
+                    for (var lpc = 0; lpc < count(localPoisonChips); lpc++) {
+                        var rec = localPoisonChips[lpc]
+                        var pc = rec['chip']
+                        if (remainingTP < pc._cost) continue
+                        if (getCooldown(pc._id, player._id) > 0) continue
+                        // Check range and LOS inline (static class has no 'this')
+                        var dist = getCellDistance(playerPos, target._cellPos)
+                        if (dist == null || dist < pc._minRange || dist > pc._maxRange) continue
+                        if (!lineOfSight(playerPos, target._cellPos)) continue
+                        push(currChipPlan, pc)
+                        remainingTP -= pc._cost
+                        if (verbosePlan) debug("[DoT-KITE][PLAN][FALLBACK] Added " + getChipName(pc._id) + " from current pos")
+                    }
+                }
+
+                if (count(currChipPlan) > 0) {
+                    if (verbosePlan) debug("[DoT-KITE][PLAN][FALLBACK] Using " + count(currChipPlan) + " chips from current position")
+                    return ['cell': currCell, 'chips': currChipPlan, 'weapons': []]
+                }
+            }
+            if (verbosePlan) debug("[DoT-KITE][PLAN][FALLBACK] No chips available from current position")
         }
 
         if (bestCell == -1) return null
