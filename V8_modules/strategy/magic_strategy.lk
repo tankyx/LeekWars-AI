@@ -678,6 +678,16 @@ class MagicStrategy extends Strategy {
             }
         }
 
+        // Use CHIP_REMISSION as TP dump (instant heal, 5 TP)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
+            if (getCooldown(CHIP_REMISSION, player._id) == 0 && player._currTp >= 5) {
+                push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, player._cellPos, player))
+                player._currTp -= 5
+                willAttack = true
+                debug("[MAGIC][REMISSION] Used CHIP_REMISSION as TP dump (5 TP, heal ~100-150 HP)")
+            }
+        }
+
         context['willAttack'] = willAttack
         context['plannedWeapon'] = plannedWeapon
     }

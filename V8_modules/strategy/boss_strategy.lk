@@ -802,5 +802,13 @@ class BossFightStrategy extends Strategy {
         // Place crystal
         var playerPos = getCell()
         this.placeCrystal(playerPos, myCrystal, grailPos, crystals)
+
+        // Use CHIP_REMISSION as TP dump (instant heal, 5 TP)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
+            if (getCooldown(CHIP_REMISSION, player._id) == 0 && getTP() >= 5) {
+                useChip(CHIP_REMISSION, player._id)
+                debug("[BOSS][REMISSION] Used CHIP_REMISSION as TP dump (5 TP, heal ~100-150 HP)")
+            }
+        }
     }
 }

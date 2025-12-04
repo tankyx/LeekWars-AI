@@ -1275,6 +1275,15 @@ class Strategy {
             }
         }
 
+        // Use CHIP_REMISSION as TP dump (instant heal, 5 TP)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
+            if (getCooldown(CHIP_REMISSION, player._id) == 0 && playerTP >= 5) {
+                push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, player._cellPos, player))
+                playerTP -= 5
+                debug("[" + debugPrefix + "][REMISSION] Used CHIP_REMISSION as TP dump (5 TP, heal ~100-150 HP)")
+            }
+        }
+
         return ['playerMP': playerMP, 'playerTP': playerTP]
     }
 

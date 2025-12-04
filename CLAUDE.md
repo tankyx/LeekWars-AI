@@ -460,6 +460,29 @@ Abstract base class providing:
 - Magic strategy validation now works correctly (actions no longer removed)
 - Magic AI can move, attack, and execute full combat strategy
 
+### Enhancement: CHIP_REMISSION TP Dump (December 3, 2025)
+
+**Feature:** Added CHIP_REMISSION as automatic TP dump across all strategies
+- **Purpose:** Spend remaining TP productively on instant healing instead of wasting it
+- **Cost:** 5 TP per use
+- **Benefit:** ~100-150 HP instant heal (scales with wisdom)
+- **Trigger:** Applied at end of combat actions when TP >= 5 and chip off cooldown
+
+**Files Modified:**
+1. **base_strategy.lk (line ~1278):** Added CHIP_REMISSION to `executeWeaponFocusedOffensive()` before return statement
+   - Benefits: Strength and Agility strategies automatically
+   - Executes after all weapon spam and chip usage, before HNS movement returns
+
+2. **magic_strategy.lk (line ~681):** Added CHIP_REMISSION to `createFullOffensiveDoT()` after debuffs
+   - Executes after weapon spam, poison chips, nova chips, and debuffs
+   - Queued as action for validation
+
+3. **boss_strategy.lk (line ~806):** Added CHIP_REMISSION to `executeTurn()` after crystal placement
+   - Uses direct execution (not queued) since boss strategy doesn't use action queue
+   - Ensures remaining TP is spent on healing in puzzle fights
+
+**Result:** All strategies now automatically use excess TP for healing, improving survivability without manual intervention
+
 ---
 
 ## V8 Strategy Analysis & Improvement Plan
@@ -830,4 +853,4 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 **Script ID:** 447626 (V8 main.lk - Current production, December 2025)
 
-*Document Version: 27.0 | Last Updated: December 3, 2025 - Magic & Strength Strategy Bug Fixes*
+*Document Version: 28.0 | Last Updated: December 3, 2025 - CHIP_REMISSION TP Dump Enhancement*
