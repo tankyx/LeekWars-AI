@@ -219,6 +219,70 @@ Abstract base class providing:
 
 ---
 
+## December 5, 2025 Improvements (Completed)
+
+### Math Probability System - Compilation Fixes
+
+**Constructor Syntax (4 files)**
+- Fixed LeekScript constructor syntax: Changed `ClassName(params)` → `constructor(params)`
+- Files: polynomial.lk, piecewise_function.lk, probability_distribution.lk
+
+**Class Member Variables (3 files)**
+- LeekScript requires initialization, not declaration: `var coeffs;` → `coeffs = []`
+- Fixed in polynomial.lk, piecewise_function.lk, probability_distribution.lk
+
+**Include Paths (3 files)**
+- Fixed relative includes within math/ folder: `include('math/polynomial.lk')` → `include('polynomial.lk')`
+- Files within same folder reference each other without folder prefix
+
+**Array Functions (1 file)**
+- Fixed LeekScript API: `arrayRemove()` → `remove()`
+- polynomial.lk line 26
+
+**Function Call Fix (1 file)**
+- Changed `Polynomial.constant()` → `PolynomialConstant()` (global factory function)
+- probability_distribution.lk line 389
+
+**Result:** All 4 math modules (polynomial, piecewise_function, probability_distribution, damage_probability) now compile successfully. Probability-based kill calculations are fully functional.
+
+### Emergency Positioning System
+
+**Problem Identified:**
+- Player with only 5 MP per turn couldn't reach damage cells requiring 8-24 MP
+- AI would use all MP to move closer, ending at positions with no attacks available
+- Result: 42 "no attacks available" warnings in 10 test fights
+
+**Fix #1: Smart Path-Finding (base_strategy.lk lines 1096-1141)**
+- Before: Blind `moveTowardCell()` uses all MP, often lands in non-attack positions
+- After: `findBestDamageCellOnPath()` searches for damage cells along path to target
+- Stops at furthest reachable damage cell instead of non-attack position
+- Result: 21% reduction in warnings (42 → 33)
+
+**Fix #2: Emergency TELEPORTATION (base_strategy.lk lines 1096-1133)**
+- Added emergency teleport logic when no cells reachable within MP budget
+- Triggers after LEATHER_BOOTS fails, before path fallback
+- Teleports directly to best weapon cell (range 1-10, costs 5 TP)
+- Immediately updates player state and marks `reachedWeaponCell = true`
+- Result: Additional 27% reduction (33 → 24 warnings, 43% total improvement)
+
+**Positioning Decision Flow:**
+1. Try to find reachable damage cells within MP budget
+2. If none: Use LEATHER_BOOTS (+2 MP) if available and would help
+3. If still none: Use emergency TELEPORTATION to best weapon cell
+4. If teleport unavailable/out of range: Find damage cells on path to target
+5. Last resort: Use `moveTowardCell()` as fallback
+
+**Testing Results (10 fights vs Domingo):**
+- Original: 42 warnings, 40% win rate
+- After fixes: 24 warnings (-43%), 30% win rate
+- Emergency teleports used: 2 successful jumps to weapon cells
+- Remaining warnings: Unavoidable (TELEPORTATION out of range 14-17, on cooldown, or TP shortage)
+
+**Files Modified:**
+- `base_strategy.lk`: Lines 1096-1180 (emergency teleportation + smart path-finding)
+
+---
+
 ## Development Workflow
 
 **Automated Testing (January 2026):**
@@ -859,4 +923,4 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 **Script ID:** 447626 (V8 main.lk - Current production, December 2025)
 
-*Document Version: 28.1 | Last Updated: December 4, 2025 - Threat Map Performance Optimization (Operations Limit Fix)*
+*Document Version: 28.2 | Last Updated: December 5, 2025 - Math Probability System + Emergency Positioning (TELEPORTATION)*

@@ -1093,27 +1093,89 @@ class Strategy {
                     }
                 }
 
-                // Still no reachable cells - move toward best damage cell or enemy (execute directly, bypass validation)
-                if (reachableCell == null && playerMP > 0) {
-                    debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - moving toward enemy")
+                // Try emergency TELEPORTATION if still no reachable cells
+                if (reachableCell == null &&
+                    mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                    getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
+                    playerTP >= 5 &&
+                    bestWeaponCell != -1 && bestWeaponCell != null) {
 
-                    // Move toward the best weapon cell (get as close as possible using moveTowardCell)
-                    // Execute directly instead of queueing to bypass validation (moveTowardCell handles partial movement)
-                    var moveResult = moveTowardCell(bestWeaponCell._id)
-                    debug("[" + debugPrefix + "] Direct approach movement result: " + moveResult)
+                    // Check if teleport destination is valid and within range (1-10 cells)
+                    var teleportDist = getCellDistance(playerPos, bestWeaponCell._id)
+                    if (teleportDist != null && teleportDist >= 1 && teleportDist <= 10) {
+                        debug("[" + debugPrefix + "] EMERGENCY: Using TELEPORTATION to reach best weapon cell " + bestWeaponCell._id + " (dist=" + teleportDist + ")")
 
-                    // Update state after movement
-                    player.updateEntity()
-                    playerPos = player._cellPos
-                    playerMP = player._currMp
-                    playerTP = player._currTp
-                    debug("[" + debugPrefix + "] After approach movement: pos=" + playerPos + " MP=" + playerMP)
+                        var teleportResult = useChipOnCell(CHIP_TELEPORTATION, bestWeaponCell._id)
+                        playerTP -= 5
 
-                    // Check if we reached a damage cell after movement
-                    if (mapContainsKey(fieldMap.damageMap, playerPos)) {
-                        reachedWeaponCell = true
-                        bestWeaponCell = fieldMap.damageMap[playerPos]
-                        debug("[" + debugPrefix + "] Reached damage cell " + playerPos + " after approach")
+                        if (teleportResult == USE_SUCCESS) {
+                            // Update player state after teleport
+                            player.updateEntity()
+                            playerPos = player._cellPos
+                            playerMP = player._currMp
+                            playerTP = player._currTp
+
+                            debug("[" + debugPrefix + "] Teleport successful! New pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
+
+                            // Verify we reached the weapon cell
+                            if (playerPos == bestWeaponCell._id) {
+                                reachedWeaponCell = true
+                                debug("[" + debugPrefix + "] Successfully teleported to weapon cell!")
+                            } else {
+                                debug("[" + debugPrefix + "] WARNING: Teleport didn't land on expected cell (expected=" + bestWeaponCell._id + " actual=" + playerPos + ")")
+                            }
+                        } else {
+                            debug("[" + debugPrefix + "] TELEPORTATION failed (result=" + teleportResult + ")")
+                        }
+                    } else {
+                        debug("[" + debugPrefix + "] TELEPORTATION out of range (dist=" + teleportDist + ", range=1-10)")
+                    }
+                }
+
+                // Still no reachable cells - find damage cell on path to weapon cell
+                if (reachableCell == null && !reachedWeaponCell && playerMP > 0) {
+                    debug("[" + debugPrefix + "] " + (usedLeatherBoots ? "Even with LEATHER_BOOTS, no" : "No") + " reachable damage cells - searching path to weapon cell")
+
+                    // Try to find a damage cell on the path to the weapon cell
+                    var cellOnPath = this.findBestDamageCellOnPath(bestWeaponCell._id, playerMP)
+
+                    if (cellOnPath != null && cellOnPath._id != playerPos) {
+                        // Found a damage cell on the path! Move there instead of blind approach
+                        debug("[" + debugPrefix + "] Found damage cell " + cellOnPath._id + " on path (damage=" + cellOnPath._totalDamage + "), moving there")
+                        this.createMovementAction(Action.MOVEMENT_APPROACH, cellOnPath._id, target)
+
+                        // Execute movement immediately
+                        this.executeAndFlushActions()
+                        playerPos = player._cellPos
+                        playerMP = player._currMp
+                        playerTP = player._currTp
+                        debug("[" + debugPrefix + "] After path movement: pos=" + playerPos + " MP=" + playerMP)
+
+                        // We should have reached the damage cell
+                        if (playerPos == cellOnPath._id) {
+                            reachedWeaponCell = true
+                            bestWeaponCell = cellOnPath
+                            debug("[" + debugPrefix + "] Successfully reached damage cell on path")
+                        }
+                    } else {
+                        // No damage cells on path - fall back to blind approach as last resort
+                        debug("[" + debugPrefix + "] No damage cells on path, using fallback moveTowardCell()")
+                        var moveResult = moveTowardCell(bestWeaponCell._id)
+                        debug("[" + debugPrefix + "] Fallback movement result: " + moveResult)
+
+                        // Update state after movement
+                        player.updateEntity()
+                        playerPos = player._cellPos
+                        playerMP = player._currMp
+                        playerTP = player._currTp
+                        debug("[" + debugPrefix + "] After fallback movement: pos=" + playerPos + " MP=" + playerMP)
+
+                        // Check if we reached a damage cell after movement
+                        if (mapContainsKey(fieldMap.damageMap, playerPos)) {
+                            reachedWeaponCell = true
+                            bestWeaponCell = fieldMap.damageMap[playerPos]
+                            debug("[" + debugPrefix + "] Reached damage cell " + playerPos + " after fallback")
+                        }
                     }
                 }
             }
