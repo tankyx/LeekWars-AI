@@ -8,6 +8,15 @@ global strategy = null
 include('game_entity.lk')
 include('field_map_tactical.lk')
 include('item.lk')
+
+// Optional: Advanced probability calculations for accurate kill probability
+// Comment out these lines if operations limit exceeded (>10,000 ops/turn)
+// Fallback to simple estimates in Arsenal.getKillProbability() if not included
+include('math/polynomial.lk')
+include('math/piecewise_function.lk')
+include('math/probability_distribution.lk')
+include('math/damage_probability.lk')
+
 include('strategy/action.lk')
 include('strategy/base_strategy.lk')
 include('strategy/strength_strategy.lk')

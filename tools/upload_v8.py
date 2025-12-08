@@ -264,6 +264,40 @@ class V8Uploader:
             else:
                 print("   ⚠️  No strategy directory found")
 
+        # Step 5: Create math folder and upload math modules
+        print("\n5️⃣ Uploading math modules...")
+        math_folder = self.create_or_get_folder("math", folder_v8, existing_folders)
+        if not math_folder:
+            print("   ⚠️  Failed to create math folder")
+        else:
+            self.folder_ids["math"] = math_folder
+
+            # Upload math modules (excluding README/markdown files)
+            math_path = v8_dir / "math"
+            if math_path.exists():
+                math_files = sorted(math_path.glob("*.lk"))
+
+                print(f"   Found {len(math_files)} math modules to upload")
+
+                for module_file in math_files:
+                    # Keep full filename including .lk extension
+                    module_name = module_file.name
+                    stats["total"] += 1
+
+                    with open(module_file, 'r', encoding='utf-8') as f:
+                        code = f.read()
+
+                    ai_id = self.create_or_update_ai_script(module_name, code, math_folder, existing_ais)
+
+                    if ai_id:
+                        stats["success"] += 1
+                    else:
+                        stats["failed"] += 1
+
+                    time.sleep(1.0)
+            else:
+                print("   ⚠️  No math directory found")
+
         # Summary
         print("\n" + "="*60)
         print("📊 UPLOAD COMPLETE")
@@ -282,14 +316,23 @@ class V8Uploader:
         print("       ├── field_map_core.lk")
         print("       ├── field_map_patterns.lk")
         print("       ├── field_map_tactical.lk")
-        print("       └── strategy/")
+        print("       ├── strategy/")
 
         strategy_path = v8_dir / "strategy"
         if strategy_path.exists():
             modules = [f for f in sorted(strategy_path.glob("*.lk")) if "OLD_BACKUP" not in f.name]
             if modules:
-                print(f"           ({len(modules)} modules)")
+                print(f"       │   ({len(modules)} modules)")
                 for m in modules:
+                    print(f"       │   ├── {m.name}")
+
+        print("       └── math/")
+        math_path = v8_dir / "math"
+        if math_path.exists():
+            math_modules = sorted(math_path.glob("*.lk"))
+            if math_modules:
+                print(f"           ({len(math_modules)} modules)")
+                for m in math_modules:
                     print(f"           ├── {m.name}")
 
         print("\n✨ V8 MODULAR AI SYSTEM IS COMPLETE!")
@@ -301,6 +344,7 @@ class V8Uploader:
         print("   🛡️  AoE self-damage prevention")
         print("   🏃 Fighting retreat (attack while fleeing)")
         print("   📍 Smart positioning (HNS, reachable cells)")
+        print("   📊 Probability-based OTKO with kill probability calculation")
 
         print("\n📖 Usage:")
         print("   main.lk - Entry point with build detection")

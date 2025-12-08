@@ -302,10 +302,60 @@ class FieldMap extends FieldMapPatterns {
 
         if (bestCell == -1) return null
 
-        var canKill = (bestDamage >= targetHP)
-        debug("[OTKO-TELEPORT] bestCell=" + bestCell + " projectedDamage=" + bestDamage + " targetHP=" + targetHP + " canKill=" + canKill)
+        // Calculate kill probability using simple estimate
+        // Build item list for best cell
+        var bestCellItems = []
+        var tpForItems = player._currTp - 9  // Reserve teleport cost
 
-        return ['cell': bestCell, 'damage': bestDamage, 'canKill': canKill]
+        // Add weapons that can be used from best cell
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var wObj = arsenal.playerEquippedWeapons[wid]
+            if (wObj == null) continue
+
+            var distToTarget = getCellDistance(bestCell, target._cellPos)
+            if (distToTarget == null) continue
+            if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+            if (!lineOfSight(bestCell, target._cellPos)) continue
+
+            var swapCost = (getWeapon() != wid) ? 1 : 0
+            var uses = min(wObj._maxUse, floor((tpForItems - swapCost) / wObj._cost))
+
+            for (var u = 0; u < uses; u++) {
+                push(bestCellItems, wid)
+            }
+        }
+
+        // Add chips
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            var chipObj = arsenal.playerEquippedChips[cid]
+            if (chipObj == null) continue
+            if (cid == CHIP_TELEPORTATION) continue
+            if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
+
+            var distChip = getCellDistance(bestCell, target._cellPos)
+            if (distChip == null) continue
+            if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
+            if (!lineOfSight(bestCell, target._cellPos)) continue
+
+            var usesChip = min(chipObj._maxUse, floor(tpForItems / chipObj._cost))
+            for (var uc = 0; uc < usesChip; uc++) {
+                push(bestCellItems, cid)
+            }
+        }
+
+        // Calculate kill probability
+        var killProb = arsenal.getKillProbability(
+            bestCellItems,
+            player._strength,
+            player._magic,
+            player._wisdom,
+            player._agility,
+            target
+        )
+
+        debug("[OTKO-TELEPORT] bestCell=" + bestCell + " projectedDamage=" + floor(bestDamage) + " targetHP=" + targetHP + " killProbability=" + round(killProb * 100) + "%")
+
+        return ['cell': bestCell, 'damage': bestDamage, 'killProbability': killProb]
     }
 
     // ====================================================================
@@ -583,6 +633,7 @@ class FieldMap extends FieldMapPatterns {
             var threat = this.getThreatAtCell(cell._id)
 
             // Score = our damage - (threat * weight)
+            // Note: ourDamage naturally includes multi-enemy AoE value (sum of all enemies hit)
             // threatWeight: 0 = ignore threat, 1 = equal weight
             var score = ourDamage - (threat * threatWeight)
 
@@ -594,7 +645,8 @@ class FieldMap extends FieldMapPatterns {
 
         if (best != -1) {
             var threat = this.getThreatAtCell(best._id)
-            debug("[THREAT-MAP] Best tactical cell: " + best._id + " (damage=" + best._totalDamage + ", threat=" + threat + ", score=" + bestScore + ")")
+            var multiHitInfo = best._enemiesHitCount >= 2 ? ", MULTI-HIT: " + best._enemiesHitCount + " enemies" : ""
+            debug("[THREAT-MAP] Best tactical cell: " + best._id + " (damage=" + best._totalDamage + ", threat=" + threat + ", score=" + bestScore + multiHitInfo + ")")
         }
 
         return best

@@ -209,6 +209,22 @@ class FieldMapPatterns extends FieldMapCore {
         }
         debug("[HITMAP][SUMMARY] chipCells=" + chipCells + " weaponOnlyCellsSample=" + (count(weaponOnlyCells) > 0 ? weaponOnlyCells : []))
 
+        // Multi-hit detection logging
+        var multiHitCells = []
+        for (var cell in this.damageMap) {
+            if (cell._enemiesHitCount >= 2) {
+                push(multiHitCells, ['cell': cell._id, 'enemies': cell._enemiesHitCount, 'damage': cell._totalAoEDamage])
+            }
+        }
+        if (count(multiHitCells) > 0) {
+            debug("[MULTI-HIT] ⚡ Found " + count(multiHitCells) + " cells with 2+ enemy hits:")
+            for (var mh in multiHitCells) {
+                debug("  Cell " + mh['cell'] + ": " + mh['enemies'] + " enemies, " + floor(mh['damage']) + " total AoE damage")
+            }
+        } else {
+            debug("[MULTI-HIT] No multi-enemy AoE opportunities detected")
+        }
+
         // Cache the new damage map
         this._damageMapCache = this.damageMap
         this._lastCacheKey = cacheKey
@@ -253,60 +269,77 @@ class FieldMapPatterns extends FieldMapCore {
     // ====================================================================
 
     // curCell: shooting position, targetCell: aim point (AoE center)
+    // MULTI-ENEMY AWARE: Calculates total damage across ALL enemies in AoE
     updateHitCells(hitCells, curCell, weapon=null, chip=null, targetCell=-1) {
         if (weapon == null && chip == null) {
             return hitCells
         }
 
+        var item = weapon != null ? weapon : chip
+        var itemId = item._id
+
+        // Get all enemies that would be hit by AoE
+        var enemies = fieldMap.getEnemySubMap()
+        var enemiesArray = mapValues(enemies)
+        var multiResult = arsenal.calculateMultiEnemyDamage(curCell, targetCell, itemId, enemiesArray)
+
+        var totalDamage = multiResult['total']
+        var hitEnemies = multiResult['enemies']
+        var enemyCount = count(hitEnemies)
+
+        // Scale by max uses (for weapons) or apply once (for chips)
         if (weapon != null) {
-            var breakdownW = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id, targetCell, targetCell)
-            var scaledDamage = breakdownW['total']
-            scaledDamage *= weapon._maxUse
-            if (mapContainsKey(hitCells, curCell)) {
-                if (hitCells[curCell]._weaponDamage < scaledDamage) {
-                    hitCells[curCell]._weaponDamage = scaledDamage
-                    hitCells[curCell]._highestDamageWeapon = weapon
-                    hitCells[curCell]._directDamage = breakdownW['direct'] * weapon._maxUse
-                    hitCells[curCell]._dotDamage += breakdownW['dot'] * weapon._maxUse
+            totalDamage *= weapon._maxUse
+        }
+
+        // Update or create cell entry
+        if (mapContainsKey(hitCells, curCell)) {
+            var cell = hitCells[curCell]
+
+            if (weapon != null) {
+                if (totalDamage > cell._weaponDamage) {
+                    cell._weaponDamage = totalDamage
+                    cell._highestDamageWeapon = weapon
+                    cell._totalAoEDamage = totalDamage
+                    cell._enemiesHit = hitEnemies
+                    cell._enemiesHitCount = enemyCount
                 }
+                // Add to weapons list
                 var already = false
-                for (var wIdx = 0; wIdx < count(hitCells[curCell]._weaponsList); wIdx++) {
-                    if (hitCells[curCell]._weaponsList[wIdx]._id == weapon._id) { already = true; break }
+                for (var w in cell._weaponsList) {
+                    if (w._id == weapon._id) { already = true; break }
                 }
-                if (!already) push(hitCells[curCell]._weaponsList, weapon)
-            }
-            else {
-                var newCell = new Cell(curCell, false, getEntityOnCell(curCell), scaledDamage, 0, true, weapon, -1)
-                newCell._directDamage = breakdownW['direct'] * weapon._maxUse
-                newCell._dotDamage = breakdownW['dot'] * weapon._maxUse
-                push(newCell._weaponsList, weapon)
-                mapPut(hitCells, curCell, newCell)
-            }
-        }
-        else if (chip != null) {
-            var breakdownC = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chip._id, targetCell, targetCell)
-            var scaledDamage = breakdownC['total']
-            scaledDamage *= chip._maxUse
-            if (mapContainsKey(hitCells, curCell)) {
-                hitCells[curCell]._directDamage += breakdownC['direct'] * chip._maxUse
-                hitCells[curCell]._dotDamage += breakdownC['dot'] * chip._maxUse
-                if (hitCells[curCell]._chipDamage < scaledDamage) {
-                    hitCells[curCell]._chipDamage = scaledDamage
-                    hitCells[curCell]._highestDamageChip = chip
-                }
-                var alreadyC = false
-                for (var cIdx = 0; cIdx < count(hitCells[curCell]._chipsList); cIdx++) {
-                    if (hitCells[curCell]._chipsList[cIdx]._id == chip._id) { alreadyC = true; break }
-                }
-                if (!alreadyC) push(hitCells[curCell]._chipsList, chip)
+                if (!already) push(cell._weaponsList, weapon)
             } else {
-                var nc = new Cell(curCell, false, getEntityOnCell(curCell), 0, scaledDamage, true, -1, chip)
-                nc._directDamage = breakdownC['direct'] * chip._maxUse
-                nc._dotDamage = breakdownC['dot'] * chip._maxUse
-                push(nc._chipsList, chip)
-                mapPut(hitCells, curCell, nc)
+                cell._chipDamage += totalDamage
+                cell._totalAoEDamage += totalDamage
+                // Merge hit enemies (avoid duplicates)
+                for (var e in hitEnemies) {
+                    var found = false
+                    for (var existing in cell._enemiesHit) {
+                        if (existing._id == e._id) { found = true; break }
+                    }
+                    if (!found) {
+                        push(cell._enemiesHit, e)
+                        cell._enemiesHitCount += 1
+                    }
+                }
+                push(cell._chipsList, chip)
             }
+        } else {
+            // Create new cell
+            var newCell = new Cell(curCell, false, getEntityOnCell(curCell),
+                                   weapon != null ? totalDamage : 0,
+                                   chip != null ? totalDamage : 0,
+                                   true, weapon != null ? weapon : -1, chip != null ? chip : -1)
+            newCell._totalAoEDamage = totalDamage
+            newCell._enemiesHit = hitEnemies
+            newCell._enemiesHitCount = enemyCount
+            if (weapon != null) push(newCell._weaponsList, weapon)
+            if (chip != null) push(newCell._chipsList, chip)
+            mapPut(hitCells, curCell, newCell)
         }
+
         // Recompute aggregate
         if (mapContainsKey(hitCells, curCell)) {
             var cellRef = hitCells[curCell]

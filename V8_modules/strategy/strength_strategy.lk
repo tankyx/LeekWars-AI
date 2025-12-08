@@ -45,9 +45,10 @@ class StrengthStrategy extends Strategy {
             return false
         }
 
-        // Only proceed if we can guarantee the kill (or if target is chest - always prioritize chests)
-        if (!teleportInfo['canKill'] && !(target instanceof Chest)) {
-            debug("[OTKO] Projected damage insufficient for kill: " + teleportInfo['damage'] + " vs " + target._currHealth + " HP")
+        // Only proceed if we have 85%+ kill probability (or if target is chest - always prioritize chests)
+        var killProb = teleportInfo['killProbability']
+        if (killProb < 0.85 && !(target instanceof Chest)) {
+            debug("[OTKO] Kill probability too low: " + round(killProb * 100) + "% (damage: " + teleportInfo['damage'] + " vs HP: " + target._currHealth + ")")
 
             // Check if CHIP_ADRENALINE can bridge the gap
             if (this.shouldUseAdrenaline(15)) {  // Need at least 15 TP for meaningful OTKO
@@ -57,13 +58,19 @@ class StrengthStrategy extends Strategy {
                 player._currTp = playerTP  // Update player TP for recalculation
                 debug("[OTKO][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
 
-                // RECALCULATE damage with new TP budget
+                // RECALCULATE with new TP budget
                 teleportInfo = fieldMap.findOptimalTeleportCell(target)
-                if (teleportInfo == null || teleportInfo['damage'] < target._currHealth) {
-                    debug("[OTKO][ADRENALINE] Still insufficient damage after Adrenaline: " + (teleportInfo != null ? teleportInfo['damage'] : 0) + " vs " + target._currHealth + " HP")
+                if (teleportInfo == null) {
+                    debug("[OTKO][ADRENALINE] Recalculation failed")
                     return false
                 }
-                debug("[OTKO][ADRENALINE] Recalculated damage: " + teleportInfo['damage'] + " (can kill now)")
+
+                var newKillProb = teleportInfo['killProbability']
+                if (newKillProb < 0.85) {
+                    debug("[OTKO][ADRENALINE] Still insufficient kill probability after Adrenaline: " + round(newKillProb * 100) + "% (damage: " + teleportInfo['damage'] + " vs HP: " + target._currHealth + ")")
+                    return false
+                }
+                debug("[OTKO][ADRENALINE] Recalculated kill probability: " + round(newKillProb * 100) + "% (sufficient for OTKO)")
             } else {
                 return false
             }
@@ -298,7 +305,7 @@ class StrengthStrategy extends Strategy {
             if (dist == null || dist < 1 || dist > 5) continue
 
             // Check if player would be in the AoE (+ pattern radius 2)
-            var affectedCells = fieldMap.getAoEAffectedCells(targetCell, therapyChip._aoeType)
+            var affectedCells = fieldMap.getAoEAffectedCells(targetCell, therapyChip._aoeType, playerPos)
             var playerInAoE = false
             for (var i = 0; i < count(affectedCells); i++) {
                 if (affectedCells[i] == playerPos) {
@@ -729,20 +736,19 @@ class StrengthStrategy extends Strategy {
                          player._currTp >= 15  // Minimum for teleport + attacks
 
         if (canTeleport) {
-            // Find optimal teleport cell for damage calculation
+            // Find optimal teleport cell with kill probability calculation
             var teleportInfo = fieldMap.findOptimalTeleportCell(target)
             if (teleportInfo != null) {
                 var teleCell = teleportInfo['cell']
-
-                // Project actual damage output from teleport cell (include STEROID if available)
-                var projectedDamage = this.projectTotalDamageOutput(true, teleCell, player._currTp - 9, target)
+                var killProb = teleportInfo['killProbability']
+                var projectedDamage = teleportInfo['damage']
                 var enemyHP = target._currHealth
 
-                debug("[STR][OTKO-CHECK] Projected damage from teleport: " + floor(projectedDamage) + " vs enemy HP: " + enemyHP)
+                debug("[STR][OTKO-CHECK] Projected damage: " + floor(projectedDamage) + " vs HP: " + enemyHP + ", Kill probability: " + round(killProb * 100) + "%")
 
-                // OTKO is viable if projected damage >= enemy HP
-                if (projectedDamage >= enemyHP) {
-                    debug("[STR][OTKO] OTKO viable! Executing teleport scenario")
+                // OTKO is viable if kill probability >= 85%
+                if (killProb >= 0.85) {
+                    debug("[STR][OTKO] OTKO viable with " + round(killProb * 100) + "% confidence! Executing teleport scenario")
                     var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
                     if (otkoExecuted) {
                         debug("[STR] OTKO scenario executed successfully")
@@ -750,7 +756,7 @@ class StrengthStrategy extends Strategy {
                     }
                     debug("[STR] OTKO execution failed, falling back to normal offensive scenario")
                 } else {
-                    debug("[STR][OTKO] OTKO not viable (insufficient damage), skipping teleport")
+                    debug("[STR][OTKO] OTKO not viable (only " + round(killProb * 100) + "% kill chance), skipping teleport")
                 }
             }
         }

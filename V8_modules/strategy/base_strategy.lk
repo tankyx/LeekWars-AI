@@ -33,11 +33,11 @@ class Strategy {
         // No AoE = always safe
         if (chip._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
 
-        // Get AoE affected cells
-        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType)
+        // Get AoE affected cells (pass player position for laser line calculations)
+        var playerPos = player._cellPos
+        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType, playerPos)
 
         // Check if player is in AoE
-        var playerPos = player._cellPos
         for (var i = 0; i < count(aoeCells); i++) {
             if (aoeCells[i] == playerPos) {
                 debug("[AOE-CHECK] WARNING: " + getChipName(chipId) + " would hit player at " + playerPos + " (target=" + targetCell + ") - need repositioning")
@@ -56,7 +56,6 @@ class Strategy {
 
         var playerPos = player._cellPos
         var playerMP = player._currMp
-        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType)
 
         var bestCell = -1
         var bestDist = 99999
@@ -69,18 +68,21 @@ class Strategy {
             var pathLen = getPathLength(playerPos, cellId)
             if (pathLen == null || pathLen > playerMP) continue
 
-            // Must NOT be in AoE
+            // Must have range and LOS to target from this cell
+            if (!this.inRangeAndLOS(cellId, targetCell, chip._minRange, chip._maxRange)) continue
+
+            // Calculate AoE from this candidate cell (important for laser lines)
+            var aoeCellsFromHere = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType, cellId)
+
+            // Check if shooting from this cell would hit us
             var inAoE = false
-            for (var a = 0; a < count(aoeCells); a++) {
-                if (aoeCells[a] == cellId) {
+            for (var a = 0; a < count(aoeCellsFromHere); a++) {
+                if (aoeCellsFromHere[a] == cellId) {
                     inAoE = true
                     break
                 }
             }
             if (inAoE) continue
-
-            // Must have range and LOS to target from this cell
-            if (!this.inRangeAndLOS(cellId, targetCell, chip._minRange, chip._maxRange)) continue
 
             // Prefer closest cell to current position
             if (pathLen < bestDist) {

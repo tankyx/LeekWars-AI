@@ -20,6 +20,12 @@ class Cell {
     _weaponsList = [] // all weapons that can fire from this cell
     _chipsList = []   // all chips that can fire from this cell
 
+    // Multi-enemy AoE tracking
+    _totalAoEDamage = 0          // Total damage across ALL enemies in AoE
+    _enemiesHit = []             // Array of enemies hit by AoE
+    _enemiesHitCount = 0         // Count for quick access
+    _multiHitBonus = 0           // Bonus score for hitting 2+ enemies
+
     constructor(id, isObstacle, entityID, weaponDamage, chipDamage, hasLOS, highestDamageWeapon, highestDamageChip) {
         this._id = id
         this._isObstacle = isObstacle
@@ -341,8 +347,43 @@ class FieldMapCore {
         return mapContainsKey(item._effects, EFFECT_DAMAGE) || mapContainsKey(item._effects, EFFECT_POISON)
     }
 
+    // Helper: Get all cells in a straight line between two cells (for AREA_LASER_LINE)
+    // Returns cells along the line, including start and end
+    getCellsInLine(fromCell, toCell) {
+        var cells = []
+
+        // Get coordinates
+        var x1 = getCellX(fromCell)
+        var y1 = getCellY(fromCell)
+        var x2 = getCellX(toCell)
+        var y2 = getCellY(toCell)
+
+        // Calculate direction
+        var dx = x2 - x1
+        var dy = y2 - y1
+        var steps = max(abs(dx), abs(dy))
+
+        if (steps == 0) {
+            push(cells, fromCell)
+            return cells
+        }
+
+        // Step along the line
+        for (var i = 0; i <= steps; i++) {
+            var x = x1 + floor((dx * i) / steps)
+            var y = y1 + floor((dy * i) / steps)
+            var cellId = getCellFromXY(x, y)
+            if (cellId != null && cellId >= 0 && cellId < FieldMapCore.board_cell_count) {
+                push(cells, cellId)
+            }
+        }
+
+        return cells
+    }
+
     // Get all cells affected by AoE around a center cell
-    getAoEAffectedCells(centerCell, aoeType) {
+    // shooterCell: Optional parameter for AREA_LASER_LINE (where the shot originates from)
+    getAoEAffectedCells(centerCell, aoeType, shooterCell = -1) {
         var affected = []
 
         // AREA_POINT - only the center cell
@@ -416,12 +457,46 @@ class FieldMapCore {
                 }
             }
         }
-        // AREA_LASER_LINE - handled differently (linear along shot path)
+        // AREA_LASER_LINE - affects all cells along line from shooter to target
         else if (aoeType == AREA_LASER_LINE) {
-            // Laser AoE affects cells along line of fire, not radially
-            // Handle during actual shot - treat as single target for damage calc
+            if (shooterCell != -1 && shooterCell != centerCell) {
+                // Get all cells in straight line between shooter and target
+                var lineCells = this.getCellsInLine(shooterCell, centerCell)
+                if (lineCells != null) {
+                    for (var i = 0; i < count(lineCells); i++) {
+                        var c = lineCells[i]
+                        // Skip shooter cell and center (already added center above)
+                        if (c != shooterCell && c != centerCell) {
+                            push(affected, c)
+                        }
+                    }
+                }
+            }
+            // If no shooter provided, only center cell is affected (same as AREA_POINT)
         }
 
         return affected
+    }
+
+    // Get all enemies that would be hit by AoE aimed at targetCell from shooterCell
+    // Returns array of Enemy objects that fall within the AoE pattern
+    getEnemiesInAoE(shooterCell, targetCell, aoeType) {
+        var aoeCells = this.getAoEAffectedCells(targetCell, aoeType, shooterCell)
+        var hitEnemies = []
+
+        var enemies = this.getEnemySubMap()
+        for (var e in enemies) {
+            if (isDead(e._id)) continue
+
+            // Check if enemy position is in any AoE cell
+            for (var i = 0; i < count(aoeCells); i++) {
+                if (aoeCells[i] == e._cellPos) {
+                    push(hitEnemies, e)
+                    break
+                }
+            }
+        }
+
+        return hitEnemies
     }
 }
