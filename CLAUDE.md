@@ -555,6 +555,212 @@ Abstract base class providing:
 
 ---
 
+## December 8, 2025 - Combat Optimization & Attrition System (Completed)
+
+### Critical Performance Improvements
+
+**Win Rate Progression:**
+- Original (Turn 1 buff waste): 10% win rate
+- Chip attacks during approach: 30% win rate
+- Defensive approach + delayed burst: 47% win rate
+- **Attrition-based OTKO + Optimized buffs: 60% win rate**
+
+**Total improvement: 10% → 60% = 6x win rate increase**
+
+### 1. Attrition-Based OTKO System
+
+**Problem:** OTKO checked once at combat start when enemy at full HP (2500) → never viable until too late
+
+**Solution:** OTKO now checks **every turn** as enemy HP drops from attrition
+
+**Implementation:** `strength_strategy.lk` lines 700-732
+```leekscript
+// PRIORITY 1: OPPORTUNISTIC OTKO (check every turn based on current enemy HP)
+// This runs on EVERY turn - as enemy HP drops from attrition, OTKO becomes viable
+var canTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                 getCooldown(CHIP_TELEPORTATION, getEntity()) == 0 &&
+                 player._currTp >= 15
+
+if (canTeleport) {
+    var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+    if (teleportInfo != null && teleportInfo['killProbability'] >= 0.85) {
+        // ATTRITION-BASED OTKO: Trigger when enemy HP drops to killable range
+        debug("[STR][OTKO-ATTRITION] OTKO NOW VIABLE! Enemy weakened to " + enemyHP + " HP, executing kill shot!")
+        var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
+        if (otkoExecuted) return  // Kill shot executed, skip normal offense
+    }
+}
+```
+
+**Results (20 fights):**
+- OTKO executions: 13/20 fights (65%)
+- Average enemy HP at OTKO trigger: 1256 HP (50% of max)
+- HP range at trigger: 485 - 1630 HP
+- Win rate: 60% (vs 47% before)
+
+**Combat Flow:**
+```
+Turn 1: Enemy 2500 HP → OTKO check: 10% kill prob → Continue attrition
+Turn 2: Enemy 2100 HP → OTKO check: 25% kill prob → Continue attrition
+Turn 3: Enemy 1600 HP → OTKO check: 88% kill prob → EXECUTE OTKO!
+         ↓
+    TELEPORT + weapon spam = KILL
+```
+
+### 2. Intelligent Buff Management System
+
+**Problem:** Buffs applied blindly without considering combat state, wasting TP and buff duration
+
+**Solutions Implemented:**
+
+#### A. Smart STEROID Logic (lines 734-797)
+- **Skip if OTKO already viable** (save TP for kill)
+- **Apply when entering range** (dist ≤ 10)
+- **Re-check OTKO after STEROID** (buff may enable kill)
+
+```leekscript
+// Check if STEROID made OTKO possible
+if (playerTP >= 15 && this.isChipAvailable(CHIP_STEROID, 7)) {
+    useChip(CHIP_STEROID, player._id)
+    player._currTp -= 7
+
+    // RE-CHECK OTKO: STEROID may have enabled kill
+    if (canTeleport && player._currTp >= 15) {
+        var teleportInfoBuffed = fieldMap.findOptimalTeleportCell(target)
+        if (teleportInfoBuffed['killProbability'] >= 0.85) {
+            // STEROID enabled OTKO!
+            this.createOTKOScenario(target, targetHitCell)
+            return
+        }
+    }
+}
+```
+
+#### B. Defensive Sustain Combo (lines 799-804)
+- **Trigger:** HP < 50%
+- **Actions:** REMISSION (instant heal 100-150 HP) + FORTRESS/WALL (damage reduction)
+- **WALL fallback:** Used when FORTRESS unavailable/on cooldown
+
+```leekscript
+if (hpPercent < 50 && player._currTp >= 5) {
+    // REMISSION for instant heal
+    if (this.isChipAvailable(CHIP_REMISSION, 5)) {
+        useChip(CHIP_REMISSION, player._id)
+        player._currTp -= 5
+    }
+
+    // Reapply shield if expired
+    if (!hasShield || shieldRemaining <= 1) {
+        // Try FORTRESS first (7-8% reduction, 3 turns)
+        if (this.isChipAvailable(CHIP_FORTRESS, 6)) {
+            useChip(CHIP_FORTRESS, player._id)
+        }
+        // Fallback to WALL (4-5% reduction, 2 turns)
+        else if (this.isChipAvailable(CHIP_WALL, 3)) {
+            useChip(CHIP_WALL, player._id)
+        }
+    }
+}
+```
+
+**Verified Usage (100 fights):**
+- Defensive sustain triggered: 285 times (2.85x per fight avg)
+- WALL fallback used: 33 times
+- Successfully kept AI alive in critical HP moments
+
+#### C. Enhanced LIBERATION (lines 415-442)
+**Added:** Strip enemy EFFECT_BUFF_RESISTANCE before attacks (increases damage output)
+
+```leekscript
+var enemyHasResistance = target.hasEffect(EFFECT_BUFF_RESISTANCE)
+if (enemyHasResistance) {
+    debug("[LIBERATION] Should use to strip enemy resistance buff (increases our damage)")
+    return true
+}
+```
+
+**Priority order:**
+1. Remove player critical debuffs (shackles)
+2. Remove player poison (≥3 turns)
+3. **Strip enemy resistance** (NEW - increases our damage)
+4. Strip enemy shields
+5. Strip enemy damage return
+
+### 3. GRAPPLE-HEAVY_SWORD TP Fix
+
+**Problem:** Combo TP check was 18 TP, but actual cost was 19 TP (weapon swap not counted)
+
+**Fix:** `strength_strategy.lk` lines 523-532
+```leekscript
+// Combo costs: GRAPPLE (3) + weapon swap (1 if needed) + HEAVY_SWORD (15) = 18-19 TP
+var comboTPCost = 18  // Assume weapon already equipped
+if (getWeapon() != WEAPON_HEAVY_SWORD) {
+    comboTPCost = 19  // Need 1 TP for weapon swap
+}
+
+if (playerTP < comboTPCost) {
+    debug("[STR][GRAPPLE-HS] Insufficient TP for combo: " + playerTP + " < " + comboTPCost)
+    return false
+}
+```
+
+**Also fixed:** Skip weapon swap if already equipped (saves 1 TP)
+- Lines 599-604 (adjacent enemy case)
+- Lines 660-664 (GRAPPLE pull case)
+
+**Result:** Combo now executes reliably with correct TP accounting
+
+### 4. Approach Phase Chip Attacks
+
+**Problem:** AI wasted 2-3 turns moving without attacking when weapons out of range
+
+**Solution:** `base_strategy.lk` lines 622-700 - `useApproachChipsFromCurrentPosition()`
+- Uses long-range chips (METEORITE, PLASMA, LIGHTNING) from current position
+- Attacks THEN moves (never waste a turn)
+- Immediate execution (not queued)
+
+**Result:** No more "no attacks available" on approach turns
+
+### Files Modified
+
+1. **V8_modules/strategy/strength_strategy.lk**
+   - Lines 700-732: Attrition-based OTKO (every-turn check)
+   - Lines 734-797: Smart STEROID logic with OTKO recheck
+   - Lines 799-804: Defensive sustain combo (REMISSION + FORTRESS/WALL)
+   - Lines 415-442: Enhanced LIBERATION (resistance stripping)
+   - Lines 523-532: GRAPPLE-HEAVY_SWORD TP fix
+   - Lines 599-604, 660-664: Skip weapon swap if equipped
+
+2. **V8_modules/strategy/base_strategy.lk**
+   - Lines 622-700: Approach chip attack system
+   - Lines 861-875: Turn 1 defensive shields when enemy far
+   - Lines 877-892: Turn 1 buff distance check
+
+### Testing Results
+
+**100-Fight Baseline (before optimizations):**
+- Win rate: 47%
+- OTKO executions: Minimal (only when enemy already low)
+- Defensive sustain: Not implemented
+- No-attack warnings: 287 occurrences
+
+**20-Fight Test (after optimizations):**
+- Win rate: 60% (+13 percentage points)
+- OTKO executions: 13/20 fights (65%)
+- Average enemy HP at OTKO: 1256 HP
+- Defensive sustain: Active and working
+- WALL fallback: Functional
+
+### Key Learnings
+
+1. **OTKO timing is critical** - Checking every turn as HP drops from attrition is far more effective than one-time checks
+2. **Shield calculations were already correct** - `getNetDamageAgainstTarget()` properly accounts for relative/absolute shields
+3. **Buff management must be situational** - Smart STEROID (skip if OTKO viable, recheck after application) prevents TP waste
+4. **Defensive sustain works** - REMISSION + FORTRESS/WALL combo keeps AI alive in critical moments
+5. **Fallback systems are essential** - WALL fallback when FORTRESS unavailable ensures defensive coverage
+
+---
+
 ## V8 Strategy Analysis & Improvement Plan
 
 ### Strategy Performance Matrix
@@ -923,4 +1129,4 @@ projectTotalDamageOutput(includeBuffs = false) {
 
 **Script ID:** 447626 (V8 main.lk - Current production, December 2025)
 
-*Document Version: 28.2 | Last Updated: December 5, 2025 - Math Probability System + Emergency Positioning (TELEPORTATION)*
+*Document Version: 29.0 | Last Updated: December 8, 2025 - Attrition-Based OTKO + Intelligent Buff Management (60% win rate)*

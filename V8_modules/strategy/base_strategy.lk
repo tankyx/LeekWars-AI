@@ -619,6 +619,86 @@ class Strategy {
         return bestCell
     }
 
+    // Use long-range chips from current position when weapons are out of range
+    // Called when no reachable weapon cells - attack THEN move instead of wasting turn
+    // Returns: TP spent on chip attacks
+    useApproachChipsFromCurrentPosition(target, availableTP, debugPrefix) {
+        var playerPos = player._cellPos
+        var originalTP = availableTP
+
+        debug("[" + debugPrefix + "][APPROACH-CHIPS] Checking long-range chips from position " + playerPos + " (TP=" + availableTP + ")")
+
+        // Find chips that can hit target from current position
+        var usableChips = []
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            var chipObj = arsenal.playerEquippedChips[cid]
+            if (chipObj == null) continue
+            if (availableTP < chipObj._cost) continue
+            if (getCooldown(chipObj._id, player._id) > 0) continue
+
+            // Only damage/poison chips (skip utility chips)
+            if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
+
+            // Check range and LOS to target
+            var distToTarget = getCellDistance(playerPos, target._cellPos)
+            if (distToTarget == null || distToTarget < chipObj._minRange || distToTarget > chipObj._maxRange) continue
+            if (!lineOfSight(playerPos, target._cellPos)) continue
+
+            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, chipObj._id, target)
+            push(usableChips, ['chip': chipObj, 'damage': netDmg, 'id': chipObj._id])
+            debug("[" + debugPrefix + "][APPROACH-CHIPS] Found usable chip: " + getChipName(chipObj._id) + " (range " + chipObj._minRange + "-" + chipObj._maxRange + ", damage=" + floor(netDmg) + ")")
+        }
+
+        // Sort by damage descending
+        for (var i = 0; i < count(usableChips); i++) {
+            var bestIdx = i
+            for (var j = i + 1; j < count(usableChips); j++) {
+                if (usableChips[j]['damage'] > usableChips[bestIdx]['damage']) bestIdx = j
+            }
+            if (bestIdx != i) {
+                var tmp = usableChips[i]
+                usableChips[i] = usableChips[bestIdx]
+                usableChips[bestIdx] = tmp
+            }
+        }
+
+        // Use chips immediately (not queued - want to attack before moving)
+        var chipsUsed = 0
+        for (var ci = 0; ci < count(usableChips); ci++) {
+            var chipRec = usableChips[ci]
+            var chip = chipRec['chip']
+            if (availableTP < chip._cost) continue
+
+            // Spam chip to max uses
+            var actualUses = 0
+            while (actualUses < chip._maxUse && availableTP >= chip._cost) {
+                var result = useChipOnCell(chip._id, target._cellPos)
+                if (result == USE_SUCCESS) {
+                    availableTP -= chip._cost
+                    actualUses += 1
+                    chipsUsed += 1
+                    debug("[" + debugPrefix + "][APPROACH-CHIPS] Used " + getChipName(chip._id) + " (use " + actualUses + "/" + chip._maxUse + ", TP remaining: " + availableTP + ")")
+                } else {
+                    debug("[" + debugPrefix + "][APPROACH-CHIPS] Failed to use " + getChipName(chip._id) + " (result=" + result + ")")
+                    break
+                }
+            }
+
+            if (availableTP <= 0) break
+        }
+
+        var tpSpent = originalTP - availableTP
+        if (chipsUsed > 0) {
+            debug("[" + debugPrefix + "][APPROACH-CHIPS] Used " + chipsUsed + " chip attacks, spent " + tpSpent + " TP")
+            // Update player state after chip usage
+            player.updateEntity()
+        } else {
+            debug("[" + debugPrefix + "][APPROACH-CHIPS] No usable long-range chips found")
+        }
+
+        return tpSpent
+    }
+
     // Find damage cell on escape route to safe cell
     // Ensures we can still reach safe cell after stopping to attack
     findDamageCellOnEscapeRoute(safeCell, maxMP) {
@@ -769,23 +849,58 @@ class Strategy {
             return
         }
 
-        // PRIORITY 2: Strategy-specific stat buffs (PvP and PvE only)
+        // PRIORITY 2: Strategy-specific defensive/offensive buffs (PvP and PvE only)
+        // Check distance to closest enemy - determines buff strategy
+        var closestEnemy = fieldMap.getClosestEnemy()
+        var distToEnemy = 99999
+        if (closestEnemy != null) {
+            distToEnemy = getCellDistance(player._cellPos, closestEnemy._cellPos)
+            if (distToEnemy == null) distToEnemy = 99999
+        }
+
+        // DEFENSIVE PHASE: Apply shields when enemy far (survive approach)
+        if (distToEnemy > 10) {
+            debug("[TURN1-BUFFS] Enemy far (dist=" + distToEnemy + "), applying defensive shields")
+
+            // Strength build: Apply FORTRESS or WALL for damage reduction during approach
+            if (player._strength >= player._agility && player._strength >= player._magic) {
+                if (this.isChipAvailable(CHIP_FORTRESS, 12)) {  // 6 for FORTRESS + 6 reserve for attacks
+                    debug("Using CHIP_FORTRESS (defensive) - 7-8% damage reduction for 3 turns")
+                    useChip(CHIP_FORTRESS, player._id)
+                } else if (this.isChipAvailable(CHIP_WALL, 9)) {  // 3 for WALL + 6 reserve
+                    debug("Using CHIP_WALL (defensive) - 4-5% damage reduction for 2 turns")
+                    useChip(CHIP_WALL, player._id)
+                }
+            }
+        }
+
+        // OFFENSIVE PHASE: Apply stat buffs only if can reach combat within 2 turns (dist ≤ 10)
+        var canReachCombatSoon = (distToEnemy <= 10)
+
         // Strength build: Apply CHIP_STEROID for weapon damage boost
         if (player._strength >= player._agility && player._strength >= player._magic) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
-                debug("Using CHIP_STEROID (strength build) - +150-170 Strength for 3 turns")
-                useChip(CHIP_STEROID, player._id)
+                if (canReachCombatSoon) {
+                    debug("Using CHIP_STEROID (strength build) - +150-170 Strength for 3 turns")
+                    useChip(CHIP_STEROID, player._id)
+                } else {
+                    debug("[TURN1-BUFFS] Skipping CHIP_STEROID - enemy too far (dist=" + distToEnemy + ", need dist ≤ 10 to reach in 2 turns)")
+                }
             }
         }
 
         // Agility build: Apply CHIP_WARM_UP before damage return buffs
         if (player._agility >= player._strength && player._agility >= player._magic) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP)) {
-                debug("Using CHIP_WARM_UP (agility build) - +170-190 Agility for 3 turns")
-                useChip(CHIP_WARM_UP, player._id)
+                if (canReachCombatSoon) {
+                    debug("Using CHIP_WARM_UP (agility build) - +170-190 Agility for 3 turns")
+                    useChip(CHIP_WARM_UP, player._id)
+                } else {
+                    debug("[TURN1-BUFFS] Skipping CHIP_WARM_UP - enemy too far (dist=" + distToEnemy + ", need dist ≤ 10 to reach in 2 turns)")
+                }
             }
-            // Then apply damage return for tanky playstyle
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)) {
+            // Then apply damage return for tanky playstyle (only if used WARM_UP)
+            if (canReachCombatSoon && mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)) {
                 debug("Using CHIP_MIRROR (agility build) - Damage return")
                 useChip(CHIP_MIRROR, player._id)
             }
@@ -1052,7 +1167,7 @@ class Strategy {
                     bestWeaponCell = reachableCell  // Update best cell to the one we reached
                 }
             } else {
-                // No reachable damage cells - try LEATHER_BOOTS for emergency movement boost
+                // No reachable damage cells - try emergency movement options
                 debug("[" + debugPrefix + "] No reachable damage cells within " + playerMP + " MP")
 
                 var usedLeatherBoots = false
@@ -1160,23 +1275,38 @@ class Strategy {
                             debug("[" + debugPrefix + "] Successfully reached damage cell on path")
                         }
                     } else {
-                        // No damage cells on path - fall back to blind approach as last resort
-                        debug("[" + debugPrefix + "] No damage cells on path, using fallback moveTowardCell()")
-                        var moveResult = moveTowardCell(bestWeaponCell._id)
-                        debug("[" + debugPrefix + "] Fallback movement result: " + moveResult)
+                        // No damage cells on path - USE CHIPS FIRST, then move
+                        debug("[" + debugPrefix + "] No damage cells on path - attempting chip attacks from current position")
 
-                        // Update state after movement
-                        player.updateEntity()
-                        playerPos = player._cellPos
-                        playerMP = player._currMp
-                        playerTP = player._currTp
-                        debug("[" + debugPrefix + "] After fallback movement: pos=" + playerPos + " MP=" + playerMP)
+                        // Use long-range chips from current position before moving
+                        var tpSpentOnChips = this.useApproachChipsFromCurrentPosition(target, playerTP, debugPrefix)
+                        if (tpSpentOnChips > 0) {
+                            playerTP -= tpSpentOnChips
+                            player._currTp = playerTP
+                            debug("[" + debugPrefix + "] Used " + tpSpentOnChips + " TP on approach chips, remaining: " + playerTP)
+                        }
 
-                        // Check if we reached a damage cell after movement
-                        if (mapContainsKey(fieldMap.damageMap, playerPos)) {
-                            reachedWeaponCell = true
-                            bestWeaponCell = fieldMap.damageMap[playerPos]
-                            debug("[" + debugPrefix + "] Reached damage cell " + playerPos + " after fallback")
+                        // Now move closer for next turn (only if we have MP)
+                        if (playerMP > 0) {
+                            debug("[" + debugPrefix + "] Moving toward best weapon cell " + bestWeaponCell._id)
+                            var moveResult = moveTowardCell(bestWeaponCell._id)
+                            debug("[" + debugPrefix + "] Fallback movement result: " + moveResult)
+
+                            // Update state after movement
+                            player.updateEntity()
+                            playerPos = player._cellPos
+                            playerMP = player._currMp
+                            playerTP = player._currTp
+                            debug("[" + debugPrefix + "] After movement: pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
+
+                            // Check if we reached a damage cell after movement
+                            if (mapContainsKey(fieldMap.damageMap, playerPos)) {
+                                reachedWeaponCell = true
+                                bestWeaponCell = fieldMap.damageMap[playerPos]
+                                debug("[" + debugPrefix + "] Reached damage cell " + playerPos + " after movement")
+                            }
+                        } else {
+                            debug("[" + debugPrefix + "] No MP remaining, staying at position " + playerPos)
                         }
                     }
                 }

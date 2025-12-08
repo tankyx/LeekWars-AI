@@ -384,69 +384,9 @@ class StrengthStrategy extends Strategy {
         return requiredTP
     }
 
-    // Check if CHIP_FORTRESS should be used (defensive buff)
-    shouldUseFortress() {
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_FORTRESS)) return false
-
-        var cooldown = getCooldown(CHIP_FORTRESS, getEntity())
-        if (cooldown > 0) return false
-
-        var playerTP = player._currTp
-        if (playerTP < 12) return false  // 6 TP for FORTRESS + 6 minimum for attacks
-
-        // Don't use if poisoned (shields don't reduce poison damage)
-        if (player.hasEffect(EFFECT_POISON)) {
-            debug("[STR][FORTRESS] Skipping FORTRESS - player is poisoned (shields don't help)")
-            return false
-        }
-
-        // Check if effect already active
-        if (player.hasEffect(EFFECT_RELATIVE_SHIELD)) {
-            var remaining = player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
-            if (remaining > 1) return false  // Already have defensive buff active
-        }
-
-        // Use when in combat range (enemy within distance 8)
-        if (!this.isInCombatRange()) {
-            debug("[STR][FORTRESS] Not in combat range, skipping FORTRESS")
-            return false
-        }
-
-        debug("[STR][FORTRESS] In combat range, should use FORTRESS")
-        return true
-    }
-
-    // Check if CHIP_WALL should be used (weaker defensive buff)
-    shouldUseWall() {
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_WALL)) return false
-
-        var cooldown = getCooldown(CHIP_WALL, getEntity())
-        if (cooldown > 0) return false
-
-        var playerTP = player._currTp
-        if (playerTP < 9) return false  // 3 TP for WALL + 6 minimum for attacks
-
-        // Don't use if poisoned (shields don't reduce poison damage)
-        if (player.hasEffect(EFFECT_POISON)) {
-            debug("[STR][WALL] Skipping WALL - player is poisoned (shields don't help)")
-            return false
-        }
-
-        // Check if effect already active
-        if (player.hasEffect(EFFECT_RELATIVE_SHIELD)) {
-            var remaining = player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
-            if (remaining > 1) return false  // Already have defensive buff active
-        }
-
-        // Use when in combat range (enemy within distance 8)
-        if (!this.isInCombatRange()) {
-            debug("[STR][WALL] Not in combat range, skipping WALL")
-            return false
-        }
-
-        debug("[STR][WALL] In combat range, should use WALL")
-        return true
-    }
+    // NOTE: FORTRESS and WALL defensive buffs are now applied on Turn 1 in base_strategy.lk
+    // when enemy is far (dist > 10). This ensures shields are active during the approach phase.
+    // Old shouldUseFortress() and shouldUseWall() methods removed - defensive buffs handled centrally.
 
     // Check if CHIP_LIBERATION is tactically valuable
     shouldUseLiberation(target) {
@@ -472,9 +412,10 @@ class StrengthStrategy extends Strategy {
         var hasPoison = player.hasEffect(EFFECT_POISON)
         var poisonRemaining = player.getEffectRemaining(EFFECT_POISON)
 
-        // Priority 3: Remove enemy buffs/shields/damage return
+        // Priority 3: Remove enemy buffs/shields/damage return/resistance
         var enemyShielded = target._relShield > 15 || target._absShield > 30
         var enemyHasDamageReturn = target.hasEffect(EFFECT_DAMAGE_RETURN)
+        var enemyHasResistance = target.hasEffect(EFFECT_BUFF_RESISTANCE)
 
         // Use if we have critical debuffs OR poison with 3+ turns OR enemy heavily buffed
         if (hasDebuff) {
@@ -483,6 +424,10 @@ class StrengthStrategy extends Strategy {
         }
         if (hasPoison && poisonRemaining >= 3) {
             debug("[LIBERATION] Should use to reduce poison (remaining: " + poisonRemaining + " turns)")
+            return true
+        }
+        if (enemyHasResistance) {
+            debug("[LIBERATION] Should use to strip enemy resistance buff (increases our damage)")
             return true
         }
         if (enemyShielded) {
@@ -559,8 +504,14 @@ class StrengthStrategy extends Strategy {
 
         // Case 1: Enemy already adjacent (range 1) - just use HEAVY_SWORD
         if (dist == 1) {
-            if (playerTP < 15) {
-                debug("[STR][GRAPPLE-HS] Enemy adjacent but insufficient TP: " + playerTP + " < 15")
+            // Need 15 TP for HEAVY_SWORD, plus 1 TP for weapon swap if needed
+            var requiredTP = 15
+            if (getWeapon() != WEAPON_HEAVY_SWORD) {
+                requiredTP = 16  // Need 1 TP for weapon swap
+            }
+
+            if (playerTP < requiredTP) {
+                debug("[STR][GRAPPLE-HS] Enemy adjacent but insufficient TP: " + playerTP + " < " + requiredTP)
                 return false
             }
             debug("[STR][GRAPPLE-HS] Enemy adjacent, will use HEAVY_SWORD directly")
@@ -580,8 +531,14 @@ class StrengthStrategy extends Strategy {
                 return false
             }
 
-            if (playerTP < 18) {
-                debug("[STR][GRAPPLE-HS] Insufficient TP for combo: " + playerTP + " < 18")
+            // Combo costs: GRAPPLE (3) + weapon swap (1 if needed) + HEAVY_SWORD (15) = 18-19 TP
+            var comboTPCost = 18  // Assume weapon already equipped
+            if (getWeapon() != WEAPON_HEAVY_SWORD) {
+                comboTPCost = 19  // Need 1 TP for weapon swap
+            }
+
+            if (playerTP < comboTPCost) {
+                debug("[STR][GRAPPLE-HS] Insufficient TP for combo: " + playerTP + " < " + comboTPCost)
                 return false
             }
 
@@ -649,7 +606,14 @@ class StrengthStrategy extends Strategy {
         // Case 1: Enemy already adjacent - skip GRAPPLE, use HEAVY_SWORD only
         if (dist == 1) {
             debug("[STR][GRAPPLE-HS] Enemy already adjacent, using HEAVY_SWORD only")
-            setWeapon(WEAPON_HEAVY_SWORD)
+
+            // Only swap weapon if not already equipped
+            if (getWeapon() != WEAPON_HEAVY_SWORD) {
+                setWeapon(WEAPON_HEAVY_SWORD)
+                player._currTp -= 1
+                debug("[STR][GRAPPLE-HS] Swapped to HEAVY_SWORD (1 TP)")
+            }
+
             useWeaponOnCell(target._cellPos)
             player._currTp -= 15
             debug("[STR][GRAPPLE-HS] HEAVY_SWORD executed (60 vulnerability), TP remaining: " + player._currTp)
@@ -703,7 +667,13 @@ class StrengthStrategy extends Strategy {
         target.updateEntity()
 
         // Execute HEAVY_SWORD immediately (enemy should now be adjacent)
-        setWeapon(WEAPON_HEAVY_SWORD)
+        // Only swap weapon if not already equipped (saves 1 TP)
+        if (getWeapon() != WEAPON_HEAVY_SWORD) {
+            setWeapon(WEAPON_HEAVY_SWORD)
+            player._currTp -= 1
+            debug("[STR][GRAPPLE-HS] Swapped to HEAVY_SWORD (1 TP)")
+        }
+
         useWeaponOnCell(target._cellPos)
         player._currTp -= 15
 
@@ -717,7 +687,7 @@ class StrengthStrategy extends Strategy {
         // Track whether GRAPPLE-HEAVY_SWORD combo was executed
         var comboExecuted = false
 
-        // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
+        // PRIORITY 0: Check for chest - if exists, switch target to chest immediately
         var chest = fieldMap.getClosestChest()
         if (chest != null) {
             debug("[CHEST] Chest detected! Switching target from enemy to chest (ID: " + chest._id + ")")
@@ -727,16 +697,14 @@ class StrengthStrategy extends Strategy {
             targetHitCell = fieldMap.getBestWeaponOrChipCell()
         }
 
-        // PRIORITY 2: Check for OTKO opportunity FIRST (before GRAPPLE repositioning)
-        // If OTKO is viable, skip GRAPPLE combo to preserve teleport positioning
-
-        // Use damage projection to determine if OTKO is actually possible (not just HP threshold)
+        // PRIORITY 1: OPPORTUNISTIC OTKO (check every turn based on current enemy HP)
+        // This runs on EVERY turn - as enemy HP drops from attrition, OTKO becomes viable
         var canTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
                          getCooldown(CHIP_TELEPORTATION, getEntity()) == 0 &&
                          player._currTp >= 15  // Minimum for teleport + attacks
 
         if (canTeleport) {
-            // Find optimal teleport cell with kill probability calculation
+            // Calculate damage projection from teleport position
             var teleportInfo = fieldMap.findOptimalTeleportCell(target)
             if (teleportInfo != null) {
                 var teleCell = teleportInfo['cell']
@@ -744,19 +712,120 @@ class StrengthStrategy extends Strategy {
                 var projectedDamage = teleportInfo['damage']
                 var enemyHP = target._currHealth
 
-                debug("[STR][OTKO-CHECK] Projected damage: " + floor(projectedDamage) + " vs HP: " + enemyHP + ", Kill probability: " + round(killProb * 100) + "%")
+                debug("[STR][OTKO-ATTRITION] Enemy HP: " + enemyHP + ", Projected damage: " + floor(projectedDamage) + ", Kill prob: " + round(killProb * 100) + "%")
 
-                // OTKO is viable if kill probability >= 85%
+                // ATTRITION-BASED OTKO: Trigger when enemy HP drops to killable range (85%+ confidence)
                 if (killProb >= 0.85) {
-                    debug("[STR][OTKO] OTKO viable with " + round(killProb * 100) + "% confidence! Executing teleport scenario")
+                    debug("[STR][OTKO-ATTRITION] OTKO NOW VIABLE! Enemy weakened to " + enemyHP + " HP, executing kill shot!")
                     var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
                     if (otkoExecuted) {
-                        debug("[STR] OTKO scenario executed successfully")
+                        debug("[STR] OTKO scenario executed successfully (attrition-based)")
                         return  // OTKO actions planned, skip normal offensive logic
                     }
                     debug("[STR] OTKO execution failed, falling back to normal offensive scenario")
-                } else {
-                    debug("[STR][OTKO] OTKO not viable (only " + round(killProb * 100) + "% kill chance), skipping teleport")
+                }
+                // Only show detailed message when enemy is getting close to killable range
+                else if (enemyHP < 1500) {
+                    debug("[STR][OTKO-ATTRITION] Enemy at " + enemyHP + " HP, need " + round((killProb * 100)) + "% → 85% kill prob (continue attrition)")
+                }
+            }
+        }
+
+        // PRIORITY 1.5: Smart STEROID application (only if OTKO not possible)
+        // Apply delayed offensive buff when in range AND OTKO was not viable
+        var distToEnemy = getCellDistance(player._cellPos, target._cellPos)
+        if (!player.hasEffect(EFFECT_BUFF_STRENGTH) && distToEnemy != null && distToEnemy <= 10) {
+            // Only apply STEROID if we didn't just execute OTKO (save TP for kill)
+            var shouldApplySteroid = true
+
+            // Check if OTKO was viable - if so, skip STEROID (TP was used for OTKO)
+            if (canTeleport) {
+                var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+                if (teleportInfo != null && teleportInfo['killProbability'] >= 0.85) {
+                    shouldApplySteroid = false  // OTKO executed, no need for STEROID
+                    debug("[STR][DELAYED-BUFF] Skipping STEROID - OTKO executed (TP used for kill)")
+                }
+            }
+
+            if (shouldApplySteroid) {
+                var minTPForBurst = 15  // 7 (STEROID) + 8 (minimum for attacks)
+                var playerTP = player._currTp
+
+                debug("[STR][DELAYED-BUFF] Entering weapon range (dist=" + distToEnemy + "), checking delayed STEROID application (TP=" + playerTP + ")")
+
+                // Use ADRENALINE if short 1-4 TP to reach burst threshold
+                if (playerTP < minTPForBurst && playerTP >= 11) {
+                    if (this.shouldUseAdrenaline(minTPForBurst)) {
+                        debug("[STR][DELAYED-BUFF] Using ADRENALINE to bridge TP gap (have " + playerTP + ", need " + minTPForBurst + ")")
+                        useChip(CHIP_ADRENALINE, player._id)
+                        player._currTp = player._currTp - 1 + 5  // Net +4 TP
+                        playerTP = player._currTp
+                        debug("[STR][DELAYED-BUFF] After ADRENALINE: TP=" + playerTP)
+                    }
+                }
+
+                // Apply STEROID for +160 STR burst damage
+                if (playerTP >= 15 && this.isChipAvailable(CHIP_STEROID, 7)) {
+                    debug("[STR][DELAYED-BUFF] Applying STEROID at range " + distToEnemy + " (TP=" + playerTP + ")")
+                    useChip(CHIP_STEROID, player._id)
+                    player._currTp -= 7
+                    debug("[STR][DELAYED-BUFF] STEROID active! +160 STR for 3 turns, TP remaining: " + player._currTp)
+
+                    // RE-CHECK OTKO: Now that STEROID is active, check if OTKO became possible
+                    if (canTeleport && player._currTp >= 15) {
+                        var teleportInfoBuffed = fieldMap.findOptimalTeleportCell(target)
+                        if (teleportInfoBuffed != null) {
+                            var killProbBuffed = teleportInfoBuffed['killProbability']
+                            var dmgBuffed = teleportInfoBuffed['damage']
+
+                            debug("[STR][OTKO-RECHECK] With STEROID: damage=" + floor(dmgBuffed) + " vs HP=" + target._currHealth + ", kill prob=" + round(killProbBuffed * 100) + "%")
+
+                            if (killProbBuffed >= 0.85) {
+                                debug("[STR][OTKO-RECHECK] STEROID enabled OTKO! Executing...")
+                                var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
+                                if (otkoExecuted) {
+                                    debug("[STR] OTKO with STEROID executed successfully")
+                                    return  // OTKO actions planned, skip normal offensive
+                                }
+                            }
+                        }
+                    }
+                } else if (playerTP < 15) {
+                    debug("[STR][DELAYED-BUFF] Insufficient TP for STEROID (have " + playerTP + ", need 15)")
+                }
+            }
+        }
+
+        // Calculate HP percentage once for all health-based decisions
+        var hpPercent = (player._currHealth * 100) / player._maxHealth
+
+        // PRIORITY 2: Defensive sustain combo (HP < 50%): REMISSION + FORTRESS/WALL
+        if (hpPercent < 50 && player._currTp >= 5) {
+            debug("[STR][SUSTAIN] HP at " + round(hpPercent) + "%, checking defensive sustain combo")
+
+            // Apply REMISSION for instant heal (100-150 HP)
+            if (this.isChipAvailable(CHIP_REMISSION, 5)) {
+                debug("[STR][SUSTAIN] Using REMISSION for instant heal (TP=" + player._currTp + ")")
+                useChip(CHIP_REMISSION, player._id)
+                player._currTp -= 5
+            }
+
+            // Reapply defensive shield if expired or about to expire
+            var hasShield = player.hasEffect(EFFECT_RELATIVE_SHIELD)
+            var shieldRemaining = hasShield ? player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) : 0
+
+            if (!hasShield || shieldRemaining <= 1) {
+                // Try FORTRESS first (stronger, longer duration)
+                if (this.isChipAvailable(CHIP_FORTRESS, 6) && player._currTp >= 6) {
+                    debug("[STR][SUSTAIN] Reapplying FORTRESS (7-8% reduction, 3 turns, TP=" + player._currTp + ")")
+                    useChip(CHIP_FORTRESS, player._id)
+                    player._currTp -= 6
+                }
+                // Fallback to WALL if FORTRESS unavailable
+                else if (this.isChipAvailable(CHIP_WALL, 3) && player._currTp >= 3) {
+                    debug("[STR][SUSTAIN] Using WALL fallback (4-5% reduction, 2 turns, TP=" + player._currTp + ")")
+                    useChip(CHIP_WALL, player._id)
+                    player._currTp -= 3
                 }
             }
         }
@@ -808,7 +877,7 @@ class StrengthStrategy extends Strategy {
         }
 
         // PRIORITY 4: CHIP_THERAPY - Emergency healing (only if HP critically low < 25%)
-        var hpPercent = (player._currHealth * 100) / player._maxHealth
+        // Note: hpPercent already calculated above for sustain combo
         if (hpPercent < 25 && this.shouldUseTherapy()) {
             var therapyTarget = this.findTherapyTarget()
             if (therapyTarget != null) {
@@ -840,25 +909,9 @@ class StrengthStrategy extends Strategy {
             debug("[STR][INVERSION] Position swap: player " + playerOldPos + " → " + player._cellPos + ", enemy " + targetOldPos + " → " + target._cellPos)
         }
 
-        // PRIORITY 6: CHIP_FORTRESS - Defensive buff (in combat range, no poison)
-        if (this.shouldUseFortress()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_FORTRESS)
-            // Target self
-            this._actions[count(this._actions) - 1].targetCell = player._cellPos
-            player._currTp -= 6
-            debug("[STR] Applied CHIP_FORTRESS (7-8% damage reduction for 3 turns)")
-        }
+        // NOTE: FORTRESS and WALL defensive buffs removed from here (now applied on Turn 1 when enemy far)
 
-        // PRIORITY 7: CHIP_WALL - Weaker defensive buff (in combat range, no poison, fallback)
-        if (this.shouldUseWall()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WALL)
-            // Target self
-            this._actions[count(this._actions) - 1].targetCell = player._cellPos
-            player._currTp -= 3
-            debug("[STR] Applied CHIP_WALL (4-5% damage reduction for 2 turns)")
-        }
-
-        // PRIORITY 8: Check for tactical CHIP_LIBERATION usage BEFORE combat
+        // PRIORITY 6: Check for tactical CHIP_LIBERATION usage BEFORE combat
         if (this.shouldUseLiberation(target)) {
             // Use on enemy to remove their buffs, or on self to remove debuffs
             var liberationTarget = target._cellPos
