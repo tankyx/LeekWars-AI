@@ -731,10 +731,9 @@ class StrengthStrategy extends Strategy {
             }
         }
 
-        // PRIORITY 1.5: Smart STEROID application (only if OTKO not possible)
-        // Apply delayed offensive buff when in range AND OTKO was not viable
-        var distToEnemy = getCellDistance(player._cellPos, target._cellPos)
-        if (!player.hasEffect(EFFECT_BUFF_STRENGTH) && distToEnemy != null && distToEnemy <= 10) {
+        // PRIORITY 1.5: Reapply STEROID when it wears off (maintain +160 STR throughout fight)
+        // Changed: No distance check - reapply immediately when buff expires
+        if (!player.hasEffect(EFFECT_BUFF_STRENGTH)) {
             // Only apply STEROID if we didn't just execute OTKO (save TP for kill)
             var shouldApplySteroid = true
 
@@ -743,7 +742,7 @@ class StrengthStrategy extends Strategy {
                 var teleportInfo = fieldMap.findOptimalTeleportCell(target)
                 if (teleportInfo != null && teleportInfo['killProbability'] >= 0.85) {
                     shouldApplySteroid = false  // OTKO executed, no need for STEROID
-                    debug("[STR][DELAYED-BUFF] Skipping STEROID - OTKO executed (TP used for kill)")
+                    debug("[STR][BUFF-REAPPLY] Skipping STEROID - OTKO executed (TP used for kill)")
                 }
             }
 
@@ -751,25 +750,25 @@ class StrengthStrategy extends Strategy {
                 var minTPForBurst = 15  // 7 (STEROID) + 8 (minimum for attacks)
                 var playerTP = player._currTp
 
-                debug("[STR][DELAYED-BUFF] Entering weapon range (dist=" + distToEnemy + "), checking delayed STEROID application (TP=" + playerTP + ")")
+                debug("[STR][BUFF-REAPPLY] STEROID expired, reapplying for continued attrition (TP=" + playerTP + ")")
 
                 // Use ADRENALINE if short 1-4 TP to reach burst threshold
                 if (playerTP < minTPForBurst && playerTP >= 11) {
                     if (this.shouldUseAdrenaline(minTPForBurst)) {
-                        debug("[STR][DELAYED-BUFF] Using ADRENALINE to bridge TP gap (have " + playerTP + ", need " + minTPForBurst + ")")
+                        debug("[STR][BUFF-REAPPLY] Using ADRENALINE to bridge TP gap (have " + playerTP + ", need " + minTPForBurst + ")")
                         useChip(CHIP_ADRENALINE, player._id)
                         player._currTp = player._currTp - 1 + 5  // Net +4 TP
                         playerTP = player._currTp
-                        debug("[STR][DELAYED-BUFF] After ADRENALINE: TP=" + playerTP)
+                        debug("[STR][BUFF-REAPPLY] After ADRENALINE: TP=" + playerTP)
                     }
                 }
 
                 // Apply STEROID for +160 STR burst damage
                 if (playerTP >= 15 && this.isChipAvailable(CHIP_STEROID, 7)) {
-                    debug("[STR][DELAYED-BUFF] Applying STEROID at range " + distToEnemy + " (TP=" + playerTP + ")")
+                    debug("[STR][BUFF-REAPPLY] Reapplying STEROID (TP=" + playerTP + ")")
                     useChip(CHIP_STEROID, player._id)
                     player._currTp -= 7
-                    debug("[STR][DELAYED-BUFF] STEROID active! +160 STR for 3 turns, TP remaining: " + player._currTp)
+                    debug("[STR][BUFF-REAPPLY] STEROID active! +160 STR for 3 turns, TP remaining: " + player._currTp)
 
                     // RE-CHECK OTKO: Now that STEROID is active, check if OTKO became possible
                     if (canTeleport && player._currTp >= 15) {
@@ -791,7 +790,7 @@ class StrengthStrategy extends Strategy {
                         }
                     }
                 } else if (playerTP < 15) {
-                    debug("[STR][DELAYED-BUFF] Insufficient TP for STEROID (have " + playerTP + ", need 15)")
+                    debug("[STR][BUFF-REAPPLY] Insufficient TP for STEROID (have " + playerTP + ", need 15)")
                 }
             }
         }

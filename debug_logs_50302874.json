@@ -1,0 +1,8486 @@
+{
+  "18035": {
+    "1": [
+      [
+        0,
+        1,
+        "Player seems to be a magic user.",
+        0,
+        447626,
+        42
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][STATE] Initializing antidote tracking state for new fight",
+        0,
+        447640,
+        25
+      ],
+      [
+        0,
+        1,
+        "Applying turn one buffs if available",
+        0,
+        447635,
+        728
+      ],
+      [
+        0,
+        1,
+        "Dumping equipped chips:",
+        0,
+        447635,
+        729
+      ],
+      [
+        0,
+        1,
+        " - toxin",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - grapple",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - regeneration",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - armoring",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - plague",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - boxing_glove",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - fracture",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - leather_boots",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - adrenaline",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - remission",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - covid",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - elevation",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - teleportation",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - knowledge",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - wizardry",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        " - ball_and_chain",
+        0,
+        447635,
+        731
+      ],
+      [
+        0,
+        1,
+        "[TURN1-BUFFS] Applying mandatory HP buffs",
+        0,
+        447635,
+        735
+      ],
+      [
+        0,
+        1,
+        "Using CHIP_KNOWLEDGE - Science/Magic boost",
+        0,
+        447635,
+        737
+      ]
+    ],
+    "113": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 291, now 257",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 291, now 257",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 226, now 311",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[257, 225, 419, 330, 204, 365, 240, 208, 401, 242, 275, 244, 277, 437, 312, 313, 186, 314, 347, 222, 382, 383]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[257, 225, 419, 293, 294, 329, 330, 204, 365, 240, 208, 401, 242, 275, 244, 277, 312, 313, 314, 347, 222, 382, 383]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[293, 294, 329]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[401, 257, 419, 275, 277, 437, 347, 365, 383]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[257, 329, 330, 204, 208, 401, 275, 277, 347, 222, 225, 419, 293, 294, 365, 240, 242, 244, 437, 312, 313, 186, 314, 382, 383]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[257, 225, 293, 294, 329, 330, 365, 240, 401, 242, 275, 277, 312, 313, 347, 222, 382, 383]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[275, 293, 277, 294, 311, 312, 329, 347]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[257, 329, 330, 204, 208, 401, 275, 277, 347, 222, 225, 419, 293, 294, 365, 240, 242, 244, 437, 311, 312, 313, 186, 314, 382, 383] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_311",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 257 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 7",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 311 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 60 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 531 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 390 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 311, now 311",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 257, now 257",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=true remaining=0 TP=19 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][CLOSE-RANGE] Distance 3 cells - using full offensive",
+        0,
+        447640,
+        212
+      ],
+      [
+        0,
+        1,
+        "[ANTIDOTE][STATE] enemy=1 baiting=false inferredUse=false cd=3 prevRemain=-1 turnsBaiting=3",
+        0,
+        447637,
+        78
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][ANTIDOTE-STATE] Turn 7: baiting=false enemyHasAntidote=true antidoteCD=3",
+        0,
+        447640,
+        220
+      ],
+      [
+        0,
+        1,
+        "[COMBO-POSITIONING] Found optimal GRAPPLE-COVID cell: 257 (antidoteCD=3)",
+        0,
+        447640,
+        304
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          186
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=186 canAttack=true danger=9 dist=7 cover=3 currentDist=3",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN] weaponPreferred=true",
+        0,
+        447639,
+        45
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=257 rawScore=1665 adjScore=1665 pathLen=0 penalty=0 stayHighDot=true",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=275 rawScore=3794 adjScore=3787 pathLen=1 penalty=7 stayHighDot=true",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=293 rawScore=4716 adjScore=4702 pathLen=2 penalty=14 stayHighDot=true",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][CHOICE] cell=293 adjScore=4702 chips=3 weapons=0 pathLen=2",
+        0,
+        447639,
+        356
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][CHOICE-DETAIL] cell=293 TP_rem_est=0 weapons={destroyer:d=50/p=0/t=50, axe:d=66/p=0/t=66} chips={toxin:d=0/p=567/t=567, plague:d=0/p=1134/t=1134, covid:d=0/p=3263/t=3263}",
+        0,
+        447639,
+        385
+      ],
+      [
+        0,
+        4,
+        [
+          307
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=307 danger=0 dist=8 cover=2 playerPos=257",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][LEATHER_BOOTS] Skipping - reserving TP for GRAPPLE-COVID combo",
+        0,
+        447640,
+        348
+      ],
+      [
+        0,
+        1,
+        "[COMBO-POSITIONING] Overriding poison plan with combo cell 257",
+        0,
+        447640,
+        358
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Already positioned on cell 257",
+        0,
+        447640,
+        403
+      ],
+      [
+        0,
+        1,
+        "[FULL] ===== ENTERED FULL OFFENSIVE MODE =====",
+        0,
+        447640,
+        498
+      ],
+      [
+        0,
+        1,
+        "[FULL] Checking GRAPPLE-COVID combo... antidoteCD=3 enemyHasAntidote=true antidoteSafe=true",
+        0,
+        447640,
+        516
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] Starting check: playerPos=257 targetPos=311 dist=3 TP=19",
+        0,
+        447638,
+        52
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] Chips equipped: GRAPPLE=true COVID=true BOXING=true",
+        0,
+        447638,
+        70
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] Cooldowns: GRAPPLE=0 COVID=0 BOXING=0",
+        0,
+        447638,
+        81
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] Same line check: true",
+        0,
+        447638,
+        90
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] Line of sight check: true",
+        0,
+        447638,
+        98
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] SUCCESS: All conditions met (path clear, pull destination valid)",
+        0,
+        447638,
+        126
+      ],
+      [
+        0,
+        1,
+        "[FULL][GRAPPLE-COVID] Combo available NOW - reserving 18 TP (BNC=true)",
+        0,
+        447640,
+        523
+      ],
+      [
+        0,
+        1,
+        "[FULL][GRAPPLE-COVID] Executing combo NOW!",
+        0,
+        447640,
+        534
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Starting 18 TP combo from range 3 (BNC=true)",
+        0,
+        447638,
+        142
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Step 1: GRAPPLE (3 TP) - pulling enemy from 311 toward 293",
+        0,
+        447638,
+        159
+      ]
+    ],
+    "115": [
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 311, now 293",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Enemy pulled to: 293 (distance from player: 2)",
+        0,
+        447638,
+        167
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Step 2: COVID (8 TP) on cell 293",
+        0,
+        447638,
+        170
+      ]
+    ],
+    "117": [
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] BOXING geometry check: player(2,-5) enemy(4,-5)",
+        0,
+        447638,
+        186
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] BOXING alignment: horizontal=true vertical=false",
+        0,
+        447638,
+        191
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] BOXING_GLOVE: horizontal push to 401 (dist from player=8)",
+        0,
+        447638,
+        206
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Step 3: BOXING_GLOVE (2 TP) - pushing from 293 to 401 (alignment: horizontal)",
+        0,
+        447638,
+        241
+      ]
+    ],
+    "119": [
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 293, now 401",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Enemy pushed to: 401",
+        0,
+        447638,
+        249
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Step 4: BALL_AND_CHAIN (5 TP) on cell 401",
+        0,
+        447638,
+        254
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID] Combo complete! TP remaining: 1",
+        0,
+        447638,
+        261
+      ],
+      [
+        0,
+        1,
+        "[FULL][CHIP-LIST] Found 3 chips in poison plan, TP available=1",
+        0,
+        447640,
+        627
+      ],
+      [
+        0,
+        1,
+        "[FULL][CHIP-CHECK] covid cost=8 cd=7 TP=1",
+        0,
+        447640,
+        630
+      ],
+      [
+        0,
+        1,
+        "[FULL][CHIP-SKIP] covid - insufficient TP",
+        0,
+        447640,
+        632
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Found 0 safe cells within 6 MP (threat \u2264 0)",
+        0,
+        447632,
+        543
+      ],
+      [
+        0,
+        1,
+        "[SAFE-KITE] No zero-threat cells found within 6 MP",
+        0,
+        447640,
+        50
+      ],
+      [
+        0,
+        4,
+        [
+          307
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=307 danger=0 dist=13 cover=2 playerPos=257",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][KITE] Using standard H&S cell (danger=0)",
+        0,
+        447640,
+        445
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][HNS] Added hide move to cell 307 danger=0",
+        0,
+        447640,
+        466
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Actions scheduled=1 TP_end=1",
+        0,
+        447640,
+        479
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 1 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 307 updates simulated pos (cost: 4 MP, 2 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 307",
+        0,
+        447635,
+        1580
+      ]
+    ],
+    "138": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 257, now 307",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 257, now 307",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 401, now 416",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[520, 521, 522, 395, 396, 397, 537, 539, 413, 414, 415, 417, 418, 419, 296, 430, 431, 432, 308, 312, 313, 448, 449, 450, 451, 326, 330, 465, 466, 467, 468, 469, 344, 347, 483, 484, 485, 486, 487, 362, 364, 365, 500, 502, 503, 504, 380, 381, 382]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[448, 449, 450, 451, 326, 520, 521, 330, 522, 396, 397, 398, 399, 466, 467, 468, 469, 344, 347, 413, 414, 415, 417, 418, 483, 419, 484, 485, 486, 487, 362, 364, 365, 431, 432, 433, 434, 308, 502, 503, 312, 504, 313, 380, 381, 382]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[433, 434, 398, 399]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[450, 467, 484, 308, 326, 344, 362, 380, 365, 382]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[520, 521, 522, 395, 396, 397, 398, 399, 537, 539, 413, 414, 415, 417, 418, 419, 296, 430, 431, 432, 433, 434, 308, 312, 313, 448, 449, 450, 451, 326, 330, 465, 466, 467, 468, 469, 344, 347, 483, 484, 485, 486, 487, 362, 364, 365, 500, 502, 503, 504, 380, 381, 382]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[449, 450, 451, 326, 330, 396, 397, 398, 399, 466, 467, 468, 469, 344, 347, 414, 415, 417, 418, 484, 485, 486, 487, 362, 364, 365, 431, 432, 433, 434, 502, 503, 504, 380, 381, 382]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[416, 433, 417, 450, 434, 451, 380, 381, 398, 382, 415, 399]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[520, 521, 522, 395, 396, 397, 398, 399, 537, 539, 413, 414, 415, 416, 417, 418, 419, 296, 430, 431, 432, 433, 434, 308, 312, 313, 448, 449, 450, 451, 326, 330, 465, 466, 467, 468, 469, 344, 347, 483, 484, 485, 486, 487, 362, 364, 365, 500, 502, 503, 504, 380, 381, 382] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_416",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 308 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 8",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 416 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 68 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 520 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 362 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][THREAT] Immediate lethal threat: 1924 >= 1066 HP",
+        0,
+        447640,
+        108
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Verifying remission (cost: 5 TP, have: 19 TP)",
+        0,
+        447640,
+        803
+      ],
+      [
+        0,
+        1,
+        "[HEAL-TARGET] AoE heal chip, returning player position",
+        0,
+        447640,
+        855
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Estimating heal for remission",
+        0,
+        447640,
+        875
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Direct heal: 66.0",
+        0,
+        447640,
+        880
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Scaled with wisdom (540): 66.0 -> 101.64",
+        0,
+        447640,
+        890
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Total estimated heal: 101.64",
+        0,
+        447640,
+        894
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Healing executable: chip=remission TP=19 heal=101.64 HP",
+        0,
+        447640,
+        836
+      ],
+      [
+        0,
+        1,
+        "[MAGIC] Switching to defensive (HP=33% threat=1924)",
+        0,
+        447640,
+        129
+      ],
+      [
+        0,
+        1,
+        "[HEAL] Using REMISSION (HP=33% priority=1)",
+        0,
+        447635,
+        1336
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity SmallPoxLeek with weapon double_gun and chip remission",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          287
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=287 danger=0 dist=13 cover=3 playerPos=307",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[ESCAPE-ROUTE] No damage cells on escape route that preserve path to safety (maxMP=6)",
+        0,
+        447635,
+        670
+      ],
+      [
+        0,
+        1,
+        "[FLEE] Fleeing to safe cell 287 (no damage cells on escape route, MP=6)",
+        0,
+        447635,
+        1426
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 12 to cell 287 towards entity Domingo",
+        0,
+        447635,
+        810
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 2 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (remission): TP 19 -> 14",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 287 updates simulated pos (cost: 4 MP, 2 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=-1 chip=80 targetCell=307",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using chip remission on cell 307 (TP=19)",
+        0,
+        447635,
+        1597
+      ]
+    ],
+    "140": [
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 287",
+        0,
+        447635,
+        1580
+      ]
+    ],
+    "150": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 307, now 287",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 307, now 287",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 416, now 384",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[418, 451, 419, 436, 437, 454, 472, 381, 382, 383]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[418, 451, 419, 454, 367, 401, 402, 436, 437, 472, 381, 382, 383]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[401, 402, 367]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[418]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[418, 451, 419, 454, 367, 401, 402, 436, 437, 472, 381, 382, 383]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[401, 418, 402, 419, 436, 437, 454, 472, 382, 383, 367]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[384, 401, 418, 402, 419, 383, 367]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[384, 401, 402, 418, 419, 436, 437, 451, 454, 472, 367, 381, 382, 383] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_384",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 418 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 9",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 384 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 30 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 377 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 276 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 384, now 384",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 287, now 287",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=true remaining=0 TP=19 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Distance 19 cells - using simple approach mode",
+        0,
+        447640,
+        164
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][BUFF] Applied LEATHER_BOOTS (+2 MP)",
+        0,
+        447640,
+        188
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          291
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=291 canAttack=false danger=0 dist=11 cover=5 currentDist=19",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][MOVE] Approaching via cell 291",
+        0,
+        447640,
+        196
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Executing simple approach (TP=16 MP=8)",
+        0,
+        447640,
+        204
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 2 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (leather_boots): TP 19 -> 16",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 291 requires 7 MP but only have 6 - checking fallback",
+        0,
+        447635,
+        1726
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell 291 (MP=6)",
+        0,
+        447635,
+        1662
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 6 MP",
+        0,
+        447635,
+        473
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found partial path cell: 325 (dist=6)",
+        0,
+        447635,
+        1680
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 325 (original: 325, cost: 5 MP)",
+        0,
+        447635,
+        1737
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 0 invalid actions, added 1 fallbacks, 2 total actions remaining",
+        0,
+        447635,
+        1853
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip leather_boots on entity SmallPoxLeek",
+        0,
+        447635,
+        1606
+      ]
+    ],
+    "152": [
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 325",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "153": [
+      [
+        0,
+        1,
+        "Movement result: 287 -> 325 (target was 325)",
+        0,
+        447635,
+        1573
+      ]
+    ],
+    "173": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 287, now 325",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 287, now 325",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 384, now 398",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[517, 520, 521, 522, 395, 396, 397, 399, 279, 412, 413, 414, 417, 296, 430, 431, 432, 433, 434, 308, 313, 447, 448, 449, 450, 451, 326, 330, 465, 466, 467, 468, 469, 344, 347, 483, 484, 485, 486, 487, 362, 364, 365, 500, 502, 503, 504, 505, 382]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[448, 449, 450, 451, 326, 330, 395, 396, 397, 399, 465, 466, 467, 468, 469, 344, 347, 413, 414, 415, 416, 417, 483, 484, 485, 486, 487, 296, 362, 364, 365, 430, 431, 432, 433, 434, 308, 500, 502, 503, 504, 313, 505, 380, 381, 382]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[416, 380, 381, 415]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[449, 483, 517, 262, 326, 296, 330, 362, 364, 432, 434, 466, 500, 308, 534, 279, 344, 313, 347]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[517, 520, 521, 522, 395, 396, 397, 399, 279, 412, 413, 414, 415, 416, 417, 296, 430, 431, 432, 433, 434, 308, 313, 447, 448, 449, 450, 451, 326, 330, 465, 466, 467, 468, 469, 344, 347, 483, 484, 485, 486, 487, 362, 364, 365, 500, 502, 503, 504, 505, 380, 381, 382]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[448, 449, 450, 451, 326, 330, 396, 397, 399, 466, 467, 468, 469, 344, 347, 413, 414, 415, 416, 417, 483, 484, 485, 486, 487, 362, 364, 365, 431, 432, 433, 434, 308, 313, 380, 381, 382]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[432, 416, 433, 434, 362, 380, 364, 397, 381, 398, 415, 399]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[517, 520, 521, 522, 395, 396, 397, 398, 399, 279, 412, 413, 414, 415, 416, 417, 296, 430, 431, 432, 433, 434, 308, 313, 447, 448, 449, 450, 451, 326, 330, 465, 466, 467, 468, 469, 344, 347, 483, 484, 485, 486, 487, 362, 364, 365, 500, 502, 503, 504, 505, 380, 381, 382] weaponOnlyCellsSample=[262, 534]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_398",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 308 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 10",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 398 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 72 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 556 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 385 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][THREAT] Immediate lethal threat: 1924 >= 938 HP",
+        0,
+        447640,
+        108
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Verifying remission (cost: 5 TP, have: 19 TP)",
+        0,
+        447640,
+        803
+      ],
+      [
+        0,
+        1,
+        "[HEAL-TARGET] AoE heal chip, returning player position",
+        0,
+        447640,
+        855
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Estimating heal for remission",
+        0,
+        447640,
+        875
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Direct heal: 66.0",
+        0,
+        447640,
+        880
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Scaled with wisdom (540): 66.0 -> 101.64",
+        0,
+        447640,
+        890
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Total estimated heal: 101.64",
+        0,
+        447640,
+        894
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Healing executable: chip=remission TP=19 heal=101.64 HP",
+        0,
+        447640,
+        836
+      ],
+      [
+        0,
+        1,
+        "[MAGIC] Switching to defensive (HP=29% threat=1924)",
+        0,
+        447640,
+        129
+      ],
+      [
+        0,
+        1,
+        "[HEAL] Using REMISSION (HP=29% priority=1)",
+        0,
+        447635,
+        1336
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity SmallPoxLeek with weapon double_gun and chip remission",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          286
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=286 danger=0 dist=14 cover=1 playerPos=325",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[ESCAPE-ROUTE] No damage cells on escape route that preserve path to safety (maxMP=8)",
+        0,
+        447635,
+        670
+      ],
+      [
+        0,
+        1,
+        "[FLEE] Fleeing to safe cell 286 (no damage cells on escape route, MP=8)",
+        0,
+        447635,
+        1426
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 12 to cell 286 towards entity Domingo",
+        0,
+        447635,
+        810
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 2 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (remission): TP 19 -> 14",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 286 updates simulated pos (cost: 7 MP, 1 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=-1 chip=80 targetCell=325",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using chip remission on cell 325 (TP=19)",
+        0,
+        447635,
+        1597
+      ]
+    ],
+    "175": [
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 286",
+        0,
+        447635,
+        1580
+      ]
+    ],
+    "19": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 176, now 284",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 176, now 284",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 16, now 136",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[64, 33, 34, 99, 100, 68, 134, 102, 135, 10, 46, 16, 17, 82, 51, 116, 117, 85, 151, 152, 28]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[64, 33, 34, 99, 100, 68, 134, 102, 135, 46, 82, 51, 116, 117, 85, 118, 151, 119, 152, 153, 28]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[118, 119, 153]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[64, 17, 34, 82, 51, 68, 100, 85, 102, 10, 28, 46]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[64, 33, 34, 99, 100, 68, 134, 102, 135, 10, 46, 16, 17, 82, 51, 116, 117, 85, 118, 151, 119, 152, 153, 28]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[64, 99, 100, 68, 134, 102, 135, 46, 82, 51, 116, 117, 85, 118, 151, 119, 152, 153]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[100, 118, 102, 135, 119, 136, 153]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[64, 68, 134, 135, 136, 10, 16, 17, 82, 85, 151, 152, 153, 28, 33, 34, 99, 100, 102, 46, 51, 116, 117, 118, 119] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_136",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 10 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 2",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 136 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 51 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 364 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 263 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 136, now 136",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 284, now 284",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=false remaining=0 TP=19 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Distance 19 cells - using simple approach mode",
+        0,
+        447640,
+        164
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][BUFF] Applied WIZARDRY (+150-170 magic)",
+        0,
+        447640,
+        171
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][BUFF] Applied LEATHER_BOOTS (+2 MP)",
+        0,
+        447640,
+        188
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          288
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=288 canAttack=false danger=0 dist=11 cover=4 currentDist=19",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][MOVE] Approaching via cell 288",
+        0,
+        447640,
+        196
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Executing simple approach (TP=10 MP=8)",
+        0,
+        447640,
+        204
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 3 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (wizardry): TP 19 -> 13",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (leather_boots): TP 13 -> 10",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 288 requires 7 MP but only have 6 - checking fallback",
+        0,
+        447635,
+        1726
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell 288 (MP=6)",
+        0,
+        447635,
+        1662
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 6 MP",
+        0,
+        447635,
+        473
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found partial path cell: 287 (dist=6)",
+        0,
+        447635,
+        1680
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 287 (original: 287, cost: 5 MP)",
+        0,
+        447635,
+        1737
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 0 invalid actions, added 1 fallbacks, 3 total actions remaining",
+        0,
+        447635,
+        1853
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip wizardry on entity SmallPoxLeek",
+        0,
+        447635,
+        1606
+      ]
+    ],
+    "192": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 325, now 286",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 325, now 286",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 398, now 342",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[257, 391, 392, 393, 394, 461, 270, 462, 274, 341, 409, 410, 411, 412, 223, 288, 289, 291, 358, 426, 427, 428, 240, 306, 307, 308, 374, 375, 376, 377, 252, 444, 445, 447]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[257, 324, 325, 392, 393, 394, 270, 274, 341, 409, 410, 411, 412, 288, 289, 291, 358, 359, 427, 428, 240, 306, 307, 308, 374, 375, 376, 377, 252, 444, 445, 447]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[324, 325, 359]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[288, 257, 291, 393, 427, 461, 270, 240, 274, 306, 308, 376, 410, 444, 252, 223]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[257, 324, 325, 391, 392, 393, 394, 461, 270, 462, 274, 341, 409, 410, 411, 412, 223, 288, 289, 291, 358, 359, 426, 427, 428, 240, 306, 307, 308, 374, 375, 376, 377, 252, 444, 445, 447]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[257, 324, 325, 392, 393, 394, 270, 274, 341, 410, 411, 412, 288, 289, 291, 358, 359, 427, 428, 306, 307, 308, 375, 376, 377, 252]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[306, 307, 324, 308, 341, 325, 342, 359, 376, 377]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[257, 391, 392, 393, 394, 270, 274, 409, 410, 411, 412, 288, 289, 291, 426, 427, 428, 306, 307, 308, 444, 445, 447, 324, 325, 461, 462, 341, 342, 223, 358, 359, 240, 374, 375, 376, 377, 252] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_342",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 252 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 11",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 342 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 70 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 718 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 543 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][THREAT] Immediate lethal threat: 1924 >= 991 HP",
+        0,
+        447640,
+        108
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Verifying remission (cost: 5 TP, have: 19 TP)",
+        0,
+        447640,
+        803
+      ],
+      [
+        0,
+        1,
+        "[HEAL-TARGET] AoE heal chip, returning player position",
+        0,
+        447640,
+        855
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Estimating heal for remission",
+        0,
+        447640,
+        875
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Direct heal: 66.0",
+        0,
+        447640,
+        880
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Scaled with wisdom (540): 66.0 -> 101.64",
+        0,
+        447640,
+        890
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Total estimated heal: 101.64",
+        0,
+        447640,
+        894
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Healing executable: chip=remission TP=19 heal=101.64 HP",
+        0,
+        447640,
+        836
+      ],
+      [
+        0,
+        1,
+        "[MAGIC] Switching to defensive (HP=31% threat=1924)",
+        0,
+        447640,
+        129
+      ],
+      [
+        0,
+        1,
+        "[HEAL] Using REMISSION (HP=31% priority=1)",
+        0,
+        447635,
+        1336
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity SmallPoxLeek with weapon double_gun and chip remission",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          214
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=214 danger=1 dist=11 cover=1 playerPos=286",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[ESCAPE-ROUTE] No damage cells on escape route that preserve path to safety (maxMP=6)",
+        0,
+        447635,
+        670
+      ],
+      [
+        0,
+        1,
+        "[FLEE] Fleeing to safe cell 214 (no damage cells on escape route, MP=6)",
+        0,
+        447635,
+        1426
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 12 to cell 214 towards entity Domingo",
+        0,
+        447635,
+        810
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 2 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (remission): TP 19 -> 14",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 214 updates simulated pos (cost: 5 MP, 1 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=-1 chip=80 targetCell=286",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using chip remission on cell 286 (TP=19)",
+        0,
+        447635,
+        1597
+      ]
+    ],
+    "194": [
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 214",
+        0,
+        447635,
+        1580
+      ]
+    ],
+    "207": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 286, now 214",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 286, now 214",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 342, now 217",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[128, 196, 197, 198, 270, 144, 145, 146, 147, 214, 215, 216, 287, 288, 161, 162, 163, 164, 110, 112, 179, 180, 181, 182, 252, 126, 127]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[128, 197, 198, 199, 270, 144, 145, 146, 147, 214, 215, 216, 287, 288, 162, 163, 164, 235, 110, 112, 179, 180, 181, 182, 252, 127]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[199, 235]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[145, 163, 181, 127]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[128, 196, 197, 198, 199, 270, 144, 145, 146, 147, 214, 215, 216, 287, 288, 161, 162, 163, 164, 235, 110, 112, 179, 180, 181, 182, 252, 126, 127]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[128, 288, 162, 163, 164, 197, 198, 199, 235, 270, 145, 146, 147, 180, 181, 182, 215, 216, 252, 127, 287]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[181, 182, 199, 216, 217, 235, 252]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[128, 270, 144, 145, 146, 147, 287, 288, 161, 162, 163, 164, 179, 180, 181, 182, 196, 197, 198, 199, 214, 215, 216, 217, 235, 110, 112, 252, 126, 127] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_217",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 163 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 12",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 217 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 63 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 597 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 450 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][THREAT] Immediate lethal threat: 1924 >= 268 HP",
+        0,
+        447640,
+        108
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Verifying remission (cost: 5 TP, have: 19 TP)",
+        0,
+        447640,
+        803
+      ],
+      [
+        0,
+        1,
+        "[HEAL-TARGET] AoE heal chip, returning player position",
+        0,
+        447640,
+        855
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Estimating heal for remission",
+        0,
+        447640,
+        875
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Direct heal: 66.0",
+        0,
+        447640,
+        880
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Scaled with wisdom (540): 66.0 -> 101.64",
+        0,
+        447640,
+        890
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Total estimated heal: 101.64",
+        0,
+        447640,
+        894
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Healing executable: chip=remission TP=19 heal=101.64 HP",
+        0,
+        447640,
+        836
+      ],
+      [
+        0,
+        1,
+        "[MAGIC] Switching to defensive (HP=8% threat=1924)",
+        0,
+        447640,
+        129
+      ],
+      [
+        0,
+        1,
+        "[HEAL] Using REMISSION (HP=8% priority=1)",
+        0,
+        447635,
+        1336
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity SmallPoxLeek with weapon double_gun and chip remission",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[FLEE-ATTACK] Attacking from current position 214 before fleeing (weapon=double_gun)",
+        0,
+        447635,
+        1348
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon double_gun and chip ",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon double_gun and chip ",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon double_gun and chip ",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          300
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=300 danger=0 dist=9 cover=3 playerPos=214",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[FLEE] Fleeing to safe cell 300 (danger=0, MP=6)",
+        0,
+        447635,
+        1431
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 12 to cell 300 towards entity Domingo",
+        0,
+        447635,
+        810
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 5 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (remission): TP 19 -> 14",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (double_gun): TP 14 -> 10",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (double_gun): TP 10 -> 6",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (double_gun): TP 6 -> 2",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 300 updates simulated pos (cost: 4 MP, 2 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=-1 chip=80 targetCell=214",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using chip remission on cell 214 (TP=19)",
+        0,
+        447635,
+        1597
+      ]
+    ],
+    "209": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=39 chip=-1 targetCell=217",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon double_gun on cell 217 (pos=214 dist=6 TP=14)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "21": [
+      [
+        0,
+        1,
+        "Executing buff/utility chip leather_boots on entity SmallPoxLeek",
+        0,
+        447635,
+        1606
+      ]
+    ],
+    "212": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=39 chip=-1 targetCell=217",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon double_gun on cell 217 (pos=214 dist=6 TP=10)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "215": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=39 chip=-1 targetCell=217",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon double_gun on cell 217 (pos=214 dist=6 TP=6)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "218": [
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 300",
+        0,
+        447635,
+        1580
+      ]
+    ],
+    "23": [
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 287",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "234": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 214, now 300",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 214, now 300",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 217, now 165",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[128, 130, 197, 198, 199, 267, 77, 144, 145, 146, 149, 214, 215, 216, 284, 95, 162, 163, 164, 166, 167, 168, 233, 112, 179, 180, 181, 250, 127]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[128, 130, 197, 198, 199, 267, 77, 145, 146, 147, 148, 149, 215, 216, 95, 162, 163, 164, 166, 167, 168, 233, 112, 180, 181, 182, 250, 127]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[147, 148, 182]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[199, 216, 233, 250, 267, 284]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[128, 130, 197, 198, 199, 267, 77, 144, 145, 146, 147, 148, 149, 214, 215, 216, 284, 95, 162, 163, 164, 166, 167, 168, 233, 112, 179, 180, 181, 182, 250, 127]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[128, 130, 163, 164, 198, 166, 199, 167, 233, 77, 112, 145, 146, 147, 180, 148, 181, 149, 182, 215, 216, 250, 95]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[130, 147, 164, 148, 165, 182, 166, 199]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[128, 130, 267, 144, 145, 146, 147, 148, 149, 284, 162, 163, 164, 165, 166, 167, 168, 179, 180, 181, 182, 197, 198, 199, 77, 214, 215, 216, 95, 233, 112, 250, 127] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_165",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 284 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 13",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 165 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 58 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 583 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 435 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][THREAT] Immediate lethal threat: 609 >= 8 HP",
+        0,
+        447640,
+        108
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Verifying remission (cost: 5 TP, have: 19 TP)",
+        0,
+        447640,
+        803
+      ],
+      [
+        0,
+        1,
+        "[HEAL-TARGET] AoE heal chip, returning player position",
+        0,
+        447640,
+        855
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Estimating heal for remission",
+        0,
+        447640,
+        875
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Direct heal: 66.0",
+        0,
+        447640,
+        880
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Scaled with wisdom (540): 66.0 -> 101.64",
+        0,
+        447640,
+        890
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Total estimated heal: 101.64",
+        0,
+        447640,
+        894
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Healing executable: chip=remission TP=19 heal=101.64 HP",
+        0,
+        447640,
+        836
+      ],
+      [
+        0,
+        1,
+        "[MAGIC] Switching to defensive (HP=0% threat=609)",
+        0,
+        447640,
+        129
+      ],
+      [
+        0,
+        1,
+        "[HEAL] Using REMISSION (HP=0% priority=1)",
+        0,
+        447635,
+        1336
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity SmallPoxLeek with weapon double_gun and chip remission",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          405
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=405 danger=0 dist=14 cover=1 playerPos=300",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[ESCAPE-ROUTE] No damage cells on escape route that preserve path to safety (maxMP=6)",
+        0,
+        447635,
+        670
+      ],
+      [
+        0,
+        1,
+        "[FLEE] Fleeing to safe cell 405 (no damage cells on escape route, MP=6)",
+        0,
+        447635,
+        1426
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 12 to cell 405 towards entity Domingo",
+        0,
+        447635,
+        810
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 2 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (remission): TP 19 -> 14",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 405 updates simulated pos (cost: 5 MP, 1 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=-1 chip=80 targetCell=300",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using chip remission on cell 300 (TP=19)",
+        0,
+        447635,
+        1597
+      ]
+    ],
+    "236": [
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 405",
+        0,
+        447635,
+        1580
+      ]
+    ],
+    "24": [
+      [
+        0,
+        1,
+        "Movement result: 284 -> 287 (target was 287)",
+        0,
+        447635,
+        1573
+      ]
+    ],
+    "250": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 300, now 405",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 300, now 405",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 165, now 95",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[130, 147, 164, 165, 182, 199, 216, 10, 27, 44, 61]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[130, 164, 165, 199, 10, 44, 77, 78, 112, 147, 182, 27, 61]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[112, 77, 78]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[10, 27, 44, 61]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[130, 164, 165, 199, 10, 44, 77, 78, 112, 147, 182, 216, 27, 61]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[112, 130, 147, 164, 165, 182, 10, 27, 44, 77, 61, 78]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[112, 130, 77, 61, 78, 95]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[130, 10, 147, 27, 164, 165, 44, 182, 61, 199, 77, 78, 216, 95, 112] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_95",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 10 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 14",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 95 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 42 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 482 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 371 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][THREAT] Critical HP: 14% (emergency heal)",
+        0,
+        447640,
+        118
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Verifying remission (cost: 5 TP, have: 19 TP)",
+        0,
+        447640,
+        803
+      ],
+      [
+        0,
+        1,
+        "[HEAL-TARGET] AoE heal chip, returning player position",
+        0,
+        447640,
+        855
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Estimating heal for remission",
+        0,
+        447640,
+        875
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Direct heal: 66.0",
+        0,
+        447640,
+        880
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Scaled with wisdom (540): 66.0 -> 101.64",
+        0,
+        447640,
+        890
+      ],
+      [
+        0,
+        1,
+        "[HEAL-ESTIMATE] Total estimated heal: 101.64",
+        0,
+        447640,
+        894
+      ],
+      [
+        0,
+        1,
+        "[HEAL-CHECK] Healing executable: chip=remission TP=19 heal=101.64 HP",
+        0,
+        447640,
+        836
+      ],
+      [
+        0,
+        1,
+        "[MAGIC] Switching to defensive (HP=14% threat=0)",
+        0,
+        447640,
+        129
+      ],
+      [
+        0,
+        1,
+        "[HEAL] Using REMISSION (HP=14% priority=1)",
+        0,
+        447635,
+        1336
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity SmallPoxLeek with weapon double_gun and chip remission",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          509
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=509 danger=0 dist=24 cover=2 playerPos=405",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[ESCAPE-ROUTE] No damage cells on escape route that preserve path to safety (maxMP=6)",
+        0,
+        447635,
+        670
+      ],
+      [
+        0,
+        1,
+        "[FLEE] Fleeing to safe cell 509 (no damage cells on escape route, MP=6)",
+        0,
+        447635,
+        1426
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 12 to cell 509 towards entity Domingo",
+        0,
+        447635,
+        810
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 2 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (remission): TP 19 -> 14",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 509 updates simulated pos (cost: 5 MP, 1 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=-1 chip=80 targetCell=405",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using chip remission on cell 405 (TP=19)",
+        0,
+        447635,
+        1597
+      ]
+    ],
+    "252": [
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 509",
+        0,
+        447635,
+        1580
+      ]
+    ],
+    "259": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 405, now 509",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 405, now 509",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 95, now 198",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[128, 130, 267, 268, 269, 143, 144, 145, 146, 147, 148, 149, 285, 286, 160, 161, 162, 163, 164, 165, 302, 303, 177, 178, 179, 182, 320, 321, 195, 196, 197, 199, 72, 212, 213, 214, 217, 90, 230, 231, 233, 235, 108, 110, 247, 250, 251, 126, 127]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[128, 130, 195, 196, 197, 199, 267, 268, 269, 143, 144, 145, 146, 147, 148, 213, 214, 215, 216, 217, 90, 285, 286, 160, 161, 162, 163, 164, 165, 230, 231, 233, 235, 108, 110, 302, 303, 178, 179, 180, 181, 182, 250, 251, 126, 127]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[180, 181, 215, 216]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[144, 130, 162, 147, 164, 54, 72, 90, 108, 126]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[128, 130, 267, 268, 269, 143, 144, 145, 146, 147, 148, 149, 285, 286, 160, 161, 162, 163, 164, 165, 302, 303, 177, 178, 179, 180, 181, 182, 320, 321, 195, 196, 197, 199, 72, 212, 213, 214, 215, 216, 217, 90, 230, 231, 233, 235, 108, 110, 247, 250, 251, 126, 127]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[128, 130, 196, 197, 199, 267, 268, 269, 143, 144, 145, 146, 147, 148, 213, 214, 215, 216, 217, 285, 286, 161, 162, 163, 164, 165, 231, 233, 235, 108, 110, 178, 179, 180, 181, 182, 250, 251, 126, 127]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[162, 163, 180, 164, 197, 181, 198, 215, 199, 216, 233]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[128, 130, 267, 268, 269, 143, 144, 145, 146, 147, 148, 149, 285, 286, 160, 161, 162, 163, 164, 165, 302, 303, 177, 178, 179, 180, 181, 182, 320, 321, 195, 196, 197, 198, 199, 72, 212, 213, 214, 215, 216, 217, 90, 230, 231, 233, 235, 108, 110, 247, 250, 251, 126, 127] weaponOnlyCellsSample=[54]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_198",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 162 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 15",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 198 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 71 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 557 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 409 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][THREAT] HP low (29%) but no lethal threat (threat=0) - continuing offense",
+        0,
+        447640,
+        121
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 198, now 198",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 509, now 509",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=false remaining=0 TP=19 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Distance 18 cells - using simple approach mode",
+        0,
+        447640,
+        164
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][BUFF] Applied WIZARDRY (+150-170 magic)",
+        0,
+        447640,
+        171
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][BUFF] Applied LEATHER_BOOTS (+2 MP)",
+        0,
+        447640,
+        188
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          371
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=371 canAttack=false danger=0 dist=10 cover=2 currentDist=18",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][MOVE] Approaching via cell 371",
+        0,
+        447640,
+        196
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Executing simple approach (TP=10 MP=8)",
+        0,
+        447640,
+        204
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 3 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (wizardry): TP 19 -> 13",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (leather_boots): TP 13 -> 10",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 371 requires 7 MP but only have 6 - checking fallback",
+        0,
+        447635,
+        1726
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell 371 (MP=6)",
+        0,
+        447635,
+        1662
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 6 MP",
+        0,
+        447635,
+        473
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found partial path cell: 405 (dist=6)",
+        0,
+        447635,
+        1680
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 405 (original: 405, cost: 5 MP)",
+        0,
+        447635,
+        1737
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 0 invalid actions, added 1 fallbacks, 3 total actions remaining",
+        0,
+        447635,
+        1853
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip wizardry on entity SmallPoxLeek",
+        0,
+        447635,
+        1606
+      ]
+    ],
+    "261": [
+      [
+        0,
+        1,
+        "Executing buff/utility chip leather_boots on entity SmallPoxLeek",
+        0,
+        447635,
+        1606
+      ]
+    ],
+    "263": [
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 405",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "264": [
+      [
+        0,
+        1,
+        "Movement result: 509 -> 405 (target was 405)",
+        0,
+        447635,
+        1573
+      ]
+    ],
+    "3": [
+      [
+        0,
+        1,
+        "Using CHIP_ELEVATION - Wisdom boost",
+        0,
+        447635,
+        741
+      ]
+    ],
+    "31": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 284, now 287",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 284, now 287",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 136, now 34",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[33, 50, 67, 68, 85, 102, 119, 136, 153, 15]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[16, 33, 17, 50, 67, 51, 68, 85, 102, 119, 136, 15]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[16, 17, 51]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[68, 85, 102, 119, 136, 153]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[33, 67, 68, 102, 136, 15, 16, 17, 50, 51, 85, 119, 153]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[16, 33, 17, 50, 67, 51, 68, 85, 102, 119, 15]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[16, 33, 17, 34, 51, 68]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[67, 68, 136, 15, 16, 17, 85, 153, 33, 34, 102, 50, 51, 119] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_34",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 153 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 3",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 34 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 24 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 244 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 181 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 34, now 34",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 287, now 287",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=false remaining=0 TP=19 MP=8",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Distance 19 cells - using simple approach mode",
+        0,
+        447640,
+        164
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          289
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=289 canAttack=false danger=0 dist=15 cover=4 currentDist=19",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][MOVE] Approaching via cell 289",
+        0,
+        447640,
+        196
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Executing simple approach (TP=19 MP=8)",
+        0,
+        447640,
+        204
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 1 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 289 updates simulated pos (cost: 3 MP, 5 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 289",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "32": [
+      [
+        0,
+        1,
+        "Movement result: 287 -> 289 (target was 289)",
+        0,
+        447635,
+        1573
+      ]
+    ],
+    "40": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 287, now 289",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 287, now 289",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 34, now 67",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[33, 34, 68, 102, 138, 13, 173, 16, 17, 51, 120, 31, 191]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[33, 34, 68, 102, 138, 13, 173, 16, 49, 17, 50, 51, 85, 120, 31]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[49, 50, 85]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[16, 33, 13, 31]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[33, 34, 68, 102, 138, 13, 173, 16, 49, 17, 50, 51, 85, 120, 31, 191]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[33, 34, 68, 102, 138, 13, 16, 49, 17, 50, 51, 85, 120, 31]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[49, 33, 50, 67, 68, 85, 102, 31]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[67, 68, 138, 13, 16, 17, 85, 31, 33, 34, 102, 173, 49, 50, 51, 120, 191] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_67",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 31 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 4",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 67 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 41 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 329 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 232 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 67, now 67",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 289, now 289",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=false remaining=0 TP=19 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][CLOSE-RANGE] Distance 13 cells - using full offensive",
+        0,
+        447640,
+        212
+      ],
+      [
+        0,
+        1,
+        "[ANTIDOTE][INIT] enemy=1 has antidote -> entering bait mode (turn=4)",
+        0,
+        447637,
+        72
+      ],
+      [
+        0,
+        1,
+        "[ANTIDOTE][STATE] enemy=1 baiting=true inferredUse=false cd=0 prevRemain=-1 turnsBaiting=0",
+        0,
+        447637,
+        78
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][ANTIDOTE-STATE] Turn 4: baiting=true enemyHasAntidote=true antidoteCD=0",
+        0,
+        447640,
+        220
+      ],
+      [
+        0,
+        1,
+        "[COMBO-POSITIONING] Skipping - enemy antidote available (CD=0)",
+        0,
+        447640,
+        308
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          288
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=288 canAttack=false danger=0 dist=13 cover=4 currentDist=13",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN] weaponPreferred=false",
+        0,
+        447639,
+        45
+      ],
+      [
+        0,
+        4,
+        [
+          395
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=395 danger=0 dist=19 cover=2 playerPos=289",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        4,
+        [
+          307
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          325
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          308
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          291
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          274
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          257
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          240
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          222
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          204
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          186
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          168
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          151
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          134
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          117
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          100
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          82
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          65
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          48
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          31
+        ],
+        "ffd700",
+        3
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Found 0 safe cells within -13 MP (threat \u2264 0)",
+        0,
+        447632,
+        543
+      ],
+      [
+        0,
+        1,
+        "[SAFE-KITE] No zero-threat cells found within -13 MP",
+        0,
+        447640,
+        50
+      ],
+      [
+        0,
+        4,
+        [
+          395
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=395 danger=0 dist=19 cover=2 playerPos=289",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][KITE] Using standard H&S cell (danger=0)",
+        0,
+        447640,
+        445
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][HNS] Not enough MP for hide pathNeeded=40 MP=6",
+        0,
+        447640,
+        469
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Fallback flee movement",
+        0,
+        447640,
+        476
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Actions scheduled=3 TP_end=13",
+        0,
+        447640,
+        479
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 3 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 31 requires 18 MP but only have 6 - checking fallback",
+        0,
+        447635,
+        1726
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell 31 (MP=6)",
+        0,
+        447635,
+        1662
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 6 MP",
+        0,
+        447635,
+        473
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found partial path cell: 257 (dist=6)",
+        0,
+        447635,
+        1680
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 257 (original: 257, cost: 5 MP)",
+        0,
+        447635,
+        1737
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Distance invalid from 257 to 67: 11 (need 2-8)",
+        0,
+        447635,
+        141
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removing invalid action [0] Out of range/LOS",
+        0,
+        447635,
+        1847
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] No path from 257 to -1 - checking fallback",
+        0,
+        447635,
+        1743
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell -1 (MP=1)",
+        0,
+        447635,
+        1662
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 1 MP",
+        0,
+        447635,
+        473
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] No alternative found",
+        0,
+        447635,
+        1686
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] No fallback found, removing movement action",
+        0,
+        447635,
+        1756
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 2 invalid actions, added 1 fallbacks, 1 total actions remaining",
+        0,
+        447635,
+        1853
+      ],
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 257",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "41": [
+      [
+        0,
+        1,
+        "Movement result: 289 -> 257 (target was 257)",
+        0,
+        447635,
+        1573
+      ]
+    ],
+    "5": [
+      [
+        0,
+        1,
+        "Using CHIP_ARMORING - Resistance boost",
+        0,
+        447635,
+        745
+      ]
+    ],
+    "52": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 289, now 257",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 289, now 257",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 67, now 122",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[224, 208, 241, 225, 242, 87, 155, 156, 173, 190, 207, 191]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[224, 208, 225, 87, 155, 139, 156, 173, 190, 207, 191]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[139]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[224, 241, 258, 156, 173, 190, 207]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[224, 225, 139, 173, 207, 208, 241, 242, 87, 155, 156, 190, 191]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[208, 87, 155, 139, 156, 173, 190, 207, 191]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[87, 122, 139, 156]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[139, 207, 208, 87, 155, 156, 224, 225, 173, 241, 242, 122, 190, 191] weaponOnlyCellsSample=[258]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_122",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 258 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 5",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 122 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 28 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 298 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 216 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 122, now 122",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 257, now 257",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=false remaining=0 TP=19 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][CLOSE-RANGE] Distance 10 cells - using full offensive",
+        0,
+        447640,
+        212
+      ],
+      [
+        0,
+        1,
+        "[ANTIDOTE][STATE] enemy=1 baiting=true inferredUse=false cd=0 prevRemain=-1 turnsBaiting=1",
+        0,
+        447637,
+        78
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][ANTIDOTE-STATE] Turn 5: baiting=true enemyHasAntidote=true antidoteCD=0",
+        0,
+        447640,
+        220
+      ],
+      [
+        0,
+        1,
+        "[COMBO-POSITIONING] Skipping - enemy antidote available (CD=0)",
+        0,
+        447640,
+        308
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          258
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=258 canAttack=true danger=17 dist=8 cover=1 currentDist=10",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN] weaponPreferred=true",
+        0,
+        447639,
+        45
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=258 rawScore=377 adjScore=367 pathLen=2 penalty=10 stayHighDot=false",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=207 rawScore=1665 adjScore=1640 pathLen=5 penalty=25 stayHighDot=false",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][CHOICE] cell=207 adjScore=1640 chips=1 weapons=2 pathLen=5",
+        0,
+        447639,
+        356
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][CHOICE-DETAIL] cell=207 TP_rem_est=2 weapons={double_gun:d=21/p=132/t=153x1, destroyer:d=50/p=0/t=50, flame_thrower:d=37/p=340/t=377x1} chips={toxin:d=0/p=567/t=567, plague:d=0/p=1134/t=1134}",
+        0,
+        447639,
+        385
+      ],
+      [
+        0,
+        4,
+        [
+          289
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=289 danger=0 dist=16 cover=4 playerPos=257",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Plan cell=207 chips=1 weapons=2",
+        0,
+        447640,
+        361
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][HNS-APPROACH] Switching to approach cell 258",
+        0,
+        447640,
+        382
+      ],
+      [
+        0,
+        4,
+        [
+          275
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          258
+        ],
+        "ffd700",
+        3
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon flame_thrower and chip ",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon flame_thrower and chip ",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 4 on entity Domingo with weapon double_gun and chip ",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon double_gun and chip ",
+        0,
+        447635,
+        821
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Found 0 safe cells within 4 MP (threat \u2264 0)",
+        0,
+        447632,
+        543
+      ],
+      [
+        0,
+        1,
+        "[SAFE-KITE] No zero-threat cells found within 4 MP",
+        0,
+        447640,
+        50
+      ],
+      [
+        0,
+        4,
+        [
+          289
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=289 danger=0 dist=16 cover=4 playerPos=257",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][KITE] Using standard H&S cell (danger=0)",
+        0,
+        447640,
+        445
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][HNS] Not enough MP for hide pathNeeded=18 MP=6",
+        0,
+        447640,
+        469
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Fallback flee movement",
+        0,
+        447640,
+        476
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Actions scheduled=6 TP_end=2",
+        0,
+        447640,
+        479
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 6 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 258 updates simulated pos (cost: 1 MP, 5 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (flame_thrower): TP 19 -> 13",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (flame_thrower): TP 13 -> 7",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon swap: TP 7 -> 6",
+        0,
+        447635,
+        1834
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Distance invalid from 258 to 122: 8 (need 2-7)",
+        0,
+        447635,
+        141
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removing invalid action [0] Out of range/LOS",
+        0,
+        447635,
+        1847
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] No path from 258 to -1 - checking fallback",
+        0,
+        447635,
+        1743
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell -1 (MP=5)",
+        0,
+        447635,
+        1662
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] Found best reachable damage cell: 258 damage=755.4 dist=2",
+        0,
+        447635,
+        471
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found reachable damage cell: 258 (damage=755.4)",
+        0,
+        447635,
+        1667
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 258 (original unreachable, cost: 0 MP)",
+        0,
+        447635,
+        1754
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 1 invalid actions, added 1 fallbacks, 5 total actions remaining",
+        0,
+        447635,
+        1853
+      ],
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 258",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "53": [
+      [
+        0,
+        1,
+        "Movement result: 257 -> 258 (target was 258)",
+        0,
+        447635,
+        1573
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=46 chip=-1 targetCell=122",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon flame_thrower on cell 122 (pos=258 dist=8 TP=19)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "56": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=46 chip=-1 targetCell=122",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon flame_thrower on cell 122 (pos=258 dist=8 TP=13)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "59": [
+      [
+        0,
+        1,
+        "Swapping to weapon double_gun",
+        0,
+        447635,
+        1584
+      ]
+    ],
+    "60": [
+      [
+        0,
+        1,
+        "Executing flee/kite movement away from entity 1",
+        0,
+        447635,
+        1576
+      ]
+    ],
+    "7": [
+      [
+        0,
+        1,
+        "[FIGHT-TYPE] PvP fight detected (enemy leek)",
+        0,
+        447635,
+        717
+      ],
+      [
+        0,
+        1,
+        "[TURN1-BUFFS] Fight type: pvp",
+        0,
+        447635,
+        751
+      ]
+    ],
+    "8": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 176, now 176",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 176, now 176",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 16, now 16",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[17, 50, 67, 51, 68, 85, 102, 119, 136, 13, 14, 15]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[33, 34, 67, 68, 102, 13, 14, 15, 17, 50, 51, 85, 119]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[33, 34]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[50, 67]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[33, 34, 67, 68, 102, 136, 13, 14, 15, 17, 50, 51, 85, 119]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[33, 17, 50, 34, 67, 51, 68, 85, 102, 14, 15]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[16, 33, 17, 50, 34, 51, 15]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[33, 34, 67, 68, 102, 136, 13, 14, 15, 16, 17, 50, 51, 85, 119] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_16",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 67 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 1",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 16 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 21 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 237 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 176 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 16, now 16",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 176, now 176",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=false remaining=0 TP=2 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Distance 30 cells - using simple approach mode",
+        0,
+        447640,
+        164
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=284 canAttack=false danger=0 dist=24 cover=3 currentDist=30",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE][MOVE] Approaching via cell 284",
+        0,
+        447640,
+        196
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][LONG-RANGE] Executing simple approach (TP=2 MP=6)",
+        0,
+        447640,
+        204
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 1 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 284 updates simulated pos (cost: 5 MP, 1 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 284",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "81": [
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 257, now 291",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 257, now 291",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 122, now 226",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] double_gun shooterCells=[192, 258, 259, 261, 262, 138, 139, 332, 207, 278, 279, 155, 156, 223, 224, 225, 227, 296, 297, 173, 174, 240, 241, 242, 120, 313, 314, 190, 191]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] destroyer shooterCells=[192, 258, 259, 261, 262, 138, 139, 332, 207, 208, 209, 278, 279, 155, 156, 223, 224, 225, 227, 296, 297, 173, 174, 241, 242, 243, 244, 120, 313, 314, 190, 191]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] axe shooterCells=[208, 209, 243, 244]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] flame_thrower shooterCells=[192, 262, 190]",
+        0,
+        447631,
+        233
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] toxin shooterCells=[192, 258, 259, 261, 262, 138, 139, 332, 207, 208, 209, 278, 279, 155, 156, 223, 224, 225, 227, 296, 297, 173, 174, 240, 241, 242, 243, 244, 120, 313, 314, 190, 191]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] regeneration shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] plague shooterCells=[192, 259, 261, 262, 138, 139, 207, 208, 209, 278, 279, 155, 156, 224, 225, 227, 296, 297, 173, 174, 241, 242, 243, 244, 313, 314, 190, 191]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] fracture shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] remission shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] covid shooterCells=[208, 192, 225, 209, 226, 243, 227, 244, 261, 262, 190, 191]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] wizardry shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] ball_and_chain shooterCells=[]",
+        0,
+        447631,
+        247
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[192, 258, 259, 261, 262, 138, 139, 332, 207, 208, 209, 278, 279, 155, 156, 223, 224, 225, 226, 227, 296, 297, 173, 174, 240, 241, 242, 243, 244, 120, 313, 314, 190, 191] weaponOnlyCellsSample=[]",
+        0,
+        447631,
+        210
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_226",
+        0,
+        447631,
+        215
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 190 Weapon: flame_thrower",
+        0,
+        447626,
+        70
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 6",
+        0,
+        447632,
+        345
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 226 (MP=7, weapons=4)",
+        0,
+        447632,
+        379
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Enemy can reach 43 cells",
+        0,
+        447632,
+        383
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 407 threat markers for Domingo",
+        0,
+        447632,
+        416
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 290 cells threatened by 1 enemies",
+        0,
+        447632,
+        370
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 226, now 226",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity SmallPoxLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 291, now 291",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Start poisonActive=false remaining=0 TP=19 MP=6",
+        0,
+        447640,
+        155
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][CLOSE-RANGE] Distance 10 cells - using full offensive",
+        0,
+        447640,
+        212
+      ],
+      [
+        0,
+        1,
+        "[ANTIDOTE][STATE] enemy=1 baiting=true inferredUse=false cd=4 prevRemain=-1 turnsBaiting=2",
+        0,
+        447637,
+        78
+      ],
+      [
+        0,
+        1,
+        "[ANTIDOTE][ESCALATE] Antidote on cooldown (cd=4) -> full offensive",
+        0,
+        447637,
+        88
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][ANTIDOTE-STATE] Turn 6: baiting=false enemyHasAntidote=true antidoteCD=4",
+        0,
+        447640,
+        220
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          223
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=223 canAttack=true danger=15 dist=6 cover=3 currentDist=10",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN] weaponPreferred=true",
+        0,
+        447639,
+        45
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=258 rawScore=720 adjScore=700 pathLen=4 penalty=20 stayHighDot=false",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=259 rawScore=1854 adjScore=1824 pathLen=6 penalty=30 stayHighDot=false",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][BEST] cell=241 rawScore=1854 adjScore=1829 pathLen=5 penalty=25 stayHighDot=false",
+        0,
+        447639,
+        292
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][CHOICE] cell=241 adjScore=1829 chips=2 weapons=1 pathLen=5",
+        0,
+        447639,
+        356
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][PLAN][CHOICE-DETAIL] cell=241 TP_rem_est=4 weapons={double_gun:d=21/p=132/t=153x1, destroyer:d=50/p=0/t=50} chips={toxin:d=0/p=567/t=567, plague:d=0/p=1134/t=1134}",
+        0,
+        447639,
+        385
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][WIZARDRY] Applied (+150-170 magic, 6 TP)",
+        0,
+        447640,
+        321
+      ],
+      [
+        0,
+        4,
+        [
+          288
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=288 danger=0 dist=16 cover=4 playerPos=291",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Plan cell=241 chips=2 weapons=1",
+        0,
+        447640,
+        361
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][HNS-APPROACH] Switching to approach cell 223",
+        0,
+        447640,
+        382
+      ],
+      [
+        0,
+        4,
+        [
+          274
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          257
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          240
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          223
+        ],
+        "ffd700",
+        3
+      ],
+      [
+        0,
+        1,
+        "[FULL] ===== ENTERED FULL OFFENSIVE MODE =====",
+        0,
+        447640,
+        498
+      ],
+      [
+        0,
+        1,
+        "[FULL] Checking GRAPPLE-COVID combo... antidoteCD=4 enemyHasAntidote=true antidoteSafe=true",
+        0,
+        447640,
+        516
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] Starting check: playerPos=291 targetPos=226 dist=10 TP=13",
+        0,
+        447638,
+        52
+      ],
+      [
+        0,
+        1,
+        "[GRAPPLE-COVID][CHECK] FAIL: Distance out of range (need 3-8, got 10)",
+        0,
+        447638,
+        56
+      ],
+      [
+        0,
+        1,
+        "[FULL][GRAPPLE-COVID] Combo NOT available",
+        0,
+        447640,
+        529
+      ],
+      [
+        0,
+        1,
+        "[FULL][WEAPON-SPAM] Used double_gun x3 TP_left=1",
+        0,
+        447640,
+        621
+      ],
+      [
+        0,
+        1,
+        "[FULL][CHIP-LIST] Found 2 chips in poison plan, TP available=1",
+        0,
+        447640,
+        627
+      ],
+      [
+        0,
+        1,
+        "[FULL][CHIP-CHECK] plague cost=6 cd=0 TP=1",
+        0,
+        447640,
+        630
+      ],
+      [
+        0,
+        1,
+        "[FULL][CHIP-SKIP] plague - insufficient TP",
+        0,
+        447640,
+        632
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Found 0 safe cells within 2 MP (threat \u2264 0)",
+        0,
+        447632,
+        543
+      ],
+      [
+        0,
+        1,
+        "[SAFE-KITE] No zero-threat cells found within 2 MP",
+        0,
+        447640,
+        50
+      ],
+      [
+        0,
+        4,
+        [
+          288
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=288 danger=0 dist=16 cover=4 playerPos=291",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[MAGIC][KITE] Using standard H&S cell (danger=0)",
+        0,
+        447640,
+        445
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE][HNS] Not enough MP for hide pathNeeded=22 MP=6",
+        0,
+        447640,
+        469
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Fallback flee movement",
+        0,
+        447640,
+        476
+      ],
+      [
+        0,
+        1,
+        "[DoT-KITE] Actions scheduled=6 TP_end=1",
+        0,
+        447640,
+        479
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 6 actions",
+        0,
+        447635,
+        1695
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (wizardry): TP 19 -> 13",
+        0,
+        447635,
+        1844
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 223 updates simulated pos (cost: 3 MP, 3 MP remaining)",
+        0,
+        447635,
+        1724
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (double_gun): TP 13 -> 9",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (double_gun): TP 9 -> 5",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (double_gun): TP 5 -> 1",
+        0,
+        447635,
+        1839
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] No path from 223 to -1 - checking fallback",
+        0,
+        447635,
+        1743
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell -1 (MP=3)",
+        0,
+        447635,
+        1662
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] Found best reachable damage cell: 240 damage=461.4 dist=3",
+        0,
+        447635,
+        471
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found reachable damage cell: 240 (damage=461.4)",
+        0,
+        447635,
+        1667
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 240 (original unreachable, cost: 0 MP)",
+        0,
+        447635,
+        1754
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 0 invalid actions, added 1 fallbacks, 6 total actions remaining",
+        0,
+        447635,
+        1853
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip wizardry on entity SmallPoxLeek",
+        0,
+        447635,
+        1606
+      ]
+    ],
+    "83": [
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 223",
+        0,
+        447635,
+        1569
+      ]
+    ],
+    "84": [
+      [
+        0,
+        1,
+        "Movement result: 291 -> 223 (target was 223)",
+        0,
+        447635,
+        1573
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=39 chip=-1 targetCell=226",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon double_gun on cell 226 (pos=223 dist=6 TP=13)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "88": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=39 chip=-1 targetCell=226",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon double_gun on cell 226 (pos=223 dist=6 TP=9)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "9": [
+      [
+        0,
+        1,
+        "Movement result: 176 -> 284 (target was 284)",
+        0,
+        447635,
+        1573
+      ]
+    ],
+    "92": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=39 chip=-1 targetCell=226",
+        0,
+        447635,
+        1594
+      ],
+      [
+        0,
+        1,
+        "Using weapon double_gun on cell 226 (pos=223 dist=6 TP=5)",
+        0,
+        447635,
+        1601
+      ]
+    ],
+    "96": [
+      [
+        0,
+        1,
+        "Executing flee/kite movement away from entity 1",
+        0,
+        447635,
+        1576
+      ]
+    ]
+  }
+}

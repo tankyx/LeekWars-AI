@@ -874,35 +874,21 @@ class Strategy {
             }
         }
 
-        // OFFENSIVE PHASE: Apply stat buffs only if can reach combat within 2 turns (dist ≤ 10)
-        var canReachCombatSoon = (distToEnemy <= 10)
+        // OFFENSIVE PHASE: Apply STEROID immediately for attrition damage
 
         // Strength build: Apply CHIP_STEROID for weapon damage boost
         if (player._strength >= player._agility && player._strength >= player._magic) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
-                if (canReachCombatSoon) {
-                    debug("Using CHIP_STEROID (strength build) - +150-170 Strength for 3 turns")
-                    useChip(CHIP_STEROID, player._id)
-                } else {
-                    debug("[TURN1-BUFFS] Skipping CHIP_STEROID - enemy too far (dist=" + distToEnemy + ", need dist ≤ 10 to reach in 2 turns)")
-                }
+                debug("Using CHIP_STEROID (strength build) - +150-170 Strength for 3 turns (attrition boost)")
+                useChip(CHIP_STEROID, player._id)
             }
         }
 
         // Agility build: Apply CHIP_WARM_UP before damage return buffs
         if (player._agility >= player._strength && player._agility >= player._magic) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP)) {
-                if (canReachCombatSoon) {
-                    debug("Using CHIP_WARM_UP (agility build) - +170-190 Agility for 3 turns")
-                    useChip(CHIP_WARM_UP, player._id)
-                } else {
-                    debug("[TURN1-BUFFS] Skipping CHIP_WARM_UP - enemy too far (dist=" + distToEnemy + ", need dist ≤ 10 to reach in 2 turns)")
-                }
-            }
-            // Then apply damage return for tanky playstyle (only if used WARM_UP)
-            if (canReachCombatSoon && mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)) {
-                debug("Using CHIP_MIRROR (agility build) - Damage return")
-                useChip(CHIP_MIRROR, player._id)
+                debug("Using CHIP_WARM_UP (agility build) - +170-190 Agility for 3 turns (attrition boost)")
+                useChip(CHIP_WARM_UP, player._id)
             }
         }
 
