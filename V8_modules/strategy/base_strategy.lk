@@ -1671,14 +1671,20 @@ class Strategy {
     // Check if should enter emergency/defensive mode (WEEK 2: Threat-based)
     // Override in strategies for custom logic
     shouldEnterEmergencyMode(target) {
-        // NEVER enter emergency if we have lethal damage (can kill enemy this turn)
-        if (this.hasLethalOpportunity(target)) {
-            debug("[EMERGENCY] Lethal opportunity detected - skipping emergency mode")
-            return false
-        }
-
         var playerHP = getLife()
         var hpPercent = (playerHP * 100) / getTotalLife()
+
+        // ABSOLUTE PRIORITY: Critical HP (< 20%) - ALWAYS heal, ignore kill opportunities
+        if (hpPercent < 20) {
+            debug("[EMERGENCY][CRITICAL] HP at " + floor(hpPercent) + "% - ABSOLUTE PRIORITY healing")
+            return true
+        }
+
+        // Don't enter emergency if we have lethal damage AND we're not critically low HP
+        if (this.hasLethalOpportunity(target)) {
+            debug("[EMERGENCY] Lethal opportunity detected and HP safe (" + floor(hpPercent) + "%) - skipping emergency mode")
+            return false
+        }
 
         // WEEK 2: Threat-based emergency detection
         var currentThreat = fieldMap.getThreatAtCell(player._cellPos)

@@ -88,8 +88,8 @@ class Entity {
     getEffectRemaining(effectId) {
         var effect = this.getEffect(effectId)
         if (effect == null) return 0
-        // Assume structure [effectID, value, remainingDuration]
-        if (count(effect) >= 3) return effect[2]
+        // Effect structure from getEffects(): [type, value, caster_id, turns_remaining, critical, equipment_id, target_id]
+        if (count(effect) >= 4) return effect[3]  // Index 3 = turns_remaining
         // Fallback if duration not present
         return 1
     }

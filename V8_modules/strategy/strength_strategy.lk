@@ -79,6 +79,43 @@ class StrengthStrategy extends Strategy {
         var teleCell = teleportInfo['cell']
         debug("[OTKO] Executing teleport OTKO to cell " + teleCell + " projected damage: " + teleportInfo['damage'])
 
+        // PRE-OTKO NEUTRINO STACKING: Amplify teleport burst damage with 24% vulnerability
+        // Only stack if we have Neutrino equipped, enemy in diagonal range 2-6, and sufficient TP
+        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO) && playerTP >= 21) {
+            var preTeleportDist = getCellDistance(player._cellPos, target._cellPos)
+            var preTeleportAligned = this.isDiagonal(player._cellPos, target._cellPos)
+
+            // Check if we can stack from current position before teleport
+            if (preTeleportDist != null && preTeleportDist >= 2 && preTeleportDist <= 6 &&
+                preTeleportAligned && lineOfSight(player._cellPos, target._cellPos)) {
+
+                debug("[OTKO][NEUTRINO] Pre-stacking vulnerability before teleport for amplified OTKO")
+
+                // Stack 3x Neutrino for 24% damage amplification (1.24x multiplier)
+                if (getWeapon() != WEAPON_NEUTRINO) {
+                    setWeapon(WEAPON_NEUTRINO)
+                    playerTP -= 1
+                    player._currTp -= 1
+                }
+
+                for (var nStack = 0; nStack < 3; nStack++) {
+                    if (playerTP >= 4) {
+                        useWeaponOnCell(target._cellPos)
+                        playerTP -= 4
+                        player._currTp -= 4
+                    }
+                }
+
+                // Update target to refresh vulnerability status
+                target.updateEntity()
+
+                var neutrinoRelShield = target._relShield
+                debug("[OTKO][NEUTRINO] Stacked 24% vulnerability (target shield: " + neutrinoRelShield + "%), TP: " + playerTP + " - now teleporting for amplified burst")
+            } else {
+                debug("[OTKO][NEUTRINO] Cannot pre-stack: dist=" + preTeleportDist + " (need 2-6), diagonal=" + preTeleportAligned + ", TP=" + playerTP)
+            }
+        }
+
         // Execute teleportation
         this.createAttackAction(Action.ACTION_TELEPORT, target, -1, CHIP_TELEPORTATION)
         // Override targetCell to teleport destination (not target's position)
@@ -493,6 +530,55 @@ class StrengthStrategy extends Strategy {
         return (x1 == x2 || y1 == y2)  // Horizontal OR vertical
     }
 
+    // Check if two cells are on same diagonal line (for Neutrino range validation)
+    isDiagonal(cell1, cell2) {
+        var x1 = getCellX(cell1)
+        var y1 = getCellY(cell1)
+        var x2 = getCellX(cell2)
+        var y2 = getCellY(cell2)
+        // Diagonal: absolute x difference equals absolute y difference
+        return abs(x2 - x1) == abs(y2 - y1)
+    }
+
+    // Find optimal cell for Neutrino vulnerability stacking (diagonal range 2-6)
+    findNeutrinoStackingCell(target) {
+        var bestCell = -1
+        var bestScore = -1
+
+        var reachableCells = fieldMap.getAccessibleCells(player)
+        for (var i = 0; i < count(reachableCells); i++) {
+            var cell = reachableCells[i]
+            var dist = getCellDistance(cell, target._cellPos)
+
+            // Must be in Neutrino range (2-6 diagonal)
+            if (dist == null || dist < 2 || dist > 6) continue
+
+            // Must be on diagonal line
+            if (!this.isDiagonal(cell, target._cellPos)) continue
+
+            // Must have line of sight
+            if (!lineOfSight(cell, target._cellPos)) continue
+
+            // Score: prefer mid-range (4 sweet spot), closer to current position
+            var rangePenalty = abs(dist - 4) * 3  // Penalize distance from range 4
+            var distFromCurrent = getCellDistance(player._cellPos, cell)
+            if (distFromCurrent == null) continue
+
+            var score = 100 - rangePenalty - distFromCurrent
+
+            if (score > bestScore) {
+                bestScore = score
+                bestCell = cell
+            }
+        }
+
+        if (bestCell != -1) {
+            debug("[STR][NEUTRINO-POS] Found stacking position: cell " + bestCell + " (score=" + bestScore + ")")
+        }
+
+        return bestCell
+    }
+
     // Find optimal cell for GRAPPLE-HEAVY_SWORD combo (range 2-8, same line, LOS)
     findGrappleHeavySwordCell(target) {
         var bestCell = -1
@@ -723,6 +809,122 @@ class StrengthStrategy extends Strategy {
         return true
     }
 
+    // Check if NEUTRINO vulnerability stacking should be used (core DPS amplifier)
+    shouldStackNeutrino(target) {
+        // Check if Neutrino is equipped
+        if (!mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            return false
+        }
+
+        var dist = getCellDistance(player._cellPos, target._cellPos)
+        if (dist == null) return false
+
+        // Range validation: 2-6 diagonal
+        if (dist < 2 || dist > 6) {
+            debug("[STR][NEUTRINO] Out of range: " + dist + " (need 2-6)")
+            return false
+        }
+
+        if (!this.isDiagonal(player._cellPos, target._cellPos)) {
+            debug("[STR][NEUTRINO] Not on diagonal")
+            return false
+        }
+
+        if (!lineOfSight(player._cellPos, target._cellPos)) {
+            debug("[STR][NEUTRINO] No line of sight")
+            return false
+        }
+
+        // TP budget: 12 TP minimum (3x Neutrino @ 4 TP + enough for 1 weapon use)
+        if (player._currTp < 12) {
+            debug("[STR][NEUTRINO] Insufficient TP: " + player._currTp + " < 12")
+            return false
+        }
+
+        // Check current vulnerability stacks (based on relShield value)
+        var currentStacks = arsenal.getVulnerabilityStacks(target)
+
+        // Check vulnerability duration (fixed getEffectRemaining now uses correct index [3])
+        var vulnRemaining = target.getEffectRemaining(EFFECT_VULNERABILITY)
+
+        // Don't stack if already at 3 stacks with good duration (2+ turns remaining)
+        if (currentStacks >= 3 && vulnRemaining >= 2) {
+            debug("[STR][NEUTRINO] Already at max stacks (3), remaining: " + vulnRemaining + " turns, relShield: " + target._relShield)
+            return false
+        }
+
+        // Refresh if vulnerability is about to expire (at 2+ stacks, 1 turn remaining)
+        if (currentStacks >= 2 && vulnRemaining <= 1 && vulnRemaining > 0) {
+            debug("[STR][NEUTRINO] Refreshing expiring vulnerability (stacks=" + currentStacks + ", remaining=" + vulnRemaining + ", relShield: " + target._relShield + ")")
+            return true
+        }
+
+        // Don't stack if enemy HP too low (OTKO range handles this separately)
+        if (target._currHealth < 500) {
+            debug("[STR][NEUTRINO] Enemy HP too low for stacking: " + target._currHealth)
+            return false
+        }
+
+        // Calculate value proposition using Arsenal helper
+        var avgWeaponDamage = 180  // Base estimate for STR build
+        if (player.hasEffect(EFFECT_BUFF_STRENGTH)) {
+            avgWeaponDamage = 240  // Higher with STEROID active (+160 STR)
+        }
+
+        // Estimate future attacks: remaining TP this turn + next 2 turns
+        var futureAttacks = floor((player._currTp - 12) / 8) + 4  // Conservative estimate
+
+        var benefit = arsenal.calculateNeutrinoAmplification(3, futureAttacks, avgWeaponDamage)
+
+        debug("[STR][NEUTRINO] Amplification analysis: " + floor(benefit['netBenefit']) + " total value (" + floor(benefit['amplification']) + " amp + " + floor(benefit['directDamage']) + " direct)")
+        debug("[STR][NEUTRINO] Multiplier: " + benefit['multiplier'] + "x, Future attacks: " + futureAttacks + ", Avg dmg: " + avgWeaponDamage)
+
+        // Stack if net benefit > threshold
+        // Lower threshold if we have lots of TP to spare (aggressive stacking)
+        var threshold = 150
+        if (player._currTp >= 20) threshold = 100  // More aggressive with spare TP
+
+        if (benefit['netBenefit'] >= threshold) {
+            debug("[STR][NEUTRINO] Value check PASSED: " + floor(benefit['netBenefit']) + " >= " + threshold)
+            return true
+        } else {
+            debug("[STR][NEUTRINO] Value check FAILED: " + floor(benefit['netBenefit']) + " < " + threshold)
+            return false
+        }
+    }
+
+    // Execute Neutrino vulnerability stacking sequence (immediate execution, not queued)
+    executeNeutrinoStacking(target) {
+        debug("[STR][NEUTRINO] Executing vulnerability stacking sequence")
+
+        // Swap to Neutrino if needed (1 TP cost)
+        if (getWeapon() != WEAPON_NEUTRINO) {
+            setWeapon(WEAPON_NEUTRINO)
+            player._currTp -= 1
+            debug("[STR][NEUTRINO] Swapped to Neutrino (1 TP)")
+        }
+
+        // Stack 3 times for maximum vulnerability (24% = 1.24x damage multiplier)
+        var stacksApplied = 0
+        for (var i = 0; i < 3; i++) {
+            if (player._currTp >= 4) {
+                useWeaponOnCell(target._cellPos)
+                player._currTp -= 4
+                stacksApplied += 1
+            }
+        }
+
+        // Update target entity to refresh vulnerability status
+        target.updateEntity()
+
+        var totalVuln = stacksApplied * 8
+        var currentRelShield = target._relShield
+        debug("[STR][NEUTRINO] Applied " + stacksApplied + " stacks (" + totalVuln + "% vulnerability)")
+        debug("[STR][NEUTRINO] Target relative shield now: " + currentRelShield + "%, TP remaining: " + player._currTp)
+
+        return stacksApplied >= 2  // Success if we got at least 2 stacks (16% vulnerability)
+    }
+
     // Override offensive scenario for Strength builds: always prioritize weapons (highest weapon damage cell)
     // Only after exhausting primary + secondary weapons do we spend leftover TP on damage chips (sorted by per-use damage desc).
     createOffensiveScenario(target, targetHitCell) {
@@ -891,6 +1093,55 @@ class StrengthStrategy extends Strategy {
                     useChip(CHIP_WALL, player._id)
                     player._currTp -= 3
                 }
+            }
+        }
+
+        // PRIORITY 2.5: NEUTRINO VULNERABILITY STACKING (CORE DPS MULTIPLIER)
+        // This is the foundation of our damage output - all weapons benefit from 24% vulnerability
+        // Stack before GRAPPLE-HEAVY_SWORD to amplify combo damage
+        var neutrinoExecuted = false
+
+        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            var neutrinoDist = getCellDistance(player._cellPos, target._cellPos)
+            var neutrinoAligned = this.isDiagonal(player._cellPos, target._cellPos)
+
+            // Case 1: Already in Neutrino range (diagonal 2-6) - stack immediately
+            if (neutrinoDist != null && neutrinoDist >= 2 && neutrinoDist <= 6 &&
+                neutrinoAligned && lineOfSight(player._cellPos, target._cellPos)) {
+
+                if (this.shouldStackNeutrino(target)) {
+                    debug("[STR][NEUTRINO] In range, executing stacking from current position")
+                    if (this.executeNeutrinoStacking(target)) {
+                        neutrinoExecuted = true
+                        debug("[STR][NEUTRINO] Stacking complete, continuing with amplified weapons")
+                    }
+                }
+            }
+            // Case 2: Not in range - move to Neutrino position if high value
+            // Only reposition if we have spare MP (3+) and good TP budget (15+)
+            else if (player._currMp >= 3 && player._currTp >= 15) {
+                var neutrinoCell = this.findNeutrinoStackingCell(target)
+                if (neutrinoCell != -1) {
+                    var pathToNeutrinoCell = getPath(player._cellPos, neutrinoCell)
+                    if (pathToNeutrinoCell != null && count(pathToNeutrinoCell) <= player._currMp) {
+                        debug("[STR][NEUTRINO] Moving to stacking position (cell " + neutrinoCell + ", " + count(pathToNeutrinoCell) + " MP)")
+                        var moveResult = moveTowardCell(neutrinoCell)
+                        player._currMp -= count(pathToNeutrinoCell)
+                        player._cellPos = getCell()
+
+                        // Stack after repositioning
+                        if (this.shouldStackNeutrino(target)) {
+                            if (this.executeNeutrinoStacking(target)) {
+                                neutrinoExecuted = true
+                                debug("[STR][NEUTRINO] Repositioned and stacked vulnerability")
+                            }
+                        }
+                    }
+                } else {
+                    debug("[STR][NEUTRINO] Not in range (dist=" + neutrinoDist + " diagonal=" + neutrinoAligned + "), no good repositioning cell found")
+                }
+            } else {
+                debug("[STR][NEUTRINO] Not in range (dist=" + neutrinoDist + " diagonal=" + neutrinoAligned + "), insufficient resources to reposition")
             }
         }
 
