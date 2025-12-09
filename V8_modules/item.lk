@@ -360,10 +360,16 @@ class Arsenal {
         var baseMin = 0
         var baseMax = 0
 
-        if (chipID == CHIP_MIRROR) {
+        if (chipID == CHIP_BRAMBLE) {
+            // CHIP_BRAMBLE: 25% base return, 1 turn, 4 TP (aggressive option)
+            baseMin = 25
+            baseMax = 25
+        } else if (chipID == CHIP_MIRROR) {
+            // CHIP_MIRROR: 5-6% base return, 3 turns, 5 TP
             baseMin = 5
             baseMax = 6
         } else if (chipID == CHIP_THORN) {
+            // CHIP_THORN: 3-4% base return, 2 turns, 4 TP
             baseMin = 3
             baseMax = 4
         } else {

@@ -26,6 +26,10 @@ class Cell {
     _enemiesHitCount = 0         // Count for quick access
     _multiHitBonus = 0           // Bonus score for hitting 2+ enemies
 
+    // Optimal AoE aim tracking
+    _weaponOptimalAims = [:]     // Map: weaponId -> optimal aim cell
+    _chipOptimalAims = [:]       // Map: chipId -> optimal aim cell
+
     constructor(id, isObstacle, entityID, weaponDamage, chipDamage, hasLOS, highestDamageWeapon, highestDamageChip) {
         this._id = id
         this._isObstacle = isObstacle

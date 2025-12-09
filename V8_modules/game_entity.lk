@@ -104,6 +104,16 @@ class Entity {
         return this.getEffectRemaining(EFFECT_DAMAGE_RETURN)
     }
 
+    // Check if entity has vulnerability debuff active (increases damage taken)
+    hasVulnerability() {
+        return this.hasEffect(EFFECT_VULNERABILITY)
+    }
+
+    // Get remaining turns of vulnerability debuff
+    getVulnerabilityRemaining() {
+        return this.getEffectRemaining(EFFECT_VULNERABILITY)
+    }
+
     // Check if entity is invulnerable (boss fight Protection divine)
     // Invulnerability is indicated by absolute shield effect or specific invulnerability buff
     isInvulnerable() {

@@ -10,24 +10,40 @@ class AgilityStrategy extends Strategy {
         return "AGI"
     }
 
-    // Select best available damage return chip (priority: MIRROR > THORN)
-    selectBestReturnChip() {
-        // CHIP_MIRROR: 5-6% return, 3 turn duration, 5 TP cost
+    // Select best available damage return chip based on combat situation
+    // BRAMBLE (1 turn, 25% return) - Use when in close combat (enemy within attack range)
+    // MIRROR (3 turns, 5-6% return) - Use when approaching (enemy far, need sustained protection)
+    // THORN (2 turns, 3-4% return) - Fallback option
+    selectBestReturnChip(distanceToEnemy) {
+        // Determine if we're in close combat (enemy can attack us or we can attack them)
+        var inCloseCombat = distanceToEnemy <= 8  // Most weapons have range 1-8
+
+        // CHIP_BRAMBLE: Best for close combat (1 turn duration, highest return per turn)
+        if (inCloseCombat && mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)) {
+            var bramble = arsenal.playerEquippedChips[CHIP_BRAMBLE]
+            if (getCooldown(CHIP_BRAMBLE, player._id) == 0 && player._currTp >= bramble._cost) {
+                var returnVal = arsenal.getDamageReturnValue(player._agility, CHIP_BRAMBLE)
+                debug("[AGILITY] CHIP_BRAMBLE selected for close combat: " + returnVal + "% return, dist=" + distanceToEnemy)
+                return CHIP_BRAMBLE
+            }
+        }
+
+        // CHIP_MIRROR: Best for approaching (3 turn duration, sustained protection)
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)) {
             var mirror = arsenal.playerEquippedChips[CHIP_MIRROR]
             if (getCooldown(CHIP_MIRROR, player._id) == 0 && player._currTp >= mirror._cost) {
-                var returnVal = arsenal.getDamageReturnValue(player._agility, CHIP_MIRROR)
-                debug("[AGILITY] CHIP_MIRROR available: " + returnVal + "% return (scaled by agility)")
+                var returnVal2 = arsenal.getDamageReturnValue(player._agility, CHIP_MIRROR)
+                debug("[AGILITY] CHIP_MIRROR selected: " + returnVal2 + "% return for 3 turns, dist=" + distanceToEnemy)
                 return CHIP_MIRROR
             }
         }
 
-        // CHIP_THORN: 3-4% return, 2 turn duration, 4 TP cost
+        // CHIP_THORN: Fallback (2 turn duration)
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)) {
             var thorn = arsenal.playerEquippedChips[CHIP_THORN]
             if (getCooldown(CHIP_THORN, player._id) == 0 && player._currTp >= thorn._cost) {
-                var returnVal2 = arsenal.getDamageReturnValue(player._agility, CHIP_THORN)
-                debug("[AGILITY] CHIP_THORN available: " + returnVal2 + "% return (scaled by agility)")
+                var returnVal3 = arsenal.getDamageReturnValue(player._agility, CHIP_THORN)
+                debug("[AGILITY] CHIP_THORN selected: " + returnVal3 + "% return for 2 turns, dist=" + distanceToEnemy)
                 return CHIP_THORN
             }
         }
@@ -135,14 +151,55 @@ class AgilityStrategy extends Strategy {
         var playerMP = player._currMp
         var playerTP = player._currTp
 
-        // STEP 0: Apply CHIP_WARM_UP before damage return buff if needed
-        if (this.shouldUseWarmUp()) {
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WARM_UP)
-            playerTP -= 7
-            debug("[AGILITY] Applied CHIP_WARM_UP (+170-190 Agility for 3 turns)")
+        // Calculate distance to target for smart chip selection
+        var distToTarget = getCellDistance(playerPos, target._cellPos)
+        if (distToTarget == null) distToTarget = 99
+
+        // AGGRESSIVE STRATEGY: Damage return FIRST (always maintain return buff for aggressive play)
+        // STEP 1: Apply damage return buff (BRAMBLE in close combat, MIRROR/THORN when far)
+        var returnChipApplied = false
+        if (this.shouldReapplyReturnBuff()) {
+            var chipToUse = this.selectBestReturnChip(distToTarget)
+            if (chipToUse != -1) {
+                var chipObj = arsenal.playerEquippedChips[chipToUse]
+                debug("[AGILITY][AGGRESSIVE] Applying damage return chip: " + getChipName(chipToUse) + " (cost: " + chipObj._cost + " TP, dist: " + distToTarget + ")")
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, chipToUse)
+                playerTP -= chipObj._cost
+                returnChipApplied = true
+
+                // Execute immediately so the buff is active for rest of turn planning
+                this.executeAndFlushActions()
+                player.updateEntity()
+                debug("[AGILITY][AGGRESSIVE] Damage return buff applied and flushed, TP remaining: " + player._currTp)
+            } else {
+                debug("[AGILITY] WARNING: No return chip available (BRAMBLE/MIRROR/THORN on cooldown or insufficient TP)")
+            }
         }
 
-        // STEP 0.5: Check for CHIP_LEATHER_BOOTS if target cell unreachable
+        // STEP 2: Apply CHIP_WARM_UP if enough TP remains (requires 14 TP after return chip)
+        if (this.shouldUseWarmUp() && playerTP >= 14) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WARM_UP)
+            playerTP -= 7
+            debug("[AGILITY] Applied CHIP_WARM_UP (+170-190 Agility for 3 turns, remaining TP: " + playerTP + ")")
+        } else if (playerTP < 14) {
+            debug("[AGILITY] Skipping WARM_UP - not enough TP for attacks after buff (have " + playerTP + " TP, need 14)")
+        }
+
+        // STEP 2.5: Apply WEAPON_NEUTRINO vulnerability debuff if not active (amplifies ALL damage)
+        if (!target.hasVulnerability() && mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            var neutrinoWeapon = arsenal.playerEquippedWeapons[WEAPON_NEUTRINO]
+            // distToTarget already defined above, reuse it
+            if (distToTarget != null && distToTarget >= neutrinoWeapon._minRange && distToTarget <= neutrinoWeapon._maxRange) {
+                if (playerTP >= neutrinoWeapon._cost) {
+                    debug("[AGILITY][AGGRESSIVE] Applying WEAPON_NEUTRINO vulnerability debuff (dist=" + distToTarget + ", amplifies damage)")
+                    // Use Neutrino to apply vulnerability - weapon swap + use happens in execution phase
+                    // For now, just note that we should prioritize Neutrino in weapon spam
+                    // This will be handled by weapon priority in executeWeaponFocusedOffensive
+                }
+            }
+        }
+
+        // STEP 3: Check for CHIP_LEATHER_BOOTS if target cell unreachable
         if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
             playerTP -= 3
@@ -150,28 +207,7 @@ class AgilityStrategy extends Strategy {
             debug("[AGILITY] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
         }
 
-        // STEP 1: Apply damage return buff (CHIP_MIRROR or CHIP_THORN) if needed
-        // Only apply if we have enough TP left for attacks (minimum 7 TP: 1 swap + 6 weapon use)
-        if (this.shouldReapplyReturnBuff()) {
-            var chipToUse = this.selectBestReturnChip()
-            if (chipToUse != -1) {
-                var chipObj = arsenal.playerEquippedChips[chipToUse]
-                var minAttackTP = 7  // Reserve TP for at least one weapon swap + use
-
-                // Only apply buff if we have enough TP for meaningful attacks after
-                if (playerTP >= chipObj._cost + minAttackTP) {
-                    debug("[AGILITY] Applying damage return chip: " + getChipName(chipToUse) + " (cost: " + chipObj._cost + " TP, remaining: " + (playerTP - chipObj._cost) + " TP)")
-                    this.createAttackAction(Action.ACTION_BUFF, player, -1, chipToUse)
-                    playerTP -= chipObj._cost
-                } else {
-                    debug("[AGILITY] Skipping buff reapplication - need TP for attacks (have " + playerTP + " TP, need " + (chipObj._cost + minAttackTP) + " TP)")
-                }
-            } else {
-                debug("[AGILITY] WARNING: No return chip available (MIRROR/THORN on cooldown or insufficient TP)")
-            }
-        }
-
-        // WEEK 2 STEP 1.5: Check for tactical CHIP_LIBERATION usage BEFORE combat
+        // STEP 4: Check for tactical CHIP_LIBERATION usage BEFORE combat
         if (this.shouldUseLiberation(target)) {
             // Use on enemy to remove their buffs, or on self to remove debuffs
             var liberationTarget = target._cellPos
@@ -194,7 +230,7 @@ class AgilityStrategy extends Strategy {
             playerTP -= 5
         }
 
-        // STEP 2: WEEK 2 - Select best tactical cell (hit-and-run: damage vs threat)
+        // STEP 5: Select best tactical cell (hit-and-run: damage vs threat)
         // Agility builds leverage mobility to maximize damage while minimizing risk
         var tacticalCell = fieldMap.findBestTacticalCell(playerMP, 0.4)  // Threat weighted 40% (less risk-averse than magic)
 
@@ -228,7 +264,7 @@ class AgilityStrategy extends Strategy {
             return
         }
 
-        // STEP 2.5: Check if CHIP_ADRENALINE can help with weapon spam
+        // STEP 6: Check if CHIP_ADRENALINE can help with weapon spam
         if (this.shouldUseAdrenaline(playerTP + 4)) {  // Check if +4 TP would enable more attacks
             this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
             playerTP -= 1
@@ -236,9 +272,34 @@ class AgilityStrategy extends Strategy {
             debug("[AGILITY][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
         }
 
-        // STEP 3: Execute shared weapon-focused combat logic (exclude CHIP_MIRROR/THORN from damage chips)
-        var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [CHIP_MIRROR, CHIP_THORN], "AGILITY")
+        // STEP 7: Execute shared weapon-focused combat logic (exclude return damage chips, skip hide-and-seek for aggressive play)
+        var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [CHIP_BRAMBLE, CHIP_MIRROR, CHIP_THORN], "AGILITY", true)
 
-        debug("[AGILITY] Offensive scenario complete. Remaining TP: " + result['playerTP'] + ", MP: " + result['playerMP'])
+        // STEP 8: AGGRESSIVE SHIELD STACKING - Use leftover TP for WEAPON_SWORD (8% relative shield per use, stackable)
+        playerTP = result['playerTP']
+        playerMP = result['playerMP']
+
+        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_SWORD)) {
+            var swordWeapon = arsenal.playerEquippedWeapons[WEAPON_SWORD]
+            // Recalculate distance (player position might have changed after combat)
+            distToTarget = getCellDistance(player._cellPos, target._cellPos)
+
+            // Stack shields with WEAPON_SWORD if we have leftover TP
+            if (distToTarget != null && distToTarget >= swordWeapon._minRange && distToTarget <= swordWeapon._maxRange) {
+                var shieldsStacked = 0
+                while (playerTP >= swordWeapon._cost && shieldsStacked < 3) {  // Max 3 stacks per turn
+                    debug("[AGILITY][SHIELD-STACK] Using WEAPON_SWORD for defensive layering (8% shield, stack #" + (shieldsStacked + 1) + ")")
+                    this.createAttackAction(Action.ACTION_DIRECT, target, swordWeapon._id, -1)
+                    playerTP -= swordWeapon._cost
+                    shieldsStacked++
+                }
+                if (shieldsStacked > 0) {
+                    debug("[AGILITY][SHIELD-STACK] Stacked " + shieldsStacked + " shields (~" + (shieldsStacked * 8) + "% total), remaining TP: " + playerTP)
+                }
+            }
+        }
+
+        debug("[AGILITY] Offensive scenario complete. Remaining TP: " + playerTP + ", MP: " + playerMP)
+        debug("[AGILITY] AGGRESSIVE MODE: Stay in combat range, no defensive retreat")
     }
 }

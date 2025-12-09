@@ -707,6 +707,45 @@ class Strategy {
 
     // Find damage cell on escape route to safe cell
     // Ensures we can still reach safe cell after stopping to attack
+    // Find nearby damage cells (not just on path) that still allow escape to safe cell
+    findNearbyDamageCellWithEscape(safeCell, maxMP) {
+        var playerPos = player._cellPos
+        var bestCell = null
+        var bestDamage = -1
+        var bestDist = 99999
+
+        // Check all damage cells within MP range
+        for (var cellObj in fieldMap.damageMap) {
+            if (cellObj._id == playerPos) continue  // Skip current position
+
+            // Check if cell is reachable
+            var distToCell = getPathLength(playerPos, cellObj._id)
+            if (distToCell == null || distToCell > maxMP || distToCell == 0) continue
+
+            // CRITICAL: Check if we can still reach safe cell AFTER stopping here
+            var remainingMP = maxMP - distToCell
+            var distToSafeFromHere = getPathLength(cellObj._id, safeCell)
+
+            if (distToSafeFromHere != null && distToSafeFromHere <= remainingMP) {
+                // This cell preserves escape route!
+                if (cellObj._totalDamage > bestDamage || (cellObj._totalDamage == bestDamage && distToCell < bestDist)) {
+                    bestDamage = cellObj._totalDamage
+                    bestCell = cellObj
+                    bestDist = distToCell
+                    debug("[NEARBY-ESCAPE] Candidate cell " + cellObj._id + ": damage=" + cellObj._totalDamage + ", dist=" + distToCell + ", distToSafe=" + distToSafeFromHere + "/" + remainingMP)
+                }
+            }
+        }
+
+        if (bestCell != null) {
+            debug("[NEARBY-ESCAPE] Found nearby damage cell " + bestCell._id + " (damage=" + bestDamage + ", dist=" + bestDist + ")")
+        } else {
+            debug("[NEARBY-ESCAPE] No nearby damage cells found that preserve escape")
+        }
+
+        return bestCell
+    }
+
     findDamageCellOnEscapeRoute(safeCell, maxMP) {
         var playerPos = player._cellPos
 
@@ -819,7 +858,7 @@ class Strategy {
             debug(" - " + getChipName(c))
         }
 
-        // PRIORITY 1: Universal HP buffs (ALWAYS applied first, regardless of fight type)
+        // PRIORITY 1: Universal HP buffs (ALWAYS applied - survivability is critical)
         debug("[TURN1-BUFFS] Applying mandatory HP buffs")
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
             debug("Using CHIP_KNOWLEDGE - Science/Magic boost")
@@ -837,6 +876,14 @@ class Strategy {
         // Detect fight type for strategy-specific buff decisions
         var fightType = this.detectFightType()
         debug("[TURN1-BUFFS] Fight type: " + fightType)
+
+        // Check distance to closest enemy
+        var closestEnemy = fieldMap.getClosestEnemy()
+        var distToEnemy = 99999
+        if (closestEnemy != null) {
+            distToEnemy = getCellDistance(player._cellPos, closestEnemy._cellPos)
+            if (distToEnemy == null) distToEnemy = 99999
+        }
 
         // SKIP strategy buffs for boss/chest (need TP for damage/chips)
         if (fightType == "boss") {
@@ -856,26 +903,18 @@ class Strategy {
         }
 
         // PRIORITY 2: Strategy-specific defensive/offensive buffs (PvP and PvE only)
-        // Check distance to closest enemy - determines buff strategy
-        var closestEnemy = fieldMap.getClosestEnemy()
-        var distToEnemy = 99999
-        if (closestEnemy != null) {
-            distToEnemy = getCellDistance(player._cellPos, closestEnemy._cellPos)
-            if (distToEnemy == null) distToEnemy = 99999
-        }
+        // Distance already calculated above for HP buff decision
 
-        // DEFENSIVE PHASE: Apply shields when enemy far (survive approach)
+        // DEFENSIVE PHASE: Apply initial shield when enemy far (survive approach)
         if (distToEnemy > 10) {
-            debug("[TURN1-BUFFS] Enemy far (dist=" + distToEnemy + "), applying defensive shields")
+            debug("[TURN1-BUFFS] Enemy far (dist=" + distToEnemy + "), applying defensive shield")
 
-            // Strength build: Apply FORTRESS or WALL for damage reduction during approach
+            // Strength build: Start with FORTRESS (3 turn duration) for initial protection
+            // WALL will be applied later when FORTRESS expires to maintain continuous coverage
             if (player._strength >= player._agility && player._strength >= player._magic) {
                 if (this.isChipAvailable(CHIP_FORTRESS, 12)) {  // 6 for FORTRESS + 6 reserve for attacks
                     debug("Using CHIP_FORTRESS (defensive) - 7-8% damage reduction for 3 turns")
                     useChip(CHIP_FORTRESS, player._id)
-                } else if (this.isChipAvailable(CHIP_WALL, 9)) {  // 3 for WALL + 6 reserve
-                    debug("Using CHIP_WALL (defensive) - 4-5% damage reduction for 2 turns")
-                    useChip(CHIP_WALL, player._id)
                 }
             }
         }
@@ -890,13 +929,8 @@ class Strategy {
             }
         }
 
-        // Agility build: Apply CHIP_WARM_UP before damage return buffs
-        if (player._agility >= player._strength && player._agility >= player._magic) {
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP)) {
-                debug("Using CHIP_WARM_UP (agility build) - +170-190 Agility for 3 turns (attrition boost)")
-                useChip(CHIP_WARM_UP, player._id)
-            }
-        }
+        // NOTE: Agility builds apply CHIP_WARM_UP in AgilityStrategy.createOffensiveScenario()
+        // This avoids duplication and allows proper TP budget validation
 
         // PRIORITY 3: Weapon selection
         if (getWeapon() == null) {
@@ -919,15 +953,25 @@ class Strategy {
         debug("Planned movement action: Type " + type + " to cell " + targetHitCellID + " towards entity " + targetName)
     }
 
-    createAttackAction(type, target, weaponID = -1, chipID = -1) {
+    createAttackAction(type, target, weaponID = -1, chipID = -1, aimCell = -1) {
+        // Use provided aim cell, or default to target position
+        var targetCell = (aimCell != -1) ? aimCell : target._cellPos
+
         push(this._actions, new Action(
             type,
             weaponID,
             chipID,
-            target._cellPos,
+            targetCell,
             target
         ))
-        debug("Planned attack action: Type " + type + " on entity " + getName(target._id) + " with weapon " + getWeaponName(weaponID) + " and chip " + getChipName(chipID))
+
+        // Log offset aim
+        if (aimCell != -1 && aimCell != target._cellPos) {
+            debug("Planned attack: Type " + type + " on " + getName(target._id) +
+                  " aiming at OFFSET cell " + aimCell + " (target at " + target._cellPos + ")")
+        } else {
+            debug("Planned attack action: Type " + type + " on entity " + getName(target._id) + " with weapon " + getWeaponName(weaponID) + " and chip " + getChipName(chipID))
+        }
     }
 
     createOffensiveScenario(target, targetHitCell) {
@@ -1111,8 +1155,11 @@ class Strategy {
     // Shared weapon-focused combat logic for Strength and Agility strategies
     // Returns map with remaining MP/TP after combat
     // chipExclusionList: chips to exclude from damage chip usage (e.g., CHIP_MIRROR/THORN for agility)
-    executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, chipExclusionList, debugPrefix) {
+    executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, chipExclusionList, debugPrefix, skipHideAndSeek) {
         // Always query current weapon directly to avoid tracking desync
+
+        // Handle optional skipHideAndSeek parameter (LeekScript doesn't support default values)
+        if (skipHideAndSeek == null) skipHideAndSeek = false
 
         // HNS-approach cell check (safer positioning)
         var hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
@@ -1175,8 +1222,12 @@ class Strategy {
                         debug("[" + debugPrefix + "] EMERGENCY: Using LEATHER_BOOTS for +2 MP (current: " + playerMP + ") to reach cell " + wouldReachCell._id)
                         useChip(CHIP_LEATHER_BOOTS, player._id)
                         playerTP -= 3
+
+                        // CRITICAL: Update player entity to get fresh MP value after buff
+                        player.updateEntity()
                         playerMP = player._currMp  // Refresh MP after boots
                         usedLeatherBoots = true
+                        debug("[" + debugPrefix + "] After LEATHER_BOOTS: MP=" + playerMP + " (boosted from " + (playerMP - 2) + ")")
 
                         // Re-check for reachable cells with boosted MP
                         reachableCell = this.findBestReachableDamageCell(playerMP)
@@ -1212,29 +1263,39 @@ class Strategy {
                     // Check if teleport destination is valid and within range (1-10 cells)
                     var teleportDist = getCellDistance(playerPos, bestWeaponCell._id)
                     if (teleportDist != null && teleportDist >= 1 && teleportDist <= 10) {
-                        debug("[" + debugPrefix + "] EMERGENCY: Using TELEPORTATION to reach best weapon cell " + bestWeaponCell._id + " (dist=" + teleportDist + ")")
+                        // CRITICAL: Check if we can actually attack after teleport
+                        var tpAfterTeleport = playerTP - 5
+                        var primaryWeapon = bestWeaponCell._highestDamageWeapon
+                        var canAffordPrimary = (primaryWeapon != -1 && primaryWeapon != null && tpAfterTeleport >= primaryWeapon._cost + 1)
+                        var hasBackupAttacks = (count(bestWeaponCell._weaponsList) > 1 || count(bestWeaponCell._chipsList) > 0)
 
-                        var teleportResult = useChipOnCell(CHIP_TELEPORTATION, bestWeaponCell._id)
-                        playerTP -= 5
-
-                        if (teleportResult == USE_SUCCESS) {
-                            // Update player state after teleport
-                            player.updateEntity()
-                            playerPos = player._cellPos
-                            playerMP = player._currMp
-                            playerTP = player._currTp
-
-                            debug("[" + debugPrefix + "] Teleport successful! New pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
-
-                            // Verify we reached the weapon cell
-                            if (playerPos == bestWeaponCell._id) {
-                                reachedWeaponCell = true
-                                debug("[" + debugPrefix + "] Successfully teleported to weapon cell!")
-                            } else {
-                                debug("[" + debugPrefix + "] WARNING: Teleport didn't land on expected cell (expected=" + bestWeaponCell._id + " actual=" + playerPos + ")")
-                            }
+                        if (!canAffordPrimary && !hasBackupAttacks) {
+                            debug("[" + debugPrefix + "] TELEPORTATION skipped: Cell " + bestWeaponCell._id + " has no viable attacks (TP after TP=" + tpAfterTeleport + ", need " + (primaryWeapon != null ? primaryWeapon._cost + 1 : "?") + ", backups=" + hasBackupAttacks + ")")
                         } else {
-                            debug("[" + debugPrefix + "] TELEPORTATION failed (result=" + teleportResult + ")")
+                            debug("[" + debugPrefix + "] EMERGENCY: Using TELEPORTATION to reach best weapon cell " + bestWeaponCell._id + " (dist=" + teleportDist + ", canAffordPrimary=" + canAffordPrimary + ", hasBackups=" + hasBackupAttacks + ")")
+
+                            var teleportResult = useChipOnCell(CHIP_TELEPORTATION, bestWeaponCell._id)
+                            playerTP -= 5
+
+                            if (teleportResult == USE_SUCCESS) {
+                                // Update player state after teleport
+                                player.updateEntity()
+                                playerPos = player._cellPos
+                                playerMP = player._currMp
+                                playerTP = player._currTp
+
+                                debug("[" + debugPrefix + "] Teleport successful! New pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
+
+                                // Verify we reached the weapon cell
+                                if (playerPos == bestWeaponCell._id) {
+                                    reachedWeaponCell = true
+                                    debug("[" + debugPrefix + "] Successfully teleported to weapon cell!")
+                                } else {
+                                    debug("[" + debugPrefix + "] WARNING: Teleport didn't land on expected cell (expected=" + bestWeaponCell._id + " actual=" + playerPos + ")")
+                                }
+                            } else {
+                                debug("[" + debugPrefix + "] TELEPORTATION failed (result=" + teleportResult + ")")
+                            }
                         }
                     } else {
                         debug("[" + debugPrefix + "] TELEPORTATION out of range (dist=" + teleportDist + ", range=1-10)")
@@ -1328,24 +1389,42 @@ class Strategy {
         var primaryWeapon = bestWeaponCell._highestDamageWeapon
         var currentWeaponId = getWeapon()  // Query actual equipped weapon
         debug("[" + debugPrefix + "] Primary weapon: reachedWeaponCell=" + reachedWeaponCell + " primaryWeapon=" + (primaryWeapon != -1 && primaryWeapon != null ? getWeaponName(primaryWeapon._id) : "none") + " currentWeapon=" + getWeaponName(currentWeaponId) + " playerTP=" + playerTP)
+
+        var primaryWeaponReady = false  // Track if primary weapon is equipped/will be equipped
         if (reachedWeaponCell && primaryWeapon != -1 && primaryWeapon != null) {
             if (currentWeaponId != primaryWeapon._id) {
                 debug("[" + debugPrefix + "] Need weapon swap: current=" + getWeaponName(currentWeaponId) + " -> target=" + getWeaponName(primaryWeapon._id) + " (TP=" + playerTP + " need=" + (1 + primaryWeapon._cost) + ")")
                 if (playerTP >= 1 + primaryWeapon._cost) {
                     this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, primaryWeapon._id, -1)
                     playerTP -= 1
+                    primaryWeaponReady = true
                     debug("[" + debugPrefix + "] Created weapon swap action")
                 } else {
-                    debug("[" + debugPrefix + "] Not enough TP to swap and use primary weapon " + getWeaponName(primaryWeapon._id))
+                    debug("[" + debugPrefix + "] Not enough TP to swap and use primary weapon " + getWeaponName(primaryWeapon._id) + " - will use current weapon instead")
                 }
             } else {
                 debug("[" + debugPrefix + "] Weapon already equipped: " + getWeaponName(currentWeaponId))
+                primaryWeaponReady = true
             }
-            var uses = primaryWeapon._maxUse
-            while (playerTP >= primaryWeapon._cost && uses > 0) {
-                this.createAttackAction(Action.ACTION_DIRECT, target, primaryWeapon._id, -1)
-                playerTP -= primaryWeapon._cost
-                uses -= 1
+
+            // Only use primary weapon if it's ready (equipped or will be equipped)
+            if (primaryWeaponReady) {
+                // NEW: Get optimal aim cell from damage map
+                var currentCellObj = mapContainsKey(fieldMap.damageMap, playerPos) ?
+                                     fieldMap.damageMap[playerPos] : null
+                var optimalAim = target._cellPos  // Default to direct aim
+
+                if (currentCellObj != null &&
+                    mapContainsKey(currentCellObj._weaponOptimalAims, primaryWeapon._id)) {
+                    optimalAim = currentCellObj._weaponOptimalAims[primaryWeapon._id]
+                }
+
+                var uses = primaryWeapon._maxUse
+                while (playerTP >= primaryWeapon._cost && uses > 0) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, primaryWeapon._id, -1, optimalAim)
+                    playerTP -= primaryWeapon._cost
+                    uses -= 1
+                }
             }
         } else if (!reachedWeaponCell) {
             debug("[" + debugPrefix + "] Did not reach weapon cell - will use weapons from current position " + playerPos)
@@ -1374,9 +1453,15 @@ class Strategy {
                     playerTP -= 1
                 }
 
+                // NEW: Get optimal aim for this weapon
+                var wOptimalAim = target._cellPos
+                if (mapContainsKey(curCellObj._weaponOptimalAims, wObj._id)) {
+                    wOptimalAim = curCellObj._weaponOptimalAims[wObj._id]
+                }
+
                 var uses2 = wObj._maxUse
                 while (playerTP >= wObj._cost && uses2 > 0) {
-                    this.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, -1)
+                    this.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, -1, wOptimalAim)
                     playerTP -= wObj._cost
                     uses2 -= 1
                 }
@@ -1386,6 +1471,7 @@ class Strategy {
         }
 
         // Spend leftover TP on damage/poison chips (use chips available from current position)
+        debug("[" + debugPrefix + "][CHIPS] playerTP=" + playerTP + " curCellObj=" + (curCellObj != null ? "exists" : "null") + " chipsList=" + (curCellObj != null ? count(curCellObj._chipsList) : 0))
         if (playerTP > 0 && curCellObj != null && count(curCellObj._chipsList) > 0) {
             var dmgChips = []
             // Use chips directly from cell's _chipsList (already pre-calculated with range/LOS)
@@ -1401,14 +1487,22 @@ class Strategy {
                         break
                     }
                 }
-                if (excluded) continue
+                if (excluded) {
+                    debug("[" + debugPrefix + "][CHIPS] Skipping excluded chip: " + getChipName(chipObj._id))
+                    continue
+                }
 
                 // Filter attack chips (damage or poison effects)
-                if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
+                if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) {
+                    debug("[" + debugPrefix + "][CHIPS] Skipping non-attack chip: " + getChipName(chipObj._id))
+                    continue
+                }
 
                 var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
                 push(dmgChips, ['chip': chipObj, 'per': bd['total']])
+                debug("[" + debugPrefix + "][CHIPS] Added " + getChipName(chipObj._id) + " damage=" + bd['total'])
             }
+            debug("[" + debugPrefix + "][CHIPS] Total damage chips found: " + count(dmgChips))
 
             // Selection sort descending by per-use total damage
             for (var i = 0; i < count(dmgChips); i++) {
@@ -1426,27 +1520,40 @@ class Strategy {
             for (var dc = 0; dc < count(dmgChips); dc++) {
                 var rec = dmgChips[dc]
                 var chipUse = rec['chip']
-                if (playerTP < chipUse._cost) continue
+                if (playerTP < chipUse._cost) {
+                    debug("[" + debugPrefix + "][CHIPS] Not enough TP for " + getChipName(chipUse._id) + " (have " + playerTP + ", need " + chipUse._cost + ")")
+                    continue
+                }
 
                 // Check cooldown before attempting to use chip
                 if (getCooldown(chipUse._id, player._id) > 0) {
-                    debug("[" + debugPrefix + "] Chip " + getChipName(chipUse._id) + " on cooldown, skipping")
+                    debug("[" + debugPrefix + "][CHIPS] Chip " + getChipName(chipUse._id) + " on cooldown, skipping")
                     continue
+                }
+
+                // NEW: Get optimal aim for this chip
+                var cOptimalAim = target._cellPos
+                if (mapContainsKey(curCellObj._chipOptimalAims, chipUse._id)) {
+                    cOptimalAim = curCellObj._chipOptimalAims[chipUse._id]
                 }
 
                 // Spam chip until max uses OR TP exhausted
                 var actualUsesC = 0
                 while (actualUsesC < chipUse._maxUse && playerTP >= chipUse._cost) {
-                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, chipUse._id)
+                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, chipUse._id, cOptimalAim)
                     playerTP -= chipUse._cost
                     actualUsesC += 1
                 }
+                debug("[" + debugPrefix + "][CHIPS] Used " + getChipName(chipUse._id) + " " + actualUsesC + " times, TP remaining: " + playerTP)
                 if (playerTP <= 0) break
             }
+        } else if (playerTP > 0) {
+            debug("[" + debugPrefix + "][CHIPS] Cannot use chips: curCellObj=" + (curCellObj == null ? "null" : "exists") + " chipsList=" + (curCellObj != null ? count(curCellObj._chipsList) : 0))
         }
 
         // Post-offensive HNS relocation (break line of sight with remaining MP)
-        if (playerMP > 0) {
+        // Skip for aggressive strategies that want to maintain pressure
+        if (!skipHideAndSeek && playerMP > 0) {
             var hnsInfo = fieldMap.findHideAndSeekCell()
             if (hnsInfo != null) {
                 var hideCellId = hnsInfo['cell']
@@ -1459,6 +1566,8 @@ class Strategy {
                     }
                 }
             }
+        } else if (skipHideAndSeek) {
+            debug("[" + debugPrefix + "][AGGRESSIVE] Skipping hide-and-seek - maintaining combat pressure")
         }
 
         // REMOVED: REMISSION as TP dump (was causing loops and wasting TP)
@@ -1530,6 +1639,15 @@ class Strategy {
         if (bestWeapon != null && playerTP >= bestWeapon._cost) {
             debug("[FLEE-ATTACK] Attacking from current position " + playerPos + " before fleeing (weapon=" + getWeaponName(bestWeapon._id) + ")")
 
+            // NEW: Get optimal aim
+            var fleeOptimalAim = target._cellPos
+            var currPosObj = mapContainsKey(fieldMap.damageMap, playerPos) ?
+                             fieldMap.damageMap[playerPos] : null
+            if (currPosObj != null &&
+                mapContainsKey(currPosObj._weaponOptimalAims, bestWeapon._id)) {
+                fleeOptimalAim = currPosObj._weaponOptimalAims[bestWeapon._id]
+            }
+
             // Swap weapon if needed
             var currentWeapon = getWeapon()
             if (currentWeapon != bestWeapon._id && playerTP >= 1 + bestWeapon._cost) {
@@ -1540,7 +1658,7 @@ class Strategy {
             // Spam weapon with available TP
             var uses = bestWeapon._maxUse
             while (playerTP >= bestWeapon._cost && uses > 0) {
-                this.createAttackAction(Action.ACTION_DIRECT, target, bestWeapon._id, -1)
+                this.createAttackAction(Action.ACTION_DIRECT, target, bestWeapon._id, -1, fleeOptimalAim)
                 playerTP -= bestWeapon._cost
                 uses -= 1
             }
@@ -1556,7 +1674,9 @@ class Strategy {
             if (hCell != player._cellPos) {
                 // If we didn't attack from current position and have TP, find damage cell on escape route
                 if (!attackedFromCurrentPos && playerTP >= 6) {  // Need at least 6 TP for meaningful attack
-                    var damageCellOnPath = this.findDamageCellOnEscapeRoute(hCell, playerMP)
+                    // First, check nearby damage cells (not just on path)
+                    var nearbyDamageCell = this.findNearbyDamageCellWithEscape(hCell, playerMP)
+                    var damageCellOnPath = nearbyDamageCell != null ? nearbyDamageCell : this.findDamageCellOnEscapeRoute(hCell, playerMP)
 
                     if (damageCellOnPath != null) {
                         // Stop at damage cell on escape route to attack while fleeing
@@ -1577,6 +1697,15 @@ class Strategy {
                         if (weaponAtDamageCell != null && playerTP >= weaponAtDamageCell._cost) {
                             debug("[FLEE-ATTACK] Attacking from damage cell " + newPos + " (weapon=" + getWeaponName(weaponAtDamageCell._id) + ")")
 
+                            // NEW: Get optimal aim from new position
+                            var newPosOptimalAim = target._cellPos
+                            var newPosObj = mapContainsKey(fieldMap.damageMap, newPos) ?
+                                            fieldMap.damageMap[newPos] : null
+                            if (newPosObj != null &&
+                                mapContainsKey(newPosObj._weaponOptimalAims, weaponAtDamageCell._id)) {
+                                newPosOptimalAim = newPosObj._weaponOptimalAims[weaponAtDamageCell._id]
+                            }
+
                             // Swap weapon if needed
                             var currentWeapon2 = getWeapon()
                             if (currentWeapon2 != weaponAtDamageCell._id && playerTP >= 1 + weaponAtDamageCell._cost) {
@@ -1587,7 +1716,7 @@ class Strategy {
                             // Spam weapon with available TP
                             var uses2 = weaponAtDamageCell._maxUse
                             while (playerTP >= weaponAtDamageCell._cost && uses2 > 0) {
-                                this.createAttackAction(Action.ACTION_DIRECT, target, weaponAtDamageCell._id, -1)
+                                this.createAttackAction(Action.ACTION_DIRECT, target, weaponAtDamageCell._id, -1, newPosOptimalAim)
                                 playerTP -= weaponAtDamageCell._cost
                                 uses2 -= 1
                             }

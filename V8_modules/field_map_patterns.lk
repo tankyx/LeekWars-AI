@@ -108,6 +108,148 @@ class FieldMapPatterns extends FieldMapCore {
     }
 
     // ====================================================================
+    // OPTIMAL AIM CALCULATION
+    // ====================================================================
+
+    // Get cells to test as aim points (AoE-type aware)
+    getAimCandidates(primaryTarget, aoeType, itemRange) {
+        var candidates = []
+        var targetCell = primaryTarget._cellPos
+
+        // AREA_POINT: No alternatives (single-target)
+        if (aoeType == AREA_POINT) {
+            push(candidates, targetCell)
+            return candidates
+        }
+
+        // AREA_LASER_LINE: Test aiming at each enemy (line hits all between)
+        if (aoeType == AREA_LASER_LINE) {
+            push(candidates, targetCell)  // Primary target
+            var enemies = this.getEnemySubMap()
+            for (var e in mapValues(enemies)) {
+                if (e._cellPos != targetCell && !isDead(e._id)) {
+                    push(candidates, e._cellPos)
+                }
+            }
+            return candidates
+        }
+
+        // For all other AoE types: Test aim points around primary target
+        // Search radius based on AoE size
+        var searchRadius = 1
+        if (aoeType == AREA_CIRCLE_3 || aoeType == AREA_PLUS_3 ||
+            aoeType == AREA_X_3 || aoeType == AREA_SQUARE_2) {
+            searchRadius = 2  // Larger AoEs benefit from wider search
+        }
+
+        // Always include primary target
+        push(candidates, targetCell)
+
+        // Add adjacent/nearby cells based on search radius
+        for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (var dy = -searchRadius; dy <= searchRadius; dy++) {
+                if (dx == 0 && dy == 0) continue  // Already added center
+                var dist = abs(dx) + abs(dy)
+                if (dist > searchRadius) continue
+
+                var aimCell = targetCell + FieldMapPatterns.x_offset * dx +
+                              FieldMapPatterns.y_offset * dy
+
+                // Validate aim cell
+                if (aimCell >= 0 && aimCell < FieldMapPatterns.board_cell_count &&
+                    !isObstacle(aimCell)) {
+                    push(candidates, aimCell)
+                }
+            }
+        }
+
+        return candidates
+    }
+
+    // Find optimal aim point from shooterCell using item
+    // Returns: {aimCell, damage, enemies, hitCount}
+    findOptimalAimPoint(shooterCell, item, isWeapon, primaryTarget) {
+        // OPTIMIZATION: Skip for non-AoE weapons (AREA_POINT) - no benefit from testing multiple aims
+        if (item._aoeType == AREA_POINT) {
+            // Direct calculation - no aim optimization needed
+            var enemies = this.getEnemySubMap()
+            var enemiesArray = mapValues(enemies)
+            var result = arsenal.calculateMultiEnemyDamage(shooterCell, primaryTarget._cellPos, item._id, enemiesArray)
+            var totalDamage = result['total']
+            if (isWeapon) {
+                totalDamage *= item._maxUse
+            }
+            return [
+                'aimCell': primaryTarget._cellPos,
+                'damage': totalDamage,
+                'enemies': result['enemies'],
+                'hitCount': count(result['enemies'])
+            ]
+        }
+
+        var enemies = this.getEnemySubMap()
+        var enemiesArray = mapValues(enemies)
+        var itemId = item._id
+
+        // Get aim candidates based on AoE type
+        var aimCandidates = this.getAimCandidates(primaryTarget, item._aoeType, item._maxRange)
+
+        var bestAimCell = primaryTarget._cellPos
+        var bestDamage = 0
+        var bestEnemies = []
+        var bestHitCount = 0
+
+        for (var aimCell in aimCandidates) {
+            // Validate aim point is in range and has LOS
+            var dist = getCellDistance(shooterCell, aimCell)
+            if (dist == null || dist < item._minRange || dist > item._maxRange) continue
+            if (!lineOfSight(shooterCell, aimCell)) continue
+
+            // Calculate total multi-enemy damage for this aim point
+            var result = arsenal.calculateMultiEnemyDamage(
+                shooterCell, aimCell, itemId, enemiesArray
+            )
+
+            var totalDamage = result['total']
+            var hitEnemies = result['enemies']
+            var hitCount = count(hitEnemies)
+
+            // Scale by max uses for weapons
+            if (isWeapon) {
+                totalDamage *= item._maxUse
+            }
+
+            // Prefer higher damage, tie-break by hit count, then closer to primary target
+            var isBetter = false
+            if (totalDamage > bestDamage) {
+                isBetter = true
+            } else if (totalDamage == bestDamage && hitCount > bestHitCount) {
+                isBetter = true
+            } else if (totalDamage == bestDamage && hitCount == bestHitCount) {
+                var distToTarget = getCellDistance(aimCell, primaryTarget._cellPos)
+                var bestDistToTarget = getCellDistance(bestAimCell, primaryTarget._cellPos)
+                if (distToTarget != null && bestDistToTarget != null && distToTarget < bestDistToTarget) {
+                    isBetter = true
+                }
+            }
+
+            if (isBetter) {
+                bestDamage = totalDamage
+                bestAimCell = aimCell
+                bestEnemies = hitEnemies
+                bestHitCount = hitCount
+            }
+        }
+
+        return [
+            'aimCell': bestAimCell,
+            'damage': bestDamage,
+            'enemies': bestEnemies,
+            'hitCount': bestHitCount
+        ]
+    }
+
+    // ====================================================================
     // HIT MAP BUILDING
     // ====================================================================
 
@@ -278,18 +420,30 @@ class FieldMapPatterns extends FieldMapCore {
         var item = weapon != null ? weapon : chip
         var itemId = item._id
 
-        // Get all enemies that would be hit by AoE
+        // Get primary target entity
+        var target = null
         var enemies = fieldMap.getEnemySubMap()
-        var enemiesArray = mapValues(enemies)
-        var multiResult = arsenal.calculateMultiEnemyDamage(curCell, targetCell, itemId, enemiesArray)
+        for (var e in mapValues(enemies)) {
+            if (e._cellPos == targetCell) {
+                target = e
+                break
+            }
+        }
+        if (target == null) target = mapValues(enemies)[0]  // Fallback to first enemy
 
-        var totalDamage = multiResult['total']
-        var hitEnemies = multiResult['enemies']
-        var enemyCount = count(hitEnemies)
+        // NEW: Find optimal aim point (tests multiple aim positions)
+        var optimalAim = this.findOptimalAimPoint(curCell, item, weapon != null, target)
+        var optimalAimCell = optimalAim['aimCell']
+        var totalDamage = optimalAim['damage']
+        var hitEnemies = optimalAim['enemies']
+        var enemyCount = optimalAim['hitCount']
 
-        // Scale by max uses (for weapons) or apply once (for chips)
-        if (weapon != null) {
-            totalDamage *= weapon._maxUse
+        // Log optimal aim if different from direct aim
+        if (optimalAimCell != targetCell) {
+            debug("[OPTIMAL-AIM] Cell " + curCell + " " +
+                  (weapon != null ? getWeaponName(itemId) : getChipName(itemId)) +
+                  ": aim " + optimalAimCell + " vs target " + targetCell +
+                  " (damage: " + floor(totalDamage) + ", hits " + enemyCount + " enemies)")
         }
 
         // Update or create cell entry
@@ -303,13 +457,20 @@ class FieldMapPatterns extends FieldMapCore {
                     cell._totalAoEDamage = totalDamage
                     cell._enemiesHit = hitEnemies
                     cell._enemiesHitCount = enemyCount
+
+                    // NEW: Store optimal aim point
+                    mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
                 }
                 // Add to weapons list
                 var already = false
                 for (var w in cell._weaponsList) {
                     if (w._id == weapon._id) { already = true; break }
                 }
-                if (!already) push(cell._weaponsList, weapon)
+                if (!already) {
+                    push(cell._weaponsList, weapon)
+                    // Store optimal aim for this weapon too
+                    mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
+                }
             } else {
                 cell._chipDamage += totalDamage
                 cell._totalAoEDamage += totalDamage
@@ -325,6 +486,9 @@ class FieldMapPatterns extends FieldMapCore {
                     }
                 }
                 push(cell._chipsList, chip)
+
+                // NEW: Store optimal aim point
+                mapPut(cell._chipOptimalAims, itemId, optimalAimCell)
             }
         } else {
             // Create new cell
@@ -335,8 +499,18 @@ class FieldMapPatterns extends FieldMapCore {
             newCell._totalAoEDamage = totalDamage
             newCell._enemiesHit = hitEnemies
             newCell._enemiesHitCount = enemyCount
-            if (weapon != null) push(newCell._weaponsList, weapon)
-            if (chip != null) push(newCell._chipsList, chip)
+
+            if (weapon != null) {
+                push(newCell._weaponsList, weapon)
+                // NEW: Store optimal aim
+                mapPut(newCell._weaponOptimalAims, itemId, optimalAimCell)
+            }
+            if (chip != null) {
+                push(newCell._chipsList, chip)
+                // NEW: Store optimal aim
+                mapPut(newCell._chipOptimalAims, itemId, optimalAimCell)
+            }
+
             mapPut(hitCells, curCell, newCell)
         }
 

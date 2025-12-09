@@ -79,6 +79,9 @@ class StrengthStrategy extends Strategy {
         var teleCell = teleportInfo['cell']
         debug("[OTKO] Executing teleport OTKO to cell " + teleCell + " projected damage: " + teleportInfo['damage'])
 
+        // Track planned weapon swaps (since we're queuing actions, not executing)
+        var plannedWeapon = getWeapon()
+
         // PRE-OTKO NEUTRINO STACKING: Amplify teleport burst damage with 24% vulnerability
         // Only stack if we have Neutrino equipped, enemy in diagonal range 2-6, and sufficient TP
         if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO) && playerTP >= 21) {
@@ -92,25 +95,21 @@ class StrengthStrategy extends Strategy {
                 debug("[OTKO][NEUTRINO] Pre-stacking vulnerability before teleport for amplified OTKO")
 
                 // Stack 3x Neutrino for 24% damage amplification (1.24x multiplier)
-                if (getWeapon() != WEAPON_NEUTRINO) {
-                    setWeapon(WEAPON_NEUTRINO)
+                // QUEUE these actions instead of executing immediately
+                if (plannedWeapon != WEAPON_NEUTRINO) {
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, WEAPON_NEUTRINO, -1)
                     playerTP -= 1
-                    player._currTp -= 1
+                    plannedWeapon = WEAPON_NEUTRINO
                 }
 
                 for (var nStack = 0; nStack < 3; nStack++) {
                     if (playerTP >= 4) {
-                        useWeaponOnCell(target._cellPos)
+                        this.createAttackAction(Action.ACTION_DIRECT, target, WEAPON_NEUTRINO, -1)
                         playerTP -= 4
-                        player._currTp -= 4
                     }
                 }
 
-                // Update target to refresh vulnerability status
-                target.updateEntity()
-
-                var neutrinoRelShield = target._relShield
-                debug("[OTKO][NEUTRINO] Stacked 24% vulnerability (target shield: " + neutrinoRelShield + "%), TP: " + playerTP + " - now teleporting for amplified burst")
+                debug("[OTKO][NEUTRINO] Queued 3x Neutrino for 24% vulnerability stacking, TP remaining: " + playerTP + " - now queueing teleport + burst")
             } else {
                 debug("[OTKO][NEUTRINO] Cannot pre-stack: dist=" + preTeleportDist + " (need 2-6), diagonal=" + preTeleportAligned + ", TP=" + playerTP)
             }
@@ -161,10 +160,11 @@ class StrengthStrategy extends Strategy {
             var wObj = wRec['weapon']
 
             // Swap weapon if needed
-            if (getWeapon() != wObj._id) {
+            if (plannedWeapon != wObj._id) {
                 if (playerTP >= 1 + wObj._cost) {
                     this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
                     playerTP -= 1
+                    plannedWeapon = wObj._id
                 } else {
                     continue  // Not enough TP to swap and use
                 }
@@ -294,9 +294,10 @@ class StrengthStrategy extends Strategy {
 
         // SMART ANTIDOTE: Calculate if poison is sustainable with available healing
         // Only use antidote if: poison_damage > available_healing OR poison is lethal
+        // With liberal REMISSION usage, we can sustain through most poisons
 
         // Get poison damage per turn
-        var poisonDamagePerTurn = player.getEffectPower(EFFECT_POISON)
+        var poisonDamagePerTurn = player.getEffectValue(EFFECT_POISON)
         if (poisonDamagePerTurn == null) poisonDamagePerTurn = 0
 
         var totalPoisonDamage = poisonDamagePerTurn * poisonRemaining
@@ -304,18 +305,18 @@ class StrengthStrategy extends Strategy {
         // Calculate available healing resources
         var availableHealing = 0
 
-        // REMISSION: 125 HP average (100-150 range), costs 5 TP
+        // REMISSION: 125 HP average (100-150 range), costs 5 TP (liberal sustain heal)
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
             var remissionCD = getCooldown(CHIP_REMISSION, getEntity())
-            if (remissionCD == 0 && playerTP >= 8) {  // Need 5 for REMISSION + 3 for attacks
+            if (remissionCD == 0 && playerTP >= 10) {  // Need 5 for REMISSION + 5 reserve (liberal threshold)
                 availableHealing += 125
             }
         }
 
-        // REGENERATION: 500 HP, costs 8 TP (if equipped)
+        // REGENERATION: 500 HP, costs 8 TP (emergency heal for < 25% HP)
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
             var regenCD = getCooldown(CHIP_REGENERATION, getEntity())
-            if (regenCD == 0 && playerTP >= 11) {  // Need 8 for REGEN + 3 for attacks
+            if (regenCD == 0 && playerTP >= 11) {  // Need 8 for REGEN + 3 reserve
                 availableHealing += 500
             }
         }
@@ -1042,53 +1043,38 @@ class StrengthStrategy extends Strategy {
         // Calculate HP percentage once for all health-based decisions
         var hpPercent = (player._currHealth * 100) / player._maxHealth
 
-        // PRIORITY 2: Proactive defensive sustain - Use REMISSION + shields during combat
-        // Trigger when HP < 60% and we have TP to spare (15+)
-        // This keeps us healthy throughout the fight instead of waiting for emergencies
-        //
-        // REMISSION priorities:
-        //   1. Attrition fights (enemy shielded, we lack LIBERATION burst) → Use liberally
-        //   2. General combat (HP dropping, have spare TP) → Use moderately
-        //   3. NOT for emergencies (REGENERATION handles < 25% HP emergencies)
+        // PRIORITY 2: Defensive sustain - REMISSION for emergencies, shields for continuous protection
+        // Philosophy: Maintain continuous shield coverage, use REMISSION only when HP significantly low
+        // REMISSION: Emergency heal (100-150 HP), 5 TP (30-50% HP range - true emergency, not every turn)
+        // Shields: Alternate FORTRESS (6 TP, 3 turns) and WALL (3 TP, 2 turns) for continuous coverage
 
-        var inSustainRange = hpPercent >= 25 && hpPercent <= 60
-        var hasSustainTP = player._currTp >= 15
+        var inSustainRange = hpPercent >= 30 && hpPercent <= 50  // Use REMISSION only in emergency range
+        var hasSustainTP = player._currTp >= 10  // Minimum TP to afford sustain + attacks
 
-        // Check if this is an attrition fight (enemy has shields, we can't burst through)
-        var enemyHasShields = target.hasEffect(EFFECT_RELATIVE_SHIELD) || target.hasEffect(EFFECT_ABSOLUTE_SHIELD)
-        var canStripShields = this.isChipAvailable(CHIP_LIBERATION, 3)
-        var isAttritionFight = enemyHasShields && !canStripShields
+        if (inSustainRange && hasSustainTP) {
+            debug("[STR][SUSTAIN] HP at " + round(hpPercent) + "%, using sustain combo (TP=" + player._currTp + ")")
 
-        // Use sustain if: HP dropping AND (attrition fight OR have lots of spare TP)
-        var useSustain = inSustainRange && hasSustainTP && (isAttritionFight || player._currTp >= 20)
-
-        if (useSustain) {
-            if (isAttritionFight) {
-                debug("[STR][SUSTAIN] Attrition fight (enemy shielded, no burst) - HP at " + round(hpPercent) + "%, using REMISSION + shields")
-            } else {
-                debug("[STR][SUSTAIN] HP at " + round(hpPercent) + "%, spare TP (" + player._currTp + ") - using proactive defense")
-            }
-
-            // Apply REMISSION for sustained healing (~120 HP)
+            // Apply REMISSION for sustained healing (~120 HP, 5 TP)
             if (this.isChipAvailable(CHIP_REMISSION, 5)) {
                 debug("[STR][SUSTAIN] Using REMISSION (TP=" + player._currTp + ")")
                 useChip(CHIP_REMISSION, player._id)
                 player._currTp -= 5
             }
 
-            // Keep shields up throughout combat (not just in attrition)
+            // Maintain continuous shield coverage - alternate between FORTRESS and WALL
             var hasShield = player.hasEffect(EFFECT_RELATIVE_SHIELD)
             var shieldRemaining = hasShield ? player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) : 0
 
+            // Apply new shield when current shield expires or missing
             if (!hasShield || shieldRemaining <= 1) {
-                // Try FORTRESS first (stronger, longer duration)
-                if (this.isChipAvailable(CHIP_FORTRESS, 6) && player._currTp >= 12) {
+                // Prefer FORTRESS (stronger, 3 turns) if available
+                if (this.isChipAvailable(CHIP_FORTRESS, 9) && player._currTp >= 9) {  // 6 for FORTRESS + 3 reserve
                     debug("[STR][SUSTAIN] Applying FORTRESS (7-8% reduction, 3 turns, TP=" + player._currTp + ")")
                     useChip(CHIP_FORTRESS, player._id)
                     player._currTp -= 6
                 }
-                // Fallback to WALL if FORTRESS unavailable
-                else if (this.isChipAvailable(CHIP_WALL, 3) && player._currTp >= 9) {
+                // Fallback to WALL (cheaper, 2 turns) if FORTRESS unavailable
+                else if (this.isChipAvailable(CHIP_WALL, 6) && player._currTp >= 6) {  // 3 for WALL + 3 reserve
                     debug("[STR][SUSTAIN] Applying WALL (4-5% reduction, 2 turns, TP=" + player._currTp + ")")
                     useChip(CHIP_WALL, player._id)
                     player._currTp -= 3
@@ -1328,7 +1314,7 @@ class StrengthStrategy extends Strategy {
         // Execute shared weapon-focused combat logic (no chip exclusions for strength)
         var playerMP = player._currMp
         var playerTP = player._currTp
-        var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [], "STR")
+        var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [], "STR", false)
 
         debug("[STR] Offensive scenario complete. Remaining TP: " + result['playerTP'] + ", MP: " + result['playerMP'])
     }
