@@ -531,16 +531,6 @@ class StrengthStrategy extends Strategy {
         return (x1 == x2 || y1 == y2)  // Horizontal OR vertical
     }
 
-    // Check if two cells are on same diagonal line (for Neutrino range validation)
-    isDiagonal(cell1, cell2) {
-        var x1 = getCellX(cell1)
-        var y1 = getCellY(cell1)
-        var x2 = getCellX(cell2)
-        var y2 = getCellY(cell2)
-        // Diagonal: absolute x difference equals absolute y difference
-        return abs(x2 - x1) == abs(y2 - y1)
-    }
-
     // Find optimal cell for Neutrino vulnerability stacking (diagonal range 2-6)
     findNeutrinoStackingCell(target) {
         var bestCell = -1

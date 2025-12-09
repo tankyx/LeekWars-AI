@@ -24,6 +24,16 @@ class Strategy {
         return true
     }
 
+    // Check if two cells are on a diagonal line (for Neutrino weapon)
+    isDiagonal(cell1, cell2) {
+        var x1 = getCellX(cell1)
+        var y1 = getCellY(cell1)
+        var x2 = getCellX(cell2)
+        var y2 = getCellY(cell2)
+        // Diagonal: absolute x difference equals absolute y difference
+        return abs(x2 - x1) == abs(y2 - y1)
+    }
+
     // Check if using a chip with AoE at targetCell would hit the player
     // Returns map: {safe: bool, needsRepositioning: bool}
     checkAoESafety(chipId, targetCell) {
