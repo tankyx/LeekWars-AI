@@ -1118,8 +1118,8 @@ class StrengthStrategy extends Strategy {
                 }
             }
             // Case 2: Not in range - move to Neutrino position if high value
-            // Only reposition if we have spare MP (3+) and good TP budget (15+)
-            else if (player._currMp >= 3 && player._currTp >= 15) {
+            // More aggressive repositioning: MP >= 2, TP >= 12 (lowered from 3/15)
+            else if (player._currMp >= 2 && player._currTp >= 12) {
                 var neutrinoCell = this.findNeutrinoStackingCell(target)
                 if (neutrinoCell != -1) {
                     var pathToNeutrinoCell = getPath(player._cellPos, neutrinoCell)

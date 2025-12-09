@@ -79,12 +79,24 @@ REMOVE_POISONS = 307
 REMOVE_SHACKLES = 308
 ACTION_BUG = 1002
 
-# Weapon IDs
+# Weapon IDs (comprehensive mapping)
 WEAPONS = {
     1: "Pistol", 2: "MachineGun", 3: "DoubleGun", 4: "Shotgun", 5: "Magnum",
     6: "Laser", 7: "GrenadeLauncher", 8: "FlameThrower", 9: "Destroyer",
     10: "Gazor", 11: "Electrisor", 12: "MLaser", 13: "BLaser",
-    14: "Katana", 15: "Broadsword", 16: "Axe"
+    14: "Katana", 15: "Broadsword", 16: "Axe",
+    # Advanced/upgraded weapons (common IDs based on LeekWars)
+    42: "Rifle", 43: "Bazooka", 44: "Laser", 45: "EnhancedLightninger",
+    46: "MLaser", 47: "BLaser",
+    81: "Neutrino", 82: "Photon", 83: "AntiMatter",
+    92: "UnbridledGazor", 93: "IlluminatiElectrisor", 94: "EnhancedGrenadeLauncher",
+    95: "FlameThrower", 96: "EnhancedDestroyer", 97: "UnbridledGazor",
+    98: "Rifle", 99: "Bazooka", 100: "JLaser", 101: "Destroyer",
+    112: "Lightninger", 113: "Laser", 114: "Shotgun", 115: "Destroyer",
+    131: "Rhino", 132: "HeavySword", 133: "Pistol",
+    161: "EnhancedLightninger", 162: "MLaser", 163: "BLaser",
+    167: "JLaser", 168: "MLaser", 169: "BLaser",
+    182: "Neutrino", 183: "Photon", 184: "Laser"
 }
 
 # Chip IDs
@@ -137,24 +149,34 @@ class FightActionParser:
         self.enemy_team_ids = []
 
     def set_entity_names(self, fight_data, farmer_leek_ids):
-        """Extract entity names and team assignments from fight data"""
-        self.our_team_ids = farmer_leek_ids
+        """Extract entity names and team assignments from fight data
 
+        IMPORTANT: Actions use entity indices (0, 1, 2...) not leek database IDs.
+        Entity 0 = first leek in fight, Entity 1 = second leek, etc.
+        """
+        self.our_team_ids = []
+        self.enemy_team_ids = []
+        entity_index = 0
+
+        # Team 1 leeks
         for leek in fight_data.get("leeks1", []):
-            self.entity_names[leek["id"]] = leek["name"]
-            if leek["id"] in farmer_leek_ids:
-                # This is our team
-                pass
+            self.entity_names[entity_index] = leek["name"]
+            if leek["id"] in farmer_leek_ids or leek.get("farmer") in [f.get("id") for f in fight_data.get("farmers1", {}).values() if isinstance(fight_data.get("farmers1"), dict)]:
+                # This is our team (entity index, not leek ID)
+                self.our_team_ids.append(entity_index)
             else:
-                self.enemy_team_ids.append(leek["id"])
+                self.enemy_team_ids.append(entity_index)
+            entity_index += 1
 
+        # Team 2 leeks
         for leek in fight_data.get("leeks2", []):
-            self.entity_names[leek["id"]] = leek["name"]
-            if leek["id"] in farmer_leek_ids:
-                # This is our team
-                pass
+            self.entity_names[entity_index] = leek["name"]
+            if leek["id"] in farmer_leek_ids or leek.get("farmer") in [f.get("id") for f in fight_data.get("farmers2", []) if isinstance(f, dict)]:
+                # This is our team (entity index, not leek ID)
+                self.our_team_ids.append(entity_index)
             else:
-                self.enemy_team_ids.append(leek["id"])
+                self.enemy_team_ids.append(entity_index)
+            entity_index += 1
 
     def get_entity_name(self, entity_id):
         """Get entity name or ID as fallback"""
@@ -213,7 +235,9 @@ class FightActionParser:
 
             # Track weapon usage
             elif action_type in [ACTION_USE_WEAPON, ACTION_USE_WEAPON_OLD]:
-                weapon_id = action[3] if action_type == ACTION_USE_WEAPON_OLD and len(action) > 3 else None
+                # ACTION_USE_WEAPON format: [16, weapon_id, target_id]
+                # ACTION_USE_WEAPON_OLD format: [1, entity_id, target_id, weapon_id]
+                weapon_id = action[1] if action_type == ACTION_USE_WEAPON and len(action) > 1 else (action[3] if len(action) > 3 else None)
                 weapon_name = WEAPONS.get(weapon_id, "Weapon") if weapon_id else "Weapon"
                 entity_id = self.current_entity if action_type == ACTION_USE_WEAPON else (action[1] if len(action) > 1 else None)
 
