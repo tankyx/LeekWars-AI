@@ -418,31 +418,37 @@ class Strategy {
         var missingHP = maxHP - currentHP
         var currentTP = getTP()
 
-        // Priority 1: CHIP_REMISSION (instant heal, cheap, short CD)
-        // Best for: Emergency (< 35% HP) OR small damage (< 120 missing HP)
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
-            if (getCooldown(CHIP_REMISSION, getEntity()) == 0 && currentTP >= 5) {
-                if (hpPercent < 35 || missingHP < 120) {
-                    return ['chipId': CHIP_REMISSION, 'name': "REMISSION", 'priority': 1]
+        // Priority 1: CHIP_REGENERATION (HoT, 500+ HP over 5 turns, wisdom-scaled)
+        // Best for: Emergency (< 25% HP) - massive healing over time, high wisdom scaling
+        // This is the TRUE emergency heal, not REMISSION
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
+            var regen = arsenal.playerEquippedChips[CHIP_REGENERATION]
+            if (getCooldown(CHIP_REGENERATION, getEntity()) == 0 && currentTP >= regen._cost) {
+                if (hpPercent < 25) {
+                    return ['chipId': CHIP_REGENERATION, 'name': "REGENERATION", 'priority': 1]
                 }
             }
         }
 
         // Priority 2: CHIP_SERUM (HoT AoE, high total healing, expensive)
-        // Best for: Moderate-heavy damage (35-70% HP) AND sufficient TP (8 TP)
+        // Best for: Moderate damage (25-50% HP) AND sufficient TP (8 TP)
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_SERUM)) {
             if (getCooldown(CHIP_SERUM, getEntity()) == 0 && currentTP >= 8) {
-                if (hpPercent >= 35 && hpPercent < 70) {
+                if (hpPercent >= 25 && hpPercent < 50) {
                     return ['chipId': CHIP_SERUM, 'name': "SERUM", 'priority': 2]
                 }
             }
         }
 
-        // Priority 3: CHIP_REGENERATION (fallback)
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
-            var regen = arsenal.playerEquippedChips[CHIP_REGENERATION]
-            if (getCooldown(CHIP_REGENERATION, getEntity()) == 0 && currentTP >= regen._cost) {
-                return ['chipId': CHIP_REGENERATION, 'name': "REGENERATION", 'priority': 3]
+        // Priority 3: CHIP_REMISSION (instant ~120 HP, cheap, fast CD)
+        // Best for: Light damage (50-70% HP) OR very small missing HP (< 150)
+        // NOTE: For attrition fights, REMISSION is used proactively by strength_strategy
+        //       at 30-60% HP when enemy has shields. This is just fallback emergency use.
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
+            if (getCooldown(CHIP_REMISSION, getEntity()) == 0 && currentTP >= 5) {
+                if ((hpPercent >= 50 && hpPercent < 70) || missingHP < 150) {
+                    return ['chipId': CHIP_REMISSION, 'name': "REMISSION", 'priority': 3]
+                }
             }
         }
 
@@ -1455,14 +1461,11 @@ class Strategy {
             }
         }
 
-        // Use CHIP_REMISSION as TP dump (instant heal, 5 TP)
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
-            if (getCooldown(CHIP_REMISSION, player._id) == 0 && playerTP >= 5) {
-                push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, player._cellPos, player))
-                playerTP -= 5
-                debug("[" + debugPrefix + "][REMISSION] Used CHIP_REMISSION as TP dump (5 TP, heal ~100-150 HP)")
-            }
-        }
+        // REMOVED: REMISSION as TP dump (was causing loops and wasting TP)
+        // REMISSION now only used in:
+        // 1. Defensive sustain combo (strength_strategy.lk: HP < 30%, TP >= 15)
+        // 2. Emergency mode (base_strategy.lk: lethal threat)
+        // This prevents wasting TP that should be saved for shield renewal or OTKO
 
         return ['playerMP': playerMP, 'playerTP': playerTP]
     }

@@ -255,7 +255,49 @@ class StrengthStrategy extends Strategy {
             return false
         }
 
-        debug("[STR][ANTIDOTE] Poisoned with " + poisonRemaining + " turns remaining, should use ANTIDOTE")
+        // SMART ANTIDOTE: Calculate if poison is sustainable with available healing
+        // Only use antidote if: poison_damage > available_healing OR poison is lethal
+
+        // Get poison damage per turn
+        var poisonDamagePerTurn = player.getEffectPower(EFFECT_POISON)
+        if (poisonDamagePerTurn == null) poisonDamagePerTurn = 0
+
+        var totalPoisonDamage = poisonDamagePerTurn * poisonRemaining
+
+        // Calculate available healing resources
+        var availableHealing = 0
+
+        // REMISSION: 125 HP average (100-150 range), costs 5 TP
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION)) {
+            var remissionCD = getCooldown(CHIP_REMISSION, getEntity())
+            if (remissionCD == 0 && playerTP >= 8) {  // Need 5 for REMISSION + 3 for attacks
+                availableHealing += 125
+            }
+        }
+
+        // REGENERATION: 500 HP, costs 8 TP (if equipped)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)) {
+            var regenCD = getCooldown(CHIP_REGENERATION, getEntity())
+            if (regenCD == 0 && playerTP >= 11) {  // Need 8 for REGEN + 3 for attacks
+                availableHealing += 500
+            }
+        }
+
+        // Check if poison is lethal (would kill us before we can heal)
+        var currentHP = player._currHealth
+        if (totalPoisonDamage >= currentHP) {
+            debug("[STR][ANTIDOTE] LETHAL poison: " + totalPoisonDamage + " total dmg (" + poisonDamagePerTurn + "/turn × " + poisonRemaining + " turns) vs " + currentHP + " HP - MUST CLEANSE!")
+            return true
+        }
+
+        // Check if we can sustain poison with available healing
+        if (totalPoisonDamage <= availableHealing) {
+            debug("[STR][ANTIDOTE] Poison SUSTAINABLE: " + totalPoisonDamage + " dmg (" + poisonDamagePerTurn + "/turn) vs " + availableHealing + " heal available - saving antidote")
+            return false  // Don't waste antidote, we can heal through it
+        }
+
+        // Poison damage exceeds healing - use antidote
+        debug("[STR][ANTIDOTE] Poison NOT sustainable: " + totalPoisonDamage + " dmg (" + poisonDamagePerTurn + "/turn × " + poisonRemaining + " turns) vs " + availableHealing + " heal - using ANTIDOTE")
         return true
     }
 
@@ -798,33 +840,54 @@ class StrengthStrategy extends Strategy {
         // Calculate HP percentage once for all health-based decisions
         var hpPercent = (player._currHealth * 100) / player._maxHealth
 
-        // PRIORITY 2: Defensive sustain combo (HP < 30%): REMISSION + FORTRESS/WALL
-        // Changed from 50% to 30% to prevent premature use and TP starvation
-        // Only use if we have enough TP for attacks after (15+ TP total)
-        if (hpPercent < 30 && player._currTp >= 15) {
-            debug("[STR][SUSTAIN] HP at " + round(hpPercent) + "%, checking defensive sustain combo")
+        // PRIORITY 2: Proactive defensive sustain - Use REMISSION + shields during combat
+        // Trigger when HP < 60% and we have TP to spare (15+)
+        // This keeps us healthy throughout the fight instead of waiting for emergencies
+        //
+        // REMISSION priorities:
+        //   1. Attrition fights (enemy shielded, we lack LIBERATION burst) → Use liberally
+        //   2. General combat (HP dropping, have spare TP) → Use moderately
+        //   3. NOT for emergencies (REGENERATION handles < 25% HP emergencies)
 
-            // Apply REMISSION for instant heal (100-150 HP)
+        var inSustainRange = hpPercent >= 25 && hpPercent <= 60
+        var hasSustainTP = player._currTp >= 15
+
+        // Check if this is an attrition fight (enemy has shields, we can't burst through)
+        var enemyHasShields = target.hasEffect(EFFECT_RELATIVE_SHIELD) || target.hasEffect(EFFECT_ABSOLUTE_SHIELD)
+        var canStripShields = this.isChipAvailable(CHIP_LIBERATION, 3)
+        var isAttritionFight = enemyHasShields && !canStripShields
+
+        // Use sustain if: HP dropping AND (attrition fight OR have lots of spare TP)
+        var useSustain = inSustainRange && hasSustainTP && (isAttritionFight || player._currTp >= 20)
+
+        if (useSustain) {
+            if (isAttritionFight) {
+                debug("[STR][SUSTAIN] Attrition fight (enemy shielded, no burst) - HP at " + round(hpPercent) + "%, using REMISSION + shields")
+            } else {
+                debug("[STR][SUSTAIN] HP at " + round(hpPercent) + "%, spare TP (" + player._currTp + ") - using proactive defense")
+            }
+
+            // Apply REMISSION for sustained healing (~120 HP)
             if (this.isChipAvailable(CHIP_REMISSION, 5)) {
-                debug("[STR][SUSTAIN] Using REMISSION for instant heal (TP=" + player._currTp + ")")
+                debug("[STR][SUSTAIN] Using REMISSION (TP=" + player._currTp + ")")
                 useChip(CHIP_REMISSION, player._id)
                 player._currTp -= 5
             }
 
-            // Reapply defensive shield if expired or about to expire
+            // Keep shields up throughout combat (not just in attrition)
             var hasShield = player.hasEffect(EFFECT_RELATIVE_SHIELD)
             var shieldRemaining = hasShield ? player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) : 0
 
             if (!hasShield || shieldRemaining <= 1) {
                 // Try FORTRESS first (stronger, longer duration)
-                if (this.isChipAvailable(CHIP_FORTRESS, 6) && player._currTp >= 12) {  // Need 12+ for FORTRESS + attacks
-                    debug("[STR][SUSTAIN] Reapplying FORTRESS (7-8% reduction, 3 turns, TP=" + player._currTp + ")")
+                if (this.isChipAvailable(CHIP_FORTRESS, 6) && player._currTp >= 12) {
+                    debug("[STR][SUSTAIN] Applying FORTRESS (7-8% reduction, 3 turns, TP=" + player._currTp + ")")
                     useChip(CHIP_FORTRESS, player._id)
                     player._currTp -= 6
                 }
-                // Fallback to WALL if FORTRESS unavailable or not enough TP
-                else if (this.isChipAvailable(CHIP_WALL, 3) && player._currTp >= 9) {  // Need 9+ for WALL + attacks
-                    debug("[STR][SUSTAIN] Using WALL fallback (4-5% reduction, 2 turns, TP=" + player._currTp + ")")
+                // Fallback to WALL if FORTRESS unavailable
+                else if (this.isChipAvailable(CHIP_WALL, 3) && player._currTp >= 9) {
+                    debug("[STR][SUSTAIN] Applying WALL (4-5% reduction, 2 turns, TP=" + player._currTp + ")")
                     useChip(CHIP_WALL, player._id)
                     player._currTp -= 3
                 }
