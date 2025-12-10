@@ -235,44 +235,52 @@ class AgilityStrategy extends Strategy {
         return true
     }
 
-    // Select best available damage return chip based on combat situation
-    // BRAMBLE (1 turn, 25% return) - Use when in close combat (enemy within attack range)
-    // MIRROR (3 turns, 5-6% return) - Use when approaching (enemy far, need sustained protection)
-    // THORN (2 turns, 3-4% return) - Fallback option
+    // INTELLIGENT CYCLING: Select damage return chip to ensure continuous coverage
+    // Cooldown starts when chip is used (not when effect ends)
+    // MIRROR (3t duration, 4t cooldown) + THORN (2t duration, 3t cooldown) cycle
+    // BRAMBLE (1t duration, 8t cooldown) for emergency gaps in close combat
     selectBestReturnChip(distanceToEnemy) {
-        // Determine if we're in close combat (enemy can attack us or we can attack them)
-        var inCloseCombat = distanceToEnemy <= 8  // Most weapons have range 1-8
+        var inCloseCombat = distanceToEnemy <= 8
 
-        // CHIP_BRAMBLE: Best for close combat (1 turn duration, highest return per turn)
-        if (inCloseCombat && mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)) {
-            var bramble = arsenal.playerEquippedChips[CHIP_BRAMBLE]
-            if (getCooldown(CHIP_BRAMBLE, player._id) == 0 && player._currTp >= bramble._cost) {
-                var returnVal = arsenal.getDamageReturnValue(player._agility, CHIP_BRAMBLE)
-                debug("[AGILITY] CHIP_BRAMBLE selected for close combat: " + returnVal + "% return, dist=" + distanceToEnemy)
-                return CHIP_BRAMBLE
-            }
+        // Check availability of each chip
+        var hasMirror = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)
+
+        var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, player._id) : 999
+        var thornCd = hasThorn ? getCooldown(CHIP_THORN, player._id) : 999
+        var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, player._id) : 999
+
+        var mirrorReady = mirrorCd == 0 && hasMirror && player._currTp >= 5
+        var thornReady = thornCd == 0 && hasThorn && player._currTp >= 4
+        var brambleReady = brambleCd == 0 && hasBramble && player._currTp >= 4
+
+        // PRIORITY 1: Prefer MIRROR when both available (3 turn coverage > 2 turn)
+        if (mirrorReady && thornReady) {
+            debug("[AGILITY][CYCLE] Both available: MIRROR (3t > 2t duration)")
+            return CHIP_MIRROR
         }
 
-        // CHIP_MIRROR: Best for approaching (3 turn duration, sustained protection)
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)) {
-            var mirror = arsenal.playerEquippedChips[CHIP_MIRROR]
-            if (getCooldown(CHIP_MIRROR, player._id) == 0 && player._currTp >= mirror._cost) {
-                var returnVal2 = arsenal.getDamageReturnValue(player._agility, CHIP_MIRROR)
-                debug("[AGILITY] CHIP_MIRROR selected: " + returnVal2 + "% return for 3 turns, dist=" + distanceToEnemy)
-                return CHIP_MIRROR
-            }
+        // PRIORITY 2: Use MIRROR when available (best sustained coverage)
+        if (mirrorReady) {
+            debug("[AGILITY][CYCLE] MIRROR: 5-6% return × 3t (THORN cd=" + thornCd + ")")
+            return CHIP_MIRROR
         }
 
-        // CHIP_THORN: Fallback (2 turn duration)
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)) {
-            var thorn = arsenal.playerEquippedChips[CHIP_THORN]
-            if (getCooldown(CHIP_THORN, player._id) == 0 && player._currTp >= thorn._cost) {
-                var returnVal3 = arsenal.getDamageReturnValue(player._agility, CHIP_THORN)
-                debug("[AGILITY] CHIP_THORN selected: " + returnVal3 + "% return for 2 turns, dist=" + distanceToEnemy)
-                return CHIP_THORN
-            }
+        // PRIORITY 3: Use THORN when available
+        if (thornReady) {
+            debug("[AGILITY][CYCLE] THORN: 3-4% return × 2t (MIRROR cd=" + mirrorCd + ")")
+            return CHIP_THORN
         }
 
+        // PRIORITY 4: BRAMBLE for emergency gaps (only in close combat)
+        if (brambleReady && inCloseCombat) {
+            debug("[AGILITY][CYCLE] BRAMBLE emergency: 25% return × 1t (close combat, MIRROR cd=" + mirrorCd + ", THORN cd=" + thornCd + ")")
+            return CHIP_BRAMBLE
+        }
+
+        // No chips available - coverage gap
+        debug("[AGILITY][CYCLE] GAP: All on cooldown (MIRROR=" + mirrorCd + ", THORN=" + thornCd + ", BRAMBLE=" + brambleCd + ")")
         return -1
     }
 
@@ -290,24 +298,36 @@ class AgilityStrategy extends Strategy {
 
 
     // Check if we should reapply damage return buff
+    // Cooldowns start when chip is used, not when effect ends
+    // THORN: 2t duration, 3t cooldown → available every 3 turns
+    // MIRROR: 3t duration, 4t cooldown → available every 4 turns
+    // BRAMBLE: 1t duration, 8t cooldown → emergency burst only
     shouldReapplyReturnBuff() {
         var hasReturn = player.hasDamageReturn()
         var returnRemaining = player.getDamageReturnRemaining()
 
-        // No active return buff
+        // No active return buff - MUST reapply immediately
         if (!hasReturn) {
-            debug("[AGILITY] No damage return active - MUST reapply")
+            debug("[AGILITY][CYCLE] No damage return active - MUST reapply")
             return true
         }
 
-        // Return buff expiring soon (≤2 turns remaining)
-        // Reapply proactively to avoid cooldown gaps (MIRROR lasts 3 turns with ~5 turn cooldown)
-        if (returnRemaining <= 2) {
-            debug("[AGILITY] Damage return expiring in " + returnRemaining + " turn(s) - reapplying proactively")
+        // Check if any sustain chip (MIRROR/THORN) is available while current buff is active
+        // This allows us to reapply early and avoid gaps
+        var hasMirror = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)
+
+        var mirrorReady = hasMirror && getCooldown(CHIP_MIRROR, player._id) == 0 && player._currTp >= 5
+        var thornReady = hasThorn && getCooldown(CHIP_THORN, player._id) == 0 && player._currTp >= 4
+
+        // If a better chip is available AND current buff is expiring soon (≤1 turn), switch early
+        if (returnRemaining <= 1 && (mirrorReady || thornReady)) {
+            debug("[AGILITY][CYCLE] Expiring in " + returnRemaining + " turn, switching chip early")
             return true
         }
 
-        debug("[AGILITY] Damage return active with " + returnRemaining + " turns remaining")
+        // Don't reapply if buff has 2+ turns remaining (wait for expiration)
+        debug("[AGILITY][CYCLE] Active with " + returnRemaining + " turns remaining, waiting")
         return false
     }
 
