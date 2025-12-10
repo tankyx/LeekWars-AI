@@ -1038,37 +1038,40 @@ class StrengthStrategy extends Strategy {
         // REMISSION: Emergency heal (100-150 HP), 5 TP (30-50% HP range - true emergency, not every turn)
         // Shields: Alternate FORTRESS (6 TP, 3 turns) and WALL (3 TP, 2 turns) for continuous coverage
 
-        var inSustainRange = hpPercent >= 30 && hpPercent <= 50  // Use REMISSION only in emergency range
+        // CONTINUOUS SHIELD MAINTENANCE (every turn, regardless of HP)
+        var hasShield = player.hasEffect(EFFECT_RELATIVE_SHIELD)
+        var shieldRemaining = hasShield ? player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) : 0
+
+        // Apply new shield when current shield expires or missing (maintain continuous coverage)
+        if (!hasShield || shieldRemaining <= 1) {
+            // Prefer FORTRESS (stronger, 3 turns, 6 TP) if available
+            if (this.isChipAvailable(CHIP_FORTRESS, 9) && player._currTp >= 9) {  // 6 for FORTRESS + 3 reserve
+                debug("[STR][SHIELD] Applying FORTRESS (7-8% reduction, 3 turns, TP=" + player._currTp + ")")
+                useChip(CHIP_FORTRESS, player._id)
+                player._currTp -= 6
+            }
+            // Fallback to WALL (cheaper, 2 turns, 3 TP) if FORTRESS unavailable
+            else if (this.isChipAvailable(CHIP_WALL, 6) && player._currTp >= 6) {  // 3 for WALL + 3 reserve
+                debug("[STR][SHIELD] Applying WALL (4-5% reduction, 2 turns, TP=" + player._currTp + ")")
+                useChip(CHIP_WALL, player._id)
+                player._currTp -= 3
+            }
+        } else {
+            debug("[STR][SHIELD] Shield active with " + shieldRemaining + " turns remaining")
+        }
+
+        // REMISSION HEALING (only when HP in emergency range 30-50%)
+        var inSustainRange = hpPercent >= 30 && hpPercent <= 50
         var hasSustainTP = player._currTp >= 10  // Minimum TP to afford sustain + attacks
 
         if (inSustainRange && hasSustainTP) {
-            debug("[STR][SUSTAIN] HP at " + round(hpPercent) + "%, using sustain combo (TP=" + player._currTp + ")")
+            debug("[STR][SUSTAIN] HP at " + round(hpPercent) + "%, applying REMISSION healing (TP=" + player._currTp + ")")
 
             // Apply REMISSION for sustained healing (~120 HP, 5 TP)
             if (this.isChipAvailable(CHIP_REMISSION, 5)) {
                 debug("[STR][SUSTAIN] Using REMISSION (TP=" + player._currTp + ")")
                 useChip(CHIP_REMISSION, player._id)
                 player._currTp -= 5
-            }
-
-            // Maintain continuous shield coverage - alternate between FORTRESS and WALL
-            var hasShield = player.hasEffect(EFFECT_RELATIVE_SHIELD)
-            var shieldRemaining = hasShield ? player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) : 0
-
-            // Apply new shield when current shield expires or missing
-            if (!hasShield || shieldRemaining <= 1) {
-                // Prefer FORTRESS (stronger, 3 turns) if available
-                if (this.isChipAvailable(CHIP_FORTRESS, 9) && player._currTp >= 9) {  // 6 for FORTRESS + 3 reserve
-                    debug("[STR][SUSTAIN] Applying FORTRESS (7-8% reduction, 3 turns, TP=" + player._currTp + ")")
-                    useChip(CHIP_FORTRESS, player._id)
-                    player._currTp -= 6
-                }
-                // Fallback to WALL (cheaper, 2 turns) if FORTRESS unavailable
-                else if (this.isChipAvailable(CHIP_WALL, 6) && player._currTp >= 6) {  // 3 for WALL + 3 reserve
-                    debug("[STR][SUSTAIN] Applying WALL (4-5% reduction, 2 turns, TP=" + player._currTp + ")")
-                    useChip(CHIP_WALL, player._id)
-                    player._currTp -= 3
-                }
             }
         }
 

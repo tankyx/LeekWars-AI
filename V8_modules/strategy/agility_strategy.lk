@@ -300,9 +300,10 @@ class AgilityStrategy extends Strategy {
             return true
         }
 
-        // Return buff expiring soon (≤1 turn remaining)
-        if (returnRemaining <= 1) {
-            debug("[AGILITY] Damage return expiring in " + returnRemaining + " turn(s) - reapplying")
+        // Return buff expiring soon (≤2 turns remaining)
+        // Reapply proactively to avoid cooldown gaps (MIRROR lasts 3 turns with ~5 turn cooldown)
+        if (returnRemaining <= 2) {
+            debug("[AGILITY] Damage return expiring in " + returnRemaining + " turn(s) - reapplying proactively")
             return true
         }
 
