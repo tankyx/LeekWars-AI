@@ -127,19 +127,37 @@ class AgilityStrategy extends Strategy {
         // Execute weapon attacks from teleport position
         // Build list of usable weapons sorted by shield-adjusted damage
         var weaponDmgList = []
+        var distToTarget = getCellDistance(teleCell, target._cellPos)
+        debug("[OTKO][WEAPONS] From teleport cell " + teleCell + " to target " + target._cellPos + " dist=" + distToTarget + " TP=" + playerTP)
+        debug("[OTKO][WEAPONS] Equipped weapons: " + count(mapKeys(arsenal.playerEquippedWeapons)))
+
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
             var wObj = arsenal.playerEquippedWeapons[wid]
             if (wObj == null) continue
 
             // Check if weapon can hit target from teleport cell
-            var distToTarget = getCellDistance(teleCell, target._cellPos)
             if (distToTarget == null) continue
-            if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
-            if (!lineOfSight(teleCell, target._cellPos)) continue
+
+            // Use API functions directly to ensure correct range values
+            var minR = getWeaponMinRange(wid)
+            var maxR = getWeaponMaxRange(wid)
+            var dist = distToTarget
+
+            if (dist < minR || dist > maxR) {
+                debug("[OTKO][WEAPONS] Skip " + getWeaponName(wid) + " - out of range (need " + minR + "-" + maxR + ", have " + dist + ")")
+                continue
+            }
+            if (!lineOfSight(teleCell, target._cellPos)) {
+                debug("[OTKO][WEAPONS] Skip " + getWeaponName(wid) + " - no LOS")
+                continue
+            }
 
             var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
+            debug("[OTKO][WEAPONS] Add " + getWeaponName(wid) + " - dmg=" + netDmg + " cost=" + wObj._cost + " maxUses=" + wObj._maxUse)
             push(weaponDmgList, ['weapon': wObj, 'netDmg': netDmg])
         }
+
+        debug("[OTKO][WEAPONS] Total usable weapons: " + count(weaponDmgList))
 
         // Sort by descending net damage (selection sort)
         for (var i = 0; i < count(weaponDmgList); i++) {
@@ -237,10 +255,11 @@ class AgilityStrategy extends Strategy {
 
     // INTELLIGENT CYCLING: Select damage return chip to ensure continuous coverage
     // Cooldown starts when chip is used (not when effect ends)
-    // MIRROR (3t duration, 4t cooldown) + THORN (2t duration, 3t cooldown) cycle
-    // BRAMBLE (1t duration, 8t cooldown) for emergency gaps in close combat
+    // MIRROR (3t duration, 4t cooldown, 5 TP) + THORN (2t duration, 3t cooldown, 4 TP) cycle
+    // BRAMBLE (1t duration, 8t cooldown, 4 TP) for active melee combat (25% return)
     selectBestReturnChip(distanceToEnemy) {
         var inCloseCombat = distanceToEnemy <= 8
+        var currentTP = player._currTp
 
         // Check availability of each chip
         var hasMirror = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)
@@ -251,32 +270,47 @@ class AgilityStrategy extends Strategy {
         var thornCd = hasThorn ? getCooldown(CHIP_THORN, player._id) : 999
         var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, player._id) : 999
 
-        var mirrorReady = mirrorCd == 0 && hasMirror && player._currTp >= 5
-        var thornReady = thornCd == 0 && hasThorn && player._currTp >= 4
-        var brambleReady = brambleCd == 0 && hasBramble && player._currTp >= 4
+        var mirrorReady = mirrorCd == 0 && hasMirror && currentTP >= 5
+        var thornReady = thornCd == 0 && hasThorn && currentTP >= 4
+        var brambleReady = brambleCd == 0 && hasBramble && currentTP >= 4
 
-        // PRIORITY 1: Prefer MIRROR when both available (3 turn coverage > 2 turn)
-        if (mirrorReady && thornReady) {
-            debug("[AGILITY][CYCLE] Both available: MIRROR (3t > 2t duration)")
+        // PRIORITY 1: BRAMBLE during active melee combat (25% return, best burst damage reflection)
+        if (brambleReady && inCloseCombat && currentTP >= 10) {
+            debug("[AGILITY][CYCLE] BRAMBLE active combat: 25% return × 1t (melee range, TP=" + currentTP + ")")
+            return CHIP_BRAMBLE
+        }
+
+        // PRIORITY 2: TP-aware selection - prefer THORN when TP < 15 (cheaper, leaves more TP for attacks)
+        if (currentTP < 15) {
+            if (thornReady) {
+                debug("[AGILITY][CYCLE] THORN (low TP): 3-4% return × 2t (TP=" + currentTP + ", cheaper than MIRROR)")
+                return CHIP_THORN
+            }
+            if (mirrorReady && currentTP >= 10) {
+                debug("[AGILITY][CYCLE] MIRROR (low TP): 5-6% return × 3t (TP=" + currentTP + ", using anyway)")
+                return CHIP_MIRROR
+            }
+            // Skip damage return if TP too low
+            debug("[AGILITY][CYCLE] SKIP: TP too low (" + currentTP + "), attack directly")
+            return -1
+        }
+
+        // PRIORITY 3: Prefer MIRROR when both available AND sufficient TP (3 turn coverage > 2 turn)
+        if (mirrorReady && thornReady && currentTP >= 15) {
+            debug("[AGILITY][CYCLE] Both available: MIRROR (3t > 2t, TP=" + currentTP + ")")
             return CHIP_MIRROR
         }
 
-        // PRIORITY 2: Use MIRROR when available (best sustained coverage)
+        // PRIORITY 4: Use MIRROR when available (best sustained coverage)
         if (mirrorReady) {
             debug("[AGILITY][CYCLE] MIRROR: 5-6% return × 3t (THORN cd=" + thornCd + ")")
             return CHIP_MIRROR
         }
 
-        // PRIORITY 3: Use THORN when available
+        // PRIORITY 5: Use THORN when available
         if (thornReady) {
             debug("[AGILITY][CYCLE] THORN: 3-4% return × 2t (MIRROR cd=" + mirrorCd + ")")
             return CHIP_THORN
-        }
-
-        // PRIORITY 4: BRAMBLE for emergency gaps (only in close combat)
-        if (brambleReady && inCloseCombat) {
-            debug("[AGILITY][CYCLE] BRAMBLE emergency: 25% return × 1t (close combat, MIRROR cd=" + mirrorCd + ", THORN cd=" + thornCd + ")")
-            return CHIP_BRAMBLE
         }
 
         // No chips available - coverage gap
@@ -301,28 +335,36 @@ class AgilityStrategy extends Strategy {
     // Cooldowns start when chip is used, not when effect ends
     // THORN: 2t duration, 3t cooldown → available every 3 turns
     // MIRROR: 3t duration, 4t cooldown → available every 4 turns
-    // BRAMBLE: 1t duration, 8t cooldown → emergency burst only
+    // BRAMBLE: 1t duration, 8t cooldown → active combat burst
     shouldReapplyReturnBuff() {
         var hasReturn = player.hasDamageReturn()
         var returnRemaining = player.getDamageReturnRemaining()
+        var currentTP = player._currTp
 
-        // No active return buff - MUST reapply immediately
+        // No active return buff - reapply if we have enough TP (10+ for meaningful combat after buff)
         if (!hasReturn) {
-            debug("[AGILITY][CYCLE] No damage return active - MUST reapply")
-            return true
+            if (currentTP >= 10) {
+                debug("[AGILITY][CYCLE] No damage return active - reapply (TP=" + currentTP + ")")
+                return true
+            } else {
+                debug("[AGILITY][CYCLE] No damage return but TP too low (" + currentTP + "), skip and attack directly")
+                return false
+            }
         }
 
-        // Check if any sustain chip (MIRROR/THORN) is available while current buff is active
+        // Check if any sustain chip (MIRROR/THORN/BRAMBLE) is available while current buff is active
         // This allows us to reapply early and avoid gaps
         var hasMirror = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)
         var hasThorn = mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)
 
-        var mirrorReady = hasMirror && getCooldown(CHIP_MIRROR, player._id) == 0 && player._currTp >= 5
-        var thornReady = hasThorn && getCooldown(CHIP_THORN, player._id) == 0 && player._currTp >= 4
+        var mirrorReady = hasMirror && getCooldown(CHIP_MIRROR, player._id) == 0 && currentTP >= 5
+        var thornReady = hasThorn && getCooldown(CHIP_THORN, player._id) == 0 && currentTP >= 4
+        var brambleReady = hasBramble && getCooldown(CHIP_BRAMBLE, player._id) == 0 && currentTP >= 4
 
         // If a better chip is available AND current buff is expiring soon (≤1 turn), switch early
-        if (returnRemaining <= 1 && (mirrorReady || thornReady)) {
-            debug("[AGILITY][CYCLE] Expiring in " + returnRemaining + " turn, switching chip early")
+        if (returnRemaining <= 1 && (mirrorReady || thornReady || brambleReady) && currentTP >= 10) {
+            debug("[AGILITY][CYCLE] Expiring in " + returnRemaining + " turn, switching chip early (TP=" + currentTP + ")")
             return true
         }
 
@@ -377,6 +419,14 @@ class AgilityStrategy extends Strategy {
             return true
         }
 
+        return false
+    }
+
+    // AGILITY NEVER FLEES - Override emergency mode to always stay aggressive
+    shouldEnterEmergencyMode(target) {
+        // Agility philosophy: Press the attack at all costs
+        // Damage return buffs + aggressive combat = best defense
+        debug("[AGILITY][AGGRESSIVE] Never flee - always attack (HP=" + floor((getLife() * 100) / getTotalLife()) + "%)")
         return false
     }
 
@@ -564,13 +614,8 @@ class AgilityStrategy extends Strategy {
             return
         }
 
-        // STEP 6: Check if CHIP_ADRENALINE can help with weapon spam
-        if (this.shouldUseAdrenaline(playerTP + 4)) {  // Check if +4 TP would enable more attacks
-            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
-            playerTP -= 1
-            playerTP += 5  // Net gain of 4 TP
-            debug("[AGILITY][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
-        }
+        // STEP 6: Check if CHIP_ADRENALINE can help with weapon spam (unused for now)
+        // Reserved for future improvements
 
         // STEP 7: Execute shared weapon-focused combat logic (exclude return damage chips, skip hide-and-seek for aggressive play)
         var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [CHIP_BRAMBLE, CHIP_MIRROR, CHIP_THORN], "AGILITY", true)
@@ -578,7 +623,6 @@ class AgilityStrategy extends Strategy {
         // STEP 8: AGGRESSIVE SHIELD STACKING - Use leftover TP for WEAPON_SWORD (8% relative shield per use, stackable)
         playerTP = result['playerTP']
         playerMP = result['playerMP']
-
         if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_SWORD)) {
             var swordWeapon = arsenal.playerEquippedWeapons[WEAPON_SWORD]
             // Recalculate distance (player position might have changed after combat)

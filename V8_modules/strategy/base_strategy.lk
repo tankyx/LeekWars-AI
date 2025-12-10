@@ -1386,14 +1386,15 @@ class Strategy {
                             var teleportResult = useChipOnCell(CHIP_TELEPORTATION, bestWeaponCell._id)
                             playerTP -= 5
 
-                            if (teleportResult == USE_SUCCESS) {
+                            // Check for success: USE_SUCCESS (1) or critical success (2)
+                            if (teleportResult == USE_SUCCESS || teleportResult == USE_CRITICAL) {
                                 // Update player state after teleport
                                 player.updateEntity()
                                 playerPos = player._cellPos
                                 playerMP = player._currMp
                                 playerTP = player._currTp
 
-                                debug("[" + debugPrefix + "] Teleport successful! New pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP)
+                                debug("[" + debugPrefix + "] Teleport successful! New pos=" + playerPos + " MP=" + playerMP + " TP=" + playerTP + " (result=" + teleportResult + ")")
 
                                 // Verify we reached the weapon cell
                                 if (playerPos == bestWeaponCell._id) {
@@ -1448,12 +1449,12 @@ class Strategy {
                             debug("[" + debugPrefix + "] Used " + tpSpentOnChips + " TP on approach chips, remaining: " + playerTP)
                         }
 
-                        // Only move if TP exhausted (<=2) AND we have MP
-                        // Keep 2 TP threshold for weapon swap (1 TP) + minimum attack
-                        if (playerMP > 0 && playerTP <= 2) {
-                            debug("[" + debugPrefix + "] TP exhausted (" + playerTP + " <= 2), moving toward best weapon cell " + bestWeaponCell._id)
+                        // AGGRESSIVE MOVEMENT: Always move toward best weapon cell if we have MP
+                        // We couldn't find any usable attacks from current position, so moving is ALWAYS better
+                        if (playerMP > 0) {
+                            debug("[" + debugPrefix + "] No attacks from current position - AGGRESSIVELY moving toward best weapon cell " + bestWeaponCell._id + " (TP=" + playerTP + ", MP=" + playerMP + ")")
                             var moveResult = moveTowardCell(bestWeaponCell._id)
-                            debug("[" + debugPrefix + "] Fallback movement result: " + moveResult)
+                            debug("[" + debugPrefix + "] Aggressive movement result: " + moveResult)
 
                             // Update state after movement
                             player.updateEntity()
@@ -1468,8 +1469,6 @@ class Strategy {
                                 bestWeaponCell = fieldMap.damageMap[playerPos]
                                 debug("[" + debugPrefix + "] Reached damage cell " + playerPos + " after movement")
                             }
-                        } else if (playerMP > 0) {
-                            debug("[" + debugPrefix + "] TP remaining (" + playerTP + " > 2), staying at position " + playerPos + " to maximize damage this turn")
                         } else {
                             debug("[" + debugPrefix + "] No MP remaining, staying at position " + playerPos)
                         }

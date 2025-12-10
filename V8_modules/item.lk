@@ -317,7 +317,7 @@ class Arsenal {
                 // Get base damage breakdown
                 var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, itemId, aimCell, e._cellPos)
 
-                // Apply shields to direct damage only
+                // Apply shields/vulnerability to direct damage only
                 var directAfterShield = bd['direct'] * aoeModifier
                 if (bd['direct'] > 0 && (e._relShield > 0 || e._absShield > 0)) {
                     directAfterShield = directAfterShield * (1 - e._relShield / 100) - e._absShield
