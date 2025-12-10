@@ -1448,9 +1448,10 @@ class Strategy {
                             debug("[" + debugPrefix + "] Used " + tpSpentOnChips + " TP on approach chips, remaining: " + playerTP)
                         }
 
-                        // Now move closer for next turn (only if we have MP)
-                        if (playerMP > 0) {
-                            debug("[" + debugPrefix + "] Moving toward best weapon cell " + bestWeaponCell._id)
+                        // Only move if TP exhausted (<=2) AND we have MP
+                        // Keep 2 TP threshold for weapon swap (1 TP) + minimum attack
+                        if (playerMP > 0 && playerTP <= 2) {
+                            debug("[" + debugPrefix + "] TP exhausted (" + playerTP + " <= 2), moving toward best weapon cell " + bestWeaponCell._id)
                             var moveResult = moveTowardCell(bestWeaponCell._id)
                             debug("[" + debugPrefix + "] Fallback movement result: " + moveResult)
 
@@ -1467,6 +1468,8 @@ class Strategy {
                                 bestWeaponCell = fieldMap.damageMap[playerPos]
                                 debug("[" + debugPrefix + "] Reached damage cell " + playerPos + " after movement")
                             }
+                        } else if (playerMP > 0) {
+                            debug("[" + debugPrefix + "] TP remaining (" + playerTP + " > 2), staying at position " + playerPos + " to maximize damage this turn")
                         } else {
                             debug("[" + debugPrefix + "] No MP remaining, staying at position " + playerPos)
                         }
@@ -1575,6 +1578,71 @@ class Strategy {
                     uses2 -= 1
                 }
             }
+        } else if (curCellObj == null && playerTP > 0) {
+            // FALLBACK: curCellObj is null (position not in damageMap)
+            // Check Arsenal directly for any usable weapons from current position
+            debug("[" + debugPrefix + "][WEAPONS-FALLBACK] Position " + playerPos + " not in damageMap, checking Arsenal directly")
+
+            var fallbackWeapons = []
+            for (var fwid in mapKeys(arsenal.playerEquippedWeapons)) {
+                var fweaponObj = arsenal.playerEquippedWeapons[fwid]
+                if (fweaponObj == null) continue
+                if (fweaponObj._id == primaryWid) continue  // Skip primary weapon
+                if (playerTP < fweaponObj._cost) continue  // Need at least weapon cost
+
+                // Check range and LOS to target
+                var fwdist = getCellDistance(playerPos, target._cellPos)
+                if (fwdist == null || fwdist < fweaponObj._minRange || fwdist > fweaponObj._maxRange) continue
+                if (!lineOfSight(playerPos, target._cellPos)) continue
+
+                var fwnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, fweaponObj._id, target)
+                push(fallbackWeapons, ['weapon': fweaponObj, 'damage': fwnetDmg])
+            }
+
+            // Sort by damage descending
+            for (var fwi = 0; fwi < count(fallbackWeapons); fwi++) {
+                var fwbestIdx = fwi
+                for (var fwj = fwi + 1; fwj < count(fallbackWeapons); fwj++) {
+                    if (fallbackWeapons[fwj]['damage'] > fallbackWeapons[fwbestIdx]['damage']) fwbestIdx = fwj
+                }
+                if (fwbestIdx != fwi) {
+                    var fwtmp = fallbackWeapons[fwi]
+                    fallbackWeapons[fwi] = fallbackWeapons[fwbestIdx]
+                    fallbackWeapons[fwbestIdx] = fwtmp
+                }
+            }
+
+            // Use weapons
+            for (var fwci = 0; fwci < count(fallbackWeapons); fwci++) {
+                var fweaponRec = fallbackWeapons[fwci]
+                var fweapon = fweaponRec['weapon']
+
+                // Swap weapon if needed
+                var fcurrentWeapon = getWeapon()
+                if (fcurrentWeapon != fweapon._id) {
+                    if (playerTP < 1) continue  // Need 1 TP for swap
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, fweapon._id, -1)
+                    playerTP -= 1
+                }
+
+                // Use weapon
+                var fwuses = 0
+                while (fwuses < fweapon._maxUse && playerTP >= fweapon._cost) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, fweapon._id, -1, target._cellPos)
+                    playerTP -= fweapon._cost
+                    fwuses += 1
+                }
+
+                if (fwuses > 0) {
+                    debug("[" + debugPrefix + "][WEAPONS-FALLBACK] Used " + getWeaponName(fweapon._id) + " " + fwuses + " times, TP remaining: " + playerTP)
+                }
+
+                if (playerTP <= 0) break
+            }
+
+            if (count(fallbackWeapons) == 0) {
+                debug("[" + debugPrefix + "][WEAPONS-FALLBACK] No usable weapons found from position " + playerPos)
+            }
         } else {
             debug("[" + debugPrefix + "] No weapons available from current position " + playerPos)
         }
@@ -1656,8 +1724,78 @@ class Strategy {
                 debug("[" + debugPrefix + "][CHIPS] Used " + getChipName(chipUse._id) + " " + actualUsesC + " times, TP remaining: " + playerTP)
                 if (playerTP <= 0) break
             }
+        } else if (playerTP > 0 && curCellObj == null) {
+            // FALLBACK: curCellObj is null (position not in damageMap)
+            // This happens when we move to an intermediate position
+            // Check Arsenal directly for any usable chips from current position
+            debug("[" + debugPrefix + "][CHIPS-FALLBACK] Position " + playerPos + " not in damageMap, checking Arsenal directly")
+
+            var fallbackChips = []
+            for (var fcid in mapKeys(arsenal.playerEquippedChips)) {
+                var fchipObj = arsenal.playerEquippedChips[fcid]
+                if (fchipObj == null) continue
+                if (playerTP < fchipObj._cost) continue
+                if (getCooldown(fchipObj._id, player._id) > 0) continue
+
+                // Only damage/poison chips
+                if (!mapContainsKey(fchipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(fchipObj._effects, EFFECT_POISON)) continue
+
+                // Skip excluded chips
+                var fexcluded = false
+                for (var fex = 0; fex < count(chipExclusionList); fex++) {
+                    if (fchipObj._id == chipExclusionList[fex]) {
+                        fexcluded = true
+                        break
+                    }
+                }
+                if (fexcluded) continue
+
+                // Check range and LOS to target
+                var fdist = getCellDistance(playerPos, target._cellPos)
+                if (fdist == null || fdist < fchipObj._minRange || fdist > fchipObj._maxRange) continue
+                if (!lineOfSight(playerPos, target._cellPos)) continue
+
+                var fnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, fchipObj._id, target)
+                push(fallbackChips, ['chip': fchipObj, 'damage': fnetDmg])
+            }
+
+            // Sort by damage descending
+            for (var fi = 0; fi < count(fallbackChips); fi++) {
+                var fbestIdx = fi
+                for (var fj = fi + 1; fj < count(fallbackChips); fj++) {
+                    if (fallbackChips[fj]['damage'] > fallbackChips[fbestIdx]['damage']) fbestIdx = fj
+                }
+                if (fbestIdx != fi) {
+                    var ftmp = fallbackChips[fi]
+                    fallbackChips[fi] = fallbackChips[fbestIdx]
+                    fallbackChips[fbestIdx] = ftmp
+                }
+            }
+
+            // Use chips
+            for (var fci = 0; fci < count(fallbackChips); fci++) {
+                var fchipRec = fallbackChips[fci]
+                var fchip = fchipRec['chip']
+
+                var factualUses = 0
+                while (factualUses < fchip._maxUse && playerTP >= fchip._cost) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, fchip._id, target._cellPos)
+                    playerTP -= fchip._cost
+                    factualUses += 1
+                }
+
+                if (factualUses > 0) {
+                    debug("[" + debugPrefix + "][CHIPS-FALLBACK] Used " + getChipName(fchip._id) + " " + factualUses + " times, TP remaining: " + playerTP)
+                }
+
+                if (playerTP <= 0) break
+            }
+
+            if (count(fallbackChips) == 0) {
+                debug("[" + debugPrefix + "][CHIPS-FALLBACK] No usable chips found from position " + playerPos)
+            }
         } else if (playerTP > 0) {
-            debug("[" + debugPrefix + "][CHIPS] Cannot use chips: curCellObj=" + (curCellObj == null ? "null" : "exists") + " chipsList=" + (curCellObj != null ? count(curCellObj._chipsList) : 0))
+            debug("[" + debugPrefix + "][CHIPS] Unexpected state: playerTP=" + playerTP + " curCellObj=" + (curCellObj != null ? "exists" : "null"))
         }
 
         // Post-offensive HNS relocation (break line of sight with remaining MP)

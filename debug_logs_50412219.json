@@ -1,0 +1,3658 @@
+{
+  "18035": {
+    "1": [
+      [
+        0,
+        1,
+        "Player is agility-focused (agility: 600, strength: 520, magic: 0)",
+        0,
+        447626,
+        46
+      ],
+      [
+        0,
+        1,
+        "Applying turn one buffs if available",
+        0,
+        447635,
+        855
+      ],
+      [
+        0,
+        1,
+        "Dumping equipped chips:",
+        0,
+        447635,
+        856
+      ],
+      [
+        0,
+        1,
+        " - liberation",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - grapple",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - armoring",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - boxing_glove",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - inversion",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - thorn",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - mirror",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - bramble",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - leather_boots",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - antidote",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - adrenaline",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - elevation",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - teleportation",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - knowledge",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        " - warm_up",
+        0,
+        447635,
+        858
+      ],
+      [
+        0,
+        1,
+        "[FIGHT-TYPE] PvP fight detected (enemy leek)",
+        0,
+        447635,
+        844
+      ],
+      [
+        0,
+        1,
+        "[TURN1-BUFFS] Fight type: pvp",
+        0,
+        447635,
+        864
+      ],
+      [
+        0,
+        1,
+        "[TURN1-BUFFS] Skipping HP buffs (agility build PvP) - saving 6 TP for aggressive damage return",
+        0,
+        447635,
+        869
+      ],
+      [
+        0,
+        1,
+        "[TURN1-BUFFS] Enemy far (dist=24), applying defensive shield",
+        0,
+        447635,
+        916
+      ]
+    ],
+    "100": [
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 180, now 201",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 180, now 201",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 32, now 135",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] unstable_destroyer shooterCells=[132, 133, 134, 136, 137, 138, 150, 151, 152, 153, 154, 27, 155, 28, 29, 32, 167, 168, 169, 170, 171, 172, 45, 173, 46, 47, 49, 185, 186, 187, 188, 189, 62, 190, 63, 64, 65, 66, 67, 202, 205, 206, 207, 80, 208, 81, 82, 83, 84, 222, 223, 224, 225, 98, 99, 100, 101, 240, 241, 242, 115, 243, 116, 117, 118, 119]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] lightninger shooterCells=[243, 9, 27]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] rifle shooterCells=[192, 257, 259, 260, 8, 9, 201, 11, 15, 272, 209, 275, 149, 277, 278, 26, 218, 219, 156, 226, 227, 292, 166, 294, 295, 43, 44, 236, 174, 244, 184, 61, 191]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] grenade_launcher shooterCells=[257, 259, 132, 260, 133, 9, 137, 138, 11, 15, 149, 150, 27, 155, 28, 156, 29, 32, 167, 168, 44, 172, 45, 173, 46, 47, 49, 184, 185, 62, 190, 63, 191, 64, 65, 66, 67, 202, 205, 206, 207, 80, 208, 219, 222, 223, 224, 225, 98, 226, 240, 241, 242, 115, 243]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] liberation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] inversion shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] thorn shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] mirror shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] bramble shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] antidote shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] warm_up shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[] weaponOnlyCellsSample=[257, 259, 260, 8, 9, 11, 15, 272, 275, 277, 278, 26, 27, 28, 29, 32, 292, 294, 295, 43, 44, 45, 46, 47, 49, 61, 62, 63, 64, 65, 66, 67, 80, 81, 82, 83, 84, 98, 99, 100, 101, 115, 116, 117, 118, 119, 132, 133, 134, 136, 137, 138, 149, 150, 151, 152, 153, 154, 155, 156, 166, 167, 168, 169, 170, 171, 172, 173, 174, 184, 185, 186, 187, 188, 189, 190, 191, 192, 201, 202, 205, 206, 207, 208, 209, 218, 219, 222, 223, 224, 225, 226, 227, 236, 240, 241, 242, 243, 244]",
+        0,
+        447631,
+        352
+      ],
+      [
+        0,
+        1,
+        "[MULTI-HIT] No multi-enemy AoE opportunities detected",
+        0,
+        447631,
+        367
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_135",
+        0,
+        447631,
+        373
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 27 Weapon: lightninger",
+        0,
+        447626,
+        79
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 5",
+        0,
+        447632,
+        395
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 135 (MP=8, weapons=4)",
+        0,
+        447632,
+        442
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 257 threat markers for Domingo",
+        0,
+        447632,
+        489
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 257 cells threatened by 1 enemies",
+        0,
+        447632,
+        432
+      ],
+      [
+        0,
+        1,
+        "[LETHAL] High TP (TP=23) enemy killable (HP=1510) - prioritizing kill",
+        0,
+        447635,
+        1775
+      ],
+      [
+        0,
+        1,
+        "[EMERGENCY] Lethal opportunity detected and HP safe (53%) - skipping emergency mode",
+        0,
+        447635,
+        1814
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Damage return expiring in 1 turn(s) - reapplying",
+        0,
+        447634,
+        75
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] WARNING: No return chip available (BRAMBLE/MIRROR/THORN on cooldown or insufficient TP)",
+        0,
+        447634,
+        159
+      ],
+      [
+        0,
+        1,
+        "[LEATHER_BOOTS] Target cell unreachable (need 10 MP, have 9) - using boots",
+        0,
+        447635,
+        224
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 3 on entity EbolaLeek with weapon lightninger and chip leather_boots",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)",
+        0,
+        447634,
+        177
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Best tactical cell: 9 (damage=1077.2, threat=1116.8000000000002, score=630.48)",
+        0,
+        447632,
+        649
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][TACTICAL] Using threat-aware positioning: cell=9 damage=1077.2 threat=1116.8000000000002",
+        0,
+        447634,
+        210
+      ],
+      [
+        0,
+        1,
+        "[ADRENALINE] Short 1 TP (have 23 need 24) - using Adrenaline",
+        0,
+        447635,
+        2187
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 3 on entity EbolaLeek with weapon lightninger and chip adrenaline",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][ADRENALINE] Used Adrenaline, now have 24 TP",
+        0,
+        447634,
+        242
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          275
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=275 canAttack=true danger=27 dist=8 cover=2 currentDist=8",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        4,
+        [
+          184
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          167
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          149
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          132
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          115
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          98
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          80
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          62
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          44
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          27
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          9
+        ],
+        "ffd700",
+        3
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Movement check: pathLen=11 playerMP=11 bestWeaponCell=9 playerPos=201",
+        0,
+        447635,
+        1187
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 6 to cell 9 towards entity Domingo",
+        0,
+        447635,
+        959
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] After movement logic: reachedWeaponCell=true playerPos=9 playerMP=0",
+        0,
+        447635,
+        1381
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Primary weapon: reachedWeaponCell=true primaryWeapon=lightninger currentWeapon=lightninger playerTP=24",
+        0,
+        447635,
+        1394
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Weapon already equipped: lightninger",
+        0,
+        447635,
+        1409
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon lightninger and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon lightninger and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 4 on entity Domingo with weapon grenade_launcher and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] playerTP=5 curCellObj=exists chipsList=0",
+        0,
+        447635,
+        1477
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] Cannot use chips: curCellObj=exists chipsList=0",
+        0,
+        447635,
+        1554
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Offensive scenario complete. Remaining TP: 5, MP: 0",
+        0,
+        447634,
+        248
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 6 actions",
+        0,
+        447635,
+        2013
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removing invalid action [3] Chip on cooldown: leather_boots",
+        0,
+        447635,
+        2165
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (adrenaline): TP 23 -> 22",
+        0,
+        447635,
+        2162
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 9 requires 10 MP but only have 9 - checking fallback",
+        0,
+        447635,
+        2044
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell 9 (MP=9)",
+        0,
+        447635,
+        1980
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] Found best reachable damage cell: 201 damage=742.4 dist=0",
+        0,
+        447635,
+        479
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found reachable damage cell: 201 (damage=742.4)",
+        0,
+        447635,
+        1985
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 201 (original: 201, cost: 0 MP)",
+        0,
+        447635,
+        2055
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (lightninger): TP 22 -> 13",
+        0,
+        447635,
+        2157
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (lightninger): TP 13 -> 4",
+        0,
+        447635,
+        2157
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon swap: TP 4 -> 3",
+        0,
+        447635,
+        2152
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 1 invalid actions, added 1 fallbacks, 5 total actions remaining",
+        0,
+        447635,
+        2171
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip adrenaline on entity EbolaLeek",
+        0,
+        447635,
+        1924
+      ]
+    ],
+    "103": [
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 201",
+        0,
+        447635,
+        1887
+      ],
+      [
+        0,
+        1,
+        "Movement result: 201 -> 201 (target was 201)",
+        0,
+        447635,
+        1891
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=180 chip=-1 targetCell=135",
+        0,
+        447635,
+        1912
+      ],
+      [
+        0,
+        1,
+        "Using weapon lightninger on cell 135 (pos=201 dist=8 TP=29)",
+        0,
+        447635,
+        1919
+      ],
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=180 chip=-1 targetCell=135",
+        0,
+        447635,
+        1912
+      ],
+      [
+        0,
+        1,
+        "Using weapon lightninger on cell 135 (pos=201 dist=8 TP=29)",
+        0,
+        447635,
+        1919
+      ],
+      [
+        0,
+        1,
+        "Swapping to weapon grenade_launcher",
+        0,
+        447635,
+        1902
+      ]
+    ],
+    "2": [
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 386, now 386",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 386, now 386",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 118, now 118",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] unstable_destroyer shooterCells=[133, 134, 135, 136, 137, 11, 15, 150, 151, 152, 153, 154, 155, 28, 156, 29, 32, 168, 169, 170, 171, 172, 45, 173, 46, 47, 49, 185, 186, 187, 188, 189, 190, 63, 191, 64, 65, 66, 67, 205, 206, 207, 80, 208, 81, 82, 83, 84, 222, 223, 224, 225, 98, 226, 99, 100, 101, 115, 116, 117, 119]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] lightninger shooterCells=[226, 244]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] rifle shooterCells=[192, 257, 259, 132, 260, 9, 201, 202, 209, 149, 277, 278, 26, 27, 219, 227, 166, 167, 44, 236, 174, 240, 241, 242, 243, 244, 184, 61, 62]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] grenade_launcher shooterCells=[132, 133, 11, 15, 150, 151, 27, 155, 28, 156, 29, 32, 167, 168, 45, 173, 46, 174, 47, 49, 185, 186, 187, 188, 189, 62, 190, 63, 191, 202, 205, 206, 207, 80, 208, 81, 209, 222, 223, 224, 225, 98, 226, 240, 241, 242, 115, 243, 116, 244]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] liberation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] inversion shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] thorn shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] mirror shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] bramble shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] antidote shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] warm_up shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[] weaponOnlyCellsSample=[257, 259, 132, 260, 133, 134, 135, 136, 137, 9, 11, 15, 149, 277, 150, 278, 151, 152, 153, 154, 26, 155, 27, 28, 156, 29, 32, 166, 167, 168, 169, 170, 171, 172, 44, 45, 173, 46, 174, 47, 49, 184, 185, 186, 187, 188, 189, 61, 190, 62, 63, 191, 64, 192, 65, 66, 67, 201, 202, 205, 206, 207, 80, 208, 81, 209, 82, 83, 84, 219, 222, 223, 224, 225, 98, 226, 99, 227, 100, 101, 236, 240, 241, 242, 115, 243, 116, 244, 117, 119]",
+        0,
+        447631,
+        352
+      ],
+      [
+        0,
+        1,
+        "[MULTI-HIT] No multi-enemy AoE opportunities detected",
+        0,
+        447631,
+        367
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_118",
+        0,
+        447631,
+        373
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 226 Weapon: lightninger",
+        0,
+        447626,
+        79
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 1",
+        0,
+        447632,
+        395
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 118 (MP=8, weapons=4)",
+        0,
+        447632,
+        442
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 236 threat markers for Domingo",
+        0,
+        447632,
+        489
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 236 cells threatened by 1 enemies",
+        0,
+        447632,
+        432
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No damage return active - MUST reapply",
+        0,
+        447634,
+        69
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] CHIP_BRAMBLE available: 175.0% return for 1 turn (AGGRESSIVE)",
+        0,
+        447634,
+        21
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][AGGRESSIVE] Applying damage return chip: bramble (cost: 4 TP)",
+        0,
+        447634,
+        155
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 3 on entity EbolaLeek with weapon lightninger and chip bramble",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 3 on entity EbolaLeek with weapon lightninger and chip warm_up",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Applied CHIP_WARM_UP (+170-190 Agility for 3 turns, remaining TP: 11)",
+        0,
+        447634,
+        167
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][FALLBACK] Using pure damage cell (no tactical cell available)",
+        0,
+        447634,
+        226
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          337
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=337 canAttack=false danger=0 dist=17 cover=2 currentDist=24",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        4,
+        [
+          369
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          352
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          335
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          318
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          301
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          284
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          267
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          250
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          233
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          216
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          234
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          217
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          235
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          218
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          236
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          219
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          237
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          220
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          238
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          221
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          239
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          222
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          240
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          223
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          241
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          224
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          242
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          225
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          243
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          226
+        ],
+        "ffd700",
+        3
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Movement check: pathLen=30 playerMP=7 bestWeaponCell=226 playerPos=386",
+        0,
+        447635,
+        1187
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Best cell 226 unreachable (need 30 MP, have 7)",
+        0,
+        447635,
+        1191
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 7 MP",
+        0,
+        447635,
+        481
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No reachable damage cells within 7 MP",
+        0,
+        447635,
+        1213
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 9 MP",
+        0,
+        447635,
+        481
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] LEATHER_BOOTS would not help reach any damage cells (boostedMP=9), skipping",
+        0,
+        447635,
+        1238
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No reachable damage cells - searching path to weapon cell",
+        0,
+        447635,
+        1310
+      ],
+      [
+        0,
+        1,
+        "[FLEE-PATH] No reachable damage cells on flee path to 226 (maxMP=7)",
+        0,
+        447635,
+        622
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No damage cells on path - attempting chip attacks from current position",
+        0,
+        447635,
+        1335
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][APPROACH-CHIPS] Checking long-range chips from position 386 (TP=11)",
+        0,
+        447635,
+        635
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][APPROACH-CHIPS] No usable long-range chips found",
+        0,
+        447635,
+        702
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Moving toward best weapon cell 226",
+        0,
+        447635,
+        1347
+      ]
+    ],
+    "20": [
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 267, now 267",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 386, now 267",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 118, now 14",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] unstable_destroyer shooterCells=[32, 16, 49, 17, 67, 84, 119, 15]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] lightninger shooterCells=[]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] rifle shooterCells=[154]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] grenade_launcher shooterCells=[16, 17, 84, 119]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] liberation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] inversion shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] thorn shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] mirror shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] bramble shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] antidote shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] warm_up shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[] weaponOnlyCellsSample=[15, 16, 17, 154, 32, 49, 67, 84, 119]",
+        0,
+        447631,
+        352
+      ],
+      [
+        0,
+        1,
+        "[MULTI-HIT] No multi-enemy AoE opportunities detected",
+        0,
+        447631,
+        367
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_14",
+        0,
+        447631,
+        373
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 154 Weapon: rifle",
+        0,
+        447626,
+        79
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 2",
+        0,
+        447632,
+        395
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 14 (MP=8, weapons=4)",
+        0,
+        447632,
+        442
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 150 threat markers for Domingo",
+        0,
+        447632,
+        489
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 150 cells threatened by 1 enemies",
+        0,
+        447632,
+        432
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No damage return active - MUST reapply",
+        0,
+        447634,
+        69
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] CHIP_MIRROR available: 38.5% return for 3 turns",
+        0,
+        447634,
+        31
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][AGGRESSIVE] Applying damage return chip: mirror (cost: 5 TP)",
+        0,
+        447634,
+        155
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 3 on entity EbolaLeek with weapon lightninger and chip mirror",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][FALLBACK] Using pure damage cell (no tactical cell available)",
+        0,
+        447634,
+        226
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          200
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=200 canAttack=false danger=0 dist=13 cover=1 currentDist=19",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        4,
+        [
+          250
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          233
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          216
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          199
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          182
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          165
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          148
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          166
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          149
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          167
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          150
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          168
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          151
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          169
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          152
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          170
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          153
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          171
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          154
+        ],
+        "ffd700",
+        3
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Movement check: pathLen=19 playerMP=7 bestWeaponCell=154 playerPos=267",
+        0,
+        447635,
+        1187
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Best cell 154 unreachable (need 19 MP, have 7)",
+        0,
+        447635,
+        1191
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 7 MP",
+        0,
+        447635,
+        481
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No reachable damage cells within 7 MP",
+        0,
+        447635,
+        1213
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 9 MP",
+        0,
+        447635,
+        481
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] LEATHER_BOOTS would not help reach any damage cells (boostedMP=9), skipping",
+        0,
+        447635,
+        1238
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] TELEPORTATION out of range (dist=19, range=1-10)",
+        0,
+        447635,
+        1304
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No reachable damage cells - searching path to weapon cell",
+        0,
+        447635,
+        1310
+      ],
+      [
+        0,
+        1,
+        "[FLEE-PATH] No reachable damage cells on flee path to 154 (maxMP=7)",
+        0,
+        447635,
+        622
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No damage cells on path - attempting chip attacks from current position",
+        0,
+        447635,
+        1335
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][APPROACH-CHIPS] Checking long-range chips from position 267 (TP=18)",
+        0,
+        447635,
+        635
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][APPROACH-CHIPS] No usable long-range chips found",
+        0,
+        447635,
+        702
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Moving toward best weapon cell 154",
+        0,
+        447635,
+        1347
+      ]
+    ],
+    "21": [
+      [
+        0,
+        1,
+        "[AGILITY] Fallback movement result: 7",
+        0,
+        447635,
+        1349
+      ],
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 267, now 148",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] After movement: pos=148 MP=0 TP=23",
+        0,
+        447635,
+        1356
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] After movement logic: reachedWeaponCell=false playerPos=148 playerMP=0",
+        0,
+        447635,
+        1381
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] WARNING: Ended at position 148 with no attacks available!",
+        0,
+        447635,
+        1387
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Primary weapon: reachedWeaponCell=false primaryWeapon=rifle currentWeapon=lightninger playerTP=23",
+        0,
+        447635,
+        1394
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Did not reach weapon cell - will use weapons from current position 148",
+        0,
+        447635,
+        1433
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No weapons available from current position 148",
+        0,
+        447635,
+        1473
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] playerTP=23 curCellObj=null chipsList=0",
+        0,
+        447635,
+        1477
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] Cannot use chips: curCellObj=null chipsList=0",
+        0,
+        447635,
+        1554
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Offensive scenario complete. Remaining TP: 23, MP: 0",
+        0,
+        447634,
+        248
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 1 actions",
+        0,
+        447635,
+        2013
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (mirror): TP 23 -> 18",
+        0,
+        447635,
+        2162
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip mirror on entity EbolaLeek",
+        0,
+        447635,
+        1924
+      ]
+    ],
+    "3": [
+      [
+        0,
+        1,
+        "[AGILITY] Fallback movement result: 7",
+        0,
+        447635,
+        1349
+      ],
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 386, now 267",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] After movement: pos=267 MP=0 TP=22",
+        0,
+        447635,
+        1356
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] After movement logic: reachedWeaponCell=false playerPos=267 playerMP=0",
+        0,
+        447635,
+        1381
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] WARNING: Ended at position 267 with no attacks available!",
+        0,
+        447635,
+        1387
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Primary weapon: reachedWeaponCell=false primaryWeapon=lightninger currentWeapon=lightninger playerTP=22",
+        0,
+        447635,
+        1394
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Did not reach weapon cell - will use weapons from current position 267",
+        0,
+        447635,
+        1433
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] No weapons available from current position 267",
+        0,
+        447635,
+        1473
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] playerTP=22 curCellObj=null chipsList=0",
+        0,
+        447635,
+        1477
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] Cannot use chips: curCellObj=null chipsList=0",
+        0,
+        447635,
+        1554
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Offensive scenario complete. Remaining TP: 22, MP: 0",
+        0,
+        447634,
+        248
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 2 actions",
+        0,
+        447635,
+        2013
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (bramble): TP 22 -> 18",
+        0,
+        447635,
+        2162
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (warm_up): TP 18 -> 11",
+        0,
+        447635,
+        2162
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip bramble on entity EbolaLeek",
+        0,
+        447635,
+        1924
+      ]
+    ],
+    "34": [
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 148, now 148",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 267, now 148",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 14, now 151",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] unstable_destroyer shooterCells=[256, 259, 132, 133, 134, 135, 136, 148, 149, 150, 152, 153, 154, 166, 167, 168, 169, 170, 171, 44, 45, 46, 47, 49, 184, 185, 186, 187, 188, 189, 62, 63, 64, 65, 66, 201, 202, 205, 206, 80, 81, 82, 83, 84, 218, 219, 221, 223, 224, 98, 99, 100, 101, 236, 241, 115, 116, 117, 118, 119, 253]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] lightninger shooterCells=[32, 321, 259, 295, 331, 270, 15, 304, 49, 277, 313, 253, 287]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] rifle shooterCells=[67, 260, 9, 137, 138, 11, 12, 269, 270, 15, 207, 208, 277, 278, 217, 27, 155, 28, 29, 287, 32, 225, 291, 165, 295, 234, 235, 172, 173, 304, 242, 243, 313, 252, 190]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] grenade_launcher shooterCells=[256, 259, 136, 137, 270, 148, 149, 277, 153, 154, 27, 28, 29, 32, 165, 166, 171, 44, 172, 45, 46, 47, 49, 184, 188, 189, 62, 63, 64, 65, 66, 67, 201, 206, 207, 80, 81, 82, 83, 84, 218, 219, 221, 223, 224, 101, 235, 236, 241, 242, 118, 119, 253]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] liberation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] inversion shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] thorn shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] mirror shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] bramble shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] antidote shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] warm_up shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[] weaponOnlyCellsSample=[256, 259, 260, 9, 11, 12, 269, 270, 15, 277, 278, 27, 28, 29, 287, 32, 291, 295, 44, 45, 46, 47, 304, 49, 313, 62, 63, 64, 65, 321, 66, 67, 331, 80, 81, 82, 83, 84, 98, 99, 100, 101, 115, 116, 117, 118, 119, 132, 133, 134, 135, 136, 137, 138, 148, 149, 150, 152, 153, 154, 155, 165, 166, 167, 168, 169, 170, 171, 172, 173, 184, 185, 186, 187, 188, 189, 190, 201, 202, 205, 206, 207, 208, 217, 218, 219, 221, 223, 224, 225, 234, 235, 236, 241, 242, 243, 252, 253]",
+        0,
+        447631,
+        352
+      ],
+      [
+        0,
+        1,
+        "[MULTI-HIT] No multi-enemy AoE opportunities detected",
+        0,
+        447631,
+        367
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_151",
+        0,
+        447631,
+        373
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 253 Weapon: lightninger",
+        0,
+        447626,
+        79
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 3",
+        0,
+        447632,
+        395
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 151 (MP=8, weapons=4)",
+        0,
+        447632,
+        442
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 296 threat markers for Domingo",
+        0,
+        447632,
+        489
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 296 cells threatened by 1 enemies",
+        0,
+        447632,
+        432
+      ],
+      [
+        0,
+        1,
+        "[EMERGENCY][THREAT] Two-turn lethal detected - threat: 1116.8000000000002 x2 = 2233.6000000000004 vs HP: 1689",
+        0,
+        447635,
+        1829
+      ],
+      [
+        0,
+        1,
+        "[EMERGENCY] Using default emergency scenario (regeneration + flee)",
+        0,
+        447635,
+        1856
+      ],
+      [
+        0,
+        1,
+        "[FLEE-ATTACK] Attacking from current position 148 before fleeing (weapon=grenade_launcher)",
+        0,
+        447635,
+        1640
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 4 on entity Domingo with weapon grenade_launcher and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon grenade_launcher and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon grenade_launcher and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          180
+        ],
+        "78c8ff",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-defensive] bestCell=180 danger=1 dist=12 cover=3 playerPos=148",
+        0,
+        447632,
+        192
+      ],
+      [
+        0,
+        1,
+        "[FLEE] Fleeing to safe cell 180 (danger=1, MP=7)",
+        0,
+        447635,
+        1743
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 12 to cell 180 towards entity Domingo",
+        0,
+        447635,
+        959
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 4 actions",
+        0,
+        447635,
+        2013
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon swap: TP 23 -> 22",
+        0,
+        447635,
+        2152
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (grenade_launcher): TP 22 -> 16",
+        0,
+        447635,
+        2157
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon attack (grenade_launcher): TP 16 -> 10",
+        0,
+        447635,
+        2157
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 180 updates simulated pos (cost: 5 MP, 2 MP remaining)",
+        0,
+        447635,
+        2042
+      ],
+      [
+        0,
+        1,
+        "Swapping to weapon grenade_launcher",
+        0,
+        447635,
+        1902
+      ]
+    ],
+    "35": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=43 chip=-1 targetCell=151",
+        0,
+        447635,
+        1912
+      ],
+      [
+        0,
+        1,
+        "Using weapon grenade_launcher on cell 151 (pos=148 dist=6 TP=22)",
+        0,
+        447635,
+        1919
+      ]
+    ],
+    "39": [
+      [
+        0,
+        1,
+        "Executing attack action: type=0 weaponId=43 chip=-1 targetCell=151",
+        0,
+        447635,
+        1912
+      ],
+      [
+        0,
+        1,
+        "Using weapon grenade_launcher on cell 151 (pos=148 dist=6 TP=16)",
+        0,
+        447635,
+        1919
+      ]
+    ],
+    "43": [
+      [
+        0,
+        1,
+        "Executing Hide&Seek movement to cell 180",
+        0,
+        447635,
+        1898
+      ]
+    ],
+    "5": [
+      [
+        0,
+        1,
+        "Executing buff/utility chip warm_up on entity EbolaLeek",
+        0,
+        447635,
+        1924
+      ]
+    ],
+    "53": [
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 148, now 180",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity EbolaLeek",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 148, now 180",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        1,
+        "Updating entity Domingo",
+        0,
+        447627,
+        57
+      ],
+      [
+        0,
+        1,
+        "Cell pos was 151, now 32",
+        0,
+        447627,
+        58
+      ],
+      [
+        0,
+        10
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] unstable_destroyer shooterCells=[66, 99, 67, 100, 101, 134, 135, 136, 14, 15, 49, 83, 84, 117, 118]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] lightninger shooterCells=[134, 151, 168, 185, 202]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] rifle shooterCells=[133, 168, 169, 170, 171, 116, 150, 151, 152, 185, 153, 186, 187, 188]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][WEAPON] grenade_launcher shooterCells=[99, 116, 100, 117, 101, 134, 118, 151, 135, 152, 136, 153]",
+        0,
+        447631,
+        391
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] liberation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] grapple shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] armoring shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] boxing_glove shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] inversion shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] thorn shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] mirror shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] bramble shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] leather_boots shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] antidote shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] adrenaline shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] elevation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] teleportation shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] knowledge shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][CHIP] warm_up shooterCells=[]",
+        0,
+        447631,
+        405
+      ],
+      [
+        0,
+        1,
+        "[HITMAP][SUMMARY] chipCells=[] weaponOnlyCellsSample=[14, 15, 49, 66, 67, 83, 84, 99, 100, 101, 116, 117, 118, 133, 134, 135, 136, 150, 151, 152, 153, 168, 169, 170, 171, 185, 186, 187, 188, 202]",
+        0,
+        447631,
+        352
+      ],
+      [
+        0,
+        1,
+        "[MULTI-HIT] No multi-enemy AoE opportunities detected",
+        0,
+        447631,
+        367
+      ],
+      [
+        0,
+        1,
+        "[CACHE] Cached damage map for 1_32",
+        0,
+        447631,
+        373
+      ],
+      [
+        0,
+        1,
+        "Target hit cell: 202 Weapon: lightninger",
+        0,
+        447626,
+        79
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Building new threat map for turn 4",
+        0,
+        447632,
+        395
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Processing enemy Domingo at cell 32 (MP=8, weapons=4)",
+        0,
+        447632,
+        442
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP]   Added 153 threat markers for Domingo",
+        0,
+        447632,
+        489
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Complete. 153 cells threatened by 1 enemies",
+        0,
+        447632,
+        432
+      ],
+      [
+        0,
+        1,
+        "[LETHAL] High TP (TP=23) enemy killable (HP=1939) - prioritizing kill",
+        0,
+        447635,
+        1775
+      ],
+      [
+        0,
+        1,
+        "[EMERGENCY] Lethal opportunity detected and HP safe (81%) - skipping emergency mode",
+        0,
+        447635,
+        1814
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Damage return expiring in 1 turn(s) - reapplying",
+        0,
+        447634,
+        75
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] CHIP_THORN available: 24.5% return for 2 turns",
+        0,
+        447634,
+        41
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][AGGRESSIVE] Applying damage return chip: thorn (cost: 4 TP)",
+        0,
+        447634,
+        155
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 3 on entity EbolaLeek with weapon grenade_launcher and chip thorn",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[LEATHER_BOOTS] Target cell unreachable (need 9 MP, have 7) - using boots",
+        0,
+        447635,
+        224
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 3 on entity EbolaLeek with weapon grenade_launcher and chip leather_boots",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)",
+        0,
+        447634,
+        177
+      ],
+      [
+        0,
+        1,
+        "[THREAT-MAP] Best tactical cell: 202 (damage=1077.2, threat=411.82000000000005, score=912.472)",
+        0,
+        447632,
+        649
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][TACTICAL] Using threat-aware positioning: cell=202 damage=1077.2 threat=411.82000000000005",
+        0,
+        447634,
+        210
+      ],
+      [
+        0,
+        1,
+        "[HNS][CACHE] Rebuilt enemy access cache size=1",
+        0,
+        447632,
+        77
+      ],
+      [
+        0,
+        4,
+        [
+          130
+        ],
+        "ffc878",
+        3
+      ],
+      [
+        0,
+        1,
+        "[HNS-approach] bestCell=130 canAttack=false danger=0 dist=14 cover=6 currentDist=19",
+        0,
+        447632,
+        188
+      ],
+      [
+        0,
+        4,
+        [
+          163
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          181
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          199
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          217
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          200
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          218
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          201
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          219
+        ],
+        "64c8ff",
+        2
+      ],
+      [
+        0,
+        4,
+        [
+          202
+        ],
+        "ffd700",
+        3
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Movement check: pathLen=9 playerMP=9 bestWeaponCell=202 playerPos=180",
+        0,
+        447635,
+        1187
+      ],
+      [
+        0,
+        1,
+        "Planned movement action: Type 6 to cell 202 towards entity Domingo",
+        0,
+        447635,
+        959
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] After movement logic: reachedWeaponCell=true playerPos=202 playerMP=0",
+        0,
+        447635,
+        1381
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Primary weapon: reachedWeaponCell=true primaryWeapon=lightninger currentWeapon=grenade_launcher playerTP=16",
+        0,
+        447635,
+        1394
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Need weapon swap: current=grenade_launcher -> target=lightninger (TP=16 need=10)",
+        0,
+        447635,
+        1399
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 4 on entity Domingo with weapon lightninger and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Created weapon swap action",
+        0,
+        447635,
+        1404
+      ],
+      [
+        0,
+        1,
+        "Planned attack action: Type 0 on entity Domingo with weapon lightninger and chip ",
+        0,
+        447635,
+        979
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] playerTP=6 curCellObj=exists chipsList=0",
+        0,
+        447635,
+        1477
+      ],
+      [
+        0,
+        1,
+        "[AGILITY][CHIPS] Cannot use chips: curCellObj=exists chipsList=0",
+        0,
+        447635,
+        1554
+      ],
+      [
+        0,
+        1,
+        "[AGILITY] Offensive scenario complete. Remaining TP: 6, MP: 0",
+        0,
+        447634,
+        248
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Starting validation of 5 actions",
+        0,
+        447635,
+        2013
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (thorn): TP 23 -> 19",
+        0,
+        447635,
+        2162
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Chip (leather_boots): TP 19 -> 16",
+        0,
+        447635,
+        2162
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Movement to 202 requires 8 MP but only have 7 - checking fallback",
+        0,
+        447635,
+        2044
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Searching for alternative to cell 202 (MP=7)",
+        0,
+        447635,
+        1980
+      ],
+      [
+        0,
+        1,
+        "[REACHABLE-CELL] No reachable damage cells within 7 MP",
+        0,
+        447635,
+        481
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION][FALLBACK] Found partial path cell: 201 (dist=7)",
+        0,
+        447635,
+        1998
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Added fallback movement to 201 (original: 201, cost: 6 MP)",
+        0,
+        447635,
+        2055
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Weapon swap: TP 16 -> 15",
+        0,
+        447635,
+        2152
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Distance invalid from 201 to 32: 12 (need 6-10)",
+        0,
+        447635,
+        143
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removing invalid action [0] Out of range/LOS",
+        0,
+        447635,
+        2165
+      ],
+      [
+        0,
+        1,
+        "[VALIDATION] Removed 1 invalid actions, added 1 fallbacks, 4 total actions remaining",
+        0,
+        447635,
+        2171
+      ],
+      [
+        0,
+        1,
+        "Executing buff/utility chip thorn on entity EbolaLeek",
+        0,
+        447635,
+        1924
+      ]
+    ],
+    "56": [
+      [
+        0,
+        1,
+        "Executing buff/utility chip leather_boots on entity EbolaLeek",
+        0,
+        447635,
+        1924
+      ]
+    ],
+    "58": [
+      [
+        0,
+        1,
+        "Executing movement (toward) action to cell 201",
+        0,
+        447635,
+        1887
+      ]
+    ],
+    "59": [
+      [
+        0,
+        1,
+        "Movement result: 180 -> 201 (target was 201)",
+        0,
+        447635,
+        1891
+      ],
+      [
+        0,
+        1,
+        "Swapping to weapon lightninger",
+        0,
+        447635,
+        1902
+      ]
+    ]
+  }
+}

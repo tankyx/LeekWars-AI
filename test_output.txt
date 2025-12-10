@@ -1,0 +1,52 @@
+============================================================
+LEEKWARS SCRIPT TESTING TOOL
+============================================================
+Script ID: 447626
+Number of tests: 1
+Opponent: Domingo - Balanced, 600 strength
+Account: main
+🔐 Logging in...
+✅ Connected as: Virus
+
+🎯 Running 1 test fights for script 447626 vs Domingo...
+🤖 Opponent: Domingo - Balanced, 600 strength
+📜 Log retrieval: ENABLED
+📝 Script: main.lk (ID: 447626)
+📋 Creating new test scenario vs Domingo...
+✅ Created scenario ID: 34964
+   Scenario verified: 1 vs 1 leeks
+
+🚀 Starting tests...
+Progress:    [DEBUG] get-logs status: 200
+   [DEBUG] get-logs data type: <class 'list'>, len: 0
+   [DEBUG] get-logs returned a list with 0 entries
+   [DEBUG] Empty list - possibly fight still processing or no debug() calls in AI
+   [DEBUG] Saved raw logs to debug_logs_50408177.json
+   [DEBUG] get-report status: 401
+   [DEBUG] fight/get status: 200
+   [DEBUG] fight/get top-level keys: ['id', 'date', 'year', 'type', 'context', 'status', 'winner', 'leeks1', 'leeks2', 'farmers1', 'farmers2', 'report', 'comments', 'tournament', 'views']
+   [DEBUG] Saved full fight data to debug_fight_50408177.json
+   [DEBUG] report field exists, type: <class 'NoneType'>, truthiness: False, len: N/A
+   [DEBUG] fight_data keys: ['scenario', 'ai']
+   [DEBUG] No ops field in fight_data
+   [DEBUG] No logs found for fight 50408177
+
+   ⚠️ No logs retrieved for fight 50408177
+   [INFO] If AI doesn't use debug() calls, logs will be empty
+.
+
+============================================================
+TEST RESULTS
+============================================================
+✅ Wins: 0
+❌ Losses: 1
+🤝 Draws: 0
+📊 Win Rate: 0.0%
+🎯 Total Tests: 1
+
+🔗 Sample fight URLs:
+   https://leekwars.com/fight/50408177
+
+💾 Results saved to: test_results_447626_20251209_120315.json
+📜 Fight logs saved to: fight_logs_447626_domingo_20251209_120315.json
+📊 Log analysis saved to: log_analysis_447626_domingo_20251209_120315.txt
