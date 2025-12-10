@@ -128,7 +128,8 @@ class ComboSystem {
     }
 
     // Execute GRAPPLE → COVID → (optional BALL_AND_CHAIN) → BOXING_GLOVE combo
-    static executeGrappleCovidCombo(target) {
+    // Uses action queue pattern with immediate execution between steps for position updates
+    static executeGrappleCovidCombo(target, strategy) {
         var enemyPos = target._cellPos
         var playerPos = player._cellPos
         var tpCost = 13  // Base: GRAPPLE(3) + COVID(8) + BOXING(2)
@@ -157,10 +158,11 @@ class ComboSystem {
         }
 
         debug("[GRAPPLE-COVID] Step 1: GRAPPLE (3 TP) - pulling enemy from " + enemyPos + " toward " + grappleCell)
-        useChipOnCell(CHIP_GRAPPLE, grappleCell)
+        push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, target))
         player._currTp -= 3
 
-        // Update enemy position after GRAPPLE
+        // Execute GRAPPLE immediately and update enemy position
+        strategy.executeAndFlushActions()
         target.updateEntity()
         var newEnemyPos = target._cellPos
         var distAfterGrapple = getCellDistance(playerPos, newEnemyPos)
@@ -168,8 +170,11 @@ class ComboSystem {
 
         // 2. COVID (8 TP) - uncleansable poison
         debug("[GRAPPLE-COVID] Step 2: COVID (8 TP) on cell " + newEnemyPos)
-        useChipOnCell(CHIP_COVID, newEnemyPos)
+        push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, newEnemyPos, target))
         player._currTp -= 8
+
+        // Execute COVID immediately
+        strategy.executeAndFlushActions()
 
         // 3. BOXING_GLOVE (2 TP) - push enemy away (requires distance 2+ for min range)
         var pushedEnemyPos = newEnemyPos  // Default: enemy stays if push fails
@@ -190,70 +195,74 @@ class ComboSystem {
 
             debug("[GRAPPLE-COVID] BOXING alignment: horizontal=" + isHorizontal + " vertical=" + isVertical)
 
-        var boxingCell = null
+            var boxingCell = null
 
-        if (isHorizontal) {
-            var pushDir = (enemyX > playerX) ? 1 : -1
-            // Range 2-8 is from CASTER position, not enemy
-            for (var distFromPlayer = 8; distFromPlayer >= 2; distFromPlayer--) {
-                var testX = playerX + pushDir * distFromPlayer
-                var testCell = getCellFromXY(testX, enemyY)
-                // Check: valid cell, behind enemy, has LOS from enemy
-                if (testCell != null) {
-                    var isBehindEnemy = (pushDir > 0 && testX > enemyX) || (pushDir < 0 && testX < enemyX)
-                    if (isBehindEnemy && lineOfSight(newEnemyPos, testCell)) {
-                        boxingCell = testCell
-                        debug("[GRAPPLE-COVID] BOXING_GLOVE: horizontal push to " + testCell + " (dist from player=" + distFromPlayer + ")")
-                        break
+            if (isHorizontal) {
+                var pushDir = (enemyX > playerX) ? 1 : -1
+                // Range 2-8 is from CASTER position, not enemy
+                for (var distFromPlayer = 8; distFromPlayer >= 2; distFromPlayer--) {
+                    var testX = playerX + pushDir * distFromPlayer
+                    var testCell = getCellFromXY(testX, enemyY)
+                    // Check: valid cell, behind enemy, has LOS from enemy
+                    if (testCell != null) {
+                        var isBehindEnemy = (pushDir > 0 && testX > enemyX) || (pushDir < 0 && testX < enemyX)
+                        if (isBehindEnemy && lineOfSight(newEnemyPos, testCell)) {
+                            boxingCell = testCell
+                            debug("[GRAPPLE-COVID] BOXING_GLOVE: horizontal push to " + testCell + " (dist from player=" + distFromPlayer + ")")
+                            break
+                        }
                     }
                 }
-            }
-        } else if (isVertical) {
-            var pushDir = (enemyY > playerY) ? 1 : -1
-            // Range 2-8 is from CASTER position, not enemy
-            for (var distFromPlayer = 8; distFromPlayer >= 2; distFromPlayer--) {
-                var testY = playerY + pushDir * distFromPlayer
-                var testCell = getCellFromXY(enemyX, testY)
-                // Check: valid cell, behind enemy, has LOS from enemy
-                if (testCell != null) {
-                    var isBehindEnemy = (pushDir > 0 && testY > enemyY) || (pushDir < 0 && testY < enemyY)
-                    if (isBehindEnemy && lineOfSight(newEnemyPos, testCell)) {
-                        boxingCell = testCell
-                        debug("[GRAPPLE-COVID] BOXING_GLOVE: vertical push to " + testCell + " (dist from player=" + distFromPlayer + ")")
-                        break
+            } else if (isVertical) {
+                var pushDir = (enemyY > playerY) ? 1 : -1
+                // Range 2-8 is from CASTER position, not enemy
+                for (var distFromPlayer = 8; distFromPlayer >= 2; distFromPlayer--) {
+                    var testY = playerY + pushDir * distFromPlayer
+                    var testCell = getCellFromXY(enemyX, testY)
+                    // Check: valid cell, behind enemy, has LOS from enemy
+                    if (testCell != null) {
+                        var isBehindEnemy = (pushDir > 0 && testY > enemyY) || (pushDir < 0 && testY < enemyY)
+                        if (isBehindEnemy && lineOfSight(newEnemyPos, testCell)) {
+                            boxingCell = testCell
+                            debug("[GRAPPLE-COVID] BOXING_GLOVE: vertical push to " + testCell + " (dist from player=" + distFromPlayer + ")")
+                            break
+                        }
                     }
                 }
+            } else {
+                debug("[GRAPPLE-COVID] ERROR: Enemy not on horizontal/vertical line - BOXING_GLOVE will fail!")
+                boxingCell = newEnemyPos
             }
-        } else {
-            debug("[GRAPPLE-COVID] ERROR: Enemy not on horizontal/vertical line - BOXING_GLOVE will fail!")
-            boxingCell = newEnemyPos
-        }
 
-        if (boxingCell == null) boxingCell = newEnemyPos
+            if (boxingCell == null) boxingCell = newEnemyPos
 
-        // Validate destination is on same line as player and enemy
-        var destX = getCellX(boxingCell)
-        var destY = getCellY(boxingCell)
-        var validLine = false
-        if (isHorizontal && destY == playerY && destY == enemyY) validLine = true
-        if (isVertical && destX == playerX && destX == enemyX) validLine = true
+            // Validate destination is on same line as player and enemy
+            var destX = getCellX(boxingCell)
+            var destY = getCellY(boxingCell)
+            var validLine = false
+            if (isHorizontal && destY == playerY && destY == enemyY) validLine = true
+            if (isVertical && destX == playerX && destX == enemyX) validLine = true
 
-        debug("[GRAPPLE-COVID] Step 3: BOXING_GLOVE (2 TP) - pushing from " + newEnemyPos + " to " + boxingCell + " (alignment: " + (isHorizontal ? "horizontal" : "vertical") + ")")
+            debug("[GRAPPLE-COVID] Step 3: BOXING_GLOVE (2 TP) - pushing from " + newEnemyPos + " to " + boxingCell + " (alignment: " + (isHorizontal ? "horizontal" : "vertical") + ")")
 
-        useChipOnCell(CHIP_BOXING_GLOVE, boxingCell)
-        player._currTp -= 2
+            push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_BOXING_GLOVE, boxingCell, target))
+            player._currTp -= 2
 
-            // Update enemy position after push
+            // Execute BOXING_GLOVE immediately and update enemy position
+            strategy.executeAndFlushActions()
             target.updateEntity()
-            pushedEnemyPos = target._cellPos  // Update the variable defined earlier
+            pushedEnemyPos = target._cellPos
             debug("[GRAPPLE-COVID] Enemy pushed to: " + pushedEnemyPos)
         }
 
         // 4. BALL_AND_CHAIN (5 TP) - optional MP debuff
         if (includeBNC) {
             debug("[GRAPPLE-COVID] Step 4: BALL_AND_CHAIN (5 TP) on cell " + pushedEnemyPos)
-            useChipOnCell(CHIP_BALL_AND_CHAIN, pushedEnemyPos)
+            push(strategy._actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_BALL_AND_CHAIN, pushedEnemyPos, target))
             player._currTp -= 5
+
+            // Execute BALL_AND_CHAIN immediately
+            strategy.executeAndFlushActions()
         } else {
             debug("[GRAPPLE-COVID] Step 4: BALL_AND_CHAIN skipped (cd=" + cdBNC + " or insufficient TP)")
         }

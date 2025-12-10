@@ -37,25 +37,100 @@ class Strategy {
     // Check if using a chip with AoE at targetCell would hit the player
     // Returns map: {safe: bool, needsRepositioning: bool}
     checkAoESafety(chipId, targetCell) {
+        return this.checkAoESafetyFromCell(chipId, targetCell, player._cellPos)
+    }
+
+    // Check if using a chip with AoE at targetCell would hit a specific position
+    // fromCell: position to check for self-damage (usually player position after movement)
+    // Returns map: {safe: bool, needsRepositioning: bool}
+    checkAoESafetyFromCell(chipId, targetCell, fromCell) {
         if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return ['safe': false, 'needsRepositioning': false]
         var chip = arsenal.playerEquippedChips[chipId]
 
         // No AoE = always safe
         if (chip._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
 
-        // Get AoE affected cells (pass player position for laser line calculations)
-        var playerPos = player._cellPos
-        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType, playerPos)
+        // Get AoE affected cells (pass fromCell for laser line calculations)
+        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType, fromCell)
 
-        // Check if player is in AoE
+        // Check if fromCell is in AoE
         for (var i = 0; i < count(aoeCells); i++) {
-            if (aoeCells[i] == playerPos) {
-                debug("[AOE-CHECK] WARNING: " + getChipName(chipId) + " would hit player at " + playerPos + " (target=" + targetCell + ") - need repositioning")
+            if (aoeCells[i] == fromCell) {
+                debug("[AOE-CHECK] WARNING: " + getChipName(chipId) + " would hit player at " + fromCell + " (target=" + targetCell + ") - need repositioning")
                 return ['safe': false, 'needsRepositioning': true]
             }
         }
 
         return ['safe': true, 'needsRepositioning': false]
+    }
+
+    // Find a cell near enemy that we can target to hit them via AoE (even without direct LOS)
+    // Returns: {cell: targetCell, safe: bool} or null if no valid cell found
+    // Use case: Enemy behind wall - target adjacent cell to splash damage them
+    findAoESplashCell(chipId, enemyCell) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return null
+        var chip = arsenal.playerEquippedChips[chipId]
+
+        // Only works for AoE chips
+        if (chip._aoeType == AREA_POINT) return null
+
+        var playerPos = player._cellPos
+        var bestCell = null
+        var bestDist = 999
+
+        // Check cells within AoE radius of enemy
+        var aoeRadius = 2  // Standard AoE radius for PLAGUE/TOXIN
+        if (chip._aoeType == AREA_CIRCLE_3) aoeRadius = 3
+
+        for (var dx = -aoeRadius; dx <= aoeRadius; dx++) {
+            for (var dy = -aoeRadius; dy <= aoeRadius; dy++) {
+                if (dx == 0 && dy == 0) continue  // Skip enemy's exact cell
+
+                var candidateX = getCellX(enemyCell) + dx
+                var candidateY = getCellY(enemyCell) + dy
+                var candidateCell = getCellFromXY(candidateX, candidateY)
+
+                if (candidateCell == null || isObstacle(candidateCell)) continue
+
+                // Check if we can target this cell (range + LOS)
+                var dist = getCellDistance(playerPos, candidateCell)
+                if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
+                if (!lineOfSight(playerPos, candidateCell)) continue
+
+                // Check if targeting this cell would hit the enemy via AoE
+                var aoeCells = fieldMap.getAoEAffectedCells(candidateCell, chip._aoeType, playerPos)
+                var hitsEnemy = false
+                for (var i = 0; i < count(aoeCells); i++) {
+                    if (aoeCells[i] == enemyCell) {
+                        hitsEnemy = true
+                        break
+                    }
+                }
+                if (!hitsEnemy) continue
+
+                // Check if it would hit us
+                var hitsPlayer = false
+                for (var j = 0; j < count(aoeCells); j++) {
+                    if (aoeCells[j] == playerPos) {
+                        hitsPlayer = true
+                        break
+                    }
+                }
+
+                // Prefer closest cell that doesn't hit us
+                if (!hitsPlayer && dist < bestDist) {
+                    bestDist = dist
+                    bestCell = candidateCell
+                }
+            }
+        }
+
+        if (bestCell != null) {
+            debug("[AOE-SPLASH] Found cell " + bestCell + " to splash-hit enemy at " + enemyCell + " (no direct LOS)")
+            return ['cell': bestCell, 'safe': true]
+        }
+
+        return null
     }
 
     // Find closest safe cell to use AoE chip without self-damage
@@ -129,11 +204,11 @@ class Strategy {
         }
 
         if (toCell == -1) return true  // No target cell to validate
-        
+
         // Get range based on weapon or chip
         var minRange = 0
         var maxRange = 999
-        
+
         if (action.weaponId != -1) {
             var weapon = arsenal.playerEquippedWeapons[action.weaponId]
             if (weapon == null) return false
@@ -145,7 +220,31 @@ class Strategy {
             minRange = chip._minRange
             maxRange = chip._maxRange
         }
-        
+
+        // SPECIAL CASE: Push/Pull chips
+        // These chips target a destination cell but need LOS to the enemy, not the destination
+        // Push chips: BOXING_GLOVE
+        // Pull chips: GRAPPLE
+        var isPushPullChip = (action.chip == CHIP_BOXING_GLOVE ||
+                              action.chip == CHIP_GRAPPLE)
+
+        if (isPushPullChip && action.targetEntity != null) {
+            // Validate against enemy position, not destination cell
+            var enemyPos = action.targetEntity._cellPos
+            var dist = getCellDistance(fromCell, enemyPos)
+            if (dist == null) return false
+            if (dist < minRange || dist > maxRange) {
+                debug("[VALIDATION] Push/Pull chip distance invalid from " + fromCell + " to enemy at " + enemyPos + ": " + dist + " (need " + minRange + "-" + maxRange + ")")
+                return false
+            }
+            if (!lineOfSight(fromCell, enemyPos)) {
+                debug("[VALIDATION] Push/Pull chip: No line of sight from " + fromCell + " to enemy at " + enemyPos)
+                return false
+            }
+            return true
+        }
+
+        // NORMAL CASE: Validate against target cell
         // Check distance
         var dist = getCellDistance(fromCell, toCell)
         if (dist == null) return false
@@ -153,13 +252,13 @@ class Strategy {
             debug("[VALIDATION] Distance invalid from " + fromCell + " to " + toCell + ": " + dist + " (need " + minRange + "-" + maxRange + ")")
             return false
         }
-        
+
         // Check line of sight
         if (!lineOfSight(fromCell, toCell)) {
             debug("[VALIDATION] No line of sight from " + fromCell + " to " + toCell)
             return false
         }
-        
+
         return true
     }
     

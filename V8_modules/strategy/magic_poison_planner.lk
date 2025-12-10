@@ -252,10 +252,30 @@ class PoisonPlanner {
                         continue
                     }
 
-                    score += chipUses * bdC2['total']
+                    // AoE SAFETY CHECK: Reduce score if chip would self-damage from this cell
+                    var chipContribution = chipUses * bdC2['total']
+                    var chip = arsenal.playerEquippedChips[pc._id]
+                    if (chip != null && chip._aoeType != AREA_POINT) {
+                        // Check if using this AoE chip from this cell would hit player
+                        var aoeCells = fieldMap.getAoEAffectedCells(target._cellPos, chip._aoeType, c._id)
+                        var wouldHitPlayer = false
+                        for (var aIdx = 0; aIdx < count(aoeCells); aIdx++) {
+                            if (aoeCells[aIdx] == c._id) {
+                                wouldHitPlayer = true
+                                break
+                            }
+                        }
+                        if (wouldHitPlayer) {
+                            // Heavily penalize cells where AoE chips would self-damage
+                            chipContribution = chipContribution * 0.05  // 95% penalty (was contributing to score, now barely counts)
+                            if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] AoE penalty for " + getChipName(pc._id) + " from cell " + c._id + " (would self-damage)")
+                        }
+                    }
+
+                    score += chipContribution
                     push(chipPlan, pc)
                     remainingTP -= chipUses * pc._cost
-                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] +Chip " + getChipName(pc._id) + " uses=" + chipUses + " add=" + floor(chipUses * bdC2['total']) + " TP_left=" + remainingTP)
+                    if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] +Chip " + getChipName(pc._id) + " uses=" + chipUses + " add=" + floor(chipContribution) + " TP_left=" + remainingTP)
                 }
             }
 

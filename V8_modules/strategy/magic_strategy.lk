@@ -324,7 +324,7 @@ class MagicStrategy extends Strategy {
                 // Execute combo if now viable
                 if (canExecuteNow && player._currTp >= 13) {
                     debug("[AGGRESSIVE-COMBO] EXECUTING GRAPPLE-COVID COMBO NOW!")
-                    ComboSystem.executeGrappleCovidCombo(target)
+                    ComboSystem.executeGrappleCovidCombo(target, this)
                     debug("[AGGRESSIVE-COMBO] Combo complete, remaining TP=" + player._currTp + " MP=" + player._currMp)
 
                     // Skip to hide/kite after combo (don't execute normal offensive)
@@ -615,6 +615,27 @@ class MagicStrategy extends Strategy {
         var plannedWeapon = context['plannedWeapon']
         var willAttack = context['willAttack']
 
+        // PRIORITY 0: HP-based healing (sustain)
+        var currHp = getLife()
+        var maxHp = getTotalLife()
+        var hpPercent = floor((currHp / maxHp) * 100)
+        debug("[MAGIC][SUSTAIN] HP check: " + currHp + "/" + maxHp + " (" + hpPercent + "%)")
+
+        // REGENERATION: Emergency heal for HP < 30% (500+ HP over 5 turns)
+        if (hpPercent < 30 && this.isChipAvailable(CHIP_REGENERATION, 8)) {
+            debug("[MAGIC][EMERGENCY] Using REGENERATION (HP=" + hpPercent + "%, TP=" + player._currTp + ")")
+            push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, player._cellPos, player))
+            player._currTp -= 8
+            willAttack = true
+        }
+        // REMISSION: Mid-HP sustain for 40% < HP < 60% (~120 HP instant, 5 TP)
+        else if (hpPercent >= 40 && hpPercent <= 60 && this.isChipAvailable(CHIP_REMISSION, 5)) {
+            debug("[MAGIC][SUSTAIN] Using REMISSION (HP=" + hpPercent + "%, TP=" + player._currTp + ")")
+            push(this._actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, player._cellPos, player))
+            player._currTp -= 5
+            willAttack = true
+        }
+
         // Check CHIP_ADRENALINE for extra DoT chip usage
         if (player._currTp < 6 && player._currTp >= 2) {
             if (this.shouldUseAdrenaline(6)) {
@@ -647,7 +668,7 @@ class MagicStrategy extends Strategy {
         // PRIORITY 1: GRAPPLE-COVID combo (13-18 TP) - only when antidote safe
         if (canExecuteNow) {
             debug("[FULL][GRAPPLE-COVID] Executing combo NOW!")
-            ComboSystem.executeGrappleCovidCombo(target)
+            ComboSystem.executeGrappleCovidCombo(target, this)
             context['comboExecuted'] = true
             willAttack = true
             reservedTPForCombo = 0  // Clear reservation - TP already spent
@@ -736,7 +757,53 @@ class MagicStrategy extends Strategy {
                     debug("[FULL][WEAPON-SPAM] Used " + getWeaponName(wObj._id) + " x" + actualUses + " TP_left=" + player._currTp)
                 }
             }
+        }
 
+        // FALLBACK WEAPON SPAM: If poison plan had no DoT weapons, use ALL equipped weapons
+        // This ensures magic leeks still attack even when only non-DoT weapons are available (Axe, Destroyer, etc.)
+        if (poisonPlan != null && count(poisonPlan['weapons']) == 0 && player._currTp - reservedTPForCombo >= 3) {
+            debug("[FULL][WEAPON-FALLBACK] Poison plan had no DoT weapons, spamming all equipped weapons")
+            var allWeapons = []
+            if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_AXE)) push(allWeapons, arsenal.playerEquippedWeapons[WEAPON_AXE])
+            if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_DESTROYER)) push(allWeapons, arsenal.playerEquippedWeapons[WEAPON_DESTROYER])
+            if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_DOUBLE_GUN)) push(allWeapons, arsenal.playerEquippedWeapons[WEAPON_DOUBLE_GUN])
+            if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_FLAME_THROWER)) push(allWeapons, arsenal.playerEquippedWeapons[WEAPON_FLAME_THROWER])
+
+            for (var fwIdx = 0; fwIdx < count(allWeapons); fwIdx++) {
+                var fallbackWeapon = allWeapons[fwIdx]
+                if (player._currTp - reservedTPForCombo < fallbackWeapon._cost) continue
+
+                // Check if weapon is in range from current position or targetHitCell
+                var canUseWeapon = false
+                if (targetHitCell != -1 && targetHitCell != null) {
+                    if (this.inRangeAndLOS(targetHitCell._id, target._cellPos, fallbackWeapon._minRange, fallbackWeapon._maxRange)) {
+                        canUseWeapon = true
+                    }
+                }
+                if (!canUseWeapon) continue
+
+                // Swap if needed
+                if (plannedWeapon != fallbackWeapon._id && player._currTp >= 1) {
+                    push(this._actions, new Action(Action.ACTION_WEAPON_SWAP, fallbackWeapon._id, -1, target._cellPos, target))
+                    player._currTp -= 1
+                    plannedWeapon = fallbackWeapon._id
+                }
+
+                // Spam weapon to max uses
+                var fallbackUses = 0
+                while (fallbackUses < fallbackWeapon._maxUse && player._currTp - reservedTPForCombo >= fallbackWeapon._cost) {
+                    push(this._actions, new Action(Action.ACTION_DIRECT, fallbackWeapon._id, -1, target._cellPos, target))
+                    player._currTp -= fallbackWeapon._cost
+                    fallbackUses += 1
+                    willAttack = true
+                }
+                if (fallbackUses > 0) {
+                    debug("[FULL][WEAPON-FALLBACK] Used " + getWeaponName(fallbackWeapon._id) + " x" + fallbackUses + " TP_left=" + player._currTp)
+                }
+            }
+        }
+
+        if (poisonPlan != null) {
             // THEN use poison chips with remaining TP (once per turn)
             var chipsToUse = poisonPlan['chips']
             debug("[FULL][CHIP-LIST] Found " + count(chipsToUse) + " chips in poison plan, TP available=" + (player._currTp - reservedTPForCombo))

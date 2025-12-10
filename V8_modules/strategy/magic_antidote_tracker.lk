@@ -125,6 +125,33 @@ class AntidoteTracker {
         var plannedWeapon = context['plannedWeapon']
         var willAttack = context['willAttack']
 
+        // PRIORITY 0: HP-based healing (sustain)
+        var currHp = getLife()
+        var maxHp = getTotalLife()
+        var hpPercent = floor((currHp / maxHp) * 100)
+        debug("[BAIT][SUSTAIN] HP check: " + currHp + "/" + maxHp + " (" + hpPercent + "%)")
+
+        // REGENERATION: Emergency heal for HP < 30% (500+ HP over 5 turns)
+        if (hpPercent < 30 && strategy.isChipAvailable(CHIP_REGENERATION, 8)) {
+            debug("[BAIT][EMERGENCY] Using REGENERATION (HP=" + hpPercent + "%, TP=" + player._currTp + ")")
+            push(strategy._actions, new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, player._cellPos, player))
+            player._currTp -= 8
+            willAttack = true
+            // Execute immediately so state is updated
+            strategy.executeAndFlushActions()
+            player.updateEntity()
+        }
+        // REMISSION: Mid-HP sustain for 40% < HP < 60% (~120 HP instant, 5 TP)
+        else if (hpPercent >= 40 && hpPercent <= 60 && strategy.isChipAvailable(CHIP_REMISSION, 5)) {
+            debug("[BAIT][SUSTAIN] Using REMISSION (HP=" + hpPercent + "%, TP=" + player._currTp + ")")
+            push(strategy._actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, player._cellPos, player))
+            player._currTp -= 5
+            willAttack = true
+            // Execute immediately so state is updated
+            strategy.executeAndFlushActions()
+            player.updateEntity()
+        }
+
         if (poisonPlan != null) {
             var wPlan = poisonPlan['weapons']
             for (var wpIdx = 0; wpIdx < count(wPlan); wpIdx++) {
@@ -147,17 +174,45 @@ class AntidoteTracker {
             }
 
             // Use chips from poison plan if available
+            // IMPORTANT: Poison plan cell has already been moved to, so check AoE from TARGET cell, not current
             if (poisonPlan != null && count(poisonPlan['chips']) > 0) {
                 var chipsToUse = poisonPlan['chips']
-                debug("[BAIT] Using " + count(chipsToUse) + " chips from poison plan (TP=" + player._currTp + ")")
+                var plannedCell = poisonPlan['cell']._id  // Cell where we'll be attacking from
+                debug("[BAIT] Using " + count(chipsToUse) + " chips from poison plan (TP=" + player._currTp + ") from cell=" + plannedCell)
+
                 for (var cidx = 0; cidx < count(chipsToUse); cidx++) {
                     var pc = chipsToUse[cidx]
                     if (!AntidoteTracker.isBaitAllowedChip(pc._id)) continue
                     if (player._currTp < pc._cost) break
-                    if (!strategy.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)) continue
 
-                    var aoeBait = strategy.checkAoESafety(pc._id, target._cellPos)
-                    if (!aoeBait['safe'] && aoeBait['needsRepositioning']) continue
+                    // Check range from PLANNED cell (where we'll be after movement), not current position
+                    if (!strategy.inRangeAndLOS(plannedCell, target._cellPos, pc._minRange, pc._maxRange)) {
+                        debug("[BAIT][SKIP] " + getChipName(pc._id) + " - out of range from planned cell " + plannedCell)
+                        continue
+                    }
+
+                    // Check AoE safety from PLANNED cell (critical: must check from attack position, not current)
+                    var aoeBait = strategy.checkAoESafetyFromCell(pc._id, target._cellPos, plannedCell)
+                    if (!aoeBait['safe'] && aoeBait['needsRepositioning']) {
+                        debug("[BAIT][SKIP] " + getChipName(pc._id) + " - would hit player from planned cell " + plannedCell + ", trying from current position")
+
+                        // Fallback: try using chip from CURRENT position instead of planned cell
+                        // CRITICAL: Must execute IMMEDIATELY before any movement happens
+                        var aoeCurrent = strategy.checkAoESafety(pc._id, target._cellPos)
+                        if (aoeCurrent['safe'] && strategy.inRangeAndLOS(player._cellPos, target._cellPos, pc._minRange, pc._maxRange)) {
+                            debug("[BAIT] Using " + getChipName(pc._id) + " from CURRENT position IMMEDIATELY (planned cell unsafe)")
+                            push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, pc._id, target._cellPos, target))
+                            player._currTp -= pc._cost
+                            willAttack = true
+                            // Execute NOW before movement to planned cell
+                            strategy.executeAndFlushActions()
+                            player.updateEntity()
+                            debug("[BAIT] Executed " + getChipName(pc._id) + " from current position, remaining TP=" + player._currTp)
+                        } else {
+                            debug("[BAIT][SKIP] " + getChipName(pc._id) + " - also unsafe from current position")
+                        }
+                        continue
+                    }
 
                     strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, pc._id)
                     player._currTp -= pc._cost
@@ -169,16 +224,63 @@ class AntidoteTracker {
 
         // AGGRESSIVE BAIT: Use poison chips from current position (when no plan available)
         debug("[BAIT][AGGRESSIVE] Checking poison chips from current position (TP=" + player._currTp + ")")
+
+        // PRIORITY: Non-AoE poison chips (VENOM) when close-range (safer than PLAGUE/TOXIN)
+        if (player._currTp >= 3 && mapContainsKey(arsenal.playerEquippedChips, CHIP_VENOM)) {
+            var venomC = arsenal.playerEquippedChips[CHIP_VENOM]
+            if (getCooldown(CHIP_VENOM, player._id) == 0) {
+                if (strategy.inRangeAndLOS(player._cellPos, target._cellPos, venomC._minRange, venomC._maxRange)) {
+                    // VENOM is non-AoE (AREA_POINT), so always safe from self-damage
+                    debug("[BAIT][AGGRESSIVE] Using VENOM (non-AoE, safe at close range)")
+                    push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_VENOM, target._cellPos, target))
+                    player._currTp -= 3
+                    willAttack = true
+                    // Execute immediately to ensure it happens before movement
+                    strategy.executeAndFlushActions()
+                    player.updateEntity()
+                    debug("[BAIT][AGGRESSIVE] Applied VENOM (3 TP)")
+                }
+            }
+        }
+
+        // AoE poison chips (PLAGUE, TOXIN) - use only when safe or splash-able
         if (player._currTp >= 6 && mapContainsKey(arsenal.playerEquippedChips, CHIP_PLAGUE)) {
             var plagueC = arsenal.playerEquippedChips[CHIP_PLAGUE]
             if (getCooldown(CHIP_PLAGUE, player._id) == 0) {
-                if (strategy.inRangeAndLOS(player._cellPos, target._cellPos, plagueC._minRange, plagueC._maxRange)) {
-                    var aoePlague = strategy.checkAoESafety(CHIP_PLAGUE, target._cellPos)
-                    if (aoePlague['safe']) {
-                        strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_PLAGUE)
+                // Try direct targeting first
+                var hasDirectLOS = strategy.inRangeAndLOS(player._cellPos, target._cellPos, plagueC._minRange, plagueC._maxRange)
+                var plagueTargetCell = target._cellPos
+
+                // If no direct LOS, try AoE splash through walls
+                if (!hasDirectLOS) {
+                    var splashResult = strategy.findAoESplashCell(CHIP_PLAGUE, target._cellPos)
+                    if (splashResult != null) {
+                        plagueTargetCell = splashResult['cell']
+                        hasDirectLOS = true  // We found an alternate target
+                        debug("[BAIT][AGGRESSIVE] Using AoE splash for PLAGUE (target=" + plagueTargetCell + " to hit enemy at " + target._cellPos + ")")
+                    }
+                }
+
+                if (hasDirectLOS) {
+                    var aoePlague = strategy.checkAoESafety(CHIP_PLAGUE, plagueTargetCell)
+                    if (!aoePlague['safe'] && aoePlague['needsRepositioning']) {
+                        var safeCellPlague = strategy.findSafeCellForAoE(CHIP_PLAGUE, plagueTargetCell)
+                        if (safeCellPlague != -1 && player._currMp > 0) {
+                            debug("[BAIT][AGGRESSIVE-REPOSITION] Moving to safe cell " + safeCellPlague + " for PLAGUE")
+                            strategy.createMovementAction(Action.MOVEMENT_APPROACH, safeCellPlague, target)
+                            strategy.executeAndFlushActions()
+                            player.updateEntity()
+                        } else {
+                            debug("[BAIT][AGGRESSIVE-SKIP] PLAGUE - no safe cell found")
+                            aoePlague = ['safe': false]
+                        }
+                    }
+                    if (aoePlague['safe'] || aoePlague['needsRepositioning']) {
+                        // Create action with the actual target cell (may be splash cell, not enemy cell)
+                        push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_PLAGUE, plagueTargetCell, target))
                         player._currTp -= 6
                         willAttack = true
-                        debug("[BAIT][AGGRESSIVE] Applied PLAGUE from current position (6 TP)")
+                        debug("[BAIT][AGGRESSIVE] Applied PLAGUE (6 TP) targeting cell " + plagueTargetCell)
                     }
                 }
             }
@@ -189,11 +291,23 @@ class AntidoteTracker {
             if (getCooldown(CHIP_TOXIN, player._id) == 0) {
                 if (strategy.inRangeAndLOS(player._cellPos, target._cellPos, toxinC._minRange, toxinC._maxRange)) {
                     var aoeToxin = strategy.checkAoESafety(CHIP_TOXIN, target._cellPos)
-                    if (aoeToxin['safe']) {
+                    if (!aoeToxin['safe'] && aoeToxin['needsRepositioning']) {
+                        var safeCellToxin = strategy.findSafeCellForAoE(CHIP_TOXIN, target._cellPos)
+                        if (safeCellToxin != -1 && player._currMp > 0) {
+                            debug("[BAIT][AGGRESSIVE-REPOSITION] Moving to safe cell " + safeCellToxin + " for TOXIN")
+                            strategy.createMovementAction(Action.MOVEMENT_APPROACH, safeCellToxin, target)
+                            strategy.executeAndFlushActions()
+                            player.updateEntity()
+                        } else {
+                            debug("[BAIT][AGGRESSIVE-SKIP] TOXIN - no safe cell found")
+                            aoeToxin = ['safe': false]
+                        }
+                    }
+                    if (aoeToxin['safe'] || aoeToxin['needsRepositioning']) {
                         strategy.createAttackAction(Action.ACTION_DIRECT, target, -1, CHIP_TOXIN)
                         player._currTp -= 5
                         willAttack = true
-                        debug("[BAIT][AGGRESSIVE] Applied TOXIN from current position (5 TP)")
+                        debug("[BAIT][AGGRESSIVE] Applied TOXIN (5 TP)")
                     }
                 }
             }
