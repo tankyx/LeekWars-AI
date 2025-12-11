@@ -982,13 +982,13 @@ class StrengthStrategy extends Strategy {
             }
 
             if (shouldApplySteroid) {
-                var minTPForBurst = 15  // 7 (STEROID) + 8 (minimum for attacks)
+                var minTPForBurst = 20  // 7 (STEROID) + 13 (meaningful attacks) - prioritize attacks over early reapply
                 var playerTP = player._currTp
 
-                debug("[STR][BUFF-REAPPLY] STEROID expired, reapplying for continued attrition (TP=" + playerTP + ")")
+                debug("[STR][BUFF-REAPPLY] STEROID expired, checking TP for reapplication (TP=" + playerTP + ", threshold=" + minTPForBurst + ")")
 
                 // Use ADRENALINE if short 1-4 TP to reach burst threshold
-                if (playerTP < minTPForBurst && playerTP >= 11) {
+                if (playerTP < minTPForBurst && playerTP >= 16) {
                     if (this.shouldUseAdrenaline(minTPForBurst)) {
                         debug("[STR][BUFF-REAPPLY] Using ADRENALINE to bridge TP gap (have " + playerTP + ", need " + minTPForBurst + ")")
                         useChip(CHIP_ADRENALINE, player._id)
@@ -998,8 +998,8 @@ class StrengthStrategy extends Strategy {
                     }
                 }
 
-                // Apply STEROID for +160 STR burst damage
-                if (playerTP >= 15 && this.isChipAvailable(CHIP_STEROID, 7)) {
+                // Apply STEROID for +160 STR burst damage (only if TP >= 20 for meaningful post-buff attacks)
+                if (playerTP >= minTPForBurst && this.isChipAvailable(CHIP_STEROID, 7)) {
                     debug("[STR][BUFF-REAPPLY] Reapplying STEROID (TP=" + playerTP + ")")
                     useChip(CHIP_STEROID, player._id)
                     player._currTp -= 7
@@ -1024,8 +1024,8 @@ class StrengthStrategy extends Strategy {
                             }
                         }
                     }
-                } else if (playerTP < 15) {
-                    debug("[STR][BUFF-REAPPLY] Insufficient TP for STEROID (have " + playerTP + ", need 15)")
+                } else if (playerTP < minTPForBurst) {
+                    debug("[STR][BUFF-REAPPLY] Skipping STEROID - prioritizing attacks (TP=" + playerTP + ", threshold=" + minTPForBurst + ")")
                 }
             }
         }

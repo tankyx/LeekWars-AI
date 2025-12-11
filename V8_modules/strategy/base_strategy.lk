@@ -740,15 +740,16 @@ class Strategy {
     useApproachChipsFromCurrentPosition(target, availableTP, debugPrefix) {
         var playerPos = player._cellPos
         var originalTP = availableTP
+        var minTPReserve = 2  // Reserve only 2 TP for movement - be aggressive with chip usage
 
-        debug("[" + debugPrefix + "][APPROACH-CHIPS] Checking long-range chips from position " + playerPos + " (TP=" + availableTP + ")")
+        debug("[" + debugPrefix + "][APPROACH-CHIPS] Checking long-range chips from position " + playerPos + " (TP=" + availableTP + ", minReserve=" + minTPReserve + ")")
 
         // Find chips that can hit target from current position
         var usableChips = []
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
             if (chipObj == null) continue
-            if (availableTP < chipObj._cost) continue
+            if (availableTP < chipObj._cost + minTPReserve) continue  // Reserve minimum TP
             if (getCooldown(chipObj._id, player._id) > 0) continue
 
             // Only damage/poison chips (skip utility chips)
@@ -761,7 +762,7 @@ class Strategy {
 
             var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, chipObj._id, target)
             push(usableChips, ['chip': chipObj, 'damage': netDmg, 'id': chipObj._id])
-            debug("[" + debugPrefix + "][APPROACH-CHIPS] Found usable chip: " + getChipName(chipObj._id) + " (range " + chipObj._minRange + "-" + chipObj._maxRange + ", damage=" + floor(netDmg) + ")")
+            debug("[" + debugPrefix + "][APPROACH-CHIPS] Found usable chip: " + getChipName(chipObj._id) + " (range " + chipObj._minRange + "-" + chipObj._maxRange + ", damage=" + floor(netDmg) + ", cost=" + chipObj._cost + ")")
         }
 
         // Sort by damage descending
@@ -782,11 +783,11 @@ class Strategy {
         for (var ci = 0; ci < count(usableChips); ci++) {
             var chipRec = usableChips[ci]
             var chip = chipRec['chip']
-            if (availableTP < chip._cost) continue
+            if (availableTP < chip._cost + minTPReserve) continue  // Respect TP reserve
 
-            // Spam chip to max uses
+            // Spam chip to max uses (but reserve minimum TP)
             var actualUses = 0
-            while (actualUses < chip._maxUse && availableTP >= chip._cost) {
+            while (actualUses < chip._maxUse && availableTP >= chip._cost + minTPReserve) {
                 var result = useChipOnCell(chip._id, target._cellPos)
                 if (result == USE_SUCCESS) {
                     availableTP -= chip._cost
@@ -799,7 +800,7 @@ class Strategy {
                 }
             }
 
-            if (availableTP <= 0) break
+            if (availableTP <= minTPReserve) break  // Stop when we hit reserve
         }
 
         var tpSpent = originalTP - availableTP
