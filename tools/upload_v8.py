@@ -209,7 +209,12 @@ class V8Uploader:
             "field_map",
             "field_map_core",
             "field_map_patterns",
-            "field_map_tactical"
+            "field_map_tactical",
+            "operation_tracker",
+            "cache_manager",
+            "scenario_simulator",
+            "scenario_scorer",
+            "scenario_generator"
         ]
 
         for module_name in root_modules:
@@ -316,6 +321,9 @@ class V8Uploader:
         print("       ├── field_map_core.lk")
         print("       ├── field_map_patterns.lk")
         print("       ├── field_map_tactical.lk")
+        print("       ├── scenario_simulator.lk")
+        print("       ├── scenario_scorer.lk")
+        print("       ├── scenario_generator.lk")
         print("       ├── strategy/")
 
         strategy_path = v8_dir / "strategy"

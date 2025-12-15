@@ -6,11 +6,16 @@ Development guide for LeekWars AI V8 system - modular, strategy-based combat AI 
 ## Project Structure
 ```
 LeekWars-AI/
-├── V8_modules/          # V8 AI (10 modules, ~3,300 lines)
+├── V8_modules/          # V8 AI (17 modules, ~4,500 lines)
 │   ├── main.lk         # Main entry point & strategy selection
 │   ├── game_entity.lk  # Player & enemy state tracking
-│   ├── field_map.lk    # Damage zones & tactical positioning
+│   ├── field_map_*.lk  # Damage zones & tactical positioning (3 modules)
 │   ├── item.lk         # Weapon/chip definitions & damage calculations
+│   ├── operation_tracker.lk   # Operation profiling (startOp/stopOp)
+│   ├── cache_manager.lk       # Path length memoization
+│   ├── scenario_generator.lk # Generates 6 scenario variants
+│   ├── scenario_simulator.lk # Simulates scenarios without execution
+│   ├── scenario_scorer.lk     # Build-specific scenario scoring
 │   └── strategy/       # Build-specific strategies
 │       ├── action.lk            # Action type definitions
 │       ├── base_strategy.lk     # Base combat logic & action executor
@@ -39,6 +44,39 @@ V8 uses a **two-phase execution model**:
 - Consistency (all strategies follow same flow)
 - Debugging (actions visible in logs)
 - State management (TP/MP/position updated correctly)
+
+### Multi-Scenario Evaluation System (December 2025)
+
+**V8 now evaluates multiple strategic scenarios each turn and executes the best one.**
+
+**System Components:**
+- **ScenarioGenerator**: Creates 6 scenario variants (Aggressive, Conservative, Defensive, All-in, Kiting, Efficient)
+- **ScenarioSimulator**: Simulates each scenario without executing (tracks TP/MP/damage/positioning)
+- **ScenarioScorer**: Scores scenarios using build-specific weights (STR favors damage, MAG favors DoT, AGI favors positioning)
+
+**How It Works:**
+1. **Generation**: Create 6 different action sequences based on available TP/MP
+2. **Simulation**: Run each scenario in a sandbox (no game state changes)
+3. **Scoring**: Apply build-specific weights to damage/DoT/eHP/positioning metrics
+4. **Execution**: Execute the highest-scoring scenario
+
+**Optimization - Path Length Caching:**
+- LeekScript operations budget: ~6M ops/turn (10M total per fight)
+- Multi-scenario cost: ~450K-700K ops/turn (~12% of budget)
+- **cache_manager.lk**: Memoizes `getPathLength()` calls (50K ops → 2 ops per lookup)
+- **operation_tracker.lk**: Profiles operation costs with `startOp()`/`stopOp()`
+
+**Key Implementation Details:**
+- Scenarios track **simulated position** after movement for accurate weapon range checks
+- Weapon spam uses simulated position, not starting position
+- All `getPathLength()` calls replaced with `getCachedPathLength()`
+- All `getChipCost()` calls replaced with `getCachedChipCost()`
+
+**Performance:**
+- Average per-turn cost: ~2.95M ops (49% of 6M budget)
+- Generates 3-4 actions per scenario
+- Scores range from 0 to 10,000+ (higher = better)
+- System fully functional and within operation budget ✅
 
 ### Module Breakdown
 
@@ -237,4 +275,4 @@ python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>
 
 **Script ID:** 447626 (V8 main.lk - Production, December 2025)
 
-*Document Version: 30.0 | Last Updated: December 8, 2025 - 60% win rate (6x improvement)*
+*Document Version: 31.0 | Last Updated: December 15, 2025 - Multi-Scenario Evaluation System Implemented*

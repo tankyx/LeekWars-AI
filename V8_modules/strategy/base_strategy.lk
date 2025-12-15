@@ -2004,6 +2004,8 @@ class Strategy {
     createAndExecuteDefensiveScenario(target) {
         arrayClear(this._actions)
         this.createDefensiveScenario(target, -1)
+        debug("[BASELINE] Actions queued: " + count(this._actions))
+        debug("[BASELINE] Executing scenario...")
         this.executeScenario()
     }
 
@@ -2111,14 +2113,120 @@ class Strategy {
         this._originalTP = player._currTp
         this._originalMP = player._currMp
 
-        // Check for emergency mode first (lethal check happens inside)
-        if (this.shouldEnterEmergencyMode(target)) {
-            this.createEmergencyScenario(target, targetHitCell)
+        // PHASE 1 OPTIMIZATIONS: Full 6-scenario evaluation with caching
+        var useMultiScenario = true  // ENABLED: Multi-scenario mode
+        debug("[MULTI-SCENARIO] Multi-scenario mode enabled")
+
+        if (useMultiScenario) {
+            startOp()
+            this.generateAndEvaluateBestScenario(target, targetHitCell)
+            stopOp("Total Multi-Scenario Evaluation")
         } else {
-            this.createOffensiveScenario(target, targetHitCell)
+            // Single-scenario approach (baseline)
+            debug("[BASELINE] Checking emergency mode...")
+            if (this.shouldEnterEmergencyMode(target)) {
+                debug("[BASELINE] Creating emergency scenario")
+                this.createEmergencyScenario(target, targetHitCell)
+            } else {
+                debug("[BASELINE] Creating offensive scenario")
+                this.createOffensiveScenario(target, targetHitCell)
+            }
         }
+
+        debug("[BASELINE] Actions queued: " + count(this._actions))
+        debug("[BASELINE] Executing scenario...")
         this.executeScenario()
     }
+
+    // PHASE 2: Generate multiple scenarios, evaluate all, pick best (WITH OPERATION TRACKING)
+    generateAndEvaluateBestScenario(target, targetHitCell) {
+        debug("[MULTI-SCENARIO] Starting multi-scenario evaluation...")
+        logCheckpoint("Start of multi-scenario evaluation")
+
+        // Emergency mode overrides multi-scenario
+            debug("[BASELINE] Checking emergency mode...")
+        if (this.shouldEnterEmergencyMode(target)) {
+            debug("[MULTI-SCENARIO] Emergency mode detected, using emergency scenario")
+                debug("[BASELINE] Creating emergency scenario")
+            this.createEmergencyScenario(target, targetHitCell)
+            return
+        }
+
+        // Generate multiple scenario variants
+        startOp()
+        var generator = new ScenarioGenerator(arsenal, player, target, fieldMap, this)
+        var scenarios = generator.generateScenarios()
+        var genOps = stopOp("Scenario Generation (all 6 scenarios)")
+
+        if (count(scenarios) == 0) {
+            debug("[MULTI-SCENARIO] No scenarios generated, falling back to hardcoded")
+                debug("[BASELINE] Creating offensive scenario")
+            this.createOffensiveScenario(target, targetHitCell)
+            return
+        }
+
+        debug("[MULTI-SCENARIO] Evaluating " + count(scenarios) + " scenarios...")
+        logCheckpoint("After scenario generation")
+
+        // Score each scenario
+        var simulator = new ScenarioSimulator(arsenal, player, target, fieldMap)
+        var scorer = new ScenarioScorer(player, target, fieldMap)
+
+        var bestScore = -999999
+        var bestScenario = null
+        var bestSimResult = null
+
+        startOp()
+        for (var i = 0; i < count(scenarios); i++) {
+            var scenario = scenarios[i]
+            if (count(scenario) == 0) continue
+
+            // Track simulation
+            startOp()
+            var simResult = simulator.simulate(scenario)
+            var simOps = stopOp("Simulation #" + (i+1))
+
+            // Track scoring
+            startOp()
+            var score = scorer.score(simResult)
+            var scoreOps = stopOp("Scoring #" + (i+1))
+
+            debug("[MULTI-SCENARIO] Scenario " + (i+1) + ": score=" + floor(score) +
+                  " actions=" + count(scenario) + " dmg=" + floor(simResult.damageDealt) +
+                  " simOps=" + simOps + " scoreOps=" + scoreOps)
+
+            if (score > bestScore) {
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            }
+        }
+        var evalOps = stopOp("All Simulation+Scoring")
+
+        if (bestScenario == null) {
+            debug("[MULTI-SCENARIO] No valid scenarios, falling back to hardcoded")
+                debug("[BASELINE] Creating offensive scenario")
+            this.createOffensiveScenario(target, targetHitCell)
+            return
+        }
+
+        debug("[MULTI-SCENARIO] ========== BEST SCENARIO SELECTED ==========")
+        debug("[MULTI-SCENARIO] Best score: " + floor(bestScore))
+        debug("[MULTI-SCENARIO] Actions: " + count(bestScenario))
+        debug("[MULTI-SCENARIO] Damage: " + floor(bestSimResult.damageDealt) + " | DoT: " + floor(bestSimResult.dotDamageQueued))
+        debug("[MULTI-SCENARIO] TP: " + bestSimResult.tpSpent + " | MP: " + bestSimResult.mpSpent)
+        debug("[MULTI-SCENARIO] OPS: gen=" + genOps + " eval=" + evalOps + " total=" + (genOps + evalOps))
+        debug("[MULTI-SCENARIO] ===========================================")
+
+        logCheckpoint("After scenario evaluation")
+
+        // Set the best scenario as our action queue
+        arrayClear(this._actions)
+        for (var action in bestScenario) {
+            push(this._actions, action)
+        }
+    }
+
 
     executeScenario() {
         // Validate actions before execution to prevent wasting TP/MP on invalid actions
@@ -2210,6 +2318,8 @@ class Strategy {
     // Execute all queued actions immediately and update game state
     // Useful when we need to know actual position/resources before continuing scenario planning
     executeAndFlushActions() {
+        debug("[BASELINE] Actions queued: " + count(this._actions))
+        debug("[BASELINE] Executing scenario...")
         this.executeScenario()
         arrayClear(this._actions)
         player.updateEntity()

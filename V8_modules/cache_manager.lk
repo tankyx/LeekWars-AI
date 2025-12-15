@@ -1,0 +1,172 @@
+/** Cache Manager - Optimized caching system to reduce operation costs **/
+
+include('operation_tracker.lk')
+
+// Global caches (cleared each turn)
+global __reachableCellsCache = []      // Maps: cell → {reachableCells map}
+global __damageCache = []               // Maps: itemId → damage breakdown
+global __chipCostCache = []             // Maps: chipId → TP cost
+global __weaponCostCache = []           // Maps: weaponId → TP cost
+global __pathLengthCache = []           // Maps: hash(cell1, cell2) → path length
+
+// Binary hash function for two cells (optimized with bit shifting)
+// cell1 and cell2 can be 0-612, so we need 10 bits each (2^10 = 1024)
+function hashTwoCells(cell1, cell2) {
+    return cell1 << 10 | cell2  // 3 operations vs 5 for multiplication
+}
+
+// Clear all caches (call at start of each turn)
+function clearCaches() {
+    __reachableCellsCache = []
+    __damageCache = []
+    __chipCostCache = []
+    __weaponCostCache = []
+    __pathLengthCache = []
+}
+
+// ========== REACHABLE CELLS CACHE ==========
+
+// Build reachable cells cache for current player position
+// This replaces many expensive getPathLength() calls with cheap map lookups
+function buildReachableCellsCache(fromCell, mp) {
+    if (mp <= 0) return []
+
+    // getReachableCells may not be available in all LeekScript versions
+    // Fallback to manual pathfinding if needed
+    var reachable = []
+    // TODO: Implement manual reachable cells calculation if getReachableCells unavailable
+    __reachableCellsCache[fromCell] = reachable
+    return reachable
+}
+
+// Check if a cell is reachable (replaces getPathLength check)
+// Returns: true if reachable, false otherwise
+function isReachableCell(fromCell, toCell, mp) {
+    // Check if we have cache for this starting position
+    if (!mapContainsKey(__reachableCellsCache, fromCell)) {
+        // Build cache on-demand
+        buildReachableCellsCache(fromCell, mp)
+    }
+
+    var reachable = __reachableCellsCache[fromCell]
+    return mapContainsKey(reachable, toCell)
+}
+
+// Get path length from cache (if available) or calculate and cache
+// This memoizes getPathLength results
+function getCachedPathLength(fromCell, toCell) {
+    var hash = hashTwoCells(fromCell, toCell)
+
+    // Check cache
+    if (mapContainsKey(__pathLengthCache, hash)) {
+        return __pathLengthCache[hash]
+    }
+
+    // Calculate and cache
+    var pathLen = getPathLength(fromCell, toCell)
+    __pathLengthCache[hash] = pathLen
+    return pathLen
+}
+
+// ========== DAMAGE CALCULATION CACHE ==========
+
+// Build damage cache for all equipped weapons/chips vs target
+// This eliminates redundant getDamageBreakdown() calls
+function buildDamageCache(arsenal, player, target) {
+    var str = player._strength
+    var mag = player._magic
+    var wis = player._wisdom
+
+    // Cache weapon damage
+    for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
+        var bd = arsenal.getDamageBreakdown(str, mag, wis, weaponId)
+        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, target)
+        __damageCache[weaponId] = ['breakdown': bd, 'net': netDmg]
+    }
+
+    // Cache chip damage
+    for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
+        var bd = arsenal.getDamageBreakdown(str, mag, wis, chipId)
+        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, target)
+        __damageCache[chipId] = ['breakdown': bd, 'net': netDmg]
+    }
+}
+
+// Get cached damage breakdown
+// Returns: ['direct': X, 'dot': Y, 'total': Z] or null if not cached
+function getCachedDamageBreakdown(itemId) {
+    if (mapContainsKey(__damageCache, itemId)) {
+        return __damageCache[itemId]['breakdown']
+    }
+    return null
+}
+
+// Get cached net damage against target
+// Returns: net damage number or null if not cached
+function getCachedNetDamage(itemId) {
+    if (mapContainsKey(__damageCache, itemId)) {
+        return __damageCache[itemId]['net']
+    }
+    return null
+}
+
+// ========== CHIP/WEAPON COST CACHE ==========
+
+// Build cost cache for all equipped items
+// getChipCost() and similar functions cost 15 ops each
+function buildCostCache(arsenal) {
+    // Cache chip costs
+    for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
+        __chipCostCache[chipId] = getChipCost(chipId)
+    }
+
+    // Cache weapon costs
+    for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
+        var weapon = arsenal.playerEquippedWeapons[weaponId]
+        __weaponCostCache[weaponId] = weapon._cost  // Already stored in Arsenal object
+    }
+}
+
+// Get cached chip cost (2 ops instead of 15)
+function getCachedChipCost(chipId) {
+    if (mapContainsKey(__chipCostCache, chipId)) {
+        return __chipCostCache[chipId]
+    }
+    // Fallback: calculate and cache
+    var cost = getChipCost(chipId)
+    __chipCostCache[chipId] = cost
+    return cost
+}
+
+// Get cached weapon cost (2 ops instead of accessing object)
+function getCachedWeaponCost(weaponId, arsenal) {
+    if (mapContainsKey(__weaponCostCache, weaponId)) {
+        return __weaponCostCache[weaponId]
+    }
+    // Fallback: get from arsenal
+    var weapon = arsenal.getItemById(weaponId)
+    if (weapon != null) {
+        __weaponCostCache[weaponId] = weapon._cost
+        return weapon._cost
+    }
+    return null
+}
+
+// ========== INITIALIZATION ==========
+
+// Initialize all caches at start of turn
+// Call this once per turn after target selection
+function initializeCaches(player, target, arsenal) {
+    startOp()
+    clearCaches()
+    stopOp("Clear caches")
+
+    // PHASE 1 OPTIMIZATION: Only cache path lengths (most expensive operation)
+    // Damage/cost caching disabled - not needed for scenario generation
+    // Damage calculations happen on-demand during execution phase
+
+    // Path length cache is built on-demand by getCachedPathLength()
+    // No pre-building needed - just initialize empty cache
+
+    debug("[CACHE] Initialized path cache (on-demand)")
+}

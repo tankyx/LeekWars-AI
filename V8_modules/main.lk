@@ -17,6 +17,15 @@ include('math/piecewise_function.lk')
 include('math/probability_distribution.lk')
 include('math/damage_probability.lk')
 
+// Operation tracking and caching (Phase 1 optimizations)
+include('operation_tracker.lk')
+include('cache_manager.lk')
+
+// Scenario evaluation system (Phase 1)
+include('scenario_generator.lk')
+include('scenario_simulator.lk')
+include('scenario_scorer.lk')
+
 include('strategy/action.lk')
 include('strategy/base_strategy.lk')
 include('strategy/strength_strategy.lk')
@@ -37,7 +46,7 @@ function init() {
     fieldMap = new FieldMap();
 
     // Check if this is a boss fight first
-    if (BossFightStrategy.detectBossFight()) {
+    if (detectBossFight()) {
         debug("Boss fight detected! Using BossFightStrategy")
         strategy = new BossFightStrategy();
         // Don't call turnOneBuffs() for boss fights - need TP for puzzle chips
@@ -67,6 +76,12 @@ function main() {
     var target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
     // Fallback to closest if priority selection fails
     if (target == null) target = fieldMap.getClosestEnemy()
+
+    // Initialize caches for optimized multi-scenario evaluation (PHASE 1)
+    startOp()
+    initializeCaches(player, target, arsenal)
+    var cacheOps = stopOp("Initialize all caches")
+    debug("[CACHE] Cache initialization complete: " + cacheOps + " ops")
 
     var targetHitCell = null
 

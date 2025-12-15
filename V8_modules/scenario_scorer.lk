@@ -1,0 +1,276 @@
+/** Scenario Scorer - Scores simulation results with build-specific weights **/
+
+class ScenarioScorer {
+    _player = null
+    _target = null
+    _fieldMap = null
+
+    constructor(player, target, fieldMap) {
+        this._player = player
+        this._target = target
+        this._fieldMap = fieldMap
+    }
+
+    // Score a simulation result based on player build and game state
+    // Returns numerical score (higher = better scenario)
+    score(simResult) {
+        var score = 0
+
+        // 1. DAMAGE WEIGHT - Based on STR and MAG stats
+        var damageWeight = this.calculateDamageWeight()
+        var damageScore = simResult.damageDealt * damageWeight
+        score += damageScore
+
+        // 2. DOT DAMAGE WEIGHT - Heavily favored by MAG builds
+        var dotWeight = this.calculateDotWeight()
+        var dotScore = simResult.dotDamageQueued * dotWeight
+        score += dotScore
+
+        // 3. eHP WEIGHT - Value of shields and healing (RESISTANCE/WISDOM)
+        var ehpWeight = this.calculateEhpWeight()
+        var shieldScore = simResult.shieldsGained * ehpWeight
+        var relShieldScore = this.calculateRelativeShieldValue(simResult.relativeShieldGained) * ehpWeight
+        var healScore = simResult.hpGained * ehpWeight
+        score += shieldScore + relShieldScore + healScore
+
+        // 4. POSITIONING WEIGHT - Safety and threat avoidance (AGI builds value positioning)
+        var positionWeight = this.calculatePositionWeight()
+        var positionScore = this.evaluatePosition(simResult.finalPosition) * positionWeight
+        score += positionScore
+
+        // 5. EFFICIENCY WEIGHT - TP/MP economy (longer fights favor efficiency)
+        var efficiencyWeight = this.calculateEfficiencyWeight()
+        var efficiencyScore = this.calculateEfficiency(simResult) * efficiencyWeight
+        score += efficiencyScore
+
+        // 6. BUFF/DEBUFF WEIGHT - Strategic value of buffs
+        var buffWeight = this.calculateBuffWeight()
+        var buffScore = this.evaluateBuffs(simResult.buffsApplied) * buffWeight
+        var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
+        score += buffScore + debuffScore
+
+        // 7. CRITICAL HIT BONUS - AGI builds benefit from crit chance
+        var critBonus = this.calculateCritBonus(simResult.damageDealt)
+        score += critBonus
+
+        // Debug scoring breakdown
+        debug("[SCORE] Total=" + floor(score) + " | dmg=" + floor(damageScore) + " dot=" + floor(dotScore) +
+              " eHP=" + floor(shieldScore + relShieldScore + healScore) +
+              " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
+              " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus))
+
+        return score
+    }
+
+    // DAMAGE WEIGHT: STR builds favor direct damage, MAG builds moderate
+    calculateDamageWeight() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        // STR builds: high weight (1.5-2.5)
+        if (str > mag && str > agi) {
+            return 1.5 + (str / 1000.0)  // Scale with strength
+        }
+        // MAG builds: moderate weight (0.8-1.2)
+        else if (mag > str && mag > agi) {
+            return 0.8 + (mag / 2000.0)
+        }
+        // AGI builds: high weight (similar to STR, benefits from crits)
+        else if (agi > str && agi > mag) {
+            return 1.3 + (agi / 1500.0)
+        }
+
+        return 1.0  // Default
+    }
+
+    // DOT WEIGHT: MAG builds heavily favor DoT damage
+    calculateDotWeight() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        // MAG builds: very high weight (2.0-3.0)
+        if (mag > str && mag > agi) {
+            return 2.0 + (mag / 1000.0)
+        }
+        // Other builds: low weight (0.3-0.5)
+        return 0.3
+    }
+
+    // eHP WEIGHT: RESISTANCE/WISDOM based (tank value)
+    calculateEhpWeight() {
+        var resistance = this._player._resistance
+        var wisdom = this._player._wisdom
+        var currentHP = this._player._hp
+        var maxHP = this._player._maxHP
+
+        // Low HP situations: increase eHP value
+        var hpRatio = currentHP / maxHP
+        var urgencyMultiplier = 1.0
+        if (hpRatio < 0.3) urgencyMultiplier = 3.0
+        else if (hpRatio < 0.5) urgencyMultiplier = 2.0
+        else if (hpRatio < 0.7) urgencyMultiplier = 1.5
+
+        // Base weight from RESISTANCE/WISDOM
+        var baseWeight = 0.5 + (resistance / 500.0) + (wisdom / 1000.0)
+
+        return baseWeight * urgencyMultiplier
+    }
+
+    // POSITION WEIGHT: AGI builds value positioning more
+    calculatePositionWeight() {
+        var agi = this._player._agility
+        var str = this._player._strength
+        var mag = this._player._magic
+
+        // AGI builds: high weight (0.8-1.5)
+        if (agi > str && agi > mag) {
+            return 0.8 + (agi / 1000.0)
+        }
+        // MAG builds: moderate weight (kiting)
+        else if (mag > str && mag > agi) {
+            return 0.5 + (mag / 2000.0)
+        }
+        // STR builds: low weight (prefer standing and fighting)
+        return 0.2
+    }
+
+    // EFFICIENCY WEIGHT: Longer fights favor efficiency
+    calculateEfficiencyWeight() {
+        var currentHP = this._player._hp
+        var maxHP = this._player._maxHP
+        var targetHP = this._target._hp
+
+        // Long fight expected: increase efficiency weight
+        var fightLengthEstimate = targetHP / max(1, this._player._strength + this._player._magic)
+
+        if (fightLengthEstimate > 3) return 0.3  // Long fight
+        else if (fightLengthEstimate > 1.5) return 0.15  // Medium fight
+        return 0.05  // Short fight (OTKO scenarios)
+    }
+
+    // BUFF WEIGHT: Strategic value of buffs
+    calculateBuffWeight() {
+        return 50.0  // Fixed weight for buff/debuff strategic value
+    }
+
+    // Evaluate position safety/threat
+    evaluatePosition(finalPos) {
+        if (finalPos == -1 || finalPos == this._player._cellPos) return 0
+
+        // Check if position is in damage map (good for offense)
+        var offensiveValue = 0
+        if (mapContainsKey(this._fieldMap.damageMap, finalPos)) {
+            var cellObj = this._fieldMap.damageMap[finalPos]
+            offensiveValue = cellObj._totalDamage
+        }
+
+        // Check distance to target (kiting value)
+        var distToTarget = getCellDistance(finalPos, this._target._cellPos)
+        var kitingValue = 0
+        if (distToTarget != null) {
+            // MAG builds prefer distance, STR builds prefer close range
+            if (this._player._magic > this._player._strength) {
+                kitingValue = distToTarget * 10  // Reward distance
+            } else {
+                kitingValue = max(0, (10 - distToTarget)) * 10  // Reward closeness
+            }
+        }
+
+        return offensiveValue + kitingValue
+    }
+
+    // Calculate TP/MP efficiency score
+    calculateEfficiency(simResult) {
+        var tpEfficiency = 0
+        var mpEfficiency = 0
+
+        // Reward high damage per TP
+        if (simResult.tpSpent > 0) {
+            var damagePerTP = (simResult.damageDealt + simResult.dotDamageQueued) / simResult.tpSpent
+            tpEfficiency = damagePerTP * 10
+        }
+
+        // Penalize excessive MP usage (unless it leads to high damage)
+        if (simResult.mpSpent > 0) {
+            var damagePerMP = (simResult.damageDealt + simResult.dotDamageQueued) / simResult.mpSpent
+            mpEfficiency = damagePerMP * 5
+        }
+
+        return tpEfficiency + mpEfficiency
+    }
+
+    // Evaluate buff strategic value
+    evaluateBuffs(buffsApplied) {
+        var value = 0
+
+        for (var buffChip in buffsApplied) {
+            // Offensive buffs
+            if (buffChip == CHIP_STEROID) value += 200
+            if (buffChip == CHIP_DOPING) value += 100
+            if (buffChip == CHIP_WARM_UP) value += 150
+            if (buffChip == CHIP_ADRENALINE) value += 100
+
+            // Defensive buffs
+            if (buffChip == CHIP_HELMET || buffChip == CHIP_SHIELD) value += 80
+            if (buffChip == CHIP_WALL || buffChip == CHIP_FORTRESS) value += 150
+            if (buffChip == CHIP_PROTEIN || buffChip == CHIP_LEATHER_BOOTS) value += 100
+
+            // Healing
+            if (buffChip == CHIP_REGENERATION) value += 80
+            if (buffChip == CHIP_CURE) value += 120
+            if (buffChip == CHIP_DRIP) value += 100
+
+            // Utility
+            if (buffChip == CHIP_LIBERATION) value += 120
+            if (buffChip == CHIP_REMISSION) value += 100
+
+            // Damage return (AGI builds)
+            if (buffChip == CHIP_MIRROR || buffChip == CHIP_THORN) {
+                if (this._player._agility > this._player._strength) value += 180
+                else value += 80
+            }
+        }
+
+        return value
+    }
+
+    // Evaluate debuff strategic value
+    evaluateDebuffs(debuffsApplied) {
+        var value = 0
+
+        for (var debuffChip in debuffsApplied) {
+            // High-value debuffs
+            if (debuffChip == CHIP_VENOM || debuffChip == CHIP_TOXIN) value += 100
+            if (debuffChip == CHIP_STALACTITE || debuffChip == CHIP_ICEBERG) value += 120
+            if (debuffChip == CHIP_ARMOR || debuffChip == CHIP_SOLIDIFICATION) value += 150
+
+            // Movement debuffs
+            if (debuffChip == CHIP_SLOW_DOWN || debuffChip == CHIP_BALL_AND_CHAIN) value += 80
+        }
+
+        return value
+    }
+
+    // Calculate critical hit bonus (AGI builds)
+    calculateCritBonus(damageDealt) {
+        var agi = this._player._agility
+
+        // AGI builds have crit chance
+        if (agi > this._player._strength && agi > this._player._magic) {
+            var critChance = min(0.5, agi / 2000.0)  // ~25% crit at 500 AGI
+            var critMultiplier = 1.3
+            var expectedCritBonus = damageDealt * critChance * (critMultiplier - 1.0)
+            return expectedCritBonus * 0.5  // Weight expected crit value
+        }
+
+        return 0
+    }
+
+    // Calculate relative shield value (converts % shield to absolute value)
+    calculateRelativeShieldValue(relativeShieldPercent) {
+        var maxHP = this._player._maxHP
+        return (relativeShieldPercent / 100.0) * maxHP
+    }
+}

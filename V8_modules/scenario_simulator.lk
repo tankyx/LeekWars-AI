@@ -1,0 +1,229 @@
+/** Scenario Simulator - Simulates action sequences without executing them **/
+
+class SimulationResult {
+    damageDealt = 0           // Immediate damage from weapons/chips
+    dotDamageQueued = 0       // DoT damage (poison/burn total ticks)
+    hpGained = 0              // Healing from chips
+    shieldsGained = 0         // Shield points added
+    relativeShieldGained = 0  // Relative shield percentage
+    tpSpent = 0               // TP consumed
+    mpSpent = 0               // MP consumed
+    finalPosition = -1        // Ending cell position
+    buffsApplied = []         // List of buff chip IDs applied
+    debuffsApplied = []       // List of debuff chip IDs applied
+    actionsExecuted = 0       // Number of actions successfully executed
+
+    constructor() {
+        this.buffsApplied = []
+        this.debuffsApplied = []
+    }
+}
+
+class ScenarioSimulator {
+    _arsenal = null
+    _player = null
+    _target = null
+    _fieldMap = null
+
+    constructor(arsenal, player, target, fieldMap) {
+        this._arsenal = arsenal
+        this._player = player
+        this._target = target
+        this._fieldMap = fieldMap
+    }
+
+    // Simulate a complete scenario (action sequence)
+    // Returns SimulationResult with all metrics
+    simulate(actions) {
+        var result = new SimulationResult()
+
+        // Track simulated state (don't modify actual game state)
+        var simPos = this._player._cellPos
+        var simTP = getTP()
+        var simMP = getMP()
+        var simWeapon = getWeapon()
+        var simStrength = this._player._strength
+        var simMagic = this._player._magic
+        var simWisdom = this._player._wisdom
+
+        result.finalPosition = simPos
+
+        for (var action in actions) {
+            // Check if action is feasible with current simulated resources
+            if (!this.canExecuteAction(action, simPos, simTP, simMP, simWeapon)) {
+                debug("[SIM] Action skipped - insufficient resources")
+                continue
+            }
+
+            // Simulate action effects
+            if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT || action.type == Action.ACTION_DEBUFF) {
+                if (action.chip != -1) {
+                    // Chip attack or debuff - USE CACHED VALUES
+                    var chipCost = getChipCost(action.chip)
+                    var chipDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, action.chip, this._target)
+                    var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, action.chip)
+
+                    result.damageDealt += breakdown['direct']
+                    result.dotDamageQueued += breakdown['dot']
+                    result.tpSpent += chipCost
+                    simTP -= chipCost
+
+                    // Track debuffs
+                    if (action.type == Action.ACTION_DEBUFF) {
+                        push(result.debuffsApplied, action.chip)
+                    }
+
+                    result.actionsExecuted++
+                } else if (action.weaponId != -1) {
+                    // Weapon attack - USE CACHED VALUES
+                    var swapCost = (simWeapon != action.weaponId) ? 1 : 0
+                    var weaponObj = this._arsenal.getItemById(action.weaponId)
+                    var weaponCost = weaponObj != null ? weaponObj._cost : null
+                    var weaponDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, action.weaponId, this._target)
+
+                    if (weaponCost != null) {
+                        result.damageDealt += weaponDmg
+                        result.tpSpent += swapCost + weaponCost
+                        simTP -= swapCost + weaponCost
+                        simWeapon = action.weaponId
+                        result.actionsExecuted++
+                    }
+                }
+            }
+            else if (action.type == Action.ACTION_BUFF) {
+                // Buff chip - USE CACHED COST
+                var buffCost = getChipCost(action.chip)
+                result.tpSpent += buffCost
+                simTP -= buffCost
+                push(result.buffsApplied, action.chip)
+
+                // Track specific buff effects
+                if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD || action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS) {
+                    var shieldAmount = this.estimateShieldAmount(action.chip, simWisdom)
+                    result.shieldsGained += shieldAmount
+                } else if (action.chip == CHIP_PROTEIN || action.chip == CHIP_LEATHER_BOOTS) {
+                    result.relativeShieldGained += this.estimateRelativeShield(action.chip)
+                } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
+                    result.hpGained += this.estimateHealing(action.chip, simWisdom)
+                } else if (action.chip == CHIP_STEROID || action.chip == CHIP_DOPING) {
+                    // Strength buff - update simulated strength for future damage calculations
+                    simStrength += this.estimateStrengthBuff(action.chip)
+                } else if (action.chip == CHIP_WARM_UP) {
+                    // Agility buff (doesn't affect damage directly in this sim)
+                }
+
+                result.actionsExecuted++
+            }
+            else if (action.type == Action.ACTION_WEAPON_SWAP) {
+                var swapCost = 1
+                result.tpSpent += swapCost
+                simTP -= swapCost
+                simWeapon = action.weaponId
+                result.actionsExecuted++
+            }
+            else if (action.type == Action.MOVEMENT_APPROACH || action.type == Action.MOVEMENT_OFFENSIVE ||
+                     action.type == Action.MOVEMENT_DEFENSIVE || action.type == Action.MOVEMENT_OTKO ||
+                     action.type == Action.MOVEMENT_DOT_OFFENSIVE || action.type == Action.MOVEMENT_DEBUFF ||
+                     action.type == Action.MOVEMENT_HNS || action.type == Action.MOVEMENT_PAB) {
+                // Movement action - USE CACHED PATH LENGTH
+                var pathLength = getPathLength(simPos, action.targetCell)
+                if (pathLength != null && pathLength <= simMP) {
+                    result.mpSpent += pathLength
+                    simMP -= pathLength
+                    simPos = action.targetCell
+                    result.finalPosition = simPos
+                    result.actionsExecuted++
+                }
+            }
+            else if (action.type == Action.MOVEMENT_FLEE) {
+                // Flee movement - estimate MP usage (hard to simulate exactly)
+                var estimatedMP = min(simMP, 3)  // Assume ~3 MP for flee
+                result.mpSpent += estimatedMP
+                simMP -= estimatedMP
+                result.actionsExecuted++
+            }
+            else if (action.type == Action.ACTION_TELEPORT) {
+                var tpCost = getChipCost(CHIP_TELEPORTATION)
+                var dist = getCellDistance(simPos, action.targetCell)
+                if (dist != null && dist >= 1 && dist <= 12 && simTP >= tpCost) {
+                    result.tpSpent += tpCost
+                    simTP -= tpCost
+                    simPos = action.targetCell
+                    result.finalPosition = simPos
+                    result.actionsExecuted++
+                }
+            }
+        }
+
+        return result
+    }
+
+    // Check if action can be executed with current simulated state
+    // OPTIMIZED: Uses cached values
+    canExecuteAction(action, simPos, simTP, simMP, simWeapon) {
+        if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT ||
+            action.type == Action.ACTION_DEBUFF || action.type == Action.ACTION_BUFF) {
+            if (action.chip != -1) {
+                var cost = getChipCost(action.chip)
+                return simTP >= cost
+            } else if (action.weaponId != -1) {
+                    var weaponCost = null
+                    var weaponObj = this._arsenal.getItemById(action.weaponId)
+                    if (weaponObj != null) weaponCost = weaponObj._cost
+                if (weaponCost == null) return false
+                var swapCost = (simWeapon != action.weaponId) ? 1 : 0
+                return simTP >= swapCost + weaponCost
+            }
+        }
+        else if (action.type == Action.ACTION_WEAPON_SWAP) {
+            return simTP >= 1
+        }
+        else if (action.type == Action.MOVEMENT_APPROACH || action.type == Action.MOVEMENT_OFFENSIVE ||
+                 action.type == Action.MOVEMENT_DEFENSIVE || action.type == Action.MOVEMENT_OTKO ||
+                 action.type == Action.MOVEMENT_DOT_OFFENSIVE || action.type == Action.MOVEMENT_DEBUFF ||
+                 action.type == Action.MOVEMENT_HNS || action.type == Action.MOVEMENT_PAB) {
+            var pathLength = getPathLength(simPos, action.targetCell)
+            return pathLength != null && pathLength <= simMP
+        }
+        else if (action.type == Action.MOVEMENT_FLEE) {
+            return simMP >= 1  // Need at least 1 MP to flee
+        }
+        else if (action.type == Action.ACTION_TELEPORT) {
+            var tpCost = getChipCost(CHIP_TELEPORTATION)
+            return simTP >= tpCost
+        }
+
+        return true
+    }
+
+    // Estimate shield amount from chip (approximate formulas)
+    estimateShieldAmount(chip, wisdom) {
+        if (chip == CHIP_HELMET) return 50 + wisdom * 0.5
+        if (chip == CHIP_SHIELD) return 100 + wisdom * 1.0
+        if (chip == CHIP_WALL) return 200 + wisdom * 2.0
+        if (chip == CHIP_FORTRESS) return 400 + wisdom * 4.0
+        return 0
+    }
+
+    // Estimate relative shield percentage
+    estimateRelativeShield(chip) {
+        if (chip == CHIP_PROTEIN) return 10  // 10% relative shield
+        if (chip == CHIP_LEATHER_BOOTS) return 20  // 20% relative shield
+        return 0
+    }
+
+    // Estimate healing amount
+    estimateHealing(chip, wisdom) {
+        if (chip == CHIP_REGENERATION) return 50 + wisdom * 0.5
+        if (chip == CHIP_CURE) return 100 + wisdom * 1.0
+        if (chip == CHIP_DRIP) return 200 + wisdom * 2.0
+        return 0
+    }
+
+    // Estimate strength buff amount
+    estimateStrengthBuff(chip) {
+        if (chip == CHIP_STEROID) return 100
+        if (chip == CHIP_DOPING) return 50
+        return 0
+    }
+}
