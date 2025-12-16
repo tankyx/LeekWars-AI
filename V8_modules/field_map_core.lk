@@ -30,6 +30,12 @@ class Cell {
     _weaponOptimalAims = [:]     // Map: weaponId -> optimal aim cell
     _chipOptimalAims = [:]       // Map: chipId -> optimal aim cell
 
+    // OTKO opportunity tracking (calculated during buildHitMap)
+    _isOTKOCell = false          // Can kill target from this position
+    _otkoDamage = 0              // Projected burst damage
+    _otkoKillProbability = 0.0   // Kill confidence (0.0-1.0)
+    _otkoTPRequired = 0          // TP needed for OTKO combo
+
     constructor(id, isObstacle, entityID, weaponDamage, chipDamage, hasLOS, highestDamageWeapon, highestDamageChip) {
         this._id = id
         this._isObstacle = isObstacle

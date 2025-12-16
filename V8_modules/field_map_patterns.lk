@@ -6,6 +6,8 @@ include('field_map_core.lk')
 
 class FieldMapPatterns extends FieldMapCore {
     damageMap = [:]
+    weaponHitmap = [:]  // Map of weaponId -> array of shooter cells
+    chipHitmap = [:]    // Map of chipId -> array of shooter cells
 
     // Damage map caching system
     _damageMapCache = [:]        // Cached damage map
@@ -367,6 +369,85 @@ class FieldMapPatterns extends FieldMapCore {
             debug("[MULTI-HIT] No multi-enemy AoE opportunities detected")
         }
 
+        // OTKO CELL MARKING: Calculate burst damage from reachable cells
+        // Only run if we have a valid target entity
+        var target = null
+        var enemies = fieldMap.getEnemySubMap()
+        for (var e in mapValues(enemies)) {
+            if (e._cellPos == oppCell) {
+                target = e
+                break
+            }
+        }
+
+        // Update target entity to get current HP (critical for OTKO detection)
+        if (target != null) {
+            target.updateEntity()
+        }
+
+        // OTKO CELL MARKING - OPTIMIZED (reuses field map data, ~10-20K ops)
+        // Only runs when enemy HP < 70% and we have sufficient TP
+        var enableOTKOCells = true  // Re-enabled with optimizations
+        if (enableOTKOCells && target != null && player._currTp >= 10 && target._currHealth < (target._maxHealth * 0.7)) {
+            var playerTP = player._currTp
+
+            // OPTIMIZATION 1: Limit to top 20 damage map cells (already have good damage potential)
+            // Field map cells are already sorted by usefulness (high damage cells first)
+            var candidateCells = []
+            for (var dmCell in this.damageMap) {
+                push(candidateCells, dmCell)
+            }
+
+            var otkoCount = 0
+            var cellsChecked = 0
+            var cellsLimit = min(count(candidateCells), 20)  // Check top 20 instead of 50
+            var maxOTKOCells = 5  // Early exit after finding 5 OTKO cells
+
+            // OPTIMIZATION 2: Skip distance sorting (expensive 2500 getCellDistance calls)
+            // Damage map cells are already in useful order
+
+            // Check cells for OTKO opportunities
+            for (var idx = 0; idx < cellsLimit && idx < count(candidateCells); idx++) {
+                var cell = candidateCells[idx]
+                cellsChecked++
+
+                // Calculate burst damage from this position (optimized: uses field map data)
+                var burstInfo = fieldMap.calculateBurstDamageFromCell(cell._id, target, playerTP)
+                if (burstInfo == null) continue
+
+                var damage = burstInfo['damage']
+                var tpRequired = burstInfo['tpRequired']
+                var killProb = burstInfo['killProbability']
+
+                // Mark as OTKO cell if kill probability >= 85%
+                if (killProb >= 0.85) {
+                    cell._isOTKOCell = true
+                    cell._otkoDamage = damage
+                    cell._otkoKillProbability = killProb
+                    cell._otkoTPRequired = tpRequired
+                    otkoCount++
+
+                    // OPTIMIZATION 3: Visual marking only for first 3 cells (reduce mark() overhead)
+                    if (otkoCount <= 3) {
+                        var goldColor = getColor(255, 215, 0)
+                        mark(cell._id, goldColor, 3)
+                        markText(cell._id, "OTKO", goldColor, 2)
+                    }
+
+                    // OPTIMIZATION 4: Early exit after finding 5 OTKO cells
+                    if (otkoCount >= maxOTKOCells) {
+                        break
+                    }
+                }
+            }
+
+            if (otkoCount > 0) {
+                debug("[OTKO-CELLS] ⚡ Found " + otkoCount + " OTKO cells (checked " + cellsChecked + " candidates, enemy HP=" + target._currHealth + ")")
+            } else {
+                debug("[OTKO-CELLS] No OTKO opportunities found (checked " + cellsChecked + " cells, enemy HP=" + target._currHealth + ")")
+            }
+        }
+
         // Cache the new damage map
         this._damageMapCache = this.damageMap
         this._lastCacheKey = cacheKey
@@ -388,6 +469,7 @@ class FieldMapPatterns extends FieldMapCore {
                 this.updateHitCells(this.damageMap, cellRef._id, wObj, null, oppCell)
                 push(listIDs, cellRef._id)
             }
+            this.weaponHitmap[wObj._id] = listIDs  // Store for scenario validation
             debug("[HITMAP][WEAPON] " + getWeaponName(wObj._id) + " shooterCells=" + listIDs)
         }
         // Chips
@@ -402,6 +484,7 @@ class FieldMapPatterns extends FieldMapCore {
                 this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj, oppCell)
                 push(listCID, cellRef2._id)
             }
+            this.chipHitmap[chipObj._id] = listCID  // Store for scenario validation
             debug("[HITMAP][CHIP] " + getChipName(chipObj._id) + " shooterCells=" + listCID)
         }
     }
@@ -652,5 +735,19 @@ class FieldMapPatterns extends FieldMapCore {
             }
         }
         return result
+    }
+
+    // Check if a specific cell can shoot with a specific weapon (uses hitmap)
+    canShootFromCell(weaponId, cellId) {
+        if (!mapContainsKey(this.weaponHitmap, weaponId)) return false
+        var shooterCells = this.weaponHitmap[weaponId]
+        return inArray(shooterCells, cellId)
+    }
+
+    // Check if a specific cell can shoot with a specific chip (uses hitmap)
+    canShootChipFromCell(chipId, cellId) {
+        if (!mapContainsKey(this.chipHitmap, chipId)) return false
+        var shooterCells = this.chipHitmap[chipId]
+        return inArray(shooterCells, cellId)
     }
 }

@@ -45,26 +45,49 @@ V8 uses a **two-phase execution model**:
 - Debugging (actions visible in logs)
 - State management (TP/MP/position updated correctly)
 
-### Multi-Scenario Evaluation System (December 2025)
+### State-Based Multi-Scenario System (December 2025)
 
-**V8 now evaluates multiple strategic scenarios each turn and executes the best one.**
+**V8 uses strategic state detection to generate 2-4 optimized scenarios per turn.**
 
 **System Components:**
-- **ScenarioGenerator**: Creates 6 scenario variants (Aggressive, Conservative, Defensive, All-in, Kiting, Efficient)
+- **ScenarioGenerator**: State-based scenario generation (KILL, AGGRO, ATTRITION, SUSTAIN, FLEE)
 - **ScenarioSimulator**: Simulates each scenario without executing (tracks TP/MP/damage/positioning)
 - **ScenarioScorer**: Scores scenarios using build-specific weights (STR favors damage, MAG favors DoT, AGI favors positioning)
 
 **How It Works:**
-1. **Generation**: Create 6 different action sequences based on available TP/MP
-2. **Simulation**: Run each scenario in a sandbox (no game state changes)
-3. **Scoring**: Apply build-specific weights to damage/DoT/eHP/positioning metrics
-4. **Execution**: Execute the highest-scoring scenario
+1. **State Detection** (~10-20K ops): Analyze HP, buffs, turn number, OTKO opportunity
+2. **Generation** (~300K ops): Create 2-4 scenarios for detected state only
+3. **Simulation** (~30K ops): Run each scenario in sandbox (no game state changes)
+4. **Scoring** (~30K ops): Apply build-specific weights to metrics
+5. **Execution**: Execute the highest-scoring scenario
+
+**Strategic States:**
+- **KILL** (enemy HP < 40% + can OTKO): 2 burst scenarios (teleport OTKO, direct burst)
+- **AGGRO** (early game OR buffs expired): 3 buff scenarios (build-specific, offensive, pure damage)
+- **ATTRITION** (balanced combat, turn 5+): 3 balanced scenarios (mixed resources 60-100%)
+- **SUSTAIN** (our HP 30-60%): 3 healing scenarios (heal+shield, heal+kite, mixed buffs)
+- **FLEE** (our HP < 30%): 2 survival scenarios (REGENERATION-aware lifesteal strategy)
+
+**FLEE State Lifesteal Strategy:**
+- **If REGENERATION available**: REMISSION + REGENERATION + minimal attack + hide
+- **If REGENERATION on cooldown**: REMISSION + spam ENHANCED_LIGHTNINGER (100% TP lifesteal) + kite
+- Leverages lifesteal healing when multi-turn heal unavailable
+
+**Buff Cycling Integration:**
+- **Shield Cycling** (all builds): FORTRESS (3t) / WALL (2t) alternation, reapplies when `remainingTurns <= 1`
+- **Damage Return** (agility): MIRROR (3t) / THORN (2t) / BRAMBLE (1t), TP-aware selection, close-range BRAMBLE priority
 
 **Optimization - Path Length Caching:**
 - LeekScript operations budget: ~6M ops/turn (10M total per fight)
-- Multi-scenario cost: ~450K-700K ops/turn (~12% of budget)
+- State-based cost: ~350-400K ops/turn (~6% of budget)
 - **cache_manager.lk**: Memoizes `getPathLength()` calls (50K ops → 2 ops per lookup)
 - **operation_tracker.lk**: Profiles operation costs with `startOp()`/`stopOp()`
+
+**OTKO Cell Marking (Optimized):**
+- Pre-calculates kill opportunities during field map generation (~10-20K ops)
+- Reuses field map data (avoids redundant damage calculations)
+- Visual marking: Gold cells with "OTKO" text (max 3 cells marked)
+- Only runs when enemy HP < 70% and sufficient TP
 
 **Key Implementation Details:**
 - Scenarios track **simulated position** after movement for accurate weapon range checks
@@ -73,10 +96,10 @@ V8 uses a **two-phase execution model**:
 - All `getChipCost()` calls replaced with `getCachedChipCost()`
 
 **Performance:**
-- Average per-turn cost: ~2.95M ops (49% of 6M budget)
-- Generates 3-4 actions per scenario
+- Average per-turn cost: ~370K ops (6% of 6M budget) ✅
+- Generates 2-4 scenarios per turn (vs 12 previously)
 - Scores range from 0 to 10,000+ (higher = better)
-- System fully functional and within operation budget ✅
+- Win rate: 60% vs domingo (baseline restored) ✅
 
 ### Module Breakdown
 
@@ -275,4 +298,4 @@ python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>
 
 **Script ID:** 447626 (V8 main.lk - Production, December 2025)
 
-*Document Version: 31.0 | Last Updated: December 15, 2025 - Multi-Scenario Evaluation System Implemented*
+*Document Version: 32.0 | Last Updated: December 16, 2025 - State-Based Scenario Filtering + Shield/Damage Return Cycling + OTKO Cell Marking + FLEE Lifesteal Strategy*

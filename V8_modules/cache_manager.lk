@@ -3,11 +3,11 @@
 include('operation_tracker.lk')
 
 // Global caches (cleared each turn)
-global __reachableCellsCache = []      // Maps: cell → {reachableCells map}
-global __damageCache = []               // Maps: itemId → damage breakdown
-global __chipCostCache = []             // Maps: chipId → TP cost
-global __weaponCostCache = []           // Maps: weaponId → TP cost
-global __pathLengthCache = []           // Maps: hash(cell1, cell2) → path length
+global __reachableCellsCache = [:]      // Maps: cell → {reachableCells map}
+global __damageCache = [:]               // Maps: itemId → damage breakdown
+global __chipCostCache = [:]             // Maps: chipId → TP cost
+global __weaponCostCache = [:]           // Maps: weaponId → TP cost
+global __pathLengthCache = [:]           // Maps: hash(cell1, cell2) → path length
 
 // Binary hash function for two cells (optimized with bit shifting)
 // cell1 and cell2 can be 0-612, so we need 10 bits each (2^10 = 1024)
@@ -17,11 +17,11 @@ function hashTwoCells(cell1, cell2) {
 
 // Clear all caches (call at start of each turn)
 function clearCaches() {
-    __reachableCellsCache = []
-    __damageCache = []
-    __chipCostCache = []
-    __weaponCostCache = []
-    __pathLengthCache = []
+    __reachableCellsCache = [:]
+    __damageCache = [:]
+    __chipCostCache = [:]
+    __weaponCostCache = [:]
+    __pathLengthCache = [:]
 }
 
 // ========== REACHABLE CELLS CACHE ==========
@@ -29,11 +29,11 @@ function clearCaches() {
 // Build reachable cells cache for current player position
 // This replaces many expensive getPathLength() calls with cheap map lookups
 function buildReachableCellsCache(fromCell, mp) {
-    if (mp <= 0) return []
+    if (mp <= 0) return [:]
 
     // getReachableCells may not be available in all LeekScript versions
     // Fallback to manual pathfinding if needed
-    var reachable = []
+    var reachable = [:]
     // TODO: Implement manual reachable cells calculation if getReachableCells unavailable
     __reachableCellsCache[fromCell] = reachable
     return reachable
@@ -144,7 +144,12 @@ function getCachedWeaponCost(weaponId, arsenal) {
         return __weaponCostCache[weaponId]
     }
     // Fallback: get from arsenal
-    var weapon = arsenal.getItemById(weaponId)
+    var weapon = null
+    if (mapContainsKey(arsenal.playerEquippedWeapons, weaponId)) {
+        weapon = arsenal.playerEquippedWeapons[weaponId]
+    } else if (mapContainsKey(arsenal.weaponsList, weaponId)) {
+        weapon = arsenal.weaponsList[weaponId]
+    }
     if (weapon != null) {
         __weaponCostCache[weaponId] = weapon._cost
         return weapon._cost

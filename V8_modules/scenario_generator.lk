@@ -1,5 +1,22 @@
 /** Scenario Generator - Creates multiple scenario variants for evaluation **/
 
+// Parametric scenario configuration
+class ScenarioParams {
+    buffStrategy = 0       // 0=none, 1=offensive, 2=defensive, 3=both, 4=build-specific (AGI:dmgReturn, STR:LIBERATION)
+    healThreshold = -1     // -1=never, 0.0-1.0=heal if HP% below threshold
+    movementFraction = 1.0 // 0.0-1.0 = % of MP to use for movement
+    attackFraction = 1.0   // DEPRECATED: Now always uses 100% of remaining TP (maximizes damage output)
+    repositioning = "hide" // "hide", "kite", "stand", "otko"
+
+    constructor(buffStrat, healThr, moveFrac, attackFrac, reposition) {
+        this.buffStrategy = buffStrat
+        this.healThreshold = healThr
+        this.movementFraction = moveFrac
+        this.attackFraction = attackFrac  // Kept for compatibility, but ignored in attack phase
+        this.repositioning = reposition
+    }
+}
+
 class ScenarioGenerator {
     _arsenal = null
     _player = null
@@ -7,85 +24,195 @@ class ScenarioGenerator {
     _fieldMap = null
     _strategy = null
 
+    // Cache for expensive operations (computed once, reused across scenarios)
+    _moveCache = [:]     // Cached move actions by MP budget (MAP not array)
+    _hideCache = null    // Cached hide action
+    _kiteCache = null    // Cached kite action
+
     constructor(arsenal, player, target, fieldMap, strategy) {
         this._arsenal = arsenal
         this._player = player
         this._target = target
         this._fieldMap = fieldMap
         this._strategy = strategy
+        this._moveCache = [:]  // Initialize as map
     }
 
-    // Generate multiple scenario variants
+    // STATE-BASED SCENARIO GENERATION (2-4 scenarios per state)
+    // Reduces operations from 1-4M to 200-400K per turn (~75% reduction)
     // Returns array of scenarios (each scenario is an array of actions)
     generateScenarios() {
         var scenarios = []
-
-        // Get available TP/MP budget
         var availableTP = getTP()
         var availableMP = getMP()
 
-        debug("[GENERATOR] Generating scenarios with TP=" + availableTP + " MP=" + availableMP)
+        // PHASE 1: Determine strategic state (~10-20K ops)
+        var state = this.determineStrategicState()
+        debug("[STATE] Strategic state: " + state)
 
-        // SCENARIO 1: Aggressive (buff → attack → attack → hide)
-        startOp()
-        var aggressive = this.createAggressiveScenario(availableTP, availableMP)
-        var aggOps = stopOp("Gen: Aggressive")
-        if (aggressive != null && count(aggressive) > 0) {
-            push(scenarios, aggressive)
-            debug("[GENERATOR] Created aggressive scenario (" + count(aggressive) + " actions, " + aggOps + " ops)")
+        // PHASE 2: Generate scenarios for detected state only
+        // ScenarioParams(buffStrategy, healThreshold, movementFraction, attackFraction, repositioning)
+        // buffStrategy: 0=none, 1=offensive, 2=defensive, 3=both, 4=build-specific
+
+        if (state == "KILL") {
+            // Enemy HP < 40% AND we can OTKO → pure burst scenarios (2 scenarios)
+            debug("[STATE-KILL] Enemy killable - generating burst scenarios")
+            push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "otko"), availableTP, availableMP))
+            push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "stand"), availableTP, availableMP))
         }
-
-        // SCENARIO 2: Conservative (buff → move → attack → hide)
-        startOp()
-        var conservative = this.createConservativeScenario(availableTP, availableMP)
-        var consOps = stopOp("Gen: Conservative")
-        if (conservative != null && count(conservative) > 0) {
-            push(scenarios, conservative)
-            debug("[GENERATOR] Created conservative scenario (" + count(conservative) + " actions, " + consOps + " ops)")
+        else if (state == "AGGRO") {
+            // Both HP > 60%, turn 1-4, OR buffs expired → apply buffs + attack (3 scenarios)
+            debug("[STATE-AGGRO] Early game / buff application phase")
+            push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // Build-specific buff
+            push(scenarios, this.createParametricScenario(new ScenarioParams(1, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // Offensive buff
+            push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // No buff (save TP)
         }
-
-        // SCENARIO 3: Defensive (defensive buffs → attack → hide)
-        startOp()
-        var defensive = this.createDefensiveScenario(availableTP, availableMP)
-        var defOps = stopOp("Gen: Defensive")
-        if (defensive != null && count(defensive) > 0) {
-            push(scenarios, defensive)
-            debug("[GENERATOR] Created defensive scenario (" + count(defensive) + " actions, " + defOps + " ops)")
+        else if (state == "ATTRITION") {
+            // Both HP 40-80%, turn 5+, buffs active → balanced combat (3 scenarios)
+            debug("[STATE-ATTRITION] Ongoing balanced combat")
+            push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 0.8, 0.8, "hide"), availableTP, availableMP))  // Build-specific + 80%
+            push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.8, 0.8, "hide"), availableTP, availableMP))  // Mixed buffs + 80%
+            push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // Pure damage spam
         }
-
-        // SCENARIO 4: All-in damage (no buffs → all damage → no repositioning)
-        startOp()
-        var allIn = this.createAllInDamageScenario(availableTP, availableMP)
-        var allInOps = stopOp("Gen: All-in")
-        if (allIn != null && count(allIn) > 0) {
-            push(scenarios, allIn)
-            debug("[GENERATOR] Created all-in damage scenario (" + count(allIn) + " actions, " + allInOps + " ops)")
+        else if (state == "SUSTAIN") {
+            // Our HP 30-60%, enemy HP > 40% → heal + conservative (3 scenarios)
+            debug("[STATE-SUSTAIN] HP management phase")
+            push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.6, 0.6, "hide"), availableTP, availableMP))  // Heal + shield + 60%
+            push(scenarios, this.createParametricScenario(new ScenarioParams(4, 0.7, 0.6, 0.6, "kite"), availableTP, availableMP))  // Build-specific + heal + kite
+            push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.6, 0.6, "hide"), availableTP, availableMP))  // Mixed buffs + 60%
         }
+        else if (state == "FLEE") {
+            // Our HP < 30% → heal + lifesteal strategy
+            debug("[STATE-FLEE] Emergency survival mode")
 
-        // SCENARIO 5: Kiting (damage → kite away → damage)
-        startOp()
-        var kiting = this.createKitingScenario(availableTP, availableMP)
-        var kiteOps = stopOp("Gen: Kiting")
-        if (kiting != null && count(kiting) > 0) {
-            push(scenarios, kiting)
-            debug("[GENERATOR] Created kiting scenario (" + count(kiting) + " actions, " + kiteOps + " ops)")
+            // Check if REGENERATION is available (critical for survival strategy)
+            var hasRegen = mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)
+            var regenAvailable = hasRegen && getCooldown(CHIP_REGENERATION, player._id) == 0
+
+            if (regenAvailable) {
+                // REGENERATION available → use it + REMISSION + minimal attack + hide
+                debug("[STATE-FLEE] REGENERATION available - defensive healing")
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))  // Both heals + hide
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "kite"), availableTP, availableMP))  // Both heals + kite
+            } else {
+                // REGENERATION on cooldown → REMISSION + spam ENHANCED_LIGHTNINGER (lifesteal healing)
+                debug("[STATE-FLEE] REGENERATION on cooldown - lifesteal strategy (ENHANCED_LIGHTNINGER spam)")
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))  // REMISSION + 100% attack (lifesteal)
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))  // Aggressive lifesteal
+            }
         }
-
-        // SCENARIO 6: TP-efficient (minimal buffs → focused damage → hide)
-        startOp()
-        var efficient = this.createEfficientScenario(availableTP, availableMP)
-        var effOps = stopOp("Gen: Efficient")
-        if (efficient != null && count(efficient) > 0) {
-            push(scenarios, efficient)
-            debug("[GENERATOR] Created efficient scenario (" + count(efficient) + " actions, " + effOps + " ops)")
-        }
-
-        debug("[GENERATOR] Generated " + count(scenarios) + " total scenarios")
 
         return scenarios
     }
 
-    // SCENARIO 1: Aggressive - buff, move close, spam damage, hide
+    // ====================================================================
+    // STRATEGIC STATE DETECTION (~10-20K ops)
+    // ====================================================================
+
+    // Determine which strategic state we're in based on HP, buffs, turn, OTKO opportunity
+    // Returns: "KILL", "AGGRO", "ATTRITION", "SUSTAIN", or "FLEE"
+    determineStrategicState() {
+        var playerHP = this._player._currHealth
+        var playerMaxHP = this._player._maxHealth
+        var enemyHP = this._target._currHealth
+        var enemyMaxHP = this._target._maxHealth
+
+        var playerHPPercent = (playerHP * 100) / playerMaxHP
+        var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
+
+        var currentTurn = getTurn()
+        var availableTP = getTP()
+
+        // STATE 1: FLEE (our HP < 30%) - highest priority
+        if (playerHPPercent < 30) {
+            return "FLEE"
+        }
+
+        // STATE 2: KILL (enemy HP < 40% AND we can OTKO)
+        if (enemyHPPercent < 40) {
+            // Check if we have OTKO opportunity
+            var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
+            var killProbability = estimatedDamage / enemyHP
+
+            if (killProbability >= 0.85) {
+                return "KILL"
+            }
+        }
+
+        // STATE 3: SUSTAIN (our HP 30-60%, enemy HP > 40%)
+        if (playerHPPercent >= 30 && playerHPPercent <= 60 && enemyHPPercent > 40) {
+            return "SUSTAIN"
+        }
+
+        // STATE 4: AGGRO (early game OR buffs expired)
+        // Check if we're in early game (turn 1-4) OR critical buffs expired
+        var earlyGame = (currentTurn >= 1 && currentTurn <= 4)
+        var buffsExpired = this.checkCriticalBuffsExpired()
+
+        if ((earlyGame || buffsExpired) && playerHPPercent > 60 && enemyHPPercent > 60) {
+            return "AGGRO"
+        }
+
+        // STATE 5: ATTRITION (default - ongoing balanced combat)
+        // Both HP 40-80%, turn 5+, buffs active
+        return "ATTRITION"
+    }
+
+    // Check if critical build-specific buffs have expired and need reapplication
+    checkCriticalBuffsExpired() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        // Strength builds: Check STEROID (most important buff)
+        if (str > mag && str > agi) {
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
+                var steroidActive = getCooldown(CHIP_STEROID, this._player._id) > 0
+                if (!steroidActive) {
+                    return true  // STEROID available but not active
+                }
+            }
+        }
+
+        // Agility builds: Check damage return (MIRROR/THORN/BRAMBLE)
+        else if (agi > str && agi > mag) {
+            var hasReturn = this._player.hasDamageReturn()
+            if (!hasReturn) {
+                // Check if any damage return chip is available
+                var mirrorAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) &&
+                                     getCooldown(CHIP_MIRROR, this._player._id) == 0
+                var thornAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) &&
+                                    getCooldown(CHIP_THORN, this._player._id) == 0
+                var brambleAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE) &&
+                                      getCooldown(CHIP_BRAMBLE, this._player._id) == 0
+
+                if (mirrorAvailable || thornAvailable || brambleAvailable) {
+                    return true  // Damage return available but not active
+                }
+            }
+        }
+
+        // Check shield expiration (all builds benefit from shields)
+        var hasShield = this._player.hasEffect(EFFECT_RELATIVE_SHIELD)
+        if (!hasShield) {
+            var fortressAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_FORTRESS) &&
+                                   getCooldown(CHIP_FORTRESS, this._player._id) == 0
+            var wallAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_WALL) &&
+                               getCooldown(CHIP_WALL, this._player._id) == 0
+
+            if (fortressAvailable || wallAvailable) {
+                return true  // Shield available but not active
+            }
+        }
+
+        return false  // All critical buffs either active or unavailable
+    }
+
+    // ====================================================================
+    // PREDEFINED SCENARIO CONSTRUCTORS (Legacy - for reference)
+    // ====================================================================
+
+    // SCENARIO 1: Aggressive - buff, move close, spam damage, hide (BUILD-AWARE)
     createAggressiveScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -99,7 +226,21 @@ class ScenarioGenerator {
             tpBudget -= getCachedChipCost(buffAction.chip)
         }
 
-        // 2. Move to best damage cell
+        // 2. AGI-specific: Apply damage return buff
+        var damageReturnAction = this.getDamageReturnBuff()
+        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
+            push(actions, damageReturnAction)
+            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        }
+
+        // 3. STR-specific: Strip enemy buffs with LIBERATION
+        var debuffAction = this.getDebuffAction()
+        if (debuffAction != null && tpBudget >= 4) {
+            push(actions, debuffAction)
+            tpBudget -= 4
+        }
+
+        // 4. Move to best damage cell
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
@@ -110,13 +251,13 @@ class ScenarioGenerator {
             }
         }
 
-        // 3. Spam all weapons (aggressive) - use simulated position
-        var attackActions = this.getWeaponSpamActions(tpBudget, 1.0, simPos)
+        // 5. Spam weapons + damage chips (aggressive) - use simulated position
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
         for (var atk in attackActions) {
             push(actions, atk)
         }
 
-        // 4. Hide and seek repositioning
+        // 6. Hide and seek repositioning
         var hideAction = this.getHideAndSeekAction(mpBudget)
         if (hideAction != null) {
             push(actions, hideAction)
@@ -125,27 +266,42 @@ class ScenarioGenerator {
         return actions
     }
 
-    // SCENARIO 2: Conservative - buff, careful movement, moderate damage, hide
+    // SCENARIO 2: Conservative - buff, careful movement, moderate damage, hide (BUILD-AWARE)
     createConservativeScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
         var simPos = this._player._cellPos  // Track simulated position
 
-        // 1. Defensive + offensive buffs
+        // 1. Offensive buff
         var buffAction = this.getOffensiveBuff()
         if (buffAction != null) {
             push(actions, buffAction)
             tpBudget -= getCachedChipCost(buffAction.chip)
         }
 
+        // 2. AGI-specific: Damage return buff
+        var damageReturnAction = this.getDamageReturnBuff()
+        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
+            push(actions, damageReturnAction)
+            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        }
+
+        // 3. Defensive buff (shields)
         var defensiveBuff = this.getDefensiveBuff()
         if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
             push(actions, defensiveBuff)
             tpBudget -= getCachedChipCost(defensiveBuff.chip)
         }
 
-        // 2. Move conservatively (not all the way)
+        // 4. Healing if injured (HP < 70%)
+        var healAction = this.getHealingAction(tpBudget, 0.7)
+        if (healAction != null) {
+            push(actions, healAction)
+            tpBudget -= getCachedChipCost(healAction.chip)
+        }
+
+        // 5. Move conservatively (not all the way)
         var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.7))  // Use 70% of MP
         if (moveAction != null) {
             push(actions, moveAction)
@@ -156,13 +312,13 @@ class ScenarioGenerator {
             }
         }
 
-        // 3. Moderate weapon usage (70% TP) - use simulated position
-        var attackActions = this.getWeaponSpamActions(tpBudget, 0.7, simPos)
+        // 6. Moderate attack usage (70% TP) - weapons + damage chips
+        var attackActions = this.getAttackActions(tpBudget, 0.7, simPos)
         for (var atk in attackActions) {
             push(actions, atk)
         }
 
-        // 4. Hide
+        // 7. Hide
         var hideAction = this.getHideAndSeekAction(mpBudget)
         if (hideAction != null) {
             push(actions, hideAction)
@@ -171,21 +327,28 @@ class ScenarioGenerator {
         return actions
     }
 
-    // SCENARIO 3: Defensive - shields → conservative damage → hide
+    // SCENARIO 3: Defensive - healing → shields → conservative damage → hide
     createDefensiveScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
         var simPos = this._player._cellPos  // Track simulated position
 
-        // 1. Apply defensive buffs (shields/HP)
+        // 1. PRIORITY: Healing first if injured (HP < 70%)
+        var healAction = this.getHealingAction(tpBudget, 0.7)
+        if (healAction != null) {
+            push(actions, healAction)
+            tpBudget -= getCachedChipCost(healAction.chip)
+        }
+
+        // 2. Defensive buffs (shields)
         var defensiveBuff = this.getDefensiveBuff()
-        if (defensiveBuff != null) {
+        if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
             push(actions, defensiveBuff)
             tpBudget -= getCachedChipCost(defensiveBuff.chip)
         }
 
-        // 2. Minimal movement (save MP for escape)
+        // 3. Minimal movement (save MP for escape)
         var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.5))
         if (moveAction != null) {
             push(actions, moveAction)
@@ -196,13 +359,13 @@ class ScenarioGenerator {
             }
         }
 
-        // 3. Conservative attacks (50% TP)
-        var attackActions = this.getWeaponSpamActions(tpBudget, 0.5, simPos)
+        // 4. Conservative attacks (50% TP) - weapons + damage chips
+        var attackActions = this.getAttackActions(tpBudget, 0.5, simPos)
         for (var atk in attackActions) {
             push(actions, atk)
         }
 
-        // 4. Hide
+        // 5. Hide
         var hideAction = this.getHideAndSeekAction(mpBudget)
         if (hideAction != null) {
             push(actions, hideAction)
@@ -211,13 +374,45 @@ class ScenarioGenerator {
         return actions
     }
 
-    // SCENARIO 4: All-in damage - no buffs, no repositioning, pure damage
+    // SCENARIO 4: All-in damage - OTKO variant or pure damage spam
     createAllInDamageScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
         var simPos = this._player._cellPos  // Track simulated position
 
+        // CHECK OTKO OPPORTUNITY: If enemy HP low, teleport and burst
+        if (this.checkOTKOOpportunity()) {
+            // Check if we need to teleport to get in range
+            var distToTarget = getCellDistance(this._player._cellPos, this._target._cellPos)
+            var maxWeaponRange = 12  // M-LASER max range
+
+            if (distToTarget > maxWeaponRange &&
+                mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                getCooldown(CHIP_TELEPORTATION, this._player._id) == 0 &&
+                tpBudget >= 5) {
+
+                var bestCell = this._fieldMap.getBestWeaponOrChipCell()
+                if (bestCell != null) {
+                    var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
+                    if (teleportDist >= 1 && teleportDist <= 12) {
+                        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
+                        tpBudget -= 5
+                        simPos = bestCell._id
+                    }
+                }
+            }
+
+            // Spam ALL weapons and damage chips (100% remaining TP)
+            var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            for (var atk in attackActions) {
+                push(actions, atk)
+            }
+
+            return actions
+        }
+
+        // STANDARD ALL-IN: Move + spam all TP
         // 1. Move to best damage cell
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
@@ -229,8 +424,8 @@ class ScenarioGenerator {
             }
         }
 
-        // 2. ALL weapons and chips (100% TP, no reserve)
-        var attackActions = this.getWeaponSpamActions(tpBudget, 1.0, simPos)
+        // 2. ALL weapons and damage chips (100% TP, no reserve)
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
         for (var atk in attackActions) {
             push(actions, atk)
         }
@@ -247,8 +442,8 @@ class ScenarioGenerator {
         var mpBudget = availableMP
         var simPos = this._player._cellPos  // Track simulated position
 
-        // 1. Attack from current position (long-range)
-        var attackActions = this.getWeaponSpamActions(tpBudget, 0.6, simPos)  // 60% TP
+        // 1. Attack from current position (long-range weapons + damage chips)
+        var attackActions = this.getAttackActions(tpBudget, 0.6, simPos)  // 60% TP
         for (var atk in attackActions) {
             push(actions, atk)
         }
@@ -289,8 +484,8 @@ class ScenarioGenerator {
             }
         }
 
-        // 3. Balanced damage (80% TP)
-        var attackActions = this.getWeaponSpamActions(tpBudget, 0.8, simPos)
+        // 3. Balanced damage (80% TP) - weapons + damage chips
+        var attackActions = this.getAttackActions(tpBudget, 0.8, simPos)
         for (var atk in attackActions) {
             push(actions, atk)
         }
@@ -300,6 +495,147 @@ class ScenarioGenerator {
         if (hideAction != null) {
             push(actions, hideAction)
         }
+
+        return actions
+    }
+
+    // ========== PARAMETRIC SCENARIO GENERATOR ==========
+
+    // Unified parametric scenario generator - replaces 6 hardcoded functions with 1 configurable function
+    createParametricScenario(params, availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        // PHASE 1: HEALING (if threshold met)
+        if (params.healThreshold >= 0) {
+            // Special case: healThreshold=1.0 means "use ALL healing" (REMISSION + REGENERATION)
+            // Used in FLEE state when REGENERATION is available
+            if (params.healThreshold >= 0.99) {
+                var currentHP = this._player._currHealth
+                var maxHP = this._player._maxHealth
+                var hpRatio = currentHP / maxHP
+
+                // Only heal if HP below 100%
+                if (hpRatio < params.healThreshold) {
+                    // Apply REMISSION first (instant heal, 5 TP)
+                    var remissionAction = this.getRemissionAction()
+                    if (remissionAction != null && tpBudget >= 5) {
+                        push(actions, remissionAction)
+                        tpBudget -= 5
+                    }
+
+                    // Then apply REGENERATION (multi-turn heal, 3 TP)
+                    var regenAction = this.getRegenerationAction()
+                    if (regenAction != null && tpBudget >= 3) {
+                        push(actions, regenAction)
+                        tpBudget -= 3
+                    }
+                }
+            } else {
+                // Normal healing: use one chip (REMISSION > REGENERATION priority)
+                var healAction = this.getHealingAction(tpBudget, params.healThreshold)
+                if (healAction != null) {
+                    push(actions, healAction)
+                    tpBudget -= getCachedChipCost(healAction.chip)
+                }
+            }
+        }
+
+        // PHASE 2: BUFFS (based on buffStrategy)
+        if (params.buffStrategy == 1 || params.buffStrategy == 3) {
+            // Offensive buff
+            var offensiveBuff = this.getOffensiveBuff()
+            if (offensiveBuff != null && tpBudget >= getCachedChipCost(offensiveBuff.chip)) {
+                push(actions, offensiveBuff)
+                tpBudget -= getCachedChipCost(offensiveBuff.chip)
+            }
+        }
+
+        if (params.buffStrategy == 2 || params.buffStrategy == 3) {
+            // Defensive buff
+            var defensiveBuff = this.getDefensiveBuff()
+            if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
+                push(actions, defensiveBuff)
+                tpBudget -= getCachedChipCost(defensiveBuff.chip)
+            }
+        }
+
+        if (params.buffStrategy == 4) {
+            // Build-specific buffs (AGI: damage return, STR: LIBERATION)
+            var damageReturnBuff = this.getDamageReturnBuff()
+            if (damageReturnBuff != null && tpBudget >= getCachedChipCost(damageReturnBuff.chip)) {
+                push(actions, damageReturnBuff)
+                tpBudget -= getCachedChipCost(damageReturnBuff.chip)
+            }
+
+            var debuffAction = this.getDebuffAction()
+            if (debuffAction != null && tpBudget >= 4) {
+                push(actions, debuffAction)
+                tpBudget -= 4
+            }
+        }
+
+        // PHASE 3: OTKO TELEPORT (if repositioning == "otko")
+        if (params.repositioning == "otko" && this.checkOTKOOpportunity()) {
+            var distToTarget = getCellDistance(this._player._cellPos, this._target._cellPos)
+            var maxWeaponRange = 12
+
+            if (distToTarget > maxWeaponRange &&
+                mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                getCooldown(CHIP_TELEPORTATION, this._player._id) == 0 &&
+                tpBudget >= 5) {
+
+                var bestCell = this._fieldMap.getBestWeaponOrChipCell()
+                if (bestCell != null) {
+                    var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
+                    if (teleportDist >= 1 && teleportDist <= 12) {
+                        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
+                        tpBudget -= 5
+                        simPos = bestCell._id
+                    }
+                }
+            }
+        }
+
+        // PHASE 4: MOVEMENT (based on movementFraction)
+        if (params.movementFraction > 0 && params.repositioning != "otko") {
+            var mpToUse = floor(mpBudget * params.movementFraction)
+            var moveAction = this.getMoveToOptimalCell(mpToUse)
+            if (moveAction != null) {
+                push(actions, moveAction)
+                var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
+                if (moveCost != null) {
+                    mpBudget -= moveCost
+                    simPos = moveAction.targetCell
+                }
+            }
+        }
+
+        // PHASE 5: ATTACKS (use ALL remaining TP - guarantees damage in all scenarios)
+        // ALL scenarios now maximize TP usage - they differ in buff/heal priorities, not attack intensity
+        if (tpBudget >= 4) {
+            // getAttackActions now ALWAYS uses 100% of tpBudget (fraction parameter ignored)
+            var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            for (var atk in attackActions) {
+                push(actions, atk)
+            }
+        }
+
+        // PHASE 6: REPOSITIONING (based on repositioning type)
+        if (params.repositioning == "hide") {
+            var hideAction = this.getHideAndSeekAction(mpBudget)
+            if (hideAction != null) {
+                push(actions, hideAction)
+            }
+        } else if (params.repositioning == "kite") {
+            var kiteAction = this.getKiteAwayAction(mpBudget)
+            if (kiteAction != null) {
+                push(actions, kiteAction)
+            }
+        }
+        // "stand" and "otko" don't add repositioning
 
         return actions
     }
@@ -328,33 +664,42 @@ class ScenarioGenerator {
         return null
     }
 
-    // Get defensive buff action
+    // Get defensive buff action - INTELLIGENT SHIELD CYCLING
+    // Maintains continuous shield coverage by alternating FORTRESS (3t) and WALL (2t)
+    // Reapplies when shield expires (remainingTurns <= 1) to prevent gaps
     getDefensiveBuff() {
-        var currentHP = this._player._hp
-        var maxHP = this._player._maxHP
-        var hpRatio = currentHP / maxHP
+        var currentTP = getTP()
 
-        // Choose buff based on HP
-        if (hpRatio < 0.5) {
-            // Low HP - strong shields
-            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player)
-            }
-            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL)) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player)
-            }
-        } else {
-            // Moderate HP - light shields
-            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_SHIELD)) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_SHIELD, -1, this._player)
-            }
+        // Check if shield is currently active
+        var hasShield = this._player.hasEffect(EFFECT_RELATIVE_SHIELD)
+        var shieldRemaining = hasShield ? this._player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) : 0
+
+        // Only reapply when shield is missing or about to expire (≤1 turn remaining)
+        if (hasShield && shieldRemaining > 1) {
+            return null  // Shield still active with 2+ turns, wait
         }
 
-        return null
+        // Prefer FORTRESS (stronger, 3 turns, 6 TP) if available
+        var hasFortress = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)
+        var hasWall = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL)
+
+        var fortressCd = hasFortress ? getCooldown(CHIP_FORTRESS, this._player._id) : 999
+        var wallCd = hasWall ? getCooldown(CHIP_WALL, this._player._id) : 999
+
+        // FORTRESS: 6 TP, 3 turns, 7-8% reduction
+        if (hasFortress && fortressCd == 0 && currentTP >= 9) {  // 6 for FORTRESS + 3 reserve
+            return new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player)
+        }
+
+        // WALL: 3 TP, 2 turns, 4-5% reduction (fallback)
+        if (hasWall && wallCd == 0 && currentTP >= 6) {  // 3 for WALL + 3 reserve
+            return new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player)
+        }
+
+        return null  // No shields available or insufficient TP
     }
 
-    // Get movement action to optimal damage cell
-    // OPTIMIZED: Uses cached path lengths
+    // Get movement action to optimal damage cell (NO CACHING - scenarios need different positions)
     getMoveToOptimalCell(mpBudget) {
         if (mpBudget <= 0) return null
 
@@ -368,26 +713,39 @@ class ScenarioGenerator {
             if (bestCell == null) return null
         }
 
-        return new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestCell._id, this._target)
+        var action = new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestCell._id, this._target)
+        return action
     }
 
-    // Get hide and seek action
+    // Get hide and seek action (CACHED)
     getHideAndSeekAction(mpBudget) {
         if (mpBudget <= 0) return null
 
-        var hideCell = this._strategy.findHideAndSeekCell()
+        // Return cached result if available
+        if (this._hideCache != null) {
+            return this._hideCache
+        }
+
+        var hideCell = this._fieldMap.findHideAndSeekCell("defensive")
         if (hideCell != null && hideCell != -1) {
-            return new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, this._target)
+            this._hideCache = new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, this._target)
+            return this._hideCache
         }
 
         return null
     }
 
-    // Get kite away action
+    // Get kite away action (CACHED)
     getKiteAwayAction(mpBudget) {
         if (mpBudget <= 0) return null
 
-        return new Action(Action.MOVEMENT_FLEE, -1, -1, -1, this._target)
+        // Return cached result if available
+        if (this._kiteCache != null) {
+            return this._kiteCache
+        }
+
+        this._kiteCache = new Action(Action.MOVEMENT_FLEE, -1, -1, -1, this._target)
+        return this._kiteCache
     }
 
     // Get weapon spam actions (fraction = 0.0-1.0 of TP to use)
@@ -422,5 +780,294 @@ class ScenarioGenerator {
         }
 
         return actions
+    }
+
+    // ========== ENHANCED HELPER METHODS (Build-Aware) ==========
+
+    // Get damage return buff for AGI builds (MIRROR/THORN/BRAMBLE)
+    // Get damage return buff - INTELLIGENT CYCLING FOR AGILITY BUILDS
+    // Maintains continuous damage return coverage by alternating MIRROR (3t) and THORN (2t)
+    // Uses BRAMBLE (1t, 25% return) for close-range burst combat
+    // Reapplies when buff expires (remainingTurns <= 1) to prevent gaps
+    getDamageReturnBuff() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        // Only for agility builds
+        if (agi <= str || agi <= mag) return null
+
+        var currentTP = getTP()
+
+        // Check if damage return is currently active
+        var hasReturn = this._player.hasDamageReturn()
+        var returnRemaining = hasReturn ? this._player.getDamageReturnRemaining() : 0
+
+        // Only reapply when damage return is missing or about to expire (≤1 turn remaining)
+        if (hasReturn && returnRemaining > 1) {
+            return null  // Damage return still active with 2+ turns, wait
+        }
+
+        // Calculate distance to enemy for BRAMBLE check
+        var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
+        if (distToEnemy == null) distToEnemy = 99
+        var inCloseCombat = distToEnemy <= 8
+
+        // Check availability of damage return chips
+        var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+
+        var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, this._player._id) : 999
+        var thornCd = hasThorn ? getCooldown(CHIP_THORN, this._player._id) : 999
+        var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, this._player._id) : 999
+
+        var mirrorReady = mirrorCd == 0 && hasMirror && currentTP >= 5
+        var thornReady = thornCd == 0 && hasThorn && currentTP >= 4
+        var brambleReady = brambleCd == 0 && hasBramble && currentTP >= 4
+
+        // PRIORITY 1: BRAMBLE during active melee combat (25% return, best burst damage reflection)
+        if (brambleReady && inCloseCombat && currentTP >= 10) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player)
+        }
+
+        // PRIORITY 2: TP-aware selection - prefer THORN when TP < 15 (cheaper, leaves more TP for attacks)
+        if (currentTP < 15) {
+            if (thornReady) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)  // 4 TP, 2 turns
+            }
+            if (mirrorReady && currentTP >= 10) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)  // 5 TP, 3 turns
+            }
+            return null  // TP too low, skip damage return and attack directly
+        }
+
+        // PRIORITY 3: Prefer MIRROR when both available AND sufficient TP (3 turn coverage > 2 turn)
+        if (mirrorReady && thornReady && currentTP >= 15) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)
+        }
+
+        // PRIORITY 4: Use MIRROR when available (best sustained coverage)
+        if (mirrorReady) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)
+        }
+
+        // PRIORITY 5: Use THORN when available
+        if (thornReady) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)
+        }
+
+        return null  // All on cooldown - coverage gap
+    }
+
+    // Get healing action if HP below threshold
+    getHealingAction(tpBudget, hpThreshold = 0.7) {
+        var currentHP = this._player._currHealth
+        var maxHP = this._player._maxHealth
+        var hpRatio = currentHP / maxHP
+
+        if (hpRatio >= hpThreshold) return null  // Don't heal if above threshold
+
+        // REMISSION: ~125 HP, 5 TP (priority: instant heal)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
+            getCooldown(CHIP_REMISSION, this._player._id) == 0 &&
+            tpBudget >= 5) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
+        }
+
+        // REGENERATION: fallback (multi-turn heal)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION) &&
+            getCooldown(CHIP_REGENERATION, this._player._id) == 0 &&
+            tpBudget >= 3) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
+        }
+
+        return null
+    }
+
+    // Get REMISSION action (instant heal, 5 TP)
+    getRemissionAction() {
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
+            getCooldown(CHIP_REMISSION, this._player._id) == 0) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
+        }
+        return null
+    }
+
+    // Get REGENERATION action (multi-turn heal, 3 TP)
+    getRegenerationAction() {
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION) &&
+            getCooldown(CHIP_REGENERATION, this._player._id) == 0) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
+        }
+        return null
+    }
+
+    // Get LIBERATION debuff for STR builds (strip enemy buffs)
+    getDebuffAction() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        // Only for strength builds
+        if (str <= mag || str <= agi) return null
+
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LIBERATION)) return null
+        if (getCooldown(CHIP_LIBERATION, this._player._id) != 0) return null
+
+        // Check if target has buffs worth removing (shields, damage return, resistance buffs)
+        var targetBuffs = 0
+        if (this._target.hasEffect(EFFECT_ABSOLUTE_SHIELD)) targetBuffs++
+        if (this._target.hasEffect(EFFECT_RELATIVE_SHIELD)) targetBuffs++
+        if (this._target.hasEffect(EFFECT_DAMAGE_RETURN)) targetBuffs++
+        if (this._target.hasEffect(EFFECT_BUFF_RESISTANCE)) targetBuffs++
+        if (this._target.hasEffect(EFFECT_BUFF_STRENGTH)) targetBuffs++
+
+        if (targetBuffs > 0) {
+            return new Action(Action.ACTION_DEBUFF, -1, CHIP_LIBERATION, this._target._cellPos, this._target)
+        }
+
+        return null
+    }
+
+    // Enhanced attack actions - BOTH weapons AND damage chips (respects max uses)
+    // ALWAYS uses 100% of available TP budget to maximize damage output
+    getAttackActions(tpBudget, fraction, simPos) {
+        var actions = []
+        // MAXIMIZED TP USAGE: Always use ALL remaining TP (ignore fraction parameter)
+        // Scenarios differ in what they spend TP on BEFORE attacks (buffs/heals)
+        // But all scenarios should maximize damage with whatever TP remains
+        var tpToUse = tpBudget  // Use ALL remaining TP, not a fraction
+        var weaponUses = [:]  // Track weapon uses per weapon ID
+        var chipCooldowns = [:]  // Track chip usage (single use per turn for damage chips)
+
+        // Repeatedly find and use best available attack from simulated position
+        while (tpToUse >= 4) {  // Minimum TP for any attack
+            var bestAttack = this.findBestAvailableAttack(simPos, weaponUses, chipCooldowns)
+            if (bestAttack == null) break  // No more attacks available
+
+            var attackCost = bestAttack['cost']
+            if (tpToUse < attackCost) break  // Not enough TP
+
+            var attackType = bestAttack['type']
+            var attackId = bestAttack['id']
+
+            // Add action
+            if (attackType == 'weapon') {
+                push(actions, new Action(Action.ACTION_DIRECT, attackId, -1, this._target._cellPos, this._target))
+                var currentUses = weaponUses[attackId]
+                if (currentUses == null) currentUses = 0
+                weaponUses[attackId] = currentUses + 1
+            } else {
+                push(actions, new Action(Action.ACTION_DIRECT, -1, attackId, this._target._cellPos, this._target))
+                chipCooldowns[attackId] = true  // Mark chip as used
+            }
+
+            tpToUse -= attackCost
+        }
+
+        return actions
+    }
+
+    // Find best available attack (excludes exhausted weapons/chips)
+    findBestAvailableAttack(simPos, weaponUses, chipCooldowns) {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var wis = this._player._wisdom
+        var bestAttack = null
+        var bestDamage = 0
+
+        // Check all equipped weapons
+        for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var weapon = this._arsenal.playerEquippedWeapons[weaponId]
+
+            // Check if weapon max uses reached
+            var currentUses = weaponUses[weaponId]
+            if (currentUses == null) currentUses = 0
+            if (currentUses >= weapon._maxUse) continue
+
+            // Check range from simulated position
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
+
+            // Use hitmap to validate shooting position (more accurate than lineOfSight)
+            var canShoot = this._fieldMap.canShootFromCell(weaponId, simPos)
+            if (!canShoot) {
+                debug("[SCENARIO-ATTACK] " + getWeaponName(weaponId) + " NOT IN HITMAP from " + simPos + " to " + this._target._cellPos + " (dist=" + dist + ")")
+                continue
+            }
+
+            // Calculate damage
+            var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, this._target)
+            if (damage > bestDamage) {
+                bestDamage = damage
+                bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage]
+                debug("[SCENARIO-ATTACK] " + getWeaponName(weaponId) + " BEST from " + simPos + " (dmg=" + floor(damage) + " dist=" + dist + ")")
+            }
+        }
+
+        // Check all equipped damage chips
+        var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
+                           CHIP_FIRE_BALL, CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE]
+
+        for (var chipId in damageChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
+            if (chipCooldowns[chipId] != null) continue  // Already used this scenario
+            if (getCooldown(chipId, this._player._id) > 0) continue  // On cooldown
+
+            // Check range from simulated position
+            var chip = this._arsenal.playerEquippedChips[chipId]
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
+            if (!lineOfSight(simPos, this._target._cellPos)) continue
+
+            // Calculate damage
+            var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, this._target)
+            if (damage > bestDamage) {
+                bestDamage = damage
+                bestAttack = ["type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage]
+            }
+        }
+
+        return bestAttack
+    }
+
+    // Check if OTKO opportunity exists
+    checkOTKOOpportunity() {
+        var enemyHP = this._target._currHealth
+        var enemyMaxHP = this._target._maxHealth
+        var hpPercent = (enemyHP * 100) / enemyMaxHP
+
+        return (hpPercent < 35 || enemyHP < 500)
+    }
+
+    // Estimate maximum damage player can deal this turn (for mutual lethal detection)
+    estimateMaxDamageThisTurn(availableTP) {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var wis = this._player._wisdom
+        var totalDamage = 0
+
+        // Estimate damage from all equipped weapons (respecting max uses)
+        for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var weapon = this._arsenal.playerEquippedWeapons[weaponId]
+            var weaponDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, this._target)
+            var maxUses = min(weapon._maxUse, floor(availableTP / weapon._cost))
+            totalDamage += weaponDamage * maxUses
+        }
+
+        // Estimate damage from best damage chip (single use)
+        var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG]
+        var bestChipDamage = 0
+        for (var chipId in damageChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
+            if (getCooldown(chipId, this._player._id) > 0) continue
+
+            var chipDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, this._target)
+            bestChipDamage = max(bestChipDamage, chipDamage)
+        }
+        totalDamage += bestChipDamage
+
+        return totalDamage
     }
 }

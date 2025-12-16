@@ -584,12 +584,7 @@ class Strategy {
             }
         }
 
-        if (bestCell != null) {
-            debug("[REACHABLE-CELL] Found best reachable damage cell: " + bestCell._id + " damage=" + bestDamage + " dist=" + bestDist)
-        } else {
-            debug("[REACHABLE-CELL] No reachable damage cells within " + maxMP + " MP")
-        }
-
+        // Removed verbose [REACHABLE-CELL] logs (too spammy during multi-scenario)
         return bestCell
     }
 
@@ -1029,13 +1024,33 @@ class Strategy {
             }
         }
 
-        // OFFENSIVE PHASE: Apply STEROID immediately for attrition damage
+        // OFFENSIVE PHASE: Apply STEROID immediately for attrition damage (CRITICAL for 60% WR baseline)
+        // This gives +150-170 strength for 3 turns, boosting all weapon damage early
+        // SMART LOGIC: Skip STEROID if OTKO is already viable (save 7 TP for burst damage)
 
-        // Strength build: Apply CHIP_STEROID for weapon damage boost
+        // Strength build: Apply CHIP_STEROID on turn 1 (UNLESS OTKO is immediately viable)
         if (player._strength >= player._agility && player._strength >= player._magic) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
-                debug("Using CHIP_STEROID (strength build) - +150-170 Strength for 3 turns (attrition boost)")
-                useChip(CHIP_STEROID, player._id)
+                // CRITICAL: Check if OTKO is viable BEFORE spending 7 TP on STEROID
+                // If we can already kill enemy, save the TP for burst damage instead
+                var skipSteroidForOTKO = false
+
+                if (closestEnemy != null && player._currTp >= 15) {
+                    // Quick OTKO check: Can we kill enemy right now without STEROID?
+                    var teleportInfo = fieldMap.findOptimalTeleportCell(closestEnemy)
+                    if (teleportInfo != null && teleportInfo['killProbability'] >= 0.85) {
+                        skipSteroidForOTKO = true
+                        debug("[TURN1-BUFFS][STEROID] SKIPPING STEROID - OTKO already viable (" +
+                              round(teleportInfo['killProbability'] * 100) + "% kill prob, saving 7 TP for burst)")
+                    }
+                }
+
+                if (!skipSteroidForOTKO) {
+                    debug("[TURN1-BUFFS][STEROID] Applying STEROID turn 1 for maximum attrition damage")
+                    useChip(CHIP_STEROID, player._id)
+                }
+            } else {
+                debug("[TURN1-BUFFS][STEROID] WARNING: CHIP_STEROID not equipped (critical for STR builds)")
             }
         }
 
@@ -1862,6 +1877,70 @@ class Strategy {
         return bestWeapon
     }
 
+    // Find best attack (weapon OR chip) available from a specific position
+    // Returns {type: "weapon"/"chip", id: weaponId/chipId, cost: TP, damage: number, maxUse: number} or null
+    findBestAttackAtPosition(position, target) {
+        var distToTarget = getCellDistance(position, target._cellPos)
+        if (distToTarget == null) return null
+
+        var bestAttack = null
+        var bestDamage = -1
+
+        // Check if position is in damage map
+        if (!mapContainsKey(fieldMap.damageMap, position)) return null
+        var cell = fieldMap.damageMap[position]
+
+        // Check weapons from this position
+        if (count(cell._weaponsList) > 0) {
+            for (var wIdx = 0; wIdx < count(cell._weaponsList); wIdx++) {
+                var weapon = cell._weaponsList[wIdx]
+
+                // Verify weapon can hit at current distance
+                if (distToTarget >= weapon._minRange && distToTarget <= weapon._maxRange) {
+                    // Verify line of sight
+                    if (lineOfSight(position, target._cellPos)) {
+                        var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id)
+                        var dmg = bd['total']
+                        if (dmg > bestDamage) {
+                            bestDamage = dmg
+                            bestAttack = ['type': 'weapon', 'id': weapon._id, 'cost': weapon._cost, 'damage': dmg, 'maxUse': weapon._maxUse]
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check chips from this position
+        if (count(cell._chipsList) > 0) {
+            for (var cIdx = 0; cIdx < count(cell._chipsList); cIdx++) {
+                var chip = cell._chipsList[cIdx]
+
+                // Only consider damage chips (not buffs/heals)
+                if (!mapContainsKey(chip._effects, EFFECT_DAMAGE) && !mapContainsKey(chip._effects, EFFECT_POISON)) {
+                    continue
+                }
+
+                // Verify chip can hit at current distance
+                if (distToTarget >= chip._minRange && distToTarget <= chip._maxRange) {
+                    // Verify line of sight
+                    if (lineOfSight(position, target._cellPos)) {
+                        // Verify cooldown
+                        if (getCooldown(chip._id, player._id) == 0) {
+                            var chipBd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chip._id)
+                            var chipDmg = chipBd['total']
+                            if (chipDmg > bestDamage) {
+                                bestDamage = chipDmg
+                                bestAttack = ['type': 'chip', 'id': chip._id, 'cost': chip._cost, 'damage': chipDmg, 'maxUse': chip._maxUse]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return bestAttack
+    }
+
     // Base defensive scenario usable by all strategies
     createDefensiveScenario(target, targetHitCell) {
         var playerTP = player._currTp
@@ -1880,34 +1959,53 @@ class Strategy {
 
         // STEP 2: FIGHTING RETREAT - Attack from current position before fleeing
         var playerPos = player._cellPos
-        var bestWeapon = this.findBestWeaponAtPosition(playerPos, target)
+        var bestAttack = this.findBestAttackAtPosition(playerPos, target)
         var attackedFromCurrentPos = false
 
-        if (bestWeapon != null && playerTP >= bestWeapon._cost) {
-            debug("[FLEE-ATTACK] Attacking from current position " + playerPos + " before fleeing (weapon=" + getWeaponName(bestWeapon._id) + ")")
+        if (bestAttack != null && playerTP >= bestAttack['cost']) {
+            var attackType = bestAttack['type']
+            var attackId = bestAttack['id']
+            var attackName = (attackType == 'weapon') ? getWeaponName(attackId) : getChipName(attackId)
+            debug("[FLEE-ATTACK] Attacking from current position " + playerPos + " before fleeing (" + attackType + "=" + attackName + ")")
 
-            // NEW: Get optimal aim
+            // Get optimal aim (weapons have optimal aims, chips may too)
             var fleeOptimalAim = target._cellPos
             var currPosObj = mapContainsKey(fieldMap.damageMap, playerPos) ?
                              fieldMap.damageMap[playerPos] : null
-            if (currPosObj != null &&
-                mapContainsKey(currPosObj._weaponOptimalAims, bestWeapon._id)) {
-                fleeOptimalAim = currPosObj._weaponOptimalAims[bestWeapon._id]
-            }
 
-            // Swap weapon if needed
-            var currentWeapon = getWeapon()
-            if (currentWeapon != bestWeapon._id && playerTP >= 1 + bestWeapon._cost) {
-                this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, bestWeapon._id, -1)
-                playerTP -= 1
-            }
+            if (attackType == 'weapon') {
+                // Weapon attack logic
+                if (currPosObj != null && mapContainsKey(currPosObj._weaponOptimalAims, attackId)) {
+                    fleeOptimalAim = currPosObj._weaponOptimalAims[attackId]
+                }
 
-            // Spam weapon with available TP
-            var uses = bestWeapon._maxUse
-            while (playerTP >= bestWeapon._cost && uses > 0) {
-                this.createAttackAction(Action.ACTION_DIRECT, target, bestWeapon._id, -1, fleeOptimalAim)
-                playerTP -= bestWeapon._cost
-                uses -= 1
+                // Swap weapon if needed
+                var currentWeapon = getWeapon()
+                if (currentWeapon != attackId && playerTP >= 1 + bestAttack['cost']) {
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, attackId, -1)
+                    playerTP -= 1
+                }
+
+                // Spam weapon with available TP
+                var uses = bestAttack['maxUse']
+                while (playerTP >= bestAttack['cost'] && uses > 0) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, attackId, -1, fleeOptimalAim)
+                    playerTP -= bestAttack['cost']
+                    uses -= 1
+                }
+            } else {
+                // Chip attack logic
+                if (currPosObj != null && mapContainsKey(currPosObj._chipOptimalAims, attackId)) {
+                    fleeOptimalAim = currPosObj._chipOptimalAims[attackId]
+                }
+
+                // Spam chip with available TP
+                var chipUses = bestAttack['maxUse']
+                while (playerTP >= bestAttack['cost'] && chipUses > 0) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, attackId, fleeOptimalAim)
+                    playerTP -= bestAttack['cost']
+                    chipUses -= 1
+                }
             }
 
             player._currTp = playerTP  // Update TP for flee planning
@@ -1939,33 +2037,52 @@ class Strategy {
 
                         // Attack from new position
                         var newPos = player._cellPos
-                        var weaponAtDamageCell = this.findBestWeaponAtPosition(newPos, target)
+                        var attackAtDamageCell = this.findBestAttackAtPosition(newPos, target)
 
-                        if (weaponAtDamageCell != null && playerTP >= weaponAtDamageCell._cost) {
-                            debug("[FLEE-ATTACK] Attacking from damage cell " + newPos + " (weapon=" + getWeaponName(weaponAtDamageCell._id) + ")")
+                        if (attackAtDamageCell != null && playerTP >= attackAtDamageCell['cost']) {
+                            var escapeAttackType = attackAtDamageCell['type']
+                            var escapeAttackId = attackAtDamageCell['id']
+                            var escapeAttackName = (escapeAttackType == 'weapon') ? getWeaponName(escapeAttackId) : getChipName(escapeAttackId)
+                            debug("[FLEE-ATTACK] Attacking from damage cell " + newPos + " (" + escapeAttackType + "=" + escapeAttackName + ")")
 
-                            // NEW: Get optimal aim from new position
+                            // Get optimal aim from new position
                             var newPosOptimalAim = target._cellPos
                             var newPosObj = mapContainsKey(fieldMap.damageMap, newPos) ?
                                             fieldMap.damageMap[newPos] : null
-                            if (newPosObj != null &&
-                                mapContainsKey(newPosObj._weaponOptimalAims, weaponAtDamageCell._id)) {
-                                newPosOptimalAim = newPosObj._weaponOptimalAims[weaponAtDamageCell._id]
-                            }
 
-                            // Swap weapon if needed
-                            var currentWeapon2 = getWeapon()
-                            if (currentWeapon2 != weaponAtDamageCell._id && playerTP >= 1 + weaponAtDamageCell._cost) {
-                                this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, weaponAtDamageCell._id, -1)
-                                playerTP -= 1
-                            }
+                            if (escapeAttackType == 'weapon') {
+                                // Weapon attack logic
+                                if (newPosObj != null && mapContainsKey(newPosObj._weaponOptimalAims, escapeAttackId)) {
+                                    newPosOptimalAim = newPosObj._weaponOptimalAims[escapeAttackId]
+                                }
 
-                            // Spam weapon with available TP
-                            var uses2 = weaponAtDamageCell._maxUse
-                            while (playerTP >= weaponAtDamageCell._cost && uses2 > 0) {
-                                this.createAttackAction(Action.ACTION_DIRECT, target, weaponAtDamageCell._id, -1, newPosOptimalAim)
-                                playerTP -= weaponAtDamageCell._cost
-                                uses2 -= 1
+                                // Swap weapon if needed
+                                var currentWeapon2 = getWeapon()
+                                if (currentWeapon2 != escapeAttackId && playerTP >= 1 + attackAtDamageCell['cost']) {
+                                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, escapeAttackId, -1)
+                                    playerTP -= 1
+                                }
+
+                                // Spam weapon with available TP
+                                var uses2 = attackAtDamageCell['maxUse']
+                                while (playerTP >= attackAtDamageCell['cost'] && uses2 > 0) {
+                                    this.createAttackAction(Action.ACTION_DIRECT, target, escapeAttackId, -1, newPosOptimalAim)
+                                    playerTP -= attackAtDamageCell['cost']
+                                    uses2 -= 1
+                                }
+                            } else {
+                                // Chip attack logic
+                                if (newPosObj != null && mapContainsKey(newPosObj._chipOptimalAims, escapeAttackId)) {
+                                    newPosOptimalAim = newPosObj._chipOptimalAims[escapeAttackId]
+                                }
+
+                                // Spam chip with available TP
+                                var chipUses2 = attackAtDamageCell['maxUse']
+                                while (playerTP >= attackAtDamageCell['cost'] && chipUses2 > 0) {
+                                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, escapeAttackId, newPosOptimalAim)
+                                    playerTP -= attackAtDamageCell['cost']
+                                    chipUses2 -= 1
+                                }
                             }
 
                             player._currTp = playerTP
@@ -2100,8 +2217,110 @@ class Strategy {
     }
 
     // Virtual method - strategies can override for custom emergency behavior
-    // Default: flee with regeneration
+    // Default: teleport escape (if critical) OR flee with regeneration
     createEmergencyScenario(target, targetHitCell) {
+        var playerHP = getLife()
+        var hpPercent = (playerHP * 100) / getTotalLife()
+        var currentThreat = fieldMap.getThreatAtCell(player._cellPos)
+        var playerTP = player._currTp
+
+        // Check if CRITICAL emergency (HP < 10% OR lethal threat)
+        var isCritical = (hpPercent < 10 || currentThreat >= playerHP)
+
+        // Try teleportation escape if critical and available
+        if (isCritical &&
+            mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+            getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
+            playerTP >= 5) {
+
+            debug("[EMERGENCY][TELEPORT] Critical situation detected, searching for teleport escape cell")
+
+            // Find best safe cell for teleportation (zero threat, maximum distance from enemies)
+            var bestSafeCell = -1
+            var bestSafeCellDist = -1
+
+            // LeekScript maps have cells 0-612 (35x35 grid), iterate through all possible cell IDs
+            for (var candidateCell = 0; candidateCell < 650; candidateCell++) {
+
+                // Check if cell is valid for teleportation
+                if (isObstacle(candidateCell) || isEntity(candidateCell)) continue
+
+                // Check teleport range (1-12 cells from current position)
+                var distToCell = getCellDistance(player._cellPos, candidateCell)
+                if (distToCell == null || distToCell < 1 || distToCell > 12) continue
+
+                // Check if cell has zero threat
+                var cellThreat = fieldMap.getThreatAtCell(candidateCell)
+                if (cellThreat > 0) continue
+
+                // Prefer cells farther from all enemies
+                var minDistToEnemies = 999
+                var enemies = getEnemies()
+                for (var eIdx = 0; eIdx < count(enemies); eIdx++) {
+                    var enemyCell = getCell(enemies[eIdx])
+                    var distToEnemy = getCellDistance(candidateCell, enemyCell)
+                    if (distToEnemy != null && distToEnemy < minDistToEnemies) {
+                        minDistToEnemies = distToEnemy
+                    }
+                }
+
+                // Choose cell with maximum distance to nearest enemy
+                if (minDistToEnemies > bestSafeCellDist) {
+                    bestSafeCellDist = minDistToEnemies
+                    bestSafeCell = candidateCell
+                }
+            }
+
+            // If we found a good safe cell, teleport to it
+            if (bestSafeCell != -1) {
+                debug("[EMERGENCY][TELEPORT] Teleporting to safe cell " + bestSafeCell + " (dist from nearest enemy: " + bestSafeCellDist + ")")
+
+                // Create teleport action
+                var teleportAction = new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestSafeCell, target)
+                push(this._actions, teleportAction)
+                playerTP -= 5
+
+                // Attack with remaining TP if available
+                var attackAfterTeleport = this.findBestAttackAtPosition(bestSafeCell, target)
+                if (attackAfterTeleport != null && playerTP >= attackAfterTeleport['cost']) {
+                    debug("[EMERGENCY][TELEPORT] Attacking after teleport (" + attackAfterTeleport['type'] + "=" +
+                          ((attackAfterTeleport['type'] == 'weapon') ? getWeaponName(attackAfterTeleport['id']) : getChipName(attackAfterTeleport['id'])) +
+                          ")")
+
+                    if (attackAfterTeleport['type'] == 'weapon') {
+                        // Weapon swap if needed
+                        var currentWeapon = getWeapon()
+                        if (currentWeapon != attackAfterTeleport['id'] && playerTP >= 1 + attackAfterTeleport['cost']) {
+                            this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, attackAfterTeleport['id'], -1)
+                            playerTP -= 1
+                        }
+
+                        // Attack with weapon
+                        var uses = attackAfterTeleport['maxUse']
+                        while (playerTP >= attackAfterTeleport['cost'] && uses > 0) {
+                            this.createAttackAction(Action.ACTION_DIRECT, target, attackAfterTeleport['id'], -1, target._cellPos)
+                            playerTP -= attackAfterTeleport['cost']
+                            uses -= 1
+                        }
+                    } else {
+                        // Attack with chip
+                        var chipUses = attackAfterTeleport['maxUse']
+                        while (playerTP >= attackAfterTeleport['cost'] && chipUses > 0) {
+                            this.createAttackAction(Action.ACTION_DIRECT, target, -1, attackAfterTeleport['id'], target._cellPos)
+                            playerTP -= attackAfterTeleport['cost']
+                            chipUses -= 1
+                        }
+                    }
+                }
+
+                debug("[EMERGENCY][TELEPORT] Teleport escape scenario created")
+                return
+            }
+
+            debug("[EMERGENCY][TELEPORT] No suitable teleport destination found, falling back to defensive scenario")
+        }
+
+        // Fallback: Use defensive scenario (heal + fighting retreat)
         debug("[EMERGENCY] Using default emergency scenario (regeneration + flee)")
         this.createDefensiveScenario(target, targetHitCell)
     }
@@ -2133,39 +2352,181 @@ class Strategy {
             }
         }
 
-        debug("[BASELINE] Actions queued: " + count(this._actions))
-        debug("[BASELINE] Executing scenario...")
         this.executeScenario()
+    }
+
+    // Create OTKO scenario (override in strategy-specific classes)
+    // Returns true if OTKO scenario was created successfully, false otherwise
+    createOTKOScenario(target, targetHitCell) {
+        // Base implementation: no OTKO logic
+        // Override in StrengthStrategy, AgilityStrategy, etc.
+        return false
+    }
+
+    // Calculate if we can OTKO (One-Turn Kill Opportunity) the target
+    // Returns true if calculated burst damage >= enemy HP (with 85% confidence threshold)
+    // Checks both current position AND optimal teleport position
+    hasOTKOOpportunity(target) {
+        if (target == null) return false
+
+        var enemyHP = target._currHealth
+        var playerTP = player._currTp
+        var playerPos = player._cellPos
+
+        // Minimum TP requirement for OTKO attempt (need enough for burst)
+        if (playerTP < 10) {  // Keep threshold low to catch early OTKO opportunities
+            return false
+        }
+
+        // METHOD 1: Check current position first (no teleport)
+        var burstFromCurrent = this.calculateBurstDamage(target, playerPos, playerTP)
+        var killProbCurrent = burstFromCurrent / enemyHP
+
+        if (killProbCurrent >= 0.85) {
+            debug("[OTKO-CALC] Kill opportunity from CURRENT position: damage=" + floor(burstFromCurrent) +
+                  " vs HP=" + enemyHP + " (" + floor(killProbCurrent * 100) + "% kill probability)")
+            return true
+        }
+
+        // METHOD 2: Check optimal TELEPORT position (if available and enemy far)
+        // Use fieldMap.findOptimalTeleportCell() which calculates best position + projected damage
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+            getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
+            playerTP >= 15) {  // Need 5 for teleport + at least 10 for attacks
+
+            var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+            if (teleportInfo != null) {
+                var projectedDamage = teleportInfo['damage']
+                var killProbTeleport = projectedDamage / enemyHP
+
+                if (killProbTeleport >= 0.85) {
+                    debug("[OTKO-CALC] Kill opportunity via TELEPORT: damage=" + floor(projectedDamage) +
+                          " vs HP=" + enemyHP + " (" + floor(killProbTeleport * 100) + "% kill probability, cell=" + teleportInfo['cell'] + ")")
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    // Calculate maximum burst damage we can deal this turn from a given position
+    // Accounts for: weapon damage, weapon uses, TP costs, enemy shields
+    calculateBurstDamage(target, fromPosition, availableTP) {
+        var totalDamage = 0
+        var tpBudget = availableTP
+        var str = player._strength
+        var mag = player._magic
+        var wis = player._wisdom
+
+        // Reserve TP for teleport if we're checking from different position
+        if (fromPosition != player._cellPos && mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            tpBudget -= 5  // Reserve for teleport
+        }
+
+        // Calculate damage from all equipped weapons
+        for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
+            var weapon = arsenal.playerEquippedWeapons[weaponId]
+            if (weapon == null) continue
+
+            // Check range from shooting position
+            var distToTarget = getCellDistance(fromPosition, target._cellPos)
+            if (distToTarget == null) continue
+            if (distToTarget < weapon._minRange || distToTarget > weapon._maxRange) continue
+            if (!lineOfSight(fromPosition, target._cellPos)) continue
+
+            // Calculate net damage (accounting for shields)
+            var weaponDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, target)
+
+            // Calculate how many times we can use this weapon
+            var swapCost = (getWeapon() != weaponId) ? 1 : 0
+            if (tpBudget <= swapCost) continue
+
+            var maxUses = min(weapon._maxUse, floor((tpBudget - swapCost) / weapon._cost))
+            if (maxUses <= 0) continue
+
+            // Add to total damage
+            totalDamage += weaponDmg * maxUses
+            tpBudget -= (swapCost + maxUses * weapon._cost)
+        }
+
+        // Add damage from damage chips (if TP remains)
+        if (tpBudget > 0) {
+            for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
+                var chip = arsenal.playerEquippedChips[chipId]
+                if (chip == null) continue
+
+                // Only consider direct damage chips
+                if (!mapContainsKey(chip._effects, EFFECT_DAMAGE)) continue
+
+                // Check range
+                var distChip = getCellDistance(fromPosition, target._cellPos)
+                if (distChip == null) continue
+                if (distChip < chip._minRange || distChip > chip._maxRange) continue
+
+                // Check if we have enough TP
+                var chipCost = chip._cost
+                if (tpBudget < chipCost) continue
+
+                // Calculate chip damage
+                var chipDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, target)
+
+                // Use chip as many times as possible (most chips have maxUse=1)
+                var chipUses = min(chip._maxUse, floor(tpBudget / chipCost))
+                totalDamage += chipDmg * chipUses
+                tpBudget -= (chipUses * chipCost)
+            }
+        }
+
+        return totalDamage
     }
 
     // PHASE 2: Generate multiple scenarios, evaluate all, pick best (WITH OPERATION TRACKING)
     generateAndEvaluateBestScenario(target, targetHitCell) {
-        debug("[MULTI-SCENARIO] Starting multi-scenario evaluation...")
         logCheckpoint("Start of multi-scenario evaluation")
 
-        // Emergency mode overrides multi-scenario
-            debug("[BASELINE] Checking emergency mode...")
+        // PRIORITY 1: Check for OTKO opportunity (calculated burst damage)
+        // This overrides multi-scenario when we can secure a kill
+        if (this.hasOTKOOpportunity(target)) {
+            debug("[OTKO-OVERRIDE] Calculated OTKO opportunity - using hardcoded burst combo")
+            if (this.createOTKOScenario(target, targetHitCell)) {
+                debug("[OTKO-OVERRIDE] OTKO scenario created successfully")
+                return  // Skip multi-scenario
+            }
+            debug("[OTKO-OVERRIDE] OTKO scenario failed, falling back to multi-scenario")
+        }
+
+        // PRIORITY 2: Emergency mode (HP < 20%)
         if (this.shouldEnterEmergencyMode(target)) {
-            debug("[MULTI-SCENARIO] Emergency mode detected, using emergency scenario")
-                debug("[BASELINE] Creating emergency scenario")
-            this.createEmergencyScenario(target, targetHitCell)
+            debug("[EMERGENCY] HP critical - using defensive scenario (heal + flee)")
+            this.createDefensiveScenario(target, targetHitCell)
             return
         }
 
-        // Generate multiple scenario variants
+        // OUT-OF-RANGE OPTIMIZATION: Skip expensive multi-scenario if enemy too far
+        var distToTarget = getCellDistance(player._cellPos, target._cellPos)
+        var maxWeaponRange = 12  // M-LASER max range
+        var currentMP = getMP()
+
+        if (distToTarget != null && distToTarget > maxWeaponRange + currentMP) {
+            this.createMovementAction(Action.MOVEMENT_APPROACH, target._cellPos, target)
+            return
+        }
+
+        // PRIORITY 3: Multi-scenario evaluation with intelligent cycling
+        // Shield/damage return cycling now integrated into scenario generator
+        // Generate multiple scenario variants (state-based: 2-4 scenarios per state)
         startOp()
         var generator = new ScenarioGenerator(arsenal, player, target, fieldMap, this)
         var scenarios = generator.generateScenarios()
-        var genOps = stopOp("Scenario Generation (all 6 scenarios)")
+        var scenarioCount = count(scenarios)
+        var genOps = stopOp("Scenario Generation (" + scenarioCount + " scenarios)")
 
         if (count(scenarios) == 0) {
-            debug("[MULTI-SCENARIO] No scenarios generated, falling back to hardcoded")
-                debug("[BASELINE] Creating offensive scenario")
             this.createOffensiveScenario(target, targetHitCell)
             return
         }
 
-        debug("[MULTI-SCENARIO] Evaluating " + count(scenarios) + " scenarios...")
         logCheckpoint("After scenario generation")
 
         // Score each scenario
@@ -2181,19 +2542,8 @@ class Strategy {
             var scenario = scenarios[i]
             if (count(scenario) == 0) continue
 
-            // Track simulation
-            startOp()
             var simResult = simulator.simulate(scenario)
-            var simOps = stopOp("Simulation #" + (i+1))
-
-            // Track scoring
-            startOp()
             var score = scorer.score(simResult)
-            var scoreOps = stopOp("Scoring #" + (i+1))
-
-            debug("[MULTI-SCENARIO] Scenario " + (i+1) + ": score=" + floor(score) +
-                  " actions=" + count(scenario) + " dmg=" + floor(simResult.damageDealt) +
-                  " simOps=" + simOps + " scoreOps=" + scoreOps)
 
             if (score > bestScore) {
                 bestScore = score
@@ -2204,19 +2554,13 @@ class Strategy {
         var evalOps = stopOp("All Simulation+Scoring")
 
         if (bestScenario == null) {
-            debug("[MULTI-SCENARIO] No valid scenarios, falling back to hardcoded")
-                debug("[BASELINE] Creating offensive scenario")
             this.createOffensiveScenario(target, targetHitCell)
             return
         }
 
-        debug("[MULTI-SCENARIO] ========== BEST SCENARIO SELECTED ==========")
-        debug("[MULTI-SCENARIO] Best score: " + floor(bestScore))
-        debug("[MULTI-SCENARIO] Actions: " + count(bestScenario))
-        debug("[MULTI-SCENARIO] Damage: " + floor(bestSimResult.damageDealt) + " | DoT: " + floor(bestSimResult.dotDamageQueued))
-        debug("[MULTI-SCENARIO] TP: " + bestSimResult.tpSpent + " | MP: " + bestSimResult.mpSpent)
-        debug("[MULTI-SCENARIO] OPS: gen=" + genOps + " eval=" + evalOps + " total=" + (genOps + evalOps))
-        debug("[MULTI-SCENARIO] ===========================================")
+        // Summary log (concise)
+        debug("[MULTI-SCENARIO] Best: score=" + floor(bestScore) + " dmg=" + floor(bestSimResult.damageDealt) +
+              " TP=" + bestSimResult.tpSpent + " | OPS: gen=" + genOps + " eval=" + evalOps)
 
         logCheckpoint("After scenario evaluation")
 
@@ -2270,9 +2614,31 @@ class Strategy {
                     debug("Using chip " + getChipName(a.chip) + " on cell " + a.targetCell + " (TP=" + getTP() + ")")
                     useChipOnCell(a.chip, a.targetCell)
                 }
-                else {
-                    debug("Using weapon " + getWeaponName(a.weaponId) + " on cell " + a.targetCell + " (pos=" + currentPos + " dist=" + dist + " TP=" + getTP() + ")")
-                    useWeaponOnCell(a.targetCell)
+                else if (a.weaponId != -1) {
+                    // Ensure correct weapon is equipped before using it
+                    if (currentWeap != a.weaponId) {
+                        debug("Swapping to weapon " + getWeaponName(a.weaponId) + " (1 TP)")
+                        setWeapon(a.weaponId)
+                        currentWeap = a.weaponId  // Update current weapon tracker
+                    }
+
+                    var tpBefore = getTP()
+                    debug("Using weapon " + getWeaponName(a.weaponId) + " on cell " + a.targetCell + " (pos=" + currentPos + " dist=" + dist + " TP=" + tpBefore + ")")
+
+                    // Use entity ID instead of cell for more reliable targeting
+                    var result = null
+                    if (a.targetEntity != null && a.targetEntity._isAlive) {
+                        result = useWeapon(a.targetEntity._id)
+                    } else {
+                        result = useWeaponOnCell(a.targetCell)
+                    }
+
+                    var tpAfter = getTP()
+
+                    // Detect silent failure (TP didn't decrease)
+                    if (result == USE_INVALID_TARGET || tpBefore == tpAfter) {
+                        debug("⚠️  WEAPON ATTACK FAILED: " + getWeaponName(a.weaponId) + " from " + currentPos + " to " + a.targetCell + " (dist=" + dist + ", result=" + result + ", TP unchanged)")
+                    }
                 }
             }
             else if (a.type == Action.ACTION_BUFF) {
@@ -2373,6 +2739,7 @@ class Strategy {
         var simulatedPos = player._cellPos
         var simulatedTP = this._originalTP  // Start from original TP before planning decrements
         var simulatedMP = this._originalMP  // Start from original MP before planning decrements
+        var simulatedEquippedWeapon = getWeapon()  // Track equipped weapon for auto-swap insertion
 
         for (var i = 0; i < initialActionCount; i++) {
             var action = this._actions[i]
@@ -2452,7 +2819,24 @@ class Strategy {
                 isValid = false
                 reason = "Target dead (ID: " + action.targetEntity._id + ")"
             }
-            
+
+            // AUTO-INSERT WEAPON SWAP: If weapon attack requires different weapon, insert swap action
+            if (isValid && action.weaponId != -1 && action.type != Action.ACTION_WEAPON_SWAP && action.weaponId != simulatedEquippedWeapon) {
+                var weapon = arsenal.playerEquippedWeapons[action.weaponId]
+                if (weapon != null && simulatedTP >= 1 + weapon._cost) {
+                    // Create and insert weapon swap action
+                    var swapAction = new Action(Action.ACTION_WEAPON_SWAP, action.weaponId, -1, -1, action.targetEntity)
+                    push(validActions, swapAction)
+                    simulatedTP -= 1
+                    simulatedEquippedWeapon = action.weaponId
+                    fallbacksAdded += 1
+                    debug("[VALIDATION] Auto-inserted weapon swap: " + getWeaponName(simulatedEquippedWeapon) + " -> " + getWeaponName(action.weaponId) + " (TP: " + (simulatedTP + 1) + " -> " + simulatedTP + ")")
+                } else if (weapon != null && simulatedTP < 1 + weapon._cost) {
+                    isValid = false
+                    reason = "Insufficient TP for weapon swap + attack: need " + (1 + weapon._cost) + ", have " + simulatedTP
+                }
+            }
+
             // Validate TP availability for weapons (skip for weapon swaps - they're validated separately)
             if (isValid && action.weaponId != -1 && action.type != Action.ACTION_WEAPON_SWAP) {
                 var weapon = arsenal.playerEquippedWeapons[action.weaponId]
@@ -2506,12 +2890,16 @@ class Strategy {
                 var tpBefore = simulatedTP
                 if (action.type == Action.ACTION_WEAPON_SWAP) {
                     simulatedTP -= 1  // Weapon swap always costs 1 TP
-                    debug("[VALIDATION] Weapon swap: TP " + tpBefore + " -> " + simulatedTP)
+                    simulatedEquippedWeapon = action.weaponId  // Update simulated equipped weapon
+                    debug("[VALIDATION] Weapon swap: TP " + tpBefore + " -> " + simulatedTP + ", equipped: " + getWeaponName(simulatedEquippedWeapon))
                 } else if (action.weaponId != -1) {
                     var weapon = arsenal.playerEquippedWeapons[action.weaponId]
                     if (weapon != null) {
-                        simulatedTP -= weapon._cost
-                        debug("[VALIDATION] Weapon attack (" + getWeaponName(weapon._id) + "): TP " + tpBefore + " -> " + simulatedTP)
+                        // Account for weapon swap cost if weapon is not currently equipped
+                        var swapCost = (simulatedEquippedWeapon != action.weaponId) ? 1 : 0
+                        simulatedTP -= swapCost + weapon._cost
+                        simulatedEquippedWeapon = action.weaponId  // Update simulated equipped weapon
+                        debug("[VALIDATION] Weapon attack (" + getWeaponName(weapon._id) + "): TP " + tpBefore + " -> " + simulatedTP + " (swap=" + swapCost + ")")
                     }
                 } else if (action.chip != -1) {
                     var chipCost = getChipCost(action.chip)

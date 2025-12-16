@@ -359,6 +359,60 @@ class FieldMap extends FieldMapPatterns {
     }
 
     // ====================================================================
+    // BURST DAMAGE CALCULATION (for OTKO cell marking)
+    // ====================================================================
+
+    // Calculate maximum burst damage from specific cell position
+    // OPTIMIZED: Reuses field map data instead of recalculating
+    // Returns: {damage, tpRequired, killProbability}
+    // Used during buildHitMap() to mark OTKO cells
+    calculateBurstDamageFromCell(cellId, target, availableTP) {
+        if (target == null) return null
+        if (cellId < 0 || cellId >= FieldMap.board_cell_count) return null
+
+        // OPTIMIZATION: Reuse field map's pre-calculated damage data
+        // Field map already computed: range checks, LOS checks, damage calculations
+        // This cell data is fresh (rebuilt every turn when enemy moves)
+
+        var cell = null
+        // Find cell in damage map
+        for (var dmCell in this.damageMap) {
+            if (dmCell._id == cellId) {
+                cell = dmCell
+                break
+            }
+        }
+
+        if (cell == null) return null  // Cell not in damage map (no attacks possible)
+
+        // Use pre-calculated damage from field map
+        // This is the damage per-use, already accounting for shields/resistances
+        var baseDamage = cell._weaponDamage + cell._chipDamage
+
+        if (baseDamage <= 0) return null  // No damage possible from this cell
+
+        // Estimate maximum damage with available TP
+        // Heuristic: Average weapon use costs ~6 TP, can use ~3 times with 25 TP
+        // This is a conservative estimate (actual may be higher with multi-weapon combos)
+        var avgTPPerUse = 6.0
+        var estimatedUses = floor(availableTP / avgTPPerUse)
+        if (estimatedUses < 1) estimatedUses = 1
+        if (estimatedUses > 4) estimatedUses = 4  // Cap at 4 uses (realistic max)
+
+        var estimatedMaxDamage = baseDamage * estimatedUses
+
+        // Calculate kill probability
+        var targetHP = target._currHealth
+        var killProbability = (targetHP > 0) ? (estimatedMaxDamage / targetHP) : 0.0
+
+        return [
+            'damage': estimatedMaxDamage,
+            'tpRequired': availableTP,
+            'killProbability': killProbability
+        ]
+    }
+
+    // ====================================================================
     // ENEMY THREAT MAP SYSTEM (Week 2)
     // ====================================================================
 

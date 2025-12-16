@@ -45,6 +45,7 @@ class ScenarioSimulator {
         var simStrength = this._player._strength
         var simMagic = this._player._magic
         var simWisdom = this._player._wisdom
+        var simWeaponUses = [:]  // Track weapon uses per weapon ID
 
         result.finalPosition = simPos
 
@@ -76,16 +77,30 @@ class ScenarioSimulator {
                     result.actionsExecuted++
                 } else if (action.weaponId != -1) {
                     // Weapon attack - USE CACHED VALUES
-                    var swapCost = (simWeapon != action.weaponId) ? 1 : 0
-                    var weaponObj = this._arsenal.getItemById(action.weaponId)
-                    var weaponCost = weaponObj != null ? weaponObj._cost : null
-                    var weaponDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, action.weaponId, this._target)
+                    var weaponObj = null
+                    if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
+                        weaponObj = this._arsenal.playerEquippedWeapons[action.weaponId]
+                    }
 
-                    if (weaponCost != null) {
+                    if (weaponObj != null) {
+                        // Check weapon max uses
+                        var currentUses = simWeaponUses[action.weaponId]
+                        if (currentUses == null) currentUses = 0
+
+                        if (currentUses >= weaponObj._maxUse) {
+                            debug("[SIM] Weapon " + action.weaponId + " max uses (" + weaponObj._maxUse + ") reached - skipping")
+                            continue
+                        }
+
+                        var swapCost = (simWeapon != action.weaponId) ? 1 : 0
+                        var weaponCost = weaponObj._cost
+                        var weaponDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, action.weaponId, this._target)
+
                         result.damageDealt += weaponDmg
                         result.tpSpent += swapCost + weaponCost
                         simTP -= swapCost + weaponCost
                         simWeapon = action.weaponId
+                        simWeaponUses[action.weaponId] = currentUses + 1
                         result.actionsExecuted++
                     }
                 }
@@ -103,7 +118,7 @@ class ScenarioSimulator {
                     result.shieldsGained += shieldAmount
                 } else if (action.chip == CHIP_PROTEIN || action.chip == CHIP_LEATHER_BOOTS) {
                     result.relativeShieldGained += this.estimateRelativeShield(action.chip)
-                } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
+                } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
                 } else if (action.chip == CHIP_STEROID || action.chip == CHIP_DOPING) {
                     // Strength buff - update simulated strength for future damage calculations
@@ -168,8 +183,10 @@ class ScenarioSimulator {
                 return simTP >= cost
             } else if (action.weaponId != -1) {
                     var weaponCost = null
-                    var weaponObj = this._arsenal.getItemById(action.weaponId)
-                    if (weaponObj != null) weaponCost = weaponObj._cost
+                    if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
+                        var weaponObj = this._arsenal.playerEquippedWeapons[action.weaponId]
+                        weaponCost = weaponObj._cost
+                    }
                 if (weaponCost == null) return false
                 var swapCost = (simWeapon != action.weaponId) ? 1 : 0
                 return simTP >= swapCost + weaponCost
@@ -215,6 +232,7 @@ class ScenarioSimulator {
     // Estimate healing amount
     estimateHealing(chip, wisdom) {
         if (chip == CHIP_REGENERATION) return 50 + wisdom * 0.5
+        if (chip == CHIP_REMISSION) return 100 + wisdom * 1.0  // ~125 HP with wisdom buff
         if (chip == CHIP_CURE) return 100 + wisdom * 1.0
         if (chip == CHIP_DRIP) return 200 + wisdom * 2.0
         return 0

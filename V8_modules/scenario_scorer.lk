@@ -18,6 +18,21 @@ class ScenarioScorer {
 
         // 1. DAMAGE WEIGHT - Based on STR and MAG stats
         var damageWeight = this.calculateDamageWeight()
+
+        // KILL OPPORTUNITY BOOST: If we can kill enemy (damage >= 70% HP), heavily favor this scenario
+        var enemyHP = this._target._currHealth
+        var killProbability = simResult.damageDealt / enemyHP
+
+        if (killProbability >= 0.70) {
+            damageWeight *= 5.0  // 5x damage weight for kill opportunities
+            debug("[SCORER-BOOST] Kill opportunity: dmg=" + floor(simResult.damageDealt) +
+                  " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 5x damage weight")
+        } else if (killProbability >= 0.50) {
+            damageWeight *= 2.5  // 2.5x for near-kill (50-70%)
+            debug("[SCORER-BOOST] Near-kill: dmg=" + floor(simResult.damageDealt) +
+                  " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
+        }
+
         var damageScore = simResult.damageDealt * damageWeight
         score += damageScore
 
@@ -102,8 +117,8 @@ class ScenarioScorer {
     calculateEhpWeight() {
         var resistance = this._player._resistance
         var wisdom = this._player._wisdom
-        var currentHP = this._player._hp
-        var maxHP = this._player._maxHP
+        var currentHP = this._player._currHealth
+        var maxHP = this._player._maxHealth
 
         // Low HP situations: increase eHP value
         var hpRatio = currentHP / maxHP
@@ -114,6 +129,15 @@ class ScenarioScorer {
 
         // Base weight from RESISTANCE/WISDOM
         var baseWeight = 0.5 + (resistance / 500.0) + (wisdom / 1000.0)
+
+        // KNOWLEDGE/ELEVATION wisdom buffs active: healing is more valuable
+        // Check if wisdom buffs were used recently (cooldown > 0 means still active)
+        var knowledgeActive = (getCooldown(CHIP_KNOWLEDGE, this._player._id) > 0)
+        var elevationActive = (getCooldown(CHIP_ELEVATION, this._player._id) > 0)
+
+        if (knowledgeActive || elevationActive) {
+            baseWeight *= 1.5  // 50% bonus to healing value with wisdom buff active
+        }
 
         return baseWeight * urgencyMultiplier
     }
@@ -138,9 +162,9 @@ class ScenarioScorer {
 
     // EFFICIENCY WEIGHT: Longer fights favor efficiency
     calculateEfficiencyWeight() {
-        var currentHP = this._player._hp
-        var maxHP = this._player._maxHP
-        var targetHP = this._target._hp
+        var currentHP = this._player._currHealth
+        var maxHP = this._player._maxHealth
+        var targetHP = this._target._currHealth
 
         // Long fight expected: increase efficiency weight
         var fightLengthEstimate = targetHP / max(1, this._player._strength + this._player._magic)
@@ -152,10 +176,10 @@ class ScenarioScorer {
 
     // BUFF WEIGHT: Strategic value of buffs
     calculateBuffWeight() {
-        return 50.0  // Fixed weight for buff/debuff strategic value
+        return 5.0  // Fixed weight for buff/debuff strategic value (reduced from 50 to balance with damage)
     }
 
-    // Evaluate position safety/threat
+    // Evaluate position safety/threat (IMPROVED: Now accounts for enemy threat at position)
     evaluatePosition(finalPos) {
         if (finalPos == -1 || finalPos == this._player._cellPos) return 0
 
@@ -178,7 +202,25 @@ class ScenarioScorer {
             }
         }
 
-        return offensiveValue + kitingValue
+        // NEW: Threat-based safety evaluation (reduce damage taken)
+        // Check how much threat (potential damage) enemy has at this position
+        var threatPenalty = 0
+        var threatAtPos = this._fieldMap.getThreatAtCell(finalPos)
+        if (threatAtPos > 0) {
+            // Heavy penalty for high-threat positions
+            // Threat is enemy's potential damage at this cell
+            threatPenalty = -threatAtPos * 0.5  // Penalty = 50% of threat value
+
+            // Extra penalty if we're low HP (prioritize safety more)
+            var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+            if (hpPercent < 50) {
+                threatPenalty *= 2.0  // Double penalty when low HP
+                debug("[SCORER][THREAT] Low HP + high threat cell " + finalPos + ": threat=" + floor(threatAtPos) + ", penalty=" + floor(threatPenalty))
+            }
+        }
+
+        var totalScore = offensiveValue + kitingValue + threatPenalty
+        return totalScore
     }
 
     // Calculate TP/MP efficiency score
@@ -270,7 +312,7 @@ class ScenarioScorer {
 
     // Calculate relative shield value (converts % shield to absolute value)
     calculateRelativeShieldValue(relativeShieldPercent) {
-        var maxHP = this._player._maxHP
+        var maxHP = this._player._maxHealth
         return (relativeShieldPercent / 100.0) * maxHP
     }
 }
