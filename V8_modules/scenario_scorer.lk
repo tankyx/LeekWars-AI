@@ -68,11 +68,27 @@ class ScenarioScorer {
         var critBonus = this.calculateCritBonus(simResult.damageDealt)
         score += critBonus
 
+        // 8. OTKO CELL BONUS - Massive bonus for positioning on kill-opportunity cells
+        var otkoBonus = 0
+        var finalPos = simResult.finalPosition
+        if (finalPos != -1 && mapContainsKey(this._fieldMap.damageMap, finalPos)) {
+            var cell = this._fieldMap.damageMap[finalPos]
+            if (cell._isOTKOCell) {
+                // Huge bonus: 5000 points for OTKO positioning
+                otkoBonus = 5000
+                debug("[SCORER-OTKO] +5000 bonus: Final position cell " + finalPos +
+                      " is OTKO cell (kill prob=" + floor(cell._otkoKillProbability * 100) +
+                      "%, damage=" + floor(cell._otkoDamage) + ")")
+            }
+        }
+        score += otkoBonus
+
         // Debug scoring breakdown
         debug("[SCORE] Total=" + floor(score) + " | dmg=" + floor(damageScore) + " dot=" + floor(dotScore) +
               " eHP=" + floor(shieldScore + relShieldScore + healScore) +
               " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
-              " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus))
+              " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
+              " otko=" + floor(otkoBonus))
 
         return score
     }

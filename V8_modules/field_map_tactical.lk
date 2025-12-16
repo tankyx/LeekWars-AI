@@ -412,6 +412,36 @@ class FieldMap extends FieldMapPatterns {
         ]
     }
 
+    // Get the best OTKO cell (highest kill probability)
+    // Returns Cell object or null if no OTKO cells available
+    getBestOTKOCell() {
+        var bestCell = null
+        var bestKillProb = 0
+
+        for (var cell in this.damageMap) {
+            if (cell._isOTKOCell && cell._otkoKillProbability > bestKillProb) {
+                bestKillProb = cell._otkoKillProbability
+                bestCell = cell
+            }
+        }
+
+        return bestCell  // Returns cell with highest kill probability
+    }
+
+    // Get all OTKO cells (for movement prioritization)
+    // Returns array of Cell objects
+    getAllOTKOCells() {
+        var otkoCells = []
+
+        for (var cell in this.damageMap) {
+            if (cell._isOTKOCell) {
+                push(otkoCells, cell)
+            }
+        }
+
+        return otkoCells
+    }
+
     // ====================================================================
     // ENEMY THREAT MAP SYSTEM (Week 2)
     // ====================================================================

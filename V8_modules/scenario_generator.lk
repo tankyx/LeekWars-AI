@@ -55,8 +55,25 @@ class ScenarioGenerator {
         // buffStrategy: 0=none, 1=offensive, 2=defensive, 3=both, 4=build-specific
 
         if (state == "KILL") {
-            // Enemy HP < 40% AND we can OTKO → pure burst scenarios (2 scenarios)
-            debug("[STATE-KILL] Enemy killable - generating burst scenarios")
+            // Enemy HP < 40% AND we can OTKO → use OTKO cells for optimal positioning
+            debug("[STATE-KILL] Enemy killable - checking OTKO cells for optimal positioning")
+
+            // Check if we have OTKO cells and teleportation available
+            var bestOTKO = this._fieldMap.getBestOTKOCell()
+            var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
+            var teleportReady = hasTeleport && getCooldown(CHIP_TELEPORTATION, player._id) == 0
+
+            if (bestOTKO != null && teleportReady && availableTP >= 15) {
+                // SCENARIO 1: Teleport to OTKO cell + burst (best positioning for kill)
+                var distToOTKO = getCellDistance(player._cellPos, bestOTKO._id)
+                if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= 12) {
+                    debug("[STATE-KILL] Teleporting to OTKO cell " + bestOTKO._id +
+                          " (kill prob=" + floor(bestOTKO._otkoKillProbability * 100) + "%)")
+                    push(scenarios, this.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
+                }
+            }
+
+            // SCENARIO 2: Burst from current position (fallback if no teleport or OTKO cell)
             push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "otko"), availableTP, availableMP))
             push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "stand"), availableTP, availableMP))
         }
@@ -499,6 +516,33 @@ class ScenarioGenerator {
         return actions
     }
 
+    // ========== OTKO TELEPORT SCENARIO ==========
+
+    // OTKO Teleport Scenario: Teleport to OTKO cell + burst damage spam
+    // Used in KILL state when OTKO cells are available
+    createOTKOTeleportScenario(otkoCell, availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // 1. Teleport to OTKO cell (5 TP)
+        if (tpBudget >= 5) {
+            push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, otkoCell, this._target))
+            tpBudget -= 5
+            debug("[OTKO-TELEPORT] Teleporting to OTKO cell " + otkoCell + " for optimal kill positioning")
+        }
+
+        // 2. Spam ALL weapons and damage chips from OTKO position (100% remaining TP)
+        // Use otkoCell as simulated position for attack actions
+        var attackActions = this.getAttackActions(tpBudget, 1.0, otkoCell)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // No repositioning - stand and burst damage
+        return actions
+    }
+
     // ========== PARAMETRIC SCENARIO GENERATOR ==========
 
     // Unified parametric scenario generator - replaces 6 hardcoded functions with 1 configurable function
@@ -703,6 +747,34 @@ class ScenarioGenerator {
     getMoveToOptimalCell(mpBudget) {
         if (mpBudget <= 0) return null
 
+        // PRIORITY 1: Check for OTKO cells first (kill opportunity positioning)
+        var otkoCells = this._fieldMap.getAllOTKOCells()
+        if (count(otkoCells) > 0) {
+            // Find closest reachable OTKO cell
+            var bestOTKO = null
+            var bestOTKOScore = -999999
+
+            for (var otkoCell in otkoCells) {
+                var pathLen = getCachedPathLength(this._player._cellPos, otkoCell._id)
+                if (pathLen != null && pathLen <= mpBudget) {
+                    // Score: Kill probability (primary) + damage (secondary) - distance (tie-breaker)
+                    var score = otkoCell._otkoKillProbability * 10000 + otkoCell._otkoDamage - pathLen * 10
+                    if (score > bestOTKOScore) {
+                        bestOTKOScore = score
+                        bestOTKO = otkoCell
+                    }
+                }
+            }
+
+            if (bestOTKO != null) {
+                debug("[MOVE-OTKO] Prioritizing OTKO cell " + bestOTKO._id +
+                      " (kill prob=" + floor(bestOTKO._otkoKillProbability * 100) +
+                      "%, damage=" + floor(bestOTKO._otkoDamage) + ")")
+                return new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestOTKO._id, this._target)
+            }
+        }
+
+        // PRIORITY 2: Fallback to best damage cell (standard behavior)
         var bestCell = this._fieldMap.getBestWeaponOrChipCell()
         if (bestCell == null) return null
 

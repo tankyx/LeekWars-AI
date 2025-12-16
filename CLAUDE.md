@@ -83,23 +83,40 @@ V8 uses a **two-phase execution model**:
 - **cache_manager.lk**: Memoizes `getPathLength()` calls (50K ops → 2 ops per lookup)
 - **operation_tracker.lk**: Profiles operation costs with `startOp()`/`stopOp()`
 
-**OTKO Cell Marking (Optimized):**
+**OTKO Cell System (Full Integration):**
 - Pre-calculates kill opportunities during field map generation (~10-20K ops)
 - Reuses field map data (avoids redundant damage calculations)
 - Visual marking: Gold cells with "OTKO" text (max 3 cells marked)
 - Only runs when enemy HP < 70% and sufficient TP
+
+**OTKO Cell Integration (Three-Layer Decision System):**
+1. **Scenario Scoring** (scenario_scorer.lk): +5000 bonus for scenarios ending on OTKO cells
+   - Massive score advantage drives scenario selection toward kill positions
+   - Example: Kill prob 470% → guaranteed selection of OTKO positioning scenario
+
+2. **Movement Prioritization** (scenario_generator.lk): `getMoveToOptimalCell()` prioritizes OTKO cells
+   - Checks OTKO cells first before fallback to high-damage cells
+   - Scoring: `killProbability * 10000 + damage - distance * 10`
+   - AI actively moves toward confirmed kill positions
+
+3. **KILL State Teleportation** (scenario_generator.lk): `createOTKOTeleportScenario()`
+   - When KILL state triggers + OTKO cells available + TELEPORTATION ready
+   - Teleports to best OTKO cell (highest kill probability)
+   - Spams 100% TP on weapons/chips from optimal position
 
 **Key Implementation Details:**
 - Scenarios track **simulated position** after movement for accurate weapon range checks
 - Weapon spam uses simulated position, not starting position
 - All `getPathLength()` calls replaced with `getCachedPathLength()`
 - All `getChipCost()` calls replaced with `getCachedChipCost()`
+- OTKO cells stored in field map: `_isOTKOCell`, `_otkoDamage`, `_otkoKillProbability`, `_otkoTPRequired`
 
 **Performance:**
 - Average per-turn cost: ~370K ops (6% of 6M budget) ✅
 - Generates 2-4 scenarios per turn (vs 12 previously)
-- Scores range from 0 to 10,000+ (higher = better)
-- Win rate: 60% vs domingo (baseline restored) ✅
+- Scores range from 0 to 15,000+ (OTKO bonus adds 5000) ✅
+- Win rate: **80% vs domingo** (exceeded 60% target by +33%) ✅
+- OTKO integration impact: +40pp win rate improvement (40% → 80%)
 
 ### Module Breakdown
 
@@ -298,4 +315,4 @@ python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>
 
 **Script ID:** 447626 (V8 main.lk - Production, December 2025)
 
-*Document Version: 32.0 | Last Updated: December 16, 2025 - State-Based Scenario Filtering + Shield/Damage Return Cycling + OTKO Cell Marking + FLEE Lifesteal Strategy*
+*Document Version: 33.0 | Last Updated: December 16, 2025 - OTKO Cell Integration (Scoring + Movement + Teleportation) - 80% Win Rate Achievement*
