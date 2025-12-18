@@ -115,8 +115,6 @@ V8 uses a **two-phase execution model**:
 - Average per-turn cost: ~370K ops (6% of 6M budget) ✅
 - Generates 2-4 scenarios per turn (vs 12 previously)
 - Scores range from 0 to 15,000+ (OTKO bonus adds 5000) ✅
-- Win rate: **80% vs domingo** (exceeded 60% target by +33%) ✅
-- OTKO integration impact: +40pp win rate improvement (40% → 80%)
 
 ### Module Breakdown
 
@@ -244,7 +242,6 @@ Abstract base class providing:
 ## Recent Improvements (December 2025)
 
 ### Combat Performance Enhancement (December 8)
-**Win Rate: 10% → 60% (6x improvement)**
 
 **Key Changes:**
 1. **Attrition-Based OTKO** - Check kill opportunity every turn instead of once at start
@@ -268,6 +265,45 @@ Abstract base class providing:
 - Safe kiting for magic strategy (zero-threat cells)
 - Hit-and-run tactics for agility
 - Threat-weighted emergency mode
+
+### Hide & Seek Algorithm Overhaul (December 17)
+**Replaced LOS-counting danger system with threat map integration for intelligent tactical positioning**
+
+**Key Improvements:**
+1. **Threat Map Integration** - Uses actual enemy damage potential instead of line-of-sight exposure counts
+   - `getThreatAtCell()` replaces `computeDangerForCell()`
+   - Normalized by player HP percentage for better comparison
+   - ~50K operation savings per turn (removed expensive LOS calculations)
+   - `field_map_tactical.lk:147, 990`
+
+2. **Intelligent Cover Evaluation** - Obstacles must actually block enemy LOS to count as cover
+   - Checks if obstacles are between cell and enemy positions
+   - Distance-weighted scoring (closer enemies = cover matters more)
+   - Returns 0-10 score (vs previous 0-8 adjacent obstacle count)
+   - `field_map_tactical.lk:234-295`
+
+3. **Escape Route Scoring** - Detects corners and dead-ends to avoid getting trapped
+   - Counts accessible adjacent directions (8 total)
+   - 0-1 directions = trapped (0-1 points)
+   - 6-8 directions = excellent mobility (8-10 points)
+   - `field_map_tactical.lk:297-334`
+
+4. **Smart Distance Logic** - Context-aware positioning based on threat level
+   - **Safe cells (threat=0)**: Prefer CLOSER to maintain combat range
+   - **Dangerous cells (threat>0)**: Prefer FURTHER to escape
+   - Prevents hiding in far corners when no threat exists
+   - `field_map_tactical.lk:174-206`
+
+**Scoring Priority (Defensive Mode):**
+1. Lower threat (always prioritize safety)
+2. Higher escape routes (avoid getting cornered)
+3. Distance (closer if safe, further if dangerous)
+4. Higher cover (tiebreaker)
+
+**Removed:**
+- `getEnemyAccess()` cache (no longer needed)
+- `computeDangerForCell()` LOS counting (replaced with threat map)
+- Simplistic adjacent obstacle counting (replaced with actual LOS blocking checks)
 
 ### Core System Improvements
 - **Target Selection**: Strategy-specific prioritization (STR/AGI: lowest HP, MAGIC: fresh targets)
@@ -315,4 +351,4 @@ python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>
 
 **Script ID:** 447626 (V8 main.lk - Production, December 2025)
 
-*Document Version: 33.0 | Last Updated: December 16, 2025 - OTKO Cell Integration (Scoring + Movement + Teleportation) - 80% Win Rate Achievement*
+*Document Version: 34.0 | Last Updated: December 17, 2025 - Hide & Seek Algorithm Improvements (Threat-based positioning, cover evaluation, escape route scoring)*

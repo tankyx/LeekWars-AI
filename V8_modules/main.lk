@@ -47,22 +47,18 @@ function init() {
 
     // Check if this is a boss fight first
     if (detectBossFight()) {
-        debug("Boss fight detected! Using BossFightStrategy")
         strategy = new BossFightStrategy();
         // Don't call turnOneBuffs() for boss fights - need TP for puzzle chips
     }
     else if (player._agility >= player._strength && player._agility >= player._magic) {
-        debug("Player is agility-focused (agility: " + player._agility + ", strength: " + player._strength + ", magic: " + player._magic + ")")
         strategy = new AgilityStrategy();
         strategy.turnOneBuffs()
     }
     else if (player._magic >= player._strength) {
-        debug("Player is magic-focused (magic: " + player._magic + ", strength: " + player._strength + ", agility: " + player._agility + ")")
         strategy = new MagicStrategy();
         strategy.turnOneBuffs()
     }
     else {
-        debug("Player is strength-focused (strength: " + player._strength + ", agility: " + player._agility + ", magic: " + player._magic + ")")
         strategy = new StrengthStrategy();
         strategy.turnOneBuffs()
     }
@@ -80,8 +76,7 @@ function main() {
     // Initialize caches for optimized multi-scenario evaluation (PHASE 1)
     startOp()
     initializeCaches(player, target, arsenal)
-    var cacheOps = stopOp("Initialize all caches")
-    debug("[CACHE] Cache initialization complete: " + cacheOps + " ops")
+    stopOp("Initialize all caches")
 
     var targetHitCell = null
 
@@ -89,14 +84,6 @@ function main() {
     if (strategy.shouldBuildDamageMap()) {
         fieldMap.buildHitMap(target._cellPos)
         targetHitCell = fieldMap.getBestWeaponOrChipCell();
-
-        if (targetHitCell != null && targetHitCell != -1) {
-            debug("Target hit cell: " + targetHitCell._id + " Weapon: " + getWeaponName(targetHitCell._highestDamageWeapon._id))
-        } else {
-            debug("No valid attack cell found")
-        }
-    } else {
-        debug("Skipping damage map build (not required for current strategy)")
     }
 
     // WEEK 2: Build enemy threat map for tactical positioning

@@ -58,13 +58,20 @@ class ScenarioGenerator {
             // Enemy HP < 40% AND we can OTKO → use OTKO cells for optimal positioning
             debug("[STATE-KILL] Enemy killable - checking OTKO cells for optimal positioning")
 
+            // COMBO SCENARIO 1: Neutrino pre-stack + Teleport OTKO (highest damage)
+            var neutrinoOTKO = this.createNeutrinoOTKOScenario(availableTP, availableMP)
+            if (neutrinoOTKO != null) {
+                debug("[STATE-KILL] Adding Neutrino-OTKO combo scenario")
+                push(scenarios, neutrinoOTKO)
+            }
+
             // Check if we have OTKO cells and teleportation available
             var bestOTKO = this._fieldMap.getBestOTKOCell()
             var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
             var teleportReady = hasTeleport && getCooldown(CHIP_TELEPORTATION, player._id) == 0
 
             if (bestOTKO != null && teleportReady && availableTP >= 15) {
-                // SCENARIO 1: Teleport to OTKO cell + burst (best positioning for kill)
+                // SCENARIO 2: Teleport to OTKO cell + burst (best positioning for kill)
                 var distToOTKO = getCellDistance(player._cellPos, bestOTKO._id)
                 if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= 12) {
                     debug("[STATE-KILL] Teleporting to OTKO cell " + bestOTKO._id +
@@ -73,30 +80,137 @@ class ScenarioGenerator {
                 }
             }
 
-            // SCENARIO 2: Burst from current position (fallback if no teleport or OTKO cell)
+            // SCENARIO 3: Burst from current position (fallback if no teleport or OTKO cell)
             push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "otko"), availableTP, availableMP))
             push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "stand"), availableTP, availableMP))
+
+            // BASELINE scenarios (insurance against combo failures)
+            push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+            push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
         }
         else if (state == "AGGRO") {
-            // Both HP > 60%, turn 1-4, OR buffs expired → apply buffs + attack (3 scenarios)
+            // Both HP > 60%, turn 1-4, OR buffs expired → apply buffs + attack
             debug("[STATE-AGGRO] Early game / buff application phase")
+
+            // COMBO SCENARIO 1: GRAPPLE-HEAVY_SWORD (early aggression)
+            var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
+            if (grappleHS != null) {
+                debug("[STATE-AGGRO] Adding GRAPPLE-HEAVY_SWORD combo scenario")
+                push(scenarios, grappleHS)
+            }
+
+            // COMBO SCENARIO 2: Neutrino stacking (establish vulnerability early)
+            var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
+            if (neutrinoStack != null) {
+                debug("[STATE-AGGRO] Adding Neutrino stacking combo scenario")
+                push(scenarios, neutrinoStack)
+            }
+
+            // COMBO SCENARIO 3: STEROID → OTKO (check if buff enables kill)
+            var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
+            if (steroidOTKO != null) {
+                debug("[STATE-AGGRO] Adding STEROID-OTKO combo scenario")
+                push(scenarios, steroidOTKO)
+            }
+
+            // COMBO SCENARIO 3B: STEROID → Recheck (two-phase adaptive)
+            var steroidRecheck = this.createSteroidRecheckScenario(availableTP, availableMP)
+            if (steroidRecheck != null) {
+                debug("[STATE-AGGRO] Adding STEROID-Recheck two-phase scenario")
+                push(scenarios, steroidRecheck)
+            }
+
+            // Standard scenarios
             push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // Build-specific buff
             push(scenarios, this.createParametricScenario(new ScenarioParams(1, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // Offensive buff
             push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // No buff (save TP)
+
+            // PREEMPTIVE SHIELD: Apply defensive buffs early to reduce incoming damage
+            // Reduces damage taken → increases effective HP → survive longer
+            push(scenarios, this.createParametricScenario(new ScenarioParams(2, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // Defensive buff (FORTRESS/WALL)
+
+            // BASELINE scenarios (always executable - insurance against combo failures)
+            push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))  // Move + attack
+            push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))  // Attack from current position
         }
         else if (state == "ATTRITION") {
-            // Both HP 40-80%, turn 5+, buffs active → balanced combat (3 scenarios)
+            // Both HP 40-80%, turn 5+, buffs active → balanced combat
             debug("[STATE-ATTRITION] Ongoing balanced combat")
+
+            // DEFENSIVE ATTRITION: If losing HP race, prioritize heal+attack hybrids
+            var playerHP = this._player._currHealth
+            var enemyHP = this._target._currHealth
+            var losingHPRace = (playerHP < enemyHP)
+
+            if (losingHPRace) {
+                debug("[STATE-ATTRITION] Losing HP race (" + playerHP + " < " + enemyHP + ") - adding defensive scenarios")
+                // Add heal+attack hybrid scenarios
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.7, 0.7, "hide"), availableTP, availableMP))  // Heal + 70% attack
+                push(scenarios, this.createParametricScenario(new ScenarioParams(3, 0.5, 0.8, 0.8, "hide"), availableTP, availableMP))  // Mixed buffs + some heal
+            }
+
+            // COMBO SCENARIO 1: GRAPPLE-HEAVY_SWORD (pull + burst damage)
+            var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
+            if (grappleHS != null) {
+                debug("[STATE-ATTRITION] Adding GRAPPLE-HEAVY_SWORD combo scenario")
+                push(scenarios, grappleHS)
+            }
+
+            // COMBO SCENARIO 2: Neutrino stacking (if not already maxed)
+            var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
+            if (neutrinoStack != null) {
+                debug("[STATE-ATTRITION] Adding Neutrino stacking combo scenario")
+                push(scenarios, neutrinoStack)
+            }
+
+            // COMBO SCENARIO 3: STEROID → OTKO (check if enemy weakened enough)
+            var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
+            if (steroidOTKO != null) {
+                debug("[STATE-ATTRITION] Adding STEROID-OTKO combo scenario")
+                push(scenarios, steroidOTKO)
+            }
+
+            // CHECKPOINT SCENARIO 1: Neutrino → Recheck (adaptive vulnerability stacking)
+            var neutrinoRecheck = this.createNeutrinoRecheckScenario(availableTP, availableMP)
+            if (neutrinoRecheck != null) {
+                debug("[STATE-ATTRITION] Adding Neutrino-Recheck checkpoint scenario")
+                push(scenarios, neutrinoRecheck)
+            }
+
+            // CHECKPOINT SCENARIO 2: GRAPPLE-HS → Recheck (adaptive pull combo)
+            var grappleHSRecheck = this.createGrappleHSRecheckScenario(availableTP, availableMP)
+            if (grappleHSRecheck != null) {
+                debug("[STATE-ATTRITION] Adding GRAPPLE-HS-Recheck checkpoint scenario")
+                push(scenarios, grappleHSRecheck)
+            }
+
+            // Standard scenarios
             push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 0.8, 0.8, "hide"), availableTP, availableMP))  // Build-specific + 80%
             push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.8, 0.8, "hide"), availableTP, availableMP))  // Mixed buffs + 80%
             push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  // Pure damage spam
+
+            // BASELINE scenarios
+            push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+            push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
         }
         else if (state == "SUSTAIN") {
             // Our HP 30-60%, enemy HP > 40% → heal + conservative (3 scenarios)
             debug("[STATE-SUSTAIN] HP management phase")
+
+            // CHECKPOINT SCENARIO: Heal → Recheck (adaptive healing strategy)
+            var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
+            if (healRecheck != null) {
+                debug("[STATE-SUSTAIN] Adding Heal-Recheck checkpoint scenario")
+                push(scenarios, healRecheck)
+            }
+
             push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.6, 0.6, "hide"), availableTP, availableMP))  // Heal + shield + 60%
             push(scenarios, this.createParametricScenario(new ScenarioParams(4, 0.7, 0.6, 0.6, "kite"), availableTP, availableMP))  // Build-specific + heal + kite
             push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.6, 0.6, "hide"), availableTP, availableMP))  // Mixed buffs + 60%
+
+            // BASELINE scenarios
+            push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+            push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
         }
         else if (state == "FLEE") {
             // Our HP < 30% → heal + lifesteal strategy
@@ -117,6 +231,10 @@ class ScenarioGenerator {
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))  // REMISSION + 100% attack (lifesteal)
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))  // Aggressive lifesteal
             }
+
+            // BASELINE scenarios (even in FLEE, need attack options)
+            push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+            push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
         }
 
         return scenarios
@@ -156,17 +274,19 @@ class ScenarioGenerator {
             }
         }
 
-        // STATE 3: SUSTAIN (our HP 30-60%, enemy HP > 40%)
-        if (playerHPPercent >= 30 && playerHPPercent <= 60 && enemyHPPercent > 40) {
+        // STATE 3: SUSTAIN (our HP 30-70%, enemy HP > 40%)
+        // LOWERED from 60% to 70% for proactive healing (prevents dying despite winning damage race)
+        if (playerHPPercent >= 30 && playerHPPercent <= 70 && enemyHPPercent > 40) {
             return "SUSTAIN"
         }
 
         // STATE 4: AGGRO (early game OR buffs expired)
         // Check if we're in early game (turn 1-4) OR critical buffs expired
+        // UPDATED: Changed from > 60% to > 70% to align with SUSTAIN threshold
         var earlyGame = (currentTurn >= 1 && currentTurn <= 4)
         var buffsExpired = this.checkCriticalBuffsExpired()
 
-        if ((earlyGame || buffsExpired) && playerHPPercent > 60 && enemyHPPercent > 60) {
+        if ((earlyGame || buffsExpired) && playerHPPercent > 70 && enemyHPPercent > 60) {
             return "AGGRO"
         }
 
@@ -667,6 +787,9 @@ class ScenarioGenerator {
             }
         }
 
+        // Note: We don't reject buff-only scenarios here anymore
+        // Scorer applies -10000 penalty for zero-damage scenarios, ensuring attack scenarios win
+
         // PHASE 6: REPOSITIONING (based on repositioning type)
         if (params.repositioning == "hide") {
             var hideAction = this.getHideAndSeekAction(mpBudget)
@@ -1141,5 +1264,667 @@ class ScenarioGenerator {
         totalDamage += bestChipDamage
 
         return totalDamage
+    }
+
+    // ====================================================================
+    // COMBO-SPECIFIC SCENARIOS (High-Value Strategic Sequences)
+    // ====================================================================
+
+    // COMBO 1: Neutrino Vulnerability Stacking → Amplified Weapon Spam
+    // Stack 3x Neutrino (24% vulnerability) then spam best weapons
+    // Best used in AGGRO/ATTRITION states when enemy HP > 40%
+    createNeutrinoStackingScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        // Check prerequisites
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            return null  // No Neutrino equipped
+        }
+
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) return null
+
+        // Need diagonal range 2-6 for Neutrino
+        var isDiagonal = this.isDiagonal(simPos, this._target._cellPos)
+        if (!isDiagonal || dist < 2 || dist > 6) {
+            return null  // Not in Neutrino range
+        }
+
+        if (!lineOfSight(simPos, this._target._cellPos)) {
+            return null  // No LOS
+        }
+
+        // Need minimum 16 TP (12 for 3x Neutrino + 4 for at least one weapon use)
+        if (tpBudget < 16) {
+            return null
+        }
+
+        // Check if vulnerability already maxed (3 stacks, 2+ turns remaining)
+        var currentStacks = this._arsenal.getVulnerabilityStacks(this._target)
+        var vulnRemaining = this._target.getEffectRemaining(EFFECT_VULNERABILITY)
+        if (currentStacks >= 3 && vulnRemaining >= 2) {
+            return null  // Already maxed, don't waste TP
+        }
+
+        debug("[COMBO-NEUTRINO] Creating Neutrino stacking scenario (3x vuln + weapons)")
+
+        // PHASE 1: Weapon swap to Neutrino (if needed)
+        if (getWeapon() != WEAPON_NEUTRINO) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
+            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            tpBudget -= 1
+        }
+
+        // PHASE 2: Stack 3x Neutrino (24% vulnerability = 1.24x damage multiplier)
+        for (var i = 0; i < 3; i++) {
+            if (tpBudget >= 4) {
+                push(actions, new Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, -1, this._target._cellPos, this._target))
+                tpBudget -= 4
+            }
+        }
+
+        // PHASE 3: Spam remaining weapons with amplified damage
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // PHASE 4: Hide and seek repositioning
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // COMBO 2: GRAPPLE-HEAVY_SWORD Combo
+    // Pull enemy to adjacent cell + apply 60 vulnerability + burst damage
+    // RELAXED PREREQUISITES: Generates optimistically, lets simulator score invalid combos low
+    createGrappleHeavySwordScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        // CRITICAL checks only (equipment + cooldown)
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)) {
+            return null  // Can't execute without equipment
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+            return null  // Can't execute without chip
+        }
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) {
+            return null  // Can't execute on cooldown
+        }
+
+        // NULL safety check
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) {
+            return null
+        }
+
+        // Minimum TP check (GRAPPLE + HEAVY_SWORD minimum usage)
+        if (tpBudget < 10) {  // Reduced from 18-19 to allow more attempts
+            return null
+        }
+
+        // REMOVED CHECKS (let simulator handle):
+        // - Range check (2-8) → simulator will score 0 damage if out of range
+        // - Alignment check → simulator will score 0 damage if not aligned
+        // - LOS check → simulator will score 0 damage if blocked
+        // - Strict TP threshold → allow even if can't finish full combo
+
+        debug("[COMBO-GRAPPLE-HS] Creating GRAPPLE-HEAVY_SWORD scenario (optimistic - simulator will validate)")
+
+        // PHASE 1: Calculate GRAPPLE destination (adjacent to player, toward enemy)
+        var playerX = getCellX(simPos)
+        var playerY = getCellY(simPos)
+        var enemyX = getCellX(this._target._cellPos)
+        var enemyY = getCellY(this._target._cellPos)
+
+        var grappleCell = -1
+        if (playerY == enemyY) {
+            // Horizontal alignment
+            grappleCell = (enemyX < playerX) ? getCellFromXY(playerX - 1, playerY) : getCellFromXY(playerX + 1, playerY)
+        } else {
+            // Vertical alignment
+            grappleCell = (enemyY < playerY) ? getCellFromXY(playerX, playerY - 1) : getCellFromXY(playerX, playerY + 1)
+        }
+
+        if (grappleCell == -1 || grappleCell == null) {
+            return null
+        }
+
+        // PHASE 2: GRAPPLE to pull enemy
+        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
+        tpBudget -= 3
+
+        // PHASE 3: Weapon swap to HEAVY_SWORD (if needed)
+        if (getWeapon() != WEAPON_HEAVY_SWORD) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
+            actions[count(actions) - 1].weapon = WEAPON_HEAVY_SWORD
+            tpBudget -= 1
+        }
+
+        // PHASE 4: HEAVY_SWORD (60 vulnerability for 4 turns)
+        push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, this._target._cellPos, this._target))
+        tpBudget -= 15
+
+        // PHASE 5: Spam remaining weapons with 60% vulnerability amplification
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // PHASE 6: Hide and seek
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // COMBO 3: STEROID → OTKO Recheck
+    // Apply STEROID (+160 STR), recalculate damage, teleport OTKO if now possible
+    // RELAXED PREREQUISITES: Generates whenever chips available, scorer handles viability
+    createSteroidOTKOScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // CRITICAL checks only (equipment + cooldown)
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) {
+            return null
+        }
+        if (getCooldown(CHIP_STEROID, this._player._id) > 0) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            return null
+        }
+        if (getCooldown(CHIP_TELEPORTATION, this._player._id) > 0) {
+            return null
+        }
+
+        // Minimum TP check (STEROID + TELEPORTATION minimum)
+        if (tpBudget < 15) {  // Reduced from 22 to allow more attempts
+            return null
+        }
+
+        // REMOVED CHECKS (let simulator/scorer handle):
+        // - HP sweet spot (40-70%) → scorer will evaluate if combo delivers kill
+        // - Strict TP threshold → allow partial combos
+        // If combo doesn't help, scorer will rank it low
+
+        debug("[COMBO-STEROID-OTKO] Creating STEROID + OTKO scenario (optimistic)")
+
+        // PHASE 1: Apply STEROID (+160 STR for 3 turns)
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+        tpBudget -= 7
+
+        // PHASE 2: Get best OTKO cell with buffed damage
+        var bestOTKO = this._fieldMap.getBestOTKOCell()
+        if (bestOTKO == null) {
+            // No OTKO cells available, fallback to best damage cell + teleport
+            bestOTKO = this._fieldMap.getBestWeaponOrChipCell()
+            if (bestOTKO == null) {
+                return null
+            }
+        }
+
+        var teleportDist = getCellDistance(this._player._cellPos, bestOTKO._id)
+        if (teleportDist == null || teleportDist < 1 || teleportDist > 12) {
+            return null
+        }
+
+        // PHASE 3: Teleport to OTKO cell
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, this._target))
+        tpBudget -= 5
+
+        // PHASE 4: Spam ALL weapons from OTKO position
+        var attackActions = this.getAttackActions(tpBudget, 1.0, bestOTKO._id)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
+    // COMBO 3B: STEROID → Recheck (Two-Phase Adaptive)
+    // Apply STEROID (+160 STR), CHECKPOINT, then branch based on updated kill probability
+    // Branch A (kill prob >= 85%): Teleport + OTKO burst
+    // Branch B (else): Normal weapon attacks + hide
+    createSteroidRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+
+        // CRITICAL checks only (equipment + cooldown)
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) {
+            return null
+        }
+        if (getCooldown(CHIP_STEROID, this._player._id) > 0) {
+            return null
+        }
+
+        // Minimum TP check (STEROID + some attacks)
+        if (tpBudget < 10) {
+            return null
+        }
+
+        debug("[COMBO-STEROID-RECHECK] Creating two-phase STEROID scenario (adaptive)")
+
+        // PHASE 1: Apply STEROID (+160 STR for 3 turns)
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+        tpBudget -= 7
+
+        // PHASE 2: CHECKPOINT - Re-evaluate with buffed stats
+        // Pass context: target reference, remaining TP
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+
+        var checkpoint = Action.createCheckpoint("BUFF_RECHECK", "evaluateBuffRecheckContinuation", context)
+        push(actions, checkpoint)
+
+        debug("[COMBO-STEROID-RECHECK] Added checkpoint: will re-evaluate kill probability with +160 STR")
+
+        return actions
+    }
+
+    // COMBO 3C: Neutrino → Recheck (Two-Phase Adaptive)
+    // Stack 2-3 Neutrino hits (16-24% vuln), CHECKPOINT, then branch on amplified damage
+    // Branch A (if amplification enables OTKO): Aggressive burst
+    // Branch B (else): Balanced attacks
+    createNeutrinoRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var simPos = this._player._cellPos
+
+        // CRITICAL checks only (equipment)
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            return null
+        }
+
+        // Minimum TP check (2-3 Neutrino shots + some attacks)
+        if (tpBudget < 15) {
+            return null
+        }
+
+        // Check if in Neutrino range (diagonal 2-6)
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) return null
+
+        var isOnAxis = getCellX(simPos) == getCellX(this._target._cellPos) ||
+                       getCellY(simPos) == getCellY(this._target._cellPos)
+        if (!isOnAxis) return null
+        if (dist < 2 || dist > 6) return null
+
+        debug("[COMBO-NEUTRINO-RECHECK] Creating two-phase Neutrino stacking scenario (adaptive)")
+
+        // PHASE 1: Stack 2-3 Neutrino shots (16-24% vulnerability)
+        var neutrinoCount = floor((tpBudget - 10) / 4)  // Reserve 10 TP for attacks after checkpoint
+        if (neutrinoCount > 3) neutrinoCount = 3  // Max 3 stacks (24%)
+        if (neutrinoCount < 2) neutrinoCount = 2  // Min 2 stacks (16%)
+
+        for (var n = 0; n < neutrinoCount; n++) {
+            push(actions, new Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, -1, -1, this._target))
+            tpBudget -= 4
+        }
+
+        var expectedVuln = neutrinoCount * 8
+
+        // PHASE 2: CHECKPOINT - Re-evaluate with vulnerability applied
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+        context['vulnerabilityPercent'] = expectedVuln  // Fixed: use correct context key
+
+        var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
+        push(actions, checkpoint)
+
+        debug("[COMBO-NEUTRINO-RECHECK] Added checkpoint: will re-evaluate with " + expectedVuln + "% vulnerability")
+
+        return actions
+    }
+
+    // COMBO 3D: GRAPPLE-HS → Recheck (Two-Phase Adaptive)
+    // GRAPPLE pull enemy close, CHECKPOINT, then branch on position/damage potential
+    // Branch A (if in Heavy Sword range): Apply vulnerability + burst
+    // Branch B (else): Normal attacks from current position
+    createGrappleHSRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var simPos = this._player._cellPos
+
+        // CRITICAL checks only (equipment + cooldown)
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+            return null
+        }
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) {
+            return null
+        }
+
+        // Minimum TP check (GRAPPLE + Heavy Sword + some attacks)
+        if (tpBudget < 12) {
+            return null
+        }
+
+        // Check if on axis with enemy
+        var enemyPos = this._target._cellPos
+        var isOnAxis = getCellX(simPos) == getCellX(enemyPos) ||
+                       getCellY(simPos) == getCellY(enemyPos)
+        if (!isOnAxis) return null
+
+        var dist = getCellDistance(simPos, enemyPos)
+        if (dist == null) return null
+        if (dist < 2 || dist > 8) return null  // GRAPPLE range 2-8
+
+        debug("[COMBO-GRAPPLE-HS-RECHECK] Creating two-phase GRAPPLE pull scenario (adaptive)")
+
+        // PHASE 1: GRAPPLE pull enemy closer (to distance 2)
+        // Calculate GRAPPLE destination cell (between player and enemy, distance 2 from player)
+        var dx = getCellX(enemyPos) - getCellX(simPos)
+        var dy = getCellY(enemyPos) - getCellY(simPos)
+        var dirX = 0
+        var dirY = 0
+        if (dx != 0) dirX = dx / abs(dx)  // Normalize to -1, 0, or 1
+        if (dy != 0) dirY = dy / abs(dy)
+
+        var grappleTargetCell = getCellFromXY(getCellX(simPos) + dirX, getCellY(simPos) + dirY)
+        if (grappleTargetCell == null) {
+            return null  // Invalid destination
+        }
+
+        push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_GRAPPLE, grappleTargetCell, this._target))
+        tpBudget -= 4
+
+        // PHASE 2: CHECKPOINT - Re-evaluate with enemy at distance 2
+        // Use VULNERABILITY_RECHECK with 0% vulnerability (just position change)
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+        context['vulnerabilityPercent'] = 0  // No vulnerability, just position change
+
+        var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
+        push(actions, checkpoint)
+
+        debug("[COMBO-GRAPPLE-HS-RECHECK] Added checkpoint: will re-evaluate after pulling enemy to distance 2")
+
+        return actions
+    }
+
+    // COMBO 3E: Heal → Recheck (Two-Phase Adaptive)
+    // REMISSION heal, CHECKPOINT, then branch on HP percentage
+    // Branch A (if HP > 70%): Aggressive attack
+    // Branch B (if HP 50-70%): Balanced attack
+    // Branch C (if HP < 50%): Defensive kite
+    createHealRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+
+        // CRITICAL checks only (equipment + HP need)
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION)) {
+            return null
+        }
+        if (getCooldown(CHIP_REMISSION, this._player._id) > 0) {
+            return null
+        }
+
+        // Check if we actually need healing
+        var playerHP = this._player._currHealth
+        var playerMaxHP = this._player._maxHealth
+        var playerHPPercent = (playerHP * 100) / playerMaxHP
+
+        if (playerHPPercent > 70) {
+            return null  // Don't heal if HP is already high
+        }
+
+        // Minimum TP check (REMISSION + some attacks)
+        if (tpBudget < 10) {
+            return null
+        }
+
+        debug("[COMBO-HEAL-RECHECK] Creating two-phase healing scenario (adaptive)")
+
+        // PHASE 1: REMISSION heal
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
+        tpBudget -= 3
+
+        // PHASE 2: CHECKPOINT - Re-evaluate after healing
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+
+        var checkpoint = Action.createCheckpoint("HEAL_RECHECK", "evaluateHealRecheckContinuation", context)
+        push(actions, checkpoint)
+
+        debug("[COMBO-HEAL-RECHECK] Added checkpoint: will re-evaluate aggression after healing")
+
+        return actions
+    }
+
+    // COMBO 4: Neutrino Pre-Stack → Teleport OTKO
+    // Stack 3x Neutrino (24% vuln), then teleport + burst with amplified damage
+    // Best used in KILL state when enemy HP < 40% AND we're in Neutrino range
+    createNeutrinoOTKOScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        // Check prerequisites
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            return null
+        }
+        if (getCooldown(CHIP_TELEPORTATION, this._player._id) > 0) {
+            return null
+        }
+
+        // Need Neutrino stacking (12) + Teleport (5) + weapons (10) = 27 TP minimum
+        if (tpBudget < 27) {
+            return null
+        }
+
+        // Check if enemy HP < 40% (KILL state)
+        var enemyHP = this._target._currHealth
+        var enemyMaxHP = this._target._maxHealth
+        var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
+
+        if (enemyHPPercent >= 40) {
+            return null  // Not in KILL state
+        }
+
+        // Check if currently in Neutrino range (diagonal 2-6)
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) return null
+
+        var isDiagonal = this.isDiagonal(simPos, this._target._cellPos)
+        if (!isDiagonal || dist < 2 || dist > 6) {
+            return null  // Not in Neutrino range
+        }
+
+        if (!lineOfSight(simPos, this._target._cellPos)) {
+            return null
+        }
+
+        debug("[COMBO-NEUTRINO-OTKO] Creating Neutrino pre-stack + teleport OTKO scenario")
+
+        // PHASE 1: Weapon swap to Neutrino
+        if (getWeapon() != WEAPON_NEUTRINO) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
+            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            tpBudget -= 1
+        }
+
+        // PHASE 2: Stack 3x Neutrino (24% vulnerability)
+        for (var i = 0; i < 3; i++) {
+            if (tpBudget >= 4) {
+                push(actions, new Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, -1, this._target._cellPos, this._target))
+                tpBudget -= 4
+            }
+        }
+
+        // PHASE 3: Get best OTKO cell
+        var bestOTKO = this._fieldMap.getBestOTKOCell()
+        if (bestOTKO == null) {
+            bestOTKO = this._fieldMap.getBestWeaponOrChipCell()
+            if (bestOTKO == null) {
+                return null
+            }
+        }
+
+        var teleportDist = getCellDistance(simPos, bestOTKO._id)
+        if (teleportDist == null || teleportDist < 1 || teleportDist > 12) {
+            return null
+        }
+
+        // PHASE 4: Teleport to OTKO cell
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, this._target))
+        tpBudget -= 5
+
+        // PHASE 5: Spam ALL weapons with 24% amplification from OTKO position
+        var attackActions = this.getAttackActions(tpBudget, 1.0, bestOTKO._id)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
+    // COMBO 5: ADRENALINE Bridge → Combo Enabler
+    // Use ADRENALINE (+4 net TP) to enable high-value combos when short 1-4 TP
+    // Wraps around other combo scenarios
+    createAdrenalineComboScenario(comboScenarioCreator, requiredTP, availableTP, availableMP) {
+        var tpGap = requiredTP - availableTP
+
+        // Check if ADRENALINE can bridge the gap (need 1-4 TP gap)
+        if (tpGap < 1 || tpGap > 4) {
+            return null
+        }
+
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE)) {
+            return null
+        }
+        if (getCooldown(CHIP_ADRENALINE, this._player._id) > 0) {
+            return null
+        }
+
+        // Need at least 1 TP for ADRENALINE
+        if (availableTP < 1) {
+            return null
+        }
+
+        debug("[COMBO-ADRENALINE] Using ADRENALINE to bridge " + tpGap + " TP gap for combo")
+
+        var actions = []
+
+        // PHASE 1: Use ADRENALINE (+4 net TP)
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
+        var newTPBudget = availableTP - 1 + 5  // -1 cost, +5 TP gain = +4 net
+
+        // PHASE 2: Execute the combo scenario with new TP budget
+        var comboActions = comboScenarioCreator(newTPBudget, availableMP)
+        if (comboActions == null || count(comboActions) == 0) {
+            return null  // Combo not viable even with ADRENALINE
+        }
+
+        // Merge ADRENALINE + combo actions
+        for (var action in comboActions) {
+            push(actions, action)
+        }
+
+        return actions
+    }
+
+    // ====================================================================
+    // BASELINE SCENARIOS (Always Executable - Insurance Against Combo Failures)
+    // ====================================================================
+
+    // BASELINE 1: Static Attack Scenario - spam attacks from current position (no movement)
+    // Guaranteed executable: No prerequisites, no movement, just attacks
+    // Acts as minimum viable combat scenario when all combos fail
+    createStaticAttackScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var simPos = this._player._cellPos  // Stay at current position
+
+        debug("[BASELINE-STATIC] Creating static attack scenario (no movement)")
+
+        // Spam ALL weapons from current position
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // No repositioning - stay and fight
+        return actions
+    }
+
+    // BASELINE 2: Simple Offensive Scenario - move to best cell + attack
+    // Guaranteed executable: Simple movement + attacks, no complex prerequisites
+    // Provides baseline offensive performance when combos unavailable
+    createSimpleOffensiveScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        debug("[BASELINE-OFFENSIVE] Creating simple offensive scenario (move + attack)")
+
+        // PHASE 1: Move to best weapon cell (if possible)
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
+            if (moveCost != null) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell  // Update simulated position
+            }
+        }
+
+        // PHASE 2: Spam ALL weapons from final position
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // PHASE 3: Hide and seek repositioning
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // Helper: Check if two cells are on diagonal line
+    isDiagonal(cell1, cell2) {
+        var x1 = getCellX(cell1)
+        var y1 = getCellY(cell1)
+        var x2 = getCellX(cell2)
+        var y2 = getCellY(cell2)
+        var dx = abs(x2 - x1)
+        var dy = abs(y2 - y1)
+        return dx == dy && dx > 0  // Perfect diagonal (45°)
+    }
+
+    // Helper: Check if two cells are on same horizontal/vertical line
+    isOnSameLine(cell1, cell2) {
+        var x1 = getCellX(cell1)
+        var y1 = getCellY(cell1)
+        var x2 = getCellX(cell2)
+        var y2 = getCellY(cell2)
+        return (x1 == x2 || y1 == y2)  // Horizontal OR vertical
     }
 }

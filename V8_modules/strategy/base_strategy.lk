@@ -1045,10 +1045,13 @@ class Strategy {
                     }
                 }
 
-                if (!skipSteroidForOTKO) {
+                // DISABLED: Let scenario system handle STEROID application via STEROID-Recheck checkpoint
+                // Turn-one STEROID conflicts with adaptive two-phase scenarios
+                if (false && !skipSteroidForOTKO) {
                     debug("[TURN1-BUFFS][STEROID] Applying STEROID turn 1 for maximum attrition damage")
                     useChip(CHIP_STEROID, player._id)
                 }
+                debug("[TURN1-BUFFS][STEROID] Delegating to scenario system (STEROID-Recheck checkpoint)")
             } else {
                 debug("[TURN1-BUFFS][STEROID] WARNING: CHIP_STEROID not equipped (critical for STR builds)")
             }
@@ -2543,7 +2546,7 @@ class Strategy {
             if (count(scenario) == 0) continue
 
             var simResult = simulator.simulate(scenario)
-            var score = scorer.score(simResult)
+            var score = scorer.score(simResult, scenario)  // Pass scenario actions for checkpoint detection
 
             if (score > bestScore) {
                 bestScore = score
@@ -2678,6 +2681,26 @@ class Strategy {
                     }
                 }
             }
+            else if (a.type == Action.ACTION_CHECKPOINT) {
+                // CHECKPOINT: Pause execution, re-evaluate, generate continuation
+                debug("[CHECKPOINT] Hit checkpoint: type=" + a.checkpointType + " fn=" + a.continuationFn)
+
+                // Update player state before re-evaluation (critical for accurate continuation)
+                player.updateEntity()
+
+                // Evaluate checkpoint and get continuation actions
+                var continuation = this.evaluateCheckpoint(a)
+
+                if (continuation != null && count(continuation) > 0) {
+                    debug("[CHECKPOINT] Generated " + count(continuation) + " continuation actions")
+                    // Append continuation to remaining actions
+                    for (var contAction in continuation) {
+                        push(this._actions, contAction)
+                    }
+                } else {
+                    debug("[CHECKPOINT] No continuation generated, skipping")
+                }
+            }
         }
     }
 
@@ -2689,6 +2712,292 @@ class Strategy {
         this.executeScenario()
         arrayClear(this._actions)
         player.updateEntity()
+    }
+
+    // ====================================================================
+    // TWO-PHASE SCENARIO SYSTEM - CHECKPOINT EVALUATION
+    // ====================================================================
+
+    // Evaluate a checkpoint and generate continuation actions
+    // Called mid-execution when a checkpoint action is hit
+    // Returns array of continuation actions (or null if no continuation)
+    evaluateCheckpoint(checkpoint) {
+        debug("[CHECKPOINT-EVAL] Evaluating checkpoint: " + checkpoint.checkpointType)
+
+        // Dispatch to appropriate continuation generator based on checkpoint type
+        if (checkpoint.checkpointType == "BUFF_RECHECK") {
+            return this.evaluateBuffRecheckContinuation(checkpoint.context)
+        }
+        else if (checkpoint.checkpointType == "VULNERABILITY_RECHECK") {
+            return this.evaluateVulnerabilityRecheckContinuation(checkpoint.context)
+        }
+        else if (checkpoint.checkpointType == "HEAL_RECHECK") {
+            return this.evaluateHealRecheckContinuation(checkpoint.context)
+        }
+        else {
+            debug("[CHECKPOINT-EVAL] Unknown checkpoint type: " + checkpoint.checkpointType)
+            return null
+        }
+    }
+
+    // BUFF_RECHECK: After applying buffs (e.g., STEROID), recalculate OTKO opportunity
+    // Context: {target, originalTP, buffApplied}
+    evaluateBuffRecheckContinuation(context) {
+        var target = context['target']
+        if (target == null) {
+            debug("[BUFF-RECHECK] No target in context")
+            return null
+        }
+
+        // Recalculate OTKO opportunity with buffed stats
+        var currentTP = getTP()
+        var currentPos = getCell()
+        var enemyHP = target._currHealth
+
+        debug("[BUFF-RECHECK] Recalculating OTKO: TP=" + currentTP + " enemyHP=" + enemyHP)
+
+        // Check if we can now OTKO from current position
+        var burstDamage = this.calculateBurstDamage(target, currentPos, currentTP)
+        var killProb = burstDamage / enemyHP
+
+        debug("[BUFF-RECHECK] Burst damage: " + floor(burstDamage) + " (kill prob=" + floor(killProb * 100) + "%)")
+
+        // Branch A: If buffed damage enables OTKO → aggressive burst
+        if (killProb >= 0.85) {
+            debug("[BUFF-RECHECK] OTKO NOW POSSIBLE - switching to aggressive burst")
+            return this.generateOTKOBurstContinuation(target, currentTP)
+        }
+        // Branch B: Otherwise → normal attacks
+        else {
+            debug("[BUFF-RECHECK] OTKO not viable - continuing with normal attacks")
+            return this.generateNormalAttackContinuation(target, currentTP)
+        }
+    }
+
+    // VULNERABILITY_RECHECK: After stacking vulnerability, recalculate damage potential
+    // Context: {target, vulnerabilityPercent, originalTP}
+    evaluateVulnerabilityRecheckContinuation(context) {
+        var target = context['target']
+        var vulnPercent = context['vulnerabilityPercent']
+
+        if (target == null) {
+            debug("[VULN-RECHECK] No target in context")
+            return null
+        }
+
+        var currentTP = getTP()
+        var enemyHP = target._currHealth
+
+        // Estimate amplified damage (vulnerability boosts all attacks)
+        var multiplier = 1.0 + (vulnPercent / 100.0)
+        var baseDamage = this.calculateBurstDamage(target, getCell(), currentTP)
+        var amplifiedDamage = baseDamage * multiplier
+
+        debug("[VULN-RECHECK] Vulnerability=" + vulnPercent + "% → multiplier=" + multiplier + "x → damage=" + floor(amplifiedDamage))
+
+        // Branch A: If amplified damage is high → aggressive 100% TP burst
+        var damageRatio = amplifiedDamage / enemyHP
+        if (damageRatio >= 0.7) {
+            debug("[VULN-RECHECK] High damage potential - aggressive burst")
+            return this.generateAggressiveBurstContinuation(target, currentTP)
+        }
+        // Branch B: Otherwise → balanced 70% TP attacks
+        else {
+            debug("[VULN-RECHECK] Moderate damage - balanced attacks")
+            return this.generateBalancedAttackContinuation(target, currentTP)
+        }
+    }
+
+    // HEAL_RECHECK: After healing, recalculate risk tolerance
+    // Context: {target, hpBefore, hpAfter}
+    evaluateHealRecheckContinuation(context) {
+        var target = context['target']
+        if (target == null) return null
+
+        var currentHP = player._currHealth
+        var maxHP = player._maxHealth
+        var hpPercent = (currentHP * 100) / maxHP
+        var currentTP = getTP()
+
+        debug("[HEAL-RECHECK] Current HP: " + currentHP + "/" + maxHP + " (" + floor(hpPercent) + "%)")
+
+        // Branch A: HP > 60% → return to aggressive
+        if (hpPercent > 60) {
+            debug("[HEAL-RECHECK] HP safe - returning to aggressive")
+            return this.generateAggressiveBurstContinuation(target, currentTP)
+        }
+        // Branch B: HP 40-60% → balanced
+        else if (hpPercent > 40) {
+            debug("[HEAL-RECHECK] HP moderate - balanced approach")
+            return this.generateBalancedAttackContinuation(target, currentTP)
+        }
+        // Branch C: HP < 40% → defensive kite
+        else {
+            debug("[HEAL-RECHECK] HP still low - defensive kite")
+            return this.generateDefensiveKiteContinuation(target, currentTP)
+        }
+    }
+
+    // ====================================================================
+    // CONTINUATION GENERATORS - Generate action sequences for different branches
+    // ====================================================================
+
+    // Generate OTKO burst continuation (teleport if needed, 100% TP weapon spam)
+    generateOTKOBurstContinuation(target, availableTP) {
+        var actions = []
+
+        // Check if teleport to OTKO cell is beneficial
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+            getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
+            availableTP >= 10) {
+
+            var bestOTKO = fieldMap.getBestOTKOCell()
+            if (bestOTKO != null) {
+                var dist = getCellDistance(getCell(), bestOTKO._id)
+                if (dist != null && dist >= 1 && dist <= 12) {
+                    push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, target))
+                    availableTP -= 5
+                }
+            }
+        }
+
+        // Spam all weapons with remaining TP
+        var weaponActions = this.generateWeaponSpamActions(target, availableTP)
+        for (var wa in weaponActions) {
+            push(actions, wa)
+        }
+
+        return actions
+    }
+
+    // Generate normal attack continuation (conservative TP usage)
+    generateNormalAttackContinuation(target, availableTP) {
+        var actions = []
+
+        // Use 80% of TP for attacks (save some for flexibility)
+        var tpForAttacks = floor(availableTP * 0.8)
+        var weaponActions = this.generateWeaponSpamActions(target, tpForAttacks)
+        for (var wa in weaponActions) {
+            push(actions, wa)
+        }
+
+        // Hide and seek repositioning
+        var hideCell = fieldMap.getHideAndSeekCell()
+        if (hideCell != null && getMP() >= 2) {
+            push(actions, new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, target))
+        }
+
+        return actions
+    }
+
+    // Generate aggressive burst continuation (100% TP)
+    generateAggressiveBurstContinuation(target, availableTP) {
+        var actions = []
+        var weaponActions = this.generateWeaponSpamActions(target, availableTP)
+        for (var wa in weaponActions) {
+            push(actions, wa)
+        }
+        return actions
+    }
+
+    // Generate balanced attack continuation (70% TP + hide)
+    generateBalancedAttackContinuation(target, availableTP) {
+        var actions = []
+        var tpForAttacks = floor(availableTP * 0.7)
+        var weaponActions = this.generateWeaponSpamActions(target, tpForAttacks)
+        for (var wa in weaponActions) {
+            push(actions, wa)
+        }
+
+        var hideCell = fieldMap.getHideAndSeekCell()
+        if (hideCell != null && getMP() >= 2) {
+            push(actions, new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, target))
+        }
+
+        return actions
+    }
+
+    // Generate defensive kite continuation (minimal attacks, max movement)
+    generateDefensiveKiteContinuation(target, availableTP) {
+        var actions = []
+
+        // Minimal attacks (30% TP)
+        var tpForAttacks = floor(availableTP * 0.3)
+        if (tpForAttacks >= 4) {
+            var weaponActions = this.generateWeaponSpamActions(target, tpForAttacks)
+            for (var wa in weaponActions) {
+                push(actions, wa)
+            }
+        }
+
+        // Prioritize kiting movement
+        if (getMP() >= 2) {
+            push(actions, new Action(Action.MOVEMENT_FLEE, -1, -1, -1, target))
+        }
+
+        return actions
+    }
+
+    // Helper: Generate weapon spam actions for a target with given TP budget
+    generateWeaponSpamActions(target, tpBudget) {
+        var actions = []
+        var currentWeapon = getWeapon()
+        var currentPos = getCell()
+
+        // Calculate damage for each weapon and build sorted list
+        var weaponDamages = []  // Array of maps: [{weaponId: X, damage: Y}, ...]
+
+        for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
+            var weapon = arsenal.playerEquippedWeapons[weaponId]
+            if (weapon == null) continue
+
+            // Check range and LOS
+            var dist = getCellDistance(currentPos, target._cellPos)
+            if (dist == null) continue
+            if (dist < weapon._minRange || dist > weapon._maxRange) continue
+            if (!lineOfSight(currentPos, target._cellPos)) continue
+
+            // Calculate damage
+            var dmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, weaponId, target)
+
+            push(weaponDamages, ['weaponId': weaponId, 'damage': dmg])
+        }
+
+        // Sort weapons by damage (highest first) - simple bubble sort
+        for (var i = 0; i < count(weaponDamages) - 1; i++) {
+            for (var j = 0; j < count(weaponDamages) - i - 1; j++) {
+                if (weaponDamages[j]['damage'] < weaponDamages[j+1]['damage']) {
+                    var temp = weaponDamages[j]
+                    weaponDamages[j] = weaponDamages[j+1]
+                    weaponDamages[j+1] = temp
+                }
+            }
+        }
+
+        // Generate attack actions with best weapons first
+        for (var wd in weaponDamages) {
+            var weaponId = wd['weaponId']
+            var weapon = arsenal.playerEquippedWeapons[weaponId]
+            var weaponCost = weapon._cost
+            var maxUses = weapon._maxUse
+            var uses = 0
+
+            // Swap if needed
+            if (currentWeapon != weaponId && tpBudget >= 1) {
+                push(actions, new Action(Action.ACTION_WEAPON_SWAP, weaponId, -1, -1, target))
+                tpBudget -= 1
+                currentWeapon = weaponId
+            }
+
+            // Spam weapon
+            while (uses < maxUses && tpBudget >= weaponCost) {
+                push(actions, new Action(Action.ACTION_DIRECT, weaponId, -1, target._cellPos, target))
+                tpBudget -= weaponCost
+                uses++
+            }
+        }
+
+        return actions
     }
 
     // ====================================================================

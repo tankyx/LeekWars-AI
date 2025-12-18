@@ -12,6 +12,7 @@ class SimulationResult {
     buffsApplied = []         // List of buff chip IDs applied
     debuffsApplied = []       // List of debuff chip IDs applied
     actionsExecuted = 0       // Number of actions successfully executed
+    vulnerabilityApplied = 0  // Total vulnerability stacks applied to enemy (%)
 
     constructor() {
         this.buffsApplied = []
@@ -52,7 +53,6 @@ class ScenarioSimulator {
         for (var action in actions) {
             // Check if action is feasible with current simulated resources
             if (!this.canExecuteAction(action, simPos, simTP, simMP, simWeapon)) {
-                debug("[SIM] Action skipped - insufficient resources")
                 continue
             }
 
@@ -88,7 +88,6 @@ class ScenarioSimulator {
                         if (currentUses == null) currentUses = 0
 
                         if (currentUses >= weaponObj._maxUse) {
-                            debug("[SIM] Weapon " + action.weaponId + " max uses (" + weaponObj._maxUse + ") reached - skipping")
                             continue
                         }
 
@@ -101,6 +100,14 @@ class ScenarioSimulator {
                         simTP -= swapCost + weaponCost
                         simWeapon = action.weaponId
                         simWeaponUses[action.weaponId] = currentUses + 1
+
+                        // Track vulnerability applied to enemy
+                        if (action.weaponId == WEAPON_NEUTRINO) {
+                            result.vulnerabilityApplied += 8  // 8% per Neutrino hit
+                        } else if (action.weaponId == WEAPON_HEAVY_SWORD) {
+                            result.vulnerabilityApplied += 60  // 60% vulnerability for 4 turns
+                        }
+
                         result.actionsExecuted++
                     }
                 }
@@ -167,6 +174,14 @@ class ScenarioSimulator {
                     result.finalPosition = simPos
                     result.actionsExecuted++
                 }
+            }
+            else if (action.type == Action.ACTION_CHECKPOINT) {
+                // CHECKPOINT: Cannot simulate continuations (generated dynamically at execution time)
+                // Skip checkpoint action, count as executed (zero cost/benefit)
+                // Real evaluation happens during executeScenario() when checkpoint is hit
+                result.actionsExecuted++
+                // NOTE: This makes checkpoint scenarios appear low-value in simulation
+                // Scorer needs to boost checkpoint scenarios to compensate
             }
         }
 

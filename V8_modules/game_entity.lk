@@ -54,9 +54,6 @@ class Entity {
     }
 
     updateEntity() {
-        debug("Updating entity " + getName(this._id))
-        debug("Cell pos was " + this._cellPos + ", now " + getCell(this._id))
-
         this._cellPos = getCell(this._id)
         this._currHealth = getLife(this._id)
         this._maxHealth = getTotalLife(this._id)

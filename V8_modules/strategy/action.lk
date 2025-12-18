@@ -23,6 +23,7 @@ class Action {
     static MOVEMENT_HNS = 12 // Hide and Seek
     static MOVEMENT_PAB = 13 // Peek-a-Boo
     static ACTION_TELEPORT = 14 // Teleportation (targets cell, not entity)
+    static ACTION_CHECKPOINT = 15 // Checkpoint for two-phase scenarios
 
     type = -1
     weaponId = -1
@@ -30,11 +31,25 @@ class Action {
     targetCell = -1
     targetEntity = -1
 
+    // Checkpoint-specific fields (only used when type == ACTION_CHECKPOINT)
+    checkpointType = ""       // "BUFF_RECHECK", "VULNERABILITY_RECHECK", etc.
+    continuationFn = ""       // Function name to call for generating continuation
+    context = null            // Context data to pass to continuation generator
+
     constructor(type, weaponId, chip, targetCell, targetEntity) {
         this.type = type
         this.weaponId = weaponId
         this.chip = chip
         this.targetCell = targetCell
         this.targetEntity = targetEntity
+    }
+
+    // Static factory for creating checkpoint actions
+    static createCheckpoint(checkpointType, continuationFn, context) {
+        var checkpoint = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, null)
+        checkpoint.checkpointType = checkpointType
+        checkpoint.continuationFn = continuationFn
+        checkpoint.context = context
+        return checkpoint
     }
 }
