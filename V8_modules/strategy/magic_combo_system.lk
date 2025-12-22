@@ -32,7 +32,7 @@ class ComboSystem {
 
             // Score: prefer 5-6 range (middle of 3-8), closer to current position
             var rangeScore = 100 - abs(dist - 5.5) * 10
-            var pathLen = getPathLength(player._cellPos, cell)
+            var pathLen = getCachedPathLength(player._cellPos, cell)
             if (pathLen == null) continue
             var pathScore = 50 - pathLen
             var totalScore = rangeScore + pathScore

@@ -24,7 +24,7 @@ class PoisonPlanner {
         var weaponPreferred = false
         var requireWeaponIfAvailable = true
         for (var preC in fieldMap.damageMap) {
-            var pLen = getPathLength(playerPos, preC._id)
+            var pLen = getCachedPathLength(playerPos, preC._id)
             if (pLen == null || pLen > mpAvail) continue
             if (preC._weaponsList == null) continue
             for (var pw = 0; pw < count(preC._weaponsList); pw++) {
@@ -60,7 +60,7 @@ class PoisonPlanner {
 
         // Iterate over all damageMap cells
         for (var c in fieldMap.damageMap) {
-            var pathLen = getPathLength(playerPos, c._id)
+            var pathLen = getCachedPathLength(playerPos, c._id)
             if (pathLen == null || pathLen > mpAvail) continue
             var score = 0
             var chipPlan = []

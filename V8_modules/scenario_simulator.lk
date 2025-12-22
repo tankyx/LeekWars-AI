@@ -148,7 +148,7 @@ class ScenarioSimulator {
                      action.type == Action.MOVEMENT_DOT_OFFENSIVE || action.type == Action.MOVEMENT_DEBUFF ||
                      action.type == Action.MOVEMENT_HNS || action.type == Action.MOVEMENT_PAB) {
                 // Movement action - USE CACHED PATH LENGTH
-                var pathLength = getPathLength(simPos, action.targetCell)
+                var pathLength = getCachedPathLength(simPos, action.targetCell)
                 if (pathLength != null && pathLength <= simMP) {
                     result.mpSpent += pathLength
                     simMP -= pathLength
@@ -214,7 +214,7 @@ class ScenarioSimulator {
                  action.type == Action.MOVEMENT_DEFENSIVE || action.type == Action.MOVEMENT_OTKO ||
                  action.type == Action.MOVEMENT_DOT_OFFENSIVE || action.type == Action.MOVEMENT_DEBUFF ||
                  action.type == Action.MOVEMENT_HNS || action.type == Action.MOVEMENT_PAB) {
-            var pathLength = getPathLength(simPos, action.targetCell)
+            var pathLength = getCachedPathLength(simPos, action.targetCell)
             return pathLength != null && pathLength <= simMP
         }
         else if (action.type == Action.MOVEMENT_FLEE) {

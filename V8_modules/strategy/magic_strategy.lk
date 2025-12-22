@@ -273,7 +273,7 @@ class MagicStrategy extends Strategy {
                     debug("[AGGRESSIVE-COMBO] Not in range, found combo cell: " + comboCell)
 
                     if (comboCell != -1) {
-                        var pathLen = getPathLength(player._cellPos, comboCell)
+                        var pathLen = getCachedPathLength(player._cellPos, comboCell)
                         debug("[AGGRESSIVE-COMBO] Path to combo cell: " + pathLen + " cells, available MP: " + player._currMp)
 
                         // Use CHIP_LEATHER_BOOTS if it helps reach combo cell
@@ -331,7 +331,7 @@ class MagicStrategy extends Strategy {
                     var hnsInfo = fieldMap.findHideAndSeekCell("defensive")
                     if (hnsInfo != null && player._currMp > 0) {
                         var hideCell = hnsInfo['cell']
-                        var hidePath = getPathLength(player._cellPos, hideCell)
+                        var hidePath = getCachedPathLength(player._cellPos, hideCell)
                         if (hidePath != null && hidePath <= player._currMp) {
                             debug("[AGGRESSIVE-COMBO] Moving to hide cell " + hideCell + " after combo")
                             moveTowardCell(hideCell)
@@ -378,7 +378,7 @@ class MagicStrategy extends Strategy {
             var hnsInfo = fieldMap.findHideAndSeekCell("defensive")
             if (hnsInfo != null) {
                 var hideCell = hnsInfo['cell']
-                var pathLen = getPathLength(player._cellPos, hideCell)
+                var pathLen = getCachedPathLength(player._cellPos, hideCell)
                 if (pathLen != null && pathLen <= player._currMp) {
                     push(this._actions, new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, target))
                     player._currMp -= pathLen
@@ -486,8 +486,8 @@ class MagicStrategy extends Strategy {
             if (mapContainsKey(fieldMap.damageMap, hnsStage['cell']) && mapContainsKey(fieldMap.damageMap, targetHitCell._id)) {
                 var hObj = fieldMap.damageMap[hnsStage['cell']]
                 if (hObj._totalDamage == targetHitCell._totalDamage) {
-                    var dCur = getPathLength(player._cellPos, targetHitCell._id)
-                    var dH = getPathLength(player._cellPos, hObj._id)
+                    var dCur = getCachedPathLength(player._cellPos, targetHitCell._id)
+                    var dH = getCachedPathLength(player._cellPos, hObj._id)
                     if (dH != null && dCur != null && dH < dCur) consider = true
                 }
             }
@@ -542,7 +542,7 @@ class MagicStrategy extends Strategy {
         // Movement after attacks: Kite/hide (defensive positioning)
         var originalMP = player._currMp
         var pathToAttack = 0
-        if (targetHitCell != -1 && targetHitCell != null) pathToAttack = getPathLength(player._cellPos, targetHitCell._id)
+        if (targetHitCell != -1 && targetHitCell != null) pathToAttack = getCachedPathLength(player._cellPos, targetHitCell._id)
         if (pathToAttack == null) pathToAttack = 0
 
         // Try to find zero-threat cells first
@@ -566,7 +566,7 @@ class MagicStrategy extends Strategy {
             var hideCellIdK = hnsInfoKite['cell']
             var extraLeg = 0
             if (targetHitCell != -1 && targetHitCell != null && hideCellIdK != targetHitCell._id) {
-                extraLeg = getPathLength(targetHitCell._id, hideCellIdK)
+                extraLeg = getCachedPathLength(targetHitCell._id, hideCellIdK)
                 if (extraLeg == null) extraLeg = 9999
             }
 

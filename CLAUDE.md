@@ -78,7 +78,7 @@ V8 uses a **two-phase execution model**:
 - **Damage Return** (agility): MIRROR (3t) / THORN (2t) / BRAMBLE (1t), TP-aware selection, close-range BRAMBLE priority
 
 **Optimization - Path Length Caching:**
-- LeekScript operations budget: ~6M ops/turn (10M total per fight)
+- LeekScript operations budget: ~6M ops/turn (no fight-wide limit, only per-turn limit)
 - State-based cost: ~350-400K ops/turn (~6% of budget)
 - **cache_manager.lk**: Memoizes `getPathLength()` calls (50K ops → 2 ops per lookup)
 - **operation_tracker.lk**: Profiles operation costs with `startOp()`/`stopOp()`

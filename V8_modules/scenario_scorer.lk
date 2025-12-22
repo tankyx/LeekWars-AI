@@ -13,41 +13,25 @@ class ScenarioScorer {
 
     // Score a simulation result based on player build and game state
     // Returns numerical score (higher = better scenario)
-    // actions: Optional array of Action objects (used to detect checkpoint scenarios)
-    score(simResult, actions) {
+    // scenario: Optional array of Action objects - used to detect checkpoint scenarios
+    score(simResult, scenario) {
         var score = 0
-
-        // Detect if this is a checkpoint scenario (contains ACTION_CHECKPOINT)
-        var hasCheckpoint = false
-        if (actions != null) {
-            for (var action in actions) {
-                if (action.type == Action.ACTION_CHECKPOINT) {
-                    hasCheckpoint = true
-                    break
-                }
-            }
-        }
 
         // 1. DAMAGE WEIGHT - Based on STR and MAG stats
         var damageWeight = this.calculateDamageWeight()
 
-        // KILL OPPORTUNITY BOOST: If we can kill enemy, MASSIVELY favor this scenario
-        // Kills end the fight immediately → highest priority
+        // KILL OPPORTUNITY BOOST: If we can kill enemy (damage >= 70% HP), heavily favor this scenario
         var enemyHP = this._target._currHealth
         var killProbability = simResult.damageDealt / enemyHP
 
-        if (killProbability >= 0.85) {
-            damageWeight *= 20.0  // 20x damage weight for high-confidence kills (85%+)
-            debug("[SCORER-BOOST] HIGH-CONFIDENCE KILL: dmg=" + floor(simResult.damageDealt) +
-                  " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 20x damage weight")
-        } else if (killProbability >= 0.70) {
-            damageWeight *= 12.0  // 12x damage weight for likely kills (70-85%)
+        if (killProbability >= 0.70) {
+            damageWeight *= 5.0  // 5x damage weight for kill opportunities
             debug("[SCORER-BOOST] Kill opportunity: dmg=" + floor(simResult.damageDealt) +
-                  " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 12x damage weight")
-        } else if (killProbability >= 0.50) {
-            damageWeight *= 5.0  // 5x for near-kill (50-70%)
-            debug("[SCORER-BOOST] Near-kill: dmg=" + floor(simResult.damageDealt) +
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 5x damage weight")
+        } else if (killProbability >= 0.50) {
+            damageWeight *= 2.5  // 2.5x for near-kill (50-70%)
+            debug("[SCORER-BOOST] Near-kill: dmg=" + floor(simResult.damageDealt) +
+                  " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
         }
 
         var damageScore = simResult.damageDealt * damageWeight
@@ -77,7 +61,7 @@ class ScenarioScorer {
 
         // 6. BUFF/DEBUFF WEIGHT - Strategic value of buffs
         var buffWeight = this.calculateBuffWeight()
-        var buffScore = this.evaluateBuffs(simResult.buffsApplied) * buffWeight
+        var buffScore = this.evaluateBuffs(simResult.buffsApplied, simResult) * buffWeight
         var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
         score += buffScore + debuffScore
 
@@ -100,28 +84,20 @@ class ScenarioScorer {
         }
         score += otkoBonus
 
-        // 9. VULNERABILITY BONUS - Massive value for damage amplification combos
-        var vulnBonus = this.calculateVulnerabilityValue(simResult.vulnerabilityApplied, simResult.damageDealt)
-        score += vulnBonus
-
-        // 10. ZERO-DAMAGE PENALTY - Massive penalty for buff-only scenarios
-        // Prevents useless scenarios (buffs only, no attacks) from winning selection
-        // EXCEPTION: Checkpoint scenarios get evaluated dynamically, skip penalty
-        var zeroDamagePenalty = 0
-        if (simResult.damageDealt == 0 && simResult.dotDamageQueued == 0 && !hasCheckpoint) {
-            zeroDamagePenalty = -10000
-            debug("[SCORER-PENALTY] Zero damage scenario: -10000 penalty (buff-only rejected)")
-        }
-        score += zeroDamagePenalty
-
-        // 11. CHECKPOINT BONUS - Compensate for inability to simulate continuations
-        // Checkpoint scenarios will generate high-value continuations at execution time
+        // 9. CHECKPOINT BONUS - Boost two-phase adaptive scenarios
+        // Checkpoints contribute zero value during simulation (phase 2 happens at execution time)
+        // Apply bonus to compensate and make checkpoint scenarios competitive
         var checkpointBonus = 0
-        if (hasCheckpoint) {
-            // Give checkpoint scenarios a fighting chance against regular scenarios
-            // Bonus should be enough to compete with typical damage scenarios (~1000-3000 score)
-            checkpointBonus = 2000
-            debug("[SCORER-CHECKPOINT] +2000 bonus for adaptive checkpoint scenario")
+        if (scenario != null && count(scenario) > 0) {
+            for (var action in scenario) {
+                if (action.type == 15) {  // ACTION_CHECKPOINT = 15
+                    // Two-phase scenarios have strategic value that simulation can't capture
+                    // Boost by 2500 points to account for unseen phase 2 potential
+                    checkpointBonus = 2500
+                    debug("[SCORER-CHECKPOINT] +2500 bonus: Two-phase adaptive scenario (type=" + action.checkpointType + ")")
+                    break  // Only apply bonus once per scenario
+                }
+            }
         }
         score += checkpointBonus
 
@@ -130,8 +106,7 @@ class ScenarioScorer {
               " eHP=" + floor(shieldScore + relShieldScore + healScore) +
               " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
               " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
-              " otko=" + floor(otkoBonus) + " vuln=" + floor(vulnBonus) +
-              " checkpoint=" + floor(checkpointBonus) + " penalty=" + floor(zeroDamagePenalty))
+              " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus))
 
         return score
     }
@@ -180,13 +155,11 @@ class ScenarioScorer {
         var maxHP = this._player._maxHealth
 
         // Low HP situations: increase eHP value
-        // BOOSTED urgency multipliers to favor proactive healing (prevents dying despite winning damage race)
         var hpRatio = currentHP / maxHP
         var urgencyMultiplier = 1.0
-        if (hpRatio < 0.3) urgencyMultiplier = 4.0        // Emergency: 4x (was 3.0x)
-        else if (hpRatio < 0.5) urgencyMultiplier = 3.0   // Critical: 3x (was 2.0x)
-        else if (hpRatio < 0.7) urgencyMultiplier = 2.0   // Proactive: 2x (was 1.5x)
-        else if (hpRatio < 0.8) urgencyMultiplier = 1.5   // Early warning: 1.5x (new tier)
+        if (hpRatio < 0.3) urgencyMultiplier = 3.0
+        else if (hpRatio < 0.5) urgencyMultiplier = 2.0
+        else if (hpRatio < 0.7) urgencyMultiplier = 1.5
 
         // Base weight from RESISTANCE/WISDOM
         var baseWeight = 0.5 + (resistance / 500.0) + (wisdom / 1000.0)
@@ -305,7 +278,7 @@ class ScenarioScorer {
     }
 
     // Evaluate buff strategic value
-    evaluateBuffs(buffsApplied) {
+    evaluateBuffs(buffsApplied, simResult) {
         var value = 0
 
         for (var buffChip in buffsApplied) {
@@ -333,6 +306,29 @@ class ScenarioScorer {
             if (buffChip == CHIP_MIRROR || buffChip == CHIP_THORN) {
                 if (this._player._agility > this._player._strength) value += 180
                 else value += 80
+            }
+
+            // BRAMBLE: 25% damage return - HIGH VALUE in active close combat
+            if (buffChip == CHIP_BRAMBLE) {
+                var brambleValue = 100  // Base value
+
+                // Check if we're AGI build
+                if (this._player._agility > this._player._strength && this._player._agility > this._player._magic) {
+                    brambleValue = 150  // AGI builds benefit more from damage return
+                }
+
+                // ACTIVE COMBAT BONUS: Higher value when dealing damage in close range
+                // This represents "already engaged in combat" scenario
+                var finalPos = simResult.finalPosition
+                var distToTarget = getCellDistance(finalPos, this._target._cellPos)
+
+                // Active combat = dealing damage AND in close/melee range (≤6 cells)
+                if (simResult.damageDealt > 0 && distToTarget != null && distToTarget <= 6) {
+                    brambleValue *= 2.5  // 2.5x value in active close combat (150 → 375 for AGI)
+                    debug("[SCORER][BRAMBLE] Active combat bonus: dist=" + distToTarget + ", dmg=" + floor(simResult.damageDealt) + ", value=" + floor(brambleValue))
+                }
+
+                value += brambleValue
             }
         }
 
@@ -375,52 +371,5 @@ class ScenarioScorer {
     calculateRelativeShieldValue(relativeShieldPercent) {
         var maxHP = this._player._maxHealth
         return (relativeShieldPercent / 100.0) * maxHP
-    }
-
-    // Calculate vulnerability value - estimates future damage amplification
-    // Vulnerability amplifies ALL future damage for multiple turns
-    // Example: 24% vulnerability (3x Neutrino) = 1.24x damage multiplier
-    calculateVulnerabilityValue(vulnPercent, currentDamage) {
-        if (vulnPercent <= 0) return 0
-
-        // Calculate amplification multiplier
-        var multiplier = 1.0 + (vulnPercent / 100.0)
-
-        // Estimate future attacks benefiting from vulnerability
-        var enemyHP = this._target._currHealth
-        var currentTP = getTP()
-        var avgWeaponDamage = 180  // Conservative estimate
-
-        // STR builds deal more damage per attack
-        if (this._player._strength > this._player._magic && this._player._strength > this._player._agility) {
-            avgWeaponDamage = 240
-        }
-
-        // Estimate attacks this turn + next 2-3 turns (vulnerability duration)
-        var futureAttacks = floor(currentTP / 8) + 6  // Current turn + future turns
-        var futureBaseDamage = futureAttacks * avgWeaponDamage
-
-        // Calculate amplification benefit (how much extra damage vulnerability provides)
-        var amplificationBenefit = futureBaseDamage * (multiplier - 1.0)
-
-        // HUGE BONUS for vulnerability stacking
-        // Weight: 3.0x (vulnerability is core damage multiplier for STR builds)
-        var vulnerabilityScore = amplificationBenefit * 3.0
-
-        // Extra bonus for HEAVY_SWORD (60% vuln = 1.6x damage multiplier, massive value)
-        if (vulnPercent >= 60) {
-            vulnerabilityScore *= 1.5  // 50% extra bonus for HEAVY_SWORD
-            debug("[SCORER-VULN] HEAVY_SWORD detected: 60% vuln → 1.6x damage multiplier")
-        }
-        // Extra bonus for 3x Neutrino stacks (24% vuln = 1.24x damage multiplier)
-        else if (vulnPercent >= 24) {
-            vulnerabilityScore *= 1.3  // 30% extra bonus for full Neutrino stacking
-            debug("[SCORER-VULN] Full Neutrino stack detected: 24% vuln → 1.24x damage multiplier")
-        }
-
-        debug("[SCORER-VULN] Vulnerability " + floor(vulnPercent) + "% → multiplier " + multiplier + "x → score +" + floor(vulnerabilityScore))
-        debug("[SCORER-VULN] Estimated amplification: " + floor(amplificationBenefit) + " damage over next turns")
-
-        return vulnerabilityScore
     }
 }

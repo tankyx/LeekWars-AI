@@ -35,7 +35,7 @@ class FieldMap extends FieldMapPatterns {
             if (isObstacle(cid)) continue
             var approx = getCellDistance(origin, cid)
             if (approx == null || approx > mp) continue
-            var len = getPathLength(origin, cid)
+            var len = getCachedPathLength(origin, cid)
             if (len == null) continue
             if (len <= mp) push(acc, cid)
         }
@@ -590,7 +590,7 @@ class FieldMap extends FieldMapPatterns {
                 if (cellId < 0 || cellId >= FieldMap.board_cell_count) continue
                 if (isObstacle(cellId)) continue
 
-                var pathLen = getPathLength(startCell, cellId)
+                var pathLen = getCachedPathLength(startCell, cellId)
                 if (pathLen != null && pathLen <= maxMP) {
                     push(reachable, cellId)
                 }
@@ -710,7 +710,7 @@ class FieldMap extends FieldMapPatterns {
         for (var cellId in mapKeys(this.damageMap)) {
             var cell = this.damageMap[cellId]
 
-            var pathLen = getPathLength(playerPos, cell._id)
+            var pathLen = getCachedPathLength(playerPos, cell._id)
             if (pathLen == null || pathLen > maxMP) continue
 
             var ourDamage = cell._totalDamage
@@ -734,5 +734,14 @@ class FieldMap extends FieldMapPatterns {
         }
 
         return best
+    }
+
+    // Wrapper for compatibility - calls findHideAndSeekCell in defensive mode
+    getHideAndSeekCell() {
+        var result = this.findHideAndSeekCell("defensive")
+        if (result != null) {
+            return result['cell']
+        }
+        return null
     }
 }

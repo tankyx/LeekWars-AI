@@ -4,13 +4,14 @@ LeekWars Script Testing Tool
 Tests a specific script ID against standard test opponents (bots) or custom scenarios
 
 Usage:
-  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>] [--account <name>]
+  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>] [--account <name>] [--map <id>]
   Scenario mode: python3 lw_test_script.py <num_tests> --scenario <name> [--account <name>]
 
 Examples:
   python3 lw_test_script.py 10 445124 domingo
   python3 lw_test_script.py 10 445124 betalpha --leek RabiesLeek
   python3 lw_test_script.py 10 445124 domingo --account cure
+  python3 lw_test_script.py 50 445124 domingo --map 12345  # Fixed map testing
   python3 lw_test_script.py 1 --scenario graal
 
 Available opponents:
@@ -354,7 +355,7 @@ class LeekWarsScriptTester:
                 return ai_info
         return None
     
-    def setup_test_scenario(self, script_id, bot_opponent, preferred_leek_name=None, scenario_name=None):
+    def setup_test_scenario(self, script_id, bot_opponent, preferred_leek_name=None, scenario_name=None, map_id=None):
         """Create or get a test scenario for the script with specific bot opponent"""
         # First, get all existing test scenarios
         url = f"{BASE_URL}/test-scenario/get-all"
@@ -434,7 +435,7 @@ class LeekWarsScriptTester:
                 # Configure the scenario
                 scenario_data = {
                     "type": 0,  # Solo fight
-                    "map": None,  # Random map
+                    "map": map_id,  # Use specified map ID, or None for random map
                     "ai": script_id
                 }
                 
@@ -1235,12 +1236,13 @@ class LeekWarsScriptTester:
 def main():
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>] [--account <name>]")
+        print("  Regular mode:  python3 lw_test_script.py <num_tests> <script_id> [opponent] [--leek <name>] [--account <name>] [--map <id>]")
         print("  Scenario mode: python3 lw_test_script.py <num_tests> --scenario <name> [--account <name>]")
         print("\nExamples:")
         print("  python3 lw_test_script.py 10 445124 domingo")
         print("  python3 lw_test_script.py 10 445124 betalpha --leek RabiesLeek")
         print("  python3 lw_test_script.py 10 445124 domingo --account cure")
+        print("  python3 lw_test_script.py 50 445124 domingo --map 12345  # Fixed map testing")
         print("  python3 lw_test_script.py 1 --scenario graal")
         print("\nAvailable opponents:")
         for name, bot in BOTS.items():
@@ -1256,12 +1258,13 @@ def main():
         print("❌ Invalid argument. Number of tests must be an integer.")
         return 1
 
-    # Parse optional args: script_id, opponent, --leek <name>, --scenario <name>, and --account <name>
+    # Parse optional args: script_id, opponent, --leek <name>, --scenario <name>, --account <name>, --map <id>
     script_id = None
     opponent_name = None
     preferred_leek_name = None
     scenario_name = None
     account = "main"
+    map_id = None
     i = 2
     while i < len(sys.argv):
         arg = sys.argv[i]
@@ -1275,6 +1278,13 @@ def main():
             account = sys.argv[i + 1]
             if account not in ["main", "cure"]:
                 print(f"❌ Invalid account: {account}. Must be 'main' or 'cure'")
+                return 1
+            i += 2
+        elif arg == "--map" and i + 1 < len(sys.argv):
+            try:
+                map_id = int(sys.argv[i + 1])
+            except ValueError:
+                print(f"❌ Invalid map ID: {sys.argv[i + 1]}. Must be an integer.")
                 return 1
             i += 2
         else:
@@ -1328,6 +1338,10 @@ def main():
         print(f"Scenario: {scenario_name} (pre-configured)")
     else:
         print(f"Opponent: {bot_opponent['name']} - {bot_opponent['desc']}")
+    if map_id:
+        print(f"Map: {map_id} (FIXED MAP - consistent testing)")
+    else:
+        print(f"Map: Random (variance expected)")
     print(f"Account: {account}")
 
     # Create tester instance
@@ -1347,7 +1361,7 @@ def main():
         # (Monkey-patch setup_test_scenario to include these parameters)
         original_setup = tester.setup_test_scenario
         def setup_with_params(script_id_p, bot_opponent_p, **kwargs):
-            return original_setup(script_id_p, bot_opponent_p, preferred_leek_name, **kwargs)
+            return original_setup(script_id_p, bot_opponent_p, preferred_leek_name, map_id=map_id, **kwargs)
         tester.setup_test_scenario = setup_with_params
         tester.run_tests(script_id, num_tests, bot_opponent, scenario_name=scenario_name)
     except KeyboardInterrupt:

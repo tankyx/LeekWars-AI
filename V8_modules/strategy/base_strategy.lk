@@ -150,7 +150,7 @@ class Strategy {
             if (isObstacle(cellId)) continue
 
             // Must be reachable
-            var pathLen = getPathLength(playerPos, cellId)
+            var pathLen = getCachedPathLength(playerPos, cellId)
             if (pathLen == null || pathLen > playerMP) continue
 
             // Must have range and LOS to target from this cell
@@ -279,7 +279,7 @@ class Strategy {
         if (action.type == Action.MOVEMENT_OFFENSIVE ||
             action.type == Action.MOVEMENT_HNS ||
             action.type == Action.MOVEMENT_APPROACH) {
-            var pathLen = getPathLength(player._cellPos, action.targetCell)
+            var pathLen = getCachedPathLength(player._cellPos, action.targetCell)
             if (pathLen != null && pathLen > player._currMp) return false
         }
         
@@ -324,7 +324,7 @@ class Strategy {
         }
 
         var playerMP = player._currMp
-        var pathLen = getPathLength(player._cellPos, targetCell)
+        var pathLen = getCachedPathLength(player._cellPos, targetCell)
         if (pathLen == null) return false
 
         // Case 1: Simple check - target cell unreachable but within MP+2 range
@@ -336,7 +336,7 @@ class Strategy {
         }
         // Case 2: Complex check - two destinations (attack + hide)
         else {
-            var pathToSecondary = getPathLength(targetCell, secondaryCell)
+            var pathToSecondary = getCachedPathLength(targetCell, secondaryCell)
             if (pathToSecondary == null) return false
 
             var totalNeeded = pathLen + pathToSecondary
@@ -573,7 +573,7 @@ class Strategy {
         var bestDist = 99999
 
         for (var c in fieldMap.damageMap) {
-            var pathLen = getPathLength(playerPos, c._id)
+            var pathLen = getCachedPathLength(playerPos, c._id)
             if (pathLen == null || pathLen > maxMP) continue  // Skip unreachable cells
 
             // Prioritize: 1) highest damage, 2) closest distance
@@ -705,7 +705,7 @@ class Strategy {
             if (cell == playerPos) continue
 
             // Check if cell is reachable with current MP
-            var distToCell = getPathLength(playerPos, cell)
+            var distToCell = getCachedPathLength(playerPos, cell)
             if (distToCell == null || distToCell > maxMP) continue
 
             // Check if this cell is in damage map
@@ -824,12 +824,12 @@ class Strategy {
             if (cellObj._id == playerPos) continue  // Skip current position
 
             // Check if cell is reachable
-            var distToCell = getPathLength(playerPos, cellObj._id)
+            var distToCell = getCachedPathLength(playerPos, cellObj._id)
             if (distToCell == null || distToCell > maxMP || distToCell == 0) continue
 
             // CRITICAL: Check if we can still reach safe cell AFTER stopping here
             var remainingMP = maxMP - distToCell
-            var distToSafeFromHere = getPathLength(cellObj._id, safeCell)
+            var distToSafeFromHere = getCachedPathLength(cellObj._id, safeCell)
 
             if (distToSafeFromHere != null && distToSafeFromHere <= remainingMP) {
                 // This cell preserves escape route!
@@ -873,7 +873,7 @@ class Strategy {
             if (pathCell == playerPos) continue
 
             // Check if cell is reachable with current MP
-            var distToCell = getPathLength(playerPos, pathCell)
+            var distToCell = getCachedPathLength(playerPos, pathCell)
             if (distToCell == null || distToCell > maxMP) continue
 
             // Check if this cell has weapons
@@ -882,7 +882,7 @@ class Strategy {
 
                 // CRITICAL: Check if we can still reach safe cell AFTER stopping here
                 var remainingMP = maxMP - distToCell
-                var distToSafeFromHere = getPathLength(pathCell, safeCell)
+                var distToSafeFromHere = getCachedPathLength(pathCell, safeCell)
 
                 if (distToSafeFromHere != null && distToSafeFromHere <= remainingMP) {
                     // This cell preserves escape route!
@@ -1122,8 +1122,8 @@ class Strategy {
                 if (mapContainsKey(fieldMap.damageMap, hnsApproach['cell']) && mapContainsKey(fieldMap.damageMap, targetHitCell._id)) {
                     var hCellObj = fieldMap.damageMap[hnsApproach['cell']]
                     if (hCellObj._totalDamage == targetHitCell._totalDamage) {
-                        var distCurrent = getPathLength(player._cellPos, targetHitCell._id)
-                        var distH = getPathLength(player._cellPos, hCellObj._id)
+                        var distCurrent = getCachedPathLength(player._cellPos, targetHitCell._id)
+                        var distH = getCachedPathLength(player._cellPos, hCellObj._id)
                         if (distH != null && distCurrent != null && distH < distCurrent) adopt = true
                     }
                 }
@@ -1145,7 +1145,7 @@ class Strategy {
         var playerPos = player._cellPos
         var playerMP = player._currMp
         var playerTP = player._currTp
-        var pathLength = getPathLength(playerPos, targetHitCell._id)
+        var pathLength = getCachedPathLength(playerPos, targetHitCell._id)
 
         debug("Player position: " + playerPos)
         debug("Player MP: " + playerMP + " Player TP: " + playerTP)
@@ -1216,7 +1216,7 @@ class Strategy {
                 debug("No reachable hit cell found for weapon " + getWeaponName(wObj._id))
                 continue
             }
-            var secondPathLength = getPathLength(playerPos, secondHitCell._id)
+            var secondPathLength = getCachedPathLength(playerPos, secondHitCell._id)
             if (secondPathLength != null && secondPathLength <= playerMP) {
                 if (secondPathLength > 0) {
                     createMovementAction(Action.MOVEMENT_OFFENSIVE, secondHitCell._id, target)
@@ -1265,7 +1265,7 @@ class Strategy {
             if (hnsInfo != null) {
                 var hideCellId = hnsInfo['cell']
                 if (hideCellId != targetHitCell._id) {
-                    var legLen = getPathLength(targetHitCell._id, hideCellId)
+                    var legLen = getCachedPathLength(targetHitCell._id, hideCellId)
                     if (legLen != null && legLen <= playerMP) {
                         debug("[HNS] Scheduling post-attack hide move to cell " + hideCellId + " danger=" + hnsInfo['danger'])
                         createMovementAction(Action.MOVEMENT_HNS, hideCellId, target)
@@ -1294,8 +1294,8 @@ class Strategy {
         if (hnsApproach != null && hnsApproach['canAttack'] && mapContainsKey(fieldMap.damageMap, hnsApproach['cell'])) {
             var hCellObj = fieldMap.damageMap[hnsApproach['cell']]
             if (hCellObj._highestDamageWeapon != -1) {
-                var distOrig = getPathLength(playerPos, bestWeaponCell._id)
-                var distH = getPathLength(playerPos, hCellObj._id)
+                var distOrig = getCachedPathLength(playerPos, bestWeaponCell._id)
+                var distH = getCachedPathLength(playerPos, hCellObj._id)
                 if (distH != null && distOrig != null && hCellObj._weaponDamage >= bestWeaponCell._weaponDamage && distH < distOrig) {
                     debug("[" + debugPrefix + "][HNS-APPROACH] Switching weapon cell to safer/closer cell " + hCellObj._id)
                     bestWeaponCell = hCellObj
@@ -1307,7 +1307,7 @@ class Strategy {
         fieldMap.markChosenDestinationAndPath(player._cellPos, bestWeaponCell._id)
 
         // Movement to weapon cell
-        var pathLen = getPathLength(playerPos, bestWeaponCell._id)
+        var pathLen = getCachedPathLength(playerPos, bestWeaponCell._id)
         if (pathLen == null) pathLen = 99999
         debug("[" + debugPrefix + "] Movement check: pathLen=" + pathLen + " playerMP=" + playerMP + " bestWeaponCell=" + bestWeaponCell._id + " playerPos=" + playerPos)
         var reachedWeaponCell = false
@@ -1823,7 +1823,7 @@ class Strategy {
             if (hnsInfo != null) {
                 var hideCellId = hnsInfo['cell']
                 if (hideCellId != playerPos) {
-                    var legLen = getPathLength(playerPos, hideCellId)
+                    var legLen = getCachedPathLength(playerPos, hideCellId)
                     if (legLen != null && legLen <= playerMP) {
                         debug("[" + debugPrefix + "][HNS] Adding hide move to cell " + hideCellId + " danger=" + hnsInfo['danger'])
                         this.createMovementAction(Action.MOVEMENT_HNS, hideCellId, target)
@@ -2094,7 +2094,7 @@ class Strategy {
                         // Continue fleeing to final safe cell if not already there
                         var currentPos = player._cellPos
                         if (currentPos != hCell && player._currMp > 0) {
-                            var distToSafe = getPathLength(currentPos, hCell)
+                            var distToSafe = getCachedPathLength(currentPos, hCell)
                             if (distToSafe != null && distToSafe > 0 && distToSafe <= player._currMp) {
                                 debug("[FLEE] Continuing to final safe cell " + hCell + " (dist=" + distToSafe + ")")
                                 this.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
@@ -2506,17 +2506,20 @@ class Strategy {
             return
         }
 
-        // OUT-OF-RANGE OPTIMIZATION: Skip expensive multi-scenario if enemy too far
+        // PRIORITY 3: Out-of-range check - BUT still run scenarios for buffs/shields
         var distToTarget = getCellDistance(player._cellPos, target._cellPos)
         var maxWeaponRange = 12  // M-LASER max range
         var currentMP = getMP()
+        var canAttackThisTurn = (distToTarget != null && distToTarget <= maxWeaponRange + currentMP)
 
-        if (distToTarget != null && distToTarget > maxWeaponRange + currentMP) {
+        if (!canAttackThisTurn && distToTarget != null && distToTarget > 25) {
+            // Enemy VERY far (> 25 cells) - skip scenario generation entirely, just approach
+            debug("[OUT-OF-RANGE] Enemy very far (dist=" + distToTarget + ") - simple approach")
             this.createMovementAction(Action.MOVEMENT_APPROACH, target._cellPos, target)
             return
         }
 
-        // PRIORITY 3: Multi-scenario evaluation with intelligent cycling
+        // PRIORITY 4: Multi-scenario evaluation with intelligent cycling
         // Shield/damage return cycling now integrated into scenario generator
         // Generate multiple scenario variants (state-based: 2-4 scenarios per state)
         startOp()
@@ -2881,10 +2884,18 @@ class Strategy {
             push(actions, wa)
         }
 
-        // Hide and seek repositioning
-        var hideCell = fieldMap.getHideAndSeekCell()
-        if (hideCell != null && getMP() >= 2) {
-            push(actions, new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, target))
+        // If no weapon attacks possible (out of range/LOS), approach enemy instead of just hiding
+        if (count(weaponActions) == 0) {
+            debug("[NORMAL-ATTACK] No weapons in range - approaching enemy")
+            if (getMP() >= 2) {
+                push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, target._cellPos, target))
+            }
+        } else {
+            // Hide and seek repositioning only if we attacked
+            var hideCell = fieldMap.getHideAndSeekCell()
+            if (hideCell != null && getMP() >= 2) {
+                push(actions, new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, target))
+            }
         }
 
         return actions
@@ -3025,7 +3036,7 @@ class Strategy {
             for (var i = count(path) - 1; i >= 0; i--) {
                 var cell = path[i]
                 if (cell == player._cellPos) continue
-                var dist = getPathLength(player._cellPos, cell)
+                var dist = getCachedPathLength(player._cellPos, cell)
                 if (dist != null && dist <= maxMP) {
                     debug("[VALIDATION][FALLBACK] Found partial path cell: " + cell + " (dist=" + dist + ")")
                     return cell

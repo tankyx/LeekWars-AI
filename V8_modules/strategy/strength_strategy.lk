@@ -1288,7 +1288,7 @@ class StrengthStrategy extends Strategy {
         var playerPos = player._cellPos
         for (var c in fieldMap.damageMap) {
             if (c._highestDamageWeapon == -1) continue
-            var dist = getPathLength(playerPos, c._id)
+            var dist = getCachedPathLength(playerPos, c._id)
             if (dist == null) continue
             // Prefer higher weaponDamage, tie-break shorter distance
             if (c._weaponDamage > bestWeaponDamage || (c._weaponDamage == bestWeaponDamage && dist < bestDist)) {

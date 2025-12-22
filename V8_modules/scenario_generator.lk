@@ -216,6 +216,23 @@ class ScenarioGenerator {
             // Our HP < 30% → heal + lifesteal strategy
             debug("[STATE-FLEE] Emergency survival mode")
 
+            // DEFENSIVE TELEPORT: Escape to safe cell if available
+            // Analysis: Need to reduce damage taken (38% more in losses)
+            var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
+            var teleportReady = hasTeleport && getCooldown(CHIP_TELEPORTATION, player._id) == 0
+
+            if (teleportReady) {
+                // Check if we're in danger (high threat at current position)
+                var currentThreat = this._fieldMap.getThreatAtCell(player._cellPos)
+                if (currentThreat > 200) {
+                    debug("[STATE-FLEE] High threat detected (" + currentThreat + ") - prioritizing TELEPORT escape")
+                    var escapeScenario = this.createTeleportEscapeScenario(availableTP, availableMP)
+                    if (escapeScenario != null) {
+                        push(scenarios, escapeScenario)
+                    }
+                }
+            }
+
             // Check if REGENERATION is available (critical for survival strategy)
             var hasRegen = mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)
             var regenAvailable = hasRegen && getCooldown(CHIP_REGENERATION, player._id) == 0
@@ -269,24 +286,30 @@ class ScenarioGenerator {
             var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
             var killProbability = estimatedDamage / enemyHP
 
-            if (killProbability >= 0.85) {
+            // LOWERED from 0.85 to 0.75 - more aggressive finisher
+            // Analysis: Losses last 1.2 turns longer and take 38% more damage
+            // Being too cautious in endgame lets enemy come back
+            if (killProbability >= 0.75) {
                 return "KILL"
             }
         }
 
-        // STATE 3: SUSTAIN (our HP 30-70%, enemy HP > 40%)
-        // LOWERED from 60% to 70% for proactive healing (prevents dying despite winning damage race)
-        if (playerHPPercent >= 30 && playerHPPercent <= 70 && enemyHPPercent > 40) {
+        // STATE 3: SUSTAIN (our HP 30-50%, enemy HP > 40%)
+        // NARROWED from 70% to 50% - only heal when HP is actually critical
+        // Analysis: Losses spam REMISSION 5.6x more than wins (too reactive)
+        // Strategy: Stay aggressive longer, only sustain when HP truly low
+        if (playerHPPercent >= 30 && playerHPPercent <= 50 && enemyHPPercent > 40) {
             return "SUSTAIN"
         }
 
         // STATE 4: AGGRO (early game OR buffs expired)
         // Check if we're in early game (turn 1-4) OR critical buffs expired
-        // UPDATED: Changed from > 60% to > 70% to align with SUSTAIN threshold
+        // UPDATED: Changed from > 70% to > 50% to match new SUSTAIN threshold
+        // This allows AGGRO state when HP is 50-100% (more aggressive overall)
         var earlyGame = (currentTurn >= 1 && currentTurn <= 4)
         var buffsExpired = this.checkCriticalBuffsExpired()
 
-        if ((earlyGame || buffsExpired) && playerHPPercent > 70 && enemyHPPercent > 60) {
+        if ((earlyGame || buffsExpired) && playerHPPercent > 50 && enemyHPPercent > 60) {
             return "AGGRO"
         }
 
@@ -897,15 +920,35 @@ class ScenarioGenerator {
             }
         }
 
-        // PRIORITY 2: Fallback to best damage cell (standard behavior)
-        var bestCell = this._fieldMap.getBestWeaponOrChipCell()
-        if (bestCell == null) return null
+        // PRIORITY 2: Threat-aware tactical positioning (damage vs safety)
+        // Analysis: Losses take 38% more damage - need to prioritize safer positions
+        // Use threat weight based on HP: Low HP = avoid danger, High HP = maximize damage
+        var playerHP = this._player._currHealth
+        var playerMaxHP = this._player._maxHealth
+        var hpPercent = (playerHP * 100) / playerMaxHP
 
-        var pathLength = getCachedPathLength(this._player._cellPos, bestCell._id)
-        if (pathLength == null || pathLength > mpBudget) {
-            // Find reachable cell
-            bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
+        // Threat weight: 0 = ignore threat, 1 = equal to damage
+        // HP > 70%: threatWeight = 0.3 (mostly offensive)
+        // HP 40-70%: threatWeight = 0.5 (balanced)
+        // HP < 40%: threatWeight = 0.8 (mostly defensive)
+        var threatWeight = 0.3
+        if (hpPercent < 40) {
+            threatWeight = 0.8
+        } else if (hpPercent < 70) {
+            threatWeight = 0.5
+        }
+
+        var bestCell = this._fieldMap.findBestTacticalCell(mpBudget, threatWeight)
+        if (bestCell == null) {
+            // Fallback to pure damage cell if tactical positioning fails
+            bestCell = this._fieldMap.getBestWeaponOrChipCell()
             if (bestCell == null) return null
+
+            var pathLength = getCachedPathLength(this._player._cellPos, bestCell._id)
+            if (pathLength == null || pathLength > mpBudget) {
+                bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
+                if (bestCell == null) return null
+            }
         }
 
         var action = new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestCell._id, this._target)
