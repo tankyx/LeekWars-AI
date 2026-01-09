@@ -152,7 +152,7 @@ class AgilityStrategy extends Strategy {
                 continue
             }
 
-            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
+            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, wid, target)
             debug("[OTKO][WEAPONS] Add " + getWeaponName(wid) + " - dmg=" + netDmg + " cost=" + wObj._cost + " maxUses=" + wObj._maxUse)
             push(weaponDmgList, ['weapon': wObj, 'netDmg': netDmg])
         }
@@ -216,7 +216,7 @@ class AgilityStrategy extends Strategy {
                 if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
                 if (!lineOfSight(teleCell, target._cellPos)) continue
 
-                var netChipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, cid, target)
+                var netChipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, cid, target)
                 push(chipDmgList, ['chip': chipObj, 'netDmg': netChipDmg])
             }
 

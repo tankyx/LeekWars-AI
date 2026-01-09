@@ -701,6 +701,57 @@ class FieldMap extends FieldMapPatterns {
         return safe
     }
 
+    // Find best waypoint toward a target cell (multi-turn movement planning)
+    // Returns cell that: gets us closer to target, is reachable, has acceptable threat
+    // OPTIMIZED: Only check damage map cells (pre-calculated optimal positions)
+    findSafeWaypointToward(targetCell, maxMP, maxThreat = 200) {
+        var playerPos = player._cellPos
+        var bestWaypoint = -1
+        var bestScore = -99999
+
+        // Cache distance calculations
+        var currentDist = getCellDistance(playerPos, targetCell)
+        var checked = 0
+        var limit = 50  // Performance: check max 50 cells
+
+        // OPTIMIZATION: Only check cells from damage map (pre-calculated positions)
+        // This reduces search from ~300 cells to ~30 cells
+        for (var cellId in mapKeys(this.damageMap)) {
+            if (checked >= limit) break
+            checked++
+
+            var pathLen = getCachedPathLength(playerPos, cellId)
+            if (pathLen == null || pathLen > maxMP) continue
+
+            // Check threat level
+            var threat = this.getThreatAtCell(cellId)
+            if (threat > maxThreat) continue
+
+            // Calculate progress toward target (negative = closer)
+            var newDist = getCellDistance(cellId, targetCell)
+            var progress = currentDist - newDist  // Positive = moving closer
+
+            // Skip if not making progress
+            if (progress <= 0) continue
+
+            // Score: prioritize progress, penalize threat, prefer closer waypoints
+            var score = progress * 100 - threat * 0.5 - pathLen * 5
+
+            if (score > bestScore) {
+                bestScore = score
+                bestWaypoint = cellId
+            }
+        }
+
+        if (bestWaypoint != -1) {
+            var threat = this.getThreatAtCell(bestWaypoint)
+            var newDist = getCellDistance(bestWaypoint, targetCell)
+            debug("[MULTI-TURN] Waypoint to " + targetCell + ": cell " + bestWaypoint + " (threat=" + floor(threat) + ", remaining dist=" + newDist + ")")
+        }
+
+        return bestWaypoint
+    }
+
     // Find best tactical cell (high damage, low threat)
     findBestTacticalCell(maxMP, threatWeight = 0.5) {
         var best = -1

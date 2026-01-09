@@ -860,7 +860,7 @@ class MagicStrategy extends Strategy {
             var priorityChips = []
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TOXIN)) push(priorityChips, arsenal.playerEquippedChips[CHIP_TOXIN])
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_PLAGUE)) push(priorityChips, arsenal.playerEquippedChips[CHIP_PLAGUE])
-            var allPois = arsenal.getPoisonChipsSorted(player._strength, player._magic, player._wisdom)
+            var allPois = arsenal.getPoisonChipsSorted(player._strength, player._magic, player._wisdom, player._science)
             for (var addIdx = 0; addIdx < count(allPois); addIdx++) {
                 var pcAdd = allPois[addIdx]
                 if (pcAdd._id == CHIP_TOXIN || pcAdd._id == CHIP_PLAGUE) continue

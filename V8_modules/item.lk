@@ -140,7 +140,8 @@ class Arsenal {
 
     // Helper: compute base damage (without lifesteal) from a map of effects
     // Optional aoeModifier parameter applies AoE falloff (default 1.0 = full damage)
-    computeEffectsBaseDamage(effectsMap, str, mag, aoeModifier = 1.0) {
+    // Nova damage requires science stat (sci parameter)
+    computeEffectsBaseDamage(effectsMap, str, mag, sci, aoeModifier = 1.0) {
         var total = 0
         for (var e in mapKeys(effectsMap)) {
             var info = effectsMap[e]
@@ -151,23 +152,28 @@ class Arsenal {
                 var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
                 var totalOverTime = avg2 * info._effectDuration
                 total += totalOverTime * (1 + (mag / 100)) * aoeModifier
+            } else if (e == EFFECT_NOVA_DAMAGE) {
+                // Nova damage scales with both STR and SCI (additive)
+                var avgNova = (info._minEffectAmount + info._maxEffectAmount) / 2
+                total += avgNova * (1 + (str + sci) / 100) * aoeModifier
             }
         }
         return total
     }
 
-    // Provide separate breakdown for direct (immediate) vs dot (poison) damage per use/apply
-    // directPerUse: average base damage (EFFECT_DAMAGE) scaled by STR (and lifesteal not included here)
-    // dotPerApply: total poison damage over duration (EFFECT_POISON) scaled by MAG (applies at most once per target realistically)
+    // Provide separate breakdown for direct (immediate) vs dot (poison) vs nova damage
+    // directPerUse: average base damage (EFFECT_DAMAGE) scaled by STR
+    // dotPerApply: total poison damage over duration (EFFECT_POISON) scaled by MAG
+    // nova: nova damage (EFFECT_NOVA_DAMAGE) scaled by STR+SCI, bypasses shields, reduces max HP
     // Optional parameters for AoE: centerCell (impact point), targetCell (cell taking damage)
-    getDamageBreakdown(str, mag, wis, itemID, centerCell = -1, targetCell = -1) {
+    getDamageBreakdown(str, mag, wis, sci, itemID, centerCell = -1, targetCell = -1) {
         // Support both full inventory lists and equipped subsets for weapons & chips.
         var isWeapon = mapContainsKey(this.playerEquippedWeapons, itemID)
         // A chip can reside either in the global chipsList or only in playerEquippedChips.
         var chipInFull = mapContainsKey(this.chipsList, itemID)
         var chipInEquipped = mapContainsKey(this.playerEquippedChips, itemID)
         var isChip = !isWeapon && (chipInFull || chipInEquipped)
-        if (!isWeapon && !isChip) return ['direct': 0, 'dot': 0, 'total': 0, 'min': 0, 'max': 0]
+        if (!isWeapon && !isChip) return ['direct': 0, 'dot': 0, 'nova': 0, 'total': 0, 'min': 0, 'max': 0]
         var item = isWeapon ? this.playerEquippedWeapons[itemID] : (chipInFull ? this.chipsList[itemID] : this.playerEquippedChips[itemID])
 
         // Calculate AoE modifier if both cells are provided
@@ -178,6 +184,7 @@ class Arsenal {
 
         var direct = 0
         var dot = 0
+        var nova = 0
         var minDmg = 0
         var maxDmg = 0
 
@@ -200,19 +207,29 @@ class Arsenal {
                 var maxPoison = info._maxEffectAmount * info._effectDuration * (1 + (mag / 100)) * aoeModifier
                 minDmg += minPoison
                 maxDmg += maxPoison
+            } else if (e == EFFECT_NOVA_DAMAGE) {
+                // Nova damage scales with both STR and SCI (additive)
+                var avgNova = (info._minEffectAmount + info._maxEffectAmount) / 2
+                nova += avgNova * (1 + (str + sci) / 100) * aoeModifier
+
+                // Nova adds to min/max as well
+                var minNova = info._minEffectAmount * (1 + (str + sci) / 100) * aoeModifier
+                var maxNova = info._maxEffectAmount * (1 + (str + sci) / 100) * aoeModifier
+                minDmg += minNova
+                maxDmg += maxNova
             }
         }
-        return ['direct': direct, 'dot': dot, 'total': direct + dot, 'min': minDmg, 'max': maxDmg]
+        return ['direct': direct, 'dot': dot, 'nova': nova, 'total': direct + dot + nova, 'min': minDmg, 'max': maxDmg]
     }
 
     // Return an array of poison chip objects sorted by descending dot damage
-    getPoisonChipsSorted(str, mag, wis) {
+    getPoisonChipsSorted(str, mag, wis, sci) {
         var arr = []
         for (var cid in mapKeys(this.playerEquippedChips)) {
             var chip = this.playerEquippedChips[cid]
             if (!mapContainsKey(chip._effects, EFFECT_POISON)) continue
-            var bd = this.getDamageBreakdown(str, mag, wis, cid)
-            push(arr, ['chip': chip, 'dot': bd['dot'], 'direct': bd['direct'], 'total': bd['total']])
+            var bd = this.getDamageBreakdown(str, mag, wis, sci, cid)
+            push(arr, ['chip': chip, 'dot': bd['dot'], 'direct': bd['direct'], 'nova': bd['nova'], 'total': bd['total']])
         }
         // Simple selection sort (LeekScript lacks higher-order sort)
         var sorted = []
@@ -232,21 +249,21 @@ class Arsenal {
     }
 
     // Return DoT-capable weapons sorted by descending dot component; include pure direct if no dot weapons
-    getDotWeaponsSorted(str, mag, wis) {
+    getDotWeaponsSorted(str, mag, wis, sci) {
         var arr = []
         for (var wid in mapKeys(this.playerEquippedWeapons)) {
             var w = this.playerEquippedWeapons[wid]
-            var bd = this.getDamageBreakdown(str, mag, wis, wid)
-            if (bd['dot'] > 0) {
-                push(arr, ['weapon': w, 'dot': bd['dot'], 'direct': bd['direct'], 'total': bd['total']])
+            var bd = this.getDamageBreakdown(str, mag, wis, sci, wid)
+            if (bd['dot'] > 0 || bd['nova'] > 0) {
+                push(arr, ['weapon': w, 'dot': bd['dot'], 'nova': bd['nova'], 'direct': bd['direct'], 'total': bd['total']])
             }
         }
         if (count(arr) == 0) {
             // fallback: use any weapons (direct focus)
             for (var wid2 in mapKeys(this.playerEquippedWeapons)) {
                 var w2 = this.playerEquippedWeapons[wid2]
-                var bd2 = this.getDamageBreakdown(str, mag, wis, wid2)
-                push(arr, ['weapon': w2, 'dot': bd2['dot'], 'direct': bd2['direct'], 'total': bd2['total']])
+                var bd2 = this.getDamageBreakdown(str, mag, wis, sci, wid2)
+                push(arr, ['weapon': w2, 'dot': bd2['dot'], 'nova': bd2['nova'], 'direct': bd2['direct'], 'total': bd2['total']])
             }
         }
         // selection sort by dot then total
@@ -269,11 +286,12 @@ class Arsenal {
     }
 
     // Calculate net damage against target accounting for shields
-    // Poison/DoT damage bypasses shields entirely; direct damage is reduced by relative/absolute shields
-    getNetDamageAgainstTarget(str, mag, wis, itemID, targetEntity) {
-        var bd = this.getDamageBreakdown(str, mag, wis, itemID)
+    // Poison/DoT and Nova damage bypass shields entirely; direct damage is reduced by relative/absolute shields
+    getNetDamageAgainstTarget(str, mag, wis, sci, itemID, targetEntity) {
+        var bd = this.getDamageBreakdown(str, mag, wis, sci, itemID)
         var directDmg = bd['direct']
         var dotDmg = bd['dot']
+        var novaDmg = bd['nova']
 
         // Apply shields only to direct damage
         var relShield = targetEntity._relShield / 100  // Convert percentage to decimal
@@ -282,8 +300,8 @@ class Arsenal {
         var netDirect = directDmg * (1 - relShield) - absShield
         if (netDirect < 0) netDirect = 0  // Can't heal enemy
 
-        // Poison bypasses shields completely
-        return netDirect + dotDmg
+        // Poison and Nova bypass shields completely (Nova reduces max HP)
+        return netDirect + dotDmg + novaDmg
     }
 
     // Calculate total damage to all enemies in AoE with falloff and shield penetration
@@ -315,7 +333,7 @@ class Arsenal {
 
             if (aoeModifier > 0) {
                 // Get base damage breakdown
-                var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, itemId, aimCell, e._cellPos)
+                var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId, aimCell, e._cellPos)
 
                 // Apply shields/vulnerability to direct damage only
                 var directAfterShield = bd['direct'] * aoeModifier
@@ -324,10 +342,11 @@ class Arsenal {
                     if (directAfterShield < 0) directAfterShield = 0
                 }
 
-                // Poison/DoT bypasses shields completely
+                // Poison/DoT and Nova bypass shields completely
                 var dotDamage = bd['dot'] * aoeModifier
+                var novaDamage = bd['nova'] * aoeModifier
 
-                var netDmg = directAfterShield + dotDamage
+                var netDmg = directAfterShield + dotDamage + novaDamage
 
                 totalDamage += netDmg
                 push(hitEnemies, e)
@@ -343,7 +362,7 @@ class Arsenal {
         var highestDmgWeapon = null
 
         for (var w in mapKeys(this.playerEquippedWeapons)) {
-            var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, w)
+            var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, w)
             var dmg = bd['total']
             if (dmg > highestDmg) {
                 highestDmg = dmg
@@ -392,22 +411,22 @@ class Arsenal {
      * This is much more accurate than simple damage projection
      *
      * @param itemIds - array of weapon/chip IDs to use
-     * @param playerStr, playerMag, playerWis - player stats
+     * @param playerStr, playerMag, playerWis, playerSci - player stats
      * @param playerAgility - for critical hit calculation
      * @param targetEntity - enemy entity with HP and shields
      * @return probability (0.0 to 1.0) that combo will kill target
      *
      * NOTE: Requires math/damage_probability.lk to be included
      */
-    getKillProbability(itemIds, playerStr, playerMag, playerWis, playerAgility, targetEntity) {
+    getKillProbability(itemIds, playerStr, playerMag, playerWis, playerSci, playerAgility, targetEntity) {
         // This method requires the probability distribution system
         // It will be implemented when DamageProbability is available
         // For now, return simple threshold-based estimate
 
         var totalDmg = 0
         for (var i = 0; i < count(itemIds); i++) {
-            var bd = this.getDamageBreakdown(playerStr, playerMag, playerWis, itemIds[i])
-            var netDmg = this.getNetDamageAgainstTarget(playerStr, playerMag, playerWis, itemIds[i], targetEntity)
+            var bd = this.getDamageBreakdown(playerStr, playerMag, playerWis, playerSci, itemIds[i])
+            var netDmg = this.getNetDamageAgainstTarget(playerStr, playerMag, playerWis, playerSci, itemIds[i], targetEntity)
             totalDmg += netDmg
         }
 
@@ -432,7 +451,7 @@ class Arsenal {
      * otherwise falls back to simple estimate. Comment out math includes in main.lk
      * if operations limit is exceeded.
      */
-    getAccurateKillProbability(itemIds, playerStr, playerMag, playerWis, playerAgility, targetEntity) {
+    getAccurateKillProbability(itemIds, playerStr, playerMag, playerWis, playerSci, playerAgility, targetEntity) {
         // Check if DamageProbability class is available (requires math includes in main.lk)
         // If not available, LeekScript will throw error on class reference
 

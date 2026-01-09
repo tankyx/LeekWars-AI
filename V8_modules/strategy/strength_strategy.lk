@@ -137,7 +137,7 @@ class StrengthStrategy extends Strategy {
             if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
             if (!lineOfSight(teleCell, target._cellPos)) continue
 
-            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
+            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, wid, target)
             push(weaponDmgList, ['weapon': wObj, 'netDmg': netDmg])
         }
 
@@ -198,7 +198,7 @@ class StrengthStrategy extends Strategy {
                 if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
                 if (!lineOfSight(teleCell, target._cellPos)) continue
 
-                var netChipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, cid, target)
+                var netChipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, cid, target)
                 push(chipDmgList, ['chip': chipObj, 'netDmg': netChipDmg])
             }
 

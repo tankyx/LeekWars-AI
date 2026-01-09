@@ -480,7 +480,7 @@ class FieldMapPatterns extends FieldMapCore {
             var listCID = []
             for (var cellRef2 in localChipMap) {
                 if (cellRef2._isObstacle) continue
-                var bdDbg = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
+                var bdDbg = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chipObj._id)
                 this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj, oppCell)
                 push(listCID, cellRef2._id)
             }

@@ -3,6 +3,7 @@
 class SimulationResult {
     damageDealt = 0           // Immediate damage from weapons/chips
     dotDamageQueued = 0       // DoT damage (poison/burn total ticks)
+    novaDamageQueued = 0      // Nova damage (reduces max HP, bypasses shields)
     hpGained = 0              // Healing from chips
     shieldsGained = 0         // Shield points added
     relativeShieldGained = 0  // Relative shield percentage
@@ -46,6 +47,7 @@ class ScenarioSimulator {
         var simStrength = this._player._strength
         var simMagic = this._player._magic
         var simWisdom = this._player._wisdom
+        var simScience = this._player._science
         var simWeaponUses = [:]  // Track weapon uses per weapon ID
 
         result.finalPosition = simPos
@@ -61,11 +63,13 @@ class ScenarioSimulator {
                 if (action.chip != -1) {
                     // Chip attack or debuff - USE CACHED VALUES
                     var chipCost = getChipCost(action.chip)
-                    var chipDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, action.chip, this._target)
-                    var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, action.chip)
+                    var chipDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target)
+                    var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
                     result.damageDealt += breakdown['direct']
                     result.dotDamageQueued += breakdown['dot']
+                    var currentNova = result.novaDamageQueued != null ? result.novaDamageQueued : 0
+                    result.novaDamageQueued = currentNova + breakdown['nova']
                     result.tpSpent += chipCost
                     simTP -= chipCost
 
@@ -93,9 +97,13 @@ class ScenarioSimulator {
 
                         var swapCost = (simWeapon != action.weaponId) ? 1 : 0
                         var weaponCost = weaponObj._cost
-                        var weaponDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, action.weaponId, this._target)
+                        var weaponDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.weaponId, this._target)
+                        var weaponBreakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
 
-                        result.damageDealt += weaponDmg
+                        result.damageDealt += weaponBreakdown['direct']
+                        result.dotDamageQueued += weaponBreakdown['dot']
+                        var currentNova = result.novaDamageQueued != null ? result.novaDamageQueued : 0
+                        result.novaDamageQueued = currentNova + weaponBreakdown['nova']
                         result.tpSpent += swapCost + weaponCost
                         simTP -= swapCost + weaponCost
                         simWeapon = action.weaponId
@@ -123,8 +131,11 @@ class ScenarioSimulator {
                 if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD || action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS) {
                     var shieldAmount = this.estimateShieldAmount(action.chip, simWisdom)
                     result.shieldsGained += shieldAmount
-                } else if (action.chip == CHIP_PROTEIN || action.chip == CHIP_LEATHER_BOOTS) {
+                } else if (action.chip == CHIP_PROTEIN) {
                     result.relativeShieldGained += this.estimateRelativeShield(action.chip)
+                } else if (action.chip == CHIP_LEATHER_BOOTS) {
+                    result.relativeShieldGained += this.estimateRelativeShield(action.chip)
+                    simMP += 2  // LEATHER_BOOTS gives +2 MP - update simulated MP for movement
                 } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
                 } else if (action.chip == CHIP_STEROID || action.chip == CHIP_DOPING) {
@@ -132,6 +143,9 @@ class ScenarioSimulator {
                     simStrength += this.estimateStrengthBuff(action.chip)
                 } else if (action.chip == CHIP_WARM_UP) {
                     // Agility buff (doesn't affect damage directly in this sim)
+                } else if (action.chip == CHIP_ADRENALINE) {
+                    // ADRENALINE: +5 TP boost (already paid 1 TP cost, get back 5 TP)
+                    simTP += 5  // Net +4 TP after cost
                 }
 
                 result.actionsExecuted++

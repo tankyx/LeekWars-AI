@@ -30,7 +30,7 @@ class PoisonPlanner {
             for (var pw = 0; pw < count(preC._weaponsList); pw++) {
                 var wPre = preC._weaponsList[pw]
                 if (wPre == null) continue
-                var bdPre = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, wPre._id)
+                var bdPre = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, wPre._id)
                 if (bdPre['dot'] <= 0) continue
                 var swapNeedPre = (getWeapon() != wPre._id)
                 var swapCostPre = swapNeedPre ? 1 : 0
@@ -52,7 +52,7 @@ class PoisonPlanner {
                 for (var sw = 0; sw < count(stayCell._weaponsList); sw++) {
                     var swW = stayCell._weaponsList[sw]
                     if (swW == null) continue
-                    var bdStay = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, swW._id)
+                    var bdStay = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, swW._id)
                     if (bdStay['dot'] > 0) { stayHighDot = true; break }
                 }
             }
@@ -77,7 +77,7 @@ class PoisonPlanner {
                 for (var preLC = 0; preLC < count(c._chipsList); preLC++) {
                     var preChip = c._chipsList[preLC]
                     if (preChip == null) continue
-                    var bdPreChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, preChip._id)
+                    var bdPreChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, preChip._id)
                     if (bdPreChip['dot'] <= 0) continue
                     if (bdPreChip['dot'] > topPoisonDot) {
                         topPoisonDot = bdPreChip['dot']
@@ -94,7 +94,7 @@ class PoisonPlanner {
                 for (var lw = 0; lw < count(c._weaponsList); lw++) {
                     var wLoc = c._weaponsList[lw]
                     if (wLoc == null) continue
-                    var bdLoc = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, wLoc._id)
+                    var bdLoc = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, wLoc._id)
                     if (bdLoc['dot'] <= 0) continue
                     push(localDotWeapons, ['weapon': wLoc, 'total': bdLoc['total'], 'bd': bdLoc])
                 }
@@ -177,7 +177,7 @@ class PoisonPlanner {
                 for (var lc = 0; lc < count(c._chipsList); lc++) {
                     var chipObj = c._chipsList[lc]
                     if (chipObj == null) continue
-                    var bdChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
+                    var bdChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chipObj._id)
                     if (bdChip['dot'] <= 0) {
                         if (verbosePlan) debug("[DoT-KITE][PLAN][CELL] Skipping " + getChipName(chipObj._id) + " (no DoT)")
                         continue
@@ -328,7 +328,7 @@ class PoisonPlanner {
                     for (var lc = 0; lc < count(currCell._chipsList); lc++) {
                         var chipObj = currCell._chipsList[lc]
                         if (chipObj == null) continue
-                        var bdChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
+                        var bdChip = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chipObj._id)
                         if (bdChip['dot'] <= 0) continue
                         push(localPoisonChips, ['chip': chipObj, 'total': bdChip['total'], 'bd': bdChip])
                     }
@@ -380,7 +380,7 @@ class PoisonPlanner {
             if (bestCell._weaponsList != null) {
                 for (var ws = 0; ws < count(bestCell._weaponsList); ws++) {
                     var wSum = bestCell._weaponsList[ws]
-                    var bdWsum = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, wSum._id)
+                    var bdWsum = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, wSum._id)
                     var usesPlan = 0
                     for (var pwL = 0; pwL < count(bestWeapons); pwL++) {
                         if (bestWeapons[pwL]['weapon']._id == wSum._id) { usesPlan = bestWeapons[pwL]['uses']; break }
@@ -394,7 +394,7 @@ class PoisonPlanner {
             if (bestCell._chipsList != null) {
                 for (var cs = 0; cs < count(bestCell._chipsList); cs++) {
                     var cSum = bestCell._chipsList[cs]
-                    var bdCsum = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, cSum._id)
+                    var bdCsum = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, cSum._id)
                     if (bdCsum['dot'] <= 0) {
                         chipSummary += (chipSummary != "" ? ", " : "") + getChipName(cSum._id) + "(no-dot d=" + floor(bdCsum['direct']) + ")"
                         continue

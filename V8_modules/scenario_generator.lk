@@ -29,6 +29,9 @@ class ScenarioGenerator {
     _hideCache = null    // Cached hide action
     _kiteCache = null    // Cached kite action
 
+    // CONFIGURATION: Set to false to disable state-based filtering (generates all scenarios)
+    static USE_STATE_BASED_SCENARIOS = true  // Re-enabled state-based scenarios
+
     constructor(arsenal, player, target, fieldMap, strategy) {
         this._arsenal = arsenal
         this._player = player
@@ -553,7 +556,7 @@ class ScenarioGenerator {
                 tpBudget >= 5) {
 
                 var bestCell = this._fieldMap.getBestWeaponOrChipCell()
-                if (bestCell != null) {
+                if (bestCell != null && bestCell != -1) {
                     var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
                     if (teleportDist >= 1 && teleportDist <= 12) {
                         push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
@@ -686,6 +689,65 @@ class ScenarioGenerator {
         return actions
     }
 
+    // Defensive TELEPORT Escape: Emergency evacuation when HP critical
+    // Teleports to safest reachable cell + heal + shield
+    createTeleportEscapeScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // Need minimum 5 TP for teleport
+        if (tpBudget < 5) {
+            return null
+        }
+
+        // Find safest cell within teleportation range (1-12)
+        var safestCell = -1
+        var lowestThreat = 99999
+        var playerPos = this._player._cellPos
+
+        for (var cellId in mapKeys(this._fieldMap.damageMap)) {
+            var dist = getCellDistance(playerPos, cellId)
+            if (dist >= 1 && dist <= 12) {
+                var threat = this._fieldMap.getThreatAtCell(cellId)
+                if (threat < lowestThreat) {
+                    lowestThreat = threat
+                    safestCell = cellId
+                }
+            }
+        }
+
+        if (safestCell == -1) {
+            return null  // No safe cell found
+        }
+
+        // 1. Teleport to safest cell (5 TP)
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, safestCell, this._target))
+        tpBudget -= 5
+        debug("[TELEPORT-ESCAPE] Evacuating to cell " + safestCell + " (threat: " + lowestThreat + ")")
+
+        // 2. Apply REMISSION heal (4 TP)
+        if (tpBudget >= 4 && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
+            getCooldown(CHIP_REMISSION, this._player._id) == 0) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
+            tpBudget -= 4
+            debug("[TELEPORT-ESCAPE] Applying REMISSION heal")
+        }
+
+        // 3. Apply shield (FORTRESS or WALL)
+        var shieldAction = this.getDefensiveBuff()
+        if (shieldAction != null) {
+            var shieldCost = getCachedChipCost(shieldAction.chip)
+            if (tpBudget >= shieldCost) {
+                push(actions, shieldAction)
+                tpBudget -= shieldCost
+                debug("[TELEPORT-ESCAPE] Applying shield")
+            }
+        }
+
+        return actions
+    }
+
     // ========== PARAMETRIC SCENARIO GENERATOR ==========
 
     // Unified parametric scenario generator - replaces 6 hardcoded functions with 1 configurable function
@@ -764,6 +826,29 @@ class ScenarioGenerator {
             }
         }
 
+        // MOBILITY BUFF: LEATHER_BOOTS for low-MP builds (applies to all buffStrategy values)
+        // Critical for builds with < 10 base MP - enables movement to tactical positions
+        var appliedLeatherBoots = false
+        var leatherBootsBuff = this.getLeatherBootsBuff()
+        if (leatherBootsBuff != null && tpBudget >= 3) {
+            push(actions, leatherBootsBuff)
+            tpBudget -= 3
+            mpBudget += 2  // Update MP budget to reflect boost (affects movement planning)
+            appliedLeatherBoots = true
+        }
+
+        // TP RECOVERY: ADRENALINE after LEATHER_BOOTS (offsets mobility cost)
+        // LEATHER_BOOTS + ADRENALINE combo: -3 TP + 4 TP = +1 net TP + mobility
+        if (appliedLeatherBoots) {
+            var adrenalineBuff = this.getAdrenalineBuff()
+            if (adrenalineBuff != null && tpBudget >= 1) {
+                push(actions, adrenalineBuff)
+                tpBudget -= 1
+                tpBudget += 5  // ADRENALINE gives +5 TP immediately (net +4)
+                debug("[SCENARIO] LEATHER_BOOTS + ADRENALINE combo: Net +1 TP + mobility")
+            }
+        }
+
         // PHASE 3: OTKO TELEPORT (if repositioning == "otko")
         if (params.repositioning == "otko" && this.checkOTKOOpportunity()) {
             var distToTarget = getCellDistance(this._player._cellPos, this._target._cellPos)
@@ -775,7 +860,7 @@ class ScenarioGenerator {
                 tpBudget >= 5) {
 
                 var bestCell = this._fieldMap.getBestWeaponOrChipCell()
-                if (bestCell != null) {
+                if (bestCell != null && bestCell != -1) {
                     var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
                     if (teleportDist >= 1 && teleportDist <= 12) {
                         push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
@@ -889,6 +974,85 @@ class ScenarioGenerator {
         return null  // No shields available or insufficient TP
     }
 
+    // Get LEATHER_BOOTS buff action - INTELLIGENT MP CYCLING for low-MP builds
+    // CRITICAL: Only use LEATHER_BOOTS when ADRENALINE is available to offset TP cost
+    // LEATHER_BOOTS alone (-3 TP) hurts damage output, but with ADRENALINE (+4 net TP) = net +1 TP + mobility
+    getLeatherBootsBuff() {
+        var baseMP = getTotalMP()
+
+        // Only use for low-MP builds (< 10 base MP)
+        if (baseMP >= 10) {
+            return null
+        }
+
+        // Check if LEATHER_BOOTS is equipped
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS)) {
+            return null
+        }
+
+        // CRITICAL: Check if ADRENALINE is available (not on cooldown)
+        // Without ADRENALINE, LEATHER_BOOTS costs 3 TP with no recovery, which kills damage output
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE)) {
+            var adrenalineCd = getCooldown(CHIP_ADRENALINE, this._player._id)
+            if (adrenalineCd > 0) {
+                // ADRENALINE on cooldown - skip LEATHER_BOOTS to preserve TP for damage
+                return null
+            }
+        }
+
+        var currentTP = getTP()
+
+        // Check if MP buff is currently active
+        var hasMPBuff = this._player.hasEffect(EFFECT_BUFF_MP)
+        var buffRemaining = hasMPBuff ? this._player.getEffectRemaining(EFFECT_BUFF_MP) : 0
+
+        // Only reapply when buff is missing or about to expire (≤1 turn remaining)
+        if (hasMPBuff && buffRemaining > 1) {
+            return null  // Buff still active with 2+ turns, wait
+        }
+
+        // LEATHER_BOOTS: 3 TP, 2 turns, +2 MP
+        var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, this._player._id)
+        if (bootsCd == 0 && currentTP >= 6) {  // 3 for BOOTS + 3 reserve
+            return new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, -1, this._player)
+        }
+
+        return null  // Not available or insufficient TP
+    }
+
+    // Get ADRENALINE buff action - TP BOOST for low-MP builds using LEATHER_BOOTS
+    // Offsets LEATHER_BOOTS cost: spend 3 TP on boots, gain 4 net TP from ADRENALINE
+    // Net result: +1 TP + mobility (critical for 6 MP builds)
+    getAdrenalineBuff() {
+        var baseMP = getTotalMP()
+
+        // Only use for low-MP builds that need LEATHER_BOOTS
+        if (baseMP >= 10) {
+            return null
+        }
+
+        // Check if ADRENALINE is equipped
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE)) {
+            return null
+        }
+
+        var currentTP = getTP()
+
+        // Check cooldown (7 turns)
+        var adrenalineCd = getCooldown(CHIP_ADRENALINE, this._player._id)
+        if (adrenalineCd > 0) {
+            return null  // On cooldown
+        }
+
+        // ADRENALINE: 1 TP cost, +5 TP gain (net +4 TP immediately)
+        // Use when we have enough TP for it to be useful (at least 2 TP remaining after use)
+        if (currentTP >= 3) {  // 1 for ADRENALINE + 2 reserve for attacks
+            return new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player)
+        }
+
+        return null  // Not worth using with very low TP
+    }
+
     // Get movement action to optimal damage cell (NO CACHING - scenarios need different positions)
     getMoveToOptimalCell(mpBudget) {
         if (mpBudget <= 0) return null
@@ -939,15 +1103,15 @@ class ScenarioGenerator {
         }
 
         var bestCell = this._fieldMap.findBestTacticalCell(mpBudget, threatWeight)
-        if (bestCell == null) {
+        if (bestCell == null || bestCell == -1) {
             // Fallback to pure damage cell if tactical positioning fails
             bestCell = this._fieldMap.getBestWeaponOrChipCell()
-            if (bestCell == null) return null
+            if (bestCell == null || bestCell == -1) return null
 
             var pathLength = getCachedPathLength(this._player._cellPos, bestCell._id)
             if (pathLength == null || pathLength > mpBudget) {
                 bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
-                if (bestCell == null) return null
+                if (bestCell == null || bestCell == -1) return null
             }
         }
 
@@ -1228,10 +1392,9 @@ class ScenarioGenerator {
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
 
-            // Use hitmap to validate shooting position (more accurate than lineOfSight)
-            var canShoot = this._fieldMap.canShootFromCell(weaponId, simPos)
-            if (!canShoot) {
-                debug("[SCENARIO-ATTACK] " + getWeaponName(weaponId) + " NOT IN HITMAP from " + simPos + " to " + this._target._cellPos + " (dist=" + dist + ")")
+            // SIMPLIFIED: Use lineOfSight for scenario planning (hitmap not reliable for simulated positions)
+            // Hitmap is calculated from player's starting position, but simPos may be different after LEATHER_BOOTS
+            if (!lineOfSight(simPos, this._target._cellPos)) {
                 continue
             }
 
@@ -1240,7 +1403,6 @@ class ScenarioGenerator {
             if (damage > bestDamage) {
                 bestDamage = damage
                 bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage]
-                debug("[SCENARIO-ATTACK] " + getWeaponName(weaponId) + " BEST from " + simPos + " (dmg=" + floor(damage) + " dist=" + dist + ")")
             }
         }
 
@@ -1515,7 +1677,7 @@ class ScenarioGenerator {
         if (bestOTKO == null) {
             // No OTKO cells available, fallback to best damage cell + teleport
             bestOTKO = this._fieldMap.getBestWeaponOrChipCell()
-            if (bestOTKO == null) {
+            if (bestOTKO == null || bestOTKO == -1) {
                 return null
             }
         }

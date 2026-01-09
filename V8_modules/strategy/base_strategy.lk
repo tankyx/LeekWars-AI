@@ -669,8 +669,8 @@ class Strategy {
             var chipUses = min(c._maxUse, floor(playerTP / c._cost))
             if (chipUses > 0) {
                 var netChipDmg = targetEntity != null ?
-                    arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, c._id, targetEntity) :
-                    arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, c._id)['total']
+                    arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, c._id, targetEntity) :
+                    arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, c._id)['total']
                 totalDamage += netChipDmg * chipUses
                 playerTP -= c._cost * chipUses
                 debug("[DAMAGE-PROJECTION] " + getChipName(c._id) + " x" + chipUses + " = " + floor(netChipDmg * chipUses) + " damage")
@@ -755,7 +755,7 @@ class Strategy {
             if (distToTarget == null || distToTarget < chipObj._minRange || distToTarget > chipObj._maxRange) continue
             if (!lineOfSight(playerPos, target._cellPos)) continue
 
-            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, chipObj._id, target)
+            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, chipObj._id, target)
             push(usableChips, ['chip': chipObj, 'damage': netDmg, 'id': chipObj._id])
             debug("[" + debugPrefix + "][APPROACH-CHIPS] Found usable chip: " + getChipName(chipObj._id) + " (range " + chipObj._minRange + "-" + chipObj._maxRange + ", damage=" + floor(netDmg) + ", cost=" + chipObj._cost + ")")
         }
@@ -1066,7 +1066,7 @@ class Strategy {
         }
 
         // NOTE: CHIP_ADRENALINE is reserved for tactical mid-combat usage (not turn 1)
-        // NOTE: CHIP_LEATHER_BOOTS is reserved for positioning scenarios (not turn 1)
+        // NOTE: CHIP_LEATHER_BOOTS is now managed by scenario system for intelligent cycling
     }
 
     createMovementAction(type, targetHitCellID, target) {
@@ -1613,7 +1613,7 @@ class Strategy {
                 if (fwdist == null || fwdist < fweaponObj._minRange || fwdist > fweaponObj._maxRange) continue
                 if (!lineOfSight(playerPos, target._cellPos)) continue
 
-                var fwnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, fweaponObj._id, target)
+                var fwnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, fweaponObj._id, target)
                 push(fallbackWeapons, ['weapon': fweaponObj, 'damage': fwnetDmg])
             }
 
@@ -1693,7 +1693,7 @@ class Strategy {
                     continue
                 }
 
-                var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chipObj._id)
+                var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chipObj._id)
                 push(dmgChips, ['chip': chipObj, 'per': bd['total']])
                 debug("[" + debugPrefix + "][CHIPS] Added " + getChipName(chipObj._id) + " damage=" + bd['total'])
             }
@@ -1773,7 +1773,7 @@ class Strategy {
                 if (fdist == null || fdist < fchipObj._minRange || fdist > fchipObj._maxRange) continue
                 if (!lineOfSight(playerPos, target._cellPos)) continue
 
-                var fnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, fchipObj._id, target)
+                var fnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, fchipObj._id, target)
                 push(fallbackChips, ['chip': fchipObj, 'damage': fnetDmg])
             }
 
@@ -1867,7 +1867,7 @@ class Strategy {
             if (distToTarget >= weapon._minRange && distToTarget <= weapon._maxRange) {
                 // Verify line of sight
                 if (lineOfSight(position, target._cellPos)) {
-                    var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id)
+                    var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, weapon._id)
                     var dmg = bd['total']
                     if (dmg > bestDamage) {
                         bestDamage = dmg
@@ -1902,7 +1902,7 @@ class Strategy {
                 if (distToTarget >= weapon._minRange && distToTarget <= weapon._maxRange) {
                     // Verify line of sight
                     if (lineOfSight(position, target._cellPos)) {
-                        var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, weapon._id)
+                        var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, weapon._id)
                         var dmg = bd['total']
                         if (dmg > bestDamage) {
                             bestDamage = dmg
@@ -1929,7 +1929,7 @@ class Strategy {
                     if (lineOfSight(position, target._cellPos)) {
                         // Verify cooldown
                         if (getCooldown(chip._id, player._id) == 0) {
-                            var chipBd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, chip._id)
+                            var chipBd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chip._id)
                             var chipDmg = chipBd['total']
                             if (chipDmg > bestDamage) {
                                 bestDamage = chipDmg
@@ -2651,6 +2651,18 @@ class Strategy {
                 debug("Executing buff/utility chip " + getChipName(a.chip) + " on entity " + getName(a.targetEntity._id))
                 if (a.chip != -1) {
                     useChip(a.chip, a.targetEntity._id)
+
+                    // Update player entity MP if LEATHER_BOOTS was applied (critical for low-MP builds)
+                    if (a.chip == CHIP_LEATHER_BOOTS && a.targetEntity._id == player._id) {
+                        player._currMp = getMP()  // Refresh MP from game state to reflect +2 boost
+                        debug("LEATHER_BOOTS applied - updated player MP to " + player._currMp)
+                    }
+
+                    // Update player entity TP if ADRENALINE was applied (TP recovery for low-MP builds)
+                    if (a.chip == CHIP_ADRENALINE && a.targetEntity._id == player._id) {
+                        player._currTp = getTP()  // Refresh TP from game state to reflect +5 boost
+                        debug("ADRENALINE applied - updated player TP to " + player._currTp + " (net +4 TP)")
+                    }
                 }
             }
             else if (a.type == Action.ACTION_TELEPORT) {
@@ -2969,7 +2981,7 @@ class Strategy {
             if (!lineOfSight(currentPos, target._cellPos)) continue
 
             // Calculate damage
-            var dmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, weaponId, target)
+            var dmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, weaponId, target)
 
             push(weaponDamages, ['weaponId': weaponId, 'damage': dmg])
         }
@@ -3225,6 +3237,19 @@ class Strategy {
                     var chipCost = getChipCost(action.chip)
                     simulatedTP -= chipCost
                     debug("[VALIDATION] Chip (" + getChipName(action.chip) + "): TP " + tpBefore + " -> " + simulatedTP)
+
+                    // Update simulated MP if LEATHER_BOOTS is applied (critical for low-MP builds)
+                    if (action.chip == CHIP_LEATHER_BOOTS && action.targetEntity._id == player._id) {
+                        var mpBefore = simulatedMP
+                        simulatedMP += 2  // LEATHER_BOOTS gives +2 MP
+                        debug("[VALIDATION] LEATHER_BOOTS detected: MP " + mpBefore + " -> " + simulatedMP + " (enables movement)")
+                    }
+
+                    // Update simulated TP if ADRENALINE is applied (TP recovery for low-MP builds)
+                    if (action.chip == CHIP_ADRENALINE && action.targetEntity._id == player._id) {
+                        simulatedTP += 5  // ADRENALINE gives +5 TP (net +4 after 1 TP cost)
+                        debug("[VALIDATION] ADRENALINE detected: TP " + (tpBefore - chipCost) + " -> " + simulatedTP + " (net +4 TP boost)")
+                    }
                 }
             } else {
                 debug("[VALIDATION] Removing invalid action [" + action.type + "] " + reason)
