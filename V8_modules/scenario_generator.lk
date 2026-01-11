@@ -1376,6 +1376,7 @@ class ScenarioGenerator {
         var str = this._player._strength
         var mag = this._player._magic
         var wis = this._player._wisdom
+        var sci = this._player._science
         var bestAttack = null
         var bestDamage = 0
 
@@ -1399,7 +1400,7 @@ class ScenarioGenerator {
             }
 
             // Calculate damage
-            var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, this._target)
+            var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
             if (damage > bestDamage) {
                 bestDamage = damage
                 bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage]
@@ -1422,7 +1423,7 @@ class ScenarioGenerator {
             if (!lineOfSight(simPos, this._target._cellPos)) continue
 
             // Calculate damage
-            var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, this._target)
+            var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, this._target)
             if (damage > bestDamage) {
                 bestDamage = damage
                 bestAttack = ["type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage]
@@ -1446,12 +1447,13 @@ class ScenarioGenerator {
         var str = this._player._strength
         var mag = this._player._magic
         var wis = this._player._wisdom
+        var sci = this._player._science
         var totalDamage = 0
 
         // Estimate damage from all equipped weapons (respecting max uses)
         for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
             var weapon = this._arsenal.playerEquippedWeapons[weaponId]
-            var weaponDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, this._target)
+            var weaponDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
             var maxUses = min(weapon._maxUse, floor(availableTP / weapon._cost))
             totalDamage += weaponDamage * maxUses
         }
@@ -1463,7 +1465,7 @@ class ScenarioGenerator {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
             if (getCooldown(chipId, this._player._id) > 0) continue
 
-            var chipDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, this._target)
+            var chipDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, this._target)
             bestChipDamage = max(bestChipDamage, chipDamage)
         }
         totalDamage += bestChipDamage

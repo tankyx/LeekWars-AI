@@ -76,18 +76,19 @@ function buildDamageCache(arsenal, player, target) {
     var str = player._strength
     var mag = player._magic
     var wis = player._wisdom
+    var sci = player._science
 
     // Cache weapon damage
     for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
-        var bd = arsenal.getDamageBreakdown(str, mag, wis, weaponId)
-        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, target)
+        var bd = arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
+        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
         __damageCache[weaponId] = ['breakdown': bd, 'net': netDmg]
     }
 
     // Cache chip damage
     for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
-        var bd = arsenal.getDamageBreakdown(str, mag, wis, chipId)
-        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, target)
+        var bd = arsenal.getDamageBreakdown(str, mag, wis, sci, chipId)
+        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
         __damageCache[chipId] = ['breakdown': bd, 'net': netDmg]
     }
 }

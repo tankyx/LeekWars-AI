@@ -642,8 +642,8 @@ class Strategy {
                 var uses = min(w._maxUse, floor(playerTP / w._cost))
                 if (uses > 0) {
                     var netDmg = targetEntity != null ?
-                        arsenal.getNetDamageAgainstTarget(player._strength + buffBonus, player._magic, player._wisdom, w._id, targetEntity) :
-                        arsenal.getDamageBreakdown(player._strength + buffBonus, player._magic, player._wisdom, w._id)['total']
+                        arsenal.getNetDamageAgainstTarget(player._strength + buffBonus, player._magic, player._wisdom, player._science, w._id, targetEntity) :
+                        arsenal.getDamageBreakdown(player._strength + buffBonus, player._magic, player._wisdom, player._science, w._id)['total']
                     totalDamage += netDmg * uses
                     playerTP -= w._cost * uses
                     debug("[DAMAGE-PROJECTION] " + getWeaponName(w._id) + " x" + uses + " = " + floor(netDmg * uses) + " damage")
@@ -2421,6 +2421,7 @@ class Strategy {
         var str = player._strength
         var mag = player._magic
         var wis = player._wisdom
+        var sci = player._science
 
         // Reserve TP for teleport if we're checking from different position
         if (fromPosition != player._cellPos && mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
@@ -2439,7 +2440,7 @@ class Strategy {
             if (!lineOfSight(fromPosition, target._cellPos)) continue
 
             // Calculate net damage (accounting for shields)
-            var weaponDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, weaponId, target)
+            var weaponDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
 
             // Calculate how many times we can use this weapon
             var swapCost = (getWeapon() != weaponId) ? 1 : 0
@@ -2472,7 +2473,7 @@ class Strategy {
                 if (tpBudget < chipCost) continue
 
                 // Calculate chip damage
-                var chipDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, chipId, target)
+                var chipDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
 
                 // Use chip as many times as possible (most chips have maxUse=1)
                 var chipUses = min(chip._maxUse, floor(tpBudget / chipCost))

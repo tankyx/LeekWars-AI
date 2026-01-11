@@ -259,7 +259,7 @@ class FieldMap extends FieldMapPatterns {
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
                 if (!lineOfSight(cellId, target._cellPos)) continue
 
-                var weaponDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
+                var weaponDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, wid, target)
                 var tpBudget = playerTP - tpSpent
                 var swapCost = (getWeapon() != wid) ? 1 : 0
                 if (tpBudget <= swapCost) continue
@@ -284,7 +284,7 @@ class FieldMap extends FieldMapPatterns {
                     if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
                     if (!lineOfSight(cellId, target._cellPos)) continue
 
-                    var chipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, cid, target)
+                    var chipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, cid, target)
                     var tpBudgetChip = playerTP - tpSpent
                     if (tpBudgetChip < chipObj._cost) continue
                     var usesChip = min(chipObj._maxUse, floor(tpBudgetChip / chipObj._cost))
