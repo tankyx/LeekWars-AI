@@ -13,8 +13,7 @@ class ScenarioScorer {
 
     // Score a simulation result based on player build and game state
     // Returns numerical score (higher = better scenario)
-    // scenario: Optional array of Action objects - used to detect checkpoint scenarios
-    score(simResult, scenario) {
+    score(simResult) {
         var score = 0
 
         // 1. DAMAGE WEIGHT - Based on STR and MAG stats
@@ -22,67 +21,44 @@ class ScenarioScorer {
 
         // KILL OPPORTUNITY BOOST: If we can kill enemy (damage >= 70% HP), heavily favor this scenario
         var enemyHP = this._target._currHealth
-        var dotDmg = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
-        var novaDmg = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
-        var totalDamage = simResult.damageDealt + dotDmg + novaDmg
-        var killProbability = totalDamage / enemyHP
+        var killProbability = simResult.damageDealt / enemyHP
 
         if (killProbability >= 0.70) {
             damageWeight *= 5.0  // 5x damage weight for kill opportunities
-            debug("[SCORER-BOOST] Kill opportunity: dmg=" + floor(totalDamage) +
+            debug("[SCORER-BOOST] Kill opportunity: dmg=" + floor(simResult.damageDealt) +
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 5x damage weight")
         } else if (killProbability >= 0.50) {
             damageWeight *= 2.5  // 2.5x for near-kill (50-70%)
-            debug("[SCORER-BOOST] Near-kill: dmg=" + floor(totalDamage) +
+            debug("[SCORER-BOOST] Near-kill: dmg=" + floor(simResult.damageDealt) +
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
         }
 
         var damageScore = simResult.damageDealt * damageWeight
         score += damageScore
 
-        // CRITICAL: Heavy penalty for scenarios with no damage (buff-only scenarios)
-        // Exception: FLEE state (HP < 30%) where survival > damage
-        var playerHPPercent = (this._player._currHealth * 100) / this._player._maxHealth
-        if (totalDamage == 0 && playerHPPercent > 30) {
-            // Massive penalty: -2000 points for no-damage scenarios
-            // This ensures attack scenarios always beat buff-only scenarios
-            score -= 2000
-            debug("[SCORER-PENALTY] No damage dealt (not FLEE state) - penalty: -2000")
-        }
-
         // 2. DOT DAMAGE WEIGHT - Heavily favored by MAG builds
         var dotWeight = this.calculateDotWeight()
         var dotScore = simResult.dotDamageQueued * dotWeight
         score += dotScore
 
-        // 3. NOVA DAMAGE WEIGHT - Scales with SCI, bypasses shields, reduces max HP
-        // Nova damage is pre-capped by HP deficit in simulator (worthless at 100% HP)
-        var novaWeight = (dotWeight + damageWeight) / 2.0  // Hybrid between direct and DoT
-        var novaDamageQueued = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
-        var novaScore = novaDamageQueued * novaWeight
-        score += novaScore
-        if (novaScore > 0) {
-            debug("[SCORER-NOVA] Nova damage: " + floor(novaDamageQueued) + " × " + novaWeight + " = " + floor(novaScore))
-        }
-
-        // 4. eHP WEIGHT - Value of shields and healing (RESISTANCE/WISDOM)
+        // 3. eHP WEIGHT - Value of shields and healing (RESISTANCE/WISDOM)
         var ehpWeight = this.calculateEhpWeight()
         var shieldScore = simResult.shieldsGained * ehpWeight
         var relShieldScore = this.calculateRelativeShieldValue(simResult.relativeShieldGained) * ehpWeight
         var healScore = simResult.hpGained * ehpWeight
         score += shieldScore + relShieldScore + healScore
 
-        // 5. POSITIONING WEIGHT - Safety and threat avoidance (AGI builds value positioning)
+        // 4. POSITIONING WEIGHT - Safety and threat avoidance (AGI builds value positioning)
         var positionWeight = this.calculatePositionWeight()
         var positionScore = this.evaluatePosition(simResult.finalPosition) * positionWeight
         score += positionScore
 
-        // 6. EFFICIENCY WEIGHT - TP/MP economy (longer fights favor efficiency)
+        // 5. EFFICIENCY WEIGHT - TP/MP economy (longer fights favor efficiency)
         var efficiencyWeight = this.calculateEfficiencyWeight()
         var efficiencyScore = this.calculateEfficiency(simResult) * efficiencyWeight
         score += efficiencyScore
 
-        // 7. BUFF/DEBUFF WEIGHT - Strategic value of buffs
+        // 6. BUFF/DEBUFF WEIGHT - Strategic value of buffs
         var buffWeight = this.calculateBuffWeight()
         var buffScore = this.evaluateBuffs(simResult.buffsApplied, simResult) * buffWeight
         var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
@@ -107,54 +83,36 @@ class ScenarioScorer {
         }
         score += otkoBonus
 
-        // 9. CHECKPOINT BONUS - Boost two-phase adaptive scenarios
-        // Checkpoints contribute zero value during simulation (phase 2 happens at execution time)
-        // Apply bonus to compensate and make checkpoint scenarios competitive
-        var checkpointBonus = 0
-        if (scenario != null && count(scenario) > 0) {
-            for (var action in scenario) {
-                if (action.type == 15) {  // ACTION_CHECKPOINT = 15
-                    // Two-phase scenarios have strategic value that simulation can't capture
-                    // Boost by 2500 points to account for unseen phase 2 potential
-                    checkpointBonus = 2500
-                    debug("[SCORER-CHECKPOINT] +2500 bonus: Two-phase adaptive scenario (type=" + action.checkpointType + ")")
-                    break  // Only apply bonus once per scenario
-                }
-            }
-        }
-        score += checkpointBonus
-
         // Debug scoring breakdown
         debug("[SCORE] Total=" + floor(score) + " | dmg=" + floor(damageScore) + " dot=" + floor(dotScore) +
               " eHP=" + floor(shieldScore + relShieldScore + healScore) +
               " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
               " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
-              " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus))
+              " otko=" + floor(otkoBonus))
 
         return score
     }
 
     // DAMAGE WEIGHT: STR builds favor direct damage, MAG builds moderate
-    // INCREASED: Base weights 2x higher to prioritize damage over buffs
     calculateDamageWeight() {
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
 
-        // STR builds: very high weight (3.0-5.0)
+        // STR builds: high weight (1.5-2.5)
         if (str > mag && str > agi) {
-            return 3.0 + (str / 500.0)  // Scale with strength
+            return 1.5 + (str / 1000.0)  // Scale with strength
         }
-        // MAG builds: moderate weight (1.6-2.4)
+        // MAG builds: moderate weight (0.8-1.2)
         else if (mag > str && mag > agi) {
-            return 1.6 + (mag / 1000.0)
+            return 0.8 + (mag / 2000.0)
         }
-        // AGI builds: high weight (2.6-4.0)
+        // AGI builds: high weight (similar to STR, benefits from crits)
         else if (agi > str && agi > mag) {
-            return 2.6 + (agi / 750.0)
+            return 1.3 + (agi / 1500.0)
         }
 
-        return 2.0  // Default
+        return 1.0  // Default
     }
 
     // DOT WEIGHT: MAG builds heavily favor DoT damage
@@ -233,9 +191,8 @@ class ScenarioScorer {
     }
 
     // BUFF WEIGHT: Strategic value of buffs
-    // REDUCED: Buffs are support, not the primary goal - damage is king
     calculateBuffWeight() {
-        return 2.0  // Reduced from 5.0 to prevent buff-only scenarios from winning
+        return 5.0  // Fixed weight for buff/debuff strategic value (reduced from 50 to balance with damage)
     }
 
     // Evaluate position safety/threat (IMPROVED: Now accounts for enemy threat at position)
@@ -287,20 +244,15 @@ class ScenarioScorer {
         var tpEfficiency = 0
         var mpEfficiency = 0
 
-        // Include all damage types: direct, DoT, and nova
-        var dotDmg = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
-        var novaDmg = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
-        var totalDamage = simResult.damageDealt + dotDmg + novaDmg
-
         // Reward high damage per TP
         if (simResult.tpSpent > 0) {
-            var damagePerTP = totalDamage / simResult.tpSpent
+            var damagePerTP = (simResult.damageDealt + simResult.dotDamageQueued) / simResult.tpSpent
             tpEfficiency = damagePerTP * 10
         }
 
         // Penalize excessive MP usage (unless it leads to high damage)
         if (simResult.mpSpent > 0) {
-            var damagePerMP = totalDamage / simResult.mpSpent
+            var damagePerMP = (simResult.damageDealt + simResult.dotDamageQueued) / simResult.mpSpent
             mpEfficiency = damagePerMP * 5
         }
 

@@ -153,9 +153,9 @@ class Arsenal {
                 var totalOverTime = avg2 * info._effectDuration
                 total += totalOverTime * (1 + (mag / 100)) * aoeModifier
             } else if (e == EFFECT_NOVA_DAMAGE) {
-                // Nova damage scales with both STR and SCI (additive)
+                // Nova damage scales with SCI only
                 var avgNova = (info._minEffectAmount + info._maxEffectAmount) / 2
-                total += avgNova * (1 + (str + sci) / 100) * aoeModifier
+                total += avgNova * (1 + (sci / 100)) * aoeModifier
             }
         }
         return total
@@ -208,13 +208,13 @@ class Arsenal {
                 minDmg += minPoison
                 maxDmg += maxPoison
             } else if (e == EFFECT_NOVA_DAMAGE) {
-                // Nova damage scales with both STR and SCI (additive)
+                // Nova damage scales with SCI only
                 var avgNova = (info._minEffectAmount + info._maxEffectAmount) / 2
-                nova += avgNova * (1 + (str + sci) / 100) * aoeModifier
+                nova += avgNova * (1 + (sci / 100)) * aoeModifier
 
                 // Nova adds to min/max as well
-                var minNova = info._minEffectAmount * (1 + (str + sci) / 100) * aoeModifier
-                var maxNova = info._maxEffectAmount * (1 + (str + sci) / 100) * aoeModifier
+                var minNova = info._minEffectAmount * (1 + (sci / 100)) * aoeModifier
+                var maxNova = info._maxEffectAmount * (1 + (sci / 100)) * aoeModifier
                 minDmg += minNova
                 maxDmg += maxNova
             }
@@ -300,8 +300,15 @@ class Arsenal {
         var netDirect = directDmg * (1 - relShield) - absShield
         if (netDirect < 0) netDirect = 0  // Can't heal enemy
 
-        // Poison and Nova bypass shields completely (Nova reduces max HP)
-        return netDirect + dotDmg + novaDmg
+        // Poison bypasses shields completely
+        // Nova bypasses shields but is capped by HP deficit (useless at 100% HP)
+        var hpDeficit = targetEntity._maxHp - targetEntity._currHp
+        var cappedNova = novaDmg
+        if (hpDeficit < novaDmg) {
+            cappedNova = hpDeficit  // Can't reduce max HP below current HP
+        }
+
+        return netDirect + dotDmg + cappedNova
     }
 
     // Calculate total damage to all enemies in AoE with falloff and shield penetration

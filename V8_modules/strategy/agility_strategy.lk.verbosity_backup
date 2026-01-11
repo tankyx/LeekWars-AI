@@ -1,0 +1,649 @@
+include('action.lk')
+include('base_strategy.lk')
+
+class AgilityStrategy extends Strategy {
+    constructor() {
+        super()
+    }
+
+    getStrategyName() {
+        return "AGI"
+    }
+
+    createOTKOScenario(target, targetHitCell) {
+        // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
+        var chest = fieldMap.getClosestChest()
+        if (chest != null) {
+            debug("[CHEST-OTKO] Chest detected! Switching OTKO target from enemy to chest (ID: " + chest._id + ")")
+            target = chest
+        }
+
+        // Check if CHIP_TELEPORTATION is equipped
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            debug("[OTKO] Teleportation not equipped")
+            return false
+        }
+
+        // Check cooldown (0 = available)
+        var cooldown = getCooldown(CHIP_TELEPORTATION, getEntity())
+        if (cooldown > 0) {
+            debug("[OTKO] Teleportation on cooldown: " + cooldown + " turns")
+            return false
+        }
+
+        // Check minimum TP budget (9 for teleport + weapon costs)
+        var playerTP = player._currTp
+        if (playerTP < 15) {  // 9 + minimum 6 TP for one weapon use
+            debug("[OTKO] Insufficient TP for teleport OTKO: " + playerTP)
+            return false
+        }
+
+        // Find optimal teleport cell
+        var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+        if (teleportInfo == null) {
+            debug("[OTKO] No valid teleport cells found")
+            return false
+        }
+
+        // Only proceed if we have 85%+ kill probability (or if target is chest - always prioritize chests)
+        var killProb = teleportInfo['killProbability']
+        if (killProb < 0.85 && !(target instanceof Chest)) {
+            debug("[OTKO] Kill probability too low: " + round(killProb * 100) + "% (damage: " + teleportInfo['damage'] + " vs HP: " + target._currHealth + ")")
+
+            // Check if CHIP_ADRENALINE can bridge the gap
+            if (this.shouldUseAdrenaline(15)) {  // Need at least 15 TP for meaningful OTKO
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
+                playerTP -= 1
+                playerTP += 5  // Net gain of 4 TP
+                player._currTp = playerTP  // Update player TP for recalculation
+                debug("[OTKO][ADRENALINE] Used Adrenaline, now have " + playerTP + " TP")
+
+                // RECALCULATE with new TP budget
+                teleportInfo = fieldMap.findOptimalTeleportCell(target)
+                if (teleportInfo == null) {
+                    debug("[OTKO][ADRENALINE] Recalculation failed")
+                    return false
+                }
+
+                var newKillProb = teleportInfo['killProbability']
+                if (newKillProb < 0.85) {
+                    debug("[OTKO][ADRENALINE] Still insufficient kill probability after Adrenaline: " + round(newKillProb * 100) + "% (damage: " + teleportInfo['damage'] + " vs HP: " + target._currHealth + ")")
+                    return false
+                }
+                debug("[OTKO][ADRENALINE] Recalculated kill probability: " + round(newKillProb * 100) + "% (sufficient for OTKO)")
+            } else {
+                return false
+            }
+        }
+
+        var teleCell = teleportInfo['cell']
+        debug("[OTKO] Executing teleport OTKO to cell " + teleCell + " projected damage: " + teleportInfo['damage'])
+
+        // Track planned weapon swaps (since we're queuing actions, not executing)
+        var plannedWeapon = getWeapon()
+
+        // PRE-OTKO NEUTRINO STACKING: Amplify teleport burst damage with 24% vulnerability
+        // Only stack if we have Neutrino equipped, enemy in diagonal range 2-6, and sufficient TP
+        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO) && playerTP >= 21) {
+            var preTeleportDist = getCellDistance(player._cellPos, target._cellPos)
+            var preTeleportAligned = this.isDiagonal(player._cellPos, target._cellPos)
+
+            // Check if we can stack from current position before teleport
+            if (preTeleportDist != null && preTeleportDist >= 2 && preTeleportDist <= 6 &&
+                preTeleportAligned && lineOfSight(player._cellPos, target._cellPos)) {
+
+                debug("[OTKO][NEUTRINO] Pre-stacking vulnerability before teleport for amplified OTKO")
+
+                // Stack 3x Neutrino for 24% damage amplification (1.24x multiplier)
+                // QUEUE these actions instead of executing immediately
+                if (plannedWeapon != WEAPON_NEUTRINO) {
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, WEAPON_NEUTRINO, -1)
+                    playerTP -= 1
+                    plannedWeapon = WEAPON_NEUTRINO
+                }
+
+                for (var nStack = 0; nStack < 3; nStack++) {
+                    if (playerTP >= 4) {
+                        this.createAttackAction(Action.ACTION_DIRECT, target, WEAPON_NEUTRINO, -1)
+                        playerTP -= 4
+                    }
+                }
+
+                debug("[OTKO][NEUTRINO] Queued 3x Neutrino for 24% vulnerability stacking, TP remaining: " + playerTP + " - now queueing teleport + burst")
+            } else {
+                debug("[OTKO][NEUTRINO] Cannot pre-stack: dist=" + preTeleportDist + " (need 2-6), diagonal=" + preTeleportAligned + ", TP=" + playerTP)
+            }
+        }
+
+        // Execute teleportation
+        this.createAttackAction(Action.ACTION_TELEPORT, target, -1, CHIP_TELEPORTATION)
+        // Override targetCell to teleport destination (not target's position)
+        this._actions[count(this._actions) - 1].targetCell = teleCell
+        playerTP -= 9
+
+        // Update simulated player position
+        var playerPos = teleCell
+
+        // Execute weapon attacks from teleport position
+        // Build list of usable weapons sorted by shield-adjusted damage
+        var weaponDmgList = []
+        var distToTarget = getCellDistance(teleCell, target._cellPos)
+        debug("[OTKO][WEAPONS] From teleport cell " + teleCell + " to target " + target._cellPos + " dist=" + distToTarget + " TP=" + playerTP)
+        debug("[OTKO][WEAPONS] Equipped weapons: " + count(mapKeys(arsenal.playerEquippedWeapons)))
+
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var wObj = arsenal.playerEquippedWeapons[wid]
+            if (wObj == null) continue
+
+            // Check if weapon can hit target from teleport cell
+            if (distToTarget == null) continue
+
+            // Use API functions directly to ensure correct range values
+            var minR = getWeaponMinRange(wid)
+            var maxR = getWeaponMaxRange(wid)
+            var dist = distToTarget
+
+            if (dist < minR || dist > maxR) {
+                debug("[OTKO][WEAPONS] Skip " + getWeaponName(wid) + " - out of range (need " + minR + "-" + maxR + ", have " + dist + ")")
+                continue
+            }
+            if (!lineOfSight(teleCell, target._cellPos)) {
+                debug("[OTKO][WEAPONS] Skip " + getWeaponName(wid) + " - no LOS")
+                continue
+            }
+
+            var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, wid, target)
+            debug("[OTKO][WEAPONS] Add " + getWeaponName(wid) + " - dmg=" + netDmg + " cost=" + wObj._cost + " maxUses=" + wObj._maxUse)
+            push(weaponDmgList, ['weapon': wObj, 'netDmg': netDmg])
+        }
+
+        debug("[OTKO][WEAPONS] Total usable weapons: " + count(weaponDmgList))
+
+        // Sort by descending net damage (selection sort)
+        for (var i = 0; i < count(weaponDmgList); i++) {
+            var bestIdx = i
+            for (var j = i + 1; j < count(weaponDmgList); j++) {
+                if (weaponDmgList[j]['netDmg'] > weaponDmgList[bestIdx]['netDmg']) bestIdx = j
+            }
+            if (bestIdx != i) {
+                var tmp = weaponDmgList[i]
+                weaponDmgList[i] = weaponDmgList[bestIdx]
+                weaponDmgList[bestIdx] = tmp
+            }
+        }
+
+        // Execute weapons in order of net damage
+        for (var wi = 0; wi < count(weaponDmgList); wi++) {
+            var wRec = weaponDmgList[wi]
+            var wObj = wRec['weapon']
+
+            // Swap weapon if needed
+            if (plannedWeapon != wObj._id) {
+                if (playerTP >= 1 + wObj._cost) {
+                    this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
+                    playerTP -= 1
+                    plannedWeapon = wObj._id
+                } else {
+                    continue  // Not enough TP to swap and use
+                }
+            }
+
+            // Use weapon maximum times
+            var uses = min(wObj._maxUse, floor(playerTP / wObj._cost))
+            while (uses > 0 && playerTP >= wObj._cost) {
+                this.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, -1)
+                playerTP -= wObj._cost
+                uses -= 1
+            }
+
+            if (playerTP <= 0) break
+        }
+
+        // Use damage chips with remaining TP
+        if (playerTP > 0) {
+            var chipDmgList = []
+            for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+                var chipObj = arsenal.playerEquippedChips[cid]
+                if (chipObj == null) continue
+                if (cid == CHIP_TELEPORTATION) continue
+
+                // Filter attack chips
+                if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
+
+                // Check range and LOS from teleport cell
+                var distChip = getCellDistance(teleCell, target._cellPos)
+                if (distChip == null) continue
+                if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
+                if (!lineOfSight(teleCell, target._cellPos)) continue
+
+                var netChipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, cid, target)
+                push(chipDmgList, ['chip': chipObj, 'netDmg': netChipDmg])
+            }
+
+            // Sort chips by net damage
+            for (var ci = 0; ci < count(chipDmgList); ci++) {
+                var bestCIdx = ci
+                for (var cj = ci + 1; cj < count(chipDmgList); cj++) {
+                    if (chipDmgList[cj]['netDmg'] > chipDmgList[bestCIdx]['netDmg']) bestCIdx = cj
+                }
+                if (bestCIdx != ci) {
+                    var tmpC = chipDmgList[ci]
+                    chipDmgList[ci] = chipDmgList[bestCIdx]
+                    chipDmgList[bestCIdx] = tmpC
+                }
+            }
+
+            // Execute chips
+            for (var chipIdx = 0; chipIdx < count(chipDmgList); chipIdx++) {
+                var cRec = chipDmgList[chipIdx]
+                var chipUse = cRec['chip']
+                if (playerTP < chipUse._cost) continue
+                // Spam chip until max uses OR TP exhausted
+                var actualUsesC = 0
+                while (actualUsesC < chipUse._maxUse && playerTP >= chipUse._cost) {
+                    this.createAttackAction(Action.ACTION_DIRECT, target, -1, chipUse._id)
+                    playerTP -= chipUse._cost
+                    actualUsesC += 1
+                }
+                if (playerTP <= 0) break
+            }
+        }
+
+        debug("[OTKO] OTKO scenario complete, remaining TP: " + playerTP)
+        return true
+    }
+
+    // INTELLIGENT CYCLING: Select damage return chip to ensure continuous coverage
+    // Cooldown starts when chip is used (not when effect ends)
+    // MIRROR (3t duration, 4t cooldown, 5 TP) + THORN (2t duration, 3t cooldown, 4 TP) cycle
+    // BRAMBLE (1t duration, 8t cooldown, 4 TP) for active melee combat (25% return)
+    selectBestReturnChip(distanceToEnemy) {
+        var inCloseCombat = distanceToEnemy <= 8
+        var currentTP = player._currTp
+
+        // Check availability of each chip
+        var hasMirror = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)
+
+        var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, player._id) : 999
+        var thornCd = hasThorn ? getCooldown(CHIP_THORN, player._id) : 999
+        var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, player._id) : 999
+
+        var mirrorReady = mirrorCd == 0 && hasMirror && currentTP >= 5
+        var thornReady = thornCd == 0 && hasThorn && currentTP >= 4
+        var brambleReady = brambleCd == 0 && hasBramble && currentTP >= 4
+
+        // PRIORITY 1: BRAMBLE during active melee combat (25% return, best burst damage reflection)
+        if (brambleReady && inCloseCombat && currentTP >= 10) {
+            debug("[AGILITY][CYCLE] BRAMBLE active combat: 25% return × 1t (melee range, TP=" + currentTP + ")")
+            return CHIP_BRAMBLE
+        }
+
+        // PRIORITY 2: TP-aware selection - prefer THORN when TP < 15 (cheaper, leaves more TP for attacks)
+        if (currentTP < 15) {
+            if (thornReady) {
+                debug("[AGILITY][CYCLE] THORN (low TP): 3-4% return × 2t (TP=" + currentTP + ", cheaper than MIRROR)")
+                return CHIP_THORN
+            }
+            if (mirrorReady && currentTP >= 10) {
+                debug("[AGILITY][CYCLE] MIRROR (low TP): 5-6% return × 3t (TP=" + currentTP + ", using anyway)")
+                return CHIP_MIRROR
+            }
+            // Skip damage return if TP too low
+            debug("[AGILITY][CYCLE] SKIP: TP too low (" + currentTP + "), attack directly")
+            return -1
+        }
+
+        // PRIORITY 3: Prefer MIRROR when both available AND sufficient TP (3 turn coverage > 2 turn)
+        if (mirrorReady && thornReady && currentTP >= 15) {
+            debug("[AGILITY][CYCLE] Both available: MIRROR (3t > 2t, TP=" + currentTP + ")")
+            return CHIP_MIRROR
+        }
+
+        // PRIORITY 4: Use MIRROR when available (best sustained coverage)
+        if (mirrorReady) {
+            debug("[AGILITY][CYCLE] MIRROR: 5-6% return × 3t (THORN cd=" + thornCd + ")")
+            return CHIP_MIRROR
+        }
+
+        // PRIORITY 5: Use THORN when available
+        if (thornReady) {
+            debug("[AGILITY][CYCLE] THORN: 3-4% return × 2t (MIRROR cd=" + mirrorCd + ")")
+            return CHIP_THORN
+        }
+
+        // No chips available - coverage gap
+        debug("[AGILITY][CYCLE] GAP: All on cooldown (MIRROR=" + mirrorCd + ", THORN=" + thornCd + ", BRAMBLE=" + brambleCd + ")")
+        return -1
+    }
+
+    // Check if CHIP_WARM_UP should be used (agility buff)
+    shouldUseWarmUp() {
+        // CHIP_WARM_UP: 7 TP cost, need 14 TP minimum (7 + 5-7 for MIRROR/THORN + attacks)
+        if (!this.shouldApplyStatBuff(CHIP_WARM_UP, EFFECT_BUFF_AGILITY, 14)) return false
+
+        // Validate TP budget (7 TP for WARM_UP + minimum for attacks)
+        if (!this.validateTPBudget(7)) return false
+
+        return true
+    }
+
+
+
+    // Check if we should reapply damage return buff
+    // Cooldowns start when chip is used, not when effect ends
+    // THORN: 2t duration, 3t cooldown → available every 3 turns
+    // MIRROR: 3t duration, 4t cooldown → available every 4 turns
+    // BRAMBLE: 1t duration, 8t cooldown → active combat burst
+    shouldReapplyReturnBuff() {
+        var hasReturn = player.hasDamageReturn()
+        var returnRemaining = player.getDamageReturnRemaining()
+        var currentTP = player._currTp
+
+        // No active return buff - reapply if we have enough TP (10+ for meaningful combat after buff)
+        if (!hasReturn) {
+            if (currentTP >= 10) {
+                debug("[AGILITY][CYCLE] No damage return active - reapply (TP=" + currentTP + ")")
+                return true
+            } else {
+                debug("[AGILITY][CYCLE] No damage return but TP too low (" + currentTP + "), skip and attack directly")
+                return false
+            }
+        }
+
+        // Check if any sustain chip (MIRROR/THORN/BRAMBLE) is available while current buff is active
+        // This allows us to reapply early and avoid gaps
+        var hasMirror = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)
+
+        var mirrorReady = hasMirror && getCooldown(CHIP_MIRROR, player._id) == 0 && currentTP >= 5
+        var thornReady = hasThorn && getCooldown(CHIP_THORN, player._id) == 0 && currentTP >= 4
+        var brambleReady = hasBramble && getCooldown(CHIP_BRAMBLE, player._id) == 0 && currentTP >= 4
+
+        // If a better chip is available AND current buff is expiring soon (≤1 turn), switch early
+        if (returnRemaining <= 1 && (mirrorReady || thornReady || brambleReady) && currentTP >= 10) {
+            debug("[AGILITY][CYCLE] Expiring in " + returnRemaining + " turn, switching chip early (TP=" + currentTP + ")")
+            return true
+        }
+
+        // Don't reapply if buff has 2+ turns remaining (wait for expiration)
+        debug("[AGILITY][CYCLE] Active with " + returnRemaining + " turns remaining, waiting")
+        return false
+    }
+
+    // WEEK 2: Check if CHIP_LIBERATION is tactically valuable (same as strength)
+    shouldUseLiberation(target) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_LIBERATION)) return false
+
+        var cooldown = getCooldown(CHIP_LIBERATION, getEntity())
+        if (cooldown > 0) return false
+
+        var playerTP = player._currTp
+        if (playerTP < 5) return false
+
+        // Check range to target
+        var dist = getCellDistance(player._cellPos, target._cellPos)
+        if (dist == null || dist > 6) return false
+
+        // Priority 1: Remove critical player debuffs (shackles reducing our combat effectiveness)
+        var hasDebuff = player.hasEffect(EFFECT_SHACKLE_TP) ||
+                       player.hasEffect(EFFECT_SHACKLE_STRENGTH) ||
+                       player.hasEffect(EFFECT_SHACKLE_MP) ||
+                       player.hasEffect(EFFECT_SHACKLE_AGILITY)
+
+        // Priority 2: Remove player poison if significant
+        var hasPoison = player.hasEffect(EFFECT_POISON)
+        var poisonRemaining = player.getEffectRemaining(EFFECT_POISON)
+
+        // Priority 3: Remove enemy buffs/shields/damage return
+        var enemyShielded = target._relShield > 15 || target._absShield > 30
+        var enemyHasDamageReturn = target.hasEffect(EFFECT_DAMAGE_RETURN)
+
+        // Use if we have critical debuffs OR poison with 3+ turns OR enemy heavily buffed
+        if (hasDebuff) {
+            debug("[AGI][LIBERATION] Should use to remove player debuffs")
+            return true
+        }
+        if (hasPoison && poisonRemaining >= 3) {
+            debug("[AGI][LIBERATION] Should use to reduce poison (remaining: " + poisonRemaining + " turns)")
+            return true
+        }
+        if (enemyShielded) {
+            debug("[AGI][LIBERATION] Should use to strip enemy shields (rel: " + target._relShield + "%, abs: " + target._absShield + ")")
+            return true
+        }
+        if (enemyHasDamageReturn) {
+            debug("[AGI][LIBERATION] Should use to strip enemy damage return (mirror vs mirror)")
+            return true
+        }
+
+        return false
+    }
+
+    // AGILITY NEVER FLEES - Override emergency mode to always stay aggressive
+    shouldEnterEmergencyMode(target) {
+        // Agility philosophy: Press the attack at all costs
+        // Damage return buffs + aggressive combat = best defense
+        debug("[AGILITY][AGGRESSIVE] Never flee - always attack (HP=" + floor((getLife() * 100) / getTotalLife()) + "%)")
+        return false
+    }
+
+    // Override offensive scenario for agility builds
+    // Strategy: Apply CHIP_MIRROR/THORN damage return buff, then fight like strength builds
+    createOffensiveScenario(target, targetHitCell) {
+        // PRIORITY 1: Check for chest - if exists, switch target to chest immediately
+        var chest = fieldMap.getClosestChest()
+        if (chest != null) {
+            debug("[CHEST] Chest detected! Switching target from enemy to chest (ID: " + chest._id + ")")
+            target = chest
+            // Rebuild hit map for chest position
+            fieldMap.buildHitMap(chest._cellPos)
+            targetHitCell = fieldMap.getBestWeaponOrChipCell()
+        }
+
+        var playerPos = player._cellPos
+        var playerMP = player._currMp
+        var playerTP = player._currTp
+
+        // Calculate distance to target for smart chip selection
+        var distToTarget = getCellDistance(playerPos, target._cellPos)
+        if (distToTarget == null) distToTarget = 99
+
+        // PRIORITY 1.5: OPPORTUNISTIC OTKO (check every turn based on current enemy HP)
+        // This runs on EVERY turn - as enemy HP drops from attrition, OTKO becomes viable
+        var canTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                         getCooldown(CHIP_TELEPORTATION, getEntity()) == 0 &&
+                         player._currTp >= 15  // Minimum for teleport + attacks
+
+        if (canTeleport) {
+            // Calculate damage projection from teleport position
+            var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+            if (teleportInfo != null) {
+                var teleCell = teleportInfo['cell']
+                var killProb = teleportInfo['killProbability']
+                var projectedDamage = teleportInfo['damage']
+                var enemyHP = target._currHealth
+
+                debug("[AGI][OTKO-ATTRITION] Enemy HP: " + enemyHP + ", Projected damage: " + floor(projectedDamage) + ", Kill prob: " + round(killProb * 100) + "%")
+
+                // ATTRITION-BASED OTKO: Trigger when enemy HP drops to killable range (85%+ confidence)
+                if (killProb >= 0.85) {
+                    debug("[AGI][OTKO-ATTRITION] OTKO NOW VIABLE! Enemy weakened to " + enemyHP + " HP, executing kill shot!")
+                    var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
+                    if (otkoExecuted) {
+                        debug("[AGI] OTKO scenario executed successfully (attrition-based)")
+                        return  // OTKO actions planned, skip normal offensive logic
+                    }
+                    debug("[AGI] OTKO execution failed, falling back to normal offensive scenario")
+                }
+                // Only show detailed message when enemy is getting close to killable range
+                else if (enemyHP < 1500) {
+                    debug("[AGI][OTKO-ATTRITION] Enemy at " + enemyHP + " HP, need " + round((killProb * 100)) + "% → 85% kill prob (continue attrition)")
+                }
+            }
+        }
+
+        // AGGRESSIVE STRATEGY: Damage return FIRST (always maintain return buff for aggressive play)
+        // STEP 1: Apply damage return buff (BRAMBLE in close combat, MIRROR/THORN when far)
+        var returnChipApplied = false
+        if (this.shouldReapplyReturnBuff()) {
+            var chipToUse = this.selectBestReturnChip(distToTarget)
+            if (chipToUse != -1) {
+                var chipObj = arsenal.playerEquippedChips[chipToUse]
+                debug("[AGILITY][AGGRESSIVE] Applying damage return chip: " + getChipName(chipToUse) + " (cost: " + chipObj._cost + " TP, dist: " + distToTarget + ")")
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, chipToUse)
+                playerTP -= chipObj._cost
+                returnChipApplied = true
+
+                // Execute immediately so the buff is active for rest of turn planning
+                this.executeAndFlushActions()
+                player.updateEntity()
+                debug("[AGILITY][AGGRESSIVE] Damage return buff applied and flushed, TP remaining: " + player._currTp)
+            } else {
+                debug("[AGILITY] WARNING: No return chip available (BRAMBLE/MIRROR/THORN on cooldown or insufficient TP)")
+            }
+        }
+
+        // STEP 2: Apply CHIP_WARM_UP if enough TP remains (requires 14 TP after return chip)
+        if (this.shouldUseWarmUp() && playerTP >= 14) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WARM_UP)
+            playerTP -= 7
+            debug("[AGILITY] Applied CHIP_WARM_UP (+170-190 Agility for 3 turns, remaining TP: " + playerTP + ")")
+
+            // RE-CHECK OTKO: Now that WARM_UP is active, check if OTKO became possible
+            if (canTeleport && player._currTp >= 15) {
+                var teleportInfoBuffed = fieldMap.findOptimalTeleportCell(target)
+                if (teleportInfoBuffed != null) {
+                    var killProbBuffed = teleportInfoBuffed['killProbability']
+                    var dmgBuffed = teleportInfoBuffed['damage']
+
+                    debug("[AGI][OTKO-RECHECK] With WARM_UP: damage=" + floor(dmgBuffed) + " vs HP=" + target._currHealth + ", kill prob=" + round(killProbBuffed * 100) + "%")
+
+                    if (killProbBuffed >= 0.85) {
+                        debug("[AGI][OTKO-RECHECK] WARM_UP enabled OTKO! Executing...")
+                        var otkoExecuted = this.createOTKOScenario(target, targetHitCell)
+                        if (otkoExecuted) {
+                            debug("[AGI] OTKO with WARM_UP executed successfully")
+                            return  // OTKO actions planned, skip normal offensive
+                        }
+                    }
+                }
+            }
+        } else if (playerTP < 14) {
+            debug("[AGILITY] Skipping WARM_UP - not enough TP for attacks after buff (have " + playerTP + " TP, need 14)")
+        }
+
+        // STEP 2.5: Apply WEAPON_NEUTRINO vulnerability debuff if not active (amplifies ALL damage)
+        if (!target.hasVulnerability() && mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            var neutrinoWeapon = arsenal.playerEquippedWeapons[WEAPON_NEUTRINO]
+            // distToTarget already defined above, reuse it
+            if (distToTarget != null && distToTarget >= neutrinoWeapon._minRange && distToTarget <= neutrinoWeapon._maxRange) {
+                if (playerTP >= neutrinoWeapon._cost) {
+                    debug("[AGILITY][AGGRESSIVE] Applying WEAPON_NEUTRINO vulnerability debuff (dist=" + distToTarget + ", amplifies damage)")
+                    // Use Neutrino to apply vulnerability - weapon swap + use happens in execution phase
+                    // For now, just note that we should prioritize Neutrino in weapon spam
+                    // This will be handled by weapon priority in executeWeaponFocusedOffensive
+                }
+            }
+        }
+
+        // STEP 3: Check for CHIP_LEATHER_BOOTS if target cell unreachable
+        if (targetHitCell != -1 && targetHitCell != null && this.shouldUseLeatherBoots(targetHitCell._id)) {
+            this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_LEATHER_BOOTS)
+            playerTP -= 3
+            playerMP += 2  // Immediate MP boost
+            debug("[AGILITY] Applied CHIP_LEATHER_BOOTS (+2 MP for 2 turns)")
+        }
+
+        // STEP 4: Check for tactical CHIP_LIBERATION usage BEFORE combat
+        if (this.shouldUseLiberation(target)) {
+            // Use on enemy to remove their buffs, or on self to remove debuffs
+            var liberationTarget = target._cellPos
+            var hasPlayerDebuff = player.hasEffect(EFFECT_SHACKLE_TP) ||
+                                 player.hasEffect(EFFECT_SHACKLE_STRENGTH) ||
+                                 player.hasEffect(EFFECT_SHACKLE_MP) ||
+                                 player.hasEffect(EFFECT_SHACKLE_AGILITY) ||
+                                 player.hasEffect(EFFECT_POISON)
+
+            if (hasPlayerDebuff) {
+                liberationTarget = player._cellPos
+                debug("[AGI] Using Liberation on self to remove debuffs")
+            } else {
+                debug("[AGI] Using Liberation on enemy to remove buffs/shields/damage return")
+            }
+
+            this.createAttackAction(Action.ACTION_BUFF, target, -1, CHIP_LIBERATION)
+            // Update action with correct target cell
+            this._actions[count(this._actions) - 1].targetCell = liberationTarget
+            playerTP -= 5
+        }
+
+        // STEP 5: Select best tactical cell (hit-and-run: damage vs threat)
+        // Agility builds leverage mobility to maximize damage while minimizing risk
+        var tacticalCell = fieldMap.findBestTacticalCell(playerMP, 0.4)  // Threat weighted 40% (less risk-averse than magic)
+
+        var bestWeaponCell = -1
+        if (tacticalCell != null && tacticalCell != -1 && tacticalCell._highestDamageWeapon != -1) {
+            bestWeaponCell = tacticalCell
+            debug("[AGILITY][TACTICAL] Using threat-aware positioning: cell=" + tacticalCell._id + " damage=" + tacticalCell._totalDamage + " threat=" + fieldMap.getThreatAtCell(tacticalCell._id))
+        } else {
+            // Fallback: Select pure damage cell (legacy behavior)
+            var bestWeaponDamage = -1
+            var bestDist = 99999
+            for (var c in fieldMap.damageMap) {
+                if (c._highestDamageWeapon == -1) continue  // Skip chip-only cells
+                var dist = getPathLength(playerPos, c._id)
+                if (dist == null) continue  // Skip completely unreachable cells
+                // Prefer higher weaponDamage, tie-break shorter distance
+                if (c._weaponDamage > bestWeaponDamage || (c._weaponDamage == bestWeaponDamage && dist < bestDist)) {
+                    bestWeaponDamage = c._weaponDamage
+                    bestWeaponCell = c
+                    bestDist = dist
+                }
+            }
+            debug("[AGILITY][FALLBACK] Using pure damage cell (no tactical cell available)")
+        }
+        // Fallback to incoming targetHitCell if no weapon cell found
+        if (bestWeaponCell == -1 && targetHitCell != -1 && targetHitCell != null) {
+            bestWeaponCell = targetHitCell
+        }
+        if (bestWeaponCell == -1) {
+            debug("[AGILITY] No valid weapon cell found, aborting offensive")
+            return
+        }
+
+        // STEP 6: Check if CHIP_ADRENALINE can help with weapon spam (unused for now)
+        // Reserved for future improvements
+
+        // STEP 7: Execute shared weapon-focused combat logic (exclude return damage chips, skip hide-and-seek for aggressive play)
+        var result = this.executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, [CHIP_BRAMBLE, CHIP_MIRROR, CHIP_THORN], "AGILITY", true)
+
+        // STEP 8: AGGRESSIVE SHIELD STACKING - Use leftover TP for WEAPON_SWORD (8% relative shield per use, stackable)
+        playerTP = result['playerTP']
+        playerMP = result['playerMP']
+        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_SWORD)) {
+            var swordWeapon = arsenal.playerEquippedWeapons[WEAPON_SWORD]
+            // Recalculate distance (player position might have changed after combat)
+            distToTarget = getCellDistance(player._cellPos, target._cellPos)
+
+            // Stack shields with WEAPON_SWORD if we have leftover TP
+            if (distToTarget != null && distToTarget >= swordWeapon._minRange && distToTarget <= swordWeapon._maxRange) {
+                var shieldsStacked = 0
+                while (playerTP >= swordWeapon._cost && shieldsStacked < 3) {  // Max 3 stacks per turn
+                    debug("[AGILITY][SHIELD-STACK] Using WEAPON_SWORD for defensive layering (8% shield, stack #" + (shieldsStacked + 1) + ")")
+                    this.createAttackAction(Action.ACTION_DIRECT, target, swordWeapon._id, -1)
+                    playerTP -= swordWeapon._cost
+                    shieldsStacked++
+                }
+                if (shieldsStacked > 0) {
+                    debug("[AGILITY][SHIELD-STACK] Stacked " + shieldsStacked + " shields (~" + (shieldsStacked * 8) + "% total), remaining TP: " + playerTP)
+                }
+            }
+        }
+
+        debug("[AGILITY] Offensive scenario complete. Remaining TP: " + playerTP + ", MP: " + playerMP)
+        debug("[AGILITY] AGGRESSIVE MODE: Stay in combat range, no defensive retreat")
+    }
+}

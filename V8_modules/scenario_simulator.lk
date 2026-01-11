@@ -50,6 +50,10 @@ class ScenarioSimulator {
         var simScience = this._player._science
         var simWeaponUses = [:]  // Track weapon uses per weapon ID
 
+        // Track simulated enemy HP for nova damage capping
+        var simEnemyCurrHP = this._target._currHp
+        var simEnemyMaxHP = this._target._maxHp
+
         result.finalPosition = simPos
 
         for (var action in actions) {
@@ -66,10 +70,28 @@ class ScenarioSimulator {
                     var chipDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target)
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
-                    result.damageDealt += breakdown['direct']
+                    // Apply direct damage to simulated enemy HP
+                    var directDmg = breakdown['direct']
+                    result.damageDealt += directDmg
+                    simEnemyCurrHP -= directDmg
+                    if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
+
                     result.dotDamageQueued += breakdown['dot']
+
+                    // Cap nova damage by current HP deficit
+                    var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
+                    var uncappedNova = breakdown['nova']
+                    var cappedNova = uncappedNova
+                    if (hpDeficit < uncappedNova) {
+                        cappedNova = hpDeficit
+                    }
                     var currentNova = result.novaDamageQueued != null ? result.novaDamageQueued : 0
-                    result.novaDamageQueued = currentNova + breakdown['nova']
+                    result.novaDamageQueued = currentNova + cappedNova
+
+                    // Apply nova damage to simulated enemy max HP
+                    simEnemyMaxHP -= cappedNova
+                    if (simEnemyMaxHP < simEnemyCurrHP) simEnemyMaxHP = simEnemyCurrHP
+
                     result.tpSpent += chipCost
                     simTP -= chipCost
 
@@ -100,10 +122,28 @@ class ScenarioSimulator {
                         var weaponDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.weaponId, this._target)
                         var weaponBreakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
 
-                        result.damageDealt += weaponBreakdown['direct']
+                        // Apply direct damage to simulated enemy HP
+                        var directDmg = weaponBreakdown['direct']
+                        result.damageDealt += directDmg
+                        simEnemyCurrHP -= directDmg
+                        if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
+
                         result.dotDamageQueued += weaponBreakdown['dot']
+
+                        // Cap nova damage by current HP deficit
+                        var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
+                        var uncappedNova = weaponBreakdown['nova']
+                        var cappedNova = uncappedNova
+                        if (hpDeficit < uncappedNova) {
+                            cappedNova = hpDeficit
+                        }
                         var currentNova = result.novaDamageQueued != null ? result.novaDamageQueued : 0
-                        result.novaDamageQueued = currentNova + weaponBreakdown['nova']
+                        result.novaDamageQueued = currentNova + cappedNova
+
+                        // Apply nova damage to simulated enemy max HP
+                        simEnemyMaxHP -= cappedNova
+                        if (simEnemyMaxHP < simEnemyCurrHP) simEnemyMaxHP = simEnemyCurrHP
+
                         result.tpSpent += swapCost + weaponCost
                         simTP -= swapCost + weaponCost
                         simWeapon = action.weaponId

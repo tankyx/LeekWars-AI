@@ -146,6 +146,15 @@ Pre-calculates damage zones and optimal attack positions:
 - `getNetDamageAgainstTarget()` for final damage calculation
 - `getPoisonChipsSorted()` auto-detects all poison chips via `EFFECT_POISON`
 
+**Nova Damage Mechanics:**
+- Nova damage reduces enemy **max HP** (cannot go below current HP)
+- Scales with **SCI only**: `base damage × (1 + SCI / 100)`
+- Bypasses shields completely (like poison)
+- **Capped by HP deficit**: `min(maxHP - currentHP, calculated nova damage)`
+- **Useless at 100% HP** (no gap to reduce)
+- **WEAPON_QUANTUM_RIFLE**: Dual-effect weapon (direct damage scales STR, nova damage scales SCI)
+- **Nova chips**: CHIP_ALTERATION, CHIP_DESINTEGRATION, CHIP_MUTATION, CHIP_TRANSMUTATION
+
 #### **strategy/action.lk** - Action Types
 Defines action types for queue system:
 - `ACTION_DIRECT` (0), `ACTION_BUFF` (1), `ACTION_DEBUFF` (2), `ACTION_MOVEMENT` (3), `ACTION_WEAPON_SWAP` (4)

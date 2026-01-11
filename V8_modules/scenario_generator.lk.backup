@@ -1,0 +1,409 @@
+/** Scenario Generator - Creates multiple scenario variants for evaluation **/
+
+class ScenarioGenerator {
+    _arsenal = null
+    _player = null
+    _target = null
+    _fieldMap = null
+    _strategy = null
+
+    constructor(arsenal, player, target, fieldMap, strategy) {
+        this._arsenal = arsenal
+        this._player = player
+        this._target = target
+        this._fieldMap = fieldMap
+        this._strategy = strategy
+    }
+
+    // Generate multiple scenario variants
+    // Returns array of scenarios (each scenario is an array of actions)
+    generateScenarios() {
+        var scenarios = []
+
+        // Get available TP/MP budget
+        var availableTP = getTP()
+        var availableMP = getMP()
+
+        debug("[GENERATOR] Generating scenarios with TP=" + availableTP + " MP=" + availableMP)
+
+        // SCENARIO 1: Aggressive (buff → attack → attack → hide)
+        startOp()
+        var aggressive = this.createAggressiveScenario(availableTP, availableMP)
+        var aggOps = stopOp("Gen: Aggressive")
+        if (aggressive != null && count(aggressive) > 0) {
+            push(scenarios, aggressive)
+            debug("[GENERATOR] Created aggressive scenario (" + count(aggressive) + " actions, " + aggOps + " ops)")
+        }
+
+        // SCENARIO 2: Conservative (buff → move → attack → hide)
+        startOp()
+        var conservative = this.createConservativeScenario(availableTP, availableMP)
+        var consOps = stopOp("Gen: Conservative")
+        if (conservative != null && count(conservative) > 0) {
+            push(scenarios, conservative)
+            debug("[GENERATOR] Created conservative scenario (" + count(conservative) + " actions, " + consOps + " ops)")
+        }
+
+        // SCENARIO 3: Defensive (defensive buffs → attack → hide)
+        startOp()
+        var defensive = this.createDefensiveScenario(availableTP, availableMP)
+        var defOps = stopOp("Gen: Defensive")
+        if (defensive != null && count(defensive) > 0) {
+            push(scenarios, defensive)
+            debug("[GENERATOR] Created defensive scenario (" + count(defensive) + " actions, " + defOps + " ops)")
+        }
+
+        // SCENARIO 4: All-in damage (no buffs → all damage → no repositioning)
+        startOp()
+        var allIn = this.createAllInDamageScenario(availableTP, availableMP)
+        var allInOps = stopOp("Gen: All-in")
+        if (allIn != null && count(allIn) > 0) {
+            push(scenarios, allIn)
+            debug("[GENERATOR] Created all-in damage scenario (" + count(allIn) + " actions, " + allInOps + " ops)")
+        }
+
+        // SCENARIO 5: Kiting (damage → kite away → damage)
+        startOp()
+        var kiting = this.createKitingScenario(availableTP, availableMP)
+        var kiteOps = stopOp("Gen: Kiting")
+        if (kiting != null && count(kiting) > 0) {
+            push(scenarios, kiting)
+            debug("[GENERATOR] Created kiting scenario (" + count(kiting) + " actions, " + kiteOps + " ops)")
+        }
+
+        // SCENARIO 6: TP-efficient (minimal buffs → focused damage → hide)
+        startOp()
+        var efficient = this.createEfficientScenario(availableTP, availableMP)
+        var effOps = stopOp("Gen: Efficient")
+        if (efficient != null && count(efficient) > 0) {
+            push(scenarios, efficient)
+            debug("[GENERATOR] Created efficient scenario (" + count(efficient) + " actions, " + effOps + " ops)")
+        }
+
+        debug("[GENERATOR] Generated " + count(scenarios) + " total scenarios")
+
+        return scenarios
+    }
+
+    // SCENARIO 1: Aggressive - buff, move close, spam damage, hide
+    createAggressiveScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos  // Track simulated position
+
+        // 1. Apply offensive buff (if not already active)
+        var buffAction = this.getOffensiveBuff()
+        if (buffAction != null) {
+            push(actions, buffAction)
+            tpBudget -= getCachedChipCost(buffAction.chip)
+        }
+
+        // 2. Move to best damage cell
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
+            if (moveCost != null) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell  // Update simulated position!
+            }
+        }
+
+        // 3. Spam all weapons (aggressive) - use simulated position
+        var attackActions = this.getWeaponSpamActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // 4. Hide and seek repositioning
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // SCENARIO 2: Conservative - buff, careful movement, moderate damage, hide
+    createConservativeScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // 1. Defensive + offensive buffs
+        var buffAction = this.getOffensiveBuff()
+        if (buffAction != null) {
+            push(actions, buffAction)
+            tpBudget -= getCachedChipCost(buffAction.chip)
+        }
+
+        var defensiveBuff = this.getDefensiveBuff()
+        if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
+            push(actions, defensiveBuff)
+            tpBudget -= getCachedChipCost(defensiveBuff.chip)
+        }
+
+        // 2. Move conservatively (not all the way)
+        var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.7))  // Use 70% of MP
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
+            if (moveCost != null) mpBudget -= moveCost
+        }
+
+        // 3. Moderate weapon usage (70% TP)
+        var attackActions = this.getWeaponSpamActions(tpBudget, 0.7)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // 4. Hide
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // SCENARIO 3: Defensive - shields → conservative damage → hide
+    createDefensiveScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // 1. Apply defensive buffs (shields/HP)
+        var defensiveBuff = this.getDefensiveBuff()
+        if (defensiveBuff != null) {
+            push(actions, defensiveBuff)
+            tpBudget -= getCachedChipCost(defensiveBuff.chip)
+        }
+
+        // 2. Minimal movement (save MP for escape)
+        var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.5))
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
+            if (moveCost != null) mpBudget -= moveCost
+        }
+
+        // 3. Conservative attacks (50% TP)
+        var attackActions = this.getWeaponSpamActions(tpBudget, 0.5)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // 4. Hide
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // SCENARIO 4: All-in damage - no buffs, no repositioning, pure damage
+    createAllInDamageScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // 1. Move to best damage cell
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
+            if (moveCost != null) mpBudget -= moveCost
+        }
+
+        // 2. ALL weapons and chips (100% TP, no reserve)
+        var attackActions = this.getWeaponSpamActions(tpBudget, 1.0)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // No repositioning - stand and fight
+
+        return actions
+    }
+
+    // SCENARIO 5: Kiting - damage from range, kite away, repeat
+    createKitingScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // 1. Attack from current position (long-range)
+        var attackActions = this.getWeaponSpamActions(tpBudget, 0.6)  // 60% TP
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // 2. Kite away from enemy
+        var kiteAction = this.getKiteAwayAction(mpBudget)
+        if (kiteAction != null) {
+            push(actions, kiteAction)
+        }
+
+        return actions
+    }
+
+    // SCENARIO 6: Efficient - minimal buffs, focused damage, hide
+    createEfficientScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // 1. Only buff if very cost-effective
+        if (tpBudget >= 30) {  // Only if we have TP to spare
+            var buffAction = this.getOffensiveBuff()
+            if (buffAction != null && getCachedChipCost(buffAction.chip) <= 6) {
+                push(actions, buffAction)
+                tpBudget -= getCachedChipCost(buffAction.chip)
+            }
+        }
+
+        // 2. Move to optimal cell
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
+            if (moveCost != null) mpBudget -= moveCost
+        }
+
+        // 3. Balanced damage (80% TP)
+        var attackActions = this.getWeaponSpamActions(tpBudget, 0.8)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // 4. Hide
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // ========== HELPER METHODS ==========
+
+    // Get offensive buff action (build-specific)
+    getOffensiveBuff() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        // Apply build-specific buffs (simplified - don't check if already active)
+        if (str > mag && str > agi) {
+            // Strength build
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player)
+            }
+        } else if (agi > str && agi > mag) {
+            // Agility build
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP)) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player)
+            }
+        }
+
+        return null
+    }
+
+    // Get defensive buff action
+    getDefensiveBuff() {
+        var currentHP = this._player._hp
+        var maxHP = this._player._maxHP
+        var hpRatio = currentHP / maxHP
+
+        // Choose buff based on HP
+        if (hpRatio < 0.5) {
+            // Low HP - strong shields
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player)
+            }
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL)) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player)
+            }
+        } else {
+            // Moderate HP - light shields
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_SHIELD)) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_SHIELD, -1, this._player)
+            }
+        }
+
+        return null
+    }
+
+    // Get movement action to optimal damage cell
+    // OPTIMIZED: Uses cached path lengths
+    getMoveToOptimalCell(mpBudget) {
+        if (mpBudget <= 0) return null
+
+        var bestCell = this._fieldMap.getBestWeaponOrChipCell()
+        if (bestCell == null) return null
+
+        var pathLength = getCachedPathLength(this._player._cellPos, bestCell._id)
+        if (pathLength == null || pathLength > mpBudget) {
+            // Find reachable cell
+            bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
+            if (bestCell == null) return null
+        }
+
+        return new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestCell._id, this._target)
+    }
+
+    // Get hide and seek action
+    getHideAndSeekAction(mpBudget) {
+        if (mpBudget <= 0) return null
+
+        var hideCell = this._strategy.findHideAndSeekCell()
+        if (hideCell != null && hideCell != -1) {
+            return new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, this._target)
+        }
+
+        return null
+    }
+
+    // Get kite away action
+    getKiteAwayAction(mpBudget) {
+        if (mpBudget <= 0) return null
+
+        return new Action(Action.MOVEMENT_FLEE, -1, -1, -1, this._target)
+    }
+
+    // Get weapon spam actions (fraction = 0.0-1.0 of TP to use)
+    // simPos: simulated position to check weapon range from (defaults to current position)
+    getWeaponSpamActions(tpBudget, fraction, simPos = -1) {
+        var actions = []
+        var tpToUse = floor(tpBudget * fraction)
+
+        // Use simulated position if provided, otherwise use current position
+        var checkPos = (simPos == -1) ? this._player._cellPos : simPos
+
+        // Use equipped weapons directly (skip expensive sorting for scenario generation)
+        var str = this._player._strength
+        var mag = this._player._magic
+        var wis = this._player._wisdom
+
+        for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var weapon = this._arsenal.playerEquippedWeapons[weaponId]
+            if (tpToUse < weapon._cost) continue
+
+            // Check if weapon is usable from simulated/current position
+            var dist = getCellDistance(checkPos, this._target._cellPos)
+            if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
+            if (!lineOfSight(checkPos, this._target._cellPos)) continue
+
+            // Spam weapon up to max uses
+            var uses = min(weapon._maxUse, floor(tpToUse / weapon._cost))
+            for (var i = 0; i < uses; i++) {
+                push(actions, new Action(Action.ACTION_DIRECT, weapon._id, -1, this._target._cellPos, this._target))
+                tpToUse -= weapon._cost
+            }
+        }
+
+        return actions
+    }
+}
