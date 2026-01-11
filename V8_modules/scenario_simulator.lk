@@ -51,8 +51,8 @@ class ScenarioSimulator {
         var simWeaponUses = [:]  // Track weapon uses per weapon ID
 
         // Track simulated enemy HP for nova damage capping
-        var simEnemyCurrHP = this._target._currHp
-        var simEnemyMaxHP = this._target._maxHp
+        var simEnemyCurrHP = this._target._currHealth
+        var simEnemyMaxHP = this._target._maxHealth
 
         result.finalPosition = simPos
 

@@ -302,7 +302,7 @@ class Arsenal {
 
         // Poison bypasses shields completely
         // Nova bypasses shields but is capped by HP deficit (useless at 100% HP)
-        var hpDeficit = targetEntity._maxHp - targetEntity._currHp
+        var hpDeficit = targetEntity._maxHealth - targetEntity._currHealth
         var cappedNova = novaDmg
         if (hpDeficit < novaDmg) {
             cappedNova = hpDeficit  // Can't reduce max HP below current HP
