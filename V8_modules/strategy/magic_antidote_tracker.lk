@@ -16,9 +16,11 @@ class AntidoteTracker {
         // BAIT MODE: Use strong poisons to force antidote usage
         // CHIP_TOXIN: cheap poison bait (5 TP, ~567 damage)
         // CHIP_PLAGUE: strong poison bait (6 TP, ~1134 damage)
+        // CHIP_ARSENIC: stackable poison bait (8 TP, 62-67 × 2 turns, STACKABLE)
         // NOTE: COVID reserved for combo only
         return chipId == CHIP_TOXIN
             || chipId == CHIP_PLAGUE
+            || chipId == CHIP_ARSENIC
             || chipId == CHIP_FRACTURE
             || chipId == CHIP_BALL_AND_CHAIN
     }
@@ -239,6 +241,31 @@ class AntidoteTracker {
                     strategy.executeAndFlushActions()
                     player.updateEntity()
                     debug("[BAIT][AGGRESSIVE] Applied VENOM (3 TP)")
+                }
+            }
+        }
+
+        // CHIP_ARSENIC: Stackable poison through obstacles (excellent for bait mode)
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARSENIC)) {
+            var arsenicBait = arsenal.playerEquippedChips[CHIP_ARSENIC]
+            var arsenicCD = getCooldown(CHIP_ARSENIC, player._id)
+
+            // Stack ARSENIC up to 2 times during bait mode (force antidote with stacked poison)
+            var arsenicStacks = arsenicCD == 0 ? 2 : 0
+            while (arsenicStacks > 0 && player._currTp >= arsenicBait._cost) {
+                var dist = getCellDistance(player._cellPos, target._cellPos)
+                if (dist != null && dist >= arsenicBait._minRange && dist <= arsenicBait._maxRange) {
+                    push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, target._cellPos, target))
+                    player._currTp -= arsenicBait._cost
+                    willAttack = true
+                    arsenicStacks--
+                    debug("[BAIT][AGGRESSIVE] Applied ARSENIC stack (through obstacles, 8 TP) - remaining stacks: " + arsenicStacks)
+                    // Execute immediately
+                    strategy.executeAndFlushActions()
+                    player.updateEntity()
+                } else {
+                    debug("[BAIT][AGGRESSIVE] ARSENIC out of range (dist=" + dist + ", need 3-4)")
+                    break
                 }
             }
         }

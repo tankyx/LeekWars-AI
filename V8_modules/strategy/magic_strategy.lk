@@ -803,6 +803,34 @@ class MagicStrategy extends Strategy {
             }
         }
 
+        // PRIORITY: CHIP_ARSENIC (stackable poison) - use multiple times if available
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARSENIC)) {
+            var arsenic = arsenal.playerEquippedChips[CHIP_ARSENIC]
+            var arsenicCD = getCooldown(CHIP_ARSENIC, player._id)
+
+            // Calculate max uses based on available TP (can stack multiple times)
+            var arsenicUsesLeft = arsenicCD == 0 ? 3 : 0  // Max 3 stacks per opportunity
+
+            while (arsenicUsesLeft > 0 && player._currTp - reservedTPForCombo >= arsenic._cost) {
+                // Check range (3-4, through obstacles - no LOS check needed)
+                var dist = getCellDistance(player._cellPos, target._cellPos)
+                if (dist != null && dist >= arsenic._minRange && dist <= arsenic._maxRange) {
+                    push(this._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, target._cellPos, target))
+                    player._currTp -= arsenic._cost
+                    willAttack = true
+                    arsenicUsesLeft--
+                    debug("[FULL][ARSENIC] Applied stack (through obstacles, 8 TP) - remaining uses: " + arsenicUsesLeft + ", TP left: " + player._currTp)
+                } else {
+                    debug("[FULL][ARSENIC] Out of range (dist=" + dist + ", need 3-4)")
+                    break
+                }
+            }
+
+            if (arsenicCD > 0) {
+                debug("[FULL][ARSENIC] On cooldown: " + arsenicCD + " turns")
+            }
+        }
+
         if (poisonPlan != null) {
             // THEN use poison chips with remaining TP (once per turn)
             var chipsToUse = poisonPlan['chips']
