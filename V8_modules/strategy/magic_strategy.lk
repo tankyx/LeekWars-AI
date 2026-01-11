@@ -846,10 +846,19 @@ class MagicStrategy extends Strategy {
                     debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - on cooldown")
                     continue
                 }
-                if (!this.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)) {
-                    debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - out of range/LOS")
-                    continue
+
+                // Check range/LOS (ARSENIC: through obstacles, only check distance)
+                var chipInRange = false
+                if (pc._id == CHIP_ARSENIC) {
+                    var distToTarget = getCellDistance(targetHitCell._id, target._cellPos)
+                    chipInRange = distToTarget != null && distToTarget >= pc._minRange && distToTarget <= pc._maxRange
+                    if (!chipInRange) debug("[FULL][CHIP-SKIP] ARSENIC - out of range (dist=" + distToTarget + ", need 3-4)")
+                } else {
+                    chipInRange = this.inRangeAndLOS(targetHitCell._id, target._cellPos, pc._minRange, pc._maxRange)
+                    if (!chipInRange) debug("[FULL][CHIP-SKIP] " + getChipName(pc._id) + " - out of range/LOS")
                 }
+
+                if (!chipInRange) continue
 
                 // Check AoE safety and reposition if needed
                 var aoeCheck = this.checkAoESafety(pc._id, target._cellPos)
@@ -899,7 +908,17 @@ class MagicStrategy extends Strategy {
                 var chipP = priorityChips[pIdx]
                 if (player._currTp - reservedTPForCombo < chipP._cost) continue
                 if (getCooldown(chipP._id, player._id) > 0) continue
-                if (targetHitCell == -1 || targetHitCell == null || !this.inRangeAndLOS(targetHitCell._id, target._cellPos, chipP._minRange, chipP._maxRange)) continue
+
+                // Check range/LOS (ARSENIC: through obstacles, only check distance)
+                var fallbackInRange = false
+                if (chipP._id == CHIP_ARSENIC) {
+                    var distFallback = getCellDistance(targetHitCell._id, target._cellPos)
+                    fallbackInRange = distFallback != null && distFallback >= chipP._minRange && distFallback <= chipP._maxRange
+                } else {
+                    fallbackInRange = targetHitCell != -1 && targetHitCell != null && this.inRangeAndLOS(targetHitCell._id, target._cellPos, chipP._minRange, chipP._maxRange)
+                }
+
+                if (!fallbackInRange) continue
 
                 // Check AoE safety and reposition if needed
                 var aoeFallback = this.checkAoESafety(chipP._id, target._cellPos)

@@ -188,10 +188,18 @@ class AntidoteTracker {
                     if (player._currTp < pc._cost) break
 
                     // Check range from PLANNED cell (where we'll be after movement), not current position
-                    if (!strategy.inRangeAndLOS(plannedCell, target._cellPos, pc._minRange, pc._maxRange)) {
-                        debug("[BAIT][SKIP] " + getChipName(pc._id) + " - out of range from planned cell " + plannedCell)
-                        continue
+                    // ARSENIC: Through obstacles, only check distance (no LOS required)
+                    var inRange = false
+                    if (pc._id == CHIP_ARSENIC) {
+                        var distFromPlanned = getCellDistance(plannedCell, target._cellPos)
+                        inRange = distFromPlanned != null && distFromPlanned >= pc._minRange && distFromPlanned <= pc._maxRange
+                        if (!inRange) debug("[BAIT][SKIP] ARSENIC - out of range from planned cell (dist=" + distFromPlanned + ", need 3-4)")
+                    } else {
+                        inRange = strategy.inRangeAndLOS(plannedCell, target._cellPos, pc._minRange, pc._maxRange)
+                        if (!inRange) debug("[BAIT][SKIP] " + getChipName(pc._id) + " - out of range/LOS from planned cell " + plannedCell)
                     }
+
+                    if (!inRange) continue
 
                     // Check AoE safety from PLANNED cell (critical: must check from attack position, not current)
                     var aoeBait = strategy.checkAoESafetyFromCell(pc._id, target._cellPos, plannedCell)
@@ -201,7 +209,17 @@ class AntidoteTracker {
                         // Fallback: try using chip from CURRENT position instead of planned cell
                         // CRITICAL: Must execute IMMEDIATELY before any movement happens
                         var aoeCurrent = strategy.checkAoESafety(pc._id, target._cellPos)
-                        if (aoeCurrent['safe'] && strategy.inRangeAndLOS(player._cellPos, target._cellPos, pc._minRange, pc._maxRange)) {
+
+                        // Check if in range from current position (ARSENIC: through obstacles, no LOS needed)
+                        var inRangeFromCurrent = false
+                        if (pc._id == CHIP_ARSENIC) {
+                            var distFromCurrent = getCellDistance(player._cellPos, target._cellPos)
+                            inRangeFromCurrent = distFromCurrent != null && distFromCurrent >= pc._minRange && distFromCurrent <= pc._maxRange
+                        } else {
+                            inRangeFromCurrent = strategy.inRangeAndLOS(player._cellPos, target._cellPos, pc._minRange, pc._maxRange)
+                        }
+
+                        if (aoeCurrent['safe'] && inRangeFromCurrent) {
                             debug("[BAIT] Using " + getChipName(pc._id) + " from CURRENT position IMMEDIATELY (planned cell unsafe)")
                             push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, pc._id, target._cellPos, target))
                             player._currTp -= pc._cost
@@ -211,7 +229,7 @@ class AntidoteTracker {
                             player.updateEntity()
                             debug("[BAIT] Executed " + getChipName(pc._id) + " from current position, remaining TP=" + player._currTp)
                         } else {
-                            debug("[BAIT][SKIP] " + getChipName(pc._id) + " - also unsafe from current position")
+                            debug("[BAIT][SKIP] " + getChipName(pc._id) + " - also unsafe/out of range from current position")
                         }
                         continue
                     }
