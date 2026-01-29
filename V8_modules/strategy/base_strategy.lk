@@ -1945,6 +1945,59 @@ class Strategy {
     }
 
     // Base defensive scenario usable by all strategies
+    // Pure defensive fallback - NO ATTACKING (used when all scenarios have lethal return damage)
+    createDefensiveFallback(target) {
+        debug("[DEFENSIVE-FALLBACK] Creating pure survival scenario (no attacks)")
+
+        var playerTP = player._currTp
+        var playerMP = player._currMp
+        var currentHP = getLife()
+        var maxHP = getTotalLife()
+        var hpPercent = (currentHP * 100) / maxHP
+
+        // PRIORITY 1: Emergency healing if HP is critical
+        if (hpPercent < 70 && currentHP < maxHP) {
+            var healChip = this.selectBestHealingChip(hpPercent)
+            if (healChip != null && playerTP >= healChip['cost']) {
+                debug("[DEFENSIVE-FALLBACK] Emergency healing with " + healChip['name'])
+                this.createAttackAction(Action.ACTION_DIRECT, player, -1, healChip['chipId'])
+                playerTP -= healChip['cost']
+            }
+        }
+
+        // PRIORITY 2: Apply shields if available and needed
+        if (hpPercent < 80) {
+            // FORTRESS (best shield, 4 turns)
+            if (this.isChipAvailable(CHIP_FORTRESS) && playerTP >= 4) {
+                debug("[DEFENSIVE-FALLBACK] Applying FORTRESS shield")
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_FORTRESS)
+                playerTP -= 4
+            }
+            // WALL (good shield, 2 turns)
+            else if (this.isChipAvailable(CHIP_WALL) && playerTP >= 3) {
+                debug("[DEFENSIVE-FALLBACK] Applying WALL shield")
+                this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_WALL)
+                playerTP -= 3
+            }
+        }
+
+        // PRIORITY 3: Reposition to safest cell (hide and seek)
+        var hns = fieldMap.findHideAndSeekCell()
+        if (hns != null && hns['cell'] != player._cellPos) {
+            var pathLen = getPathLength(player._cellPos, hns['cell'])
+            if (pathLen != null && pathLen > 0 && pathLen <= playerMP) {
+                debug("[DEFENSIVE-FALLBACK] Repositioning to safe cell " + hns['cell'] + " (dist=" + pathLen + ")")
+                this.createMovementAction(Action.MOVEMENT_HNS, hns['cell'], target)
+                playerMP -= pathLen
+            }
+        }
+
+        // If we have actions, we're good. Otherwise, just pass the turn.
+        if (count(this._actions) == 0) {
+            debug("[DEFENSIVE-FALLBACK] No defensive options available - passing turn")
+        }
+    }
+
     createDefensiveScenario(target, targetHitCell) {
         var playerTP = player._currTp
         var playerMP = player._currMp
@@ -2337,9 +2390,34 @@ class Strategy {
 
         // PHASE 1 OPTIMIZATIONS: Full 6-scenario evaluation with caching
         var useMultiScenario = true  // ENABLED: Multi-scenario mode
-        debug("[MULTI-SCENARIO] Multi-scenario mode enabled")
+
+        // EARLY RETURN DAMAGE CHECK: DISABLED (causing AI to fail)
+        // Will rely on scenario scoring penalties instead
+        /*
+        var enemyReturnPct = target.getReturnDamagePercentage() / 100.0
+        if (enemyReturnPct > 0) {
+            // Estimate damage we'd deal in a typical attack scenario
+            var estimatedDamage = this.estimateTypicalAttackDamage(target)
+            var estimatedReturn = estimatedDamage * enemyReturnPct
+            var currentHP = player._currHealth
+
+            if (estimatedReturn >= currentHP) {
+                debug("[RETURN-DAMAGE][EARLY-ABORT] Enemy has " + floor(enemyReturnPct * 100) +
+                      "% return damage - attacking would be lethal (est. " + floor(estimatedReturn) +
+                      " return dmg vs " + floor(currentHP) + " HP) - switching to defensive mode")
+                this.createDefensiveFallback(target)
+                // Skip multi-scenario evaluation - defensive fallback already queued
+                useMultiScenario = false
+            } else if (estimatedReturn > currentHP * 0.4) {
+                debug("[RETURN-DAMAGE][WARNING] Enemy has " + floor(enemyReturnPct * 100) +
+                      "% return damage - est. " + floor(estimatedReturn) + " return damage (" +
+                      floor((estimatedReturn / currentHP) * 100) + "% of our HP)")
+            }
+        }
+        */
 
         if (useMultiScenario) {
+            debug("[MULTI-SCENARIO] Multi-scenario mode enabled")
             startOp()
             this.generateAndEvaluateBestScenario(target, targetHitCell)
             stopOp("Total Multi-Scenario Evaluation")
@@ -2364,6 +2442,30 @@ class Strategy {
         // Base implementation: no OTKO logic
         // Override in StrengthStrategy, AgilityStrategy, etc.
         return false
+    }
+
+    // Quickly estimate typical attack damage (for return damage calculation)
+    // Simplified estimation based on stats and TP
+    estimateTypicalAttackDamage(target) {
+        var tp = player._currTp
+        var str = player._strength
+        var mag = player._magic
+
+        // Rough estimation: assume 2-3 weapon uses + 1 damage chip
+        // Weapon damage ~= 200-400 per use (scales with STR)
+        // Damage chip ~= 400-600 (scales with STR/MAG)
+
+        var weaponDamagePerUse = 250 + (str * 0.5)  // Rough weapon damage
+        var estimatedWeaponUses = min(3, floor(tp / 8.0))  // Assume 8 TP per weapon use
+        var weaponDamage = weaponDamagePerUse * estimatedWeaponUses
+
+        var chipDamage = 0
+        var remainingTP = tp - (estimatedWeaponUses * 8)
+        if (remainingTP >= 8) {
+            chipDamage = 400 + (max(str, mag) * 0.3)  // Rough chip damage
+        }
+
+        return weaponDamage + chipDamage
     }
 
     // Calculate if we can OTKO (One-Turn Kill Opportunity) the target
@@ -2622,6 +2724,40 @@ class Strategy {
                     useChipOnCell(a.chip, a.targetCell)
                 }
                 else if (a.weaponId != -1) {
+                    // Get fresh enemy data to ensure we're targeting correctly
+                    var enemies = getAliveEnemies()
+                    if (count(enemies) == 0) {
+                        debug("⚠️  SKIPPING WEAPON ATTACK: No enemies alive")
+                        continue
+                    }
+
+                    // Use the first alive enemy (should match our target from planning)
+                    var targetId = enemies[0]
+                    var targetCell = getCell(targetId)
+
+                    // Validate target exists and is reachable
+                    if (targetCell == null) {
+                        debug("⚠️  SKIPPING WEAPON ATTACK: Cannot get enemy position")
+                        continue
+                    }
+
+                    // Calculate actual distance
+                    var actualDist = getCellDistance(currentPos, targetCell)
+
+                    // Validate line of sight
+                    if (!lineOfSight(currentPos, targetCell)) {
+                        debug("⚠️  SKIPPING WEAPON ATTACK: No line of sight from " + currentPos + " to " + targetCell + " (dist=" + actualDist + ")")
+                        continue
+                    }
+
+                    // Validate weapon range
+                    var minRange = getWeaponMinRange(a.weaponId)
+                    var maxRange = getWeaponMaxRange(a.weaponId)
+                    if (actualDist < minRange || actualDist > maxRange) {
+                        debug("⚠️  SKIPPING WEAPON ATTACK: Target out of range (dist=" + actualDist + ", range=" + minRange + "-" + maxRange + ")")
+                        continue
+                    }
+
                     // Ensure correct weapon is equipped before using it
                     if (currentWeap != a.weaponId) {
                         debug("Swapping to weapon " + getWeaponName(a.weaponId) + " (1 TP)")
@@ -2630,21 +2766,16 @@ class Strategy {
                     }
 
                     var tpBefore = getTP()
-                    debug("Using weapon " + getWeaponName(a.weaponId) + " on cell " + a.targetCell + " (pos=" + currentPos + " dist=" + dist + " TP=" + tpBefore + ")")
+                    debug("Using weapon " + getWeaponName(a.weaponId) + " on enemy " + targetId + " at cell " + targetCell + " (pos=" + currentPos + " dist=" + actualDist + " TP=" + tpBefore + ")")
 
-                    // Use entity ID instead of cell for more reliable targeting
-                    var result = null
-                    if (a.targetEntity != null && a.targetEntity._isAlive) {
-                        result = useWeapon(a.targetEntity._id)
-                    } else {
-                        result = useWeaponOnCell(a.targetCell)
-                    }
+                    // Use entity ID for reliable targeting
+                    var result = useWeapon(targetId)
 
                     var tpAfter = getTP()
 
                     // Detect silent failure (TP didn't decrease)
                     if (result == USE_INVALID_TARGET || tpBefore == tpAfter) {
-                        debug("⚠️  WEAPON ATTACK FAILED: " + getWeaponName(a.weaponId) + " from " + currentPos + " to " + a.targetCell + " (dist=" + dist + ", result=" + result + ", TP unchanged)")
+                        debug("⚠️  WEAPON ATTACK FAILED: " + getWeaponName(a.weaponId) + " on enemy " + targetId + " from " + currentPos + " to " + targetCell + " (dist=" + actualDist + ", result=" + result + ", TP unchanged)")
                     }
                 }
             }

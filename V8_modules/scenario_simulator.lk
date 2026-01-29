@@ -14,6 +14,7 @@ class SimulationResult {
     debuffsApplied = []       // List of debuff chip IDs applied
     actionsExecuted = 0       // Number of actions successfully executed
     vulnerabilityApplied = 0  // Total vulnerability stacks applied to enemy (%)
+    returnDamageTaken = 0     // Damage reflected back from enemy's return damage buff
 
     constructor() {
         this.buffsApplied = []
@@ -54,6 +55,9 @@ class ScenarioSimulator {
         var simEnemyCurrHP = this._target._currHealth
         var simEnemyMaxHP = this._target._maxHealth
 
+        // Get enemy's damage return percentage (0 if no buff active)
+        var enemyReturnPct = this._target.getReturnDamagePercentage() / 100.0
+
         result.finalPosition = simPos
 
         for (var action in actions) {
@@ -75,6 +79,12 @@ class ScenarioSimulator {
                     result.damageDealt += directDmg
                     simEnemyCurrHP -= directDmg
                     if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
+
+                    // Calculate return damage (only applies to direct damage)
+                    if (enemyReturnPct > 0 && directDmg > 0) {
+                        var returnDmg = directDmg * enemyReturnPct
+                        result.returnDamageTaken += returnDmg
+                    }
 
                     result.dotDamageQueued += breakdown['dot']
 
@@ -127,6 +137,12 @@ class ScenarioSimulator {
                         result.damageDealt += directDmg
                         simEnemyCurrHP -= directDmg
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
+
+                        // Calculate return damage (only applies to direct damage)
+                        if (enemyReturnPct > 0 && directDmg > 0) {
+                            var returnDmg = directDmg * enemyReturnPct
+                            result.returnDamageTaken += returnDmg
+                        }
 
                         result.dotDamageQueued += weaponBreakdown['dot']
 
