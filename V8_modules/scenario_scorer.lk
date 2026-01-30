@@ -50,40 +50,6 @@ class ScenarioScorer {
             debug("[SCORER-PENALTY] No damage dealt (not FLEE state) - penalty: -2000")
         }
 
-        // RETURN DAMAGE PENALTY - Penalize scenarios that cause dangerous self-harm
-        var returnDamagePenalty = 0
-        if (simResult.returnDamageTaken > 0) {
-            var currentHP = this._player._currHealth
-            var hpAfterReturn = currentHP - simResult.returnDamageTaken
-            var hpAfterReturnPercent = (hpAfterReturn / this._player._maxHealth) * 100
-
-            // LETHAL: Return damage would kill us - DISQUALIFYING penalty
-            if (hpAfterReturn <= 0) {
-                returnDamagePenalty = -100000  // Disqualifying penalty - avoid suicide at all costs
-                debug("[SCORER-RETURN] LETHAL return damage: " + floor(simResult.returnDamageTaken) +
-                      " would kill us (HP=" + floor(currentHP) + ") - penalty: -100000")
-            }
-            // CRITICAL: Return damage drops us below 30% HP - massive penalty
-            else if (hpAfterReturnPercent < 30 && playerHPPercent >= 30) {
-                returnDamagePenalty = -50000  // Massive penalty for entering critical HP range
-                debug("[SCORER-RETURN] CRITICAL return damage: " + floor(simResult.returnDamageTaken) +
-                      " drops us to " + floor(hpAfterReturnPercent) + "% HP - penalty: -50000")
-            }
-            // DANGEROUS: Return damage drops us below 50% HP - very heavy penalty
-            else if (hpAfterReturnPercent < 50 && playerHPPercent >= 50) {
-                returnDamagePenalty = -20000  // Very heavy penalty for significant HP loss
-                debug("[SCORER-RETURN] DANGEROUS return damage: " + floor(simResult.returnDamageTaken) +
-                      " drops us to " + floor(hpAfterReturnPercent) + "% HP - penalty: -20000")
-            }
-            // MINOR: Small return damage - proportional penalty (5x multiplier)
-            else {
-                returnDamagePenalty = -simResult.returnDamageTaken * 5.0  // 5x the return damage value
-                debug("[SCORER-RETURN] Minor return damage: " + floor(simResult.returnDamageTaken) +
-                      " HP - penalty: " + floor(returnDamagePenalty))
-            }
-        }
-        score += returnDamagePenalty
-
         // 2. DOT DAMAGE WEIGHT - Heavily favored by MAG builds
         var dotWeight = this.calculateDotWeight()
         var dotScore = simResult.dotDamageQueued * dotWeight
@@ -163,8 +129,7 @@ class ScenarioScorer {
               " eHP=" + floor(shieldScore + relShieldScore + healScore) +
               " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
               " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
-              " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus) +
-              " return=" + floor(returnDamagePenalty))
+              " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus))
 
         return score
     }

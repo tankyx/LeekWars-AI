@@ -1612,7 +1612,8 @@ class ScenarioGenerator {
 
         // PHASE 3: Weapon swap to HEAVY_SWORD (if needed)
         if (getWeapon() != WEAPON_HEAVY_SWORD) {
-            push(actions, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_HEAVY_SWORD, -1, -1, this._target))
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
+            actions[count(actions) - 1].weapon = WEAPON_HEAVY_SWORD
             tpBudget -= 1
         }
 
