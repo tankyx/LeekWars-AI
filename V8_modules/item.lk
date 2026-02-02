@@ -66,14 +66,50 @@ class Arsenal {
     playerEquippedWeapons = [:]
     playerEquippedChips = [:]
 
+    getCorrectWeaponRange(weaponId) {
+        var ranges = [
+            WEAPON_PISTOL: [0, 7],
+            WEAPON_MACHINE_GUN: [0, 8],
+            WEAPON_DOUBLE_GUN: [1, 8],
+            WEAPON_SHOTGUN: [1, 6],
+            WEAPON_MAGNUM: [1, 8],
+            WEAPON_LASER: [1, 8],
+            WEAPON_GRENADE_LAUNCHER: [3, 6],
+            WEAPON_FLAME_THROWER: [1, 6],
+            WEAPON_DESTROYER: [3, 7],
+            WEAPON_GAZOR: [3, 6],
+            WEAPON_ELECTRISOR: [1, 7],
+            WEAPON_M_LASER: [2, 7],
+            WEAPON_B_LASER: [4, 12],
+            WEAPON_KATANA: [1, 1],
+            WEAPON_BROADSWORD: [1, 2],
+            WEAPON_AXE: [1, 2],
+            WEAPON_J_LASER: [1, 5],
+            WEAPON_ENHANCED_LIGHTNINGER: [1, 8],
+            WEAPON_ILLICIT_GRENADE_LAUNCHER: [3, 6],
+            WEAPON_MYSTERIOUS_ELECTRISOR: [1, 7],
+            WEAPON_UNBRIDLED_GAZOR: [3, 6],
+            WEAPON_RIFLE: [5, 12],
+            WEAPON_HEAVY_SWORD: [1, 1],
+            WEAPON_RHINO: [1, 3]
+        ]
+
+        if (mapContainsKey(ranges, weaponId)) {
+            return ranges[weaponId]
+        }
+
+        return [getWeaponMinRange(weaponId), getWeaponMaxRange(weaponId)]
+    }
+
     buildAllWeaponsList() {
         var allWeapons = getAllWeapons()
 
         for (var w in allWeapons) {
+            var range = this.getCorrectWeaponRange(w)
             mapPut(weaponsList, w, new Weapon(
                 w,
-                getWeaponMinRange(w),
-                getWeaponMaxRange(w),
+                range[0],
+                range[1],
                 getWeaponEffects(w),
                 getWeaponCost(w),
                 getWeaponMaxUses(w),
