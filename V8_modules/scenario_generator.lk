@@ -1166,11 +1166,23 @@ class ScenarioGenerator {
             if (currentUses == null) currentUses = 0
             if (currentUses >= weapon._maxUse) continue
 
-            var dist = getCellDistance(simPos, this._target._cellPos)
-            if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
+            if (mapContainsKey(this._fieldMap.weaponHitmap, weaponId)) {
+                var shooterCells = this._fieldMap.weaponHitmap[weaponId]
+                var canShootFromHere = false
+                for (var cell in shooterCells) {
+                    if (cell == simPos) {
+                        canShootFromHere = true
+                        break
+                    }
+                }
+                if (!canShootFromHere) continue
+            } else {
+                var dist = getCellDistance(simPos, this._target._cellPos)
+                if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
 
-            if (!lineOfSight(simPos, this._target._cellPos)) {
-                continue
+                if (!lineOfSight(simPos, this._target._cellPos)) {
+                    continue
+                }
             }
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
