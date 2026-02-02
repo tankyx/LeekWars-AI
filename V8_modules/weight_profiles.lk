@@ -1,7 +1,6 @@
-/** Weight Profiles - Build-specific optimized weights from GA **/
 
 class WeightProfiles {
-    // Detect which weight profile to use based on leek stats
+    
     static function getProfile(player) {
         var str = player._strength
         var mag = player._magic
@@ -9,10 +8,8 @@ class WeightProfiles {
         var hp = player._maxHealth
         var tp = player._maxTP
 
-        // Calculate stat total (rough power level indicator)
         var primaryStat = max(str, max(mag, agi))
 
-        // Profile selection based on stat ranges
         if (primaryStat < 500) {
             return WeightProfiles.WEAK_BUILD
         } else if (primaryStat >= 500 && primaryStat < 700) {
@@ -21,84 +18,62 @@ class WeightProfiles {
             return WeightProfiles.STRONG_BUILD
         }
 
-        // Fallback to balanced
         return WeightProfiles.BALANCED_BUILD
     }
 
-    // WEAK BUILD PROFILE (400 STR, 1800 HP, 8 TP)
-    // GA-optimized for cautious play, conservative OTKO thresholds
     static var WEAK_BUILD = {
-        // Damage weights (more conservative)
+        
         'str_damage_base': 1.3,
         'mag_damage_base': 0.7,
         'agi_damage_base': 1.1,
 
-        // Kill multipliers (less aggressive - avoid overcommitting)
         'kill_mult_70': 4.0,
         'kill_mult_50': 2.0,
 
-        // Threat penalty (more cautious - low HP pool)
         'threat_penalty_mult': 0.7,
 
-        // OTKO bonus (lower - less burst potential)
         'otko_cell_bonus': 3500,
 
-        // Buff weight (higher - buffs more impactful)
         'buff_weight': 6.0,
 
-        // eHP urgency (higher - prioritize survival)
         'ehp_urgency_30': 3.5,
         'ehp_urgency_50': 2.5
     }
 
-    // BALANCED BUILD PROFILE (600 STR, 2500 HP, 10 TP)
-    // GA-optimized for standard play (baseline weights)
     static var BALANCED_BUILD = {
-        // Damage weights (baseline)
+        
         'str_damage_base': 1.5,
         'mag_damage_base': 0.8,
         'agi_damage_base': 1.3,
 
-        // Kill multipliers (standard aggression)
         'kill_mult_70': 5.0,
         'kill_mult_50': 2.5,
 
-        // Threat penalty (balanced)
         'threat_penalty_mult': 0.5,
 
-        // OTKO bonus (standard)
         'otko_cell_bonus': 5000,
 
-        // Buff weight (baseline)
         'buff_weight': 5.0,
 
-        // eHP urgency (baseline)
         'ehp_urgency_30': 3.0,
         'ehp_urgency_50': 2.0
     }
 
-    // STRONG BUILD PROFILE (800 STR, 3200 HP, 12 TP)
-    // GA-optimized for aggressive play, high burst potential
     static var STRONG_BUILD = {
-        // Damage weights (more aggressive)
+        
         'str_damage_base': 1.8,
         'mag_damage_base': 0.9,
         'agi_damage_base': 1.6,
 
-        // Kill multipliers (very aggressive - high kill potential)
         'kill_mult_70': 6.0,
         'kill_mult_50': 3.5,
 
-        // Threat penalty (less cautious - high HP pool)
         'threat_penalty_mult': 0.3,
 
-        // OTKO bonus (higher - strong burst)
         'otko_cell_bonus': 6500,
 
-        // Buff weight (lower - raw stats already high)
         'buff_weight': 4.0,
 
-        // eHP urgency (lower - tank more)
         'ehp_urgency_30': 2.5,
         'ehp_urgency_50': 1.5
     }

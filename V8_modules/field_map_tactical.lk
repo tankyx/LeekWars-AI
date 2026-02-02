@@ -1,16 +1,11 @@
 include('field_map_patterns.lk')
 
-// ====================================================================
-// FIELD MAP - TACTICAL (Hide & Seek, OTKO, Caching)
-// ====================================================================
-
 class FieldMap extends FieldMapPatterns {
-    // Per-turn cache for enemy accessible cells
+    
     _enemyAccessCache = []
     _enemyAccessCacheTurn = -1
     _enemyAccessCacheIds = []
 
-    // WEEK 2: Enemy threat map
     enemyThreatMap = [:]
     _threatMapCacheTurn = -1
     _threatMapCacheEnemyPositions = [:]
@@ -21,11 +16,6 @@ class FieldMap extends FieldMapPatterns {
         super()
     }
 
-    // ====================================================================
-    // ACCESSIBLE CELLS (for HNS calculations)
-    // ====================================================================
-
-    // Compute all cells reachable this turn for given entity
     getAccessibleCells(entity) {
         var acc = []
         if (entity == null) return acc
@@ -42,13 +32,11 @@ class FieldMap extends FieldMapPatterns {
         return acc
     }
 
-    // Build or reuse cached enemy accessible cells
     getEnemyAccess() {
         var curTurn = getTurn()
         var enemiesMap = this.getEnemySubMap()
         var enemyIdsNow = mapKeys(enemiesMap)
 
-        // Rebuild conditions: turn changed OR enemy count changed OR ID mismatch
         var needRebuild = (curTurn != this._enemyAccessCacheTurn)
         if (!needRebuild && count(enemyIdsNow) != count(this._enemyAccessCacheIds)) needRebuild = true
         if (!needRebuild) {
@@ -79,13 +67,6 @@ class FieldMap extends FieldMapPatterns {
         return this._enemyAccessCache
     }
 
-    // ====================================================================
-    // HIDE & SEEK CELL SELECTION
-    // ====================================================================
-
-    // Unified Hide & Seek cell evaluation
-    // mode: "defensive" (maximize distance) or "approach" (prefer attack cells)
-    // target: required for "approach" mode
     findHideAndSeekCell(mode = "defensive", target = null) {
         var enemyAccess = this.getEnemyAccess()
         if (count(enemyAccess) == 0) return null
@@ -98,21 +79,20 @@ class FieldMap extends FieldMapPatterns {
 
         var bestCell = -1
         var bestDanger = 99999
-        var bestDist = isApproachMode ? 99999 : -1  // Approach: minimize, Defensive: maximize
+        var bestDist = isApproachMode ? 99999 : -1  
         var bestCanAttack = false
-        var bestCover = -1  // Cover score (0-8, higher is better)
+        var bestCover = -1  
         var playerPos = player._cellPos
 
         for (var i = 0; i < count(playerAccessible); i++) {
             var cand = playerAccessible[i]
 
-            // Calculate distance metric
             var distMetric = 0
             if (isApproachMode) {
                 distMetric = getCellDistance(cand, targetPos)
                 if (distMetric == null) continue
             } else {
-                // Defensive: distance to closest enemy
+                
                 var closestEnemyDist = 999
                 for (var ea = 0; ea < count(enemyAccess); ea++) {
                     var enemyRef = enemyAccess[ea]['enemy']
@@ -123,10 +103,9 @@ class FieldMap extends FieldMapPatterns {
                 distMetric = (closestEnemyDist == 999) ? 0 : closestEnemyDist
             }
 
-            // Check if cell allows attack (approach mode only)
             var canAttack = false
             if (isApproachMode) {
-                // Skip cells that increase distance unless they allow attack
+                
                 if (distMetric > currentDist) {
                     if (mapContainsKey(this.damageMap, cand)) {
                         var cellRef = this.damageMap[cand]
@@ -143,16 +122,14 @@ class FieldMap extends FieldMapPatterns {
                 }
             }
 
-            // Calculate danger (LOS exposures) and cover score
             var danger = this.computeDangerForCell(cand, enemyAccess)
             var coverScore = this.evaluateCoverScore(cand)
 
-            // Scoring based on mode
             var shouldUpdate = false
             if (bestCell == -1) {
                 shouldUpdate = true
             } else if (isApproachMode) {
-                // Approach mode: canAttack > lower danger > lower distance > higher cover
+                
                 if (canAttack && !bestCanAttack) {
                     shouldUpdate = true
                 } else if (canAttack == bestCanAttack) {
@@ -164,7 +141,7 @@ class FieldMap extends FieldMapPatterns {
                     }
                 }
             } else {
-                // Defensive mode: lower danger > greater distance > higher cover
+                
                 if (danger < bestDanger ||
                     (danger == bestDanger && distMetric > bestDist) ||
                     (danger == bestDanger && distMetric == bestDist && coverScore > bestCover)) {
@@ -194,7 +171,6 @@ class FieldMap extends FieldMapPatterns {
         }
     }
 
-    // Compute danger (LOS exposures) for single cell
     private computeDangerForCell(cellId, enemyAccess) {
         var danger = 0
         for (var ea = 0; ea < count(enemyAccess); ea++) {
@@ -206,14 +182,11 @@ class FieldMap extends FieldMapPatterns {
         return danger
     }
 
-    // Evaluate cover quality (adjacent obstacles provide tactical advantage)
-    // Returns: 0-8 score (higher = more adjacent obstacles)
     private evaluateCoverScore(cellId) {
         var adjacentObstacles = 0
         var cellX = getCellX(cellId)
         var cellY = getCellY(cellId)
 
-        // Check all 8 adjacent cells (using cell coordinate system)
         var offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
         for (var o = 0; o < count(offsets); o++) {
             var neighborCell = getCellFromXY(cellX + offsets[o][0], cellY + offsets[o][1])
@@ -224,12 +197,6 @@ class FieldMap extends FieldMapPatterns {
         return adjacentObstacles
     }
 
-
-    // ====================================================================
-    // OTKO TELEPORTATION SUPPORT
-    // ====================================================================
-
-    // Find optimal teleport cell for OTKO
     findOptimalTeleportCell(target) {
         if (target == null) return null
 
@@ -246,10 +213,9 @@ class FieldMap extends FieldMapPatterns {
             if (distFromPlayer == null || distFromPlayer < 1 || distFromPlayer > 12) continue
 
             var totalDamage = 0
-            var playerTP = player._currTp - 9  // Reserve 9 TP for teleport
-            var tpSpent = 0  // Track TP consumed (weapons + chips)
+            var playerTP = player._currTp - 9  
+            var tpSpent = 0  
 
-            // Check all equipped weapons
             for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
                 var wObj = arsenal.playerEquippedWeapons[wid]
                 if (wObj == null) continue
@@ -269,7 +235,6 @@ class FieldMap extends FieldMapPatterns {
                 tpSpent += swapCost + uses * wObj._cost
             }
 
-            // Check damage chips if TP remains
             var tpRemaining = playerTP - tpSpent
             if (tpRemaining > 0) {
                 for (var cid in mapKeys(arsenal.playerEquippedChips)) {
@@ -302,12 +267,9 @@ class FieldMap extends FieldMapPatterns {
 
         if (bestCell == -1) return null
 
-        // Calculate kill probability using simple estimate
-        // Build item list for best cell
         var bestCellItems = []
-        var tpForItems = player._currTp - 9  // Reserve teleport cost
+        var tpForItems = player._currTp - 9  
 
-        // Add weapons that can be used from best cell
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
             var wObj = arsenal.playerEquippedWeapons[wid]
             if (wObj == null) continue
@@ -325,7 +287,6 @@ class FieldMap extends FieldMapPatterns {
             }
         }
 
-        // Add chips
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
             if (chipObj == null) continue
@@ -343,7 +304,6 @@ class FieldMap extends FieldMapPatterns {
             }
         }
 
-        // Calculate kill probability
         var killProb = arsenal.getKillProbability(
             bestCellItems,
             player._strength,
@@ -359,24 +319,12 @@ class FieldMap extends FieldMapPatterns {
         return ['cell': bestCell, 'damage': bestDamage, 'killProbability': killProb]
     }
 
-    // ====================================================================
-    // BURST DAMAGE CALCULATION (for OTKO cell marking)
-    // ====================================================================
-
-    // Calculate maximum burst damage from specific cell position
-    // OPTIMIZED: Reuses field map data instead of recalculating
-    // Returns: {damage, tpRequired, killProbability}
-    // Used during buildHitMap() to mark OTKO cells
     calculateBurstDamageFromCell(cellId, target, availableTP) {
         if (target == null) return null
         if (cellId < 0 || cellId >= FieldMap.board_cell_count) return null
 
-        // OPTIMIZATION: Reuse field map's pre-calculated damage data
-        // Field map already computed: range checks, LOS checks, damage calculations
-        // This cell data is fresh (rebuilt every turn when enemy moves)
-
         var cell = null
-        // Find cell in damage map
+        
         for (var dmCell in this.damageMap) {
             if (dmCell._id == cellId) {
                 cell = dmCell
@@ -384,25 +332,19 @@ class FieldMap extends FieldMapPatterns {
             }
         }
 
-        if (cell == null) return null  // Cell not in damage map (no attacks possible)
+        if (cell == null) return null  
 
-        // Use pre-calculated damage from field map
-        // This is the damage per-use, already accounting for shields/resistances
         var baseDamage = cell._weaponDamage + cell._chipDamage
 
-        if (baseDamage <= 0) return null  // No damage possible from this cell
+        if (baseDamage <= 0) return null  
 
-        // Estimate maximum damage with available TP
-        // Heuristic: Average weapon use costs ~6 TP, can use ~3 times with 25 TP
-        // This is a conservative estimate (actual may be higher with multi-weapon combos)
         var avgTPPerUse = 6.0
         var estimatedUses = floor(availableTP / avgTPPerUse)
         if (estimatedUses < 1) estimatedUses = 1
-        if (estimatedUses > 4) estimatedUses = 4  // Cap at 4 uses (realistic max)
+        if (estimatedUses > 4) estimatedUses = 4  
 
         var estimatedMaxDamage = baseDamage * estimatedUses
 
-        // Calculate kill probability
         var targetHP = target._currHealth
         var killProbability = (targetHP > 0) ? (estimatedMaxDamage / targetHP) : 0.0
 
@@ -413,8 +355,6 @@ class FieldMap extends FieldMapPatterns {
         ]
     }
 
-    // Get the best OTKO cell (highest kill probability)
-    // Returns Cell object or null if no OTKO cells available
     getBestOTKOCell() {
         var bestCell = null
         var bestKillProb = 0
@@ -426,11 +366,9 @@ class FieldMap extends FieldMapPatterns {
             }
         }
 
-        return bestCell  // Returns cell with highest kill probability
+        return bestCell  
     }
 
-    // Get all OTKO cells (for movement prioritization)
-    // Returns array of Cell objects
     getAllOTKOCells() {
         var otkoCells = []
 
@@ -443,16 +381,9 @@ class FieldMap extends FieldMapPatterns {
         return otkoCells
     }
 
-    // ====================================================================
-    // ENEMY THREAT MAP SYSTEM (Week 2)
-    // ====================================================================
-
-    // Build threat map considering enemy movement + attack ranges
-    // Shows maximum damage player could take at each cell this turn
     buildEnemyThreatMap() {
         var currentTurn = getTurn()
 
-        // Check cache validity (invalidate if turn changed or enemies moved)
         var cacheValid = (this._threatMapCacheTurn == currentTurn)
         if (cacheValid) {
             var enemies = this.getEnemySubMap()
@@ -476,7 +407,6 @@ class FieldMap extends FieldMapPatterns {
             return
         }
 
-        // Rebuild threat map
         debug("[THREAT-MAP] Building new threat map for turn " + currentTurn)
         mapClear(this.enemyThreatMap)
         mapClear(this._threatMapCacheEnemyPositions)
@@ -489,7 +419,6 @@ class FieldMap extends FieldMapPatterns {
             return
         }
 
-        // PERFORMANCE: Skip threat map if total enemy MP is very high (too expensive)
         var totalEnemyMP = 0
         for (var eid in mapKeys(enemies)) {
             var enemy = enemies[eid]
@@ -505,7 +434,6 @@ class FieldMap extends FieldMapPatterns {
             var enemy = enemies[eid]
             if (isDead(eid)) continue
 
-            // Cache enemy position for validation
             this._threatMapCacheEnemyPositions[eid] = enemy._cellPos
 
             this.addEnemyThreatToMap(enemy)
@@ -517,8 +445,6 @@ class FieldMap extends FieldMapPatterns {
         debug("[THREAT-MAP] Complete. " + threatenedCells + " cells threatened by " + enemyCount + " enemies")
     }
 
-    // Add single enemy's threat to map (movement + attack ranges)
-    // OPTIMIZED: Use simplified calculation to avoid operations limit
     addEnemyThreatToMap(enemy) {
         var enemyPos = enemy._cellPos
         var enemyMP = enemy._currMp
@@ -528,22 +454,16 @@ class FieldMap extends FieldMapPatterns {
 
         var totalThreats = 0
 
-        // OPTIMIZED: Calculate threat from CURRENT position with extended weapon ranges
-        // Instead of calculating from ALL movement positions (too expensive)
-        // We extend weapon max range by enemy MP (approximates "move then shoot")
         for (var j = 0; j < count(enemyWeapons); j++) {
             var weaponId = enemyWeapons[j]
             var minRange = getWeaponMinRange(weaponId)
-            var maxRange = getWeaponMaxRange(weaponId) + enemyMP  // Extend by movement range
+            var maxRange = getWeaponMaxRange(weaponId) + enemyMP  
             var area = getWeaponArea(weaponId)
 
-            // Estimate damage for this weapon
             var damage = this.estimateEnemyWeaponDamage(weaponId, enemy)
 
-            // Cap search radius to avoid excessive operations
             var searchRadius = min(maxRange, 10)
 
-            // Check cells in extended weapon range
             for (var dx = -searchRadius; dx <= searchRadius; dx++) {
                 for (var dy = -searchRadius; dy <= searchRadius; dy++) {
                     var cellId = enemyPos + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
@@ -552,17 +472,12 @@ class FieldMap extends FieldMapPatterns {
                     var dist = getCellDistance(enemyPos, cellId)
                     if (dist == null || dist > maxRange) continue
 
-                    // Skip cells too close (enemy would need to back up first)
                     if (dist < minRange && dist < enemyMP) continue
-
-                    // For laser weapons, approximate LOS (skip detailed check to save ops)
-                    // For circle weapons, assume can hit if in range
 
                     if (!mapContainsKey(this.enemyThreatMap, cellId)) {
                         this.enemyThreatMap[cellId] = 0
                     }
 
-                    // Use MAX threat (enemy will position for best shot)
                     if (damage > this.enemyThreatMap[cellId]) {
                         this.enemyThreatMap[cellId] = damage
                         totalThreats++
@@ -574,14 +489,11 @@ class FieldMap extends FieldMapPatterns {
         debug("[THREAT-MAP]   Added " + totalThreats + " threat markers for " + getName(enemy._id))
     }
 
-    // Get all cells reachable within MP budget
     getReachableCellsWithinMP(startCell, maxMP) {
         var reachable = []
 
-        // Use radius search for candidates (faster than exhaustive)
-        var radius = min(maxMP, 8)  // Cap at 8 to avoid huge searches
+        var radius = min(maxMP, 8)  
 
-        // Manual radius iteration (getCellsInRadius doesn't exist in LS4)
         for (var dx = -radius; dx <= radius; dx++) {
             for (var dy = -radius; dy <= radius; dy++) {
                 var dist = abs(dx) + abs(dy)
@@ -601,16 +513,13 @@ class FieldMap extends FieldMapPatterns {
         return reachable
     }
 
-    // Get all cells attackable from a position with a specific weapon
     getCellsInWeaponRange(fromCell, weaponId, enemy) {
         var cells = []
 
-        // Get weapon info
         var minRange = getWeaponMinRange(weaponId)
         var maxRange = getWeaponMaxRange(weaponId)
         var area = getWeaponArea(weaponId)
 
-        // Manual radius iteration (getCellsInRadius doesn't exist in LS4)
         for (var dx = -maxRange; dx <= maxRange; dx++) {
             for (var dy = -maxRange; dy <= maxRange; dy++) {
                 var cellId = fromCell + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
@@ -619,13 +528,9 @@ class FieldMap extends FieldMapPatterns {
                 var dist = getCellDistance(fromCell, cellId)
                 if (dist == null || dist < minRange || dist > maxRange) continue
 
-                // Check line of sight for line weapons
                 if (area == AREA_LASER_LINE) {
                     if (!lineOfSight(fromCell, cellId)) continue
                 }
-
-                // Check alignment for circle weapons (simplified - assume can hit)
-                // Complex AoE validation would be expensive
 
                 push(cells, cellId)
             }
@@ -634,14 +539,12 @@ class FieldMap extends FieldMapPatterns {
         return cells
     }
 
-    // Estimate enemy weapon damage (conservative assumption)
     estimateEnemyWeaponDamage(weaponId, enemy) {
-        // Get weapon effects to extract damage range
+        
         var effects = getWeaponEffects(weaponId)
         var minDmg = 0
         var maxDmg = 0
 
-        // Find EFFECT_DAMAGE in effects array
         for (var i = 0; i < count(effects); i++) {
             var effect = effects[i]
             if (effect[0] == EFFECT_DAMAGE) {
@@ -653,40 +556,34 @@ class FieldMap extends FieldMapPatterns {
 
         var baseDmg = (minDmg + maxDmg) / 2
 
-        // Check if enemy stats are available
         var enemyStr = enemy._strength
         var enemyMag = enemy._magic
         var enemyWis = enemy._wisdom
 
-        // If stats available, estimate scaled damage
         if (enemyStr != null && enemyStr > 0) {
-            // Strength weapon (simplified scaling)
+            
             var scaledDmg = baseDmg * (1 + enemyStr / 100)
             return scaledDmg
         } else if (enemyMag != null && enemyMag > 0) {
-            // Magic weapon (simplified scaling)
+            
             var scaledDmg = baseDmg * (1 + enemyMag / 100)
             return scaledDmg
         }
 
-        // Conservative fallback: assume 600 in primary stat (7x multiplier)
         return baseDmg * 7
     }
 
-    // Get threat level at a specific cell
     getThreatAtCell(cellId) {
         if (mapContainsKey(this.enemyThreatMap, cellId)) {
             return this.enemyThreatMap[cellId]
         }
-        return 0  // No threat = safe
+        return 0  
     }
 
-    // Find cells with zero or low threat
     getSafeCells(maxMP, maxThreat = 0) {
         var safe = []
         var playerPos = player._cellPos
 
-        // Only check reachable cells (performance optimization)
         var candidates = this.getReachableCellsWithinMP(playerPos, maxMP)
 
         for (var i = 0; i < count(candidates); i++) {
@@ -702,21 +599,15 @@ class FieldMap extends FieldMapPatterns {
         return safe
     }
 
-    // Find best waypoint toward a target cell (multi-turn movement planning)
-    // Returns cell that: gets us closer to target, is reachable, has acceptable threat
-    // OPTIMIZED: Only check damage map cells (pre-calculated optimal positions)
     findSafeWaypointToward(targetCell, maxMP, maxThreat = 200) {
         var playerPos = player._cellPos
         var bestWaypoint = -1
         var bestScore = -99999
 
-        // Cache distance calculations
         var currentDist = getCellDistance(playerPos, targetCell)
         var checked = 0
-        var limit = 50  // Performance: check max 50 cells
+        var limit = 50  
 
-        // OPTIMIZATION: Only check cells from damage map (pre-calculated positions)
-        // This reduces search from ~300 cells to ~30 cells
         for (var cellId in mapKeys(this.damageMap)) {
             if (checked >= limit) break
             checked++
@@ -724,18 +615,14 @@ class FieldMap extends FieldMapPatterns {
             var pathLen = getCachedPathLength(playerPos, cellId)
             if (pathLen == null || pathLen > maxMP) continue
 
-            // Check threat level
             var threat = this.getThreatAtCell(cellId)
             if (threat > maxThreat) continue
 
-            // Calculate progress toward target (negative = closer)
             var newDist = getCellDistance(cellId, targetCell)
-            var progress = currentDist - newDist  // Positive = moving closer
+            var progress = currentDist - newDist  
 
-            // Skip if not making progress
             if (progress <= 0) continue
 
-            // Score: prioritize progress, penalize threat, prefer closer waypoints
             var score = progress * 100 - threat * 0.5 - pathLen * 5
 
             if (score > bestScore) {
@@ -753,7 +640,6 @@ class FieldMap extends FieldMapPatterns {
         return bestWaypoint
     }
 
-    // Find best tactical cell (high damage, low threat)
     findBestTacticalCell(maxMP, threatWeight = 0.5) {
         var best = -1
         var bestScore = -99999
@@ -768,9 +654,6 @@ class FieldMap extends FieldMapPatterns {
             var ourDamage = cell._totalDamage
             var threat = this.getThreatAtCell(cell._id)
 
-            // Score = our damage - (threat * weight)
-            // Note: ourDamage naturally includes multi-enemy AoE value (sum of all enemies hit)
-            // threatWeight: 0 = ignore threat, 1 = equal weight
             var score = ourDamage - (threat * threatWeight)
 
             if (score > bestScore) {
@@ -788,7 +671,6 @@ class FieldMap extends FieldMapPatterns {
         return best
     }
 
-    // Wrapper for compatibility - calls findHideAndSeekCell in defensive mode
     getHideAndSeekCell() {
         var result = this.findHideAndSeekCell("defensive")
         if (result != null) {

@@ -1,30 +1,17 @@
-/**
- * PiecewiseFunction.lk - Piecewise polynomial functions for probability densities
- *
- * Represents a function defined by polynomial pieces over intervals
- * Each piece has a polynomial and a domain [min, max]
- */
 
 include('polynomial.lk');
 
 class PiecewiseFunction {
-    // Array of pieces: {poly: Polynomial, min: number, max: number}
+    
     pieces = []
 
-    /**
-     * Constructor
-     * @param pieces - array of {poly: Polynomial, min: number, max: number}
-     */
     constructor(pieces) {
         this.pieces = pieces;
         this._sortPieces();
     }
 
-    /**
-     * Sort pieces by min value
-     */
     _sortPieces() {
-        // Simple bubble sort
+        
         for (var i = 0; i < count(this.pieces) - 1; i++) {
             for (var j = 0; j < count(this.pieces) - i - 1; j++) {
                 if (this.pieces[j]["min"] > this.pieces[j + 1]["min"]) {
@@ -36,9 +23,6 @@ class PiecewiseFunction {
         }
     }
 
-    /**
-     * Get all breakpoints (where pieces change)
-     */
     getBreakpoints() {
         var points = [];
         for (var i = 0; i < count(this.pieces); i++) {
@@ -52,9 +36,6 @@ class PiecewiseFunction {
         return sort(points);
     }
 
-    /**
-     * Get domain of the function
-     */
     getDomain() {
         if (count(this.pieces) == 0) {
             return {min: 0, max: 0};
@@ -71,9 +52,6 @@ class PiecewiseFunction {
         return {min: minVal, max: maxVal};
     }
 
-    /**
-     * Evaluate function at point x
-     */
     evaluate(x) {
         for (var i = 0; i < count(this.pieces); i++) {
             var piece = this.pieces[i];
@@ -81,15 +59,11 @@ class PiecewiseFunction {
                 return piece["poly"].evaluate(x);
             }
         }
-        return 0; // Outside all domains
+        return 0; 
     }
 
-    /**
-     * Add two piecewise functions
-     * Result has breakpoints at union of both functions' breakpoints
-     */
     add(other) {
-        // Get all unique breakpoints from both functions
+        
         var allBreaks = [];
         var myBreaks = this.getBreakpoints();
         var otherBreaks = other.getBreakpoints();
@@ -107,14 +81,12 @@ class PiecewiseFunction {
 
         allBreaks = sort(allBreaks);
 
-        // For each interval between breakpoints, add the polynomials
         var newPieces = [];
         for (var i = 0; i < count(allBreaks) - 1; i++) {
             var intervalMin = allBreaks[i];
             var intervalMax = allBreaks[i + 1];
             var midpoint = (intervalMin + intervalMax) / 2;
 
-            // Get polynomials valid at midpoint
             var poly1 = this._getPolynomialAt(midpoint);
             var poly2 = other._getPolynomialAt(midpoint);
 
@@ -143,9 +115,6 @@ class PiecewiseFunction {
         return new PiecewiseFunction(newPieces);
     }
 
-    /**
-     * Get polynomial valid at point x (or null if none)
-     */
     _getPolynomialAt(x) {
         for (var i = 0; i < count(this.pieces); i++) {
             var piece = this.pieces[i];
@@ -156,9 +125,6 @@ class PiecewiseFunction {
         return null;
     }
 
-    /**
-     * Multiply by constant
-     */
     multiplyByConstant(k) {
         var newPieces = [];
         for (var i = 0; i < count(this.pieces); i++) {
@@ -172,28 +138,21 @@ class PiecewiseFunction {
         return new PiecewiseFunction(newPieces);
     }
 
-    /**
-     * Calculate primitive (antiderivative)
-     * The primitive is continuous, so we need to adjust constants
-     */
     primitive() {
         if (count(this.pieces) == 0) {
             return PiecewiseFunctionZero();
         }
 
         var newPieces = [];
-        var accumulatedValue = 0; // Running total at breakpoints
+        var accumulatedValue = 0; 
 
         for (var i = 0; i < count(this.pieces); i++) {
             var piece = this.pieces[i];
 
-            // Get primitive with constant 0
             var primitivePoly = piece["poly"].primitive(0);
 
-            // Calculate value at start of interval
             var valueAtStart = primitivePoly.evaluate(piece["min"]);
 
-            // Adjust constant so primitive is continuous
             var adjustedConstant = accumulatedValue - valueAtStart;
             primitivePoly = piece["poly"].primitive(adjustedConstant);
 
@@ -203,24 +162,17 @@ class PiecewiseFunction {
                 max: piece["max"]
             });
 
-            // Update accumulated value for next piece
             accumulatedValue = primitivePoly.evaluate(piece["max"]);
         }
 
         return new PiecewiseFunction(newPieces);
     }
 
-    /**
-     * Integrate from a to b
-     */
     integrate(a, b) {
         var F = this.primitive();
         return F.evaluate(b) - F.evaluate(a);
     }
 
-    /**
-     * Translate function by offset: f(x) -> f(x - offset)
-     */
     translate(offset) {
         var newPieces = [];
         for (var i = 0; i < count(this.pieces); i++) {
@@ -234,16 +186,10 @@ class PiecewiseFunction {
         return new PiecewiseFunction(newPieces);
     }
 
-    /**
-     * Get pieces array (for debugging/inspection)
-     */
     getPieces() {
         return this.pieces;
     }
 
-    /**
-     * String representation for debugging
-     */
     toString() {
         if (count(this.pieces) == 0) {
             return "Empty piecewise function";
@@ -259,11 +205,6 @@ class PiecewiseFunction {
     }
 }
 
-// Global factory functions (replaces static methods)
-
-/**
- * Create constant piecewise function over a domain
- */
 function PiecewiseFunctionConstant(value, minDomain, maxDomain) {
     var poly = PolynomialConstant(value);
     return new PiecewiseFunction([{
@@ -273,10 +214,6 @@ function PiecewiseFunctionConstant(value, minDomain, maxDomain) {
     }]);
 }
 
-/**
- * Create rectangle (créneau) function - uniform density
- * Height is automatically 1 / (max - min) to make integral = 1
- */
 function PiecewiseFunctionRectangle(min, max) {
     var height = 1.0 / (max - min);
     var poly = PolynomialConstant(height);
@@ -287,9 +224,6 @@ function PiecewiseFunctionRectangle(min, max) {
     }]);
 }
 
-/**
- * Create zero function
- */
 function PiecewiseFunctionZero() {
     return new PiecewiseFunction([]);
 }

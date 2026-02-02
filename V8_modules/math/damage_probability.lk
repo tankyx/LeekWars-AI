@@ -1,45 +1,23 @@
-/**
- * DamageProbability.lk - Integration layer between probability system and Arsenal
- *
- * Provides high-level functions to calculate damage probability distributions
- * for weapons, chips, and combos in LeekWars
- *
- * NOTE: All functions are global (LeekScript 4 does not support static methods)
- */
 
 include('polynomial.lk');
 include('piecewise_function.lk');
 include('probability_distribution.lk');
 
-/**
- * Calculate probability distribution for a single item (weapon or chip)
- * @param itemId - weapon or chip constant
- * @param playerStr - player strength stat
- * @param playerMag - player magic stat
- * @param playerWis - player wisdom stat
- * @param targetAbsArmor - target's absolute armor
- * @param targetRelArmor - target's relative armor (percentage)
- * @param playerAgility - player agility (for crit chance)
- * @param arsenal - Arsenal instance for damage calculations
- */
 function DamageProbabilityGetItemDistribution(itemId, playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal) {
-    // Get base damage range from arsenal
+    
     var breakdown = arsenal.getDamageBreakdown(playerStr, playerMag, playerWis, itemId);
     var minDmg = breakdown["min"];
     var maxDmg = breakdown["max"];
 
-    // Check if fixed damage item
     var isFixed = (minDmg == maxDmg);
 
-    // Calculate critical hit probability
     var critProb = 0;
     if (playerAgility != null && playerAgility > 0) {
-        critProb = min(playerAgility / 1000.0, 1.0); // Cap at 100%
+        critProb = min(playerAgility / 1000.0, 1.0); 
     }
 
     var distribution = null;
 
-    // Create base distribution
     if (isFixed) {
         if (critProb > 0) {
             distribution = ProbabilityDistributionFromFixedDamageWithCrit(minDmg, critProb, 1.3);
@@ -54,7 +32,6 @@ function DamageProbabilityGetItemDistribution(itemId, playerStr, playerMag, play
         }
     }
 
-    // Apply armor reductions
     if (targetRelArmor > 0) {
         distribution = distribution.applyRelativeArmor(targetRelArmor);
     }
@@ -66,23 +43,16 @@ function DamageProbabilityGetItemDistribution(itemId, playerStr, playerMag, play
     return distribution;
 }
 
-/**
- * Calculate probability distribution for a combo of items
- * @param itemIds - array of weapon/chip IDs to use in sequence
- * @param playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal - same as above
- */
 function DamageProbabilityGetComboDistribution(itemIds, playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal) {
     if (count(itemIds) == 0) {
         return ProbabilityDistributionFromFixedDamage(0);
     }
 
-    // Start with first item
     var distribution = DamageProbabilityGetItemDistribution(
         itemIds[0], playerStr, playerMag, playerWis,
         targetAbsArmor, targetRelArmor, playerAgility, arsenal
     );
 
-    // Convolve with each additional item
     for (var i = 1; i < count(itemIds); i++) {
         var itemDist = DamageProbabilityGetItemDistribution(
             itemIds[i], playerStr, playerMag, playerWis,
@@ -95,18 +65,11 @@ function DamageProbabilityGetComboDistribution(itemIds, playerStr, playerMag, pl
     return distribution;
 }
 
-/**
- * Calculate probability distribution for weapon spam
- * @param weaponId - weapon to spam
- * @param numUses - number of times to use weapon
- * @param other params - same as getItemDistribution
- */
 function DamageProbabilityGetWeaponSpamDistribution(weaponId, numUses, playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal) {
     if (numUses <= 0) {
         return ProbabilityDistributionFromFixedDamage(0);
     }
 
-    // Build array of weapon IDs
     var itemIds = [];
     for (var i = 0; i < numUses; i++) {
         push(itemIds, weaponId);
@@ -118,13 +81,6 @@ function DamageProbabilityGetWeaponSpamDistribution(weaponId, numUses, playerStr
     );
 }
 
-/**
- * Calculate kill probability for a combo
- * @param itemIds - array of items to use
- * @param targetCurrentHP - target's current HP
- * @param other params - same as above
- * @return probability (0 to 1) that combo will kill target
- */
 function DamageProbabilityGetKillProbability(itemIds, targetCurrentHP, playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal) {
     var distribution = DamageProbabilityGetComboDistribution(
         itemIds, playerStr, playerMag, playerWis,
@@ -134,13 +90,6 @@ function DamageProbabilityGetKillProbability(itemIds, targetCurrentHP, playerStr
     return distribution.getProbabilityAtLeast(targetCurrentHP);
 }
 
-/**
- * Calculate probability of dealing damage in a range
- * @param itemIds - array of items
- * @param minDamage - minimum damage (inclusive, after rounding)
- * @param maxDamage - maximum damage (inclusive, after rounding)
- * @param other params - same as above
- */
 function DamageProbabilityGetProbabilityInRange(itemIds, minDamage, maxDamage, playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal) {
     var distribution = DamageProbabilityGetComboDistribution(
         itemIds, playerStr, playerMag, playerWis,
@@ -150,29 +99,22 @@ function DamageProbabilityGetProbabilityInRange(itemIds, minDamage, maxDamage, p
     return distribution.getProbabilityBetween(minDamage, maxDamage);
 }
 
-/**
- * Find minimum guaranteed damage from a combo
- * Returns damage value that has 100% probability (or very close)
- */
 function DamageProbabilityGetMinimumGuaranteedDamage(itemIds, playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal) {
     var distribution = DamageProbabilityGetComboDistribution(
         itemIds, playerStr, playerMag, playerWis,
         targetAbsArmor, targetRelArmor, playerAgility, arsenal
     );
 
-    // Get domain of distribution
     var atoms = distribution.getAtoms();
     var density = distribution.getDensity();
     var domain = density.getDomain();
 
     var minPossible = 9999999;
 
-    // Check atoms
     for (var i = 0; i < count(atoms); i++) {
         minPossible = min(minPossible, atoms[i]["value"]);
     }
 
-    // Check density domain
     if (count(density.getPieces()) > 0) {
         minPossible = min(minPossible, domain["min"]);
     }
@@ -180,9 +122,6 @@ function DamageProbabilityGetMinimumGuaranteedDamage(itemIds, playerStr, playerM
     return floor(minPossible);
 }
 
-/**
- * Find maximum possible damage from a combo
- */
 function DamageProbabilityGetMaximumPossibleDamage(itemIds, playerStr, playerMag, playerWis, targetAbsArmor, targetRelArmor, playerAgility, arsenal) {
     var distribution = DamageProbabilityGetComboDistribution(
         itemIds, playerStr, playerMag, playerWis,
@@ -195,12 +134,10 @@ function DamageProbabilityGetMaximumPossibleDamage(itemIds, playerStr, playerMag
 
     var maxPossible = 0;
 
-    // Check atoms
     for (var i = 0; i < count(atoms); i++) {
         maxPossible = max(maxPossible, atoms[i]["value"]);
     }
 
-    // Check density domain
     if (count(density.getPieces()) > 0) {
         maxPossible = max(maxPossible, domain["max"]);
     }
@@ -208,9 +145,6 @@ function DamageProbabilityGetMaximumPossibleDamage(itemIds, playerStr, playerMag
     return ceil(maxPossible);
 }
 
-/**
- * Get distribution summary for debugging
- */
 function DamageProbabilityGetDistributionSummary(distribution) {
     var summary = "";
 

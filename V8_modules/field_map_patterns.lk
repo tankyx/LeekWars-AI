@@ -1,17 +1,12 @@
 include('field_map_core.lk')
 
-// ====================================================================
-// FIELD MAP - PATTERNS (Hit Calculation & Damage Map Building)
-// ====================================================================
-
 class FieldMapPatterns extends FieldMapCore {
     damageMap = [:]
-    weaponHitmap = [:]  // Map of weaponId -> array of shooter cells
-    chipHitmap = [:]    // Map of chipId -> array of shooter cells
+    weaponHitmap = [:]  
+    chipHitmap = [:]    
 
-    // Damage map caching system
-    _damageMapCache = [:]        // Cached damage map
-    _lastCacheKey = ""           // Cache key: "enemyID_cellPos"
+    _damageMapCache = [:]        
+    _lastCacheKey = ""           
 
     private static x_offset = 18
     private static y_offset = 17
@@ -24,10 +19,6 @@ class FieldMapPatterns extends FieldMapCore {
     constructor() {
         super()
     }
-
-    // ====================================================================
-    // PATTERN CALCULATION (Line, Diagonal, Star, Circle)
-    // ====================================================================
 
     getLineHits(hitCells, cell, minR, maxR, aoeType, weapon=null, chip=null) {
         var curCell = cell
@@ -42,13 +33,13 @@ class FieldMapPatterns extends FieldMapCore {
                 } else if (dir == 3) {
                     curCell = cell - x_offset * dist
                 }
-                // Verify actual game distance matches expected range
+                
                 var actualDist = getCellDistance(cell, curCell)
                 if (actualDist == null || actualDist < minR || actualDist > maxR) continue
 
                 var _hasLOS = lineOfSight(cell, curCell)
                 if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
-                    // curCell = shooting position, cell = target (AoE center)
+                    
                     this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                 }
             }
@@ -69,13 +60,13 @@ class FieldMapPatterns extends FieldMapCore {
                 } else if (dir == 3) {
                     curCell = cell + up_left_offset * dist
                 }
-                // Verify actual game distance matches expected range
+                
                 var actualDist = getCellDistance(cell, curCell)
                 if (actualDist == null || actualDist < minR || actualDist > maxR) continue
 
                 var _hasLOS = lineOfSight(cell, curCell)
                 if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
-                    // curCell = shooting position, cell = target (AoE center)
+                    
                     this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                 }
             }
@@ -100,7 +91,7 @@ class FieldMapPatterns extends FieldMapCore {
                     var curCell = cell + FieldMapPatterns.x_offset * dx + FieldMapPatterns.y_offset * dy
                     var _hasLOS = lineOfSight(cell, curCell)
                     if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
-                        // curCell = shooting position, cell = target (AoE center)
+                        
                         this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                     }
                 }
@@ -109,24 +100,17 @@ class FieldMapPatterns extends FieldMapCore {
         return hitCells
     }
 
-    // ====================================================================
-    // OPTIMAL AIM CALCULATION
-    // ====================================================================
-
-    // Get cells to test as aim points (AoE-type aware)
     getAimCandidates(primaryTarget, aoeType, itemRange) {
         var candidates = []
         var targetCell = primaryTarget._cellPos
 
-        // AREA_POINT: No alternatives (single-target)
         if (aoeType == AREA_POINT) {
             push(candidates, targetCell)
             return candidates
         }
 
-        // AREA_LASER_LINE: Test aiming at each enemy (line hits all between)
         if (aoeType == AREA_LASER_LINE) {
-            push(candidates, targetCell)  // Primary target
+            push(candidates, targetCell)  
             var enemies = this.getEnemySubMap()
             for (var e in mapValues(enemies)) {
                 if (e._cellPos != targetCell && !isDead(e._id)) {
@@ -136,28 +120,23 @@ class FieldMapPatterns extends FieldMapCore {
             return candidates
         }
 
-        // For all other AoE types: Test aim points around primary target
-        // Search radius based on AoE size
         var searchRadius = 1
         if (aoeType == AREA_CIRCLE_3 || aoeType == AREA_PLUS_3 ||
             aoeType == AREA_X_3 || aoeType == AREA_SQUARE_2) {
-            searchRadius = 2  // Larger AoEs benefit from wider search
+            searchRadius = 2  
         }
 
-        // Always include primary target
         push(candidates, targetCell)
 
-        // Add adjacent/nearby cells based on search radius
         for (var dx = -searchRadius; dx <= searchRadius; dx++) {
             for (var dy = -searchRadius; dy <= searchRadius; dy++) {
-                if (dx == 0 && dy == 0) continue  // Already added center
+                if (dx == 0 && dy == 0) continue  
                 var dist = abs(dx) + abs(dy)
                 if (dist > searchRadius) continue
 
                 var aimCell = targetCell + FieldMapPatterns.x_offset * dx +
                               FieldMapPatterns.y_offset * dy
 
-                // Validate aim cell
                 if (aimCell >= 0 && aimCell < FieldMapPatterns.board_cell_count &&
                     !isObstacle(aimCell)) {
                     push(candidates, aimCell)
@@ -168,12 +147,10 @@ class FieldMapPatterns extends FieldMapCore {
         return candidates
     }
 
-    // Find optimal aim point from shooterCell using item
-    // Returns: {aimCell, damage, enemies, hitCount}
     findOptimalAimPoint(shooterCell, item, isWeapon, primaryTarget) {
-        // OPTIMIZATION: Skip for non-AoE weapons (AREA_POINT) - no benefit from testing multiple aims
+        
         if (item._aoeType == AREA_POINT) {
-            // Direct calculation - no aim optimization needed
+            
             var enemies = this.getEnemySubMap()
             var enemiesArray = mapValues(enemies)
             var result = arsenal.calculateMultiEnemyDamage(shooterCell, primaryTarget._cellPos, item._id, enemiesArray)
@@ -193,7 +170,6 @@ class FieldMapPatterns extends FieldMapCore {
         var enemiesArray = mapValues(enemies)
         var itemId = item._id
 
-        // Get aim candidates based on AoE type
         var aimCandidates = this.getAimCandidates(primaryTarget, item._aoeType, item._maxRange)
 
         var bestAimCell = primaryTarget._cellPos
@@ -202,12 +178,11 @@ class FieldMapPatterns extends FieldMapCore {
         var bestHitCount = 0
 
         for (var aimCell in aimCandidates) {
-            // Validate aim point is in range and has LOS
+            
             var dist = getCellDistance(shooterCell, aimCell)
             if (dist == null || dist < item._minRange || dist > item._maxRange) continue
             if (!lineOfSight(shooterCell, aimCell)) continue
 
-            // Calculate total multi-enemy damage for this aim point
             var result = arsenal.calculateMultiEnemyDamage(
                 shooterCell, aimCell, itemId, enemiesArray
             )
@@ -216,12 +191,10 @@ class FieldMapPatterns extends FieldMapCore {
             var hitEnemies = result['enemies']
             var hitCount = count(hitEnemies)
 
-            // Scale by max uses for weapons
             if (isWeapon) {
                 totalDamage *= item._maxUse
             }
 
-            // Prefer higher damage, tie-break by hit count, then closer to primary target
             var isBetter = false
             if (totalDamage > bestDamage) {
                 isBetter = true
@@ -250,10 +223,6 @@ class FieldMapPatterns extends FieldMapCore {
             'hitCount': bestHitCount
         ]
     }
-
-    // ====================================================================
-    // HIT MAP BUILDING
-    // ====================================================================
 
     buildSingleItemHitMap(localMap, oppCell, item, isWeapon) {
         if (!this.isDamageItem(item)) {
@@ -325,26 +294,22 @@ class FieldMapPatterns extends FieldMapCore {
     }
 
     buildHitMap(oppCell) {
-        // Cache key: enemyID_cellPosition
+        
         var enemyId = getEntityOnCell(oppCell)
         if (enemyId == null) enemyId = -1
         var cacheKey = enemyId + "_" + oppCell
 
-        // Return cached damage map if valid
         if (this._lastCacheKey == cacheKey && this._lastCacheKey != "") {
             this.damageMap = this._damageMapCache
             debug("[CACHE] Using cached damage map for enemy " + enemyId + " at cell " + oppCell)
             return this.damageMap
         }
 
-        // Build new damage map
         clearMarks()
         mapClear(this.damageMap)
 
-        // Weapons - integrate directly into global damageMap
         this.integrateEquippedItemsIntoDamageMap(oppCell)
 
-        // Summary diagnostics
         var chipCells = []
         var weaponOnlyCells = []
         for (var dmCell in this.damageMap) {
@@ -353,7 +318,6 @@ class FieldMapPatterns extends FieldMapCore {
         }
         debug("[HITMAP][SUMMARY] chipCells=" + chipCells + " weaponOnlyCellsSample=" + (count(weaponOnlyCells) > 0 ? weaponOnlyCells : []))
 
-        // Multi-hit detection logging
         var multiHitCells = []
         for (var cell in this.damageMap) {
             if (cell._enemiesHitCount >= 2) {
@@ -369,8 +333,6 @@ class FieldMapPatterns extends FieldMapCore {
             debug("[MULTI-HIT] No multi-enemy AoE opportunities detected")
         }
 
-        // OTKO CELL MARKING: Calculate burst damage from reachable cells
-        // Only run if we have a valid target entity
         var target = null
         var enemies = fieldMap.getEnemySubMap()
         for (var e in mapValues(enemies)) {
@@ -380,19 +342,14 @@ class FieldMapPatterns extends FieldMapCore {
             }
         }
 
-        // Update target entity to get current HP (critical for OTKO detection)
         if (target != null) {
             target.updateEntity()
         }
 
-        // OTKO CELL MARKING - OPTIMIZED (reuses field map data, ~10-20K ops)
-        // Only runs when enemy HP < 70% and we have sufficient TP
-        var enableOTKOCells = true  // Re-enabled with optimizations
+        var enableOTKOCells = true  
         if (enableOTKOCells && target != null && player._currTp >= 10 && target._currHealth < (target._maxHealth * 0.7)) {
             var playerTP = player._currTp
 
-            // OPTIMIZATION 1: Limit to top 20 damage map cells (already have good damage potential)
-            // Field map cells are already sorted by usefulness (high damage cells first)
             var candidateCells = []
             for (var dmCell in this.damageMap) {
                 push(candidateCells, dmCell)
@@ -400,18 +357,13 @@ class FieldMapPatterns extends FieldMapCore {
 
             var otkoCount = 0
             var cellsChecked = 0
-            var cellsLimit = min(count(candidateCells), 20)  // Check top 20 instead of 50
-            var maxOTKOCells = 5  // Early exit after finding 5 OTKO cells
+            var cellsLimit = min(count(candidateCells), 20)  
+            var maxOTKOCells = 5  
 
-            // OPTIMIZATION 2: Skip distance sorting (expensive 2500 getCellDistance calls)
-            // Damage map cells are already in useful order
-
-            // Check cells for OTKO opportunities
             for (var idx = 0; idx < cellsLimit && idx < count(candidateCells); idx++) {
                 var cell = candidateCells[idx]
                 cellsChecked++
 
-                // Calculate burst damage from this position (optimized: uses field map data)
                 var burstInfo = fieldMap.calculateBurstDamageFromCell(cell._id, target, playerTP)
                 if (burstInfo == null) continue
 
@@ -419,7 +371,6 @@ class FieldMapPatterns extends FieldMapCore {
                 var tpRequired = burstInfo['tpRequired']
                 var killProb = burstInfo['killProbability']
 
-                // Mark as OTKO cell if kill probability >= 85%
                 if (killProb >= 0.85) {
                     cell._isOTKOCell = true
                     cell._otkoDamage = damage
@@ -427,14 +378,12 @@ class FieldMapPatterns extends FieldMapCore {
                     cell._otkoTPRequired = tpRequired
                     otkoCount++
 
-                    // OPTIMIZATION 3: Visual marking only for first 3 cells (reduce mark() overhead)
                     if (otkoCount <= 3) {
                         var goldColor = getColor(255, 215, 0)
                         mark(cell._id, goldColor, 3)
                         markText(cell._id, "OTKO", goldColor, 2)
                     }
 
-                    // OPTIMIZATION 4: Early exit after finding 5 OTKO cells
                     if (otkoCount >= maxOTKOCells) {
                         break
                     }
@@ -448,7 +397,6 @@ class FieldMapPatterns extends FieldMapCore {
             }
         }
 
-        // Cache the new damage map
         this._damageMapCache = this.damageMap
         this._lastCacheKey = cacheKey
         debug("[CACHE] Cached damage map for " + cacheKey)
@@ -456,9 +404,8 @@ class FieldMapPatterns extends FieldMapCore {
         return this.damageMap
     }
 
-    // Integrate all equipped weapons and chips
     integrateEquippedItemsIntoDamageMap(oppCell) {
-        // Weapons
+        
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
             var wObj = arsenal.playerEquippedWeapons[wid]
             var localWeaponMap = [:]
@@ -469,10 +416,10 @@ class FieldMapPatterns extends FieldMapCore {
                 this.updateHitCells(this.damageMap, cellRef._id, wObj, null, oppCell)
                 push(listIDs, cellRef._id)
             }
-            this.weaponHitmap[wObj._id] = listIDs  // Store for scenario validation
+            this.weaponHitmap[wObj._id] = listIDs  
             debug("[HITMAP][WEAPON] " + getWeaponName(wObj._id) + " shooterCells=" + listIDs)
         }
-        // Chips
+        
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
             var localChipMap = [:]
@@ -484,17 +431,11 @@ class FieldMapPatterns extends FieldMapCore {
                 this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj, oppCell)
                 push(listCID, cellRef2._id)
             }
-            this.chipHitmap[chipObj._id] = listCID  // Store for scenario validation
+            this.chipHitmap[chipObj._id] = listCID  
             debug("[HITMAP][CHIP] " + getChipName(chipObj._id) + " shooterCells=" + listCID)
         }
     }
 
-    // ====================================================================
-    // HIT CELL UPDATING (AoE-aware damage calculation)
-    // ====================================================================
-
-    // curCell: shooting position, targetCell: aim point (AoE center)
-    // MULTI-ENEMY AWARE: Calculates total damage across ALL enemies in AoE
     updateHitCells(hitCells, curCell, weapon=null, chip=null, targetCell=-1) {
         if (weapon == null && chip == null) {
             return hitCells
@@ -503,7 +444,6 @@ class FieldMapPatterns extends FieldMapCore {
         var item = weapon != null ? weapon : chip
         var itemId = item._id
 
-        // Get primary target entity
         var target = null
         var enemies = fieldMap.getEnemySubMap()
         for (var e in mapValues(enemies)) {
@@ -512,16 +452,14 @@ class FieldMapPatterns extends FieldMapCore {
                 break
             }
         }
-        if (target == null) target = mapValues(enemies)[0]  // Fallback to first enemy
+        if (target == null) target = mapValues(enemies)[0]  
 
-        // NEW: Find optimal aim point (tests multiple aim positions)
         var optimalAim = this.findOptimalAimPoint(curCell, item, weapon != null, target)
         var optimalAimCell = optimalAim['aimCell']
         var totalDamage = optimalAim['damage']
         var hitEnemies = optimalAim['enemies']
         var enemyCount = optimalAim['hitCount']
 
-        // Log optimal aim if different from direct aim
         if (optimalAimCell != targetCell) {
             debug("[OPTIMAL-AIM] Cell " + curCell + " " +
                   (weapon != null ? getWeaponName(itemId) : getChipName(itemId)) +
@@ -529,7 +467,6 @@ class FieldMapPatterns extends FieldMapCore {
                   " (damage: " + floor(totalDamage) + ", hits " + enemyCount + " enemies)")
         }
 
-        // Update or create cell entry
         if (mapContainsKey(hitCells, curCell)) {
             var cell = hitCells[curCell]
 
@@ -541,23 +478,22 @@ class FieldMapPatterns extends FieldMapCore {
                     cell._enemiesHit = hitEnemies
                     cell._enemiesHitCount = enemyCount
 
-                    // NEW: Store optimal aim point
                     mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
                 }
-                // Add to weapons list
+                
                 var already = false
                 for (var w in cell._weaponsList) {
                     if (w._id == weapon._id) { already = true; break }
                 }
                 if (!already) {
                     push(cell._weaponsList, weapon)
-                    // Store optimal aim for this weapon too
+                    
                     mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
                 }
             } else {
                 cell._chipDamage += totalDamage
                 cell._totalAoEDamage += totalDamage
-                // Merge hit enemies (avoid duplicates)
+                
                 for (var e in hitEnemies) {
                     var found = false
                     for (var existing in cell._enemiesHit) {
@@ -570,11 +506,10 @@ class FieldMapPatterns extends FieldMapCore {
                 }
                 push(cell._chipsList, chip)
 
-                // NEW: Store optimal aim point
                 mapPut(cell._chipOptimalAims, itemId, optimalAimCell)
             }
         } else {
-            // Create new cell
+            
             var newCell = new Cell(curCell, false, getEntityOnCell(curCell),
                                    weapon != null ? totalDamage : 0,
                                    chip != null ? totalDamage : 0,
@@ -585,19 +520,18 @@ class FieldMapPatterns extends FieldMapCore {
 
             if (weapon != null) {
                 push(newCell._weaponsList, weapon)
-                // NEW: Store optimal aim
+                
                 mapPut(newCell._weaponOptimalAims, itemId, optimalAimCell)
             }
             if (chip != null) {
                 push(newCell._chipsList, chip)
-                // NEW: Store optimal aim
+                
                 mapPut(newCell._chipOptimalAims, itemId, optimalAimCell)
             }
 
             mapPut(hitCells, curCell, newCell)
         }
 
-        // Recompute aggregate
         if (mapContainsKey(hitCells, curCell)) {
             var cellRef = hitCells[curCell]
             cellRef._totalDamage = cellRef._weaponDamage + cellRef._chipDamage
@@ -606,10 +540,6 @@ class FieldMapPatterns extends FieldMapCore {
         }
         return hitCells
     }
-
-    // ====================================================================
-    // DAMAGE CELL QUERIES
-    // ====================================================================
 
     getClosestHighestDmgHitCell() {
         var playerPos = player._cellPos
@@ -632,7 +562,6 @@ class FieldMapPatterns extends FieldMapCore {
             }
         }
 
-        // If unreachable this turn, check for reachable alternative
         if (closestCell != -1 && closestDist > player._currMp) {
             var potentialCell = this.getClosestHitCell()
             var dist = getCachedPathLength(playerPos, potentialCell._id)
@@ -706,7 +635,6 @@ class FieldMapPatterns extends FieldMapCore {
         return best
     }
 
-    // Weighted best cell (DoT vs direct damage)
     getBestWeightedDamageCell(dotWeight, directWeight) {
         var best = -1
         var bestScore = -1
@@ -720,7 +648,6 @@ class FieldMapPatterns extends FieldMapCore {
         return best
     }
 
-    // Get all cells where specific item is highest damage source
     getAllCellsForItem(item, isWeapon) {
         var result = []
         for (var c in this.damageMap) {
@@ -737,14 +664,12 @@ class FieldMapPatterns extends FieldMapCore {
         return result
     }
 
-    // Check if a specific cell can shoot with a specific weapon (uses hitmap)
     canShootFromCell(weaponId, cellId) {
         if (!mapContainsKey(this.weaponHitmap, weaponId)) return false
         var shooterCells = this.weaponHitmap[weaponId]
         return inArray(shooterCells, cellId)
     }
 
-    // Check if a specific cell can shoot with a specific chip (uses hitmap)
     canShootChipFromCell(chipId, cellId) {
         if (!mapContainsKey(this.chipHitmap, chipId)) return false
         var shooterCells = this.chipHitmap[chipId]

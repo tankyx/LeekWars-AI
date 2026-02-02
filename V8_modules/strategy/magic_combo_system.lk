@@ -1,17 +1,11 @@
-// ====================================================================
-// GRAPPLE-COVID COMBO SYSTEM
-// ====================================================================
-// High-damage burst combo: GRAPPLE → COVID → BOXING_GLOVE → (optional) BALL_AND_CHAIN
-// Total: 13-18 TP depending on BALL_AND_CHAIN availability
 
 class ComboSystem {
-    // Check if target is within COVID's natural range (0-2 cells)
+    
     static isWithinCovidRange(targetPos) {
         var dist = getCellDistance(player._cellPos, targetPos)
         return (dist != null && dist >= 0 && dist <= 2)
     }
 
-    // Find optimal cell for GRAPPLE-COVID combo (range 3-8, same line, LOS)
     static findGrappleCovidCell(target) {
         var bestCell = -1
         var bestScore = -1
@@ -21,16 +15,12 @@ class ComboSystem {
             var cell = reachableCells[i]
             var dist = getCellDistance(cell, target._cellPos)
 
-            // Must be in 3-8 range
             if (dist == null || dist < 3 || dist > 8) continue
 
-            // Must be on same line
             if (!isOnSameLine(cell, target._cellPos)) continue
 
-            // Must have line of sight
             if (!lineOfSight(cell, target._cellPos)) continue
 
-            // Score: prefer 5-6 range (middle of 3-8), closer to current position
             var rangeScore = 100 - abs(dist - 5.5) * 10
             var pathLen = getCachedPathLength(player._cellPos, cell)
             if (pathLen == null) continue
@@ -46,24 +36,20 @@ class ComboSystem {
         return bestCell
     }
 
-    // Check if GRAPPLE-COVID combo is available and viable
     static canUseGrappleCovidCombo(target) {
         var dist = getCellDistance(player._cellPos, target._cellPos)
         debug("[GRAPPLE-COVID][CHECK] Starting check: playerPos=" + player._cellPos + " targetPos=" + target._cellPos + " dist=" + dist + " TP=" + player._currTp)
 
-        // Must be 3-8 range
         if (dist == null || dist < 3 || dist > 8) {
             debug("[GRAPPLE-COVID][CHECK] FAIL: Distance out of range (need 3-8, got " + dist + ")")
             return false
         }
 
-        // Need minimum 13 TP for core combo
         if (player._currTp < 13) {
             debug("[GRAPPLE-COVID][CHECK] FAIL: Insufficient TP (need 13 minimum, have " + player._currTp + ")")
             return false
         }
 
-        // Check core chips equipped
         var hasGrapple = mapContainsKey(arsenal.playerEquippedChips, CHIP_GRAPPLE)
         var hasCovid = mapContainsKey(arsenal.playerEquippedChips, CHIP_COVID)
         var hasBoxing = mapContainsKey(arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)
@@ -74,7 +60,6 @@ class ComboSystem {
             return false
         }
 
-        // Check cooldowns
         var cdGrapple = getCooldown(CHIP_GRAPPLE, player._id)
         var cdCovid = getCooldown(CHIP_COVID, player._id)
         var cdBoxing = getCooldown(CHIP_BOXING_GLOVE, player._id)
@@ -85,7 +70,6 @@ class ComboSystem {
             return false
         }
 
-        // Must be on same line
         var sameLine = isOnSameLine(player._cellPos, target._cellPos)
         debug("[GRAPPLE-COVID][CHECK] Same line check: " + sameLine)
         if (!sameLine) {
@@ -93,7 +77,6 @@ class ComboSystem {
             return false
         }
 
-        // Check line of sight
         var hasLOS = lineOfSight(player._cellPos, target._cellPos)
         debug("[GRAPPLE-COVID][CHECK] Line of sight check: " + hasLOS)
         if (!hasLOS) {
@@ -101,14 +84,12 @@ class ComboSystem {
             return false
         }
 
-        // Check path between player and target (GRAPPLE can fail if obstacles block pull path)
         var pathToTarget = getPath(player._cellPos, target._cellPos)
         if (pathToTarget == null || count(pathToTarget) == 0) {
             debug("[GRAPPLE-COVID][CHECK] FAIL: No valid path between player and target")
             return false
         }
 
-        // Calculate intermediate cell where enemy will be pulled to (distance 2 from player)
         var dx = getCellX(player._cellPos) - getCellX(target._cellPos)
         var dy = getCellY(player._cellPos) - getCellY(target._cellPos)
         if (dx != 0) dx = dx / abs(dx)
@@ -117,7 +98,6 @@ class ComboSystem {
         var pullTargetY = getCellY(player._cellPos) - dy * 2
         var pullCell = getCellFromXY(pullTargetX, pullTargetY)
 
-        // Validate pull destination is not an obstacle or occupied
         if (pullCell == null || isObstacle(pullCell) || (isEntity(pullCell) && getEntityOnCell(pullCell) != target._id)) {
             debug("[GRAPPLE-COVID][CHECK] FAIL: Pull destination " + pullCell + " is blocked (obstacle=" + isObstacle(pullCell) + " entity=" + isEntity(pullCell) + ")")
             return false
@@ -127,14 +107,11 @@ class ComboSystem {
         return true
     }
 
-    // Execute GRAPPLE → COVID → (optional BALL_AND_CHAIN) → BOXING_GLOVE combo
-    // Uses action queue pattern with immediate execution between steps for position updates
     static executeGrappleCovidCombo(target, strategy) {
         var enemyPos = target._cellPos
         var playerPos = player._cellPos
-        var tpCost = 13  // Base: GRAPPLE(3) + COVID(8) + BOXING(2)
+        var tpCost = 13  
 
-        // Check if BALL_AND_CHAIN is available
         var hasBNC = mapContainsKey(arsenal.playerEquippedChips, CHIP_BALL_AND_CHAIN)
         var cdBNC = hasBNC ? getCooldown(CHIP_BALL_AND_CHAIN, player._id) : 1
         var includeBNC = hasBNC && cdBNC == 0 && player._currTp >= 18
@@ -142,18 +119,16 @@ class ComboSystem {
 
         debug("[GRAPPLE-COVID] Starting " + tpCost + " TP combo from range " + getCellDistance(playerPos, enemyPos) + " (BNC=" + includeBNC + ")")
 
-        // Calculate direction vector
         var dx = getCellX(playerPos) - getCellX(enemyPos)
         var dy = getCellY(playerPos) - getCellY(enemyPos)
         if (dx != 0) dx = dx / abs(dx)
         if (dy != 0) dy = dy / abs(dy)
 
-        // 1. GRAPPLE (3 TP) - pull enemy to distance 2 for BOXING_GLOVE (min range 2)
         var grappleTargetX = getCellX(playerPos) - dx * 2
         var grappleTargetY = getCellY(playerPos) - dy * 2
         var grappleCell = getCellFromXY(grappleTargetX, grappleTargetY)
         if (grappleCell == null) {
-            // Fallback: try player cell if adjacent cell invalid
+            
             grappleCell = playerPos
         }
 
@@ -161,27 +136,23 @@ class ComboSystem {
         push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, target))
         player._currTp -= 3
 
-        // Execute GRAPPLE immediately and update enemy position
         strategy.executeAndFlushActions()
         target.updateEntity()
         var newEnemyPos = target._cellPos
         var distAfterGrapple = getCellDistance(playerPos, newEnemyPos)
         debug("[GRAPPLE-COVID] Enemy pulled to: " + newEnemyPos + " (distance from player: " + distAfterGrapple + ")")
 
-        // 2. COVID (8 TP) - uncleansable poison
         debug("[GRAPPLE-COVID] Step 2: COVID (8 TP) on cell " + newEnemyPos)
         push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, newEnemyPos, target))
         player._currTp -= 8
 
-        // Execute COVID immediately
         strategy.executeAndFlushActions()
 
-        // 3. BOXING_GLOVE (2 TP) - push enemy away (requires distance 2+ for min range)
-        var pushedEnemyPos = newEnemyPos  // Default: enemy stays if push fails
+        var pushedEnemyPos = newEnemyPos  
         var distCheck = getCellDistance(playerPos, newEnemyPos)
         if (distCheck < 2) {
             debug("[GRAPPLE-COVID] ERROR: Enemy too close (distance=" + distCheck + ") - BOXING_GLOVE requires min range 2! Skipping push.")
-            player._currTp -= 2  // Deduct TP anyway (combo failed)
+            player._currTp -= 2  
         } else {
             var enemyX = getCellX(newEnemyPos)
             var enemyY = getCellY(newEnemyPos)
@@ -199,11 +170,11 @@ class ComboSystem {
 
             if (isHorizontal) {
                 var pushDir = (enemyX > playerX) ? 1 : -1
-                // Range 2-8 is from CASTER position, not enemy
+                
                 for (var distFromPlayer = 8; distFromPlayer >= 2; distFromPlayer--) {
                     var testX = playerX + pushDir * distFromPlayer
                     var testCell = getCellFromXY(testX, enemyY)
-                    // Check: valid cell, behind enemy, has LOS from enemy
+                    
                     if (testCell != null) {
                         var isBehindEnemy = (pushDir > 0 && testX > enemyX) || (pushDir < 0 && testX < enemyX)
                         if (isBehindEnemy && lineOfSight(newEnemyPos, testCell)) {
@@ -215,11 +186,11 @@ class ComboSystem {
                 }
             } else if (isVertical) {
                 var pushDir = (enemyY > playerY) ? 1 : -1
-                // Range 2-8 is from CASTER position, not enemy
+                
                 for (var distFromPlayer = 8; distFromPlayer >= 2; distFromPlayer--) {
                     var testY = playerY + pushDir * distFromPlayer
                     var testCell = getCellFromXY(enemyX, testY)
-                    // Check: valid cell, behind enemy, has LOS from enemy
+                    
                     if (testCell != null) {
                         var isBehindEnemy = (pushDir > 0 && testY > enemyY) || (pushDir < 0 && testY < enemyY)
                         if (isBehindEnemy && lineOfSight(newEnemyPos, testCell)) {
@@ -236,7 +207,6 @@ class ComboSystem {
 
             if (boxingCell == null) boxingCell = newEnemyPos
 
-            // Validate destination is on same line as player and enemy
             var destX = getCellX(boxingCell)
             var destY = getCellY(boxingCell)
             var validLine = false
@@ -248,20 +218,17 @@ class ComboSystem {
             push(strategy._actions, new Action(Action.ACTION_DIRECT, -1, CHIP_BOXING_GLOVE, boxingCell, target))
             player._currTp -= 2
 
-            // Execute BOXING_GLOVE immediately and update enemy position
             strategy.executeAndFlushActions()
             target.updateEntity()
             pushedEnemyPos = target._cellPos
             debug("[GRAPPLE-COVID] Enemy pushed to: " + pushedEnemyPos)
         }
 
-        // 4. BALL_AND_CHAIN (5 TP) - optional MP debuff
         if (includeBNC) {
             debug("[GRAPPLE-COVID] Step 4: BALL_AND_CHAIN (5 TP) on cell " + pushedEnemyPos)
             push(strategy._actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_BALL_AND_CHAIN, pushedEnemyPos, target))
             player._currTp -= 5
 
-            // Execute BALL_AND_CHAIN immediately
             strategy.executeAndFlushActions()
         } else {
             debug("[GRAPPLE-COVID] Step 4: BALL_AND_CHAIN skipped (cd=" + cdBNC + " or insufficient TP)")

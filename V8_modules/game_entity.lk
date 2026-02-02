@@ -22,7 +22,7 @@ class Entity {
     _currTp = 0
     _maxTp = 0
     _statuses = []
-    _effectsActive = [] // runtime active effects from getEffects
+    _effectsActive = [] 
     _isAlive = true
 
     constructor(cellPos) {
@@ -64,12 +64,10 @@ class Entity {
         this._isAlive = isAlive(this._id)
         this._relShield = getRelativeShield(this._id)
         this._absShield = getAbsoluteShield(this._id)
-        // Refresh active effects each turn to detect antidote removals
+        
         this._effectsActive = getEffects(this._id)
     }
 
-    // Get full effect data for an effect ID
-    // Returns: [effectID, value, duration] or null if not active
     getEffect(effectId) {
         if (this._effectsActive == null) return null
         for (var e in this._effectsActive) {
@@ -85,39 +83,32 @@ class Entity {
     getEffectRemaining(effectId) {
         var effect = this.getEffect(effectId)
         if (effect == null) return 0
-        // Effect structure from getEffects(): [type, value, caster_id, turns_remaining, critical, equipment_id, target_id]
-        if (count(effect) >= 4) return effect[3]  // Index 3 = turns_remaining
-        // Fallback if duration not present
+        
+        if (count(effect) >= 4) return effect[3]  
+        
         return 1
     }
 
-    // Check if entity has damage return buff active
     hasDamageReturn() {
         return this.hasEffect(EFFECT_DAMAGE_RETURN)
     }
 
-    // Get remaining turns of damage return buff
     getDamageReturnRemaining() {
         return this.getEffectRemaining(EFFECT_DAMAGE_RETURN)
     }
 
-    // Check if entity has vulnerability debuff active (increases damage taken)
     hasVulnerability() {
         return this.hasEffect(EFFECT_VULNERABILITY)
     }
 
-    // Get remaining turns of vulnerability debuff
     getVulnerabilityRemaining() {
         return this.getEffectRemaining(EFFECT_VULNERABILITY)
     }
 
-    // Check if entity is invulnerable (boss fight Protection divine)
-    // Invulnerability is indicated by absolute shield effect or specific invulnerability buff
     isInvulnerable() {
-        // Check for absolute shield at max value (indicates invulnerability)
+        
         if (this._absShield >= 9999) return true
 
-        // Check for invulnerability effect (EFFECT_ABSOLUTE_SHIELD at high values)
         if (this.hasEffect(EFFECT_ABSOLUTE_SHIELD)) {
             var shieldValue = this.getEffectValue(EFFECT_ABSOLUTE_SHIELD)
             if (shieldValue >= 9999) return true
@@ -126,11 +117,10 @@ class Entity {
         return false
     }
 
-    // Get effect value (not just duration)
     getEffectValue(effectId) {
         var effect = this.getEffect(effectId)
         if (effect == null) return 0
-        // Assume structure [effectID, value, remainingDuration]
+        
         if (count(effect) >= 2) return effect[1]
         return 0
     }

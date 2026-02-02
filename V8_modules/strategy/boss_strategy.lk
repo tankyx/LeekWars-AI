@@ -1,14 +1,6 @@
-// ================================
-// BOSS FIGHT STRATEGY - Grail & Crystal Puzzle Solver
-// ================================
-// Hybrid greedy approach: strategic INVERSION + iterative GRAPPLE/BOXING_GLOVE
 
 include('../game_entity.lk')
 include('../field_map_core.lk')
-
-// ================================
-// BOSS FIGHT DETECTION (Global Function)
-// ================================
 
 function detectBossFight() {
     var entities = getAliveEnemies()
@@ -23,53 +15,33 @@ function detectBossFight() {
 
 class BossFightStrategy {
 
-    // State
     _grail = null
-    _crystals = [:]  // Map: crystal_id -> {entity: Enemy, color: string, goalAxis: string}
+    _crystals = [:]  
     _myAssignedCrystal = null
     _usedInversion = false
     _fieldMap = null
-
-    // Crystal color to goal axis mapping
-    // Red = South (Y > grail.Y, same X)
-    // Blue = East (X > grail.X, same Y)
-    // Yellow = West (X < grail.X, same Y)
-    // Green = North (Y < grail.Y, same X)
-
-    // ================================
-    // CONSTRUCTOR
-    // ================================
 
     constructor() {
         debug("[BOSS] Initializing BossFightStrategy")
         this._fieldMap = new FieldMap()
     }
 
-    // ================================
-    // INTERFACE METHODS
-    // ================================
-
     shouldBuildDamageMap() {
-        return false;  // Boss fights don't need damage map
+        return false;  
     }
 
     createAndExecuteScenario(target, targetHitCell) {
-        // Boss fights use playTurn() instead
+        
         debug("[BOSS] createAndExecuteScenario called")
         this.playTurn()
         debug("[BOSS] playTurn completed")
     }
-
-    // ================================
-    // MAIN ENTRY POINT
-    // ================================
 
     playTurn() {
         debug("[BOSS] playTurn START")
         debug("\n[BOSS] ========== TURN " + getTurn() + " ==========")
         debug("[BOSS] MP: " + getMP() + ", TP: " + getTP())
 
-        // 1. Detect grail and crystals
         this.detectGrailAndCrystals()
         debug("[BOSS] Detected grail: " + (this._grail != null))
 
@@ -82,7 +54,6 @@ class BossFightStrategy {
             return
         }
 
-        // 2. Assign crystal to this entity
         this.assignCrystal()
         debug("[BOSS] Assigned crystal: " + (this._myAssignedCrystal != null))
 
@@ -91,7 +62,6 @@ class BossFightStrategy {
             return
         }
 
-        // 3. Check if crystal is already solved
         var solved = this.isCrystalSolved(this._myAssignedCrystal)
         debug("[BOSS] Crystal solved: " + solved)
 
@@ -100,19 +70,14 @@ class BossFightStrategy {
             return
         }
 
-        // 4. Decide and execute action
         debug("[BOSS] Executing action...")
         this.decideAndExecuteAction()
 
         debug("[BOSS] ========== END TURN ==========\n")
     }
 
-    // ================================
-    // DETECTION & ASSIGNMENT
-    // ================================
-
     detectGrailAndCrystals() {
-        // Scan all cells to find grail and crystals
+        
         for (var cellId = 0; cellId < 613; cellId++) {
             if (!isEntity(cellId)) continue
 
@@ -148,7 +113,7 @@ class BossFightStrategy {
     }
 
     assignCrystal() {
-        // Get all ally entity IDs and sort them
+        
         var myID = getEntity()
         var allAllies = []
         push(allAllies, myID)
@@ -157,10 +122,8 @@ class BossFightStrategy {
             push(allAllies, aid)
         }
 
-        // Sort entity IDs to get deterministic order
         sort(allAllies)
 
-        // Find my index
         var myIndex = -1
         for (var i = 0; i < count(allAllies); i++) {
             if (allAllies[i] == myID) {
@@ -177,13 +140,11 @@ class BossFightStrategy {
             return
         }
 
-        // Assign crystal by index: 0=red, 1=blue, 2=yellow, 3=green
         var colorOrder = ["red", "blue", "yellow", "green"]
         var targetColor = colorOrder[myIndex]
 
         debug("[BOSS] Looking for " + targetColor + " crystal (myIndex=" + myIndex + ")")
 
-        // Find crystal with matching color (iterate over values, not keys)
         for (var crystal in this._crystals) {
             debug("[BOSS]   Checking crystal color=" + crystal.color + " vs target=" + targetColor)
 
@@ -204,10 +165,6 @@ class BossFightStrategy {
         if (color == "green") return "north";
         return "unknown";
     }
-
-    // ================================
-    // CRYSTAL STATE CHECKS
-    // ================================
 
     isCrystalSolved(crystal) {
         return this.isOnGoalAxis(crystal) && this.hasLOSToGrail(crystal);
@@ -250,15 +207,11 @@ class BossFightStrategy {
         var gy = this._grail.y;
 
         if (axis == "north" || axis == "south") {
-            return abs(cx - gx);  // Distance to vertical axis
+            return abs(cx - gx);  
         } else {
-            return abs(cy - gy);  // Distance to horizontal axis
+            return abs(cy - gy);  
         }
     }
-
-    // ================================
-    // DECISION TREE
-    // ================================
 
     decideAndExecuteAction() {
         var crystal = this._myAssignedCrystal;
@@ -268,21 +221,15 @@ class BossFightStrategy {
         debug("[BOSS] Used INVERSION: " + this._usedInversion);
         debug("[BOSS] Current TP: " + getTP() + ", MP: " + getMP());
 
-        // PHASE 1: Use INVERSION if far from axis (> 8 cells) and haven't used it yet
         if (distToAxis > 8 && !this._usedInversion && getTP() >= 4) {
             debug("[BOSS] Phase 1: Using INVERSION (distance > 8)");
             this.executeInversion(crystal);
             return;
         }
 
-        // PHASE 2: Use GRAPPLE or BOXING_GLOVE to slide crystal toward goal
         debug("[BOSS] Phase 2: Using GRAPPLE/BOXING_GLOVE to slide crystal");
         this.executeSlideTowardGoal(crystal);
     }
-
-    // ================================
-    // ACTION EXECUTION
-    // ================================
 
     executeInversion(crystal) {
         var playerCell = getCell();
@@ -290,13 +237,11 @@ class BossFightStrategy {
 
         debug("[BOSS] Distance to crystal: " + dist);
 
-        // Walk closer if out of INVERSION range (1-14)
         if (dist > 14) {
             debug("[BOSS] Walking toward crystal (dist=" + dist + ")");
             var moved = moveTowardCell(crystal.cell, getMP());
             debug("[BOSS] Moved " + moved + " cells");
 
-            // Check if now in range
             playerCell = getCell();
             dist = getCellDistance(playerCell, crystal.cell);
 
@@ -306,7 +251,6 @@ class BossFightStrategy {
             }
         }
 
-        // Use INVERSION to swap positions
         if (getTP() >= 4 && lineOfSight(playerCell, crystal.cell)) {
             debug("[BOSS] ✅ Using INVERSION on crystal at cell " + crystal.cell);
             var result = useChipOnCell(CHIP_INVERSION, crystal.cell);
@@ -325,7 +269,6 @@ class BossFightStrategy {
     executeSlideTowardGoal(crystal) {
         var axis = crystal.goalAxis;
 
-        // Determine which direction to slide crystal
         var direction = this.getDirectionToSlide(crystal);
 
         if (direction == null) {
@@ -335,7 +278,6 @@ class BossFightStrategy {
 
         debug("[BOSS] Slide direction: " + direction);
 
-        // Decide whether to use GRAPPLE or BOXING_GLOVE
         if (direction == "pull") {
             this.executeGrapple(crystal);
         } else {
@@ -350,23 +292,20 @@ class BossFightStrategy {
         var gx = this._grail.x;
         var gy = this._grail.y;
 
-        // Determine if we need to pull (move toward grail) or push (move away)
         if (axis == "north" || axis == "south") {
-            // Need to move on vertical axis (change X)
-            if (cx < gx) return "pull";  // Crystal is west of axis, pull it east
-            if (cx > gx) return "push";  // Crystal is east of axis, push it west
+            
+            if (cx < gx) return "pull";  
+            if (cx > gx) return "push";  
 
-            // Already on axis, check Y position
-            if (axis == "north" && cy >= gy) return "push";  // Too far south, push north
-            if (axis == "south" && cy <= gy) return "pull";  // Too far north, pull south
+            if (axis == "north" && cy >= gy) return "push";  
+            if (axis == "south" && cy <= gy) return "pull";  
         } else {
-            // Need to move on horizontal axis (change Y)
-            if (cy < gy) return "pull";  // Crystal is north of axis, pull it south
-            if (cy > gy) return "push";  // Crystal is south of axis, push it north
+            
+            if (cy < gy) return "pull";  
+            if (cy > gy) return "push";  
 
-            // Already on axis, check X position
-            if (axis == "east" && cx <= gx) return "pull";  // Too far west, pull east
-            if (axis == "west" && cx >= gx) return "push";  // Too far east, push west
+            if (axis == "east" && cx <= gx) return "pull";  
+            if (axis == "west" && cx >= gx) return "push";  
         }
 
         return null;
@@ -377,8 +316,6 @@ class BossFightStrategy {
         var px = getCellX(playerCell);
         var py = getCellY(playerCell);
 
-        // Calculate destination cell (where we want to pull crystal TO)
-        // Destination is 1 cell toward player from crystal
         var dx = crystal.x;
         var dy = crystal.y;
 
@@ -395,24 +332,20 @@ class BossFightStrategy {
             return;
         }
 
-        // Check if we need to reposition
         var dist = getCellDistance(playerCell, crystal.cell);
         var onSameLine = isOnSameLine(playerCell, crystal.cell);
 
         debug("[BOSS] GRAPPLE check: dist=" + dist + ", onLine=" + onSameLine + ", TP=" + getTP());
 
-        // If not in range (1-8) or not on line, walk to get on same line
         if (dist < 1 || dist > 8 || !onSameLine) {
             debug("[BOSS] Need to position for GRAPPLE");
 
-            // Get on horizontal or vertical line with crystal
             var cx = crystal.x;
             var cy = crystal.y;
 
-            // Try horizontal line first (same Y as crystal)
             var targetCell = getCellFromXY(cx - 4, cy);
             if (targetCell == null || isObstacle(targetCell)) {
-                // Try vertical line (same X as crystal)
+                
                 targetCell = getCellFromXY(cx, cy - 4);
             }
 
@@ -420,14 +353,12 @@ class BossFightStrategy {
                 var moved = moveTowardCell(targetCell, getMP());
                 debug("[BOSS] Moved " + moved + " cells to align with crystal");
 
-                // Recheck after moving
                 playerCell = getCell();
                 dist = getCellDistance(playerCell, crystal.cell);
                 onSameLine = isOnSameLine(playerCell, crystal.cell);
             }
         }
 
-        // Use GRAPPLE if in range
         if (dist >= 1 && dist <= 8 && onSameLine && getTP() >= 4) {
             debug("[BOSS] ✅ Using GRAPPLE to cell " + destCell);
             var result = useChipOnCell(CHIP_GRAPPLE, destCell);
@@ -447,8 +378,6 @@ class BossFightStrategy {
         var px = getCellX(playerCell);
         var py = getCellY(playerCell);
 
-        // Calculate destination cell (where we want to push crystal TO)
-        // Destination is 1 cell away from player, beyond crystal
         var dx = crystal.x;
         var dy = crystal.y;
 
@@ -465,24 +394,20 @@ class BossFightStrategy {
             return;
         }
 
-        // Check if we need to reposition
         var dist = getCellDistance(playerCell, crystal.cell);
         var onSameLine = isOnSameLine(playerCell, crystal.cell);
 
         debug("[BOSS] BOXING_GLOVE check: dist=" + dist + ", onLine=" + onSameLine + ", TP=" + getTP());
 
-        // If not in range (2-8) or not on line, walk to get on same line
         if (dist < 2 || dist > 8 || !onSameLine) {
             debug("[BOSS] Need to position for BOXING_GLOVE");
 
-            // Get on horizontal or vertical line with crystal
             var cx = crystal.x;
             var cy = crystal.y;
 
-            // Try horizontal line first (same Y as crystal)
             var targetCell = getCellFromXY(cx + 4, cy);
             if (targetCell == null || isObstacle(targetCell)) {
-                // Try vertical line (same X as crystal)
+                
                 targetCell = getCellFromXY(cx, cy + 4);
             }
 
@@ -490,14 +415,12 @@ class BossFightStrategy {
                 var moved = moveTowardCell(targetCell, getMP());
                 debug("[BOSS] Moved " + moved + " cells to align with crystal");
 
-                // Recheck after moving
                 playerCell = getCell();
                 dist = getCellDistance(playerCell, crystal.cell);
                 onSameLine = isOnSameLine(playerCell, crystal.cell);
             }
         }
 
-        // Use BOXING_GLOVE if in range
         if (dist >= 2 && dist <= 8 && onSameLine && getTP() >= 3) {
             debug("[BOSS] ✅ Using BOXING_GLOVE to cell " + destCell);
             var result = useChipOnCell(CHIP_BOXING_GLOVE, destCell);

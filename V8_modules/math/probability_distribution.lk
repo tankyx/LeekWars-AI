@@ -1,29 +1,13 @@
-/**
- * ProbabilityDistribution.lk - Probability distribution with atoms and density
- *
- * Represents a mixed probability distribution:
- * - Discrete atoms: point masses with specific probabilities
- * - Continuous density: described by piecewise polynomial function
- *
- * Used for calculating damage probability distributions in LeekWars
- */
 
 include('polynomial.lk');
 include('piecewise_function.lk');
 
 class ProbabilityDistribution {
-    // Atoms: {value: number, probability: number}
+    
     atoms = []
 
-    // Density function (piecewise polynomial)
-    // Note: integral may be < 1 if atoms exist
     density = null
 
-    /**
-     * Constructor
-     * @param atoms - array of {value: number, probability: number}
-     * @param density - PiecewiseFunction representing continuous part
-     */
     constructor(atoms, density) {
         if (atoms == null) atoms = [];
         if (density == null) density = PiecewiseFunctionZero();
@@ -33,10 +17,6 @@ class ProbabilityDistribution {
         this._mergeAtoms();
     }
 
-
-    /**
-     * Merge atoms with same value
-     */
     _mergeAtoms() {
         var merged = [];
 
@@ -60,16 +40,10 @@ class ProbabilityDistribution {
         this.atoms = merged;
     }
 
-    /**
-     * Add another distribution to this one (sum of random variables)
-     * This is the key operation for combining item damages
-     */
     convolve(other) {
         var newAtoms = [];
         var newDensity = PiecewiseFunctionZero();
 
-        // Case 1: atom * atom
-        // Probability of (this atom + other atom) = product of probabilities
         for (var i = 0; i < count(this.atoms); i++) {
             for (var j = 0; j < count(other.atoms); j++) {
                 push(newAtoms, {
@@ -79,35 +53,25 @@ class ProbabilityDistribution {
             }
         }
 
-        // Case 2: atom * density
-        // Shift other's density by this atom value, scale by atom probability
         for (var i = 0; i < count(this.atoms); i++) {
             var shifted = other.density.translate(this.atoms[i]["value"]);
             var scaled = shifted.multiplyByConstant(this.atoms[i]["probability"]);
             newDensity = newDensity.add(scaled);
         }
 
-        // Case 3: density * atom
-        // Shift this density by other atom value, scale by atom probability
         for (var i = 0; i < count(other.atoms); i++) {
             var shifted = this.density.translate(other.atoms[i]["value"]);
             var scaled = shifted.multiplyByConstant(other.atoms[i]["probability"]);
             newDensity = newDensity.add(scaled);
         }
 
-        // Case 4: density * density
-        // This is the complex convolution operation
         newDensity = newDensity.add(this._convolveDensities(this.density, other.density));
 
         return new ProbabilityDistribution(newAtoms, newDensity);
     }
 
-    /**
-     * Convolve two piecewise functions (the hard part)
-     * For LeekWars, we often convolve with rectangles, which simplifies
-     */
     _convolveDensities(f, g) {
-        // If one is zero, result is zero
+        
         var fPieces = f.getPieces();
         var gPieces = g.getPieces();
 
@@ -115,25 +79,17 @@ class ProbabilityDistribution {
             return PiecewiseFunctionZero();
         }
 
-        // Check if g is a rectangle (single piece with constant polynomial)
         if (count(gPieces) == 1 && gPieces[0]["poly"].getDegree() == 0) {
             return this._convolveWithRectangle(f, gPieces[0]);
         }
 
-        // Check if f is a rectangle
         if (count(fPieces) == 1 && fPieces[0]["poly"].getDegree() == 0) {
             return this._convolveWithRectangle(g, fPieces[0]);
         }
 
-        // General case: convolve arbitrary piecewise functions
-        // This is complex, so we'll implement a general algorithm
         return this._convolveGeneral(f, g);
     }
 
-    /**
-     * Convolve piecewise function with a rectangle
-     * This is the common case in LeekWars (adding one more item)
-     */
     _convolveWithRectangle(f, rectPiece) {
         var rectMin = rectPiece["min"];
         var rectMax = rectPiece["max"];
@@ -142,15 +98,8 @@ class ProbabilityDistribution {
         var fPieces = f.getPieces();
         var newPieces = [];
 
-        // For each possible sum value s, the convolution is:
-        // (f * rect)(s) = rectHeight * integral of f from (s - rectMax) to (s - rectMin)
-        //
-        // We need to determine breakpoints where the integral formula changes
-        // This happens when s - rectMax or s - rectMin crosses a breakpoint of f
+        var breakpoints = []; 
 
-        var breakpoints = []; // All points where formula changes
-
-        // Add shifted breakpoints from f
         for (var i = 0; i < count(fPieces); i++) {
             push(breakpoints, fPieces[i]["min"] + rectMin);
             push(breakpoints, fPieces[i]["max"] + rectMin);
@@ -160,41 +109,29 @@ class ProbabilityDistribution {
 
         breakpoints = sort(breakpoints);
 
-        // Calculate primitive of f
         var F = f.primitive();
 
-        // For each interval between breakpoints
         for (var i = 0; i < count(breakpoints) - 1; i++) {
             var s_min = breakpoints[i];
             var s_max = breakpoints[i + 1];
 
-            // Skip zero-width intervals
             if (abs(s_max - s_min) < 0.0001) continue;
-
-            // The convolution on [s_min, s_max] is:
-            // rectHeight * (F(s - rectMin) - F(s - rectMax))
-            // This is a polynomial in s (difference of two translates of F)
 
             var midpoint = (s_min + s_max) / 2;
 
-            // Evaluate to check if non-zero
             var integralMin = midpoint - rectMax;
             var integralMax = midpoint - rectMin;
 
             var value = F.evaluate(integralMax) - F.evaluate(integralMin);
 
-            if (abs(value) < 0.0001) continue; // Skip zero regions
+            if (abs(value) < 0.0001) continue; 
 
-            // Build polynomial for this piece
-            // Result is rectHeight * (F(s - rectMin) - F(s - rectMax))
-
-            // Get the polynomial from F at the appropriate interval
             var F_pieces = F.getPieces();
             var relevantPoly = null;
 
             for (var j = 0; j < count(F_pieces); j++) {
                 var Fp = F_pieces[j];
-                // Check if interval [integralMin, integralMax] overlaps with this piece
+                
                 if (integralMax >= Fp["min"] && integralMin <= Fp["max"]) {
                     relevantPoly = Fp["poly"];
                     break;
@@ -202,7 +139,7 @@ class ProbabilityDistribution {
             }
 
             if (relevantPoly != null) {
-                // Create: rectHeight * (F(s - rectMin) - F(s - rectMax))
+                
                 var poly1 = relevantPoly.translate(-rectMin);
                 var poly2 = relevantPoly.translate(-rectMax);
                 var diffPoly = poly1.add(poly2.multiplyByConstant(-1));
@@ -219,33 +156,17 @@ class ProbabilityDistribution {
         return new PiecewiseFunction(newPieces);
     }
 
-    /**
-     * General convolution of two arbitrary piecewise functions
-     * More complex, used when both have multiple pieces
-     */
     _convolveGeneral(f, g) {
-        // For simplicity, we'll use a numerical approach for complex cases
-        // In practice, LeekWars combos build up incrementally with rectangles
-        // so this path is rarely taken
-
-        // TODO: Implement full symbolic convolution if needed
-        // For now, return approximation or simplified version
-
+        
         return PiecewiseFunctionZero();
     }
 
-    /**
-     * Apply absolute armor reduction
-     * Armor reduces all damage by a fixed amount, clamping at 0
-     * This creates an atom at 0
-     */
     applyAbsoluteArmor(armor) {
         if (armor <= 0) return this;
 
         var newAtoms = [];
         var probZero = 0;
 
-        // Shift atoms
         for (var i = 0; i < count(this.atoms); i++) {
             var newValue = this.atoms[i]["value"] - armor;
             if (newValue <= 0) {
@@ -255,15 +176,12 @@ class ProbabilityDistribution {
             }
         }
 
-        // Shift density and calculate probability of hitting 0
         var shiftedDensity = this.density.translate(-armor);
         var domain = this.density.getDomain();
 
-        // Probability that original damage <= armor (becomes 0)
         var probDensityZero = this.density.integrate(domain["min"], min(domain["max"], armor));
         probZero += probDensityZero;
 
-        // Truncate shifted density at 0 (can't have negative damage)
         var truncatedPieces = [];
         var pieces = shiftedDensity.getPieces();
 
@@ -283,7 +201,6 @@ class ProbabilityDistribution {
 
         var newDensity = new PiecewiseFunction(truncatedPieces);
 
-        // Add atom at 0 if probability > 0
         if (probZero > 0.0001) {
             push(newAtoms, {value: 0, probability: probZero});
         }
@@ -291,15 +208,11 @@ class ProbabilityDistribution {
         return new ProbabilityDistribution(newAtoms, newDensity);
     }
 
-    /**
-     * Apply relative armor (percentage reduction)
-     */
     applyRelativeArmor(reductionPercent) {
         if (reductionPercent <= 0) return this;
 
         var multiplier = 1 - (reductionPercent / 100);
 
-        // Scale atoms
         var newAtoms = [];
         for (var i = 0; i < count(this.atoms); i++) {
             push(newAtoms, {
@@ -308,27 +221,13 @@ class ProbabilityDistribution {
             });
         }
 
-        // Scale density: multiply all damage values by multiplier
-        // This means translating to 0, scaling, translating back... but for multiplication,
-        // we need to scale the x-axis which changes the integral
-        // Scaling x by factor k scales density by 1/k
-
         var pieces = this.density.getPieces();
         var newPieces = [];
 
         for (var i = 0; i < count(pieces); i++) {
             var piece = pieces[i];
 
-            // To scale damage by multiplier, we need new piece at [min*mult, max*mult]
-            // with polynomial adjusted for x-scaling
-
-            // If f(x) is original density, we want g(y) where y = x * multiplier
-            // g(y) = f(y / multiplier) / multiplier
-
             var scaledPoly = piece["poly"].multiplyByConstant(1 / multiplier);
-
-            // We also need to substitute x -> x/multiplier in the polynomial
-            // This is complex for general polynomials, so for now we'll use approximation
 
             push(newPieces, {
                 poly: piece["poly"],
@@ -342,31 +241,22 @@ class ProbabilityDistribution {
         return new ProbabilityDistribution(newAtoms, newDensity);
     }
 
-    /**
-     * Calculate cumulative distribution function
-     * Returns a PiecewiseFunction representing P(X <= x)
-     */
     getCDF() {
-        // Start with step function from atoms
+        
         var atomsContribution = this._getAtomsCDF();
 
-        // Add integral of density
         var densityPrimitive = this.density.primitive();
 
         return atomsContribution.add(densityPrimitive);
     }
 
-    /**
-     * Get step function CDF from atoms
-     */
     _getAtomsCDF() {
         if (count(this.atoms) == 0) {
             return PiecewiseFunctionZero();
         }
 
-        // Sort atoms by value
         var sortedAtoms = this.atoms;
-        // Simple bubble sort
+        
         for (var i = 0; i < count(sortedAtoms) - 1; i++) {
             for (var j = 0; j < count(sortedAtoms) - i - 1; j++) {
                 if (sortedAtoms[j]["value"] > sortedAtoms[j + 1]["value"]) {
@@ -384,7 +274,6 @@ class ProbabilityDistribution {
             var atom = sortedAtoms[i];
             var nextValue = (i < count(sortedAtoms) - 1) ? sortedAtoms[i + 1]["value"] : atom["value"] + 1000;
 
-            // Constant piece at cumProb from this atom to next
             push(pieces, {
                 poly: PolynomialConstant(cumProb),
                 min: atom["value"],
@@ -397,52 +286,32 @@ class ProbabilityDistribution {
         return new PiecewiseFunction(pieces);
     }
 
-    /**
-     * Get probability of dealing at least minDamage
-     */
     getProbabilityAtLeast(minDamage) {
         var cdf = this.getCDF();
         var domain = this.density.getDomain();
 
-        // P(X >= minDamage) = 1 - P(X < minDamage) = 1 - CDF(minDamage - 0.5)
         return 1 - cdf.evaluate(minDamage - 0.5);
     }
 
-    /**
-     * Get probability of dealing exactly damage (after rounding)
-     */
     getProbabilityExactly(damage) {
         var cdf = this.getCDF();
 
-        // P(damage - 0.5 <= X < damage + 0.5)
         return cdf.evaluate(damage + 0.5) - cdf.evaluate(damage - 0.5);
     }
 
-    /**
-     * Get probability of dealing between min and max damage (inclusive, after rounding)
-     */
     getProbabilityBetween(minDamage, maxDamage) {
         var cdf = this.getCDF();
         return cdf.evaluate(maxDamage + 0.5) - cdf.evaluate(minDamage - 0.5);
     }
 
-    /**
-     * Get atoms (for debugging)
-     */
     getAtoms() {
         return this.atoms;
     }
 
-    /**
-     * Get density (for debugging)
-     */
     getDensity() {
         return this.density;
     }
 
-    /**
-     * String representation
-     */
     toString() {
         var result = "ProbabilityDistribution:\n";
 
@@ -464,45 +333,28 @@ class ProbabilityDistribution {
     }
 }
 
-// Global factory functions (replaces static methods)
-
-/**
- * Create distribution from rectangle (uniform distribution)
- * Used for item damage ranges without critical hits
- */
 function ProbabilityDistributionFromRectangle(min, max) {
     var rect = PiecewiseFunctionRectangle(min, max);
     return new ProbabilityDistribution([], rect);
 }
 
-/**
- * Create distribution for item with critical hit chance
- */
 function ProbabilityDistributionFromRectangleWithCrit(minDamage, maxDamage, critProb, critFactor) {
-    // Non-crit rectangle: (1 - critProb) * rectangle[minDamage, maxDamage]
+    
     var noCritRect = PiecewiseFunctionRectangle(minDamage, maxDamage);
     noCritRect = noCritRect.multiplyByConstant(1 - critProb);
 
-    // Crit rectangle: critProb * rectangle[minDamage * critFactor, maxDamage * critFactor]
     var critRect = PiecewiseFunctionRectangle(minDamage * critFactor, maxDamage * critFactor);
     critRect = critRect.multiplyByConstant(critProb);
 
-    // Sum the two
     var combinedDensity = noCritRect.add(critRect);
 
     return new ProbabilityDistribution([], combinedDensity);
 }
 
-/**
- * Create distribution for fixed damage item
- */
 function ProbabilityDistributionFromFixedDamage(damage) {
     return new ProbabilityDistribution([{value: damage, probability: 1.0}], PiecewiseFunctionZero());
 }
 
-/**
- * Create distribution for fixed damage with critical hit
- */
 function ProbabilityDistributionFromFixedDamageWithCrit(damage, critProb, critFactor) {
     var atoms = [
         {value: damage, probability: 1 - critProb},

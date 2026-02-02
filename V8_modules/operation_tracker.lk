@@ -1,37 +1,29 @@
-/** Operation Tracker - Utility for measuring operation costs in LeekScript **/
 
-// Global variables for operation tracking
 global __debug_operation = 0
 global __operation_log = []
 global __operation_totals = []
 
-// Start tracking operations
 function startOp() {
     __debug_operation = getOperations()
 }
 
-// Stop tracking and log the result
-// title: Description of what was measured
 function stopOp(title) {
-    var ops = getOperations() - __debug_operation - 3  // -3 to account for function call overhead
+    var ops = getOperations() - __debug_operation - 3  
     debug("[OPS] " + title + ": " + ops + " ops")
     push(__operation_log, [title, ops])
     return ops
 }
 
-// Get total operations used so far this turn
 function getTotalOps() {
     return getOperations()
 }
 
-// Log a checkpoint with current total operations
 function logCheckpoint(label) {
     var total = getOperations()
     debug("[OPS-CHECKPOINT] " + label + ": " + total + " total ops")
     push(__operation_totals, [label, total])
 }
 
-// Print summary of all tracked operations
 function printOpsSummary() {
     debug("[OPS-SUMMARY] ========== OPERATION USAGE SUMMARY ==========")
 
@@ -48,7 +40,6 @@ function printOpsSummary() {
     debug("[OPS-SUMMARY] ============================================")
 }
 
-// Clear logs (call at start of turn)
 function clearOpsLog() {
     arrayClear(__operation_log)
     arrayClear(__operation_totals)

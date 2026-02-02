@@ -1,4 +1,4 @@
-// Declare globals FIRST so included files can reference them
+
 global _init = false
 global fieldMap = null
 global arsenal = null
@@ -9,19 +9,14 @@ include('game_entity.lk')
 include('field_map_tactical.lk')
 include('item.lk')
 
-// Optional: Advanced probability calculations for accurate kill probability
-// Comment out these lines if operations limit exceeded (>10,000 ops/turn)
-// Fallback to simple estimates in Arsenal.getKillProbability() if not included
 include('math/polynomial.lk')
 include('math/piecewise_function.lk')
 include('math/probability_distribution.lk')
 include('math/damage_probability.lk')
 
-// Operation tracking and caching (Phase 1 optimizations)
 include('operation_tracker.lk')
 include('cache_manager.lk')
 
-// Scenario evaluation system (Phase 1)
 include('scenario_generator.lk')
 include('scenario_simulator.lk')
 include('scenario_scorer.lk')
@@ -45,10 +40,9 @@ function init() {
     arsenal = new Arsenal();
     fieldMap = new FieldMap();
 
-    // Check if this is a boss fight first
     if (detectBossFight()) {
         strategy = new BossFightStrategy();
-        // Don't call turnOneBuffs() for boss fights - need TP for puzzle chips
+        
     }
     else if (player._agility >= player._strength && player._agility >= player._magic) {
         strategy = new AgilityStrategy();
@@ -68,25 +62,21 @@ function main() {
     player.updateEntity()
     fieldMap.updateMapEntities()
 
-    // Use intelligent target selection (prioritize low HP + debuffed enemies)
     var target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
-    // Fallback to closest if priority selection fails
+    
     if (target == null) target = fieldMap.getClosestEnemy()
 
-    // Initialize caches for optimized multi-scenario evaluation (PHASE 1)
     startOp()
     initializeCaches(player, target, arsenal)
     stopOp("Initialize all caches")
 
     var targetHitCell = null
 
-    // Build damage map only if strategy requires it (skip for boss fights)
     if (strategy.shouldBuildDamageMap()) {
         fieldMap.buildHitMap(target._cellPos)
         targetHitCell = fieldMap.getBestWeaponOrChipCell();
     }
 
-    // WEEK 2: Build enemy threat map for tactical positioning
     fieldMap.buildEnemyThreatMap()
 
     if (strategy instanceof MagicStrategy) {

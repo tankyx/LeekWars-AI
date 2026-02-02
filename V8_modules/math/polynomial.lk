@@ -1,42 +1,23 @@
-/**
- * Polynomial.lk - Polynomial manipulation for probability density calculations
- *
- * Represents a polynomial f(x) = a_n * x^n + ... + a_1 * x + a_0
- * Stored as array [a_0, a_1, ..., a_n] where index i is coefficient of x^i
- */
 
 class Polynomial {
-    // Coefficients array: coeffs[i] = coefficient of x^i
+    
     coeffs = []
 
-    /**
-     * Constructor
-     * @param coefficients - array of coefficients [a_0, a_1, ..., a_n]
-     */
     constructor(coefficients) {
         this.coeffs = coefficients;
         this._trimLeadingZeros();
     }
 
-    /**
-     * Remove leading zero coefficients
-     */
     _trimLeadingZeros() {
         while (count(this.coeffs) > 1 && this.coeffs[count(this.coeffs) - 1] == 0) {
             remove(this.coeffs, count(this.coeffs) - 1);
         }
     }
 
-    /**
-     * Get degree of polynomial
-     */
     getDegree() {
         return count(this.coeffs) - 1;
     }
 
-    /**
-     * Get coefficient at given degree
-     */
     getCoeff(degree) {
         if (degree < 0 || degree >= count(this.coeffs)) {
             return 0;
@@ -44,9 +25,6 @@ class Polynomial {
         return this.coeffs[degree];
     }
 
-    /**
-     * Evaluate polynomial at point x
-     */
     evaluate(x) {
         var result = 0;
         var power = 1;
@@ -57,9 +35,6 @@ class Polynomial {
         return result;
     }
 
-    /**
-     * Add two polynomials
-     */
     add(other) {
         var maxLen = max(count(this.coeffs), count(other.coeffs));
         var newCoeffs = [];
@@ -73,9 +48,6 @@ class Polynomial {
         return new Polynomial(newCoeffs);
     }
 
-    /**
-     * Multiply polynomial by constant
-     */
     multiplyByConstant(k) {
         var newCoeffs = [];
         for (var i = 0; i < count(this.coeffs); i++) {
@@ -84,13 +56,6 @@ class Polynomial {
         return new Polynomial(newCoeffs);
     }
 
-    /**
-     * Calculate a primitive (antiderivative) of the polynomial
-     * Adds constant term k (default 0)
-     *
-     * If f(x) = a_n * x^n + ... + a_1 * x + a_0
-     * Then F(x) = a_n/(n+1) * x^(n+1) + ... + a_1/2 * x^2 + a_0 * x + k
-     */
     primitive(k) {
         if (k == null) k = 0;
 
@@ -102,36 +67,22 @@ class Polynomial {
         return new Polynomial(newCoeffs);
     }
 
-    /**
-     * Calculate definite integral from a to b
-     */
     integrate(a, b) {
         var F = this.primitive(0);
         return F.evaluate(b) - F.evaluate(a);
     }
 
-    /**
-     * Translate polynomial: compute f(x - a)
-     * Uses binomial formula with Pascal's triangle
-     *
-     * If f(x) = sum(c_i * x^i), then
-     * f(x-a) = sum(c_i * (x-a)^i) = sum(c_i * sum(C(i,j) * x^j * (-a)^(i-j)))
-     */
     translate(a) {
         var n = this.getDegree();
         var newCoeffs = [];
 
-        // Initialize result coefficients
         for (var j = 0; j <= n; j++) {
             push(newCoeffs, 0);
         }
 
-        // For each term c_i * x^i in original polynomial
         for (var i = 0; i < count(this.coeffs); i++) {
             var c_i = this.coeffs[i];
 
-            // Expand (x-a)^i using binomial formula
-            // (x-a)^i = sum over j from 0 to i: C(i,j) * x^j * (-a)^(i-j)
             for (var j = 0; j <= i; j++) {
                 var binomCoeff = this._binomial(i, j);
                 var power_a = pow(-a, i - j);
@@ -142,14 +93,10 @@ class Polynomial {
         return new Polynomial(newCoeffs);
     }
 
-    /**
-     * Calculate binomial coefficient C(n, k) = n! / (k! * (n-k)!)
-     */
     _binomial(n, k) {
         if (k > n || k < 0) return 0;
         if (k == 0 || k == n) return 1;
 
-        // Use symmetry: C(n,k) = C(n, n-k)
         if (k > n - k) {
             k = n - k;
         }
@@ -163,9 +110,6 @@ class Polynomial {
         return result;
     }
 
-    /**
-     * Get copy of coefficients array
-     */
     getCoefficients() {
         var copy = [];
         for (var i = 0; i < count(this.coeffs); i++) {
@@ -174,9 +118,6 @@ class Polynomial {
         return copy;
     }
 
-    /**
-     * String representation for debugging
-     */
     toString() {
         if (count(this.coeffs) == 0 || (count(this.coeffs) == 1 && this.coeffs[0] == 0)) {
             return "0";
@@ -189,14 +130,12 @@ class Polynomial {
 
             var term = "";
 
-            // Coefficient
             if (i == 0 || abs(c) != 1) {
-                term += round(c * 1000) / 1000; // Round to 3 decimals
+                term += round(c * 1000) / 1000; 
             } else if (c == -1) {
                 term += "-";
             }
 
-            // Variable part
             if (i > 0) {
                 if (abs(c) != 1 || i == 0) term += "*";
                 term += "x";
@@ -219,18 +158,10 @@ class Polynomial {
     }
 }
 
-// Global factory functions (replaces static methods)
-
-/**
- * Create constant polynomial
- */
 function PolynomialConstant(value) {
     return new Polynomial([value]);
 }
 
-/**
- * Create zero polynomial
- */
 function PolynomialZero() {
     return new Polynomial([0]);
 }
