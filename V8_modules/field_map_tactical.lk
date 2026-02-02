@@ -324,7 +324,7 @@ class FieldMap extends FieldMapPatterns {
         if (cellId < 0 || cellId >= FieldMap.board_cell_count) return null
 
         var cell = null
-        
+
         for (var dmCell in this.damageMap) {
             if (dmCell._id == cellId) {
                 cell = dmCell
@@ -332,16 +332,35 @@ class FieldMap extends FieldMapPatterns {
             }
         }
 
-        if (cell == null) return null  
+        if (cell == null) return null
 
-        var baseDamage = cell._weaponDamage + cell._chipDamage
+        var distToTarget = getCellDistance(cellId, target._cellPos)
+        if (distToTarget == null) return null
 
-        if (baseDamage <= 0) return null  
+        var validWeaponDamage = 0
+        for (var weapon in cell._weaponsList) {
+            var minRange = getWeaponMinRange(weapon._id)
+            var maxRange = getWeaponMaxRange(weapon._id)
+
+            if (distToTarget >= minRange && distToTarget <= maxRange) {
+                var dmg = arsenal.getNetDamageAgainstTarget(
+                    player._strength, player._magic, player._wisdom, player._science,
+                    weapon._id, target
+                )
+                if (dmg > validWeaponDamage) {
+                    validWeaponDamage = dmg
+                }
+            }
+        }
+
+        var baseDamage = validWeaponDamage + cell._chipDamage
+
+        if (baseDamage <= 0) return null
 
         var avgTPPerUse = 6.0
         var estimatedUses = floor(availableTP / avgTPPerUse)
         if (estimatedUses < 1) estimatedUses = 1
-        if (estimatedUses > 4) estimatedUses = 4  
+        if (estimatedUses > 4) estimatedUses = 4
 
         var estimatedMaxDamage = baseDamage * estimatedUses
 
