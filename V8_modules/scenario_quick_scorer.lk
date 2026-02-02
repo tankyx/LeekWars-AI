@@ -1,0 +1,180 @@
+
+class ScenarioQuickScorer {
+    _player = null
+    _target = null
+    _fieldMap = null
+    _arsenal = null
+
+    constructor(player, target, fieldMap, arsenal) {
+        this._player = player
+        this._target = target
+        this._fieldMap = fieldMap
+        this._arsenal = arsenal
+    }
+
+    quickScore(scenario) {
+        var score = 0
+
+        var tpEstimate = 0
+        var actionCount = 0
+        var hasOffensiveBuff = false
+        var hasDefensiveBuff = false
+        var hasHeal = false
+        var hasTeleport = false
+        var hasCheckpoint = false
+        var finalPosition = -1
+        var weaponActions = 0
+        var chipDamageActions = 0
+
+        var comboSignature = []
+
+        for (var action in scenario) {
+            actionCount++
+
+            if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT || action.type == Action.ACTION_DEBUFF) {
+                if (action.weaponId != -1) {
+                    weaponActions++
+                    if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
+                        var weapon = this._arsenal.playerEquippedWeapons[action.weaponId]
+                        tpEstimate += weapon._cost
+
+                        if (action.weaponId == WEAPON_NEUTRINO) push(comboSignature, "NEUTRINO")
+                        if (action.weaponId == WEAPON_HEAVY_SWORD) push(comboSignature, "HEAVY_SWORD")
+                    }
+                } else if (action.chip != -1) {
+                    chipDamageActions++
+                    var chipCost = getCachedChipCost(action.chip)
+                    tpEstimate += chipCost
+
+                    if (action.chip == CHIP_GRAPPLE) push(comboSignature, "GRAPPLE")
+                }
+            }
+            else if (action.type == Action.ACTION_BUFF) {
+                var chipCost = getCachedChipCost(action.chip)
+                tpEstimate += chipCost
+
+                if (action.chip == CHIP_STEROID || action.chip == CHIP_WARM_UP || action.chip == CHIP_DOPING) {
+                    hasOffensiveBuff = true
+                    if (action.chip == CHIP_STEROID) push(comboSignature, "STEROID")
+                }
+                if (action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS || action.chip == CHIP_PROTEIN) {
+                    hasDefensiveBuff = true
+                }
+                if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION || action.chip == CHIP_CURE) {
+                    hasHeal = true
+                }
+            }
+            else if (action.type == Action.ACTION_TELEPORT) {
+                hasTeleport = true
+                tpEstimate += 5
+                finalPosition = action.targetCell
+            }
+            else if (action.type == Action.MOVEMENT_OFFENSIVE || action.type == Action.MOVEMENT_OTKO ||
+                     action.type == Action.MOVEMENT_APPROACH || action.type == Action.MOVEMENT_HNS) {
+                finalPosition = action.targetCell
+            }
+            else if (action.type == Action.ACTION_CHECKPOINT) {
+                hasCheckpoint = true
+            }
+            else if (action.type == Action.ACTION_WEAPON_SWAP) {
+                tpEstimate += 1
+            }
+        }
+
+        var tpWeight = this.getTPWeight()
+        score += tpEstimate * tpWeight
+
+        score += weaponActions * 100
+        score += chipDamageActions * 80
+
+        if (hasOffensiveBuff) score += 300
+        if (hasDefensiveBuff) {
+            var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+            if (hpPercent < 50) score += 400
+            else score += 150
+        }
+        if (hasHeal) {
+            var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+            if (hpPercent < 40) score += 500
+            else if (hpPercent < 60) score += 250
+            else score += 50
+        }
+
+        var comboBonus = this.detectCombo(comboSignature)
+        score += comboBonus
+
+        if (hasCheckpoint) {
+            score += 1500
+        }
+
+        if (finalPosition != -1 && mapContainsKey(this._fieldMap.damageMap, finalPosition)) {
+            var cellObj = this._fieldMap.damageMap[finalPosition]
+            if (cellObj._isOTKOCell) {
+                score += 3000
+            } else {
+                score += cellObj._totalDamage * 0.5
+            }
+        }
+
+        if (hasTeleport) {
+            var enemyHP = this._target._currHealth
+            var enemyMaxHP = this._target._maxHealth
+            var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
+            if (enemyHPPercent < 40) {
+                score += 800
+            }
+        }
+
+        var actionDensity = actionCount * 20
+        score += actionDensity
+
+        return score
+    }
+
+    getTPWeight() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        if (str > mag && str > agi) {
+            return 40 + (str / 100.0)
+        }
+        else if (mag > str && mag > agi) {
+            return 25 + (mag / 150.0)
+        }
+        else if (agi > str && agi > mag) {
+            return 35 + (agi / 120.0)
+        }
+
+        return 30
+    }
+
+    detectCombo(signature) {
+        var sigStr = ""
+        for (var i = 0; i < count(signature); i++) {
+            sigStr += signature[i] + "|"
+        }
+
+        if (this.contains(sigStr, "GRAPPLE") && this.contains(sigStr, "HEAVY_SWORD")) {
+            return 1500
+        }
+
+        var neutrinoCount = 0
+        for (var s in signature) {
+            if (s == "NEUTRINO") neutrinoCount++
+        }
+        if (neutrinoCount >= 2) {
+            return 1200
+        }
+
+        if (this.contains(sigStr, "STEROID") && count(signature) >= 4) {
+            return 1000
+        }
+
+        return 0
+    }
+
+    contains(str, substr) {
+        return indexOf(str, substr) != -1
+    }
+}

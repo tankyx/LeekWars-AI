@@ -1,0 +1,164 @@
+include('action.lk')
+include('../weight_profiles.lk')
+
+class UnifiedStrategy extends Strategy {
+    _weights = null
+    _player = null
+    _target = null
+    _arsenal = null
+    _turnContext = null
+
+    constructor(weights, playerEntity, targetEntity, arsenalObj, fieldMapObj) {
+        super()
+        this._weights = weights
+        this._player = playerEntity
+        this._target = targetEntity
+        this._arsenal = arsenalObj
+        this._fieldMap = fieldMapObj
+
+        this.initializeTurnContext()
+    }
+
+    initializeTurnContext() {
+        this._turnContext = [
+            'poisonRemaining': [],
+            'antidoteUsed': false,
+            'lastShieldChip': null,
+            'baitMode': false,
+            'lastReturnChip': null,
+            'returnChipTurn': 0
+        ]
+    }
+
+    resetTurnContext() {
+        this.initializeTurnContext()
+        debug("[UNIFIED] Turn context reset")
+    }
+
+    createAndExecuteScenario(target, targetHitCell) {
+        arrayClear(this._actions)
+
+        this._originalTP = player._currTp
+        this._originalMP = player._currMp
+
+        debug("[UNIFIED] Using weight-driven scenario generation")
+
+        startOp()
+        this.generateAndEvaluateBestScenario(target, targetHitCell)
+        stopOp("Unified Multi-Scenario Evaluation")
+
+        this.executeScenario()
+    }
+
+    generateAndEvaluateBestScenario(target, targetHitCell) {
+        var generator = new ScenarioGenerator(
+            arsenal,
+            player,
+            target,
+            this._fieldMap,
+            this
+        )
+
+        startOp()
+        var scenarios = generator.generateScenarios()
+        var genOps = stopOp("Generate scenarios (" + count(scenarios) + " total)")
+
+        if (count(scenarios) == 0) {
+            debug("[UNIFIED] No scenarios generated - creating fallback")
+            this.createFallbackScenario(target, targetHitCell)
+            return
+        }
+
+        var quickScorer = new ScenarioQuickScorer(player, target, this._fieldMap, arsenal)
+
+        startOp()
+        var scenariosWithQuickScore = []
+        for (var scenario in scenarios) {
+            var qScore = quickScorer.quickScore(scenario)
+            push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore])
+        }
+
+        arraySort(scenariosWithQuickScore, function(a, b) {
+            return b['quickScore'] - a['quickScore']
+        })
+
+        var topK = 12
+        var evaluateCount = min(topK, count(scenariosWithQuickScore))
+        var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
+
+        debug("[UNIFIED-TOP-K] Quick scored " + count(scenariosWithQuickScore) + " scenarios, evaluating top " + evaluateCount)
+
+        var simulator = new ScenarioSimulator(arsenal, player, target, this._fieldMap)
+        var scorer = new ScenarioScorer(player, target, this._fieldMap, this._weights)
+
+        var bestScore = -999999
+        var bestScenario = null
+        var bestSimResult = null
+
+        startOp()
+        for (var i = 0; i < evaluateCount; i++) {
+            var scenarioData = scenariosWithQuickScore[i]
+            var scenario = scenarioData['scenario']
+            var qScore = scenarioData['quickScore']
+
+            var simResult = simulator.simulate(scenario)
+            var score = scorer.score(simResult, scenario)
+
+            debug("[UNIFIED-TOP-K] Scenario #" + (i+1) + ": quickScore=" + floor(qScore) + " fullScore=" + floor(score))
+
+            if (score > bestScore) {
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            }
+        }
+        var simOps = stopOp("Simulate & score top " + evaluateCount)
+
+        if (bestScenario != null) {
+            debug("[UNIFIED-BEST] Selected scenario: score=" + floor(bestScore) +
+                  " dmg=" + floor(bestSimResult.damageDealt) +
+                  " dot=" + floor(bestSimResult.dotDamageQueued) +
+                  " tp=" + bestSimResult.tpSpent + " mp=" + bestSimResult.mpSpent)
+
+            this._actions = bestScenario
+        } else {
+            debug("[UNIFIED] No valid scenario found - creating fallback")
+            this.createFallbackScenario(target, targetHitCell)
+        }
+    }
+
+    createFallbackScenario(target, targetHitCell) {
+        debug("[UNIFIED-FALLBACK] Creating basic offensive scenario")
+
+        if (targetHitCell != null) {
+            var pathLen = getCachedPathLength(player._cellPos, targetHitCell)
+            if (pathLen != null && pathLen > 0 && player._currMp >= pathLen) {
+                var action = new Action(Action.MOVEMENT_APPROACH, -1, -1, targetHitCell, null)
+                push(this._actions, action)
+                player._currMp -= pathLen
+                debug("[UNIFIED-FALLBACK] Move to hit cell " + targetHitCell)
+            }
+        }
+
+        var weaponIds = mapKeys(arsenal.playerEquippedWeapons)
+        if (count(weaponIds) > 0) {
+            var weaponId = weaponIds[0]
+            var weapon = arsenal.playerEquippedWeapons[weaponId]
+
+            if (weapon._cost <= player._currTp) {
+                var action = new Action(Action.ACTION_DIRECT, weaponId, -1, target._cellPos, null)
+                push(this._actions, action)
+                player._currTp -= weapon._cost
+                debug("[UNIFIED-FALLBACK] Attack with " + getWeaponName(weaponId))
+            }
+        }
+    }
+
+    turnOneBuffs() {
+        debug("[UNIFIED] Turn one buffs (weight-driven)")
+    }
+
+    shouldBuildDamageMap() {
+        return true
+    }
+}

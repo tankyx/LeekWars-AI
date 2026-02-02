@@ -69,13 +69,13 @@ function buildReachableCellsCache(fromCell, mp) {
         }
     }
 
-    var cacheKey = fromCell * 100 + mp
+    var cacheKey = fromCell * 1000 + mp
     __reachableCellsCache[cacheKey] = reachable
     return reachable
 }
 
-function isReachableCell(fromCell, toCell, mp) {
-    var cacheKey = fromCell * 100 + mp
+function isCachedReachableCell(fromCell, toCell, mp) {
+    var cacheKey = fromCell * 1000 + mp
 
     if (!mapContainsKey(__reachableCellsCache, cacheKey)) {
 
@@ -176,4 +176,11 @@ function initializeCaches(player, target, arsenal) {
     clearCaches()
     stopOp("Clear caches")
 
+    startOp()
+    buildDamageCache(arsenal, player, target)
+    stopOp("Build damage cache")
+
+    startOp()
+    buildCostCache(arsenal)
+    stopOp("Build cost cache")
 }

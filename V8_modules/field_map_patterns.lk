@@ -293,8 +293,8 @@ class FieldMapPatterns extends FieldMapCore {
         }
     }
 
-    buildHitMap(oppCell) {
-        
+    buildHitMap(oppCell, reachableGraph = null) {
+
         var enemyId = getEntityOnCell(oppCell)
         if (enemyId == null) enemyId = -1
         var cacheKey = enemyId + "_" + oppCell
@@ -404,34 +404,132 @@ class FieldMapPatterns extends FieldMapCore {
         return this.damageMap
     }
 
+    integrateReachableGraphIntoDamageMap(oppCell, reachableGraph) {
+        var reachableCells = reachableGraph.getReachableCells()
+
+        mapClear(this.weaponHitmap)
+        mapClear(this.chipHitmap)
+
+        for (var cellData in reachableCells) {
+            if (cellData.damageToTarget <= 0) continue
+
+            var cellId = cellData.cellId
+
+            for (var weaponId in cellData.usableWeapons) {
+                var weapon = arsenal.playerEquippedWeapons[weaponId]
+                if (weapon != null) {
+                    this.updateHitCells(this.damageMap, cellId, weapon, null, oppCell)
+
+                    var weaponCells = this.weaponHitmap[weaponId]
+                    if (weaponCells == null) {
+                        weaponCells = []
+                        this.weaponHitmap[weaponId] = weaponCells
+                    }
+                    push(weaponCells, cellId)
+                }
+            }
+
+            for (var chipId in cellData.usableChips) {
+                var chip = arsenal.playerEquippedChips[chipId]
+                if (chip != null) {
+                    this.updateHitCells(this.damageMap, cellId, null, chip, oppCell)
+
+                    var chipCells = this.chipHitmap[chipId]
+                    if (chipCells == null) {
+                        chipCells = []
+                        this.chipHitmap[chipId] = chipCells
+                    }
+                    push(chipCells, cellId)
+                }
+            }
+        }
+
+        for (var weaponId in mapKeys(this.weaponHitmap)) {
+            var cells = this.weaponHitmap[weaponId]
+            debug("[HITMAP][WEAPON] " + getWeaponName(weaponId) + " shooterCells=[" + count(cells) + " cells]")
+        }
+
+        for (var chipId in mapKeys(this.chipHitmap)) {
+            var cells = this.chipHitmap[chipId]
+            debug("[HITMAP][CHIP] " + getChipName(chipId) + " shooterCells=[" + count(cells) + " cells]")
+        }
+    }
+
     integrateEquippedItemsIntoDamageMap(oppCell) {
-        
+        // Phase 1: Use reachable graph if available (filters to 60-120 cells)
+        var reachableCells = getReachableCells()
+        var useGraph = count(reachableCells) > 0
+
+        if (useGraph) {
+            debug("[HITMAP][PHASE1] Using reachable graph (" + count(reachableCells) + " cells)")
+        }
+
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
             var wObj = arsenal.playerEquippedWeapons[wid]
-            var localWeaponMap = [:]
-            localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
             var listIDs = []
-            for (var cellRef in localWeaponMap) {
-                if (cellRef._isObstacle) continue
-                this.updateHitCells(this.damageMap, cellRef._id, wObj, null, oppCell)
-                push(listIDs, cellRef._id)
+
+            if (useGraph) {
+                // Optimized: Only check reachable cells (still use buildSingleItemHitMap)
+                var localWeaponMap = [:]
+                localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
+
+                for (var cellRef in localWeaponMap) {
+                    if (cellRef._isObstacle) continue
+
+                    // Only add if cell is reachable
+                    var cellId = cellRef._id
+                    if (mapContainsKey(ReachableGraph, cellId)) {
+                        this.updateHitCells(this.damageMap, cellId, wObj, null, oppCell)
+                        push(listIDs, cellId)
+                    }
+                }
+            } else {
+                // Fallback: Original scan-based approach
+                var localWeaponMap = [:]
+                localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
+                for (var cellRef in localWeaponMap) {
+                    if (cellRef._isObstacle) continue
+                    this.updateHitCells(this.damageMap, cellRef._id, wObj, null, oppCell)
+                    push(listIDs, cellRef._id)
+                }
             }
-            this.weaponHitmap[wObj._id] = listIDs  
+
+            this.weaponHitmap[wObj._id] = listIDs
             debug("[HITMAP][WEAPON] " + getWeaponName(wObj._id) + " shooterCells=" + listIDs)
         }
-        
+
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
-            var localChipMap = [:]
-            localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
             var listCID = []
-            for (var cellRef2 in localChipMap) {
-                if (cellRef2._isObstacle) continue
-                var bdDbg = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chipObj._id)
-                this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj, oppCell)
-                push(listCID, cellRef2._id)
+
+            if (useGraph) {
+                // Optimized: Only check reachable cells (still use buildSingleItemHitMap)
+                var localChipMap = [:]
+                localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
+
+                for (var cellRef2 in localChipMap) {
+                    if (cellRef2._isObstacle) continue
+
+                    // Only add if cell is reachable
+                    var cellId = cellRef2._id
+                    if (mapContainsKey(ReachableGraph, cellId)) {
+                        this.updateHitCells(this.damageMap, cellId, null, chipObj, oppCell)
+                        push(listCID, cellId)
+                    }
+                }
+            } else {
+                // Fallback: Original scan-based approach
+                var localChipMap = [:]
+                localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
+                for (var cellRef2 in localChipMap) {
+                    if (cellRef2._isObstacle) continue
+                    var bdDbg = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chipObj._id)
+                    this.updateHitCells(this.damageMap, cellRef2._id, null, chipObj, oppCell)
+                    push(listCID, cellRef2._id)
+                }
             }
-            this.chipHitmap[chipObj._id] = listCID  
+
+            this.chipHitmap[chipObj._id] = listCID
             debug("[HITMAP][CHIP] " + getChipName(chipObj._id) + " shooterCells=" + listCID)
         }
     }

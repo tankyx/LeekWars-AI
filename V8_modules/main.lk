@@ -4,6 +4,7 @@ global fieldMap = null
 global arsenal = null
 global player = null
 global strategy = null
+global DEBUG_SCENARIO_TRACE = false  // Enable for score breakdown logging
 
 include('game_entity.lk')
 include('field_map_tactical.lk')
@@ -16,17 +17,18 @@ include('math/damage_probability.lk')
 
 include('operation_tracker.lk')
 include('cache_manager.lk')
+include('reachable_graph.lk')
+include('weight_profiles.lk')
 
 include('scenario_generator.lk')
 include('scenario_simulator.lk')
 include('scenario_scorer.lk')
+include('scenario_quick_scorer.lk')
 
 include('strategy/action.lk')
 include('strategy/base_strategy.lk')
-include('strategy/strength_strategy.lk')
-include('strategy/magic_strategy.lk')
-include('strategy/agility_strategy.lk')
 include('strategy/boss_strategy.lk')
+include('strategy/unified_strategy.lk')
 
 if (!_init) {
     init()
@@ -42,19 +44,14 @@ function init() {
 
     if (detectBossFight()) {
         strategy = new BossFightStrategy();
-        
-    }
-    else if (player._agility >= player._strength && player._agility >= player._magic) {
-        strategy = new AgilityStrategy();
-        strategy.turnOneBuffs()
-    }
-    else if (player._magic >= player._strength) {
-        strategy = new MagicStrategy();
-        strategy.turnOneBuffs()
     }
     else {
-        strategy = new StrengthStrategy();
-        strategy.turnOneBuffs()
+        var buildType = detectBuildType(player)
+        var weights = getWeightsForBuild(buildType)
+
+        debug("[INIT] Using UnifiedStrategy with build type: " + buildType)
+        strategy = new UnifiedStrategy(weights, player, null, arsenal, fieldMap)
+        strategy.resetTurnContext()
     }
 }
 
@@ -65,6 +62,9 @@ function main() {
         __operation_totals = []
         __debug_operation = 0
         debug("[TURN-1-RESET] Cleared all static variables and caches")
+
+        // Phase 1: Initialize adjacency map (one-time setup)
+        initializeAdjacency()
     }
 
     player.updateEntity()
@@ -74,9 +74,14 @@ function main() {
 
     if (target == null) target = fieldMap.getClosestEnemy()
 
+    // Phase 1: Build reachable graph (replaces redundant pathfinding)
+    buildReachableGraph(player._cellPos, player._currMp, player, target, arsenal)
+
     startOp()
     initializeCaches(player, target, arsenal)
     stopOp("Initialize all caches")
+
+    fieldMap.buildEnemyThreatMap()
 
     var targetHitCell = null
 
@@ -84,8 +89,6 @@ function main() {
         fieldMap.buildHitMap(target._cellPos)
         targetHitCell = fieldMap.getBestWeaponOrChipCell();
     }
-
-    fieldMap.buildEnemyThreatMap()
 
     if (strategy instanceof MagicStrategy) {
         strategy.createAndExecuteDotKite(target, targetHitCell)

@@ -3,17 +3,24 @@ class ScenarioScorer {
     _player = null
     _target = null
     _fieldMap = null
+    _weights = null
 
-    constructor(player, target, fieldMap) {
+    constructor(player, target, fieldMap, weights) {
         this._player = player
         this._target = target
         this._fieldMap = fieldMap
+        this._weights = weights != null ? weights : [:]
+    }
+
+    getWeight(key, defaultValue) {
+        if (mapContainsKey(this._weights, key)) {
+            return this._weights[key]
+        }
+        return defaultValue
     }
 
     score(simResult, scenario) {
         var score = 0
-
-        var damageWeight = this.calculateDamageWeight()
 
         var enemyHP = this._target._currHealth
         var dotDmg = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
@@ -21,12 +28,14 @@ class ScenarioScorer {
         var totalDamage = simResult.damageDealt + dotDmg + novaDmg
         var killProbability = totalDamage / enemyHP
 
+        var damageWeight = this.getWeight('burstDamage', this.calculateDamageWeight())
+
         if (killProbability >= 0.70) {
-            damageWeight *= 5.0  
+            damageWeight *= 5.0
             debug("[SCORER-BOOST] Kill opportunity: dmg=" + floor(totalDamage) +
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 5x damage weight")
         } else if (killProbability >= 0.50) {
-            damageWeight *= 2.5  
+            damageWeight *= 2.5
             debug("[SCORER-BOOST] Near-kill: dmg=" + floor(totalDamage) +
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
         }
@@ -36,16 +45,16 @@ class ScenarioScorer {
 
         var playerHPPercent = (this._player._currHealth * 100) / this._player._maxHealth
         if (totalDamage == 0 && playerHPPercent > 30) {
-            
-            score -= 2000
-            debug("[SCORER-PENALTY] No damage dealt (not FLEE state) - penalty: -2000")
+            var noDamagePenalty = this.getWeight('noDamagePenalty', -2000)
+            score += noDamagePenalty
+            debug("[SCORER-PENALTY] No damage dealt (not FLEE state) - penalty: " + noDamagePenalty)
         }
 
-        var dotWeight = this.calculateDotWeight()
+        var dotWeight = this.getWeight('dotEffects', this.calculateDotWeight())
         var dotScore = simResult.dotDamageQueued * dotWeight
         score += dotScore
 
-        var novaWeight = (dotWeight + damageWeight) / 2.0  
+        var novaWeight = this.getWeight('novaEffects', (dotWeight + damageWeight) / 2.0)
         var novaDamageQueued = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
         var novaScore = novaDamageQueued * novaWeight
         score += novaScore
@@ -63,11 +72,11 @@ class ScenarioScorer {
         var positionScore = this.evaluatePosition(simResult.finalPosition) * positionWeight
         score += positionScore
 
-        var efficiencyWeight = this.calculateEfficiencyWeight()
+        var efficiencyWeight = this.getWeight('tpEfficiency', this.calculateEfficiencyWeight())
         var efficiencyScore = this.calculateEfficiency(simResult) * efficiencyWeight
         score += efficiencyScore
 
-        var buffWeight = this.calculateBuffWeight()
+        var buffWeight = this.getWeight('buffs', this.calculateBuffWeight())
         var buffScore = this.evaluateBuffs(simResult.buffsApplied, simResult) * buffWeight
         var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
         score += buffScore + debuffScore
@@ -80,9 +89,8 @@ class ScenarioScorer {
         if (finalPos != -1 && mapContainsKey(this._fieldMap.damageMap, finalPos)) {
             var cell = this._fieldMap.damageMap[finalPos]
             if (cell._isOTKOCell) {
-                
-                otkoBonus = 5000
-                debug("[SCORER-OTKO] +5000 bonus: Final position cell " + finalPos +
+                otkoBonus = this.getWeight('otkoBonus', 5000)
+                debug("[SCORER-OTKO] +" + otkoBonus + " bonus: Final position cell " + finalPos +
                       " is OTKO cell (kill prob=" + floor(cell._otkoKillProbability * 100) +
                       "%, damage=" + floor(cell._otkoDamage) + ")")
             }
@@ -92,11 +100,10 @@ class ScenarioScorer {
         var checkpointBonus = 0
         if (scenario != null && count(scenario) > 0) {
             for (var action in scenario) {
-                if (action.type == 15) {  
-                    
-                    checkpointBonus = 2500
-                    debug("[SCORER-CHECKPOINT] +2500 bonus: Two-phase adaptive scenario (type=" + action.checkpointType + ")")
-                    break  
+                if (action.type == 15) {
+                    checkpointBonus = this.getWeight('checkpointBonus', 2500)
+                    debug("[SCORER-CHECKPOINT] +" + checkpointBonus + " bonus: Two-phase adaptive scenario (type=" + action.checkpointType + ")")
+                    break
                 }
             }
         }

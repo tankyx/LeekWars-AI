@@ -1,4 +1,8 @@
 include('action.lk')
+include('../scenario_generator.lk')
+include('../scenario_simulator.lk')
+include('../scenario_scorer.lk')
+include('../scenario_quick_scorer.lk')
 
 class Strategy {
     _actions = []
@@ -2214,25 +2218,45 @@ class Strategy {
 
         logCheckpoint("After scenario generation")
 
+        startOp()
+        var quickScorer = new ScenarioQuickScorer(player, target, fieldMap, arsenal)
+        var scenariosWithQuickScore = []
+
+        for (var i = 0; i < count(scenarios); i++) {
+            var scenario = scenarios[i]
+            if (count(scenario) == 0) continue
+
+            var qScore = quickScorer.quickScore(scenario)
+            push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore])
+        }
+
+        arraySort(scenariosWithQuickScore, function(a, b) {
+            return b['quickScore'] - a['quickScore']
+        })
+
+        var topK = 12
+        var evaluateCount = min(topK, count(scenariosWithQuickScore))
+        var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
+
+        debug("[TOP-K] Quick scored " + count(scenariosWithQuickScore) + " scenarios, evaluating top " + evaluateCount)
+
         var simulator = new ScenarioSimulator(arsenal, player, target, fieldMap)
-        var scorer = new ScenarioScorer(player, target, fieldMap)
+        var scorer = new ScenarioScorer(player, target, fieldMap, null)
 
         var bestScore = -999999
         var bestScenario = null
         var bestSimResult = null
 
         startOp()
-        for (var i = 0; i < count(scenarios); i++) {
-            if (getOperations() > 5500000) {
-                debug("[SCENARIO-EVAL] Operation limit approaching (" + getOperations() + "), stopping scenario evaluation early")
-                break
-            }
-
-            var scenario = scenarios[i]
-            if (count(scenario) == 0) continue
+        for (var i = 0; i < evaluateCount; i++) {
+            var scenarioData = scenariosWithQuickScore[i]
+            var scenario = scenarioData['scenario']
+            var qScore = scenarioData['quickScore']
 
             var simResult = simulator.simulate(scenario)
             var score = scorer.score(simResult, scenario)
+
+            debug("[TOP-K] Scenario #" + (i+1) + ": quickScore=" + floor(qScore) + " fullScore=" + floor(score))
 
             if (score > bestScore) {
                 bestScore = score
@@ -2240,7 +2264,7 @@ class Strategy {
                 bestSimResult = simResult
             }
         }
-        var evalOps = stopOp("All Simulation+Scoring")
+        var evalOps = stopOp("Full Simulation+Scoring (" + evaluateCount + " scenarios)")
 
         if (bestScenario == null) {
             this.createOffensiveScenario(target, targetHitCell)
@@ -2248,7 +2272,7 @@ class Strategy {
         }
 
         debug("[MULTI-SCENARIO] Best: score=" + floor(bestScore) + " dmg=" + floor(bestSimResult.damageDealt) +
-              " TP=" + bestSimResult.tpSpent + " | OPS: gen=" + genOps + " eval=" + evalOps)
+              " TP=" + bestSimResult.tpSpent + " | OPS: gen=" + genOps + " quick=" + quickOps + " eval=" + evalOps)
 
         logCheckpoint("After scenario evaluation")
 

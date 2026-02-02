@@ -1,80 +1,158 @@
+// Phase 2: Policy-Based Unification - Weight Profiles
+// Build-specific scoring weights for unified scenario evaluation
 
-class WeightProfiles {
-    
-    static function getProfile(player) {
-        var str = player._strength
-        var mag = player._magic
-        var agi = player._agility
-        var hp = player._maxHealth
-        var tp = player._maxTP
+global BUILD_STRENGTH = 1
+global BUILD_MAGIC = 2
+global BUILD_AGILITY = 3
+global BUILD_STRENGTH_SCIENCE = 4
 
-        var primaryStat = max(str, max(mag, agi))
+// Strength build weights - Maximize burst damage and weapon spam
+global STRENGTH_WEIGHTS = [
+    'burstDamage': 300,        // Primary focus: raw damage output
+    'weaponUses': 100,         // Secondary: weapon spam efficiency
+    'tpEfficiency': 50,        // Tertiary: TP conservation
+    'dotEffects': -50,         // Discourage: DoT chips (poor scaling)
+    'kiteDistance': 0,         // Irrelevant: no kiting strategy
+    'damageReturn': 0,         // Irrelevant: no return buffs
+    'poisonStacks': 0,         // Irrelevant: no poison synergy
+    'shieldValue': 80,         // Moderate: defensive sustainability
+    'healValue': 60,           // Moderate: emergency healing
+    'distanceToTarget': -20,   // Slight penalty: prefer close range
+    'threatReduction': 40,     // Moderate: avoid dangerous cells
+    'otkoBonus': 5000,         // Massive: prioritize kill opportunities
+    'checkpointBonus': 2500    // Large: two-phase scenarios valuable
+]
 
-        if (primaryStat < 500) {
-            return WeightProfiles.WEAK_BUILD
-        } else if (primaryStat >= 500 && primaryStat < 700) {
-            return WeightProfiles.BALANCED_BUILD
-        } else if (primaryStat >= 700) {
-            return WeightProfiles.STRONG_BUILD
+// Magic build weights - Maximize DoT attrition and kiting
+global MAGIC_WEIGHTS = [
+    'burstDamage': 100,        // Moderate: direct damage matters but not primary
+    'weaponUses': 0,           // Irrelevant: weapons scale poorly
+    'tpEfficiency': 50,        // Tertiary: TP conservation
+    'dotEffects': 500,         // Primary focus: poison/burn damage over time
+    'kiteDistance': 200,       // Secondary: maintain distance for safety
+    'damageReturn': 0,         // Irrelevant: no return buffs
+    'poisonStacks': 400,       // High: poison stacking synergy
+    'shieldValue': 100,        // High: fragile build needs defense
+    'healValue': 80,           // High: sustain crucial for attrition
+    'distanceToTarget': 30,    // Bonus: prefer far range
+    'threatReduction': 80,     // High: avoid close-range danger
+    'otkoBonus': 3000,         // Large: still want to close kills
+    'checkpointBonus': 2500    // Large: two-phase scenarios valuable
+]
+
+// Agility build weights - Balance damage and damage return
+global AGILITY_WEIGHTS = [
+    'burstDamage': 250,        // High: weapon damage with agi scaling
+    'weaponUses': 100,         // High: weapon spam like strength
+    'tpEfficiency': 50,        // Tertiary: TP conservation
+    'dotEffects': 0,           // Irrelevant: no DoT synergy
+    'kiteDistance': 50,        // Minor: hit-and-run tactics
+    'damageReturn': 300,       // Secondary focus: MIRROR/THORN/BRAMBLE
+    'poisonStacks': 0,         // Irrelevant: no poison synergy
+    'shieldValue': 80,         // Moderate: defensive sustainability
+    'healValue': 60,           // Moderate: emergency healing
+    'distanceToTarget': -10,   // Slight penalty: close range for BRAMBLE
+    'threatReduction': 50,     // Moderate: balanced approach
+    'otkoBonus': 4500,         // Very high: finish fights fast
+    'checkpointBonus': 2500    // Large: two-phase scenarios valuable
+]
+
+// Strength/Science hybrid weights - Weapon damage + Nova max HP reduction
+global STRENGTH_SCIENCE_WEIGHTS = [
+    'burstDamage': 250,        // High: weapon damage from STR
+    'weaponUses': 80,          // Moderate: balance weapons with nova chips
+    'tpEfficiency': 50,        // Tertiary: TP conservation
+    'dotEffects': 0,           // Irrelevant: no DoT synergy
+    'kiteDistance': 0,         // Irrelevant: aggressive playstyle
+    'damageReturn': 0,         // Irrelevant: no return buffs
+    'poisonStacks': 0,         // Irrelevant: no poison synergy
+    'shieldValue': 80,         // Moderate: defensive sustainability
+    'healValue': 60,           // Moderate: emergency healing
+    'distanceToTarget': -15,   // Slight penalty: prefer close range
+    'threatReduction': 40,     // Moderate: avoid dangerous cells
+    'otkoBonus': 5000,         // Massive: prioritize kill opportunities
+    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
+    'novaEffects': 400         // Primary secondary focus: max HP reduction via science
+]
+
+// Boss fight weights - Specialized for crystal puzzle mechanics
+global BOSS_WEIGHTS = [
+    'burstDamage': 0,          // Irrelevant: no damage phase
+    'weaponUses': 0,           // Irrelevant: puzzle mechanics only
+    'tpEfficiency': 200,       // High: chip usage crucial
+    'dotEffects': 0,           // Irrelevant: no damage phase
+    'kiteDistance': 0,         // Irrelevant: positioning is strategic
+    'damageReturn': 0,         // Irrelevant: no combat
+    'poisonStacks': 0,         // Irrelevant: no combat
+    'shieldValue': 0,          // Irrelevant: no damage taken
+    'healValue': 0,            // Irrelevant: no damage taken
+    'distanceToTarget': -100,  // Penalty: want to be ON axis
+    'threatReduction': 0,      // Irrelevant: no threat
+    'otkoBonus': 0,            // Irrelevant: no kills
+    'checkpointBonus': 0,      // Irrelevant: simple actions
+    'axisAlignment': 1000,     // Primary: GRAPPLE/BOXING_GLOVE require axis
+    'crystalProximity': 500    // Secondary: get close to crystal
+]
+
+// Runtime weight selector
+function getWeightsForBuild(buildType) {
+    if (buildType == BUILD_STRENGTH) {
+        return STRENGTH_WEIGHTS
+    }
+    if (buildType == BUILD_MAGIC) {
+        return MAGIC_WEIGHTS
+    }
+    if (buildType == BUILD_AGILITY) {
+        return AGILITY_WEIGHTS
+    }
+    if (buildType == BUILD_STRENGTH_SCIENCE) {
+        return STRENGTH_SCIENCE_WEIGHTS
+    }
+    return STRENGTH_WEIGHTS  // Default fallback
+}
+
+// Detect build type from player stats
+function detectBuildType(player) {
+    var strStat = player._strength
+    var magStat = player._magic
+    var agiStat = player._agility
+    var sciStat = player._science
+
+    // Check for hybrids first (science threshold: 200+)
+    if (strStat >= magStat && strStat >= agiStat && sciStat >= 200) {
+        debug("[BUILD-DETECT] Strength/Science hybrid: STR=" + strStat + " SCI=" + sciStat)
+        return BUILD_STRENGTH_SCIENCE
+    }
+
+    // Check pure builds
+    if (strStat >= magStat && strStat >= agiStat) {
+        debug("[BUILD-DETECT] Pure Strength: STR=" + strStat)
+        return BUILD_STRENGTH
+    }
+    if (magStat >= strStat && magStat >= agiStat) {
+        debug("[BUILD-DETECT] Pure Magic: MAG=" + magStat)
+        return BUILD_MAGIC
+    }
+    if (agiStat >= strStat && agiStat >= magStat) {
+        debug("[BUILD-DETECT] Pure Agility: AGI=" + agiStat)
+        return BUILD_AGILITY
+    }
+
+    return BUILD_STRENGTH  // Default
+}
+
+// Weight blending (future feature - adaptive mid-fight)
+function blendWeights(weights1, weights2, ratio) {
+    var blended = [:]
+
+    for (var key in mapKeys(weights1)) {
+        var val1 = weights1[key]
+        var val2 = 0
+        if (mapContainsKey(weights2, key)) {
+            val2 = weights2[key]
         }
-
-        return WeightProfiles.BALANCED_BUILD
+        blended[key] = floor(val1 * ratio + val2 * (1.0 - ratio))
     }
 
-    static var WEAK_BUILD = {
-        
-        'str_damage_base': 1.3,
-        'mag_damage_base': 0.7,
-        'agi_damage_base': 1.1,
-
-        'kill_mult_70': 4.0,
-        'kill_mult_50': 2.0,
-
-        'threat_penalty_mult': 0.7,
-
-        'otko_cell_bonus': 3500,
-
-        'buff_weight': 6.0,
-
-        'ehp_urgency_30': 3.5,
-        'ehp_urgency_50': 2.5
-    }
-
-    static var BALANCED_BUILD = {
-        
-        'str_damage_base': 1.5,
-        'mag_damage_base': 0.8,
-        'agi_damage_base': 1.3,
-
-        'kill_mult_70': 5.0,
-        'kill_mult_50': 2.5,
-
-        'threat_penalty_mult': 0.5,
-
-        'otko_cell_bonus': 5000,
-
-        'buff_weight': 5.0,
-
-        'ehp_urgency_30': 3.0,
-        'ehp_urgency_50': 2.0
-    }
-
-    static var STRONG_BUILD = {
-        
-        'str_damage_base': 1.8,
-        'mag_damage_base': 0.9,
-        'agi_damage_base': 1.6,
-
-        'kill_mult_70': 6.0,
-        'kill_mult_50': 3.5,
-
-        'threat_penalty_mult': 0.3,
-
-        'otko_cell_bonus': 6500,
-
-        'buff_weight': 4.0,
-
-        'ehp_urgency_30': 2.5,
-        'ehp_urgency_50': 1.5
-    }
+    return blended
 }

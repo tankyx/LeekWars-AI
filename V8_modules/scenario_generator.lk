@@ -338,8 +338,8 @@ class ScenarioGenerator {
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
-            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
-            if (moveCost != null) {
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell  
             }
@@ -391,8 +391,8 @@ class ScenarioGenerator {
         var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.7))  
         if (moveAction != null) {
             push(actions, moveAction)
-            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
-            if (moveCost != null) {
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell  
             }
@@ -432,8 +432,8 @@ class ScenarioGenerator {
         var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.5))
         if (moveAction != null) {
             push(actions, moveAction)
-            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
-            if (moveCost != null) {
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell  
             }
@@ -490,8 +490,8 @@ class ScenarioGenerator {
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
-            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
-            if (moveCost != null) {
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell  
             }
@@ -541,8 +541,8 @@ class ScenarioGenerator {
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
-            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
-            if (moveCost != null) {
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell  
             }
@@ -747,8 +747,8 @@ class ScenarioGenerator {
             var moveAction = this.getMoveToOptimalCell(mpToUse)
             if (moveAction != null) {
                 push(actions, moveAction)
-                var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
-                if (moveCost != null) {
+                var moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999) {
                     mpBudget -= moveCost
                     simPos = moveAction.targetCell
                 }
@@ -896,8 +896,8 @@ class ScenarioGenerator {
             var bestOTKOScore = -999999
 
             for (var otkoCell in otkoCells) {
-                var pathLen = getCachedPathLength(this._player._cellPos, otkoCell._id)
-                if (pathLen != null && pathLen <= mpBudget) {
+                var pathLen = getGraphMPCost(otkoCell._id)
+                if (pathLen < 999 && pathLen <= mpBudget) {
                     
                     var score = otkoCell._otkoKillProbability * 10000 + otkoCell._otkoDamage - pathLen * 10
                     if (score > bestOTKOScore) {
@@ -932,8 +932,8 @@ class ScenarioGenerator {
             bestCell = this._fieldMap.getBestWeaponOrChipCell()
             if (bestCell == null || bestCell == -1) return null
 
-            var pathLength = getCachedPathLength(this._player._cellPos, bestCell._id)
-            if (pathLength == null || pathLength > mpBudget) {
+            var pathLength = getGraphMPCost(bestCell._id)
+            if (pathLength >= 999 || pathLength > mpBudget) {
                 bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
                 if (bestCell == null || bestCell == -1) return null
             }
@@ -1763,8 +1763,8 @@ class ScenarioGenerator {
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
-            var moveCost = getCachedPathLength(this._player._cellPos, moveAction.targetCell)
-            if (moveCost != null) {
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell  
             }
