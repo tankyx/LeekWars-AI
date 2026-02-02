@@ -358,6 +358,33 @@ class FieldMap extends FieldMapPatterns {
         if (baseDamage <= 0) return null
 
         var avgTPPerUse = 6.0
+        var totalCost = 0
+        var costCount = 0
+
+        for (var weapon in cell._weaponsList) {
+            var minRange = getWeaponMinRange(weapon._id)
+            var maxRange = getWeaponMaxRange(weapon._id)
+            if (distToTarget >= minRange && distToTarget <= maxRange) {
+                var weaponCost = getCachedWeaponCost(weapon._id, arsenal)
+                if (weaponCost != null && weaponCost > 0) {
+                    totalCost += weaponCost
+                    costCount++
+                }
+            }
+        }
+
+        for (var chip in cell._chipsList) {
+            var chipCost = getCachedChipCost(chip._id)
+            if (chipCost != null && chipCost > 0) {
+                totalCost += chipCost
+                costCount++
+            }
+        }
+
+        if (costCount > 0) {
+            avgTPPerUse = totalCost / costCount
+        }
+
         var estimatedUses = floor(availableTP / avgTPPerUse)
         if (estimatedUses < 1) estimatedUses = 1
         if (estimatedUses > 4) estimatedUses = 4

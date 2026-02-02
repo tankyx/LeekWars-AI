@@ -2219,11 +2219,16 @@ class Strategy {
 
         startOp()
         for (var i = 0; i < count(scenarios); i++) {
+            if (getOperations() > 5500000) {
+                debug("[SCENARIO-EVAL] Operation limit approaching (" + getOperations() + "), stopping scenario evaluation early")
+                break
+            }
+
             var scenario = scenarios[i]
             if (count(scenario) == 0) continue
 
             var simResult = simulator.simulate(scenario)
-            var score = scorer.score(simResult, scenario)  
+            var score = scorer.score(simResult, scenario)
 
             if (score > bestScore) {
                 bestScore = score

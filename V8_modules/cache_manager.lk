@@ -8,7 +8,7 @@ global __weaponCostCache = [:]
 global __pathLengthCache = [:]           
 
 function hashTwoCells(cell1, cell2) {
-    return cell1 * 1000 + cell2
+    return cell1 * 1024 + cell2
 }
 
 function clearCaches() {
@@ -32,6 +32,10 @@ function buildReachableCellsCache(fromCell, mp) {
     mapPut(reachable, fromCell, 0)
 
     while (queueIndex < count(queue)) {
+        if (getOperations() > 5500000) {
+            break
+        }
+
         var current = queue[queueIndex]
         queueIndex++
 
