@@ -225,6 +225,10 @@ class FieldMap extends FieldMapPatterns {
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
                 if (!lineOfSight(cellId, target._cellPos)) continue
 
+                if (wObj._aoeType == AREA_LASER_LINE) {
+                    if (!this.isOnSameLine(cellId, target._cellPos)) continue
+                }
+
                 var weaponDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, wid, target)
                 var tpBudget = playerTP - tpSpent
                 var swapCost = (getWeapon() != wid) ? 1 : 0
@@ -278,6 +282,10 @@ class FieldMap extends FieldMapPatterns {
             if (distToTarget == null) continue
             if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
             if (!lineOfSight(bestCell, target._cellPos)) continue
+
+            if (wObj._aoeType == AREA_LASER_LINE) {
+                if (!this.isOnSameLine(bestCell, target._cellPos)) continue
+            }
 
             var swapCost = (getWeapon() != wid) ? 1 : 0
             var uses = min(wObj._maxUse, floor((tpForItems - swapCost) / wObj._cost))
@@ -345,6 +353,11 @@ class FieldMap extends FieldMapPatterns {
             if (distToTarget >= minRange && distToTarget <= maxRange) {
                 if (!lineOfSight(cellId, target._cellPos)) continue
 
+                var area = getWeaponArea(weapon._id)
+                if (area == AREA_LASER_LINE) {
+                    if (!this.isOnSameLine(cellId, target._cellPos)) continue
+                }
+
                 var dmg = arsenal.getNetDamageAgainstTarget(
                     player._strength, player._magic, player._wisdom, player._science,
                     weapon._id, target
@@ -368,6 +381,11 @@ class FieldMap extends FieldMapPatterns {
             var maxRange = getWeaponMaxRange(weapon._id)
             if (distToTarget >= minRange && distToTarget <= maxRange) {
                 if (!lineOfSight(cellId, target._cellPos)) continue
+
+                var area = getWeaponArea(weapon._id)
+                if (area == AREA_LASER_LINE) {
+                    if (!this.isOnSameLine(cellId, target._cellPos)) continue
+                }
 
                 var weaponCost = getCachedWeaponCost(weapon._id, arsenal)
                 if (weaponCost != null && weaponCost > 0) {
@@ -732,5 +750,13 @@ class FieldMap extends FieldMapPatterns {
             return result['cell']
         }
         return null
+    }
+
+    isOnSameLine(cell1, cell2) {
+        var x1 = getCellX(cell1)
+        var y1 = getCellY(cell1)
+        var x2 = getCellX(cell2)
+        var y2 = getCellY(cell2)
+        return (x1 == x2 || y1 == y2)
     }
 }
