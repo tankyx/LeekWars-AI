@@ -2130,6 +2130,10 @@ class Strategy {
             if (distToTarget < weapon._minRange || distToTarget > weapon._maxRange) continue
             if (!lineOfSight(fromPosition, target._cellPos)) continue
 
+            if (weapon._aoeType == AREA_LASER_LINE) {
+                if (!fieldMap.isOnSameLine(fromPosition, target._cellPos)) continue
+            }
+
             var weaponDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
 
             var swapCost = (getWeapon() != weaponId) ? 1 : 0
