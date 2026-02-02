@@ -2291,8 +2291,15 @@ class Strategy {
                     useChipOnCell(a.chip, a.targetCell)
                 }
                 else if (a.weaponId != -1) {
+                    if (dist == null) {
+                        debug("⚠️  SKIPPING WEAPON ATTACK: Cannot calculate distance")
+                        continue
+                    }
+
                     var minRange = getWeaponMinRange(a.weaponId)
                     var maxRange = getWeaponMaxRange(a.weaponId)
+
+                    debug("[RANGE-CHECK] Weapon: " + getWeaponName(a.weaponId) + " dist=" + dist + " range=" + minRange + "-" + maxRange + " inRange=" + (dist >= minRange && dist <= maxRange))
 
                     if (dist < minRange || dist > maxRange) {
                         debug("⚠️  SKIPPING WEAPON ATTACK: " + getWeaponName(a.weaponId) + " out of range (dist=" + dist + ", range=" + minRange + "-" + maxRange + ")")
