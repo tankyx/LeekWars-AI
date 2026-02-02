@@ -38,6 +38,9 @@ class ScenarioGenerator {
     }
 
     generateScenarios() {
+        this._target.updateEntity()
+        debug("[SCENARIO-GEN] Updated target entity (pos=" + this._target._cellPos + " HP=" + this._target._currHealth + ")")
+
         var scenarios = []
         var availableTP = getTP()
         var availableMP = getMP()
@@ -1340,17 +1343,26 @@ class ScenarioGenerator {
 
         var playerX = getCellX(simPos)
         var playerY = getCellY(simPos)
-        var enemyX = getCellX(this._target._cellPos)
-        var enemyY = getCellY(this._target._cellPos)
+        var enemyPos = this._target._cellPos
+        var enemyX = getCellX(enemyPos)
+        var enemyY = getCellY(enemyPos)
+
+        var isOnSameLine = (playerY == enemyY) || (playerX == enemyX)
+        if (!isOnSameLine) {
+            debug("[COMBO-GRAPPLE-HS] ABORT: Enemy not on same H/V line (player=" + simPos + " enemy=" + enemyPos + ")")
+            return null
+        }
 
         var grappleCell = -1
         if (playerY == enemyY) {
-            
+
             grappleCell = (enemyX < playerX) ? getCellFromXY(playerX - 1, playerY) : getCellFromXY(playerX + 1, playerY)
         } else {
-            
+
             grappleCell = (enemyY < playerY) ? getCellFromXY(playerX, playerY - 1) : getCellFromXY(playerX, playerY + 1)
         }
+
+        debug("[COMBO-GRAPPLE-HS] Calculated grapple destination: cell " + grappleCell + " (enemy at " + enemyPos + ")")
 
         if (grappleCell == -1 || grappleCell == null) {
             return null

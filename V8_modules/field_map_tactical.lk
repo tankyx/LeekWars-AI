@@ -484,6 +484,11 @@ class FieldMap extends FieldMapPatterns {
             var searchRadius = min(maxRange, 10)
 
             for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+                if (getOperations() > 5500000) {
+                    debug("[THREAT-MAP] Operation limit approaching, aborting threat calculation")
+                    return
+                }
+
                 for (var dy = -searchRadius; dy <= searchRadius; dy++) {
                     var cellId = enemyPos + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
                     if (cellId < 0 || cellId >= FieldMap.board_cell_count) continue

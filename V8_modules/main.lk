@@ -59,11 +59,19 @@ function init() {
 }
 
 function main() {
+    if (getTurn() == 1) {
+        clearCaches()
+        __operation_log = []
+        __operation_totals = []
+        __debug_operation = 0
+        debug("[TURN-1-RESET] Cleared all static variables and caches")
+    }
+
     player.updateEntity()
     fieldMap.updateMapEntities()
 
     var target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
-    
+
     if (target == null) target = fieldMap.getClosestEnemy()
 
     startOp()

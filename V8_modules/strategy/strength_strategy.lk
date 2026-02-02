@@ -11,39 +11,75 @@ class StrengthStrategy extends Strategy {
     }
 
     createOTKOScenario(target, targetHitCell) {
-        
+        debug("[OTKO-V2] Starting OTKO scenario creation (teleport optimization enabled)")
+
         var chest = fieldMap.getClosestChest()
         if (chest != null) {
             debug("[CHEST-OTKO] Chest detected! Switching OTKO target from enemy to chest (ID: " + chest._id + ")")
             target = chest
         }
 
-        if (!mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
-            debug("[OTKO] Teleportation not equipped")
-            return false
-        }
-
-        var cooldown = getCooldown(CHIP_TELEPORTATION, getEntity())
-        if (cooldown > 0) {
-            debug("[OTKO] Teleportation on cooldown: " + cooldown + " turns")
-            return false
-        }
-
         var playerTP = player._currTp
-        if (playerTP < 15) {  
-            debug("[OTKO] Insufficient TP for teleport OTKO: " + playerTP)
+        var playerPos = player._cellPos
+
+        var burstFromCurrent = this.calculateBurstDamage(target, playerPos, playerTP)
+        var killProbCurrent = burstFromCurrent / target._currHealth
+        debug("[OTKO-V2] Current position (cell=" + playerPos + "): damage=" + floor(burstFromCurrent) + " kill prob=" + round(killProbCurrent * 100) + "%")
+
+        var shouldTeleport = false
+        var teleportInfo = null
+        var teleCell = playerPos
+
+        var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
+        var teleportReady = hasTeleport && getCooldown(CHIP_TELEPORTATION, player._id) == 0
+        var enoughTPForTeleport = playerTP >= 24
+
+        debug("[OTKO-V2] Teleport check: equipped=" + hasTeleport + " ready=" + teleportReady + " TP=" + playerTP + " (need 24)")
+
+        if (hasTeleport && teleportReady && enoughTPForTeleport) {
+            debug("[OTKO-V2] Evaluating teleport option...")
+            teleportInfo = fieldMap.findOptimalTeleportCell(target)
+            if (teleportInfo != null) {
+                var teleportDamage = teleportInfo['damage']
+                var killProbTeleport = teleportInfo['killProbability']
+
+                var damageImprovement = teleportDamage / burstFromCurrent
+                debug("[OTKO-V2] Teleport option (cell=" + teleportInfo['cell'] + "): damage=" + floor(teleportDamage) + " kill prob=" + round(killProbTeleport * 100) + "% (improvement: " + round(damageImprovement * 100) + "%)")
+
+                if (killProbCurrent >= 0.85) {
+                    debug("[OTKO-V2] Current position viable (>85%), checking if teleport offers 20%+ boost...")
+                    if (damageImprovement > 1.2) {
+                        debug("[OTKO-V2] DECISION: Teleporting for 20%+ damage boost")
+                        shouldTeleport = true
+                        teleCell = teleportInfo['cell']
+                    } else {
+                        debug("[OTKO-V2] DECISION: Stay at current position (improvement only " + round((damageImprovement - 1) * 100) + "%)")
+                        shouldTeleport = false
+                    }
+                } else if (killProbTeleport >= 0.85) {
+                    debug("[OTKO-V2] DECISION: Teleporting to reach 85% kill threshold (current only " + round(killProbCurrent * 100) + "%)")
+                    shouldTeleport = true
+                    teleCell = teleportInfo['cell']
+                } else {
+                    debug("[OTKO-V2] DECISION: Neither option reaches threshold (current=" + round(killProbCurrent * 100) + "% teleport=" + round(killProbTeleport * 100) + "%)")
+                }
+            } else {
+                debug("[OTKO-V2] No valid teleport cells found")
+            }
+        } else {
+            debug("[OTKO-V2] Teleport not available, using current position")
+        }
+
+        if (!shouldTeleport && killProbCurrent < 0.85) {
+            debug("[OTKO] Cannot achieve 85% kill probability (current=" + round(killProbCurrent * 100) + "%, no viable teleport)")
             return false
         }
 
-        var teleportInfo = fieldMap.findOptimalTeleportCell(target)
-        if (teleportInfo == null) {
-            debug("[OTKO] No valid teleport cells found")
-            return false
-        }
+        var killProb = shouldTeleport ? teleportInfo['killProbability'] : killProbCurrent
 
-        var killProb = teleportInfo['killProbability']
         if (killProb < 0.85 && !(target instanceof Chest)) {
-            debug("[OTKO] Kill probability too low: " + round(killProb * 100) + "% (damage: " + teleportInfo['damage'] + " vs HP: " + target._currHealth + ")")
+            var effectiveDamage = shouldTeleport ? teleportInfo['damage'] : burstFromCurrent
+            debug("[OTKO] Kill probability too low: " + round(killProb * 100) + "% (damage: " + floor(effectiveDamage) + " vs HP: " + target._currHealth + ")")
 
             if (this.shouldUseAdrenaline(15)) {  
                 this.createAttackAction(Action.ACTION_BUFF, player, -1, CHIP_ADRENALINE)
@@ -69,12 +105,15 @@ class StrengthStrategy extends Strategy {
             }
         }
 
-        var teleCell = teleportInfo['cell']
-        debug("[OTKO] Executing teleport OTKO to cell " + teleCell + " projected damage: " + teleportInfo['damage'])
+        if (shouldTeleport) {
+            debug("[OTKO] Executing teleport OTKO to cell " + teleCell + " projected damage: " + teleportInfo['damage'])
+        } else {
+            debug("[OTKO] Executing OTKO from current position (cell=" + teleCell + ") projected damage: " + floor(burstFromCurrent))
+        }
 
         var plannedWeapon = getWeapon()
 
-        if (mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO) && playerTP >= 21) {
+        if (shouldTeleport && mapContainsKey(arsenal.playerEquippedWeapons, WEAPON_NEUTRINO) && playerTP >= 21) {
             var preTeleportDist = getCellDistance(player._cellPos, target._cellPos)
             var preTeleportAligned = this.isDiagonal(player._cellPos, target._cellPos)
 
@@ -102,12 +141,13 @@ class StrengthStrategy extends Strategy {
             }
         }
 
-        this.createAttackAction(Action.ACTION_TELEPORT, target, -1, CHIP_TELEPORTATION)
-        
-        this._actions[count(this._actions) - 1].targetCell = teleCell
-        playerTP -= 9
+        if (shouldTeleport) {
+            this.createAttackAction(Action.ACTION_TELEPORT, target, -1, CHIP_TELEPORTATION)
+            this._actions[count(this._actions) - 1].targetCell = teleCell
+            playerTP -= 9
+        }
 
-        var playerPos = teleCell
+        playerPos = teleCell
 
         var weaponDmgList = []
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {

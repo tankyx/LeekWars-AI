@@ -155,7 +155,7 @@ class FieldMapCore {
             }
         }
 
-        for (var entity in this.entities) {
+        for (var entity in mapValues(this.entities)) {
             if (entity != null) {
                 entity.updateEntity()
             }
@@ -163,19 +163,19 @@ class FieldMapCore {
     }
 
     getAlliesSubMap() {
-        return mapFilter(entities, function(value, key, entities) {
+        return mapFilter(this.entities, function(value, key, entities) {
             return (value instanceof Player) && key != getEntity()
         })
     }
 
     getEnemySubMap() {
-        return mapFilter(entities, function(value, key, entities) {
+        return mapFilter(this.entities, function(value, key, entities) {
             return (value instanceof Enemy)
         })
     }
 
     getChestSubMap() {
-        return mapFilter(entities, function(value, key, entities) {
+        return mapFilter(this.entities, function(value, key, entities) {
             return (value instanceof Chest)
         })
     }

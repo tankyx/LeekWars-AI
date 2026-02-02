@@ -8,7 +8,7 @@ global __weaponCostCache = [:]
 global __pathLengthCache = [:]           
 
 function hashTwoCells(cell1, cell2) {
-    return cell1 << 10 | cell2  
+    return cell1 * 1000 + cell2
 }
 
 function clearCaches() {
@@ -23,7 +23,47 @@ function buildReachableCellsCache(fromCell, mp) {
     if (mp <= 0) return [:]
 
     var reachable = [:]
-    
+    var queue = []
+    var visited = [:]
+
+    push(queue, ['cell': fromCell, 'cost': 0])
+    mapPut(visited, fromCell, true)
+    mapPut(reachable, fromCell, 0)
+
+    while (count(queue) > 0) {
+        var current = queue[0]
+        remove(queue, 0)
+
+        var currentCell = current['cell']
+        var currentCost = current['cost']
+
+        var neighbors = [
+            currentCell + 1,
+            currentCell - 1,
+            currentCell + 18,
+            currentCell - 18,
+            currentCell + 17,
+            currentCell - 17,
+            currentCell + 19,
+            currentCell - 19
+        ]
+
+        for (var neighbor in neighbors) {
+            if (neighbor < 0 || neighbor >= 613) continue
+            if (mapContainsKey(visited, neighbor)) continue
+
+            var pathLen = getPathLength(currentCell, neighbor)
+            if (pathLen == null || pathLen < 0) continue
+
+            var newCost = currentCost + pathLen
+            if (newCost > mp) continue
+
+            mapPut(visited, neighbor, true)
+            mapPut(reachable, neighbor, newCost)
+            push(queue, ['cell': neighbor, 'cost': newCost])
+        }
+    }
+
     __reachableCellsCache[fromCell] = reachable
     return reachable
 }

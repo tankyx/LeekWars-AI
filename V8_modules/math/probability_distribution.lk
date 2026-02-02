@@ -230,7 +230,7 @@ class ProbabilityDistribution {
             var scaledPoly = piece["poly"].multiplyByConstant(1 / multiplier);
 
             push(newPieces, {
-                poly: piece["poly"],
+                poly: scaledPoly,
                 min: piece["min"] * multiplier,
                 max: piece["max"] * multiplier
             });

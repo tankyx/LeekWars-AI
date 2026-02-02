@@ -15,15 +15,15 @@ class Item {
     _effects = [:]
 
     constructor(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType) {
-        _id = id
-        _minRange = minRange
-        _maxRange = maxRange
-        _cost = cost
-        _maxUse = maxUse
-        _launchType = launchType
-        _aoeType = aoeType
+        this._id = id
+        this._minRange = minRange
+        this._maxRange = maxRange
+        this._cost = cost
+        this._maxUse = maxUse
+        this._launchType = launchType
+        this._aoeType = aoeType
 
-        parseAllEffects(effects)
+        this.parseAllEffects(effects)
     }
 
     parseAllEffects(effects) {
