@@ -2291,11 +2291,23 @@ class Strategy {
                     useChipOnCell(a.chip, a.targetCell)
                 }
                 else if (a.weaponId != -1) {
-                    
+                    var minRange = getWeaponMinRange(a.weaponId)
+                    var maxRange = getWeaponMaxRange(a.weaponId)
+
+                    if (dist < minRange || dist > maxRange) {
+                        debug("⚠️  SKIPPING WEAPON ATTACK: " + getWeaponName(a.weaponId) + " out of range (dist=" + dist + ", range=" + minRange + "-" + maxRange + ")")
+                        continue
+                    }
+
+                    if (!lineOfSight(currentPos, targetPos)) {
+                        debug("⚠️  SKIPPING WEAPON ATTACK: " + getWeaponName(a.weaponId) + " no line of sight from " + currentPos + " to " + targetPos)
+                        continue
+                    }
+
                     if (currentWeap != a.weaponId) {
                         debug("Swapping to weapon " + getWeaponName(a.weaponId) + " (1 TP)")
                         setWeapon(a.weaponId)
-                        currentWeap = a.weaponId  
+                        currentWeap = a.weaponId
                     }
 
                     var tpBefore = getTP()
