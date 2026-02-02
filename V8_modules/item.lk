@@ -309,17 +309,17 @@ class Arsenal {
             var aoeModifier = this.computeAoEModifier(aimCell, e._cellPos, item._aoeType)
 
             if (aoeModifier > 0) {
-                
+
                 var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId, aimCell, e._cellPos)
 
-                var directAfterShield = bd['direct'] * aoeModifier
+                var directAfterShield = bd['direct']
                 if (bd['direct'] > 0 && (e._relShield > 0 || e._absShield > 0)) {
                     directAfterShield = directAfterShield * (1 - e._relShield / 100) - e._absShield
                     if (directAfterShield < 0) directAfterShield = 0
                 }
 
-                var dotDamage = bd['dot'] * aoeModifier
-                var novaDamage = bd['nova'] * aoeModifier
+                var dotDamage = bd['dot']
+                var novaDamage = bd['nova']
 
                 var netDmg = directAfterShield + dotDamage + novaDamage
 

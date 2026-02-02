@@ -176,11 +176,13 @@ class ScenarioSimulator {
                 result.actionsExecuted++
             }
             else if (action.type == Action.ACTION_WEAPON_SWAP) {
-                var swapCost = 1
-                result.tpSpent += swapCost
-                simTP -= swapCost
-                simWeapon = action.weaponId
-                result.actionsExecuted++
+                if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
+                    var swapCost = 1
+                    result.tpSpent += swapCost
+                    simTP -= swapCost
+                    simWeapon = action.weaponId
+                    result.actionsExecuted++
+                }
             }
             else if (action.type == Action.MOVEMENT_APPROACH || action.type == Action.MOVEMENT_OFFENSIVE ||
                      action.type == Action.MOVEMENT_DEFENSIVE || action.type == Action.MOVEMENT_OTKO ||
@@ -242,6 +244,9 @@ class ScenarioSimulator {
             }
         }
         else if (action.type == Action.ACTION_WEAPON_SWAP) {
+            if (!mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
+                return false
+            }
             return simTP >= 1
         }
         else if (action.type == Action.MOVEMENT_APPROACH || action.type == Action.MOVEMENT_OFFENSIVE ||

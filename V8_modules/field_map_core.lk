@@ -131,26 +131,34 @@ class FieldMapCore {
     }
 
     updateMapEntities() {
-        
+
+        var aliveEnemies = getAliveEnemies()
+        for (var enemyId in aliveEnemies) {
+            if (!mapContainsKey(this.entities, enemyId)) {
+                var cellId = getCell(enemyId)
+                mapPut(this.entities, enemyId, new Enemy(cellId))
+                debug("[ENTITY-SCAN] New enemy detected: " + getName(enemyId) + " at cell " + cellId)
+            }
+        }
+
+        var aliveAllies = getAliveAllies()
+        for (var allyId in aliveAllies) {
+            if (allyId == getEntity()) continue
+            if (!mapContainsKey(this.entities, allyId)) {
+                var cellId = getCell(allyId)
+                mapPut(this.entities, allyId, new Player(cellId))
+                debug("[ENTITY-SCAN] New ally detected at cell " + cellId)
+            }
+        }
+
         for (var cellId = 0; cellId < 613; cellId++) {
             if (isEntity(cellId)) {
                 var entID = getEntityOnCell(cellId)
+                var entityType = getType(entID)
 
-                if (!mapContainsKey(this.entities, entID)) {
-                    var entityType = getType(entID)
-
-                    if (entityType == ENTITY_CHEST) {
-                        mapPut(this.entities, entID, new Chest(cellId))
-                        debug("[ENTITY-SCAN] New chest detected at cell " + cellId)
-                    }
-                    else if (isAlly(entID)) {
-                        mapPut(this.entities, entID, new Player(cellId))
-                        debug("[ENTITY-SCAN] New ally detected at cell " + cellId)
-                    }
-                    else {
-                        mapPut(this.entities, entID, new Enemy(cellId))
-                        debug("[ENTITY-SCAN] New enemy detected: " + getName(entID) + " (Type=" + entityType + ") at cell " + cellId)
-                    }
+                if (entityType == ENTITY_CHEST && !mapContainsKey(this.entities, entID)) {
+                    mapPut(this.entities, entID, new Chest(cellId))
+                    debug("[ENTITY-SCAN] New chest detected at cell " + cellId)
                 }
             }
         }

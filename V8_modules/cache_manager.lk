@@ -25,14 +25,15 @@ function buildReachableCellsCache(fromCell, mp) {
     var reachable = [:]
     var queue = []
     var visited = [:]
+    var queueIndex = 0
 
     push(queue, ['cell': fromCell, 'cost': 0])
     mapPut(visited, fromCell, true)
     mapPut(reachable, fromCell, 0)
 
-    while (count(queue) > 0) {
-        var current = queue[0]
-        remove(queue, 0)
+    while (queueIndex < count(queue)) {
+        var current = queue[queueIndex]
+        queueIndex++
 
         var currentCell = current['cell']
         var currentCost = current['cost']
@@ -64,18 +65,20 @@ function buildReachableCellsCache(fromCell, mp) {
         }
     }
 
-    __reachableCellsCache[fromCell] = reachable
+    var cacheKey = fromCell * 100 + mp
+    __reachableCellsCache[cacheKey] = reachable
     return reachable
 }
 
 function isReachableCell(fromCell, toCell, mp) {
-    
-    if (!mapContainsKey(__reachableCellsCache, fromCell)) {
-        
+    var cacheKey = fromCell * 100 + mp
+
+    if (!mapContainsKey(__reachableCellsCache, cacheKey)) {
+
         buildReachableCellsCache(fromCell, mp)
     }
 
-    var reachable = __reachableCellsCache[fromCell]
+    var reachable = __reachableCellsCache[cacheKey]
     return mapContainsKey(reachable, toCell)
 }
 
