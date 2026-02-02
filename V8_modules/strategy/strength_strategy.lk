@@ -159,6 +159,10 @@ class StrengthStrategy extends Strategy {
             if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
             if (!lineOfSight(teleCell, target._cellPos)) continue
 
+            if (wObj._aoeType == AREA_LASER_LINE) {
+                if (!this.isOnSameLine(teleCell, target._cellPos)) continue
+            }
+
             var netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, wid, target)
             push(weaponDmgList, ['weapon': wObj, 'netDmg': netDmg])
         }
