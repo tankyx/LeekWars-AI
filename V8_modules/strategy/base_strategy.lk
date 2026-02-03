@@ -828,15 +828,15 @@ class Strategy {
 
         debug("[TURN1-BUFFS] Applying mandatory HP buffs")
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
-            debug("Using CHIP_KNOWLEDGE - Science/Magic boost")
+            debug("Using CHIP_KNOWLEDGE - HP boost 1/3")
             useChip(CHIP_KNOWLEDGE, player._id)
         }
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
-            debug("Using CHIP_ELEVATION - Wisdom boost")
+            debug("Using CHIP_ELEVATION - HP boost 2/3")
             useChip(CHIP_ELEVATION, player._id)
         }
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
-            debug("Using CHIP_ARMORING - Resistance boost")
+            debug("Using CHIP_ARMORING - HP boost 3/3")
             useChip(CHIP_ARMORING, player._id)
         }
 

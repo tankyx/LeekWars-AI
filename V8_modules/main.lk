@@ -55,6 +55,7 @@ function init() {
         debug("[INIT] Using UnifiedStrategy with build type: " + buildType)
         strategy = new UnifiedStrategy(weights, player, null, arsenal, fieldMap)
         strategy.resetTurnContext()
+        strategy.turnOneBuffs()
     }
 }
 

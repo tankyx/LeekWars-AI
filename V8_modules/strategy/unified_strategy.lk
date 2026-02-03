@@ -160,7 +160,8 @@ class UnifiedStrategy extends Strategy {
     }
 
     turnOneBuffs() {
-        debug("[UNIFIED] Turn one buffs (weight-driven)")
+        debug("[UNIFIED] Calling base turn one HP buffs")
+        super.turnOneBuffs()
     }
 
     shouldBuildDamageMap() {
