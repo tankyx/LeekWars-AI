@@ -349,7 +349,12 @@ class Arsenal {
 
                 var dotDamage = bd['dot']
                 var novaDamage = bd['nova']
-                var netDmg = directAfterShield + dotDamage + novaDamage
+                var hpDeficit = enemyObj._maxHealth - enemyObj._currHealth
+                var cappedNova = novaDamage
+                if (hpDeficit < novaDamage) {
+                    cappedNova = hpDeficit
+                }
+                var netDmg = directAfterShield + dotDamage + cappedNova
 
                 totalDamage += netDmg
                 push(hitEnemies, enemyObj)
@@ -374,8 +379,13 @@ class Arsenal {
 
                     var dotDamage = bd['dot']
                     var novaDamage = bd['nova']
+                    var hpDeficit = e._maxHealth - e._currHealth
+                    var cappedNova = novaDamage
+                    if (hpDeficit < novaDamage) {
+                        cappedNova = hpDeficit
+                    }
 
-                    var netDmg = directAfterShield + dotDamage + novaDamage
+                    var netDmg = directAfterShield + dotDamage + cappedNova
 
                     totalDamage += netDmg
                     push(hitEnemies, e)
