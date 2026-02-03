@@ -941,14 +941,30 @@ class ScenarioGenerator {
 
         var bestCell = this._fieldMap.findBestTacticalCell(mpBudget, threatWeight)
         if (bestCell == null || bestCell == -1) {
-            
+
             bestCell = this._fieldMap.getBestWeaponOrChipCell()
-            if (bestCell == null || bestCell == -1) return null
+            if (bestCell == null || bestCell == -1) {
+                // Fallback: no attack cells available, just move toward enemy
+                debug("[MOVE-APPROACH] No attack cells available, moving toward enemy")
+                var approachCell = this.getApproachEnemyCell(mpBudget)
+                if (approachCell != null && approachCell != -1) {
+                    return new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target)
+                }
+                return null
+            }
 
             var pathLength = getGraphMPCost(bestCell._id)
             if (pathLength >= 999 || pathLength > mpBudget) {
                 bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
-                if (bestCell == null || bestCell == -1) return null
+                if (bestCell == null || bestCell == -1) {
+                    // Fallback: no reachable damage cells, just move toward enemy
+                    debug("[MOVE-APPROACH] No reachable damage cells, moving toward enemy")
+                    var approachCell = this.getApproachEnemyCell(mpBudget)
+                    if (approachCell != null && approachCell != -1) {
+                        return new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target)
+                    }
+                    return null
+                }
             }
         }
 
@@ -981,6 +997,43 @@ class ScenarioGenerator {
 
         this._kiteCache = new Action(Action.MOVEMENT_FLEE, -1, -1, -1, this._target)
         return this._kiteCache
+    }
+
+    getApproachEnemyCell(mpBudget) {
+        if (mpBudget <= 0) return null
+
+        // Get all reachable cells within MP budget
+        var reachableCells = getReachableCells()
+        if (reachableCells == null || count(reachableCells) == 0) return null
+
+        var enemyPos = this._target._cellPos
+        var currentDist = getCellDistance(this._player._cellPos, enemyPos)
+        if (currentDist == null) return null
+
+        // Find the reachable cell that gets us closest to the enemy
+        var bestCell = null
+        var bestDist = currentDist
+
+        for (var cellId in reachableCells) {
+            var cellDist = getCellDistance(cellId, enemyPos)
+            if (cellDist == null) continue
+
+            // Only consider cells that get us closer
+            if (cellDist < bestDist) {
+                var pathCost = getGraphMPCost(cellId)
+                if (pathCost < 999 && pathCost <= mpBudget) {
+                    bestDist = cellDist
+                    bestCell = cellId
+                }
+            }
+        }
+
+        if (bestCell != null) {
+            debug("[APPROACH-ENEMY] Moving from dist=" + currentDist + " to dist=" + bestDist + " (cell " + bestCell + ")")
+            return bestCell
+        }
+
+        return null
     }
 
     getWeaponSpamActions(tpBudget, fraction, simPos = -1) {
