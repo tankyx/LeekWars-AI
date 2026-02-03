@@ -1,11 +1,11 @@
 
 include('operation_tracker.lk')
 
-global __reachableCellsCache = [:]      
-global __damageCache = [:]               
-global __chipCostCache = [:]             
-global __weaponCostCache = [:]           
-global __pathLengthCache = [:]           
+global __reachableCellsCache = [:]
+global __damageCache = [:]
+global __chipCostCache = [:]
+global __weaponCostCache = [:]
+global __pathLengthCache = [:]
 
 function hashTwoCells(cell1, cell2) {
     return cell1 * 1024 + cell2
@@ -17,6 +17,7 @@ function clearCaches() {
     __chipCostCache = [:]
     __weaponCostCache = [:]
     __pathLengthCache = [:]
+    clearPerformanceInfra()
 }
 
 function buildReachableCellsCache(fromCell, mp) {
@@ -75,15 +76,13 @@ function buildReachableCellsCache(fromCell, mp) {
 }
 
 function isCachedReachableCell(fromCell, toCell, mp) {
-    var cacheKey = fromCell * 1000 + mp
+    // Use new ReachableGraph from performance_infra.lk
+    return isReachable(fromCell, toCell, mp)
+}
 
-    if (!mapContainsKey(__reachableCellsCache, cacheKey)) {
-
-        buildReachableCellsCache(fromCell, mp)
-    }
-
-    var reachable = __reachableCellsCache[cacheKey]
-    return mapContainsKey(reachable, toCell)
+function getCachedMPCost(fromCell, toCell, mp) {
+    // O(1) lookup for MP cost (replaces multiple getCachedPathLength calls)
+    return getMPCostToCell(fromCell, toCell, mp)
 }
 
 function getCachedPathLength(fromCell, toCell) {
@@ -175,6 +174,10 @@ function initializeCaches(player, target, arsenal) {
     startOp()
     clearCaches()
     stopOp("Clear caches")
+
+    startOp()
+    initializePerformanceInfra()
+    stopOp("Initialize performance infrastructure")
 
     startOp()
     buildDamageCache(arsenal, player, target)

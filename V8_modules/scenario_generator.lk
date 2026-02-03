@@ -1,3 +1,5 @@
+// REMOVED: include('tactical_awareness.lk')
+// Phase 2 features not needed - TP/MP reset each turn
 
 class ScenarioParams {
     buffStrategy = 0       
@@ -44,6 +46,11 @@ class ScenarioGenerator {
         var scenarios = []
         var availableTP = getTP()
         var availableMP = getMP()
+
+        // REMOVED: Phase 2 TP Reservation Logic
+        // TP/MP reset to maximum each turn, so "reserving for next turn" is nonsensical
+        // If we wanted to ensure defensive actions within THIS turn, scenarios should
+        // compete on merit, not by handicapping offensive budget
 
         var state = this.determineStrategicState()
         debug("[STATE] Strategic state: " + state)

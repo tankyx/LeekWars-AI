@@ -211,7 +211,10 @@ class V8Uploader:
             "field_map_patterns",
             "field_map_tactical",
             "operation_tracker",
+            "performance_infra",
             "cache_manager",
+            "tactical_awareness",
+            "strategic_depth",
             "reachable_graph",
             "scenario_simulator",
             "scenario_scorer",
@@ -388,8 +391,9 @@ def main():
     total_modules = 0
     root_modules = ["main", "game_entity", "item", "field_map", "field_map_core",
                     "field_map_patterns", "field_map_tactical", "operation_tracker",
-                    "cache_manager", "reachable_graph", "scenario_simulator", "scenario_scorer",
-                    "scenario_generator", "scenario_quick_scorer", "weight_profiles"]
+                    "performance_infra", "cache_manager", "tactical_awareness", "strategic_depth",
+                    "reachable_graph", "scenario_simulator", "scenario_scorer", "scenario_generator",
+                    "scenario_quick_scorer", "weight_profiles"]
     for module in root_modules:
         if (v8_dir / f"{module}.lk").exists():
             total_modules += 1

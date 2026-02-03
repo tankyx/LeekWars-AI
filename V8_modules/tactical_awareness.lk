@@ -1,0 +1,396 @@
+// ========================================
+// Tactical Awareness Module (Phase 2)
+// ========================================
+// Provides predictive tactical calculations:
+// - Enemy Threat Predictor: Next-turn maximum damage projection
+// - TP Reservation Logic: Safety buffer for defensive actions
+// - 2-Turn Kill Calculator: Debuff → kill sequencing
+
+include('operation_tracker.lk')
+
+// ========================================
+// Enemy Threat Predictor
+// ========================================
+
+class ThreatPrediction {
+    maxDamage = 0
+    enemyId = -1
+    enemyName = ""
+    assumedPosition = -1
+    weaponId = -1
+    chipId = -1
+    confidence = 1.0  // 0.0-1.0 (1.0 = certain, <1.0 = estimated)
+}
+
+function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
+    // Predict maximum damage this enemy can deal to targetCell next turn
+    // Assumes enemy will move optimally and use best weapon/chip
+
+    var prediction = new ThreatPrediction()
+    prediction.enemyId = enemy._id
+    prediction.enemyName = getName(enemy._id)
+    prediction.assumedPosition = enemy._cellPos
+
+    // Get enemy capabilities
+    var enemyWeapons = getWeapons(enemy._id)
+    var enemyChips = getChips(enemy._id)
+    var enemyMP = enemy._currMp
+    var enemyTP = enemy._currTp
+
+    // Phase 1: Calculate damage from current position
+    var currentPosDamage = calculateBestAttackDamage(
+        enemy._cellPos, targetCell, enemy, enemyWeapons, enemyChips, enemyTP
+    )
+
+    // Phase 2: Predict optimal movement position
+    // Enemy will move closer if possible to maximize damage
+    var maxDamageAfterMovement = currentPosDamage
+    var bestPosition = enemy._cellPos
+
+    if (enemyMP > 0) {
+        // Check potential enemy positions within MP range
+        var searchRadius = min(enemyMP, 5)  // Limit search for performance
+
+        for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (var dy = -searchRadius; dy <= searchRadius; dy++) {
+                var dist = abs(dx) + abs(dy)
+                if (dist == 0 || dist > searchRadius) continue
+
+                var testCell = enemy._cellPos + 18 * dx + 17 * dy
+                if (testCell < 0 || testCell >= 613) continue
+                if (isObstacle(testCell)) continue
+
+                // Check if enemy can reach this cell
+                var pathLen = getCachedPathLength(enemy._cellPos, testCell)
+                if (pathLen == null || pathLen > enemyMP) continue
+
+                // Calculate damage from this position
+                var testDamage = calculateBestAttackDamage(
+                    testCell, targetCell, enemy, enemyWeapons, enemyChips, enemyTP
+                )
+
+                if (testDamage > maxDamageAfterMovement) {
+                    maxDamageAfterMovement = testDamage
+                    bestPosition = testCell
+                }
+            }
+        }
+    }
+
+    prediction.maxDamage = maxDamageAfterMovement
+    prediction.assumedPosition = bestPosition
+    prediction.confidence = (bestPosition == enemy._cellPos) ? 1.0 : 0.8
+
+    return prediction
+}
+
+function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, availableTP) {
+    // Calculate maximum damage enemy can deal from fromCell to targetCell
+
+    var maxDamage = 0
+    var dist = getCellDistance(fromCell, targetCell)
+    if (dist == null) return 0
+
+    // Check weapon damage
+    for (var weaponId in weapons) {
+        var minRange = getWeaponMinRange(weaponId)
+        var maxRange = getWeaponMaxRange(weaponId)
+        var weaponCost = getWeaponCost(weaponId)
+        var maxUses = getWeaponMaxUses(weaponId)
+
+        if (dist < minRange || dist > maxRange) continue
+        if (!lineOfSight(fromCell, targetCell)) continue
+
+        // Calculate base damage
+        var effects = getWeaponEffects(weaponId)
+        var baseDmg = 0
+        for (var eff in effects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                baseDmg = (eff[1] + eff[2]) / 2
+                break
+            }
+        }
+
+        // Scale with enemy stats
+        var scaledDmg = baseDmg * (1 + enemy._strength / 100)
+
+        // Calculate total damage with available TP
+        var possibleUses = min(maxUses, floor(availableTP / weaponCost))
+        var totalDmg = scaledDmg * possibleUses
+
+        if (totalDmg > maxDamage) {
+            maxDamage = totalDmg
+        }
+    }
+
+    // Check chip damage (simplified - only direct damage chips)
+    for (var chipId in chips) {
+        var minRange = getChipMinRange(chipId)
+        var maxRange = getChipMaxRange(chipId)
+        var chipCost = getChipCost(chipId)
+
+        if (dist < minRange || dist > maxRange) continue
+        if (chipCost > availableTP) continue
+
+        var effects = getChipEffects(chipId)
+        var baseDmg = 0
+        for (var eff in effects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                baseDmg = (eff[1] + eff[2]) / 2
+                break
+            }
+        }
+
+        // Scale with enemy stats (STR or MAG)
+        var scaledDmg = baseDmg * (1 + max(enemy._strength, enemy._magic) / 100)
+
+        if (scaledDmg > maxDamage) {
+            maxDamage = scaledDmg
+        }
+    }
+
+    return maxDamage
+}
+
+function predictTotalThreatAtCell(targetCell, enemies, player, arsenal) {
+    // Calculate total predicted threat from all enemies
+
+    var totalThreat = 0
+    var predictions = []
+
+    for (var enemy in enemies) {
+        if (isDead(enemy._id)) continue
+
+        var pred = predictEnemyThreatAtCell(targetCell, enemy, player, arsenal)
+        totalThreat += pred.maxDamage
+        push(predictions, pred)
+    }
+
+    return ['total': totalThreat, 'predictions': predictions]
+}
+
+// ========================================
+// TP Reservation Logic
+// ========================================
+
+function calculateTPReservation(player, enemies) {
+    // Calculate how much TP to reserve for defensive actions
+    // Returns: {reserved: amount, reason: string, action: chipId or -1}
+
+    var hpPercent = (player._currHealth * 100) / player._maxHealth
+    var reservation = ['reserved': 0, 'reason': "none", 'action': -1]
+
+    // No reservation needed if HP is healthy
+    if (hpPercent >= 50) {
+        return reservation
+    }
+
+    // Critical HP: Reserve for emergency teleport
+    if (hpPercent < 30) {
+        // Check if TELEPORTATION available
+        var hasTP = false
+        for (var chip in player._chips) {
+            if (chip == CHIP_TELEPORTATION) {
+                hasTP = true
+                break
+            }
+        }
+
+        if (hasTP) {
+            var tpCost = getChipCost(CHIP_TELEPORTATION)
+            reservation['reserved'] = tpCost
+            reservation['reason'] = "emergency_teleport"
+            reservation['action'] = CHIP_TELEPORTATION
+            return reservation
+        }
+    }
+
+    // Low HP: Reserve for heal + shield combo
+    if (hpPercent < 40) {
+        var hasRemission = false
+        var hasFortress = false
+
+        for (var chip in player._chips) {
+            if (chip == CHIP_REMISSION) hasRemission = true
+            if (chip == CHIP_FORTRESS) hasFortress = true
+        }
+
+        var reserveAmount = 0
+        if (hasRemission) reserveAmount += getChipCost(CHIP_REMISSION)  // ~6 TP
+        if (hasFortress) reserveAmount += getChipCost(CHIP_FORTRESS)    // ~5 TP
+
+        if (reserveAmount > 0) {
+            reservation['reserved'] = reserveAmount
+            reservation['reason'] = "heal_shield_combo"
+            reservation['action'] = CHIP_REMISSION
+            return reservation
+        }
+    }
+
+    return reservation
+}
+
+function shouldReserveTP(player, enemies) {
+    // Quick check: Should we reserve TP this turn?
+    var hpPercent = (player._currHealth * 100) / player._maxHealth
+    return hpPercent < 40
+}
+
+// ========================================
+// 2-Turn Kill Calculator
+// ========================================
+
+function calculate2TurnKill(player, target, arsenal, availableTP) {
+    // Check if spending TP on debuffs this turn guarantees kill next turn
+    // Returns: {viable: bool, debuffCost: amount, expectedKillTP: amount, confidence: 0.0-1.0}
+
+    var result = ['viable': false, 'debuffCost': 0, 'expectedKillTP': 0, 'confidence': 0.0]
+
+    var targetHP = target._currHealth
+    if (targetHP <= 0) return result
+
+    // Phase 1: Calculate damage we can deal this turn WITHOUT debuffs
+    var directDamageThisTurn = calculateMaxDirectDamage(player, target, arsenal, availableTP)
+
+    // If we can kill this turn, no need for 2-turn plan
+    if (directDamageThisTurn >= targetHP) {
+        result['viable'] = false
+        result['confidence'] = 0.0
+        return result
+    }
+
+    // Phase 2: Check debuff options
+    var debuffOptions = analyzeDebuffOptions(player, target, arsenal)
+
+    if (count(debuffOptions) == 0) return result
+
+    // Phase 3: Calculate if debuff → kill next turn is viable
+    for (var opt in debuffOptions) {
+        var debuffCost = opt['tpCost']
+        var damageAmplification = opt['amplification']
+
+        // Remaining TP after debuff
+        var remainingTP = availableTP - debuffCost
+
+        // Damage this turn with remaining TP
+        var thisTurnDamage = calculateMaxDirectDamage(player, target, arsenal, remainingTP)
+
+        // Expected TP next turn (assume full regen)
+        var nextTurnTP = player._maxTp
+
+        // Damage next turn with amplification
+        var nextTurnDamage = calculateMaxDirectDamage(player, target, arsenal, nextTurnTP) * damageAmplification
+
+        var totalDamage = thisTurnDamage + nextTurnDamage
+
+        // Check if this kills
+        if (totalDamage >= targetHP * 0.9) {  // 90% threshold for safety
+            result['viable'] = true
+            result['debuffCost'] = debuffCost
+            result['expectedKillTP'] = nextTurnTP
+            result['confidence'] = min(1.0, totalDamage / targetHP)
+            return result
+        }
+    }
+
+    return result
+}
+
+function calculateMaxDirectDamage(player, target, arsenal, availableTP) {
+    // Calculate maximum direct damage with available TP
+
+    var maxDamage = 0
+
+    // Weapons
+    for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
+        var weapon = arsenal.playerEquippedWeapons[weaponId]
+        var cost = weapon._cost
+        var maxUses = weapon._maxUse
+
+        var possibleUses = min(maxUses, floor(availableTP / cost))
+        if (possibleUses <= 0) continue
+
+        var damagePerUse = arsenal.getNetDamageAgainstTarget(
+            player._strength, player._magic, player._wisdom,
+            player._science, weaponId, target
+        )
+
+        var totalDamage = damagePerUse * possibleUses
+        if (totalDamage > maxDamage) {
+            maxDamage = totalDamage
+        }
+    }
+
+    return maxDamage
+}
+
+function analyzeDebuffOptions(player, target, arsenal) {
+    // Analyze available debuff chips and their effectiveness
+    var options = []
+
+    var playerWeapons = getWeapons()
+    var playerChips = getChips()
+
+    // Check for NEUTRINO (vulnerability stacking) - it's a WEAPON
+    var hasNeutrino = false
+    for (var wpn in playerWeapons) {
+        if (wpn == WEAPON_NEUTRINO) {
+            hasNeutrino = true
+            break
+        }
+    }
+
+    if (hasNeutrino) {
+        var neutrinoCost = getWeaponCost(WEAPON_NEUTRINO)
+        // 3 stacks = 24% vulnerability = 1.24x damage
+        push(options, [
+            'chip': WEAPON_NEUTRINO,
+            'tpCost': neutrinoCost * 3,
+            'amplification': 1.24,
+            'stacks': 3
+        ])
+    }
+
+    // Check for LIBERATION (shield removal)
+    var hasLiberation = false
+    for (var chip in playerChips) {
+        if (chip == CHIP_LIBERATION) {
+            hasLiberation = true
+            break
+        }
+    }
+
+    if (hasLiberation && (target._absShield > 50 || target._relShield > 20)) {
+        var liberationCost = getChipCost(CHIP_LIBERATION)
+        // Shield removal = effective damage increase
+        var amplification = 1.0 + (target._relShield / 100)
+        push(options, [
+            'chip': CHIP_LIBERATION,
+            'tpCost': liberationCost,
+            'amplification': amplification,
+            'stacks': 1
+        ])
+    }
+
+    return options
+}
+
+// ========================================
+// Integration Helper Functions
+// ========================================
+
+function getSafeOffensiveTP(player, enemies) {
+    // Returns maximum TP that can be safely spent on offense
+    var reservation = calculateTPReservation(player, enemies)
+    return player._currTp - reservation['reserved']
+}
+
+function isPredictedSurvivable(cell, enemies, player, arsenal) {
+    // Check if moving to this cell is survivable (predicted threat < HP)
+    var threatData = predictTotalThreatAtCell(cell, enemies, player, arsenal)
+    var predictedThreat = threatData['total']
+
+    // Add safety margin (20%)
+    var safetyMargin = 1.2
+    return (predictedThreat * safetyMargin) < player._currHealth
+}

@@ -1,0 +1,238 @@
+// ========================================
+// Performance Infrastructure Module
+// ========================================
+// Provides O(1) optimizations for:
+// - AoE pattern masks (precomputed relative cells)
+// - Occupancy map (cell → entityID lookup)
+// - ReachableGraph integration (leverages reachable_graph.lk)
+//
+// Note: Requires reachable_graph.lk to be included before this module
+
+include('operation_tracker.lk')
+
+// ========================================
+// Global Infrastructure
+// ========================================
+
+global __occupancyMap = [:]           // cell → entityID
+global __aoePatternMasks = [:]        // aoeType → [relative cell offsets]
+global __multiEnemyDamageCache = [:]  // hash → damage result
+
+// ========================================
+// AoE Pattern Masks
+// ========================================
+
+function initializeAoEMasks() {
+    // Precompute relative cell offsets for each AoE pattern
+    // Using numeric keys for compatibility (AREA_* constants)
+
+    // AREA_POINT (0): No spread
+    __aoePatternMasks[0] = [0]
+
+    // AREA_CIRCLE_1 (1): Range 1 circle (8 neighbors)
+    __aoePatternMasks[1] = [
+        0,      // Center
+        -18, 18, -17, 17, -19, 19, -1, 1  // 8 directions
+    ]
+
+    // AREA_CIRCLE_2 (2): Range 2 circle
+    __aoePatternMasks[2] = [
+        0,
+        // Range 1
+        -18, 18, -17, 17, -19, 19, -1, 1,
+        // Range 2
+        -36, 36, -34, 34, -38, 38, -2, 2,
+        -35, 35, -37, 37, -20, 20, -16, 16
+    ]
+
+    // AREA_CIRCLE_3 (3): Range 3 circle
+    __aoePatternMasks[3] = [
+        0,
+        // Range 1
+        -18, 18, -17, 17, -19, 19, -1, 1,
+        // Range 2
+        -36, 36, -34, 34, -38, 38, -2, 2,
+        -35, 35, -37, 37, -20, 20, -16, 16,
+        // Range 3
+        -54, 54, -51, 51, -57, 57, -3, 3,
+        -52, 52, -56, 56, -53, 53, -55, 55,
+        -39, 39, -33, 33, -21, 21, -15, 15
+    ]
+
+    // AREA_LASER_LINE (4): Handled dynamically (direction-dependent)
+    __aoePatternMasks[4] = [0]
+
+    // Note: Other AoE types (PLUS, X, SQUARE) can be added as needed
+    // For now, fallback to dynamic calculation for uncommon types
+}
+
+// ========================================
+// Occupancy Map
+// ========================================
+
+function buildOccupancyMap() {
+    // Build cell → entityID lookup (O(1) enemy position checks)
+    __occupancyMap = [:]
+
+    var allEntities = getAllies()
+    for (var ally in allEntities) {
+        var cell = getCell(ally)
+        if (cell != null) {
+            __occupancyMap[cell] = ally
+        }
+    }
+
+    var enemies = getAliveEnemies()
+    for (var enemy in enemies) {
+        var cell = getCell(enemy)
+        if (cell != null) {
+            __occupancyMap[cell] = enemy
+        }
+    }
+}
+
+function getEntityAtCell(cellId) {
+    // O(1) lookup instead of O(n) loop
+    if (mapContainsKey(__occupancyMap, cellId)) {
+        return __occupancyMap[cellId]
+    }
+    return null
+}
+
+function isEnemyAtCell(cellId, enemies) {
+    // Check if cell contains any enemy from the enemies map
+    var entityId = getEntityAtCell(cellId)
+    if (entityId == null) return false
+
+    for (var e in enemies) {
+        if (e._id == entityId) return true
+    }
+    return false
+}
+
+// ========================================
+// Reachable Graph Integration
+// ========================================
+// Note: Actual BFS is done in reachable_graph.lk
+// These are convenience wrappers using the global ReachableGraph
+
+function isReachable(fromCell, toCell, mp) {
+    // O(1) lookup: Check if cell is reachable with given MP
+    // Uses global ReachableGraph built by reachable_graph.lk
+    return isGraphReachableCell(toCell)
+}
+
+function getMPCostToCell(fromCell, toCell, mp) {
+    // O(1) lookup: Get exact MP cost to reach cell
+    // Uses global ReachableGraph built by reachable_graph.lk
+    if (isGraphReachableCell(toCell)) {
+        return getGraphMPCost(toCell)
+    }
+    return null  // Unreachable
+}
+
+// ========================================
+// Fast AoE Enemy Detection
+// ========================================
+
+function getEnemiesInAoE(aimCell, aoeType, enemies) {
+    // O(m) where m = AoE size (typically 1-20 cells)
+    // Instead of O(n) where n = total enemies
+
+    var hitEnemies = []
+
+    if (!mapContainsKey(__aoePatternMasks, aoeType)) {
+        // Fallback to full enemy iteration for uncommon AoE types
+        for (var e in enemies) {
+            if (isDead(e._id)) continue
+            push(hitEnemies, e)
+        }
+        return hitEnemies
+    }
+
+    var mask = __aoePatternMasks[aoeType]
+
+    // Check only cells within AoE pattern
+    for (var offset in mask) {
+        var checkCell = aimCell + offset
+        if (checkCell < 0 || checkCell >= 613) continue
+
+        var entityId = getEntityAtCell(checkCell)
+        if (entityId == null) continue
+
+        // Check if this entity is in our enemies list
+        for (var e in enemies) {
+            if (e._id == entityId && !isDead(e._id)) {
+                push(hitEnemies, e)
+                break
+            }
+        }
+    }
+
+    return hitEnemies
+}
+
+// ========================================
+// Multi-Enemy Damage Cache
+// ========================================
+
+function hashEnemyPositions(enemies) {
+    // Create hash from enemy positions for cache key
+    var hash = 0
+    for (var e in enemies) {
+        if (!isDead(e._id)) {
+            hash += e._cellPos * e._id
+        }
+    }
+    return hash
+}
+
+function getCachedMultiEnemyDamage(itemId, aimCell, enemies, arsenal) {
+    // Cache AoE damage calculations
+    var enemyHash = hashEnemyPositions(enemies)
+    var cacheKey = itemId * 1000000 + aimCell * 1000 + (enemyHash % 1000)
+
+    if (mapContainsKey(__multiEnemyDamageCache, cacheKey)) {
+        return __multiEnemyDamageCache[cacheKey]
+    }
+
+    // Calculate and cache
+    var enemiesArray = []
+    for (var e in enemies) {
+        push(enemiesArray, e)
+    }
+
+    var result = arsenal.calculateMultiEnemyDamage(
+        player._cellPos,  // Note: This may need to be passed as parameter
+        aimCell,
+        itemId,
+        enemiesArray
+    )
+
+    __multiEnemyDamageCache[cacheKey] = result
+    return result
+}
+
+function clearMultiEnemyDamageCache() {
+    __multiEnemyDamageCache = [:]
+}
+
+// ========================================
+// Initialization
+// ========================================
+
+function initializePerformanceInfra() {
+    startOp()
+    initializeAoEMasks()
+    stopOp("Initialize AoE masks")
+
+    startOp()
+    buildOccupancyMap()
+    stopOp("Build occupancy map")
+}
+
+function clearPerformanceInfra() {
+    __occupancyMap = [:]
+    __multiEnemyDamageCache = [:]
+    // Keep AoE masks (static data)
+}

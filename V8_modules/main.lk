@@ -16,9 +16,12 @@ include('math/probability_distribution.lk')
 include('math/damage_probability.lk')
 
 include('operation_tracker.lk')
-include('cache_manager.lk')
 include('reachable_graph.lk')
+include('performance_infra.lk')
+include('cache_manager.lk')
+include('tactical_awareness.lk')
 include('weight_profiles.lk')
+include('strategic_depth.lk')
 
 include('scenario_generator.lk')
 include('scenario_simulator.lk')
@@ -65,6 +68,9 @@ function main() {
 
         // Phase 1: Initialize adjacency map (one-time setup)
         initializeAdjacency()
+
+        // Phase 3: Initialize cooldown tracker
+        initializeCooldownTracker()
     }
 
     player.updateEntity()
@@ -90,9 +96,6 @@ function main() {
         targetHitCell = fieldMap.getBestWeaponOrChipCell();
     }
 
-    if (strategy instanceof MagicStrategy) {
-        strategy.createAndExecuteDotKite(target, targetHitCell)
-    } else {
-        strategy.createAndExecuteScenario(target, targetHitCell)
-    }
+    // All strategies use unified scenario-based execution
+    strategy.createAndExecuteScenario(target, targetHitCell)
 }

@@ -289,7 +289,7 @@ class Arsenal {
     }
 
     calculateMultiEnemyDamage(shooterCell, aimCell, itemId, enemies) {
-        
+
         var item = null
         if (mapContainsKey(this.playerEquippedWeapons, itemId)) {
             item = this.playerEquippedWeapons[itemId]
@@ -303,29 +303,84 @@ class Arsenal {
         var hitEnemies = []
         var breakdown = [:]
 
-        for (var e in enemies) {
-            if (isDead(e._id)) continue
+        // OPTIMIZATION: Use AoE masks to check only affected cells
+        // O(m) where m = AoE size, instead of O(n) where n = all enemies
 
-            var aoeModifier = this.computeAoEModifier(aimCell, e._cellPos, item._aoeType)
+        var aoeType = item._aoeType
+        var useOptimization = mapContainsKey(__aoePatternMasks, aoeType) &&
+                               aoeType != 4  // AREA_LASER_LINE
 
-            if (aoeModifier > 0) {
+        if (useOptimization) {
+            // Fast path: Check only AoE cells using occupancy map
+            var mask = __aoePatternMasks[aoeType]
+            var processedEnemies = [:]  // Track to avoid duplicates
 
-                var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId, aimCell, e._cellPos)
+            for (var offset in mask) {
+                var checkCell = aimCell + offset
+                if (checkCell < 0 || checkCell >= 613) continue
+
+                var entityId = getEntityAtCell(checkCell)
+                if (entityId == null) continue
+                if (mapContainsKey(processedEnemies, entityId)) continue
+
+                // Find this enemy in the provided enemies array
+                var enemyObj = null
+                for (var e in enemies) {
+                    if (e._id == entityId && !isDead(e._id)) {
+                        enemyObj = e
+                        break
+                    }
+                }
+
+                if (enemyObj == null) continue
+                mapPut(processedEnemies, entityId, true)
+
+                // Calculate damage with AoE falloff
+                var aoeModifier = this.computeAoEModifier(aimCell, enemyObj._cellPos, aoeType)
+                if (aoeModifier <= 0) continue
+
+                var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId, aimCell, enemyObj._cellPos)
 
                 var directAfterShield = bd['direct']
-                if (bd['direct'] > 0 && (e._relShield > 0 || e._absShield > 0)) {
-                    directAfterShield = directAfterShield * (1 - e._relShield / 100) - e._absShield
+                if (bd['direct'] > 0 && (enemyObj._relShield > 0 || enemyObj._absShield > 0)) {
+                    directAfterShield = directAfterShield * (1 - enemyObj._relShield / 100) - enemyObj._absShield
                     if (directAfterShield < 0) directAfterShield = 0
                 }
 
                 var dotDamage = bd['dot']
                 var novaDamage = bd['nova']
-
                 var netDmg = directAfterShield + dotDamage + novaDamage
 
                 totalDamage += netDmg
-                push(hitEnemies, e)
-                mapPut(breakdown, e._id, netDmg)
+                push(hitEnemies, enemyObj)
+                mapPut(breakdown, enemyObj._id, netDmg)
+            }
+        } else {
+            // Fallback: Original O(n) loop for uncommon AoE types
+            for (var e in enemies) {
+                if (isDead(e._id)) continue
+
+                var aoeModifier = this.computeAoEModifier(aimCell, e._cellPos, aoeType)
+
+                if (aoeModifier > 0) {
+
+                    var bd = this.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId, aimCell, e._cellPos)
+
+                    var directAfterShield = bd['direct']
+                    if (bd['direct'] > 0 && (e._relShield > 0 || e._absShield > 0)) {
+                        directAfterShield = directAfterShield * (1 - e._relShield / 100) - e._absShield
+                        if (directAfterShield < 0) directAfterShield = 0
+                    }
+
+                    var dotDamage = bd['dot']
+                    var novaDamage = bd['nova']
+
+                    var netDmg = directAfterShield + dotDamage + novaDamage
+
+                    totalDamage += netDmg
+                    push(hitEnemies, e)
+                    mapPut(breakdown, e._id, netDmg)
+                }
             }
         }
 

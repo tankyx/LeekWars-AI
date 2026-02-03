@@ -1,0 +1,286 @@
+// ========================================
+// Strategic Depth Module (Phase 3)
+// ========================================
+// Provides intelligent combat adaptation:
+// - Cooldown Tracker: Predict enemy chip availability
+// - Weight Adaptation: Dynamic scenario weights based on combat state
+
+include('operation_tracker.lk')
+include('weight_profiles.lk')
+
+// ========================================
+// Cooldown Tracker
+// ========================================
+
+global __enemyChipUsage = [:]  // enemyId → [chipId → lastUsedTurn]
+global __currentTurn = -1
+
+class ChipCooldownInfo {
+    chipId = -1
+    lastUsedTurn = -1
+    cooldownDuration = 0
+    availableOnTurn = -1
+    isAvailable = false
+    confidence = 1.0  // 0.0-1.0
+}
+
+function initializeCooldownTracker() {
+    __currentTurn = getTurn()
+
+    // Initialize tracking for all alive enemies
+    var enemies = getAliveEnemies()
+    for (var enemyId in enemies) {
+        if (!mapContainsKey(__enemyChipUsage, enemyId)) {
+            __enemyChipUsage[enemyId] = [:]
+        }
+    }
+}
+
+function trackEnemyChipUsage(enemyId, chipId) {
+    // Track when an enemy uses a chip
+    var currentTurn = getTurn()
+
+    if (!mapContainsKey(__enemyChipUsage, enemyId)) {
+        __enemyChipUsage[enemyId] = [:]
+    }
+
+    __enemyChipUsage[enemyId][chipId] = currentTurn
+
+    var chipName = "chip_" + chipId
+    debug("[COOLDOWN-TRACK] Enemy " + getName(enemyId) + " used " + chipName + " on turn " + currentTurn)
+}
+
+function predictChipAvailability(enemyId, chipId) {
+    // Predict if enemy chip is available this turn
+    var info = new ChipCooldownInfo()
+    info.chipId = chipId
+
+    var currentTurn = getTurn()
+
+    // Check if we've tracked this chip
+    if (!mapContainsKey(__enemyChipUsage, enemyId)) {
+        info.isAvailable = true  // Unknown = assume available
+        info.confidence = 0.3
+        return info
+    }
+
+    var chipHistory = __enemyChipUsage[enemyId]
+    if (!mapContainsKey(chipHistory, chipId)) {
+        info.isAvailable = true  // Never seen = assume available
+        info.confidence = 0.5
+        return info
+    }
+
+    var lastUsed = chipHistory[chipId]
+    info.lastUsedTurn = lastUsed
+
+    // Estimate cooldown based on chip type
+    var cooldown = estimateChipCooldown(chipId)
+    info.cooldownDuration = cooldown
+    info.availableOnTurn = lastUsed + cooldown + 1  // +1 because cooldown counts turns
+
+    var turnsSinceUse = currentTurn - lastUsed
+    info.isAvailable = (turnsSinceUse > cooldown)
+    info.confidence = 0.9  // High confidence from direct observation
+
+    return info
+}
+
+function estimateChipCooldown(chipId) {
+    // Estimate chip cooldown based on known patterns
+    // Shield chips: ~3 turns
+    // Heal chips: ~3 turns
+    // Antidote: ~3 turns
+    // Movement chips: ~1 turn
+    // Debuff chips: ~2 turns
+
+    // Common defensive chips (longer cooldowns)
+    if (chipId == 58 || chipId == 59 || chipId == 60) return 3  // FORTRESS, WALL, ARMOR
+    if (chipId == 66 || chipId == 67) return 3  // REMISSION, REGENERATION
+    if (chipId == 49) return 3  // ANTIDOTE
+
+    // Movement chips (short cooldowns)
+    if (chipId == 70) return 1  // TELEPORTATION
+
+    // Debuff chips (medium cooldowns)
+    if (chipId == 76) return 2  // LIBERATION
+
+    // Default assumption
+    return 2
+}
+
+function getKeyChipPredictions(enemyId) {
+    // Get predictions for strategically important chips
+    var predictions = [:]
+
+    var keyChips = [
+        58,  // CHIP_FORTRESS (absolute shield)
+        59,  // CHIP_WALL (relative shield)
+        49,  // CHIP_ANTIDOTE (poison cleanse)
+        66,  // CHIP_REMISSION (heal)
+        67,  // CHIP_REGENERATION (multi-turn heal)
+        70,  // CHIP_TELEPORTATION (escape)
+        76   // CHIP_LIBERATION (buff removal)
+    ]
+
+    for (var chipId in keyChips) {
+        var pred = predictChipAvailability(enemyId, chipId)
+        predictions[chipId] = pred
+    }
+
+    return predictions
+}
+
+function isEnemyShieldAvailable(enemyId) {
+    // Quick check: Can enemy use shield chips this turn?
+    var fortress = predictChipAvailability(enemyId, 58)  // CHIP_FORTRESS
+    var wall = predictChipAvailability(enemyId, 59)      // CHIP_WALL
+
+    return fortress.isAvailable || wall.isAvailable
+}
+
+function isEnemyAntidoteAvailable(enemyId) {
+    // Quick check: Can enemy cleanse poison this turn?
+    var antidote = predictChipAvailability(enemyId, 49)  // CHIP_ANTIDOTE
+    return antidote.isAvailable
+}
+
+// ========================================
+// Weight Adaptation
+// ========================================
+
+function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
+    // Dynamically modify weights based on current combat situation
+    var adapted = [:]
+
+    // Copy base weights
+    for (var key in mapKeys(baseWeights)) {
+        adapted[key] = baseWeights[key]
+    }
+
+    var currentTurn = getTurn()
+    var enemyCount = count(mapKeys(enemies))
+
+    // === REMOVED: HP-Based Adaptation ===
+    // Analysis showed HP-based boosts trigger too late (when fight is already lost)
+    // Offensive builds were being hurt by defensive logic
+    // Keeping only proactive, context-independent adaptations
+
+    // === Enemy Count Adaptation ===
+    if (enemyCount >= 3) {
+        // Multiple enemies: Boost threat awareness
+        adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.5)
+
+        // Slightly reduce OTKO bonus (harder to isolate targets)
+        adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 0.9)
+
+        debug("[WEIGHT-ADAPT] Multiple enemies (" + enemyCount + ") - Threat awareness boost")
+    }
+    else if (enemyCount == 2) {
+        // Two enemies: Slight threat awareness
+        adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.2)
+
+        debug("[WEIGHT-ADAPT] Two enemies - Slight threat boost")
+    }
+
+    // === Turn-Based Adaptation ===
+    if (currentTurn <= 3) {
+        // Early game: Boost TP efficiency (proven helpful)
+        adapted['tpEfficiency'] = floor(adapted['tpEfficiency'] * 1.5)
+
+        debug("[WEIGHT-ADAPT] Early game (turn " + currentTurn + ") - TP efficiency boost")
+    }
+
+    // === REMOVED: Late game burst boost ===
+    // Late game adaptations were reactive, not proactive
+
+    // === REMOVED: Buff coverage adaptation ===
+    // Wasn't providing meaningful value
+
+    // === REMOVED: Enemy threat adaptation ===
+    // High threat = already in trouble, adaptation too late
+
+    return adapted
+}
+
+function calculateAverageThreat(playerCell, enemies, fieldMap) {
+    // Calculate average threat from reachable enemy positions
+    var totalThreat = 0
+    var threatCount = 0
+
+    for (var enemyId in mapKeys(enemies)) {
+        var enemy = enemies[enemyId]
+        if (isDead(enemyId)) continue
+
+        var enemyPos = enemy._cellPos
+        var dist = getCellDistance(playerCell, enemyPos)
+
+        if (dist != null && dist <= 15) {
+            // Estimate threat from this enemy
+            var threat = estimateEnemyThreat(enemy)
+            totalThreat += threat
+            threatCount++
+        }
+    }
+
+    if (threatCount == 0) return 0
+    return totalThreat / threatCount
+}
+
+function estimateEnemyThreat(enemy) {
+    // Simple threat estimation based on enemy stats
+    var weapons = getWeapons(enemy._id)
+    var maxThreat = 0
+
+    for (var weaponId in weapons) {
+        var effects = getWeaponEffects(weaponId)
+        for (var eff in effects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                var avgDmg = (eff[1] + eff[2]) / 2
+                var scaledDmg = avgDmg * (1 + enemy._strength / 100)
+                if (scaledDmg > maxThreat) {
+                    maxThreat = scaledDmg
+                }
+            }
+        }
+    }
+
+    // Multiply by estimated uses per turn
+    return maxThreat * 3
+}
+
+// ========================================
+// Integration Helpers
+// ========================================
+
+function getAdaptedWeights(buildType, player, enemies, fieldMap) {
+    // Main entry point: Get weights adapted to current situation
+    var baseWeights = getWeightsForBuild(buildType)
+    var adapted = adaptWeightsToSituation(baseWeights, player, enemies, fieldMap)
+    return adapted
+}
+
+function shouldPrioritizeDefense(player, enemies) {
+    // Quick check: Should we play defensively?
+    var hpPercent = (player._currHealth * 100) / player._maxHealth
+    var enemyCount = count(mapKeys(enemies))
+
+    if (hpPercent < 30) return true
+    if (hpPercent < 50 && enemyCount >= 2) return true
+
+    return false
+}
+
+function shouldPrioritizeAggression(player, target) {
+    // Quick check: Should we go all-in?
+    var targetHPPercent = (target._currHealth * 100) / target._maxHealth
+    var playerHPPercent = (player._currHealth * 100) / player._maxHealth
+
+    // Enemy low and we're healthy
+    if (targetHPPercent < 40 && playerHPPercent > 50) return true
+
+    // We have massive HP advantage
+    if (playerHPPercent > targetHPPercent + 30) return true
+
+    return false
+}
