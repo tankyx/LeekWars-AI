@@ -375,7 +375,13 @@ class ScenarioGenerator {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
-        var simPos = this._player._cellPos  
+        var simPos = this._player._cellPos
+
+        var conservativeAntidote = this.getAntidoteAction(tpBudget)
+        if (conservativeAntidote != null) {
+            push(actions, conservativeAntidote)
+            tpBudget -= 3
+        }
 
         var buffAction = this.getOffensiveBuff()
         if (buffAction != null) {
@@ -428,7 +434,13 @@ class ScenarioGenerator {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
-        var simPos = this._player._cellPos  
+        var simPos = this._player._cellPos
+
+        var defensiveAntidote = this.getAntidoteAction(tpBudget)
+        if (defensiveAntidote != null) {
+            push(actions, defensiveAntidote)
+            tpBudget -= 3
+        }
 
         var healAction = this.getHealingAction(tpBudget, 0.7)
         if (healAction != null) {
@@ -625,6 +637,12 @@ class ScenarioGenerator {
         tpBudget -= 5
         debug("[TELEPORT-ESCAPE] Evacuating to cell " + safestCell + " (threat: " + lowestThreat + ")")
 
+        var escapeAntidote = this.getAntidoteAction(tpBudget)
+        if (escapeAntidote != null) {
+            push(actions, escapeAntidote)
+            tpBudget -= 3
+        }
+
         if (tpBudget >= 4 && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
             getCooldown(CHIP_REMISSION, this._player._id) == 0) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
@@ -651,15 +669,21 @@ class ScenarioGenerator {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
+        var antidoteAction = this.getAntidoteAction(tpBudget)
+        if (antidoteAction != null) {
+            push(actions, antidoteAction)
+            tpBudget -= 3
+        }
+
         if (params.healThreshold >= 0) {
-            
+
             if (params.healThreshold >= 0.99) {
                 var currentHP = this._player._currHealth
                 var maxHP = this._player._maxHealth
                 var hpRatio = currentHP / maxHP
 
                 if (hpRatio < params.healThreshold) {
-                    
+
                     var remissionAction = this.getRemissionAction()
                     if (remissionAction != null && tpBudget >= 5) {
                         push(actions, remissionAction)
@@ -673,7 +697,7 @@ class ScenarioGenerator {
                     }
                 }
             } else {
-                
+
                 var healAction = this.getHealingAction(tpBudget, params.healThreshold)
                 if (healAction != null) {
                     push(actions, healAction)
@@ -1160,6 +1184,47 @@ class ScenarioGenerator {
             getCooldown(CHIP_REGENERATION, this._player._id) == 0) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
         }
+        return null
+    }
+
+    getAntidoteAction(tpBudget) {
+        if (!this._player.hasEffect(EFFECT_POISON)) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ANTIDOTE)) return null
+        if (getCooldown(CHIP_ANTIDOTE, this._player._id) != 0) return null
+        if (tpBudget < 3) return null
+
+        var poisonRemaining = this._player.getEffectRemaining(EFFECT_POISON)
+        if (poisonRemaining < 2) return null
+
+        var poisonDamagePerTurn = this._player.getEffectValue(EFFECT_POISON)
+        if (poisonDamagePerTurn == null) poisonDamagePerTurn = 0
+
+        var totalPoisonDamage = poisonDamagePerTurn * poisonRemaining
+
+        var currentHP = this._player._currHealth
+        var maxHP = this._player._maxHealth
+        var hpRatio = currentHP / maxHP
+
+        if (totalPoisonDamage > 200) {
+            debug("[ANTIDOTE] Using Antidote - high total poison damage: " + totalPoisonDamage + " over " + poisonRemaining + " turns")
+            return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
+        }
+
+        if (poisonDamagePerTurn > 50 && poisonRemaining >= 3) {
+            debug("[ANTIDOTE] Using Antidote - sustained poison: " + poisonDamagePerTurn + "/turn for " + poisonRemaining + " turns")
+            return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
+        }
+
+        if (hpRatio < 0.5 && totalPoisonDamage > 100) {
+            debug("[ANTIDOTE] Using Antidote - low HP (" + floor(hpRatio * 100) + "%) with poison: " + totalPoisonDamage)
+            return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
+        }
+
+        if (totalPoisonDamage > currentHP) {
+            debug("[ANTIDOTE] Using Antidote - LETHAL poison: " + totalPoisonDamage + " vs HP: " + currentHP)
+            return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
+        }
+
         return null
     }
 
