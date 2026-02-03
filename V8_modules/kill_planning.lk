@@ -51,7 +51,7 @@ class KillPlanner {
         // Get all equipped damage-dealing chips
         var chips = mapValues(this._arsenal.playerEquippedChips)
         for (var chip in chips) {
-            if (chip._cost <= availableTP && chip._damageType != null) {
+            if (chip._cost <= availableTP) {
                 var netDmg = this._arsenal.getNetDamageAgainstTarget(
                     this._player._strength,
                     this._player._magic,
@@ -111,7 +111,7 @@ class KillPlanner {
 
     // Detect 2-turn kill opportunity
     detect2TurnKill() {
-        var targetHP = this._target._currHp
+        var targetHP = this._target._currHealth
         var currentTP = this._player._currTp
 
         // Calculate damage we can do this turn with ALL TP
