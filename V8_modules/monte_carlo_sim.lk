@@ -1,7 +1,7 @@
 // ========================================
 // Monte Carlo Simulator Module
 // ========================================
-// Runs 500-1000 iterations of attack sequences to calculate actual kill probability
+// Runs 100-200 iterations of attack sequences to calculate actual kill probability
 // Complements analytical damage_probability.lk for complex scenarios
 
 include('debug_config.lk')
@@ -10,9 +10,9 @@ class MonteCarloSimulator {
     _arsenal = null
     _player = null
     _target = null
-    _iterations = 500  // Default iteration count
+    _iterations = 100  // Default iteration count (reduced for operation budget)
 
-    constructor(arsenal, player, target, iterations = 500) {
+    constructor(arsenal, player, target, iterations = 100) {
         this._arsenal = arsenal
         this._player = player
         this._target = target

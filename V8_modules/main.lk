@@ -86,9 +86,8 @@ function main() {
 
     if (target == null) target = fieldMap.getClosestEnemy()
 
-    // Phase 3 & 4: TEMPORARILY DISABLED to identify operation cost issue
-    // Baseline should be ~3-4M ops, currently seeing 21M
-    /* if (target != null) {
+    // Phase 3: Cooldown tracking & kill planning
+    if (target != null) {
         var cooldownTracker = new CooldownTracker(target)
         var enemies = getAliveEnemies()
         for (var enemyId in enemies) {
@@ -100,7 +99,7 @@ function main() {
         if (killPlan != null && mapContainsKey(killPlan, 'active') && killPlan['active']) {
             debug("[MAIN] 2-turn kill - reserve " + killPlan['tpReserve'] + " TP")
         }
-    } */
+    }
 
     // Phase 1: Build reachable graph (replaces redundant pathfinding)
     buildReachableGraph(player._cellPos, player._currMp, player, target, arsenal)

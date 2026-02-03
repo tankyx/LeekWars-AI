@@ -96,8 +96,8 @@ class UnifiedStrategy extends Strategy {
         var simulator = new ScenarioSimulator(arsenal, player, target, this._fieldMap)
         var scorer = new ScenarioScorer(player, target, this._fieldMap, adaptedWeights)
 
-        // Phase 3: Monte Carlo simulator - DISABLED (not yet integrated)
-        // var monteCarloSim = new MonteCarloSimulator(arsenal, player, target, 500)
+        // Phase 3: Monte Carlo simulator (100 iterations for efficiency)
+        var monteCarloSim = new MonteCarloSimulator(arsenal, player, target, 100)
 
         var bestScore = -999999
         var bestScenario = null
@@ -131,18 +131,17 @@ class UnifiedStrategy extends Strategy {
         }
         var simOps = stopOp("Simulate & score top " + evaluateCount)
 
-        // Phase 4: DISABLED - Too expensive (adds ~15M ops)
-        // TODO: Optimize enemy predictor before re-enabling
-        if (false && count(scenarioResults) >= 3 && getOperations() < 11000000) {
+        // Phase 4: Enemy Response Lookahead (optimized: 1 scenario only)
+        if (count(scenarioResults) >= 1 && getOperations() < 10000000) {
             startOp()
             arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
 
             var predictor = new EnemyPredictor(this._fieldMap, arsenal, player, target)
-            var lookaheadCount = min(3, count(scenarioResults))
+            var lookaheadCount = min(1, count(scenarioResults))
 
-            debug("[LOOKAHEAD] Evaluating top " + lookaheadCount + " scenarios with enemy prediction")
+            debug("[LOOKAHEAD] Evaluating top " + lookaheadCount + " scenario with enemy prediction")
 
             for (var i = 0; i < lookaheadCount; i++) {
                 var scenarioData = scenarioResults[i]
