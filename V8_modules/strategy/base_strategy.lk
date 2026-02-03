@@ -57,6 +57,24 @@ class Strategy {
         return ['safe': true, 'needsRepositioning': false]
     }
 
+    checkAoEWeaponSafety(weaponId, targetCell, fromCell) {
+        if (!mapContainsKey(arsenal.playerEquippedWeapons, weaponId)) return ['safe': false, 'needsRepositioning': false]
+        var weapon = arsenal.playerEquippedWeapons[weaponId]
+
+        if (weapon._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
+
+        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, weapon._aoeType, fromCell)
+
+        for (var i = 0; i < count(aoeCells); i++) {
+            if (aoeCells[i] == fromCell) {
+                debug("[AOE-CHECK] WARNING: " + getWeaponName(weaponId) + " would hit player at " + fromCell + " (target=" + targetCell + ") - need repositioning")
+                return ['safe': false, 'needsRepositioning': true]
+            }
+        }
+
+        return ['safe': true, 'needsRepositioning': false]
+    }
+
     findAoESplashCell(chipId, enemyCell) {
         if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return null
         var chip = arsenal.playerEquippedChips[chipId]

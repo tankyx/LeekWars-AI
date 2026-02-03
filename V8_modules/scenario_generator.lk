@@ -1197,8 +1197,11 @@ class ScenarioGenerator {
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
             if (damage > bestDamage) {
-                bestDamage = damage
-                bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage]
+                var aoeCheck = this._strategy.checkAoEWeaponSafety(weaponId, this._target._cellPos, simPos)
+                if (aoeCheck['safe']) {
+                    bestDamage = damage
+                    bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage]
+                }
             }
         }
 
@@ -1217,8 +1220,11 @@ class ScenarioGenerator {
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, this._target)
             if (damage > bestDamage) {
-                bestDamage = damage
-                bestAttack = ["type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage]
+                var aoeCheck = this._strategy.checkAoESafetyFromCell(chipId, this._target._cellPos, simPos)
+                if (aoeCheck['safe']) {
+                    bestDamage = damage
+                    bestAttack = ["type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage]
+                }
             }
         }
 
