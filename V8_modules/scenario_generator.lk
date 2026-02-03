@@ -1194,24 +1194,26 @@ class ScenarioGenerator {
         var weaponUses = [:]  
         var chipCooldowns = [:]  
 
-        while (tpToUse >= 4) {  
+        while (tpToUse >= 4) {
             var bestAttack = this.findBestAvailableAttack(simPos, weaponUses, chipCooldowns)
-            if (bestAttack == null) break  
+            if (bestAttack == null) break
 
             var attackCost = bestAttack['cost']
-            if (tpToUse < attackCost) break  
+            if (tpToUse < attackCost) break
 
             var attackType = bestAttack['type']
             var attackId = bestAttack['id']
+            var attackTargetCell = bestAttack['targetCell']
+            if (attackTargetCell == null) attackTargetCell = this._target._cellPos
 
             if (attackType == 'weapon') {
-                push(actions, new Action(Action.ACTION_DIRECT, attackId, -1, this._target._cellPos, this._target))
+                push(actions, new Action(Action.ACTION_DIRECT, attackId, -1, attackTargetCell, this._target))
                 var currentUses = weaponUses[attackId]
                 if (currentUses == null) currentUses = 0
                 weaponUses[attackId] = currentUses + 1
             } else {
-                push(actions, new Action(Action.ACTION_DIRECT, -1, attackId, this._target._cellPos, this._target))
-                chipCooldowns[attackId] = true  
+                push(actions, new Action(Action.ACTION_DIRECT, -1, attackId, attackTargetCell, this._target))
+                chipCooldowns[attackId] = true
             }
 
             tpToUse -= attackCost
@@ -1235,6 +1237,9 @@ class ScenarioGenerator {
             if (currentUses == null) currentUses = 0
             if (currentUses >= weapon._maxUse) continue
 
+            var targetCell = this._target._cellPos
+            var isSplashAttack = false
+
             if (mapContainsKey(this._fieldMap.weaponHitmap, weaponId)) {
                 var shooterCells = this._fieldMap.weaponHitmap[weaponId]
                 var canShootFromHere = false
@@ -1250,16 +1255,22 @@ class ScenarioGenerator {
                 if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
 
                 if (!lineOfSight(simPos, this._target._cellPos)) {
-                    continue
+                    var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
+                    if (splashResult != null) {
+                        targetCell = splashResult['cell']
+                        isSplashAttack = true
+                    } else {
+                        continue
+                    }
                 }
             }
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
             if (damage > bestDamage) {
-                var aoeCheck = this._strategy.checkAoEWeaponSafety(weaponId, this._target._cellPos, simPos)
+                var aoeCheck = this._strategy.checkAoEWeaponSafety(weaponId, targetCell, simPos)
                 if (aoeCheck['safe']) {
                     bestDamage = damage
-                    bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage]
+                    bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage, "targetCell": targetCell, "isSplash": isSplashAttack]
                 }
             }
         }
@@ -1269,20 +1280,32 @@ class ScenarioGenerator {
 
         for (var chipId in damageChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
-            if (chipCooldowns[chipId] != null) continue  
-            if (getCooldown(chipId, this._player._id) > 0) continue  
+            if (chipCooldowns[chipId] != null) continue
+            if (getCooldown(chipId, this._player._id) > 0) continue
 
             var chip = this._arsenal.playerEquippedChips[chipId]
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
-            if (!lineOfSight(simPos, this._target._cellPos)) continue
+
+            var chipTargetCell = this._target._cellPos
+            var isChipSplash = false
+
+            if (!lineOfSight(simPos, this._target._cellPos)) {
+                var chipSplashResult = this._strategy.findAoESplashCell(chipId, this._target._cellPos, simPos)
+                if (chipSplashResult != null) {
+                    chipTargetCell = chipSplashResult['cell']
+                    isChipSplash = true
+                } else {
+                    continue
+                }
+            }
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, this._target)
             if (damage > bestDamage) {
-                var aoeCheck = this._strategy.checkAoESafetyFromCell(chipId, this._target._cellPos, simPos)
+                var aoeCheck = this._strategy.checkAoESafetyFromCell(chipId, chipTargetCell, simPos)
                 if (aoeCheck['safe']) {
                     bestDamage = damage
-                    bestAttack = ["type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage]
+                    bestAttack = ["type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage, "targetCell": chipTargetCell, "isSplash": isChipSplash]
                 }
             }
         }

@@ -75,22 +75,21 @@ class Strategy {
         return ['safe': true, 'needsRepositioning': false]
     }
 
-    findAoESplashCell(chipId, enemyCell) {
-        if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return null
-        var chip = arsenal.playerEquippedChips[chipId]
+    findAoEWeaponSplashCell(weaponId, enemyCell, fromCell) {
+        if (!mapContainsKey(arsenal.playerEquippedWeapons, weaponId)) return null
+        var weapon = arsenal.playerEquippedWeapons[weaponId]
 
-        if (chip._aoeType == AREA_POINT) return null
+        if (weapon._aoeType == AREA_POINT) return null
 
-        var playerPos = player._cellPos
         var bestCell = null
         var bestDist = 999
 
-        var aoeRadius = 2  
-        if (chip._aoeType == AREA_CIRCLE_3) aoeRadius = 3
+        var aoeRadius = 2
+        if (weapon._aoeType == AREA_CIRCLE_3) aoeRadius = 3
 
         for (var dx = -aoeRadius; dx <= aoeRadius; dx++) {
             for (var dy = -aoeRadius; dy <= aoeRadius; dy++) {
-                if (dx == 0 && dy == 0) continue  
+                if (dx == 0 && dy == 0) continue
 
                 var candidateX = getCellX(enemyCell) + dx
                 var candidateY = getCellY(enemyCell) + dy
@@ -98,11 +97,11 @@ class Strategy {
 
                 if (candidateCell == null || isObstacle(candidateCell)) continue
 
-                var dist = getCellDistance(playerPos, candidateCell)
-                if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
-                if (!lineOfSight(playerPos, candidateCell)) continue
+                var dist = getCellDistance(fromCell, candidateCell)
+                if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
+                if (!lineOfSight(fromCell, candidateCell)) continue
 
-                var aoeCells = fieldMap.getAoEAffectedCells(candidateCell, chip._aoeType, playerPos)
+                var aoeCells = fieldMap.getAoEAffectedCells(candidateCell, weapon._aoeType, fromCell)
                 var hitsEnemy = false
                 for (var i = 0; i < count(aoeCells); i++) {
                     if (aoeCells[i] == enemyCell) {
@@ -114,7 +113,7 @@ class Strategy {
 
                 var hitsPlayer = false
                 for (var j = 0; j < count(aoeCells); j++) {
-                    if (aoeCells[j] == playerPos) {
+                    if (aoeCells[j] == fromCell) {
                         hitsPlayer = true
                         break
                     }
@@ -128,7 +127,66 @@ class Strategy {
         }
 
         if (bestCell != null) {
-            debug("[AOE-SPLASH] Found cell " + bestCell + " to splash-hit enemy at " + enemyCell + " (no direct LOS)")
+            debug("[AOE-WEAPON-SPLASH] Found cell " + bestCell + " to splash-hit enemy at " + enemyCell + " (no direct LOS)")
+            return ['cell': bestCell, 'safe': true]
+        }
+
+        return null
+    }
+
+    findAoESplashCell(chipId, enemyCell, fromCell) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) return null
+        var chip = arsenal.playerEquippedChips[chipId]
+
+        if (chip._aoeType == AREA_POINT) return null
+
+        var bestCell = null
+        var bestDist = 999
+
+        var aoeRadius = 2
+        if (chip._aoeType == AREA_CIRCLE_3) aoeRadius = 3
+
+        for (var dx = -aoeRadius; dx <= aoeRadius; dx++) {
+            for (var dy = -aoeRadius; dy <= aoeRadius; dy++) {
+                if (dx == 0 && dy == 0) continue
+
+                var candidateX = getCellX(enemyCell) + dx
+                var candidateY = getCellY(enemyCell) + dy
+                var candidateCell = getCellFromXY(candidateX, candidateY)
+
+                if (candidateCell == null || isObstacle(candidateCell)) continue
+
+                var dist = getCellDistance(fromCell, candidateCell)
+                if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
+                if (!lineOfSight(fromCell, candidateCell)) continue
+
+                var aoeCells = fieldMap.getAoEAffectedCells(candidateCell, chip._aoeType, fromCell)
+                var hitsEnemy = false
+                for (var i = 0; i < count(aoeCells); i++) {
+                    if (aoeCells[i] == enemyCell) {
+                        hitsEnemy = true
+                        break
+                    }
+                }
+                if (!hitsEnemy) continue
+
+                var hitsPlayer = false
+                for (var j = 0; j < count(aoeCells); j++) {
+                    if (aoeCells[j] == fromCell) {
+                        hitsPlayer = true
+                        break
+                    }
+                }
+
+                if (!hitsPlayer && dist < bestDist) {
+                    bestDist = dist
+                    bestCell = candidateCell
+                }
+            }
+        }
+
+        if (bestCell != null) {
+            debug("[AOE-CHIP-SPLASH] Found cell " + bestCell + " to splash-hit enemy at " + enemyCell + " (no direct LOS)")
             return ['cell': bestCell, 'safe': true]
         }
 
@@ -2447,12 +2505,7 @@ class Strategy {
                     var tpBefore = getTP()
                     debug("Using weapon " + getWeaponName(a.weaponId) + " on cell " + a.targetCell + " (pos=" + currentPos + " dist=" + dist + " TP=" + tpBefore + ")")
 
-                    var result = null
-                    if (a.targetEntity != null && a.targetEntity._isAlive) {
-                        result = useWeapon(a.targetEntity._id)
-                    } else {
-                        result = useWeaponOnCell(a.targetCell)
-                    }
+                    var result = useWeaponOnCell(a.targetCell)
 
                     var tpAfter = getTP()
 
