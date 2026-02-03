@@ -3002,6 +3002,34 @@ class Strategy {
             debug("[VALIDATION] Removed " + removedCount + " invalid actions, added " + fallbacksAdded + " fallbacks, " + count(validActions) + " total actions remaining")
         }
 
+        // Check if we have any damage-dealing actions remaining
+        var hasDamageActions = false
+        for (var action in validActions) {
+            if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DEBUFF) {
+                hasDamageActions = true
+                break
+            }
+        }
+
+        // Remove orphaned HNS movements (hide-and-seek after all attacks removed)
+        if (!hasDamageActions) {
+            var beforeCleanup = count(validActions)
+            var cleanedActions = []
+            for (var action in validActions) {
+                // Keep non-HNS movements and all other actions
+                if (action.type != Action.MOVEMENT_HNS) {
+                    push(cleanedActions, action)
+                } else {
+                    debug("[VALIDATION-CLEANUP] Removing orphaned HNS movement (no damage actions)")
+                }
+            }
+
+            if (count(cleanedActions) < beforeCleanup) {
+                debug("[VALIDATION-CLEANUP] Removed " + (beforeCleanup - count(cleanedActions)) + " orphaned movements, " + count(cleanedActions) + " actions remaining")
+                validActions = cleanedActions
+            }
+        }
+
         this._actions = validActions
     }
 
