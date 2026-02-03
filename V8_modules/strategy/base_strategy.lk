@@ -2312,13 +2312,15 @@ class Strategy {
                 var scenarioData = scenarioResults[i]
                 var simResult = scenarioData['simResult']
 
-                // Add end state to simResult for predictor
-                simResult['endPosition'] = simResult.finalPosition
-                simResult['endHP'] = player._currHp + simResult.hpGained  // HP after heals
-                simResult['endTP'] = player._currTp - simResult.tpSpent
-                simResult['score'] = scenarioData['score']
+                // Create end state map for predictor (can't add fields to class instance)
+                var endState = [
+                    'endPosition': simResult.finalPosition,
+                    'endHP': player._currHealth + simResult.hpGained,  // HP after heals
+                    'endTP': player._currTp - simResult.tpSpent,
+                    'score': scenarioData['score']
+                ]
 
-                var lookahead = predictor.evaluateScenarioWithLookahead(simResult, 0.7)
+                var lookahead = predictor.evaluateScenarioWithLookahead(endState, 0.7)
 
                 // Update score with lookahead
                 scenarioData['finalScore'] = lookahead['finalScore']
