@@ -1,0 +1,195 @@
+// ========================================
+// Enemy Response Predictor Module
+// ========================================
+// Simulates one "average" enemy response turn for scenario evaluation
+// Enables 2-turn lookahead with outcome discounting
+
+include('debug_config.lk')
+
+class EnemyPredictor {
+    _fieldMap = null
+    _arsenal = null
+    _player = null
+    _enemy = null
+
+    constructor(fieldMap, arsenal, player, enemy) {
+        this._fieldMap = fieldMap
+        this._arsenal = arsenal
+        this._player = player
+        this._enemy = enemy
+    }
+
+    // Predict enemy's best weapon based on equipped arsenal
+    predictEnemyBestWeapon() {
+        var enemyWeapons = getWeapons(this._enemy._id)
+        if (count(enemyWeapons) == 0) return null
+
+        var bestWeapon = null
+        var bestDamage = 0
+
+        for (var weaponId in enemyWeapons) {
+            // Estimate damage (simplified - enemy stats unknown)
+            var minRange = getWeaponMinRange(weaponId)
+            var maxRange = getWeaponMaxRange(weaponId)
+            var cost = getWeaponCost(weaponId)
+
+            if (cost == null || cost <= 0) continue
+
+            // Rough damage estimate (100-300 per use, scaled by cost)
+            var estimatedDamage = 150 * (cost / 4.0)
+
+            if (estimatedDamage > bestDamage) {
+                bestDamage = estimatedDamage
+                bestWeapon = [
+                    'id': weaponId,
+                    'damage': estimatedDamage,
+                    'minRange': minRange,
+                    'maxRange': maxRange,
+                    'cost': cost
+                ]
+            }
+        }
+
+        return bestWeapon
+    }
+
+    // Predict enemy movement toward player
+    predictEnemyMovement(playerEndPos, enemyMP) {
+        var enemyPos = this._enemy._cellPos
+        var distance = getCellDistance(enemyPos, playerEndPos)
+
+        if (distance == null || distance <= 3) {
+            // Already in good range, don't move
+            return enemyPos
+        }
+
+        // Estimate new position (move closer by MP distance)
+        var moveDistance = min(enemyMP, distance - 3)
+        if (moveDistance <= 0) return enemyPos
+
+        // Simplified: Assume enemy moves straight toward player
+        // (Actual pathfinding would be too expensive)
+        return enemyPos  // Fallback: assume no movement for now
+    }
+
+    // Simulate one enemy turn response
+    simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP) {
+        var enemyTP = min(12, this._enemy._currTp + 6)  // Assume 6 TP regen
+        var enemyMP = this._enemy._currMp
+
+        // Predict enemy weapon
+        var weapon = this.predictEnemyBestWeapon()
+        if (weapon == null) {
+            return [
+                'damage': 0,
+                'tpUsed': 0,
+                'enemyEndPos': this._enemy._cellPos
+            ]
+        }
+
+        // Predict enemy movement
+        var enemyEndPos = this.predictEnemyMovement(playerEndPos, enemyMP)
+
+        // Calculate potential weapon uses
+        var affordableUses = floor(enemyTP / weapon['cost'])
+        var distance = getCellDistance(enemyEndPos, playerEndPos)
+
+        if (distance == null || distance < weapon['minRange'] || distance > weapon['maxRange']) {
+            // Out of range, can't attack
+            return [
+                'damage': 0,
+                'tpUsed': 0,
+                'enemyEndPos': enemyEndPos
+            ]
+        }
+
+        // Estimate damage
+        var totalDamage = weapon['damage'] * affordableUses
+        var tpUsed = weapon['cost'] * affordableUses
+
+        return [
+            'damage': floor(totalDamage),
+            'tpUsed': tpUsed,
+            'enemyEndPos': enemyEndPos
+        ]
+    }
+
+    // Evaluate scenario with 1-turn lookahead
+    evaluateScenarioWithLookahead(scenarioResult, discountFactor = 0.7) {
+        // Extract end state from scenario
+        var playerEndPos = scenarioResult['endPosition']
+        var playerEndHP = scenarioResult['endHP']
+        var playerEndTP = scenarioResult['endTP']
+        var currentTurnValue = scenarioResult['score']
+
+        // Simulate enemy response
+        var enemyResponse = this.simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP)
+        var enemyDamage = enemyResponse['damage']
+
+        // Calculate next turn value (simplified)
+        // Penalty for taking damage, bonus for maintaining good HP
+        var hpAfterEnemy = playerEndHP - enemyDamage
+        var survivalPenalty = 0
+
+        if (hpAfterEnemy <= 0) {
+            survivalPenalty = -10000  // Death = very bad
+        } else if (hpAfterEnemy < playerEndHP * 0.3) {
+            survivalPenalty = -2000  // Critical HP
+        } else if (hpAfterEnemy < playerEndHP * 0.5) {
+            survivalPenalty = -1000  // Low HP
+        }
+
+        var nextTurnValue = survivalPenalty
+
+        // Apply discount factor to next turn value
+        var discountedNextTurn = nextTurnValue * discountFactor
+
+        // Combined score
+        var finalScore = currentTurnValue + discountedNextTurn
+
+        debugDetail("[LOOKAHEAD] Scenario: current=" + currentTurnValue +
+                   ", nextTurn=" + nextTurnValue +
+                   ", discounted=" + floor(discountedNextTurn) +
+                   ", final=" + floor(finalScore) +
+                   ", enemyDmg=" + enemyDamage)
+
+        return [
+            'currentTurnValue': currentTurnValue,
+            'nextTurnValue': nextTurnValue,
+            'discountedNextTurn': discountedNextTurn,
+            'finalScore': finalScore,
+            'enemyDamage': enemyDamage,
+            'playerHPAfter': hpAfterEnemy
+        ]
+    }
+}
+
+// Helper function to add lookahead to top scenarios
+function enhanceScenariosWithLookahead(scenarios, topK, fieldMap, arsenal, player, enemy) {
+    if (count(scenarios) == 0) return scenarios
+
+    var predictor = new EnemyPredictor(fieldMap, arsenal, player, enemy)
+    var enhancedCount = min(topK, count(scenarios))
+
+    debugInfo("[LOOKAHEAD] Evaluating top " + enhancedCount + " scenarios with enemy response prediction")
+
+    for (var i = 0; i < enhancedCount; i++) {
+        // Safety valve
+        if (getOperations() > 12000000) {
+            debugInfo("[LOOKAHEAD] Operation limit reached, stopping at scenario " + i)
+            break
+        }
+
+        var scenario = scenarios[i]
+        var scenarioResult = scenario  // Assume scenario contains result data
+
+        var lookahead = predictor.evaluateScenarioWithLookahead(scenarioResult, 0.7)
+
+        // Update scenario with lookahead score
+        scenario['lookaheadScore'] = lookahead['finalScore']
+        scenario['enemyDamagePrediction'] = lookahead['enemyDamage']
+        scenario['playerHPAfterEnemy'] = lookahead['playerHPAfter']
+    }
+
+    return scenarios
+}

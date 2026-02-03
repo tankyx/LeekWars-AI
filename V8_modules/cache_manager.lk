@@ -33,7 +33,8 @@ function buildReachableCellsCache(fromCell, mp) {
     mapPut(reachable, fromCell, 0)
 
     while (queueIndex < count(queue)) {
-        if (getOperations() > 5500000) {
+        // Safety valve (raised to 12M for deeper search)
+        if (getOperations() > 12000000) {
             break
         }
 

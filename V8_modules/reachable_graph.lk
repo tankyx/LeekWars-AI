@@ -53,9 +53,9 @@ function buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj)
     mpCost[startCell] = 0
 
     while (head < count(queue)) {
-        // Safety valve
-        if (getOperations() > 5000000) {
-            debug("[REACHABLE-BFS] Safety valve triggered")
+        // Safety valve (raised to 12M for deeper search)
+        if (getOperations() > 12000000) {
+            debug("[REACHABLE-BFS] Safety valve triggered at 12M ops")
             break
         }
 

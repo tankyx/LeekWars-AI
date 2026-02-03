@@ -2252,7 +2252,7 @@ class Strategy {
             return b['quickScore'] - a['quickScore']
         })
 
-        var topK = 12
+        var topK = 50  // Increased from 12 for deeper search
         var evaluateCount = min(topK, count(scenariosWithQuickScore))
         var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
 
@@ -2261,9 +2261,13 @@ class Strategy {
         var simulator = new ScenarioSimulator(arsenal, player, target, fieldMap)
         var scorer = new ScenarioScorer(player, target, fieldMap, null)
 
+        // Phase 3: Monte Carlo simulator - DISABLED (not yet integrated)
+        // var monteCarloSim = new MonteCarloSimulator(arsenal, player, target, 500)
+
         var bestScore = -999999
         var bestScenario = null
         var bestSimResult = null
+        var scenarioResults = []
 
         startOp()
         for (var i = 0; i < evaluateCount; i++) {
@@ -2274,6 +2278,14 @@ class Strategy {
             var simResult = simulator.simulate(scenario)
             var score = scorer.score(simResult, scenario)
 
+            // Store scenario with simulation result for lookahead
+            push(scenarioResults, [
+                'scenario': scenario,
+                'simResult': simResult,
+                'score': score,
+                'quickScore': qScore
+            ])
+
             debug("[TOP-K] Scenario #" + (i+1) + ": quickScore=" + floor(qScore) + " fullScore=" + floor(score))
 
             if (score > bestScore) {
@@ -2283,6 +2295,56 @@ class Strategy {
             }
         }
         var evalOps = stopOp("Full Simulation+Scoring (" + evaluateCount + " scenarios)")
+
+        // Phase 4: DISABLED - Too expensive (adds ~15M ops)
+        // TODO: Optimize enemy predictor before re-enabling
+        if (false && count(scenarioResults) >= 3 && getOperations() < 11000000) {
+            startOp()
+            arraySort(scenarioResults, function(a, b) {
+                return b['score'] - a['score']
+            })
+
+            var predictor = new EnemyPredictor(fieldMap, arsenal, player, target)
+            var lookaheadCount = min(3, count(scenarioResults))
+
+            debug("[LOOKAHEAD] Evaluating top " + lookaheadCount + " scenarios with enemy prediction")
+
+            for (var i = 0; i < lookaheadCount; i++) {
+                var scenarioData = scenarioResults[i]
+                var simResult = scenarioData['simResult']
+
+                // Add end state to simResult for predictor
+                simResult['endPosition'] = simResult.finalPosition
+                simResult['endHP'] = player._currHp + simResult.hpGained  // HP after heals
+                simResult['endTP'] = player._currTp - simResult.tpSpent
+                simResult['score'] = scenarioData['score']
+
+                var lookahead = predictor.evaluateScenarioWithLookahead(simResult, 0.7)
+
+                // Update score with lookahead
+                scenarioData['finalScore'] = lookahead['finalScore']
+                scenarioData['enemyDamage'] = lookahead['enemyDamage']
+
+                debug("[LOOKAHEAD] Scenario #" + (i+1) + ": base=" + floor(scenarioData['score']) +
+                          " final=" + floor(lookahead['finalScore']) +
+                          " enemyDmg=" + lookahead['enemyDamage'])
+            }
+
+            // Re-evaluate best scenario with lookahead scores
+            for (var i = 0; i < lookaheadCount; i++) {
+                var scenarioData = scenarioResults[i]
+                if (mapContainsKey(scenarioData, 'finalScore')) {
+                    if (scenarioData['finalScore'] > bestScore) {
+                        bestScore = scenarioData['finalScore']
+                        bestScenario = scenarioData['scenario']
+                        bestSimResult = scenarioData['simResult']
+                    }
+                }
+            }
+
+            var lookaheadOps = stopOp("Enemy Response Lookahead (top " + lookaheadCount + ")")
+            debug("[LOOKAHEAD] Complete - " + lookaheadOps + " ops")
+        }
 
         if (bestScenario == null) {
             this.createOffensiveScenario(target, targetHitCell)

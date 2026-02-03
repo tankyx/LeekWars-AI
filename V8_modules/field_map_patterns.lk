@@ -110,7 +110,7 @@ class FieldMapPatterns extends FieldMapCore {
         }
 
         if (aoeType == AREA_LASER_LINE) {
-            push(candidates, targetCell)  
+            push(candidates, targetCell)
             var enemies = this.getEnemySubMap()
             for (var e in mapValues(enemies)) {
                 if (e._cellPos != targetCell && !isDead(e._id)) {
@@ -120,26 +120,46 @@ class FieldMapPatterns extends FieldMapCore {
             return candidates
         }
 
-        var searchRadius = 1
-        if (aoeType == AREA_CIRCLE_3 || aoeType == AREA_PLUS_3 ||
-            aoeType == AREA_X_3 || aoeType == AREA_SQUARE_2) {
-            searchRadius = 2  
+        // Global aim optimization: Scan all enemy positions and area around them
+        // instead of just small radius around primary target
+        var enemies = this.getEnemySubMap()
+        var processedCells = [:]  // Track cells we've already added
+
+        // Add all enemy positions as candidates
+        for (var e in mapValues(enemies)) {
+            if (!isDead(e._id) && !mapContainsKey(processedCells, e._cellPos)) {
+                push(candidates, e._cellPos)
+                processedCells[e._cellPos] = true
+            }
         }
 
-        push(candidates, targetCell)
+        // Expand around each enemy based on AoE size
+        var aoeRadius = 1
+        if (aoeType == AREA_CIRCLE_3 || aoeType == AREA_PLUS_3 ||
+            aoeType == AREA_X_3 || aoeType == AREA_SQUARE_2) {
+            aoeRadius = 3  // Larger expansion for bigger AoE
+        } else if (aoeType == AREA_CIRCLE_2 || aoeType == AREA_PLUS_2) {
+            aoeRadius = 2
+        }
 
-        for (var dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (var dy = -searchRadius; dy <= searchRadius; dy++) {
-                if (dx == 0 && dy == 0) continue  
-                var dist = abs(dx) + abs(dy)
-                if (dist > searchRadius) continue
+        for (var e in mapValues(enemies)) {
+            if (isDead(e._id)) continue
+            var enemyCell = e._cellPos
 
-                var aimCell = targetCell + FieldMapPatterns.x_offset * dx +
-                              FieldMapPatterns.y_offset * dy
+            for (var dx = -aoeRadius; dx <= aoeRadius; dx++) {
+                for (var dy = -aoeRadius; dy <= aoeRadius; dy++) {
+                    if (dx == 0 && dy == 0) continue
+                    var dist = abs(dx) + abs(dy)
+                    if (dist > aoeRadius) continue
 
-                if (aimCell >= 0 && aimCell < FieldMapPatterns.board_cell_count &&
-                    !isObstacle(aimCell)) {
-                    push(candidates, aimCell)
+                    var aimCell = enemyCell + FieldMapPatterns.x_offset * dx +
+                                  FieldMapPatterns.y_offset * dy
+
+                    if (aimCell >= 0 && aimCell < FieldMapPatterns.board_cell_count &&
+                        !isObstacle(aimCell) && !mapContainsKey(processedCells, aimCell)) {
+                        push(candidates, aimCell)
+                        processedCells[aimCell] = true
+                    }
                 }
             }
         }

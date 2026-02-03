@@ -1,0 +1,166 @@
+// ========================================
+// Monte Carlo Simulator Module
+// ========================================
+// Runs 500-1000 iterations of attack sequences to calculate actual kill probability
+// Complements analytical damage_probability.lk for complex scenarios
+
+include('debug_config.lk')
+
+class MonteCarloSimulator {
+    _arsenal = null
+    _player = null
+    _target = null
+    _iterations = 500  // Default iteration count
+
+    constructor(arsenal, player, target, iterations = 500) {
+        this._arsenal = arsenal
+        this._player = player
+        this._target = target
+        this._iterations = iterations
+    }
+
+    // Roll damage for a single item use (with crit chance)
+    rollItemDamage(itemId) {
+        var breakdown = this._arsenal.getDamageBreakdown(
+            this._player._strength,
+            this._player._magic,
+            this._player._wisdom,
+            this._player._science,
+            itemId
+        )
+
+        var minDmg = breakdown["min"]
+        var maxDmg = breakdown["max"]
+
+        // Roll base damage (uniform distribution)
+        var baseDmg = minDmg
+        if (maxDmg > minDmg) {
+            baseDmg = floor(minDmg + rand() * (maxDmg - minDmg + 1))
+        }
+
+        // Apply crit chance
+        var critProb = min(this._player._agility / 1000.0, 1.0)
+        if (rand() < critProb) {
+            baseDmg = floor(baseDmg * 1.3)  // 30% crit multiplier
+        }
+
+        // Apply target armor
+        var netDmg = this._arsenal.getNetDamageAgainstTarget(
+            this._player._strength,
+            this._player._magic,
+            this._player._wisdom,
+            this._player._science,
+            itemId,
+            this._target
+        )
+
+        // Scale rolled damage by armor reduction ratio
+        var avgDmg = (minDmg + maxDmg) / 2.0
+        if (avgDmg > 0) {
+            var armorRatio = netDmg / avgDmg
+            baseDmg = floor(baseDmg * armorRatio)
+        }
+
+        return max(0, baseDmg)
+    }
+
+    // Simulate single attack sequence iteration
+    simulateAttackSequence(attackSequence) {
+        // attackSequence = [weaponId1, weaponId1, chipId1, chipId2, ...]
+        var totalDamage = 0
+
+        for (var itemId in attackSequence) {
+            totalDamage += this.rollItemDamage(itemId)
+        }
+
+        return totalDamage
+    }
+
+    // Run Monte Carlo simulation and return kill statistics
+    calculateKillProbability(attackSequence, targetHP) {
+        if (count(attackSequence) == 0) {
+            return [
+                'killProb': 0.0,
+                'avgDamage': 0,
+                'minDamage': 0,
+                'maxDamage': 0,
+                'iterations': 0
+            ]
+        }
+
+        var killCount = 0
+        var totalDamage = 0
+        var minDamage = 999999
+        var maxDamage = 0
+
+        for (var i = 0; i < this._iterations; i++) {
+            // Operation safety valve
+            if (getOperations() > 12000000) {
+                debugInfo("[MONTE-CARLO] Operation limit reached at iteration " + i)
+                break
+            }
+
+            var damage = this.simulateAttackSequence(attackSequence)
+
+            if (damage >= targetHP) {
+                killCount++
+            }
+
+            totalDamage += damage
+            minDamage = min(minDamage, damage)
+            maxDamage = max(maxDamage, damage)
+        }
+
+        var avgDamage = totalDamage / this._iterations
+        var killProb = killCount / this._iterations
+
+        return [
+            'killProb': killProb,
+            'avgDamage': floor(avgDamage),
+            'minDamage': minDamage,
+            'maxDamage': maxDamage,
+            'iterations': this._iterations
+        ]
+    }
+
+    // Build attack sequence from scenario actions
+    extractAttackSequence(scenario) {
+        var sequence = []
+
+        if (scenario == null || !mapContainsKey(scenario, 'actions')) {
+            return sequence
+        }
+
+        var actions = scenario['actions']
+        for (var action in actions) {
+            var actionType = action['type']
+
+            // Extract weapon uses
+            if (actionType == 0 || actionType == 100) {  // ACTION_DIRECT or weapon action
+                if (mapContainsKey(action, 'weaponId')) {
+                    var weaponId = action['weaponId']
+                    var uses = mapContainsKey(action, 'uses') ? action['uses'] : 1
+
+                    for (var u = 0; u < uses; u++) {
+                        push(sequence, weaponId)
+                    }
+                }
+            }
+
+            // Extract chip uses
+            if (actionType == 0 || actionType == 101) {  // ACTION_DIRECT or chip action
+                if (mapContainsKey(action, 'chipId')) {
+                    push(sequence, action['chipId'])
+                }
+            }
+        }
+
+        return sequence
+    }
+
+    // High-level: Evaluate scenario kill probability
+    evaluateScenario(scenario, targetHP) {
+        var attackSequence = this.extractAttackSequence(scenario)
+        return this.calculateKillProbability(attackSequence, targetHP)
+    }
+}

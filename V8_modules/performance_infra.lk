@@ -187,10 +187,11 @@ function hashEnemyPositions(enemies) {
     return hash
 }
 
-function getCachedMultiEnemyDamage(itemId, aimCell, enemies, arsenal) {
-    // Cache AoE damage calculations
+function getCachedMultiEnemyDamage(shooterCell, itemId, aimCell, enemies, arsenal) {
+    // Cache AoE damage calculations with position-aware key
     var enemyHash = hashEnemyPositions(enemies)
-    var cacheKey = itemId * 1000000 + aimCell * 1000 + (enemyHash % 1000)
+    // Include shooterCell in cache key to prevent stale position bugs
+    var cacheKey = shooterCell * 1000000000 + itemId * 100000 + aimCell * 100 + (enemyHash % 100)
 
     if (mapContainsKey(__multiEnemyDamageCache, cacheKey)) {
         return __multiEnemyDamageCache[cacheKey]
@@ -203,7 +204,7 @@ function getCachedMultiEnemyDamage(itemId, aimCell, enemies, arsenal) {
     }
 
     var result = arsenal.calculateMultiEnemyDamage(
-        player._cellPos,  // Note: This may need to be passed as parameter
+        shooterCell,  // Use explicit shooter position
         aimCell,
         itemId,
         enemiesArray

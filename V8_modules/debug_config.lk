@@ -1,0 +1,53 @@
+// ========================================
+// Debug Configuration Module
+// ========================================
+// Provides tiered debugging to reduce operation costs in production
+//
+// DEBUG_LEVEL:
+//   0 = PRODUCTION (critical errors only) - Saves ~200K ops
+//   1 = INFO (important state changes, strategy decisions)
+//   2 = DEBUG (detailed execution traces, loop iterations)
+//   3 = VERBOSE (all debug output, high-frequency logs)
+
+global DEBUG_LEVEL = 0  // Set to 0 for production, 1+ for development
+
+// Debug wrapper functions
+function debugCritical(message) {
+    // Always printed (errors, critical failures)
+    debug("[CRITICAL] " + message)
+}
+
+function debugInfo(message) {
+    // Level 1: Important state changes, strategy selection
+    if (DEBUG_LEVEL >= 1) {
+        debug(message)
+    }
+}
+
+function debugDetail(message) {
+    // Level 2: Detailed execution, action queues, damage calculations
+    if (DEBUG_LEVEL >= 2) {
+        debug(message)
+    }
+}
+
+function debugVerbose(message) {
+    // Level 3: High-frequency loops, cell iterations, minor calculations
+    if (DEBUG_LEVEL >= 3) {
+        debug(message)
+    }
+}
+
+// Conditional operation tracking
+function startOpDebug(label) {
+    if (DEBUG_LEVEL >= 2) {
+        startOp()
+    }
+}
+
+function stopOpDebug(label) {
+    if (DEBUG_LEVEL >= 2) {
+        return stopOp(label)
+    }
+    return 0
+}

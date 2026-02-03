@@ -1,0 +1,175 @@
+// ========================================
+// Cooldown Tracker Module
+// ========================================
+// Tracks enemy chip cooldowns (Antidote, Shield, etc.) to optimize strategy
+// Usage: If Antidote on cooldown → prioritize Poison scenarios
+
+include('debug_config.lk')
+
+global COOLDOWN_STATE = [:]  // entityId → chip cooldown info
+
+class CooldownTracker {
+    _target = null
+
+    // Known chip IDs (from LeekScript constants)
+    static CHIP_ANTIDOTE = 14
+    static CHIP_CURE = 15
+    static CHIP_REMISSION = 240
+    static CHIP_WALL = 103
+    static CHIP_FORTRESS = 201
+    static CHIP_MIRROR = 104
+    static CHIP_SHIELD = 22
+
+    constructor(target) {
+        this._target = target
+    }
+
+    // Detect if enemy used a chip by checking effect changes
+    detectChipUsage(enemyId, previousEffects, currentEffects) {
+        // Compare effect lists to detect new effects
+        var newEffects = []
+
+        for (var effect in currentEffects) {
+            var effectType = effect['type']
+            var isNew = true
+
+            for (var prevEffect in previousEffects) {
+                if (prevEffect['type'] == effectType) {
+                    isNew = false
+                    break
+                }
+            }
+
+            if (isNew) {
+                push(newEffects, effect)
+            }
+        }
+
+        return newEffects
+    }
+
+    // Update cooldown tracking based on turn progression
+    updateCooldowns(enemyId) {
+        if (!mapContainsKey(COOLDOWN_STATE, enemyId)) {
+            COOLDOWN_STATE[enemyId] = [:]
+        }
+
+        var entityCooldowns = COOLDOWN_STATE[enemyId]
+
+        // Decrement all active cooldowns
+        for (var chipId in mapKeys(entityCooldowns)) {
+            var cooldownInfo = entityCooldowns[chipId]
+            if (mapContainsKey(cooldownInfo, 'turnsRemaining')) {
+                var remaining = cooldownInfo['turnsRemaining']
+                if (remaining > 0) {
+                    entityCooldowns[chipId]['turnsRemaining'] = remaining - 1
+                    debugDetail("[COOLDOWN] " + getName(enemyId) + " chip " + chipId + " cooldown: " + (remaining - 1) + " turns")
+                }
+            }
+        }
+    }
+
+    // Record chip usage (sets cooldown)
+    recordChipUse(enemyId, chipId) {
+        if (!mapContainsKey(COOLDOWN_STATE, enemyId)) {
+            COOLDOWN_STATE[enemyId] = [:]
+        }
+
+        var cooldown = this.getChipCooldown(chipId)
+        if (cooldown > 0) {
+            COOLDOWN_STATE[enemyId][chipId] = [
+                'turnsRemaining': cooldown,
+                'lastUsedTurn': getTurn()
+            ]
+
+            debugInfo("[COOLDOWN] " + getName(enemyId) + " used chip " + chipId + " (cooldown: " + cooldown + " turns)")
+        }
+    }
+
+    // Get chip cooldown duration (hardcoded for key chips)
+    getChipCooldown(chipId) {
+        // Antidote/healing chips
+        if (chipId == CooldownTracker.CHIP_ANTIDOTE) return 5
+        if (chipId == CooldownTracker.CHIP_CURE) return 3
+        if (chipId == CooldownTracker.CHIP_REMISSION) return 6
+
+        // Shield chips
+        if (chipId == CooldownTracker.CHIP_WALL) return 3
+        if (chipId == CooldownTracker.CHIP_FORTRESS) return 4
+        if (chipId == CooldownTracker.CHIP_SHIELD) return 4
+        if (chipId == CooldownTracker.CHIP_MIRROR) return 4
+
+        // Default: no cooldown tracking
+        return 0
+    }
+
+    // Check if chip is on cooldown
+    isChipOnCooldown(enemyId, chipId) {
+        if (!mapContainsKey(COOLDOWN_STATE, enemyId)) return false
+
+        var entityCooldowns = COOLDOWN_STATE[enemyId]
+        if (!mapContainsKey(entityCooldowns, chipId)) return false
+
+        var cooldownInfo = entityCooldowns[chipId]
+        if (!mapContainsKey(cooldownInfo, 'turnsRemaining')) return false
+
+        return cooldownInfo['turnsRemaining'] > 0
+    }
+
+    // Get remaining cooldown turns
+    getCooldownRemaining(enemyId, chipId) {
+        if (!mapContainsKey(COOLDOWN_STATE, enemyId)) return 0
+
+        var entityCooldowns = COOLDOWN_STATE[enemyId]
+        if (!mapContainsKey(entityCooldowns, chipId)) return 0
+
+        var cooldownInfo = entityCooldowns[chipId]
+        if (!mapContainsKey(cooldownInfo, 'turnsRemaining')) return 0
+
+        return cooldownInfo['turnsRemaining']
+    }
+
+    // Detect poison removal (indicates Antidote use)
+    detectAntidoteUse(enemyId, prevPoison, currPoison) {
+        // If poison duration decreased unexpectedly, enemy used Antidote
+        if (prevPoison > 0 && currPoison == 0) {
+            debugInfo("[COOLDOWN] Detected Antidote use by " + getName(enemyId))
+            this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+            return true
+        }
+
+        // Check for early cleanse (duration dropped by more than 1 turn)
+        if (prevPoison > currPoison + 1) {
+            debugInfo("[COOLDOWN] Detected early poison cleanse by " + getName(enemyId))
+            this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+            return true
+        }
+
+        return false
+    }
+
+    // Check if Antidote is available (not on cooldown)
+    isAntidoteAvailable(enemyId) {
+        return !this.isChipOnCooldown(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+    }
+
+    // Get strategic poison window (turns until Antidote available)
+    getPoisonWindow(enemyId) {
+        var remaining = this.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+        if (remaining > 0) {
+            return remaining  // Turns of guaranteed poison damage
+        }
+        return 0  // Antidote available now
+    }
+}
+
+// Global helper functions
+function isEnemyAntidoteOnCooldown(enemyId) {
+    var tracker = new CooldownTracker(null)
+    return !tracker.isAntidoteAvailable(enemyId)
+}
+
+function getEnemyPoisonWindow(enemyId) {
+    var tracker = new CooldownTracker(null)
+    return tracker.getPoisonWindow(enemyId)
+}

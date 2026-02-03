@@ -21,6 +21,17 @@ class FieldMap extends FieldMapPatterns {
         if (entity == null) return acc
         var mp = entity._currMp
         var origin = entity._cellPos
+
+        // For player: Use precomputed ReachableGraph (O(n) where n = reachable cells)
+        if (entity._id == getEntity()) {
+            var reachable = getReachableCells()
+            for (var cellId in reachable) {
+                push(acc, cellId)
+            }
+            return acc
+        }
+
+        // For enemies: Fall back to full scan (cannot use player's ReachableGraph)
         for (var cid = 0; cid < FieldMap.board_cell_count; cid++) {
             if (isObstacle(cid)) continue
             var approx = getCellDistance(origin, cid)
@@ -522,39 +533,41 @@ class FieldMap extends FieldMapPatterns {
 
         var totalThreats = 0
 
+        // Optimization: Only calculate threat for cells player can actually reach
+        var reachableCells = getReachableCells()
+        if (count(reachableCells) == 0) {
+            debug("[THREAT-MAP]   No reachable cells, skipping threat calculation")
+            return
+        }
+
         for (var j = 0; j < count(enemyWeapons); j++) {
             var weaponId = enemyWeapons[j]
             var minRange = getWeaponMinRange(weaponId)
-            var maxRange = getWeaponMaxRange(weaponId) + enemyMP  
+            var maxRange = getWeaponMaxRange(weaponId) + enemyMP
             var area = getWeaponArea(weaponId)
 
             var damage = this.estimateEnemyWeaponDamage(weaponId, enemy)
 
-            var searchRadius = min(maxRange, 10)
-
-            for (var dx = -searchRadius; dx <= searchRadius; dx++) {
-                if (getOperations() > 5500000) {
-                    debug("[THREAT-MAP] Operation limit approaching, aborting threat calculation")
+            // Iterate only over reachable cells instead of full grid scan
+            for (var cellId in reachableCells) {
+                // Safety valve (raised to 12M for deeper search)
+                if (getOperations() > 12000000) {
+                    debug("[THREAT-MAP] Operation limit at 12M, aborting threat calculation")
                     return
                 }
 
-                for (var dy = -searchRadius; dy <= searchRadius; dy++) {
-                    var cellId = enemyPos + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
-                    if (cellId < 0 || cellId >= FieldMap.board_cell_count) continue
+                var dist = getCellDistance(enemyPos, cellId)
+                if (dist == null || dist > maxRange) continue
 
-                    var dist = getCellDistance(enemyPos, cellId)
-                    if (dist == null || dist > maxRange) continue
+                if (dist < minRange && dist < enemyMP) continue
 
-                    if (dist < minRange && dist < enemyMP) continue
+                if (!mapContainsKey(this.enemyThreatMap, cellId)) {
+                    this.enemyThreatMap[cellId] = 0
+                }
 
-                    if (!mapContainsKey(this.enemyThreatMap, cellId)) {
-                        this.enemyThreatMap[cellId] = 0
-                    }
-
-                    if (damage > this.enemyThreatMap[cellId]) {
-                        this.enemyThreatMap[cellId] = damage
-                        totalThreats++
-                    }
+                if (damage > this.enemyThreatMap[cellId]) {
+                    this.enemyThreatMap[cellId] = damage
+                    totalThreats++
                 }
             }
         }
