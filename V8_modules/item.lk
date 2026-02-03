@@ -512,9 +512,23 @@ class Arsenal {
     getVulnerabilityStacks(targetEntity) {
         var relShield = targetEntity._relShield
 
-        if (relShield <= -20) return 3  
-        if (relShield <= -12) return 2  
-        if (relShield <= -4) return 1   
-        return 0  
+        if (relShield <= -20) return 3
+        if (relShield <= -12) return 2
+        if (relShield <= -4) return 1
+        return 0
+    }
+
+    getExpectedHeal(chip, wisdom) {
+        if (chip == CHIP_REGENERATION) {
+            return 500 * (1 + wisdom / 100)
+        } else if (chip == CHIP_REMISSION) {
+            var baseAvg = 71.5
+            return baseAvg * (1 + wisdom / 100)
+        } else if (chip == CHIP_CURE) {
+            return 100 * (1 + wisdom / 100)
+        } else if (chip == CHIP_DRIP) {
+            return 200 * (1 + wisdom / 100)
+        }
+        return 0
     }
 }

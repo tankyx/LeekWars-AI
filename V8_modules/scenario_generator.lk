@@ -192,14 +192,14 @@ class ScenarioGenerator {
             push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
         }
         else if (state == "FLEE") {
-            
+
             debug("[STATE-FLEE] Emergency survival mode")
 
             var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
             var teleportReady = hasTeleport && getCooldown(CHIP_TELEPORTATION, player._id) == 0
 
             if (teleportReady) {
-                
+
                 var currentThreat = this._fieldMap.getThreatAtCell(player._cellPos)
                 if (currentThreat > 200) {
                     debug("[STATE-FLEE] High threat detected (" + currentThreat + ") - prioritizing TELEPORT escape")
@@ -210,19 +210,25 @@ class ScenarioGenerator {
                 }
             }
 
+            var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
+            if (healRecheck != null) {
+                debug("[STATE-FLEE] Adding emergency Heal-Recheck checkpoint scenario")
+                push(scenarios, healRecheck)
+            }
+
             var hasRegen = mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)
             var regenAvailable = hasRegen && getCooldown(CHIP_REGENERATION, player._id) == 0
 
             if (regenAvailable) {
-                
+
                 debug("[STATE-FLEE] REGENERATION available - defensive healing")
-                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))  
-                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "kite"), availableTP, availableMP))  
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "kite"), availableTP, availableMP))
             } else {
-                
+
                 debug("[STATE-FLEE] REGENERATION on cooldown - lifesteal strategy (ENHANCED_LIGHTNINGER spam)")
-                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))  
-                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))  
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))
             }
 
             push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
@@ -244,7 +250,7 @@ class ScenarioGenerator {
         var currentTurn = getTurn()
         var availableTP = getTP()
 
-        if (playerHPPercent < 30) {
+        if (playerHPPercent < 40) {
             return "FLEE"
         }
 
@@ -258,7 +264,7 @@ class ScenarioGenerator {
             }
         }
 
-        if (playerHPPercent >= 30 && playerHPPercent <= 50 && enemyHPPercent > 40) {
+        if (playerHPPercent >= 40 && playerHPPercent <= 60 && enemyHPPercent > 40) {
             return "SUSTAIN"
         }
 
@@ -1071,18 +1077,18 @@ class ScenarioGenerator {
         var maxHP = this._player._maxHealth
         var hpRatio = currentHP / maxHP
 
-        if (hpRatio >= hpThreshold) return null  
-
-        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
-            getCooldown(CHIP_REMISSION, this._player._id) == 0 &&
-            tpBudget >= 5) {
-            return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
+        if (hpRatio < 0.35 &&
+            getCooldown(CHIP_REGENERATION, this._player._id) == 0 &&
+            mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION) &&
+            tpBudget >= 8) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
         }
 
-        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION) &&
-            getCooldown(CHIP_REGENERATION, this._player._id) == 0 &&
-            tpBudget >= 3) {
-            return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
+        if (hpRatio < 0.80 &&
+            getCooldown(CHIP_REMISSION, this._player._id) == 0 &&
+            mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
+            tpBudget >= 5) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
         }
 
         return null
@@ -1620,7 +1626,7 @@ class ScenarioGenerator {
         debug("[COMBO-HEAL-RECHECK] Creating two-phase healing scenario (adaptive)")
 
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
-        tpBudget -= 3
+        tpBudget -= 5
 
         var context = [:]
         context['target'] = this._target

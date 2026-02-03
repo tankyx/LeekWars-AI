@@ -282,10 +282,9 @@ class ScenarioSimulator {
     }
 
     estimateHealing(chip, wisdom) {
-        if (chip == CHIP_REGENERATION) return 50 + wisdom * 0.5
-        if (chip == CHIP_REMISSION) return 100 + wisdom * 1.0  
-        if (chip == CHIP_CURE) return 100 + wisdom * 1.0
-        if (chip == CHIP_DRIP) return 200 + wisdom * 2.0
+        if (chip == CHIP_REGENERATION || chip == CHIP_REMISSION || chip == CHIP_CURE || chip == CHIP_DRIP) {
+            return arsenal.getExpectedHeal(chip, wisdom)
+        }
         return 0
     }
 

@@ -66,7 +66,21 @@ class ScenarioScorer {
         var shieldScore = simResult.shieldsGained * ehpWeight
         var relShieldScore = this.calculateRelativeShieldValue(simResult.relativeShieldGained) * ehpWeight
         var healScore = simResult.hpGained * ehpWeight
-        score += shieldScore + relShieldScore + healScore
+
+        var currentHP = this._player._currHealth
+        var maxHP = this._player._maxHealth
+        var hpRatio = currentHP / maxHP
+        var healingUrgencyBonus = 0
+        if (simResult.hpGained > 0) {
+            if (hpRatio < 0.3) healingUrgencyBonus = simResult.hpGained * 3.0
+            else if (hpRatio < 0.5) healingUrgencyBonus = simResult.hpGained * 1.5
+            else if (hpRatio < 0.8) healingUrgencyBonus = simResult.hpGained * 0.5
+            debug("[SCORER][HEAL] Healing urgency bonus: HP=" + floor(currentHP) + "/" + maxHP +
+                  " (" + floor(hpRatio * 100) + "%), heal=" + floor(simResult.hpGained) +
+                  ", bonus=" + floor(healingUrgencyBonus))
+        }
+
+        score += shieldScore + relShieldScore + healScore + healingUrgencyBonus
 
         var positionWeight = this.calculatePositionWeight()
         var positionScore = this.evaluatePosition(simResult.finalPosition) * positionWeight
@@ -109,7 +123,29 @@ class ScenarioScorer {
         }
         score += checkpointBonus
 
-        debug("[SCORE] Total=" + floor(score) + " | dmg=" + floor(damageScore) + " dot=" + floor(dotScore) +
+        var survivalMultiplier = 1.0
+        if (simResult.hpGained > 0) {
+            var playerPos = this._player._cellPos
+            var threatAtPos = this._fieldMap.getThreatAtCell(playerPos)
+            var hasShield = this._player.hasEffect(EFFECT_ABSOLUTE_SHIELD) || this._player.hasEffect(EFFECT_RELATIVE_SHIELD)
+
+            if (hpRatio < 0.45 && (threatAtPos > 800 || !hasShield)) {
+                if (hpRatio < 0.30) {
+                    survivalMultiplier = 50.0
+                    debug("[SCORER][SURVIVAL-CRITICAL] Extreme danger (HP=" + floor(hpRatio * 100) + "%, threat=" + floor(threatAtPos) + ") - 50x multiplier")
+                } else if (hpRatio < 0.40) {
+                    survivalMultiplier = 25.0
+                    debug("[SCORER][SURVIVAL-CRITICAL] Critical danger (HP=" + floor(hpRatio * 100) + "%, threat=" + floor(threatAtPos) + ") - 25x multiplier")
+                } else {
+                    survivalMultiplier = 10.0
+                    debug("[SCORER][SURVIVAL-CRITICAL] High danger (HP=" + floor(hpRatio * 100) + "%, threat=" + floor(threatAtPos) + ") - 10x multiplier")
+                }
+            }
+        }
+
+        score *= survivalMultiplier
+
+        debug("[SCORE] Total=" + floor(score) + " (×" + survivalMultiplier + ") | dmg=" + floor(damageScore) + " dot=" + floor(dotScore) +
               " eHP=" + floor(shieldScore + relShieldScore + healScore) +
               " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
               " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
@@ -158,9 +194,10 @@ class ScenarioScorer {
 
         var hpRatio = currentHP / maxHP
         var urgencyMultiplier = 1.0
-        if (hpRatio < 0.3) urgencyMultiplier = 3.0
-        else if (hpRatio < 0.5) urgencyMultiplier = 2.0
-        else if (hpRatio < 0.7) urgencyMultiplier = 1.5
+        if (hpRatio < 0.3) urgencyMultiplier = 5.0
+        else if (hpRatio < 0.5) urgencyMultiplier = 3.5
+        else if (hpRatio < 0.7) urgencyMultiplier = 2.0
+        else if (hpRatio < 0.8) urgencyMultiplier = 1.3
 
         var baseWeight = 0.5 + (resistance / 500.0) + (wisdom / 1000.0)
 
@@ -168,7 +205,14 @@ class ScenarioScorer {
         var elevationActive = (getCooldown(CHIP_ELEVATION, this._player._id) > 0)
 
         if (knowledgeActive || elevationActive) {
-            baseWeight *= 1.5  
+            baseWeight *= 1.5
+        }
+
+        var playerPos = this._player._cellPos
+        var threatAtPos = this._fieldMap.getThreatAtCell(playerPos)
+        if (threatAtPos > 200) {
+            urgencyMultiplier *= 1.5
+            debug("[SCORER][EHP] High threat (" + floor(threatAtPos) + ") - boosting eHP weight by 1.5x")
         }
 
         return baseWeight * urgencyMultiplier
@@ -251,12 +295,23 @@ class ScenarioScorer {
         var novaDmg = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
         var totalDamage = simResult.damageDealt + dotDmg + novaDmg
 
-        if (simResult.tpSpent > 0) {
-            var damagePerTP = totalDamage / simResult.tpSpent
+        var healingTPCost = 0
+        for (var buff in simResult.buffsApplied) {
+            if (buff == CHIP_REMISSION) healingTPCost += 5
+            if (buff == CHIP_REGENERATION) healingTPCost += 8
+            if (buff == CHIP_CURE) healingTPCost += 6
+            if (buff == CHIP_DRIP) healingTPCost += 8
+        }
+
+        var offensiveTPSpent = simResult.tpSpent - healingTPCost
+        if (offensiveTPSpent < 0) offensiveTPSpent = 0
+
+        if (offensiveTPSpent > 0 && totalDamage > 0) {
+            var damagePerTP = totalDamage / offensiveTPSpent
             tpEfficiency = damagePerTP * 10
         }
 
-        if (simResult.mpSpent > 0) {
+        if (simResult.mpSpent > 0 && totalDamage > 0) {
             var damagePerMP = totalDamage / simResult.mpSpent
             mpEfficiency = damagePerMP * 5
         }
