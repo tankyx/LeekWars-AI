@@ -273,16 +273,18 @@ class Arsenal {
         var dotDmg = bd['dot']
         var novaDmg = bd['nova']
 
-        var relShield = targetEntity._relShield / 100  
+        var relShield = targetEntity._relShield / 100
         var absShield = targetEntity._absShield
 
         var netDirect = directDmg * (1 - relShield) - absShield
-        if (netDirect < 0) netDirect = 0  
+        if (netDirect < 0) netDirect = 0
 
         var hpDeficit = targetEntity._maxHealth - targetEntity._currHealth
         var cappedNova = novaDmg
-        if (hpDeficit < novaDmg) {
-            cappedNova = hpDeficit  
+        if (netDirect > 0 && novaDmg > 0) {
+            cappedNova = min(novaDmg, hpDeficit + netDirect)
+        } else if (novaDmg > 0) {
+            cappedNova = min(novaDmg, hpDeficit)
         }
 
         return netDirect + dotDmg + cappedNova
@@ -351,8 +353,10 @@ class Arsenal {
                 var novaDamage = bd['nova']
                 var hpDeficit = enemyObj._maxHealth - enemyObj._currHealth
                 var cappedNova = novaDamage
-                if (hpDeficit < novaDamage) {
-                    cappedNova = hpDeficit
+                if (directAfterShield > 0 && novaDamage > 0) {
+                    cappedNova = min(novaDamage, hpDeficit + directAfterShield)
+                } else if (novaDamage > 0) {
+                    cappedNova = min(novaDamage, hpDeficit)
                 }
                 var netDmg = directAfterShield + dotDamage + cappedNova
 
@@ -381,8 +385,10 @@ class Arsenal {
                     var novaDamage = bd['nova']
                     var hpDeficit = e._maxHealth - e._currHealth
                     var cappedNova = novaDamage
-                    if (hpDeficit < novaDamage) {
-                        cappedNova = hpDeficit
+                    if (directAfterShield > 0 && novaDamage > 0) {
+                        cappedNova = min(novaDamage, hpDeficit + directAfterShield)
+                    } else if (novaDamage > 0) {
+                        cappedNova = min(novaDamage, hpDeficit)
                     }
 
                     var netDmg = directAfterShield + dotDamage + cappedNova
