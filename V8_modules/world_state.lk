@@ -233,6 +233,27 @@ class WorldState {
     }
 
     // =========================================================================
+    // State hashing (for transposition table / duplicate detection)
+    // =========================================================================
+
+    getStateHash() {
+        // Hash based on: cell position, TP, target HP
+        // This identifies "equivalent" game states for pruning
+        var targetHP = 0
+        var target = this.getPrimaryTarget()
+        if (target != null) {
+            targetHP = target._currHealth
+        }
+
+        // Format: "cell:tp:targetHP"
+        // Round TP and HP to nearest 10 for fuzzy matching (reduces hash collisions from minor variance)
+        var roundedTP = floor(this.tp / 10) * 10
+        var roundedTargetHP = floor(targetHP / 10) * 10
+
+        return this.cell + ":" + roundedTP + ":" + roundedTargetHP
+    }
+
+    // =========================================================================
     // State queries
     // =========================================================================
 

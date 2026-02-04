@@ -127,7 +127,13 @@ class AtomicAction {
             // Chip must not be on cooldown
             if (worldState.isChipOnCooldown(this.chipId)) return false
 
-            // Must be in range (check from current position)
+            // Check if this is a self-targeting chip (buffs, healing)
+            if (this.isSelfTargetingChip(this.chipId)) {
+                // No range/target validation needed for self-buffs
+                return true
+            }
+
+            // For enemy-targeting chips, validate range and target
             var range = getChipMaxRange(this.chipId)
             var minRange = getChipMinRange(this.chipId)
 
@@ -202,6 +208,30 @@ class AtomicAction {
             }
         }
         return null
+    }
+
+    isSelfTargetingChip(chipId) {
+        // Buff chips (self-targeting)
+        var buffChips = [
+            CHIP_STEROID, CHIP_DOPING, CHIP_WARM_UP,
+            CHIP_FORTRESS, CHIP_WALL, CHIP_SHIELD, CHIP_HELMET,
+            CHIP_PROTEIN, CHIP_LEATHER_BOOTS, CHIP_ADRENALINE
+        ]
+        // Healing chips (self-targeting)
+        var healingChips = [
+            CHIP_REGENERATION, CHIP_REMISSION, CHIP_CURE, CHIP_DRIP
+        ]
+        // Teleportation (self-targeting, but handled separately)
+        if (chipId == CHIP_TELEPORTATION) return true
+
+        // Check if chip is in buff or healing lists
+        for (var buff in buffChips) {
+            if (buff == chipId) return true
+        }
+        for (var heal in healingChips) {
+            if (heal == chipId) return true
+        }
+        return false
     }
 
     // =========================================================================

@@ -40,6 +40,7 @@ class BeamSearchPlanner {
     _stateTransition = null
     _actionGenerator = null
     _heuristic = null
+    _transpositionTable = null  // Hash -> best score seen
 
     // Configuration
     BEAM_WIDTH = 100
@@ -55,6 +56,7 @@ class BeamSearchPlanner {
         this._stateTransition = new StateTransition(arsenal, fieldMap)
         this._actionGenerator = new AtomicActionGenerator(arsenal, fieldMap)
         this._heuristic = new BeamSearchHeuristic(arsenal, fieldMap)
+        this._transpositionTable = [:]  // Initialize transposition table
     }
 
     // =========================================================================
@@ -127,6 +129,7 @@ class BeamSearchPlanner {
 
     expandBeam(beam) {
         var successors = []
+        var prunedByHash = 0
 
         for (var state in beam) {
             // Generate valid actions from this state
@@ -147,8 +150,26 @@ class BeamSearchPlanner {
                 // Score the new state
                 newState.cumulativeScore = this._heuristic.scoreState(newState)
 
+                // Transposition table pruning
+                var hash = newState.getStateHash()
+                if (mapContainsKey(this._transpositionTable, hash)) {
+                    var prevBestScore = this._transpositionTable[hash]
+                    if (newState.cumulativeScore <= prevBestScore) {
+                        // We've seen this state before with a better or equal score - prune
+                        prunedByHash++
+                        continue
+                    }
+                }
+
+                // Update transposition table with best score for this state
+                this._transpositionTable[hash] = newState.cumulativeScore
+
                 push(successors, newState)
             }
+        }
+
+        if (prunedByHash > 0) {
+            debugDetail("BeamSearch: Pruned " + prunedByHash + " states via transposition table")
         }
 
         return successors

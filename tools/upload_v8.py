@@ -225,6 +225,7 @@ class V8Uploader:
             "scenario_scorer",
             "scenario_generator",
             "scenario_quick_scorer",
+            "scenario_mutation",
             "weight_profiles",
             # Beam Search / Emergent Planning modules
             "world_state",
@@ -407,7 +408,7 @@ def main():
                     "debug_config", "monte_carlo_sim", "kill_planning", "cooldown_tracker",
                     "enemy_predictor", "performance_infra", "cache_manager", "tactical_awareness",
                     "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
-                    "scenario_generator", "scenario_quick_scorer", "weight_profiles",
+                    "scenario_generator", "scenario_quick_scorer", "scenario_mutation", "weight_profiles",
                     "world_state", "atomic_action", "atomic_action_executor", "state_transition", "beam_search_planner"]
     for module in root_modules:
         if (v8_dir / f"{module}.lk").exists():
