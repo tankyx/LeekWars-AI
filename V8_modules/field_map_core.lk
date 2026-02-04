@@ -210,13 +210,16 @@ class FieldMapCore {
 
     selectOptimalTarget(criteria = null) {
         var enemyMap = this.getEnemySubMap()
-        var enemies = mapValues(enemyMap)  
+        var enemies = mapValues(enemyMap)
         if (count(enemies) == 0) return null
         if (count(enemies) == 1) return enemies[0]
 
         var priorityMode = criteria != null && mapContainsKey(criteria, 'prioritizeLowest') ? criteria['prioritizeLowest'] : "hp"
         var penalizeBuffed = criteria != null && mapContainsKey(criteria, 'penalizeBuffed') ? criteria['penalizeBuffed'] : false
         var bonusForDebuffed = criteria != null && mapContainsKey(criteria, 'bonusForDebuffed') ? criteria['bonusForDebuffed'] : false
+
+        // Battle Royale mode: use enhanced target selection
+        var isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
 
         var bestTarget = null
         var bestScore = -99999
@@ -236,15 +239,27 @@ class FieldMapCore {
             var enemyMaxHP = getTotalLife(e._id)
             var hpPercent = (enemyHP * 100) / enemyMaxHP
 
-            if (priorityMode == "hp") {
-                
-                score += (100 - hpPercent) * 2  
-                
-                score -= dist * 5  
+            if (isBattleRoyale) {
+                // Battle Royale formula: TargetScore = (100 - HP%) × 2 + (200 - Distance × 10) - (ThreatAtPosition × 0.5)
+                score += (100 - hpPercent) * 2  // Prioritize low HP
+                score += (200 - dist * 10)       // Penalize distance heavily
+
+                // Penalize targets in dangerous positions (focus fire zones)
+                var threatAtEnemy = this.getThreatAtCell(e._cellPos)
+                var threatPenalty = threatAtEnemy * 0.5
+                score -= threatPenalty
+
+                debug("[TARGET-BR] Enemy ID=" + e._id + " HP=" + floor(hpPercent) + "% dist=" + dist +
+                      " threat=" + floor(threatAtEnemy) + " score=" + floor(score))
+            } else if (priorityMode == "hp") {
+
+                score += (100 - hpPercent) * 2
+
+                score -= dist * 5
             } else {
-                
+
                 score -= dist * 10
-                
+
                 score += (100 - hpPercent)
             }
 
@@ -466,5 +481,11 @@ class FieldMapCore {
         }
 
         return hitEnemies
+    }
+
+    // Stub method - overridden in FieldMapTactical
+    // Returns threat level at a given cell (0 if not implemented)
+    getThreatAtCell(cellId) {
+        return 0
     }
 }

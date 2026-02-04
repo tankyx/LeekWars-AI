@@ -260,12 +260,45 @@ class ScenarioGenerator {
         var currentTurn = getTurn()
         var availableTP = getTP()
 
+        // Battle Royale: Phase-based state override
+        var isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
+        if (isBattleRoyale) {
+            var aliveEnemies = getAliveEnemies()
+            var enemyCount = count(aliveEnemies)
+
+            if (enemyCount > 4) {
+                // EARLY PHASE: Edge positioning, opportunistic only
+                if (playerHPPercent < 30) return "FLEE"
+                if (enemyHPPercent < 40) {
+                    var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
+                    if (estimatedDamage / enemyHP >= 0.85) return "KILL"  // Only kill if very confident
+                }
+                debug("[BR-PHASE] EARLY (enemies=" + enemyCount + ") - conservative positioning")
+                return "ATTRITION"  // Conservative play, no aggressive buffs
+            }
+            else if (enemyCount >= 3) {
+                // MID PHASE: Tighten toward weaker targets
+                if (playerHPPercent < 35) return "FLEE"
+                if (enemyHPPercent < 50) {
+                    var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
+                    if (estimatedDamage / enemyHP >= 0.75) return "KILL"
+                }
+                debug("[BR-PHASE] MID (enemies=" + enemyCount + ") - attrition focus")
+                return "ATTRITION"
+            }
+            else {
+                // LATE PHASE: Full aggressive 1v1
+                debug("[BR-PHASE] LATE (enemies=" + enemyCount + ") - aggressive 1v1")
+                // Fall through to standard 1v1 logic
+            }
+        }
+
+        // Standard 1v1 logic
         if (playerHPPercent < 40) {
             return "FLEE"
         }
 
         if (enemyHPPercent < 40) {
-            
             var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
             var killProbability = estimatedDamage / enemyHP
 
@@ -1615,17 +1648,27 @@ class ScenarioGenerator {
         push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
         tpBudget -= 3
 
+        // After GRAPPLE, enemy is at grappleCell (adjacent to player)
+        // Update simulated position for subsequent attacks
+        var enemyPulledPosition = grappleCell
+
         if (getWeapon() != WEAPON_HEAVY_SWORD) {
             push(actions, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_HEAVY_SWORD, -1, -1, this._target))
             tpBudget -= 1
         }
 
-        push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, this._target._cellPos, this._target))
+        // Attack the pulled enemy position, not original position
+        push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, enemyPulledPosition, this._target))
         tpBudget -= 15
 
-        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
-        for (var atk in attackActions) {
-            push(actions, atk)
+        // Note: getAttackActions would target original position, so we manually add follow-up attacks
+        // Spam HEAVY_SWORD while we have TP (max 2 uses per turn)
+        var heavySwordCost = getCachedWeaponCost(WEAPON_HEAVY_SWORD, this._arsenal)
+        if (heavySwordCost == null) heavySwordCost = 15
+
+        if (tpBudget >= heavySwordCost) {
+            push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, enemyPulledPosition, this._target))
+            tpBudget -= heavySwordCost
         }
 
         var hideAction = this.getHideAndSeekAction(mpBudget)

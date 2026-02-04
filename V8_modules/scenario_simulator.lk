@@ -1,18 +1,23 @@
 
 class SimulationResult {
-    damageDealt = 0           
-    dotDamageQueued = 0       
-    novaDamageQueued = 0      
-    hpGained = 0              
-    shieldsGained = 0         
-    relativeShieldGained = 0  
-    tpSpent = 0               
-    mpSpent = 0               
-    finalPosition = -1        
-    buffsApplied = []         
-    debuffsApplied = []       
-    actionsExecuted = 0       
-    vulnerabilityApplied = 0  
+    damageDealt = 0
+    dotDamageQueued = 0
+    novaDamageQueued = 0
+    hpGained = 0
+    shieldsGained = 0
+    relativeShieldGained = 0
+    tpSpent = 0
+    mpSpent = 0
+    finalPosition = -1
+    buffsApplied = []
+    debuffsApplied = []
+    actionsExecuted = 0
+    vulnerabilityApplied = 0
+
+    // Battle Royale multi-target tracking
+    totalLobbyDamage = 0      // Sum of damage to all enemies
+    enemiesHit = 0            // Number of enemies hit (AoE)
+    killsSecured = 0          // Estimated kills from this scenario
 
     constructor() {
         this.buffsApplied = []

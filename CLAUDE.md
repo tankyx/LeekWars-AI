@@ -220,6 +220,79 @@ Scenario B: currentScore=7500, enemyDamage=200 → survival=-1000 → nextTurn=-
 Selection: Scenario A wins (8000 > 6800) despite lower immediate value
 ```
 
+### Battle Royale System (February 2026)
+
+**V8 now adapts to 8-way FFA Battle Royale with phase-based positioning and cumulative threat tracking.**
+
+**Core Problem:** In Battle Royale, the #1 cause of death is **Focus Fire Death** - optimizing for a single kill while positioning where 4+ other enemies can strike.
+
+**System Components:**
+- **Cumulative Threat Map** (`field_map_tactical.lk`): Aggregates damage from ALL alive enemies, not just primary target
+- **Multi-Target AoE Scoring** (`scenario_scorer.lk`): Rewards total lobby HP removal, massive bonus for kills
+- **BR-Specific Target Selection** (`field_map_core.lk`): Prioritizes low HP + close + exposed targets
+- **Phase-Based Positioning** (`scenario_generator.lk`): Three-phase system tied to alive enemy count
+
+**How It Works:**
+1. **Fight Detection** (10 ops): `getFightType() == FIGHT_TYPE_BATTLE_ROYALE`
+2. **Cumulative Threat Calculation** (~50-150K ops): Sum damage from all enemies with exponential penalty for focus fire
+3. **Phase Detection** (~5K ops): EARLY (>4 enemies) → MID (3-4 enemies) → LATE (≤2 enemies)
+4. **Target Selection** (~10K ops): Score = `(100 - HP%) × 2 + (200 - Distance × 10) - (ThreatAtPosition × 0.5)`
+5. **Scoring Adjustments** (~5K ops): Lobby damage bonus, kill bonus, AoE bonus, center avoidance
+
+**Three-Phase System:**
+
+**EARLY PHASE (>4 enemies alive):**
+- Edge/corner positioning priority
+- Center avoidance penalty: -150 per cell closer to (0,0)
+- Opportunistic AoE & kill-steals only
+- Kill threshold: 85% probability (conservative)
+- No aggressive buffs (returns ATTRITION state)
+
+**MID PHASE (3-4 enemies alive):**
+- Attrition play begins
+- Target isolated/exposed enemies
+- Kill threshold: 75% probability (standard)
+- Tighten toward weaker survivors
+
+**LATE PHASE (≤2 enemies alive):**
+- Full aggressive 1v1 mode
+- Standard offensive scoring
+- No positioning penalty
+- All KILL/AGGRO/FLEE states available
+
+**Cumulative Lobby Threat:**
+```
+lobbyThreat = Σ(enemyDamage) × (1 + sources × 0.2)
+
+Example:
+- 1 enemy hitting for 200 = 200 × 1.0 = 200 threat
+- 3 enemies hitting for 200 each = 600 × 1.4 = 840 threat (focus fire penalty)
+```
+
+**AoE Scoring Bonuses:**
+- **Lobby size reduction**: +5000 per kill (any enemy)
+- **Multi-target AoE**: +1000 per additional enemy hit (e.g., 3 enemies = +2000)
+- **Total lobby damage**: Uses sum of all enemy damage instead of single-target damage
+
+**Target Selection (BR Mode):**
+- Avoid "lowest HP trap": Don't chase 10 HP enemy across map into cluster
+- Formula: `Score = (100 - HP%) × 2 + (200 - Distance × 10) - (ThreatAtPosition × 0.5)`
+- Penalizes targets in high-threat positions (surrounded by other enemies)
+- Prioritizes close, low HP, exposed targets
+
+**Operations Budget Optimization:**
+With 7 enemies to evaluate, computation is optimized:
+- **Distance-based pruning**: Enemies >20 cells away are skipped
+- **Budgeted threat map**: Full computation for 3 closest enemies, simplified estimates for distant ones
+- **Sorted processing**: Enemies sorted by distance, closest processed first
+- **Estimated cost**: ~100-200K ops for 7-enemy threat map (vs 500K+ without optimization)
+
+**Performance Impact:**
+- EARLY phase: ~200-300K ops/turn (threat map + phase detection)
+- MID phase: ~150-250K ops/turn (fewer enemies)
+- LATE phase: ~50-100K ops/turn (standard 1v1 overhead)
+- All within 12M operation budget
+
 ### Module Breakdown
 
 #### **main.lk** - Entry Point & Strategy Selection
@@ -606,4 +679,4 @@ python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>
 - Phase 1 & 2 only: 98% WR (100 fights, smaller sample variance)
 - Phase 3 & 4 enabled: 88% WR (100 fights, +24pp vs baseline)
 
-*Document Version: 36.0 | Last Updated: February 3, 2026 - Phase 3 & 4 Integration: Probabilistic Lethality + Strategic Lookahead (Monte Carlo simulation, 2-turn kill planning, cooldown tracking, enemy response prediction)*
+*Document Version: 37.0 | Last Updated: February 4, 2026 - Battle Royale System: FFA adaptation with cumulative lobby threat tracking, phase-based positioning (EARLY/MID/LATE), multi-target AoE scoring, and center avoidance. Includes operations budget optimization for 7-enemy evaluation.*

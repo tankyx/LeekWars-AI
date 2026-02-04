@@ -28,6 +28,15 @@ class ScenarioScorer {
         var totalDamage = simResult.damageDealt + dotDmg + novaDmg
         var killProbability = totalDamage / enemyHP
 
+        // Battle Royale mode: prioritize total lobby damage over single-target damage
+        var isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
+        var effectiveDamage = totalDamage
+        if (isBattleRoyale && simResult.totalLobbyDamage > 0) {
+            effectiveDamage = simResult.totalLobbyDamage
+            debug("[SCORER-BR] Lobby damage: " + floor(simResult.totalLobbyDamage) +
+                  " (primary=" + floor(totalDamage) + ", enemies hit=" + simResult.enemiesHit + ")")
+        }
+
         var damageWeight = this.getWeight('burstDamage', this.calculateDamageWeight())
 
         if (killProbability >= 0.70) {
@@ -40,8 +49,22 @@ class ScenarioScorer {
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
         }
 
-        var damageScore = simResult.damageDealt * damageWeight
+        var damageScore = effectiveDamage * damageWeight
         score += damageScore
+
+        // Battle Royale: massive bonus for reducing lobby size (any kill)
+        if (isBattleRoyale && simResult.killsSecured > 0) {
+            var lobbySizeBonus = simResult.killsSecured * 5000
+            score += lobbySizeBonus
+            debug("[SCORER-BR] Lobby size reduction: +" + lobbySizeBonus + " (" + simResult.killsSecured + " kills)")
+        }
+
+        // Battle Royale: bonus for hitting multiple enemies with AoE
+        if (isBattleRoyale && simResult.enemiesHit >= 2) {
+            var aoeBonus = (simResult.enemiesHit - 1) * 1000
+            score += aoeBonus
+            debug("[SCORER-BR] Multi-target AoE: +" + aoeBonus + " (" + simResult.enemiesHit + " enemies)")
+        }
 
         var playerHPPercent = (this._player._currHealth * 100) / this._player._maxHealth
         if (totalDamage == 0 && playerHPPercent > 30) {
@@ -131,6 +154,32 @@ class ScenarioScorer {
             }
         }
         score += checkpointBonus
+
+        // Battle Royale: Center avoidance penalty (EARLY phase only)
+        var centerPenalty = 0
+        if (isBattleRoyale) {
+            var aliveEnemies = getAliveEnemies()
+            var enemyCount = count(aliveEnemies)
+
+            if (enemyCount > 4) {
+                // EARLY PHASE: Penalize moving toward center
+                var centerCell = getCellFromXY(0, 0)  // Map center at (0, 0)
+                if (centerCell != null && simResult.finalPosition != -1) {
+                    var currentDistToCenter = getCellDistance(this._player._cellPos, centerCell)
+                    var finalDistToCenter = getCellDistance(simResult.finalPosition, centerCell)
+
+                    if (finalDistToCenter != null && currentDistToCenter != null) {
+                        if (finalDistToCenter < currentDistToCenter) {
+                            // Moving closer to center = bad
+                            var movementTowardCenter = currentDistToCenter - finalDistToCenter
+                            centerPenalty = movementTowardCenter * 150  // Heavy penalty
+                            debug("[SCORER-BR] Center avoidance: moved " + movementTowardCenter + " cells closer, penalty=" + floor(centerPenalty))
+                        }
+                    }
+                }
+                score -= centerPenalty
+            }
+        }
 
         var survivalMultiplier = 1.0
         if (simResult.hpGained > 0) {

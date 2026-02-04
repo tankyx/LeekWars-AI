@@ -10,6 +10,11 @@ class FieldMap extends FieldMapPatterns {
     _threatMapCacheTurn = -1
     _threatMapCacheEnemyPositions = [:]
 
+    // Battle Royale cumulative threat tracking
+    _lobbyThreatMap = [:]           // Total damage sum
+    _lobbyThreatSources = [:]       // Number of enemies that can hit each cell
+    _isBattleRoyale = false         // Set externally based on enemy count
+
     private static board_cell_count = 613
 
     constructor() {
@@ -489,6 +494,8 @@ class FieldMap extends FieldMapPatterns {
         debug("[THREAT-MAP] Building new threat map for turn " + currentTurn)
         mapClear(this.enemyThreatMap)
         mapClear(this._threatMapCacheEnemyPositions)
+        mapClear(this._lobbyThreatMap)
+        mapClear(this._lobbyThreatSources)
 
         var enemies = this.getEnemySubMap()
         var enemyCount = count(mapKeys(enemies))
@@ -498,30 +505,128 @@ class FieldMap extends FieldMapPatterns {
             return
         }
 
-        var totalEnemyMP = 0
-        for (var eid in mapKeys(enemies)) {
-            var enemy = enemies[eid]
-            if (!isDead(eid)) totalEnemyMP += enemy._currMp
-        }
-        if (totalEnemyMP > 20) {
-            debug("[THREAT-MAP] SKIPPED - Total enemy MP too high (" + totalEnemyMP + ") - operations limit risk")
-            this._threatMapCacheTurn = currentTurn
-            return
+        // Detect Battle Royale mode using built-in function
+        this._isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
+        if (this._isBattleRoyale) {
+            debug("[THREAT-MAP] Battle Royale mode detected: " + enemyCount + " enemies (FFA)")
         }
 
-        for (var eid in mapKeys(enemies)) {
-            var enemy = enemies[eid]
-            if (isDead(eid)) continue
+        // Battle Royale optimization: Sort enemies by distance, limit detailed calculation
+        if (this._isBattleRoyale && enemyCount > 3) {
+            var playerPos = player._cellPos
+            var enemyList = []
 
-            this._threatMapCacheEnemyPositions[eid] = enemy._cellPos
+            // Build array with distance info
+            for (var eid in mapKeys(enemies)) {
+                var enemy = enemies[eid]
+                if (isDead(eid)) continue
 
-            this.addEnemyThreatToMap(enemy)
+                var dist = getCellDistance(playerPos, enemy._cellPos)
+                if (dist == null) dist = 999
+
+                push(enemyList, ['enemy': enemy, 'distance': dist])
+            }
+
+            // Sort by distance (bubble sort for simplicity)
+            for (var i = 0; i < count(enemyList) - 1; i++) {
+                for (var j = 0; j < count(enemyList) - i - 1; j++) {
+                    if (enemyList[j]['distance'] > enemyList[j + 1]['distance']) {
+                        var temp = enemyList[j]
+                        enemyList[j] = enemyList[j + 1]
+                        enemyList[j + 1] = temp
+                    }
+                }
+            }
+
+            // Process enemies with distance-based budget
+            var processed = 0
+            for (var entry in enemyList) {
+                var enemy = entry['enemy']
+                var dist = entry['distance']
+
+                this._threatMapCacheEnemyPositions[enemy._id] = enemy._cellPos
+
+                if (dist > 20) {
+                    // Skip very distant enemies
+                    debug("[THREAT-MAP-BR] Skipping distant enemy " + getName(enemy._id) + " (dist=" + dist + ")")
+                    continue
+                }
+
+                if (processed < 3 || dist <= 10) {
+                    // Full computation for 3 closest or close enemies
+                    debug("[THREAT-MAP-BR] Full computation for enemy " + getName(enemy._id) + " (dist=" + dist + ", rank=" + (processed + 1) + ")")
+                    this.addEnemyThreatToMap(enemy)
+                } else {
+                    // Simplified estimation for distant enemies
+                    debug("[THREAT-MAP-BR] Simplified computation for enemy " + getName(enemy._id) + " (dist=" + dist + ")")
+                    this.addSimplifiedThreatEstimate(enemy, dist)
+                }
+
+                processed++
+            }
+        } else {
+            // Standard 1v1 or low-enemy-count processing
+            var totalEnemyMP = 0
+            for (var eid in mapKeys(enemies)) {
+                var enemy = enemies[eid]
+                if (!isDead(eid)) totalEnemyMP += enemy._currMp
+            }
+            if (totalEnemyMP > 20) {
+                debug("[THREAT-MAP] SKIPPED - Total enemy MP too high (" + totalEnemyMP + ") - operations limit risk")
+                this._threatMapCacheTurn = currentTurn
+                return
+            }
+
+            for (var eid in mapKeys(enemies)) {
+                var enemy = enemies[eid]
+                if (isDead(eid)) continue
+
+                this._threatMapCacheEnemyPositions[eid] = enemy._cellPos
+                this.addEnemyThreatToMap(enemy)
+            }
         }
 
         this._threatMapCacheTurn = currentTurn
 
         var threatenedCells = count(mapKeys(this.enemyThreatMap))
         debug("[THREAT-MAP] Complete. " + threatenedCells + " cells threatened by " + enemyCount + " enemies")
+    }
+
+    addSimplifiedThreatEstimate(enemy, enemyDist) {
+        // Fast heuristic: Assume enemy has weapons with range ~8, damage ~300
+        // Only mark cells within approximate threat range
+        var enemyPos = enemy._cellPos
+        var estimatedRange = 8 + enemy._currMp
+        var estimatedDamage = 300
+
+        var playerPos = player._cellPos
+        var reachableCells = getReachableCells()
+
+        for (var cellId in reachableCells) {
+            var distToCell = getCellDistance(enemyPos, cellId)
+            if (distToCell == null || distToCell > estimatedRange) continue
+
+            // Only mark cells within plausible attack range
+            if (distToCell <= estimatedRange) {
+                // Legacy 1v1 mode
+                if (!mapContainsKey(this.enemyThreatMap, cellId)) {
+                    this.enemyThreatMap[cellId] = 0
+                }
+                if (estimatedDamage > this.enemyThreatMap[cellId]) {
+                    this.enemyThreatMap[cellId] = estimatedDamage
+                }
+
+                // Battle Royale mode
+                if (this._isBattleRoyale) {
+                    if (!mapContainsKey(this._lobbyThreatMap, cellId)) {
+                        this._lobbyThreatMap[cellId] = 0
+                        this._lobbyThreatSources[cellId] = 0
+                    }
+                    this._lobbyThreatMap[cellId] += estimatedDamage
+                    this._lobbyThreatSources[cellId] += 1
+                }
+            }
+        }
     }
 
     addEnemyThreatToMap(enemy) {
@@ -561,13 +666,23 @@ class FieldMap extends FieldMapPatterns {
 
                 if (dist < minRange && dist < enemyMP) continue
 
+                // Legacy 1v1 mode: track max damage
                 if (!mapContainsKey(this.enemyThreatMap, cellId)) {
                     this.enemyThreatMap[cellId] = 0
                 }
-
                 if (damage > this.enemyThreatMap[cellId]) {
                     this.enemyThreatMap[cellId] = damage
                     totalThreats++
+                }
+
+                // Battle Royale mode: accumulate total damage + sources
+                if (this._isBattleRoyale) {
+                    if (!mapContainsKey(this._lobbyThreatMap, cellId)) {
+                        this._lobbyThreatMap[cellId] = 0
+                        this._lobbyThreatSources[cellId] = 0
+                    }
+                    this._lobbyThreatMap[cellId] += damage
+                    this._lobbyThreatSources[cellId] += 1
                 }
             }
         }
@@ -660,10 +775,31 @@ class FieldMap extends FieldMapPatterns {
     }
 
     getThreatAtCell(cellId) {
+        // Battle Royale mode: use cumulative threat with exponential penalty
+        if (this._isBattleRoyale) {
+            return this.getLobbyThreatAtCell(cellId)
+        }
+
+        // Legacy 1v1 mode: max damage from single enemy
         if (mapContainsKey(this.enemyThreatMap, cellId)) {
             return this.enemyThreatMap[cellId]
         }
-        return 0  
+        return 0
+    }
+
+    getLobbyThreatAtCell(cellId) {
+        if (!mapContainsKey(this._lobbyThreatMap, cellId)) {
+            return 0
+        }
+
+        var totalThreat = this._lobbyThreatMap[cellId]
+        var sources = this._lobbyThreatSources[cellId]
+
+        // Exponential penalty for being in multiple lines of sight
+        // Being hit by 1 enemy = 1.0x, 2 enemies = 1.2x, 3 enemies = 1.4x, etc.
+        var focusFireMultiplier = 1.0 + (sources * 0.2)
+
+        return totalThreat * focusFireMultiplier
     }
 
     getSafeCells(maxMP, maxThreat = 0) {
