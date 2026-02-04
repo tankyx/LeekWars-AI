@@ -1,0 +1,435 @@
+
+// =============================================================================
+// AtomicActionExecutor - Converts action sequences to Game API calls
+// =============================================================================
+//
+// The final stage of beam search planning: takes discovered action sequences
+// and executes them via LeekScript game API calls.
+//
+// Key responsibilities:
+// - Action sequence execution (ordered operations)
+// - Pre-execution validation (catch invalid actions before API calls)
+// - Error handling (skip invalid actions, log warnings)
+// - State tracking (ensure consistency between simulation and execution)
+//
+// Design philosophy:
+// - Fail-safe: Invalid actions are skipped, not crashed on
+// - Transparent: All actions logged for debugging
+// - Efficient: Minimal operation overhead (~50-100 ops per action)
+//
+// =============================================================================
+
+class AtomicActionExecutor {
+    _arsenal = null
+    _fieldMap = null
+    _player = null
+
+    constructor(arsenal, fieldMap, player) {
+        this._arsenal = arsenal
+        this._fieldMap = fieldMap
+        this._player = player
+    }
+
+    // =========================================================================
+    // Main entry point: Execute action sequence
+    // =========================================================================
+
+    execute(actionSequence) {
+        if (count(actionSequence) == 0) {
+            debugInfo("[EXECUTOR] Empty action sequence - no actions to execute")
+            return 0
+        }
+
+        debugInfo("[EXECUTOR] Executing " + count(actionSequence) + " actions...")
+
+        var executed = 0
+        var skipped = 0
+
+        for (var action in actionSequence) {
+            if (this.executeAction(action)) {
+                executed++
+            } else {
+                skipped++
+            }
+        }
+
+        debugInfo("[EXECUTOR] Complete: " + executed + " executed, " + skipped + " skipped")
+        return executed
+    }
+
+    // =========================================================================
+    // Execute single action (with validation)
+    // =========================================================================
+
+    executeAction(action) {
+        startOpDebug("ExecuteAction")
+
+        // Pre-execution validation
+        if (!this.validateAction(action)) {
+            stopOpDebug("ExecuteAction")
+            return false
+        }
+
+        // Execute based on type
+        var success = false
+
+        if (action.type == AtomicAction.MOVE_TACTICAL) {
+            success = this.executeMove(action)
+        }
+        else if (action.type == AtomicAction.USE_CHIP) {
+            success = this.executeChipUse(action)
+        }
+        else if (action.type == AtomicAction.USE_WEAPON) {
+            success = this.executeWeaponUse(action)
+        }
+        else if (action.type == AtomicAction.SWAP_WEAPON) {
+            success = this.executeWeaponSwap(action)
+        }
+        else if (action.type == AtomicAction.TELEPORT) {
+            success = this.executeTeleport(action)
+        }
+        else {
+            debugCritical("[EXECUTOR] Unknown action type: " + action.type)
+            success = false
+        }
+
+        stopOpDebug("ExecuteAction")
+        return success
+    }
+
+    // =========================================================================
+    // Movement execution
+    // =========================================================================
+
+    executeMove(action) {
+        var playerCell = this._player._cellPos
+        var targetCell = action.targetCell
+
+        // Validate path exists
+        var pathLength = getCachedPathLength(playerCell, targetCell)
+        if (pathLength == null) {
+            debugDetail("[EXECUTOR] Move failed: No path to cell " + targetCell)
+            return false
+        }
+
+        // Validate MP available
+        if (this._player._currMp < pathLength) {
+            debugDetail("[EXECUTOR] Move failed: Need " + pathLength + " MP, have " +
+                       this._player._currMp + " MP")
+            return false
+        }
+
+        // Execute movement
+        debugDetail("[EXECUTOR] Move to cell " + targetCell + " (cost=" + pathLength + " MP)")
+        var result = moveTowardCell(targetCell)
+
+        if (result <= 0) {
+            debugDetail("[EXECUTOR] Move failed: moveTowardCell returned " + result)
+            return false
+        }
+
+        // Update player state
+        this._player.updateEntity()
+
+        return true
+    }
+
+    // =========================================================================
+    // Chip execution
+    // =========================================================================
+
+    executeChipUse(action) {
+        var chipId = action.chipId
+        var targetEnemyId = action.targetEnemyId
+
+        // Validate chip available
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) {
+            debugDetail("[EXECUTOR] Chip " + chipId + " not equipped")
+            return false
+        }
+
+        // Validate TP cost
+        var cost = getChipCost(chipId)
+        if (this._player._currTp < cost) {
+            debugDetail("[EXECUTOR] Chip " + chipId + " failed: Need " + cost +
+                       " TP, have " + this._player._currTp + " TP")
+            return false
+        }
+
+        // Self-targeted chips (buffs, heals)
+        if (this.isSelfTargetedChip(chipId)) {
+            debugDetail("[EXECUTOR] UseChip " + chipId + " (self-targeted)")
+            var result = useChip(chipId, this._player._id)
+
+            if (result == USE_SUCCESS) {
+                this._player.updateEntity()
+                return true
+            } else {
+                debugDetail("[EXECUTOR] Chip " + chipId + " failed: result=" + result)
+                return false
+            }
+        }
+
+        // Enemy-targeted chips (damage, debuffs)
+        if (targetEnemyId == -1) {
+            debugDetail("[EXECUTOR] Chip " + chipId + " failed: No target specified")
+            return false
+        }
+
+        // Validate target exists and is alive
+        if (!isAlive(targetEnemyId)) {
+            debugDetail("[EXECUTOR] Chip " + chipId + " failed: Target " + targetEnemyId +
+                       " not found or dead")
+            return false
+        }
+
+        // Validate range
+        var playerCell = this._player._cellPos
+        var targetCell = getCell(targetEnemyId)
+        var distance = getCellDistance(playerCell, targetCell)
+        var minRange = getChipMinRange(chipId)
+        var maxRange = getChipMaxRange(chipId)
+
+        if (distance < minRange || distance > maxRange) {
+            debugDetail("[EXECUTOR] Chip " + chipId + " out of range: distance=" + distance +
+                       ", range=" + minRange + "-" + maxRange)
+            return false
+        }
+
+        // Execute chip
+        debugDetail("[EXECUTOR] UseChip " + chipId + " on enemy " + targetEnemyId +
+                   " (cost=" + cost + " TP)")
+        var result = useChip(chipId, targetEnemyId)
+
+        if (result == USE_SUCCESS) {
+            this._player.updateEntity()
+            return true
+        } else {
+            debugDetail("[EXECUTOR] Chip " + chipId + " failed: result=" + result)
+            return false
+        }
+    }
+
+    // =========================================================================
+    // Weapon execution
+    // =========================================================================
+
+    executeWeaponUse(action) {
+        var weaponId = action.weaponId
+        var targetEnemyId = action.targetEnemyId
+
+        // Validate weapon equipped
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, weaponId)) {
+            debugDetail("[EXECUTOR] Weapon " + weaponId + " not equipped")
+            return false
+        }
+
+        var weaponObj = this._arsenal.playerEquippedWeapons[weaponId]
+
+        // Weapon swap if needed
+        if (this._player._inUseWeapon != weaponId) {
+            if (this._player._currTp < 1) {
+                debugDetail("[EXECUTOR] Weapon swap failed: Need 1 TP for swap")
+                return false
+            }
+
+            debugDetail("[EXECUTOR] SwapWeapon to " + weaponId)
+            var swapResult = setWeapon(weaponId)
+
+            if (swapResult != USE_SUCCESS) {
+                debugDetail("[EXECUTOR] Weapon swap failed: result=" + swapResult)
+                return false
+            }
+
+            this._player.updateEntity()
+        }
+
+        // Validate TP cost
+        var weaponCost = weaponObj._cost
+        if (this._player._currTp < weaponCost) {
+            debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: Need " + weaponCost +
+                       " TP, have " + this._player._currTp + " TP")
+            return false
+        }
+
+        // Validate target exists
+        if (!isAlive(targetEnemyId)) {
+            debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: Target " + targetEnemyId +
+                       " not found or dead")
+            return false
+        }
+
+        // Validate range
+        var playerCell = this._player._cellPos
+        var targetCell = getCell(targetEnemyId)
+        var distance = getCellDistance(playerCell, targetCell)
+
+        if (distance < weaponObj._minRange || distance > weaponObj._maxRange) {
+            debugDetail("[EXECUTOR] Weapon " + weaponId + " out of range: distance=" + distance +
+                       ", range=" + weaponObj._minRange + "-" + weaponObj._maxRange)
+            return false
+        }
+
+        // Validate line-of-sight for directional weapons
+        var launchType = weaponObj._launchType
+        var needsLoS = (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_STAR)
+        if (needsLoS) {
+            if (!lineOfSight(playerCell, targetCell, [targetCell])) {
+                debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: No line of sight")
+                return false
+            }
+        }
+
+        // Execute weapon
+        debugDetail("[EXECUTOR] UseWeapon " + weaponId + " on enemy " + targetEnemyId +
+                   " (cost=" + weaponCost + " TP)")
+        var result = useWeapon(targetEnemyId)
+
+        if (result == USE_SUCCESS) {
+            this._player.updateEntity()
+            return true
+        } else {
+            debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: result=" + result)
+            return false
+        }
+    }
+
+    // =========================================================================
+    // Weapon swap execution
+    // =========================================================================
+
+    executeWeaponSwap(action) {
+        var weaponId = action.weaponId
+
+        // Validate TP
+        if (this._player._currTp < 1) {
+            debugDetail("[EXECUTOR] Weapon swap failed: Need 1 TP")
+            return false
+        }
+
+        // Validate not already equipped
+        if (this._player._inUseWeapon == weaponId) {
+            debugDetail("[EXECUTOR] Weapon " + weaponId + " already equipped")
+            return false
+        }
+
+        // Execute swap
+        debugDetail("[EXECUTOR] SwapWeapon to " + weaponId)
+        var result = setWeapon(weaponId)
+
+        if (result == USE_SUCCESS) {
+            this._player.updateEntity()
+            return true
+        } else {
+            debugDetail("[EXECUTOR] Weapon swap failed: result=" + result)
+            return false
+        }
+    }
+
+    // =========================================================================
+    // Teleport execution
+    // =========================================================================
+
+    executeTeleport(action) {
+        var targetCell = action.targetCell
+
+        // Validate TELEPORTATION equipped
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            debugDetail("[EXECUTOR] TELEPORTATION not equipped")
+            return false
+        }
+
+        // Validate TP cost
+        var cost = getChipCost(CHIP_TELEPORTATION)
+        if (this._player._currTp < cost) {
+            debugDetail("[EXECUTOR] Teleport failed: Need " + cost + " TP, have " +
+                       this._player._currTp + " TP")
+            return false
+        }
+
+        // Validate distance (1-12 range)
+        var playerCell = this._player._cellPos
+        var distance = getCellDistance(playerCell, targetCell)
+
+        if (distance < 1 || distance > 12) {
+            debugDetail("[EXECUTOR] Teleport failed: distance=" + distance + " (must be 1-12)")
+            return false
+        }
+
+        // Execute teleport
+        debugDetail("[EXECUTOR] Teleport to cell " + targetCell + " (cost=" + cost + " TP)")
+        var result = useChipOnCell(CHIP_TELEPORTATION, targetCell)
+
+        if (result == USE_SUCCESS) {
+            this._player.updateEntity()
+            return true
+        } else {
+            debugDetail("[EXECUTOR] Teleport failed: result=" + result)
+            return false
+        }
+    }
+
+    // =========================================================================
+    // Validation helpers
+    // =========================================================================
+
+    validateAction(action) {
+        // Basic sanity checks
+        if (action == null) {
+            debugCritical("[EXECUTOR] Null action")
+            return false
+        }
+
+        // Check if we have resources for this action
+        if (action.tpCost > 0 && this._player._currTp < action.tpCost) {
+            debugDetail("[EXECUTOR] Insufficient TP: need " + action.tpCost +
+                       ", have " + this._player._currTp)
+            return false
+        }
+
+        if (action.mpCost > 0 && this._player._currMp < action.mpCost) {
+            debugDetail("[EXECUTOR] Insufficient MP: need " + action.mpCost +
+                       ", have " + this._player._currMp)
+            return false
+        }
+
+        return true
+    }
+
+    isSelfTargetedChip(chipId) {
+        // Buffs
+        if (chipId == CHIP_STEROID || chipId == CHIP_DOPING || chipId == CHIP_WARM_UP) {
+            return true
+        }
+
+        // Shields
+        if (chipId == CHIP_FORTRESS || chipId == CHIP_WALL || chipId == CHIP_SHIELD) {
+            return true
+        }
+
+        // Healing
+        if (chipId == CHIP_REMISSION || chipId == CHIP_REGENERATION) {
+            return true
+        }
+
+        // Utility buffs
+        if (chipId == CHIP_ADRENALINE || chipId == CHIP_PROTEIN || chipId == CHIP_LEATHER_BOOTS) {
+            return true
+        }
+
+        return false
+    }
+
+    // =========================================================================
+    // Debug helpers
+    // =========================================================================
+
+    printActionSequence(actionSequence) {
+        debugInfo("[EXECUTOR] Action sequence (" + count(actionSequence) + " actions):")
+        var i = 1
+        for (var action in actionSequence) {
+            debugInfo("  " + i + ". " + action.toString())
+            i++
+        }
+    }
+}

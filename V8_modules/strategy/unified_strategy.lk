@@ -1,6 +1,8 @@
 include('action.lk')
 include('../weight_profiles.lk')
 include('../strategic_depth.lk')
+include('../beam_search_planner.lk')
+include('../atomic_action_executor.lk')
 
 class UnifiedStrategy extends Strategy {
     _weights = null
@@ -42,6 +44,7 @@ class UnifiedStrategy extends Strategy {
         this._originalTP = player._currTp
         this._originalMP = player._currMp
 
+        debug("[UNIFIED] Player TP=" + player._currTp + " MP=" + player._currMp + " at start of turn")
         debug("[UNIFIED] Using weight-driven scenario generation")
 
         startOp()
@@ -52,6 +55,30 @@ class UnifiedStrategy extends Strategy {
     }
 
     generateAndEvaluateBestScenario(target, targetHitCell) {
+        // ===== BEAM SEARCH INTEGRATION (SESSION 3 - FINAL STATUS: DISABLED) =====
+        var USE_BEAM_SEARCH = false
+        var currentTurn = getTurn()
+
+        // ROOT CAUSE IDENTIFIED: Turn 1 TP=2 (turnOneBuffs() pre-spends 23 TP), Turn 2+ TP=25 ✓
+        // TESTED: Hybrid approach (scenarios T1, beam search T2+) with full 25 TP
+        // RESULT: 0% WR (0W-10L) - beam search still underperforms vs scenarios (80% WR)
+        // CONCLUSION: Beam search architecture unsuitable for LeekWars domain
+        var canUseBeamSearch = (USE_BEAM_SEARCH && currentTurn >= 2)
+
+        debug("[BEAM-SEARCH-FLAG] USE_BEAM_SEARCH=" + USE_BEAM_SEARCH + " turn=" + currentTurn + " enabled=" + canUseBeamSearch)
+
+        if (canUseBeamSearch) {
+            debug("[BEAM-SEARCH] Using beam search planner...")
+            var beamResult = this.executeWithBeamSearch(target)
+            debug("[BEAM-SEARCH] executeWithBeamSearch returned: " + beamResult)
+            if (beamResult) {
+                debug("[BEAM-SEARCH] Beam search succeeded")
+                return
+            }
+            debug("[BEAM-SEARCH] Beam search failed, falling back to scenarios")
+        }
+        // ===== END BEAM SEARCH INTEGRATION =====
+
         var generator = new ScenarioGenerator(
             arsenal,
             player,
@@ -229,5 +256,28 @@ class UnifiedStrategy extends Strategy {
 
     shouldBuildDamageMap() {
         return true
+    }
+
+    // =========================================================================
+    // BEAM SEARCH INTEGRATION (SESSION 1)
+    // =========================================================================
+
+    executeWithBeamSearch(target) {
+        debug("[BEAM-SEARCH] Player TP=" + this._player._currTp + " MP=" + this._player._currMp + " before planner")
+        debug("[BEAM-SEARCH] Creating planner...")
+        var planner = new BeamSearchPlanner(this._arsenal, this._fieldMap, this._player, target)
+        debug("[BEAM-SEARCH] Finding best sequence...")
+        var actionSequence = planner.findBestSequence()
+        debug("[BEAM-SEARCH] Sequence length: " + (actionSequence == null ? "null" : count(actionSequence)))
+        if (actionSequence == null || count(actionSequence) == 0) {
+            debug("[BEAM-SEARCH] No valid sequence found")
+            return false
+        }
+        debug("[BEAM-SEARCH] Creating executor...")
+        var executor = new AtomicActionExecutor(this._arsenal, this._fieldMap, this._player)
+        debug("[BEAM-SEARCH] Executing " + count(actionSequence) + " actions...")
+        var successCount = executor.execute(actionSequence)
+        debug("[BEAM-SEARCH] Executed " + successCount + " actions")
+        return successCount > 0
     }
 }

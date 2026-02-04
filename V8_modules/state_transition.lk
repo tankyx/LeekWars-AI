@@ -1,0 +1,363 @@
+include('atomic_action.lk')
+include('cache_manager.lk')
+
+// Helper function for array containment check
+function arrayContains(arr, value) {
+    for (var item in arr) {
+        if (item == value) return true
+    }
+    return false
+}
+
+// =============================================================================
+// StateTransition - Immutable state transition engine
+// =============================================================================
+//
+// Applies atomic actions to world states, returning new states (no mutations).
+// This is the core simulation loop that enables beam search planning.
+//
+// Key properties:
+// - Pure function: State + Action → New State
+// - No game API calls (all data in WorldState)
+// - Fast: ~100-200 ops per transition
+// - Accurate: Matches game mechanics (damage, buffs, movement)
+//
+// Operations budget: 100-200 ops per transition × 50 actions × 100 beams × 8 depth
+//                    = ~4-8M ops for full search
+//
+// =============================================================================
+
+class StateTransition {
+    _arsenal = null
+    _fieldMap = null
+
+    constructor(arsenal, fieldMap) {
+        this._arsenal = arsenal
+        this._fieldMap = fieldMap
+    }
+
+    // =========================================================================
+    // Main entry point: Apply action to state, return new state
+    // =========================================================================
+
+    apply(worldState, action) {
+        // Clone state (immutable transitions)
+        var newState = worldState.clone()
+        newState.parentAction = action
+        newState.depth = worldState.depth + 1
+
+        // Append action to sequence
+        push(newState.actionSequence, action)
+
+        // Apply action based on type
+        if (action.type == AtomicAction.MOVE_TACTICAL) {
+            this.applyMovement(newState, action)
+        }
+        else if (action.type == AtomicAction.USE_CHIP) {
+            this.applyChipUse(newState, action)
+        }
+        else if (action.type == AtomicAction.USE_WEAPON) {
+            this.applyWeaponUse(newState, action)
+        }
+        else if (action.type == AtomicAction.SWAP_WEAPON) {
+            this.applyWeaponSwap(newState, action)
+        }
+        else if (action.type == AtomicAction.TELEPORT) {
+            this.applyTeleport(newState, action)
+        }
+
+        return newState
+    }
+
+    // =========================================================================
+    // Movement
+    // =========================================================================
+
+    applyMovement(state, action) {
+        var pathLength = getCachedPathLength(state.cell, action.targetCell)
+        if (pathLength != null && pathLength <= state.mp) {
+            state.mp -= pathLength
+            state.cell = action.targetCell
+        }
+    }
+
+    // =========================================================================
+    // Chip use (damage, buffs, healing)
+    // =========================================================================
+
+    applyChipUse(state, action) {
+        var chipId = action.chipId
+        var tpCost = getChipCost(chipId)
+
+        // Spend TP
+        state.tp -= tpCost
+
+        // Apply effects based on chip type
+        if (this.isDamageChip(chipId)) {
+            this.applyDamageToTarget(state, action)
+        }
+        else if (this.isBuffChip(chipId)) {
+            this.applyBuff(state, chipId)
+        }
+        else if (this.isHealingChip(chipId)) {
+            this.applyHealing(state, chipId)
+        }
+        else if (this.isDebuffChip(chipId)) {
+            this.applyDebuff(state, action)
+        }
+
+        // Set cooldown if applicable
+        if (this.hasChipCooldown(chipId)) {
+            state.chipCooldowns[chipId] = this.getChipCooldownTurns(chipId)
+        }
+    }
+
+    // =========================================================================
+    // Weapon use
+    // =========================================================================
+
+    applyWeaponUse(state, action) {
+        var weaponId = action.weaponId
+        var weaponObj = this._arsenal.playerEquippedWeapons[weaponId]
+        if (weaponObj == null) {
+            return
+        }
+
+        // Weapon swap cost if needed
+        var swapNeeded = (state.currentWeapon != weaponId)
+        if (swapNeeded) {
+            state.tp -= 1
+            state.currentWeapon = weaponId
+        }
+
+        // Weapon usage cost
+        state.tp -= weaponObj._cost
+
+        // Decrement uses
+        if (mapContainsKey(state.weaponUses, weaponId)) {
+            state.weaponUses[weaponId] = state.weaponUses[weaponId] - 1
+        }
+
+        // Apply damage
+        this.applyDamageToTarget(state, action)
+
+        // Special weapon effects
+        if (weaponId == WEAPON_NEUTRINO) {
+            var target = action.getTargetEnemy(state)
+            if (target != null) {
+                target.vulnerabilityStacks += 8
+            }
+        }
+        else if (weaponId == WEAPON_HEAVY_SWORD) {
+            var target = action.getTargetEnemy(state)
+            if (target != null) {
+                target.vulnerabilityStacks += 60
+            }
+        }
+    }
+
+    // =========================================================================
+    // Weapon swap
+    // =========================================================================
+
+    applyWeaponSwap(state, action) {
+        state.tp -= 1
+        state.currentWeapon = action.weaponId
+    }
+
+    // =========================================================================
+    // Teleport
+    // =========================================================================
+
+    applyTeleport(state, action) {
+        var tpCost = getChipCost(CHIP_TELEPORTATION)
+        state.tp -= tpCost
+        state.cell = action.targetCell
+    }
+
+    // =========================================================================
+    // Damage application
+    // =========================================================================
+
+    applyDamageToTarget(state, action) {
+        var target = action.getTargetEnemy(state)
+        if (target == null || !target.isAlive) {
+            return
+        }
+
+        var isWeapon = (action.type == AtomicAction.USE_WEAPON)
+        var itemId = isWeapon ? action.weaponId : action.chipId
+
+        // Calculate damage breakdown
+        var breakdown = this._arsenal.getDamageBreakdown(
+            state.strength, state.magic, state.wisdom, state.science, itemId
+        )
+
+        // Apply direct damage
+        var directDmg = breakdown['direct']
+
+        // Apply shields
+        if (target._absShield > 0) {
+            var absorbed = min(target._absShield, directDmg)
+            target._absShield -= absorbed
+            directDmg -= absorbed
+        }
+
+        // Apply relative shield
+        if (target._relShield > 0 && directDmg > 0) {
+            var reduction = directDmg * (target._relShield / 100.0)
+            directDmg -= reduction
+        }
+
+        // Apply vulnerability
+        if (target.vulnerabilityStacks > 0) {
+            directDmg = directDmg * (1.0 + target.vulnerabilityStacks / 100.0)
+        }
+
+        target._currHealth -= floor(directDmg)
+        if (target._currHealth <= 0) {
+            target._currHealth = 0
+            target.isAlive = false
+        }
+
+        // Apply DoT (poison tracking)
+        if (breakdown['dot'] > 0) {
+            target.poisonRemaining = 7  // Standard poison duration
+        }
+
+        // Apply Nova (max HP reduction)
+        var novaDmg = breakdown['nova']
+        if (novaDmg > 0) {
+            var hpDeficit = target._maxHealth - target._currHealth
+            var cappedNova = min(novaDmg, hpDeficit)
+            target._maxHealth -= cappedNova
+            if (target._maxHealth < target._currHealth) {
+                target._maxHealth = target._currHealth
+            }
+        }
+    }
+
+    // =========================================================================
+    // Buff application
+    // =========================================================================
+
+    applyBuff(state, chipId) {
+        if (chipId == CHIP_STEROID || chipId == CHIP_DOPING) {
+            var strBoost = (chipId == CHIP_STEROID) ? 100 : 50
+            state.strength += strBoost
+            state.damageBuffActive = true
+        }
+        else if (chipId == CHIP_WARM_UP) {
+            state.agility += 100
+            state.damageBuffActive = true
+        }
+        else if (chipId == CHIP_FORTRESS) {
+            var shield = 400 + state.wisdom * 4
+            state.absShield += shield
+            state.shieldBuffTurns = 3
+        }
+        else if (chipId == CHIP_WALL) {
+            var shield = 200 + state.wisdom * 2
+            state.absShield += shield
+            state.shieldBuffTurns = 2
+        }
+        else if (chipId == CHIP_SHIELD) {
+            var shield = 100 + state.wisdom * 1
+            state.absShield += shield
+            state.shieldBuffTurns = 1
+        }
+        else if (chipId == CHIP_PROTEIN) {
+            state.relShield += 10
+        }
+        else if (chipId == CHIP_LEATHER_BOOTS) {
+            state.relShield += 20
+            state.mp += 2
+        }
+        else if (chipId == CHIP_ADRENALINE) {
+            state.tp += 5
+        }
+    }
+
+    // =========================================================================
+    // Healing application
+    // =========================================================================
+
+    applyHealing(state, chipId) {
+        var healing = this._arsenal.getExpectedHeal(chipId, state.wisdom)
+        state.hp += healing
+        if (state.hp > state.maxHP) {
+            state.hp = state.maxHP
+        }
+    }
+
+    // =========================================================================
+    // Debuff application
+    // =========================================================================
+
+    applyDebuff(state, action) {
+        var target = action.getTargetEnemy(state)
+        if (target == null) {
+            return
+        }
+
+        var chipId = action.chipId
+
+        // Shield strip (LIBERATION)
+        if (chipId == CHIP_LIBERATION) {
+            target._absShield = 0
+            target._relShield = 0
+            target.damageBuffActive = false
+        }
+        // MP drain
+        else if (chipId == CHIP_TRANQUILIZER || chipId == CHIP_SOPORIFIC) {
+            var mpDrain = (chipId == CHIP_TRANQUILIZER) ? 2 : 3
+            target._currMp -= mpDrain
+            if (target._currMp < 0) target._currMp = 0
+        }
+    }
+
+    // =========================================================================
+    // Chip classification helpers
+    // =========================================================================
+
+    isDamageChip(chipId) {
+        var damageChips = [
+            CHIP_ROCKFALL, CHIP_ICEBERG, CHIP_METEORITE, CHIP_STALACTITE,
+            CHIP_LIGHTNING, CHIP_SPARK, CHIP_FLAME, CHIP_BALL_AND_CHAIN,
+            CHIP_PEBBLE, CHIP_ROCK
+        ]
+        return arrayContains(damageChips, chipId)
+    }
+
+    isBuffChip(chipId) {
+        var buffChips = [
+            CHIP_STEROID, CHIP_DOPING, CHIP_WARM_UP,
+            CHIP_FORTRESS, CHIP_WALL, CHIP_SHIELD,
+            CHIP_PROTEIN, CHIP_LEATHER_BOOTS, CHIP_ADRENALINE
+        ]
+        return arrayContains(buffChips, chipId)
+    }
+
+    isHealingChip(chipId) {
+        var healingChips = [
+            CHIP_REGENERATION, CHIP_REMISSION, CHIP_CURE, CHIP_DRIP
+        ]
+        return arrayContains(healingChips, chipId)
+    }
+
+    isDebuffChip(chipId) {
+        var debuffChips = [
+            CHIP_LIBERATION, CHIP_TRANQUILIZER, CHIP_SOPORIFIC
+        ]
+        return arrayContains(debuffChips, chipId)
+    }
+
+    hasChipCooldown(chipId) {
+        return chipId == CHIP_REGENERATION  // Only REGENERATION has cooldown in common chips
+    }
+
+    getChipCooldownTurns(chipId) {
+        if (chipId == CHIP_REGENERATION) return 2
+        return 0
+    }
+}

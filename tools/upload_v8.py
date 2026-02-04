@@ -225,7 +225,13 @@ class V8Uploader:
             "scenario_scorer",
             "scenario_generator",
             "scenario_quick_scorer",
-            "weight_profiles"
+            "weight_profiles",
+            # Beam Search / Emergent Planning modules
+            "world_state",
+            "atomic_action",
+            "atomic_action_executor",
+            "state_transition",
+            "beam_search_planner"
         ]
 
         for module_name in root_modules:
@@ -357,13 +363,15 @@ class V8Uploader:
         print("\n✨ V8 MODULAR AI SYSTEM IS COMPLETE!")
         print("\n🚀 V8 KEY FEATURES:")
         print("   🎯 Action queue pattern (planning + execution phases)")
+        print("   🧠 Beam Search planning (emergent strategy discovery)")
         print("   ⚔️  Build-specific strategies (Strength, Agility, Magic, Boss)")
-        print("   🧠 Shared combat logic in base_strategy.lk")
+        print("   🤖 Shared combat logic in base_strategy.lk")
         print("   💊 Magic antidote baiting + GRAPPLE-COVID combo")
         print("   🛡️  AoE self-damage prevention")
         print("   🏃 Fighting retreat (attack while fleeing)")
         print("   📍 Smart positioning (HNS, reachable cells)")
         print("   📊 Probability-based OTKO with kill probability calculation")
+        print("   🔍 Phase 3 & 4: Monte Carlo + Enemy Prediction")
 
         print("\n📖 Usage:")
         print("   main.lk - Entry point with build detection")
@@ -396,9 +404,11 @@ def main():
     total_modules = 0
     root_modules = ["main", "game_entity", "item", "field_map", "field_map_core",
                     "field_map_patterns", "field_map_tactical", "operation_tracker",
-                    "performance_infra", "cache_manager", "tactical_awareness", "strategic_depth",
-                    "reachable_graph", "scenario_simulator", "scenario_scorer", "scenario_generator",
-                    "scenario_quick_scorer", "weight_profiles"]
+                    "debug_config", "monte_carlo_sim", "kill_planning", "cooldown_tracker",
+                    "enemy_predictor", "performance_infra", "cache_manager", "tactical_awareness",
+                    "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
+                    "scenario_generator", "scenario_quick_scorer", "weight_profiles",
+                    "world_state", "atomic_action", "atomic_action_executor", "state_transition", "beam_search_planner"]
     for module in root_modules:
         if (v8_dir / f"{module}.lk").exists():
             total_modules += 1

@@ -1,0 +1,517 @@
+include('atomic_action.lk')
+include('world_state.lk')
+include('state_transition.lk')
+include('debug_config.lk')
+include('scenario_generator.lk')
+include('strategy/action.lk')
+
+// =============================================================================
+// BeamSearchPlanner - Emergent strategy discovery through state-space search
+// =============================================================================
+//
+// Replaces template-based ScenarioGenerator with pure search-based planning.
+// Discovers optimal action sequences by exploring state space with beam search.
+//
+// Algorithm:
+// 1. Initialize beam with current game state
+// 2. For each depth (1 to MAX_DEPTH):
+//    a. Expand: Generate valid actions for each state in beam
+//    b. Apply: Create successor states via StateTransition
+//    c. Score: Rank states using heuristic
+//    d. Prune: Keep top BEAM_WIDTH states
+//    e. Check ops budget, break if exceeded
+// 3. Return best sequence found
+//
+// Configuration:
+// - BEAM_WIDTH: 100 states (exploration vs computation trade-off)
+// - MAX_DEPTH: 8 actions (typical turn length)
+// - OPS_LIMIT: 12M (leave 2M safety margin from 14M budget)
+//
+// Expected cost: ~8M ops for full search (well within budget)
+//
+// =============================================================================
+
+class BeamSearchPlanner {
+    _arsenal = null
+    _fieldMap = null
+    _player = null
+    _target = null
+
+    _stateTransition = null
+    _actionGenerator = null
+    _heuristic = null
+
+    // Configuration
+    BEAM_WIDTH = 100
+    MAX_DEPTH = 8
+    OPS_LIMIT = 12000000
+
+    constructor(arsenal, fieldMap, player, target) {
+        this._arsenal = arsenal
+        this._fieldMap = fieldMap
+        this._player = player
+        this._target = target
+
+        this._stateTransition = new StateTransition(arsenal, fieldMap)
+        this._actionGenerator = new AtomicActionGenerator(arsenal, fieldMap)
+        this._heuristic = new BeamSearchHeuristic(arsenal, fieldMap)
+    }
+
+    // =========================================================================
+    // Main entry point: Find best action sequence
+    // =========================================================================
+
+    findBestSequence() {
+        debug("[BeamSearch] Starting search (width=" + this.BEAM_WIDTH + ", depth=" + this.MAX_DEPTH + ")")
+        var opsBefore = getOperations()
+
+        // 1. Initialize beam with current game state
+        var initialState = WorldState.fromGameState(this._player, this._target, this._arsenal)
+        var beam = [initialState]
+
+        // SESSION 2: Inject scenario seeds into initial beam
+        var seeds = this.generateSeedsFromScenarios()
+        for (var seed in seeds) {
+            push(beam, seed)
+        }
+        debug("[BeamSearch] Initial beam: 1 empty state + " + count(seeds) + " seeds = " + count(beam) + " total")
+
+        // 2. Expand beam for MAX_DEPTH iterations
+        for (var depth = 1; depth <= this.MAX_DEPTH; depth++) {
+            // Check operation budget
+            if (getOperations() > this.OPS_LIMIT) {
+                debug("[BeamSearch] Ops limit reached at depth " + depth)
+                break
+            }
+
+            debug("[BeamSearch] Depth " + depth + " - Expanding " + count(beam) + " states")
+
+            // Expand beam
+            var newBeam = this.expandBeam(beam)
+
+            debug("[BeamSearch] Depth " + depth + " - Generated " + count(newBeam) + " successor states")
+
+            // Check if expansion failed (no valid actions)
+            if (count(newBeam) == 0) {
+                debug("[BeamSearch] No valid actions at depth " + depth + ", stopping search")
+                break
+            }
+
+            // Score and prune
+            beam = this.pruneBeam(newBeam)
+
+            debugDetail("BeamSearch: Depth " + depth + " - Pruned to " + count(beam) + " states")
+
+            // Early termination if we found a kill
+            var bestState = beam[0]
+            if (this.isKillState(bestState)) {
+                debugInfo("BeamSearch: Kill state found at depth " + depth + ", terminating search")
+                break
+            }
+        }
+
+        // 3. Extract best sequence
+        var bestState = beam[0]
+        var sequence = this.extractSequence(bestState)
+
+        var opsUsed = getOperations() - opsBefore
+        debug("[BeamSearch] Search complete - " + count(sequence) + " actions, score=" +
+              floor(bestState.cumulativeScore) + ", ops=" + opsUsed)
+
+        return sequence
+    }
+
+    // =========================================================================
+    // Beam expansion: Generate successor states
+    // =========================================================================
+
+    expandBeam(beam) {
+        var successors = []
+
+        for (var state in beam) {
+            // Generate valid actions from this state
+            var actions = this._actionGenerator.generateActions(state)
+
+            debugVerbose("BeamSearch: State has " + count(actions) + " valid actions")
+
+            // Apply each action to create successor states
+            for (var action in actions) {
+                // Validate action can execute from this state
+                if (!action.isValid(state, this._arsenal, this._fieldMap)) {
+                    continue
+                }
+
+                // Apply action via state transition
+                var newState = this._stateTransition.apply(state, action)
+
+                // Score the new state
+                newState.cumulativeScore = this._heuristic.scoreState(newState)
+
+                push(successors, newState)
+            }
+        }
+
+        return successors
+    }
+
+    // =========================================================================
+    // Beam pruning: Keep top BEAM_WIDTH states
+    // =========================================================================
+
+    pruneBeam(beam) {
+        // Sort by cumulative score (descending)
+        arraySort(beam, function(a, b) {
+            return b.cumulativeScore - a.cumulativeScore
+        })
+
+        // Keep top BEAM_WIDTH
+        var pruned = []
+        var limit = min(this.BEAM_WIDTH, count(beam))
+        for (var i = 0; i < limit; i++) {
+            push(pruned, beam[i])
+        }
+
+        return pruned
+    }
+
+    // =========================================================================
+    // Sequence extraction: Return action sequence from best state
+    // =========================================================================
+
+    extractSequence(finalState) {
+        // Action sequence is already stored in the state
+        return finalState.actionSequence
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    isKillState(state) {
+        var target = state.getPrimaryTarget()
+        if (target == null) return false
+        return !target.isAlive
+    }
+
+    // =========================================================================
+    // SESSION 2: Hybrid Seeds - Convert scenarios to beam states
+    // =========================================================================
+
+    generateSeedsFromScenarios() {
+        debug("[BeamSearch-Seeds] Generating scenario seeds...")
+
+        // Create scenario generator (same as unified strategy uses)
+        var generator = new ScenarioGenerator(this._arsenal, this._player, this._target, this._fieldMap, null)
+
+        // Generate scenarios
+        var scenarios = generator.generateScenarios()
+        debug("[BeamSearch-Seeds] Generated " + count(scenarios) + " scenarios")
+
+        if (count(scenarios) == 0) {
+            return []
+        }
+
+        // Convert top 2-4 scenarios to seeds (limit to avoid bloat)
+        var seedLimit = min(4, count(scenarios))
+        var seeds = []
+
+        for (var i = 0; i < seedLimit; i++) {
+            var scenario = scenarios[i]
+            var seed = this.convertScenarioToSeed(scenario)
+            if (seed != null) {
+                push(seeds, seed)
+                debug("[BeamSearch-Seeds] Seed #" + (i+1) + ": " + count(seed.actionSequence) + " actions")
+            }
+        }
+
+        return seeds
+    }
+
+    convertScenarioToSeed(scenario) {
+        // Start from initial state
+        var state = WorldState.fromGameState(this._player, this._target, this._arsenal)
+        var atomicActions = []
+
+        // Convert scenario actions to atomic actions and simulate state
+        for (var action in scenario) {
+            var atomicAction = this.scenarioActionToAtomic(action)
+            if (atomicAction != null) {
+                push(atomicActions, atomicAction)
+                // Apply to state for realistic end state
+                state = this._stateTransition.apply(state, atomicAction)
+            }
+        }
+
+        // Return the final state (with action sequence embedded)
+        return state
+    }
+
+    scenarioActionToAtomic(scenarioAction) {
+        var type = scenarioAction.type
+
+        // Weapon attacks
+        if (type == Action.ACTION_DIRECT && scenarioAction.weaponId != -1) {
+            return AtomicAction.createWeaponUse(
+                scenarioAction.weaponId,
+                scenarioAction.targetEntity._id,
+                0, // TP cost calculated by action generator
+                0  // Damage calculated by state transition
+            )
+        }
+
+        // Chip actions (buffs, debuffs, damage, DoT)
+        if ((type == Action.ACTION_BUFF || type == Action.ACTION_DEBUFF ||
+             type == Action.ACTION_DOT) && scenarioAction.chip != -1) {
+            var targetId = scenarioAction.targetEntity != null ? scenarioAction.targetEntity._id : -1
+            return AtomicAction.createChipUse(
+                scenarioAction.chip,
+                targetId,
+                0, // TP cost calculated
+                0, 0, 0 // Damage/healing/shield calculated
+            )
+        }
+
+        // Movement
+        if (type >= Action.MOVEMENT_APPROACH && type <= Action.MOVEMENT_PAB) {
+            if (scenarioAction.targetCell != -1) {
+                return AtomicAction.createMove(
+                    scenarioAction.targetCell,
+                    0, // MP cost calculated
+                    0  // Threat reduction calculated
+                )
+            }
+        }
+
+        // Teleport
+        if (type == Action.ACTION_TELEPORT && scenarioAction.targetCell != -1) {
+            return AtomicAction.createTeleport(
+                scenarioAction.targetCell,
+                0, // TP cost
+                0  // Threat reduction
+            )
+        }
+
+        // Weapon swap
+        if (type == Action.ACTION_WEAPON_SWAP && scenarioAction.weaponId != -1) {
+            return AtomicAction.createWeaponSwap(scenarioAction.weaponId)
+        }
+
+        // Skip checkpoints (execution control, not real actions)
+        if (type == Action.ACTION_CHECKPOINT) {
+            return null
+        }
+
+        return null
+    }
+}
+
+// =============================================================================
+// BeamSearchHeuristic - Scores world states for beam search
+// =============================================================================
+//
+// Evaluates state quality using multiple factors:
+// - Damage dealt (primary objective)
+// - HP/shields gained (survival)
+// - Position safety (threat map)
+// - Resource efficiency (TP/MP usage)
+// - Synergy bonuses (combos discovered)
+//
+// Score range: -10,000 to +15,000
+// - Death: -10,000
+// - Average turn: 1,000-3,000
+// - OTKO turn: 5,000-10,000
+// - Perfect combo: 10,000-15,000
+//
+// =============================================================================
+
+class BeamSearchHeuristic {
+    _arsenal = null
+    _fieldMap = null
+
+    constructor(arsenal, fieldMap) {
+        this._arsenal = arsenal
+        this._fieldMap = fieldMap
+    }
+
+    scoreState(state) {
+        var score = 0
+
+        // 1. Damage dealt (primary objective)
+        score += this.scoreDamage(state)
+
+        // 2. Survival (HP, shields, healing)
+        score += this.scoreSurvival(state)
+
+        // 3. Position safety (threat map)
+        score += this.scorePosition(state)
+
+        // 4. Resource efficiency
+        score += this.scoreResourceEfficiency(state)
+
+        // 5. Synergy bonuses (combos)
+        score += this.scoreSynergies(state)
+
+        return score
+    }
+
+    // =========================================================================
+    // Damage scoring
+    // =========================================================================
+
+    scoreDamage(state) {
+        var target = state.getPrimaryTarget()
+        if (target == null) return 0
+
+        var damageFraction = 1.0 - (target._currHealth / target._maxHealth)
+        var baseWeight = this.calculateDynamicDamageWeight(state)
+
+        // SESSION 3: Kill probability multipliers (matches scenario scorer)
+        if (damageFraction >= 0.95) {
+            baseWeight *= 5.0  // Near-certain kill
+        } else if (damageFraction >= 0.70) {
+            baseWeight *= 3.0  // High kill probability
+        } else if (damageFraction >= 0.50) {
+            baseWeight *= 1.5  // Moderate kill probability
+        }
+
+        var damageScore = damageFraction * baseWeight
+
+        // Kill bonus
+        if (!target.isAlive) {
+            damageScore += 5000
+        }
+
+        return damageScore
+    }
+
+    calculateDynamicDamageWeight(state) {
+        // Base weight varies by game phase
+        var currentTurn = getTurn()
+        var baseWeight = 3000
+
+        // Early game: lower damage weight (positioning matters more)
+        if (currentTurn <= 3) {
+            baseWeight = 2000
+        }
+        // Mid game: standard weight
+        else if (currentTurn <= 6) {
+            baseWeight = 3000
+        }
+        // Late game: higher damage weight (finish the fight)
+        else {
+            baseWeight = 4000
+        }
+
+        return baseWeight
+    }
+
+    // =========================================================================
+    // Survival scoring
+    // =========================================================================
+
+    scoreSurvival(state) {
+        var score = 0
+
+        // HP ratio (higher is better)
+        var hpRatio = state.hp / state.maxHP
+        score += hpRatio * 1000  // 0-1000 points
+
+        // Shield value
+        score += state.absShield * 0.5  // Shield points worth 0.5 each
+        score += state.relShield * 10   // Relative shield worth 10 per %
+
+        // Death penalty
+        if (state.hp <= 0) {
+            score -= 10000
+        }
+
+        return score
+    }
+
+    // =========================================================================
+    // Position safety scoring
+    // =========================================================================
+
+    scorePosition(state) {
+        var threat = this._fieldMap.getThreatAtCell(state.cell)
+        if (threat == null) threat = 0
+
+        // Normalize threat by HP (200 damage is worse at 30% HP than 100% HP)
+        var hpRatio = state.hp / state.maxHP
+        var normalizedThreat = threat / max(hpRatio, 0.3)
+
+        // Penalize high-threat positions
+        var positionScore = -normalizedThreat * 0.5  // -100 per 200 threat
+
+        return positionScore
+    }
+
+    // =========================================================================
+    // Resource efficiency scoring
+    // =========================================================================
+
+    scoreResourceEfficiency(state) {
+        var score = 0
+
+        // SESSION 3: Context-aware resource penalties
+        // Only penalize if resources could have been used productively
+        var wastedTP = state.tp
+        var wastedMP = state.mp
+
+        // Reduce penalties in early game (turn 1-3) when positioning is normal
+        var currentTurn = getTurn()
+        var tpPenalty = 5
+        var mpPenalty = 2
+
+        if (currentTurn <= 3) {
+            tpPenalty = 1  // Minimal penalty early game
+            mpPenalty = 0.5
+        }
+
+        // Don't penalize small leftover amounts (< 3 TP, < 2 MP)
+        var excessTP = max(0, wastedTP - 2)
+        var excessMP = max(0, wastedMP - 1)
+
+        score -= excessTP * tpPenalty
+        score -= excessMP * mpPenalty
+
+        return score
+    }
+
+    // =========================================================================
+    // Synergy scoring (to be expanded in next phase)
+    // =========================================================================
+
+    scoreSynergies(state) {
+        var score = 0
+
+        // SESSION 3: Enhanced synergy detection
+        var target = state.getPrimaryTarget()
+
+        // 1. Buff before damage (stronger bonus)
+        if (target != null && state.damageBuffActive) {
+            var damageFraction = 1.0 - (target._currHealth / target._maxHealth)
+            if (damageFraction > 0.1) {  // Dealt meaningful damage
+                score += 500  // Increased from 300
+            }
+        }
+
+        // 2. Shield before low HP
+        if (state.hp < state.maxHP * 0.5 && state.absShield > 100) {
+            score += 600  // Increased from 400
+        }
+
+        // 3. Proactive buffing (buff applied, ready for next action)
+        if (state.damageBuffActive && state.tp >= 5) {
+            score += 200  // Buff available for follow-up
+        }
+
+        // 4. Shield stacking (shield + HP = effective HP)
+        if (state.absShield > 200) {
+            var ehpBonus = (state.absShield - 200) * 0.3
+            score += ehpBonus
+        }
+
+        return score
+    }
+}

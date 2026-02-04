@@ -1,0 +1,305 @@
+
+// =============================================================================
+// WorldState - Immutable game state representation for Beam Search planning
+// =============================================================================
+//
+// The foundation of the emergent action discovery system. WorldState captures
+// complete game state and enables cheap branching for search-based planning.
+//
+// Key properties:
+// - Immutable: Transitions create new states (no side effects)
+// - Self-contained: No game API calls (all data captured)
+// - Lightweight: Efficient cloning for beam search
+// - Complete: All data needed for action validation & simulation
+//
+// Operations budget: ~500 ops per state clone (vs ~5K for API-based approach)
+// =============================================================================
+
+class EnemyState {
+    id = -1
+    cellPos = -1
+    _currHealth = 0
+    _maxHealth = 0
+    _currTp = 0
+    _currMp = 0
+    isAlive = true
+    _relShield = 0
+    _absShield = 0
+
+    // Buff tracking for enemy response prediction
+    damageBuffActive = false      // STEROID, DOPING, WARM_UP
+    shieldActive = false           // FORTRESS, WALL, SHIELD
+    poisonRemaining = 0            // Turns of poison
+    vulnerabilityStacks = 0        // HEAVY_SWORD, NEUTRINO stacks
+
+    constructor(id, cellPos, currHealth, maxHealth, currTp, currMp, isAlive, relShield, absShield) {
+        this.id = id
+        this.cellPos = cellPos
+        this._currHealth = currHealth
+        this._maxHealth = maxHealth
+        this._currTp = currTp
+        this._currMp = currMp
+        this.isAlive = isAlive
+        this._relShield = relShield
+        this._absShield = absShield
+    }
+
+    clone() {
+        var copy = new EnemyState(this.id, this.cellPos, this._currHealth, this._maxHealth,
+                                   this._currTp, this._currMp, this.isAlive,
+                                   this._relShield, this._absShield)
+        copy.damageBuffActive = this.damageBuffActive
+        copy.shieldActive = this.shieldActive
+        copy.poisonRemaining = this.poisonRemaining
+        copy.vulnerabilityStacks = this.vulnerabilityStacks
+        return copy
+    }
+}
+
+class WorldState {
+    // Player state
+    cell = -1
+    tp = 0
+    mp = 0
+    hp = 0
+    maxHP = 0
+    currentWeapon = -1
+
+    // Player stats (for damage calculations)
+    strength = 0
+    magic = 0
+    wisdom = 0
+    science = 0
+    agility = 0
+
+    // Player buffs & shields
+    relShield = 0
+    absShield = 0
+    damageBuffActive = false       // STEROID/WARM_UP applied
+    shieldBuffTurns = 0            // FORTRESS/WALL remaining
+
+    // Resource tracking
+    weaponUses = [:]               // weaponId -> uses remaining this turn
+    chipCooldowns = [:]            // chipId -> turns remaining (for chips with cooldowns)
+
+    // Enemy tracking (Battle Royale support)
+    enemies = []                   // Array of EnemyState objects
+    primaryTargetId = -1           // Current target
+
+    // Metadata
+    depth = 0                      // Search depth (0 = initial state)
+    parentAction = null            // Action that led to this state
+    cumulativeScore = 0            // Accumulated heuristic score
+    actionSequence = []            // Full sequence of actions from initial state
+
+    constructor() {
+        this.enemies = []
+        this.weaponUses = [:]
+        this.chipCooldowns = [:]
+        this.actionSequence = []
+    }
+
+    // =========================================================================
+    // Factory: Create initial state from game API
+    // =========================================================================
+    static fromGameState(player, target, arsenal) {
+        var state = new WorldState()
+
+        // Player state
+        state.cell = player._cellPos
+        state.tp = player._currTp
+        state.mp = player._currMp
+        state.hp = player._currHealth
+        state.maxHP = player._maxHealth
+        state.currentWeapon = player._inUseWeapon
+
+        debug("[WorldState] Created from game: TP=" + state.tp + " MP=" + state.mp + " HP=" + state.hp)
+
+        // Player stats
+        state.strength = player._strength
+        state.magic = player._magic
+        state.wisdom = player._wisdom
+        state.science = player._science
+        state.agility = player._agility
+
+        // Player shields
+        state.relShield = player._relShield
+        state.absShield = player._absShield
+
+        // Detect active buffs from player effects
+        state.damageBuffActive = player.hasEffect(EFFECT_BUFF_STRENGTH) ||
+                                  player.hasEffect(EFFECT_BUFF_AGILITY)
+        state.shieldBuffTurns = 0
+        if (player.hasEffect(EFFECT_ABSOLUTE_SHIELD)) {
+            state.shieldBuffTurns = player.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD)
+        }
+
+        // Initialize weapon uses (all weapons start with max uses)
+        for (var weaponId in player._weapons) {
+            if (mapContainsKey(arsenal.playerEquippedWeapons, weaponId)) {
+                var weaponObj = arsenal.playerEquippedWeapons[weaponId]
+                state.weaponUses[weaponId] = weaponObj._maxUse
+            }
+        }
+
+        // Primary target (single enemy)
+        if (target != null) {
+            var enemyState = new EnemyState(
+                target._id,
+                target._cellPos,
+                target._currHealth,
+                target._maxHealth,
+                target._currTp,
+                target._currMp,
+                target._isAlive,
+                target._relShield,
+                target._absShield
+            )
+
+            // Track enemy buffs
+            enemyState.damageBuffActive = target.hasEffect(EFFECT_BUFF_STRENGTH) ||
+                                           target.hasEffect(EFFECT_BUFF_AGILITY)
+            enemyState.shieldActive = target.hasEffect(EFFECT_ABSOLUTE_SHIELD)
+            enemyState.poisonRemaining = target.hasEffect(EFFECT_POISON) ?
+                                          target.getEffectRemaining(EFFECT_POISON) : 0
+            enemyState.vulnerabilityStacks = target.hasEffect(EFFECT_VULNERABILITY) ?
+                                              target.getEffectRemaining(EFFECT_VULNERABILITY) : 0
+
+            push(state.enemies, enemyState)
+            state.primaryTargetId = target._id
+        }
+
+        return state
+    }
+
+    // =========================================================================
+    // Deep clone for state branching
+    // =========================================================================
+    clone() {
+        var copy = new WorldState()
+
+        // Player state
+        copy.cell = this.cell
+        copy.tp = this.tp
+        copy.mp = this.mp
+        copy.hp = this.hp
+        copy.maxHP = this.maxHP
+        copy.currentWeapon = this.currentWeapon
+
+        // Player stats
+        copy.strength = this.strength
+        copy.magic = this.magic
+        copy.wisdom = this.wisdom
+        copy.science = this.science
+        copy.agility = this.agility
+
+        // Player buffs
+        copy.relShield = this.relShield
+        copy.absShield = this.absShield
+        copy.damageBuffActive = this.damageBuffActive
+        copy.shieldBuffTurns = this.shieldBuffTurns
+
+        // Clone weapon uses
+        copy.weaponUses = [:]
+        for (var key in mapKeys(this.weaponUses)) {
+            copy.weaponUses[key] = this.weaponUses[key]
+        }
+
+        // Clone chip cooldowns
+        copy.chipCooldowns = [:]
+        for (var key in mapKeys(this.chipCooldowns)) {
+            copy.chipCooldowns[key] = this.chipCooldowns[key]
+        }
+
+        // Clone enemies
+        copy.enemies = []
+        for (var enemy in this.enemies) {
+            push(copy.enemies, enemy.clone())
+        }
+        copy.primaryTargetId = this.primaryTargetId
+
+        // Metadata
+        copy.depth = this.depth
+        copy.parentAction = this.parentAction
+        copy.cumulativeScore = this.cumulativeScore
+
+        // Clone action sequence
+        copy.actionSequence = []
+        for (var action in this.actionSequence) {
+            push(copy.actionSequence, action)
+        }
+
+        return copy
+    }
+
+    // =========================================================================
+    // State queries
+    // =========================================================================
+
+    getPrimaryTarget() {
+        for (var enemy in this.enemies) {
+            if (enemy.id == this.primaryTargetId) {
+                return enemy
+            }
+        }
+        return null
+    }
+
+    getAliveEnemies() {
+        var alive = []
+        for (var enemy in this.enemies) {
+            if (enemy.isAlive) {
+                push(alive, enemy)
+            }
+        }
+        return alive
+    }
+
+    getWeaponUsesRemaining(weaponId) {
+        if (mapContainsKey(this.weaponUses, weaponId)) {
+            return this.weaponUses[weaponId]
+        }
+        return 0
+    }
+
+    isChipOnCooldown(chipId) {
+        if (mapContainsKey(this.chipCooldowns, chipId)) {
+            return this.chipCooldowns[chipId] > 0
+        }
+        return false
+    }
+
+    // =========================================================================
+    // State validation
+    // =========================================================================
+
+    canAffordTP(cost) {
+        return this.tp >= cost
+    }
+
+    canAffordMP(cost) {
+        return this.mp >= cost
+    }
+
+    hasWeaponUsesLeft(weaponId) {
+        return this.getWeaponUsesRemaining(weaponId) > 0
+    }
+
+    // =========================================================================
+    // Debug output
+    // =========================================================================
+
+    toString() {
+        var targetHP = 0
+        var target = this.getPrimaryTarget()
+        if (target != null) targetHP = target._currHealth
+
+        return "WorldState[depth=" + this.depth +
+               " cell=" + this.cell +
+               " HP=" + this.hp + "/" + this.maxHP +
+               " TP=" + this.tp +
+               " MP=" + this.mp +
+               " targetHP=" + targetHP +
+               " score=" + floor(this.cumulativeScore) + "]"
+    }
+}

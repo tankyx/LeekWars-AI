@@ -908,4 +908,69 @@ class FieldMap extends FieldMapPatterns {
         var y2 = getCellY(cell2)
         return (x1 == x2 || y1 == y2)
     }
+
+    // =========================================================================
+    // Beam Search Helper Methods
+    // =========================================================================
+
+    // Get top N tactical cells sorted by score (damage - threat)
+    getTopTacticalCells(limit, playerHP, playerMaxHP) {
+        var hpRatio = playerHP / playerMaxHP
+        var threatWeight = 0.3  // Default: mostly offensive
+
+        // Adjust threat weight based on HP
+        if (hpRatio < 0.4) {
+            threatWeight = 0.8  // Defensive when low HP
+        } else if (hpRatio < 0.7) {
+            threatWeight = 0.5  // Balanced
+        }
+
+        var candidates = []
+
+        // Score all cells in damage map
+        for (var cell in this.damageMap) {
+            if (cell._totalDamage <= 0) continue  // Skip useless cells
+
+            var threat = this.getThreatAtCell(cell._id)
+            var score = cell._totalDamage - (threat * threatWeight)
+
+            push(candidates, [
+                'cell': cell._id,
+                'damage': cell._totalDamage,
+                'threat': threat,
+                'score': score,
+                'threatReduction': 0
+            ])
+        }
+
+        // Sort by score descending
+        arraySort(candidates, function(a, b) {
+            return b['score'] - a['score']
+        })
+
+        // Return top N
+        var result = []
+        var actualLimit = min(limit, count(candidates))
+        for (var i = 0; i < actualLimit; i++) {
+            push(result, candidates[i])
+        }
+
+        return result
+    }
+
+    // Get safest reachable cell (lowest threat)
+    getSafestCell(fromCell) {
+        var minThreat = 99999
+        var safestCell = -1
+
+        for (var cell in this.damageMap) {
+            var threat = this.getThreatAtCell(cell._id)
+            if (threat < minThreat) {
+                minThreat = threat
+                safestCell = cell._id
+            }
+        }
+
+        return safestCell
+    }
 }

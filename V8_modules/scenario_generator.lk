@@ -1079,7 +1079,11 @@ class ScenarioGenerator {
 
             var pathLength = getGraphMPCost(bestCell._id)
             if (pathLength >= 999 || pathLength > mpBudget) {
-                bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
+                if (this._strategy != null) {
+                    bestCell = this._strategy.findBestReachableDamageCell(mpBudget)
+                } else {
+                    bestCell = null
+                }
                 if (bestCell == null || bestCell == -1) {
                     // Fallback: no reachable damage cells, just move toward enemy
                     debug("[MOVE-APPROACH] No reachable damage cells, moving toward enemy")
@@ -1424,10 +1428,14 @@ class ScenarioGenerator {
 
                 // Check if we actually have LOS from simPos (hitmap may be outdated)
                 if (!lineOfSight(simPos, this._target._cellPos)) {
-                    var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
-                    if (splashResult != null) {
-                        targetCell = splashResult['cell']
-                        isSplashAttack = true
+                    if (this._strategy != null) {
+                        var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
+                        if (splashResult != null) {
+                            targetCell = splashResult['cell']
+                            isSplashAttack = true
+                        } else {
+                            continue
+                        }
                     } else {
                         continue
                     }
@@ -1437,10 +1445,14 @@ class ScenarioGenerator {
                 if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
 
                 if (!lineOfSight(simPos, this._target._cellPos)) {
-                    var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
-                    if (splashResult != null) {
-                        targetCell = splashResult['cell']
-                        isSplashAttack = true
+                    if (this._strategy != null) {
+                        var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
+                        if (splashResult != null) {
+                            targetCell = splashResult['cell']
+                            isSplashAttack = true
+                        } else {
+                            continue
+                        }
                     } else {
                         continue
                     }
@@ -1449,8 +1461,12 @@ class ScenarioGenerator {
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
             if (damage > bestDamage) {
-                var aoeCheck = this._strategy.checkAoEWeaponSafety(weaponId, targetCell, simPos)
-                if (aoeCheck['safe']) {
+                var isSafe = true
+                if (this._strategy != null) {
+                    var aoeCheck = this._strategy.checkAoEWeaponSafety(weaponId, targetCell, simPos)
+                    isSafe = aoeCheck['safe']
+                }
+                if (isSafe) {
                     bestDamage = damage
                     bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage, "targetCell": targetCell, "isSplash": isSplashAttack]
                 }
@@ -1473,10 +1489,14 @@ class ScenarioGenerator {
             var isChipSplash = false
 
             if (!lineOfSight(simPos, this._target._cellPos)) {
-                var chipSplashResult = this._strategy.findAoESplashCell(chipId, this._target._cellPos, simPos)
-                if (chipSplashResult != null) {
-                    chipTargetCell = chipSplashResult['cell']
-                    isChipSplash = true
+                if (this._strategy != null) {
+                    var chipSplashResult = this._strategy.findAoESplashCell(chipId, this._target._cellPos, simPos)
+                    if (chipSplashResult != null) {
+                        chipTargetCell = chipSplashResult['cell']
+                        isChipSplash = true
+                    } else {
+                        continue
+                    }
                 } else {
                     continue
                 }
@@ -1484,8 +1504,12 @@ class ScenarioGenerator {
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, this._target)
             if (damage > bestDamage) {
-                var aoeCheck = this._strategy.checkAoESafetyFromCell(chipId, chipTargetCell, simPos)
-                if (aoeCheck['safe']) {
+                var isSafe = true
+                if (this._strategy != null) {
+                    var aoeCheck = this._strategy.checkAoESafetyFromCell(chipId, chipTargetCell, simPos)
+                    isSafe = aoeCheck['safe']
+                }
+                if (isSafe) {
                     bestDamage = damage
                     bestAttack = ["type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage, "targetCell": chipTargetCell, "isSplash": isChipSplash]
                 }
