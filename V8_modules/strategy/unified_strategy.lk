@@ -3,6 +3,7 @@ include('../weight_profiles.lk')
 include('../strategic_depth.lk')
 include('../beam_search_planner.lk')
 include('../atomic_action_executor.lk')
+include('../scenario_mutation.lk')
 
 class UnifiedStrategy extends Strategy {
     _weights = null
@@ -115,6 +116,47 @@ class UnifiedStrategy extends Strategy {
         var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
 
         debug("[UNIFIED-TOP-K] Quick scored " + count(scenariosWithQuickScore) + " scenarios, evaluating top " + evaluateCount)
+
+        // ===== PHASE 2: HYBRID MUTATION SYSTEM =====
+        var USE_MUTATIONS = true  // Enable/disable mutation system
+        var mutationOpsLimit = 10000000  // Only run if under 10M ops (2M safety margin)
+
+        if (USE_MUTATIONS && getOperations() < mutationOpsLimit && count(scenariosWithQuickScore) >= 1) {
+            debugInfo("[MUTATION] Starting hybrid mutation pass (ops=" + getOperations() + ")")
+
+            // Adapt weights BEFORE mutation (needed by scorer)
+            var enemies = this._fieldMap.getEnemySubMap()
+            var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
+            var scorer = new ScenarioScorer(player, target, this._fieldMap, adaptedWeights)
+
+            // Extract top 3 scenarios as mutation seeds
+            var mutationSeeds = []
+            var seedLimit = min(3, count(scenariosWithQuickScore))
+            for (var i = 0; i < seedLimit; i++) {
+                push(mutationSeeds, scenariosWithQuickScore[i]['scenario'])
+            }
+
+            startOp()
+            var mutationPlanner = new HybridMutationPlanner(arsenal, player, target, this._fieldMap, scorer)
+            var bestMutatedScenario = mutationPlanner.planWithMutations(mutationSeeds)
+            var mutationOps = stopOp("Hybrid mutation pass")
+
+            debugInfo("[MUTATION] Mutation pass complete, ops=" + mutationOps)
+
+            // Replace scenarios with mutated result + originals
+            scenariosWithQuickScore = []
+            push(scenariosWithQuickScore, ['scenario': bestMutatedScenario, 'quickScore': 9999])
+
+            // Keep top 3 originals as fallback
+            var origLimit = min(3, seedLimit)
+            for (var i = 0; i < origLimit; i++) {
+                push(scenariosWithQuickScore, ['scenario': mutationSeeds[i], 'quickScore': 8000 - i * 100])
+            }
+
+            evaluateCount = count(scenariosWithQuickScore)
+            debug("[MUTATION] New candidate pool: " + evaluateCount + " scenarios (1 mutated + " + origLimit + " originals)")
+        }
+        // ===== END PHASE 2: HYBRID MUTATION SYSTEM =====
 
         // Phase 3: Adapt weights to current situation
         var enemies = this._fieldMap.getEnemySubMap()

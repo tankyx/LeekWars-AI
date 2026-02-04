@@ -28,12 +28,14 @@ include('tactical_awareness.lk')
 include('weight_profiles.lk')
 include('strategic_depth.lk')
 
+include('strategy/action.lk')
+
 include('scenario_generator.lk')
 include('scenario_simulator.lk')
 include('scenario_scorer.lk')
 include('scenario_quick_scorer.lk')
+include('scenario_mutation.lk')
 
-include('strategy/action.lk')
 include('strategy/base_strategy.lk')
 include('strategy/boss_strategy.lk')
 include('strategy/unified_strategy.lk')

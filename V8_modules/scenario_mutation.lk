@@ -1,0 +1,277 @@
+// In-place mutation system for scenario optimization
+// Note: Action class must be included before this file in main.lk
+include('scenario_simulator.lk')
+include('cache_manager.lk')
+include('debug_config.lk')
+
+class MutationDescriptor {
+    actionIndex = -1      // Which action to mutate
+    field = ""            // Which field to mutate (e.g., "targetCell")
+    newValue = null       // New value for the field
+    description = ""      // Human-readable description
+
+    constructor(actionIndex, field, newValue, description) {
+        this.actionIndex = actionIndex
+        this.field = field
+        this.newValue = newValue
+        this.description = description
+    }
+}
+
+class MutationResult {
+    scenario = null
+    mutationType = ""
+    scoreImprovement = 0
+    description = ""
+    score = 0
+
+    constructor(scenario, mutationType, scoreImprovement, description) {
+        this.scenario = scenario
+        this.mutationType = mutationType
+        this.scoreImprovement = scoreImprovement
+        this.description = description
+        this.score = 0
+    }
+}
+
+class ScenarioMutator {
+    _arsenal = null
+    _player = null
+    _target = null
+    _fieldMap = null
+
+    constructor(arsenal, player, target, fieldMap) {
+        this._arsenal = arsenal
+        this._player = player
+        this._target = target
+        this._fieldMap = fieldMap
+    }
+
+    generateMutationDescriptors(scenario) {
+        var descriptors = []
+
+        debugInfo("[Mutation] Generating mutation descriptors for scenario with " + count(scenario) + " actions")
+
+        // 1. Aim Cell Optimization (for AoE weapons/chips)
+        var aimDescriptors = this.generateAimCellDescriptors(scenario)
+        debugDetail("[Mutation] Aim cell descriptors: " + count(aimDescriptors))
+        for (var desc in aimDescriptors) {
+            push(descriptors, desc)
+        }
+
+        debugInfo("[Mutation] Total descriptors generated: " + count(descriptors))
+        return descriptors
+    }
+
+    generateAimCellDescriptors(scenario) {
+        var descriptors = []
+
+        // Find AoE attack actions in scenario
+        for (var i = 0; i < count(scenario); i++) {
+            var action = scenario[i]
+
+            // Check if this is an AoE weapon or chip
+            if (!this.isAoEAction(action)) continue
+
+            var currentAimCell = action.targetCell
+            if (currentAimCell == -1) {
+                // No aim cell specified, use target position
+                if (action.targetEntity != null) {
+                    currentAimCell = action.targetEntity._cellPos
+                }
+            }
+
+            if (currentAimCell == -1) continue
+
+            // Generate ±1 cell variants as descriptors
+            var adjacentCells = this.getAdjacentCells(currentAimCell)
+
+            for (var adjCell in adjacentCells) {
+                var desc = new MutationDescriptor(
+                    i,
+                    "targetCell",
+                    adjCell,
+                    "Aim shift: " + currentAimCell + " → " + adjCell
+                )
+                push(descriptors, desc)
+            }
+        }
+
+        return descriptors
+    }
+
+    applyMutation(scenario, descriptor) {
+        // Store original value for reversion
+        var action = scenario[descriptor.actionIndex]
+        var originalValue = null
+
+        if (descriptor.field == "targetCell") {
+            originalValue = action.targetCell
+            action.targetCell = descriptor.newValue
+        }
+
+        return originalValue
+    }
+
+    revertMutation(scenario, descriptor, originalValue) {
+        // Restore original value
+        var action = scenario[descriptor.actionIndex]
+
+        if (descriptor.field == "targetCell") {
+            action.targetCell = originalValue
+        }
+    }
+
+    isAoEAction(action) {
+        // Check if weapon is AoE
+        if (action.weaponId != -1) {
+            if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
+                var weaponObj = this._arsenal.playerEquippedWeapons[action.weaponId]
+                if (weaponObj != null && weaponObj._aoeType > 0) {
+                    return true
+                }
+            }
+        }
+
+        // Check if chip is AoE (stub for now - getChipArea may not exist)
+        // if (action.chip != -1) {
+        //     var chipArea = getChipArea(action.chip)
+        //     return chipArea != null && chipArea > 0
+        // }
+
+        return false
+    }
+
+    isMovementAction(action) {
+        // Stub - always return false for now
+        return false
+    }
+
+    getAdjacentCells(cell) {
+        var adjacent = []
+        var offsets = [
+            [1, 0],   // Right
+            [-1, 0],  // Left
+            [0, 1],   // Up
+            [0, -1]   // Down
+        ]
+
+        var cellX = getCellX(cell)
+        var cellY = getCellY(cell)
+
+        for (var offset in offsets) {
+            var newX = cellX + offset[0]
+            var newY = cellY + offset[1]
+            var newCell = getCellFromXY(newX, newY)
+
+            if (newCell != null && newCell >= 0 && newCell < 613) {
+                push(adjacent, newCell)
+            }
+        }
+
+        return adjacent
+    }
+
+    cloneScenario(scenario) {
+        // Stub - return original for now
+        // Issue: Creating new Action() objects breaks execution (0% WR)
+        // Likely cause: Action objects have internal state/references not copied
+        return scenario
+    }
+}
+
+class HybridMutationPlanner {
+    _arsenal = null
+    _player = null
+    _target = null
+    _fieldMap = null
+    _mutator = null
+    _simulator = null
+    _scorer = null
+
+    MAX_MUTATIONS_PER_SEED = 50
+    MAX_SEEDS = 3
+
+    constructor(arsenal, player, target, fieldMap, scorer) {
+        this._arsenal = arsenal
+        this._player = player
+        this._target = target
+        this._fieldMap = fieldMap
+        this._mutator = new ScenarioMutator(arsenal, player, target, fieldMap)
+        this._simulator = new ScenarioSimulator(arsenal, player, target, fieldMap)
+        this._scorer = scorer
+    }
+
+    planWithMutations(seedScenarios) {
+        debugInfo("[HybridMutation] Starting with " + count(seedScenarios) + " seed scenarios")
+
+        var opsBefore = getOperations()
+
+        // 1. Select top seeds
+        var topSeeds = this.selectTopSeeds(seedScenarios)
+        debugInfo("[HybridMutation] Selected " + count(topSeeds) + " top seeds for mutation")
+
+        // 2. Generate mutation descriptors for each seed
+        var bestScenario = null
+        var bestScore = -999999
+        var mutationsEvaluated = 0
+
+        for (var seed in topSeeds) {
+            // Evaluate original seed first
+            var originalSimResult = this._simulator.simulate(seed)
+            var originalScore = this._scorer.score(originalSimResult, seed)
+
+            if (originalScore > bestScore) {
+                bestScore = originalScore
+                bestScenario = seed
+            }
+
+            // Generate mutations for this seed
+            var descriptors = this._mutator.generateMutationDescriptors(seed)
+            debugDetail("[HybridMutation] Generated " + count(descriptors) + " descriptors for seed")
+
+            // Limit mutations per seed
+            var mutationLimit = min(count(descriptors), this.MAX_MUTATIONS_PER_SEED)
+
+            for (var i = 0; i < mutationLimit; i++) {
+                var desc = descriptors[i]
+
+                // Apply mutation IN-PLACE
+                var originalValue = this._mutator.applyMutation(seed, desc)
+
+                // Evaluate mutated scenario
+                var simResult = this._simulator.simulate(seed)
+                var score = this._scorer.score(simResult, seed)
+
+                mutationsEvaluated++
+
+                if (score > bestScore) {
+                    bestScore = score
+                    bestScenario = seed
+                    debugInfo("[HybridMutation] New best: " + floor(score) + " (" + desc.description + ")")
+                    // Leave mutation applied since this is the best
+                } else {
+                    // Revert mutation
+                    this._mutator.revertMutation(seed, desc, originalValue)
+                }
+            }
+        }
+
+        var opsUsed = getOperations() - opsBefore
+        debugInfo("[HybridMutation] Evaluated " + mutationsEvaluated + " mutations, best score: " + floor(bestScore) + ", ops: " + opsUsed)
+
+        return bestScenario
+    }
+
+    selectTopSeeds(scenarios) {
+        // Just take top N
+        var limit = min(count(scenarios), this.MAX_SEEDS)
+        var topSeeds = []
+
+        for (var i = 0; i < limit; i++) {
+            push(topSeeds, scenarios[i])
+        }
+
+        return topSeeds
+    }
+}
