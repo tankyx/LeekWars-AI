@@ -290,7 +290,8 @@ class Strategy {
         }
 
         if (!lineOfSight(fromCell, toCell)) {
-            debug("[VALIDATION] No line of sight from " + fromCell + " to " + toCell)
+            var splashInfo = action.isSplash ? " (SPLASH ATTACK)" : ""
+            debug("[VALIDATION] No line of sight from " + fromCell + " to " + toCell + splashInfo)
             return false
         }
 
@@ -2892,7 +2893,13 @@ class Strategy {
                 action.type == Action.MOVEMENT_DEBUFF ||
                 action.type == Action.MOVEMENT_FLEE ||
                 action.type == Action.MOVEMENT_HNS) {
-                
+
+                // Skip movement if already at target cell
+                if (action.targetCell != -1 && simulatedPos == action.targetCell) {
+                    debug("[VALIDATION] Already at target cell " + action.targetCell + " - skipping movement")
+                    continue
+                }
+
                 var path = getPath(simulatedPos, action.targetCell)
                 if (path != null && count(path) > 0) {
                     var mpCost = count(path) - 1  
@@ -3006,6 +3013,7 @@ class Strategy {
                            action.type == Action.ACTION_DOT ||
                            action.type == Action.ACTION_DEBUFF ||
                            action.type == Action.ACTION_BUFF)) {
+                debug("[VALIDATION-CHECK] Checking action: type=" + action.type + " targetCell=" + action.targetCell + " weaponId=" + action.weaponId + " chip=" + action.chip)
                 if (!this.validateActionRangeAndLOS(action, simulatedPos)) {
                     isValid = false
                     reason = "Out of range/LOS"

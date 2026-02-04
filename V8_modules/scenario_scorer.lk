@@ -45,9 +45,18 @@ class ScenarioScorer {
 
         var playerHPPercent = (this._player._currHealth * 100) / this._player._maxHealth
         if (totalDamage == 0 && playerHPPercent > 30) {
+            var currentTurn = getTurn()
             var noDamagePenalty = this.getWeight('noDamagePenalty', -2000)
+
+            // Reduce penalty for early turns (turn 1-3) when positioning is expected
+            if (currentTurn <= 3) {
+                noDamagePenalty = noDamagePenalty / 4  // -500 instead of -2000
+                debug("[SCORER-PENALTY] No damage dealt (early turn " + currentTurn + ") - reduced penalty: " + noDamagePenalty)
+            } else {
+                debug("[SCORER-PENALTY] No damage dealt (turn " + currentTurn + ") - full penalty: " + noDamagePenalty)
+            }
+
             score += noDamagePenalty
-            debug("[SCORER-PENALTY] No damage dealt (not FLEE state) - penalty: " + noDamagePenalty)
         }
 
         var dotWeight = this.getWeight('dotEffects', this.calculateDotWeight())

@@ -113,6 +113,16 @@ class ScenarioGenerator {
                 push(scenarios, steroidRecheck)
             }
 
+            // Emergency teleport when all enemies out of range (bulb handling)
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                getCooldown(CHIP_TELEPORTATION, this._player._id) == 0) {
+                var emergencyApproach = this.createEmergencyApproachScenario(availableTP, availableMP)
+                if (emergencyApproach != null) {
+                    debug("[STATE-AGGRO] Adding emergency approach scenario")
+                    push(scenarios, emergencyApproach)
+                }
+            }
+
             push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  
             push(scenarios, this.createParametricScenario(new ScenarioParams(1, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  
             push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))  
@@ -223,7 +233,7 @@ class ScenarioGenerator {
 
                 debug("[STATE-FLEE] REGENERATION available - defensive healing")
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))
-                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "kite"), availableTP, availableMP))
+                push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "hide"), availableTP, availableMP))
             } else {
 
                 debug("[STATE-FLEE] REGENERATION on cooldown - lifesteal strategy (ENHANCED_LIGHTNINGER spam)")
@@ -663,6 +673,63 @@ class ScenarioGenerator {
         return actions
     }
 
+    createEmergencyApproachScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        if (tpBudget < 5) {
+            return null
+        }
+
+        // Only use in early turns (1-5) when positioning is critical
+        var currentTurn = getTurn()
+        if (currentTurn > 5) {
+            return null
+        }
+
+        var bestCell = -1
+        var bestScore = -99999
+        var playerPos = this._player._cellPos
+
+        // Find best offensive cell to teleport to
+        for (var cellId in mapKeys(this._fieldMap.damageMap)) {
+            var cellData = this._fieldMap.damageMap[cellId]
+            var dist = getCellDistance(playerPos, cellId)
+
+            if (dist >= 2 && dist <= 12) {
+                // Score based on: damage potential - threat - distance
+                var damageScore = cellData._totalDamage
+                var threat = this._fieldMap.getThreatAtCell(cellId)
+                var distToEnemy = getCellDistance(cellId, this._target._cellPos)
+
+                // Prioritize: high damage, low threat, closer to enemy
+                var score = damageScore - (threat * 0.5) - (distToEnemy * 10)
+
+                if (score > bestScore) {
+                    bestScore = score
+                    bestCell = cellId
+                }
+            }
+        }
+
+        if (bestCell == -1) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell, this._target))
+        tpBudget -= 5
+        debug("[EMERGENCY-APPROACH] Teleporting to cell " + bestCell + " (score: " + bestScore + ", turn: " + currentTurn + ")")
+
+        // Follow up with attacks if we have TP
+        var attackActions = this.getAttackActions(tpBudget, 1.0, bestCell)
+        for (var aa in attackActions) {
+            push(actions, aa)
+        }
+
+        return actions
+    }
+
     createParametricScenario(params, availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -1004,8 +1071,8 @@ class ScenarioGenerator {
         }
 
         var hideCell = this._fieldMap.findHideAndSeekCell("defensive")
-        if (hideCell != null && hideCell != -1) {
-            this._hideCache = new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, this._target)
+        if (hideCell != null) {
+            this._hideCache = new Action(Action.MOVEMENT_HNS, -1, -1, hideCell['cell'], this._target)
             return this._hideCache
         }
 
@@ -1272,12 +1339,18 @@ class ScenarioGenerator {
             if (attackTargetCell == null) attackTargetCell = this._target._cellPos
 
             if (attackType == 'weapon') {
-                push(actions, new Action(Action.ACTION_DIRECT, attackId, -1, attackTargetCell, this._target))
+                debug("[ATTACK-CREATE] Weapon action: id=" + attackId + " targetCell=" + attackTargetCell + " isSplash=" + bestAttack['isSplash'])
+                var weaponAction = new Action(Action.ACTION_DIRECT, attackId, -1, attackTargetCell, this._target)
+                weaponAction.isSplash = bestAttack['isSplash']
+                push(actions, weaponAction)
                 var currentUses = weaponUses[attackId]
                 if (currentUses == null) currentUses = 0
                 weaponUses[attackId] = currentUses + 1
             } else {
-                push(actions, new Action(Action.ACTION_DIRECT, -1, attackId, attackTargetCell, this._target))
+                debug("[ATTACK-CREATE] Chip action: id=" + attackId + " targetCell=" + attackTargetCell + " isSplash=" + bestAttack['isSplash'])
+                var chipAction = new Action(Action.ACTION_DIRECT, -1, attackId, attackTargetCell, this._target)
+                chipAction.isSplash = bestAttack['isSplash']
+                push(actions, chipAction)
                 chipCooldowns[attackId] = true
             }
 
@@ -1315,6 +1388,17 @@ class ScenarioGenerator {
                     }
                 }
                 if (!canShootFromHere) continue
+
+                // Check if we actually have LOS from simPos (hitmap may be outdated)
+                if (!lineOfSight(simPos, this._target._cellPos)) {
+                    var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
+                    if (splashResult != null) {
+                        targetCell = splashResult['cell']
+                        isSplashAttack = true
+                    } else {
+                        continue
+                    }
+                }
             } else {
                 var dist = getCellDistance(simPos, this._target._cellPos)
                 if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue

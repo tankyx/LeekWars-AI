@@ -23,10 +23,11 @@ class Action {
     chip = -1
     targetCell = -1
     targetEntity = -1
+    isSplash = false
 
-    checkpointType = ""       
-    continuationFn = ""       
-    context = null            
+    checkpointType = ""
+    continuationFn = ""
+    context = null
 
     constructor(type, weaponId, chip, targetCell, targetEntity) {
         this.type = type
