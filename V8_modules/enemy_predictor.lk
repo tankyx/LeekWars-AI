@@ -147,7 +147,6 @@ class EnemyPredictor {
         // Combined score
         var finalScore = currentTurnValue + discountedNextTurn
 
-        debugDetail("[LOOKAHEAD] Scenario: current=" + currentTurnValue +
                    ", nextTurn=" + nextTurnValue +
                    ", discounted=" + floor(discountedNextTurn) +
                    ", final=" + floor(finalScore) +

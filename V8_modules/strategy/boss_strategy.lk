@@ -22,7 +22,6 @@ class BossFightStrategy {
     _fieldMap = null
 
     constructor() {
-        debug("[BOSS] Initializing BossFightStrategy")
         this._fieldMap = new FieldMap()
     }
 
@@ -32,48 +31,34 @@ class BossFightStrategy {
 
     createAndExecuteScenario(target, targetHitCell) {
         
-        debug("[BOSS] createAndExecuteScenario called")
         this.playTurn()
-        debug("[BOSS] playTurn completed")
     }
 
     playTurn() {
-        debug("[BOSS] playTurn START")
-        debug("\n[BOSS] ========== TURN " + getTurn() + " ==========")
-        debug("[BOSS] MP: " + getMP() + ", TP: " + getTP())
 
         this.detectGrailAndCrystals()
-        debug("[BOSS] Detected grail: " + (this._grail != null))
 
         var crystalCount = 0
         for (var c in this._crystals) crystalCount++
-        debug("[BOSS] Crystal count: " + crystalCount)
 
         if (this._grail == null) {
-            debug("[BOSS] ⚠️ No grail detected, passing turn")
             return
         }
 
         this.assignCrystal()
-        debug("[BOSS] Assigned crystal: " + (this._myAssignedCrystal != null))
 
         if (this._myAssignedCrystal == null) {
-            debug("[BOSS] ⚠️ No crystal assigned, passing turn")
             return
         }
 
         var solved = this.isCrystalSolved(this._myAssignedCrystal)
-        debug("[BOSS] Crystal solved: " + solved)
 
         if (solved) {
-            debug("[BOSS] ✅ My crystal is solved, passing turn")
             return
         }
 
-        debug("[BOSS] Executing action...")
         this.decideAndExecuteAction()
 
-        debug("[BOSS] ========== END TURN ==========\n")
     }
 
     detectGrailAndCrystals() {
@@ -91,7 +76,6 @@ class BossFightStrategy {
                     x: getCellX(cellId),
                     y: getCellY(cellId)
                 }
-                debug("[BOSS] Grail at (" + this._grail.x + ", " + this._grail.y + ")")
             }
             else if (entityType == "red_crystal" || entityType == "blue_crystal" ||
                      entityType == "yellow_crystal" || entityType == "green_crystal") {
@@ -107,7 +91,6 @@ class BossFightStrategy {
                     y: getCellY(cellId)
                 }
 
-                debug("[BOSS] " + color + " crystal at (" + this._crystals[eid].x + ", " + this._crystals[eid].y + ") [goal: " + goalAxis + "]")
             }
         }
     }
@@ -136,26 +119,21 @@ class BossFightStrategy {
         for (var c in this._crystals) crystalCount++
 
         if (myIndex < 0 || myIndex >= crystalCount) {
-            debug("[BOSS] ⚠️ Invalid entity index: " + myIndex + " (total allies: " + count(allAllies) + ", crystals: " + crystalCount + ")")
             return
         }
 
         var colorOrder = ["red", "blue", "yellow", "green"]
         var targetColor = colorOrder[myIndex]
 
-        debug("[BOSS] Looking for " + targetColor + " crystal (myIndex=" + myIndex + ")")
 
         for (var crystal in this._crystals) {
-            debug("[BOSS]   Checking crystal color=" + crystal.color + " vs target=" + targetColor)
 
             if (crystal != null && crystal.color == targetColor) {
                 this._myAssignedCrystal = crystal
-                debug("[BOSS] ✅ Assigned to " + targetColor + " crystal (ID=" + crystal.id + ")")
                 return
             }
         }
 
-        debug("[BOSS] ⚠️ Could not find " + targetColor + " crystal")
     }
 
     getGoalAxis(color) {
@@ -217,17 +195,12 @@ class BossFightStrategy {
         var crystal = this._myAssignedCrystal;
         var distToAxis = this.getDistanceToAxis(crystal);
 
-        debug("[BOSS] Crystal distance to axis: " + distToAxis);
-        debug("[BOSS] Used INVERSION: " + this._usedInversion);
-        debug("[BOSS] Current TP: " + getTP() + ", MP: " + getMP());
 
         if (distToAxis > 8 && !this._usedInversion && getTP() >= 4) {
-            debug("[BOSS] Phase 1: Using INVERSION (distance > 8)");
             this.executeInversion(crystal);
             return;
         }
 
-        debug("[BOSS] Phase 2: Using GRAPPLE/BOXING_GLOVE to slide crystal");
         this.executeSlideTowardGoal(crystal);
     }
 
@@ -235,34 +208,26 @@ class BossFightStrategy {
         var playerCell = getCell();
         var dist = getCellDistance(playerCell, crystal.cell);
 
-        debug("[BOSS] Distance to crystal: " + dist);
 
         if (dist > 14) {
-            debug("[BOSS] Walking toward crystal (dist=" + dist + ")");
             var moved = moveTowardCell(crystal.cell, getMP());
-            debug("[BOSS] Moved " + moved + " cells");
 
             playerCell = getCell();
             dist = getCellDistance(playerCell, crystal.cell);
 
             if (dist > 14) {
-                debug("[BOSS] Still out of range after moving, will retry next turn");
                 return;
             }
         }
 
         if (getTP() >= 4 && lineOfSight(playerCell, crystal.cell)) {
-            debug("[BOSS] ✅ Using INVERSION on crystal at cell " + crystal.cell);
             var result = useChipOnCell(CHIP_INVERSION, crystal.cell);
 
             if (result == USE_SUCCESS) {
                 this._usedInversion = true;
-                debug("[BOSS] ✅ INVERSION successful!");
             } else {
-                debug("[BOSS] ⚠️ INVERSION failed: " + result);
             }
         } else {
-            debug("[BOSS] ⚠️ Cannot use INVERSION: TP=" + getTP() + ", LOS=" + lineOfSight(playerCell, crystal.cell));
         }
     }
 
@@ -272,11 +237,9 @@ class BossFightStrategy {
         var direction = this.getDirectionToSlide(crystal);
 
         if (direction == null) {
-            debug("[BOSS] ⚠️ No valid slide direction found");
             return;
         }
 
-        debug("[BOSS] Slide direction: " + direction);
 
         if (direction == "pull") {
             this.executeGrapple(crystal);
@@ -328,17 +291,14 @@ class BossFightStrategy {
         var destCell = getCellFromXY(dx, dy);
 
         if (destCell == null || !(!isObstacle(destCell) && !isEntity(destCell))) {
-            debug("[BOSS] ⚠️ Destination cell blocked or invalid: (" + dx + ", " + dy + ")");
             return;
         }
 
         var dist = getCellDistance(playerCell, crystal.cell);
         var onSameLine = isOnSameLine(playerCell, crystal.cell);
 
-        debug("[BOSS] GRAPPLE check: dist=" + dist + ", onLine=" + onSameLine + ", TP=" + getTP());
 
         if (dist < 1 || dist > 8 || !onSameLine) {
-            debug("[BOSS] Need to position for GRAPPLE");
 
             var cx = crystal.x;
             var cy = crystal.y;
@@ -351,7 +311,6 @@ class BossFightStrategy {
 
             if (targetCell != null && !isObstacle(targetCell)) {
                 var moved = moveTowardCell(targetCell, getMP());
-                debug("[BOSS] Moved " + moved + " cells to align with crystal");
 
                 playerCell = getCell();
                 dist = getCellDistance(playerCell, crystal.cell);
@@ -360,16 +319,12 @@ class BossFightStrategy {
         }
 
         if (dist >= 1 && dist <= 8 && onSameLine && getTP() >= 4) {
-            debug("[BOSS] ✅ Using GRAPPLE to cell " + destCell);
             var result = useChipOnCell(CHIP_GRAPPLE, destCell);
 
             if (result == USE_SUCCESS) {
-                debug("[BOSS] ✅ GRAPPLE successful!");
             } else {
-                debug("[BOSS] ⚠️ GRAPPLE failed: " + result);
             }
         } else {
-            debug("[BOSS] ⚠️ Cannot use GRAPPLE: dist=" + dist + ", onLine=" + onSameLine + ", TP=" + getTP());
         }
     }
 
@@ -390,17 +345,14 @@ class BossFightStrategy {
         var destCell = getCellFromXY(dx, dy);
 
         if (destCell == null || !(!isObstacle(destCell) && !isEntity(destCell))) {
-            debug("[BOSS] ⚠️ Destination cell blocked or invalid: (" + dx + ", " + dy + ")");
             return;
         }
 
         var dist = getCellDistance(playerCell, crystal.cell);
         var onSameLine = isOnSameLine(playerCell, crystal.cell);
 
-        debug("[BOSS] BOXING_GLOVE check: dist=" + dist + ", onLine=" + onSameLine + ", TP=" + getTP());
 
         if (dist < 2 || dist > 8 || !onSameLine) {
-            debug("[BOSS] Need to position for BOXING_GLOVE");
 
             var cx = crystal.x;
             var cy = crystal.y;
@@ -413,7 +365,6 @@ class BossFightStrategy {
 
             if (targetCell != null && !isObstacle(targetCell)) {
                 var moved = moveTowardCell(targetCell, getMP());
-                debug("[BOSS] Moved " + moved + " cells to align with crystal");
 
                 playerCell = getCell();
                 dist = getCellDistance(playerCell, crystal.cell);
@@ -422,16 +373,12 @@ class BossFightStrategy {
         }
 
         if (dist >= 2 && dist <= 8 && onSameLine && getTP() >= 3) {
-            debug("[BOSS] ✅ Using BOXING_GLOVE to cell " + destCell);
             var result = useChipOnCell(CHIP_BOXING_GLOVE, destCell);
 
             if (result == USE_SUCCESS) {
-                debug("[BOSS] ✅ BOXING_GLOVE successful!");
             } else {
-                debug("[BOSS] ⚠️ BOXING_GLOVE failed: " + result);
             }
         } else {
-            debug("[BOSS] ⚠️ Cannot use BOXING_GLOVE: dist=" + dist + ", onLine=" + onSameLine + ", TP=" + getTP());
         }
     }
 }

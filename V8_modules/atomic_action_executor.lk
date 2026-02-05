@@ -108,23 +108,19 @@ class AtomicActionExecutor {
         // Validate path exists
         var pathLength = getCachedPathLength(playerCell, targetCell)
         if (pathLength == null) {
-            debugDetail("[EXECUTOR] Move failed: No path to cell " + targetCell)
             return false
         }
 
         // Validate MP available
         if (this._player._currMp < pathLength) {
-            debugDetail("[EXECUTOR] Move failed: Need " + pathLength + " MP, have " +
                        this._player._currMp + " MP")
             return false
         }
 
         // Execute movement
-        debugDetail("[EXECUTOR] Move to cell " + targetCell + " (cost=" + pathLength + " MP)")
         var result = moveTowardCell(targetCell)
 
         if (result <= 0) {
-            debugDetail("[EXECUTOR] Move failed: moveTowardCell returned " + result)
             return false
         }
 
@@ -144,41 +140,35 @@ class AtomicActionExecutor {
 
         // Validate chip available
         if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) {
-            debugDetail("[EXECUTOR] Chip " + chipId + " not equipped")
             return false
         }
 
         // Validate TP cost
         var cost = getChipCost(chipId)
         if (this._player._currTp < cost) {
-            debugDetail("[EXECUTOR] Chip " + chipId + " failed: Need " + cost +
                        " TP, have " + this._player._currTp + " TP")
             return false
         }
 
         // Self-targeted chips (buffs, heals)
         if (this.isSelfTargetedChip(chipId)) {
-            debugDetail("[EXECUTOR] UseChip " + chipId + " (self-targeted)")
             var result = useChip(chipId, this._player._id)
 
             if (result == USE_SUCCESS) {
                 this._player.updateEntity()
                 return true
             } else {
-                debugDetail("[EXECUTOR] Chip " + chipId + " failed: result=" + result)
                 return false
             }
         }
 
         // Enemy-targeted chips (damage, debuffs)
         if (targetEnemyId == -1) {
-            debugDetail("[EXECUTOR] Chip " + chipId + " failed: No target specified")
             return false
         }
 
         // Validate target exists and is alive
         if (!isAlive(targetEnemyId)) {
-            debugDetail("[EXECUTOR] Chip " + chipId + " failed: Target " + targetEnemyId +
                        " not found or dead")
             return false
         }
@@ -191,13 +181,11 @@ class AtomicActionExecutor {
         var maxRange = getChipMaxRange(chipId)
 
         if (distance < minRange || distance > maxRange) {
-            debugDetail("[EXECUTOR] Chip " + chipId + " out of range: distance=" + distance +
                        ", range=" + minRange + "-" + maxRange)
             return false
         }
 
         // Execute chip
-        debugDetail("[EXECUTOR] UseChip " + chipId + " on enemy " + targetEnemyId +
                    " (cost=" + cost + " TP)")
         var result = useChip(chipId, targetEnemyId)
 
@@ -205,7 +193,6 @@ class AtomicActionExecutor {
             this._player.updateEntity()
             return true
         } else {
-            debugDetail("[EXECUTOR] Chip " + chipId + " failed: result=" + result)
             return false
         }
     }
@@ -220,7 +207,6 @@ class AtomicActionExecutor {
 
         // Validate weapon equipped
         if (!mapContainsKey(this._arsenal.playerEquippedWeapons, weaponId)) {
-            debugDetail("[EXECUTOR] Weapon " + weaponId + " not equipped")
             return false
         }
 
@@ -229,15 +215,12 @@ class AtomicActionExecutor {
         // Weapon swap if needed
         if (this._player._inUseWeapon != weaponId) {
             if (this._player._currTp < 1) {
-                debugDetail("[EXECUTOR] Weapon swap failed: Need 1 TP for swap")
                 return false
             }
 
-            debugDetail("[EXECUTOR] SwapWeapon to " + weaponId)
             var swapResult = setWeapon(weaponId)
 
             if (swapResult != USE_SUCCESS) {
-                debugDetail("[EXECUTOR] Weapon swap failed: result=" + swapResult)
                 return false
             }
 
@@ -247,14 +230,12 @@ class AtomicActionExecutor {
         // Validate TP cost
         var weaponCost = weaponObj._cost
         if (this._player._currTp < weaponCost) {
-            debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: Need " + weaponCost +
                        " TP, have " + this._player._currTp + " TP")
             return false
         }
 
         // Validate target exists
         if (!isAlive(targetEnemyId)) {
-            debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: Target " + targetEnemyId +
                        " not found or dead")
             return false
         }
@@ -265,7 +246,6 @@ class AtomicActionExecutor {
         var distance = getCellDistance(playerCell, targetCell)
 
         if (distance < weaponObj._minRange || distance > weaponObj._maxRange) {
-            debugDetail("[EXECUTOR] Weapon " + weaponId + " out of range: distance=" + distance +
                        ", range=" + weaponObj._minRange + "-" + weaponObj._maxRange)
             return false
         }
@@ -275,13 +255,11 @@ class AtomicActionExecutor {
         var needsLoS = (launchType == LAUNCH_TYPE_LINE || launchType == LAUNCH_TYPE_DIAGONAL || launchType == LAUNCH_TYPE_STAR)
         if (needsLoS) {
             if (!lineOfSight(playerCell, targetCell, [targetCell])) {
-                debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: No line of sight")
                 return false
             }
         }
 
         // Execute weapon
-        debugDetail("[EXECUTOR] UseWeapon " + weaponId + " on enemy " + targetEnemyId +
                    " (cost=" + weaponCost + " TP)")
         var result = useWeapon(targetEnemyId)
 
@@ -289,7 +267,6 @@ class AtomicActionExecutor {
             this._player.updateEntity()
             return true
         } else {
-            debugDetail("[EXECUTOR] Weapon " + weaponId + " failed: result=" + result)
             return false
         }
     }
@@ -303,25 +280,21 @@ class AtomicActionExecutor {
 
         // Validate TP
         if (this._player._currTp < 1) {
-            debugDetail("[EXECUTOR] Weapon swap failed: Need 1 TP")
             return false
         }
 
         // Validate not already equipped
         if (this._player._inUseWeapon == weaponId) {
-            debugDetail("[EXECUTOR] Weapon " + weaponId + " already equipped")
             return false
         }
 
         // Execute swap
-        debugDetail("[EXECUTOR] SwapWeapon to " + weaponId)
         var result = setWeapon(weaponId)
 
         if (result == USE_SUCCESS) {
             this._player.updateEntity()
             return true
         } else {
-            debugDetail("[EXECUTOR] Weapon swap failed: result=" + result)
             return false
         }
     }
@@ -335,14 +308,12 @@ class AtomicActionExecutor {
 
         // Validate TELEPORTATION equipped
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
-            debugDetail("[EXECUTOR] TELEPORTATION not equipped")
             return false
         }
 
         // Validate TP cost
         var cost = getChipCost(CHIP_TELEPORTATION)
         if (this._player._currTp < cost) {
-            debugDetail("[EXECUTOR] Teleport failed: Need " + cost + " TP, have " +
                        this._player._currTp + " TP")
             return false
         }
@@ -352,19 +323,16 @@ class AtomicActionExecutor {
         var distance = getCellDistance(playerCell, targetCell)
 
         if (distance < 1 || distance > 12) {
-            debugDetail("[EXECUTOR] Teleport failed: distance=" + distance + " (must be 1-12)")
             return false
         }
 
         // Execute teleport
-        debugDetail("[EXECUTOR] Teleport to cell " + targetCell + " (cost=" + cost + " TP)")
         var result = useChipOnCell(CHIP_TELEPORTATION, targetCell)
 
         if (result == USE_SUCCESS) {
             this._player.updateEntity()
             return true
         } else {
-            debugDetail("[EXECUTOR] Teleport failed: result=" + result)
             return false
         }
     }
@@ -382,13 +350,11 @@ class AtomicActionExecutor {
 
         // Check if we have resources for this action
         if (action.tpCost > 0 && this._player._currTp < action.tpCost) {
-            debugDetail("[EXECUTOR] Insufficient TP: need " + action.tpCost +
                        ", have " + this._player._currTp)
             return false
         }
 
         if (action.mpCost > 0 && this._player._currMp < action.mpCost) {
-            debugDetail("[EXECUTOR] Insufficient MP: need " + action.mpCost +
                        ", have " + this._player._currMp)
             return false
         }

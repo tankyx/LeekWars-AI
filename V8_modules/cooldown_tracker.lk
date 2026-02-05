@@ -7,6 +7,10 @@
 include('debug_config.lk')
 
 global COOLDOWN_STATE = [:]  // entityId → chip cooldown info
+global POISON_PHASE = "BAIT"  // Poison rotation phase: BAIT, DUMP, SUSTAIN
+global ANTIDOTE_USED_THIS_FIGHT = false  // Track if enemy has used Antidote
+global LAST_POISON_DUMP_TURN = -999  // Track when we last dumped poison
+global PREV_ENEMY_POISON = 0  // Track previous turn's poison duration for Antidote detection
 
 class CooldownTracker {
     _target = null
@@ -63,7 +67,6 @@ class CooldownTracker {
                 var remaining = cooldownInfo['turnsRemaining']
                 if (remaining > 0) {
                     entityCooldowns[chipId]['turnsRemaining'] = remaining - 1
-                    debugDetail("[COOLDOWN] " + getName(enemyId) + " chip " + chipId + " cooldown: " + (remaining - 1) + " turns")
                 }
             }
         }
@@ -89,7 +92,7 @@ class CooldownTracker {
     // Get chip cooldown duration (hardcoded for key chips)
     getChipCooldown(chipId) {
         // Antidote/healing chips
-        if (chipId == CooldownTracker.CHIP_ANTIDOTE) return 5
+        if (chipId == CooldownTracker.CHIP_ANTIDOTE) return 4
         if (chipId == CooldownTracker.CHIP_CURE) return 3
         if (chipId == CooldownTracker.CHIP_REMISSION) return 6
 
@@ -131,10 +134,18 @@ class CooldownTracker {
 
     // Detect poison removal (indicates Antidote use)
     detectAntidoteUse(enemyId, prevPoison, currPoison) {
+        debugInfo("[ANTIDOTE-CHECK] enemyId=" + enemyId + " prevPoison=" + prevPoison + " currPoison=" + currPoison)
+
         // If poison duration decreased unexpectedly, enemy used Antidote
         if (prevPoison > 0 && currPoison == 0) {
             debugInfo("[COOLDOWN] Detected Antidote use by " + getName(enemyId))
             this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+
+            // Update poison phase: BAIT → DUMP
+            ANTIDOTE_USED_THIS_FIGHT = true
+            POISON_PHASE = "DUMP"
+            debugInfo("[POISON-PHASE] Antidote detected! Switching BAIT → DUMP")
+
             return true
         }
 
@@ -145,6 +156,7 @@ class CooldownTracker {
             return true
         }
 
+        debugInfo("[ANTIDOTE-CHECK] No Antidote detected (condition not met)")
         return false
     }
 

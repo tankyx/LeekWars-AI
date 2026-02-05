@@ -43,14 +43,12 @@ class ScenarioGenerator {
 
     generateScenarios() {
         this._target.updateEntity()
-        debug("[SCENARIO-GEN] Updated target entity (pos=" + this._target._cellPos + " HP=" + this._target._currHealth + ")")
+        debugInfo("[SCENARIO-GEN] Updated target entity (pos=" + this._target._cellPos + " HP=" + this._target._currHealth + ")")
 
         // Detect Antidote usage by tracking poison duration changes
         var currentPoison = this._target.getEffectRemaining(EFFECT_POISON)
-        debug("[ANTIDOTE-DETECT] Turn " + getTurn() + ": prevPoison=" + PREV_ENEMY_POISON + " currentPoison=" + currentPoison + " phase=" + POISON_PHASE)
         var tracker = new CooldownTracker(this._target)
         tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
-        debug("[ANTIDOTE-DETECT] After detection: phase=" + POISON_PHASE)
         // Note: PREV_ENEMY_POISON is updated at END of main.lk after scenario execution
 
         var scenarios = []
@@ -71,43 +69,42 @@ class ScenarioGenerator {
             // If Antidote cooldown expired AND we've sustained for at least 3 turns → back to BAIT
             if (antidoteCD == 0 && (currentTurn - LAST_POISON_DUMP_TURN) >= 3) {
                 POISON_PHASE = "BAIT"
-                debug("[POISON-PHASE] Antidote ready again - transitioning SUSTAIN → BAIT")
             }
         }
 
         var state = this.determineStrategicState()
-        debug("[STATE] Strategic state: " + state + " | POISON_PHASE=" + POISON_PHASE)
+        debugInfo("[STATE] Strategic state: " + state + " | POISON_PHASE=" + POISON_PHASE)
 
         if (state == "KILL") {
 
-            debug("[STATE-KILL] Enemy killable - checking OTKO cells for optimal positioning")
+            debugInfo("[STATE-KILL] Enemy killable - checking OTKO cells for optimal positioning")
 
             // Poison rotation scenarios (can finish with DoT)
 
             // BAIT phase: Cheap poisons to trigger Antidote
             var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
             if (poisonBait != null) {
-                debug("[STATE-KILL] Adding Poison Bait scenario (trigger Antidote)")
+                debugInfo("[STATE-KILL] Adding Poison Bait scenario (trigger Antidote)")
                 push(scenarios, poisonBait)
             }
 
             // DUMP phase: Full poison dump after Antidote used
             var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
             if (poisonDump != null) {
-                debug("[STATE-KILL] Adding Poison Dump scenario (Antidote window - finish with DoT)")
+                debugInfo("[STATE-KILL] Adding Poison Dump scenario (Antidote window - finish with DoT)")
                 push(scenarios, poisonDump)
             }
 
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debug("[STATE-KILL] Adding Shield Rotation scenario (sustain after dump)")
+                debugInfo("[STATE-KILL] Adding Shield Rotation scenario (sustain after dump)")
                 push(scenarios, shieldRotation)
             }
 
             var neutrinoOTKO = this.createNeutrinoOTKOScenario(availableTP, availableMP)
             if (neutrinoOTKO != null) {
-                debug("[STATE-KILL] Adding Neutrino-OTKO combo scenario")
+                debugInfo("[STATE-KILL] Adding Neutrino-OTKO combo scenario")
                 push(scenarios, neutrinoOTKO)
             }
 
@@ -119,7 +116,7 @@ class ScenarioGenerator {
                 
                 var distToOTKO = getCellDistance(player._cellPos, bestOTKO._id)
                 if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= 12) {
-                    debug("[STATE-KILL] Teleporting to OTKO cell " + bestOTKO._id +
+                    debugInfo("[STATE-KILL] Teleporting to OTKO cell " + bestOTKO._id +
                           " (kill prob=" + floor(bestOTKO._otkoKillProbability * 100) + "%)")
                     push(scenarios, this.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
                 }
@@ -133,29 +130,29 @@ class ScenarioGenerator {
         }
         else if (state == "AGGRO") {
             
-            debug("[STATE-AGGRO] Early game / buff application phase")
+            debugInfo("[STATE-AGGRO] Early game / buff application phase")
 
             var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
             if (grappleHS != null) {
-                debug("[STATE-AGGRO] Adding GRAPPLE-HEAVY_SWORD combo scenario")
+                debugInfo("[STATE-AGGRO] Adding GRAPPLE-HEAVY_SWORD combo scenario")
                 push(scenarios, grappleHS)
             }
 
             var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
             if (neutrinoStack != null) {
-                debug("[STATE-AGGRO] Adding Neutrino stacking combo scenario")
+                debugInfo("[STATE-AGGRO] Adding Neutrino stacking combo scenario")
                 push(scenarios, neutrinoStack)
             }
 
             var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
             if (steroidOTKO != null) {
-                debug("[STATE-AGGRO] Adding STEROID-OTKO combo scenario")
+                debugInfo("[STATE-AGGRO] Adding STEROID-OTKO combo scenario")
                 push(scenarios, steroidOTKO)
             }
 
             var steroidRecheck = this.createSteroidRecheckScenario(availableTP, availableMP)
             if (steroidRecheck != null) {
-                debug("[STATE-AGGRO] Adding STEROID-Recheck two-phase scenario")
+                debugInfo("[STATE-AGGRO] Adding STEROID-Recheck two-phase scenario")
                 push(scenarios, steroidRecheck)
             }
 
@@ -164,28 +161,28 @@ class ScenarioGenerator {
             // BAIT phase: Cheap poisons to trigger Antidote
             var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
             if (poisonBait != null) {
-                debug("[STATE-AGGRO] Adding Poison Bait scenario (trigger Antidote)")
+                debugInfo("[STATE-AGGRO] Adding Poison Bait scenario (trigger Antidote)")
                 push(scenarios, poisonBait)
             }
 
             // DUMP phase: Full poison dump after Antidote used
             var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
             if (poisonDump != null) {
-                debug("[STATE-AGGRO] Adding Poison Dump scenario (Antidote window exploitation)")
+                debugInfo("[STATE-AGGRO] Adding Poison Dump scenario (Antidote window exploitation)")
                 push(scenarios, poisonDump)
             }
 
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debug("[STATE-AGGRO] Adding Shield Rotation scenario (sustain after dump)")
+                debugInfo("[STATE-AGGRO] Adding Shield Rotation scenario (sustain after dump)")
                 push(scenarios, shieldRotation)
             }
 
             // GRAPPLE-COVID combo (Magic builds, COVID/ARSENIC with positioning)
             var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
             if (grappleCovid != null) {
-                debug("[STATE-AGGRO] Adding GRAPPLE-COVID combo scenario")
+                debugInfo("[STATE-AGGRO] Adding GRAPPLE-COVID combo scenario")
                 push(scenarios, grappleCovid)
             }
 
@@ -194,7 +191,7 @@ class ScenarioGenerator {
                 getCooldown(CHIP_TELEPORTATION, this._player._id) == 0) {
                 var emergencyApproach = this.createEmergencyApproachScenario(availableTP, availableMP)
                 if (emergencyApproach != null) {
-                    debug("[STATE-AGGRO] Adding emergency approach scenario")
+                    debugInfo("[STATE-AGGRO] Adding emergency approach scenario")
                     push(scenarios, emergencyApproach)
                 }
             }
@@ -202,7 +199,7 @@ class ScenarioGenerator {
             // Buff + Approach when enemy out of range
             var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
             if (buffApproach != null) {
-                debug("[STATE-AGGRO] Adding Buff + Approach scenario (enemy out of range)")
+                debugInfo("[STATE-AGGRO] Adding Buff + Approach scenario (enemy out of range)")
                 push(scenarios, buffApproach)
             }
 
@@ -217,14 +214,14 @@ class ScenarioGenerator {
         }
         else if (state == "ATTRITION") {
             
-            debug("[STATE-ATTRITION] Ongoing balanced combat")
+            debugInfo("[STATE-ATTRITION] Ongoing balanced combat")
 
             var playerHP = this._player._currHealth
             var enemyHP = this._target._currHealth
             var losingHPRace = (playerHP < enemyHP)
 
             if (losingHPRace) {
-                debug("[STATE-ATTRITION] Losing HP race (" + playerHP + " < " + enemyHP + ") - adding defensive scenarios")
+                debugInfo("[STATE-ATTRITION] Losing HP race (" + playerHP + " < " + enemyHP + ") - adding defensive scenarios")
                 
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.7, 0.7, "hide"), availableTP, availableMP))  
                 push(scenarios, this.createParametricScenario(new ScenarioParams(3, 0.5, 0.8, 0.8, "hide"), availableTP, availableMP))  
@@ -232,31 +229,31 @@ class ScenarioGenerator {
 
             var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
             if (grappleHS != null) {
-                debug("[STATE-ATTRITION] Adding GRAPPLE-HEAVY_SWORD combo scenario")
+                debugInfo("[STATE-ATTRITION] Adding GRAPPLE-HEAVY_SWORD combo scenario")
                 push(scenarios, grappleHS)
             }
 
             var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
             if (neutrinoStack != null) {
-                debug("[STATE-ATTRITION] Adding Neutrino stacking combo scenario")
+                debugInfo("[STATE-ATTRITION] Adding Neutrino stacking combo scenario")
                 push(scenarios, neutrinoStack)
             }
 
             var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
             if (steroidOTKO != null) {
-                debug("[STATE-ATTRITION] Adding STEROID-OTKO combo scenario")
+                debugInfo("[STATE-ATTRITION] Adding STEROID-OTKO combo scenario")
                 push(scenarios, steroidOTKO)
             }
 
             var neutrinoRecheck = this.createNeutrinoRecheckScenario(availableTP, availableMP)
             if (neutrinoRecheck != null) {
-                debug("[STATE-ATTRITION] Adding Neutrino-Recheck checkpoint scenario")
+                debugInfo("[STATE-ATTRITION] Adding Neutrino-Recheck checkpoint scenario")
                 push(scenarios, neutrinoRecheck)
             }
 
             var grappleHSRecheck = this.createGrappleHSRecheckScenario(availableTP, availableMP)
             if (grappleHSRecheck != null) {
-                debug("[STATE-ATTRITION] Adding GRAPPLE-HS-Recheck checkpoint scenario")
+                debugInfo("[STATE-ATTRITION] Adding GRAPPLE-HS-Recheck checkpoint scenario")
                 push(scenarios, grappleHSRecheck)
             }
 
@@ -265,28 +262,28 @@ class ScenarioGenerator {
             // BAIT phase: Cheap poisons to trigger Antidote
             var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
             if (poisonBait != null) {
-                debug("[STATE-ATTRITION] Adding Poison Bait scenario (trigger Antidote)")
+                debugInfo("[STATE-ATTRITION] Adding Poison Bait scenario (trigger Antidote)")
                 push(scenarios, poisonBait)
             }
 
             // DUMP phase: Full poison dump after Antidote used
             var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
             if (poisonDump != null) {
-                debug("[STATE-ATTRITION] Adding Poison Dump scenario (Antidote window exploitation)")
+                debugInfo("[STATE-ATTRITION] Adding Poison Dump scenario (Antidote window exploitation)")
                 push(scenarios, poisonDump)
             }
 
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debug("[STATE-ATTRITION] Adding Shield Rotation scenario (sustain after dump)")
+                debugInfo("[STATE-ATTRITION] Adding Shield Rotation scenario (sustain after dump)")
                 push(scenarios, shieldRotation)
             }
 
             // Buff + Approach when enemy out of range
             var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
             if (buffApproach != null) {
-                debug("[STATE-ATTRITION] Adding Buff + Approach scenario (enemy out of range)")
+                debugInfo("[STATE-ATTRITION] Adding Buff + Approach scenario (enemy out of range)")
                 push(scenarios, buffApproach)
             }
 
@@ -299,41 +296,41 @@ class ScenarioGenerator {
         }
         else if (state == "SUSTAIN") {
 
-            debug("[STATE-SUSTAIN] HP management phase")
+            debugInfo("[STATE-SUSTAIN] HP management phase")
 
             // Poison rotation scenarios (all phases)
 
             // BAIT phase: Cheap poisons to trigger Antidote
             var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
             if (poisonBait != null) {
-                debug("[STATE-SUSTAIN] Adding Poison Bait scenario (trigger Antidote)")
+                debugInfo("[STATE-SUSTAIN] Adding Poison Bait scenario (trigger Antidote)")
                 push(scenarios, poisonBait)
             }
 
             // DUMP phase: Full poison dump after Antidote used
             var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
             if (poisonDump != null) {
-                debug("[STATE-SUSTAIN] Adding Poison Dump scenario (Antidote window - use at all cost)")
+                debugInfo("[STATE-SUSTAIN] Adding Poison Dump scenario (Antidote window - use at all cost)")
                 push(scenarios, poisonDump)
             }
 
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debug("[STATE-SUSTAIN] Adding Shield Rotation scenario (sustain + heal)")
+                debugInfo("[STATE-SUSTAIN] Adding Shield Rotation scenario (sustain + heal)")
                 push(scenarios, shieldRotation)
             }
 
             var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
             if (healRecheck != null) {
-                debug("[STATE-SUSTAIN] Adding Heal-Recheck checkpoint scenario")
+                debugInfo("[STATE-SUSTAIN] Adding Heal-Recheck checkpoint scenario")
                 push(scenarios, healRecheck)
             }
 
             // Buff + Approach when enemy out of range
             var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
             if (buffApproach != null) {
-                debug("[STATE-SUSTAIN] Adding Buff + Approach scenario (enemy out of range)")
+                debugInfo("[STATE-SUSTAIN] Adding Buff + Approach scenario (enemy out of range)")
                 push(scenarios, buffApproach)
             }
 
@@ -346,28 +343,28 @@ class ScenarioGenerator {
         }
         else if (state == "FLEE") {
 
-            debug("[STATE-FLEE] Emergency survival mode")
+            debugInfo("[STATE-FLEE] Emergency survival mode")
 
             // Poison rotation scenarios (maintain rotation even in FLEE state)
 
             // BAIT phase: Cheap poisons to trigger Antidote
             var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
             if (poisonBait != null) {
-                debug("[STATE-FLEE] Adding Poison Bait scenario (trigger Antidote while fleeing)")
+                debugInfo("[STATE-FLEE] Adding Poison Bait scenario (trigger Antidote while fleeing)")
                 push(scenarios, poisonBait)
             }
 
             // DUMP phase: Full poison dump after Antidote used
             var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
             if (poisonDump != null) {
-                debug("[STATE-FLEE] Adding Poison Dump scenario (Antidote window - use at all cost)")
+                debugInfo("[STATE-FLEE] Adding Poison Dump scenario (Antidote window - use at all cost)")
                 push(scenarios, poisonDump)
             }
 
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debug("[STATE-FLEE] Adding Shield Rotation scenario (sustain while fleeing)")
+                debugInfo("[STATE-FLEE] Adding Shield Rotation scenario (sustain while fleeing)")
                 push(scenarios, shieldRotation)
             }
 
@@ -378,7 +375,7 @@ class ScenarioGenerator {
 
                 var currentThreat = this._fieldMap.getThreatAtCell(player._cellPos)
                 if (currentThreat > 200) {
-                    debug("[STATE-FLEE] High threat detected (" + currentThreat + ") - prioritizing TELEPORT escape")
+                    debugInfo("[STATE-FLEE] High threat detected (" + currentThreat + ") - prioritizing TELEPORT escape")
                     var escapeScenario = this.createTeleportEscapeScenario(availableTP, availableMP)
                     if (escapeScenario != null) {
                         push(scenarios, escapeScenario)
@@ -388,14 +385,14 @@ class ScenarioGenerator {
 
             var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
             if (healRecheck != null) {
-                debug("[STATE-FLEE] Adding emergency Heal-Recheck checkpoint scenario")
+                debugInfo("[STATE-FLEE] Adding emergency Heal-Recheck checkpoint scenario")
                 push(scenarios, healRecheck)
             }
 
             // Buff + Approach when enemy out of range
             var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
             if (buffApproach != null) {
-                debug("[STATE-FLEE] Adding Buff + Approach scenario (enemy out of range)")
+                debugInfo("[STATE-FLEE] Adding Buff + Approach scenario (enemy out of range)")
                 push(scenarios, buffApproach)
             }
 
@@ -404,12 +401,12 @@ class ScenarioGenerator {
 
             if (regenAvailable) {
 
-                debug("[STATE-FLEE] REGENERATION available - defensive healing")
+                debugInfo("[STATE-FLEE] REGENERATION available - defensive healing")
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "hide"), availableTP, availableMP))
             } else {
 
-                debug("[STATE-FLEE] REGENERATION on cooldown - lifesteal strategy (ENHANCED_LIGHTNINGER spam)")
+                debugInfo("[STATE-FLEE] REGENERATION on cooldown - lifesteal strategy (ENHANCED_LIGHTNINGER spam)")
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))
                 push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))
             }
@@ -446,7 +443,6 @@ class ScenarioGenerator {
                     var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
                     if (estimatedDamage / enemyHP >= 0.85) return "KILL"  // Only kill if very confident
                 }
-                debug("[BR-PHASE] EARLY (enemies=" + enemyCount + ") - conservative positioning")
                 return "ATTRITION"  // Conservative play, no aggressive buffs
             }
             else if (enemyCount >= 3) {
@@ -456,12 +452,10 @@ class ScenarioGenerator {
                     var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
                     if (estimatedDamage / enemyHP >= 0.75) return "KILL"
                 }
-                debug("[BR-PHASE] MID (enemies=" + enemyCount + ") - attrition focus")
                 return "ATTRITION"
             }
             else {
                 // LATE PHASE: Full aggressive 1v1
-                debug("[BR-PHASE] LATE (enemies=" + enemyCount + ") - aggressive 1v1")
                 // Fall through to standard 1v1 logic
             }
         }
@@ -810,7 +804,6 @@ class ScenarioGenerator {
         if (tpBudget >= 5) {
             push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, otkoCell, this._target))
             tpBudget -= 5
-            debug("[OTKO-TELEPORT] Teleporting to OTKO cell " + otkoCell + " for optimal kill positioning")
         }
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, otkoCell)
@@ -851,7 +844,6 @@ class ScenarioGenerator {
 
         push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, safestCell, this._target))
         tpBudget -= 5
-        debug("[TELEPORT-ESCAPE] Evacuating to cell " + safestCell + " (threat: " + lowestThreat + ")")
 
         var escapeAntidote = this.getAntidoteAction(tpBudget)
         if (escapeAntidote != null) {
@@ -863,7 +855,6 @@ class ScenarioGenerator {
             getCooldown(CHIP_REMISSION, this._player._id) == 0) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
             tpBudget -= 4
-            debug("[TELEPORT-ESCAPE] Applying REMISSION heal")
         }
 
         var shieldAction = this.getDefensiveBuff()
@@ -872,7 +863,6 @@ class ScenarioGenerator {
             if (tpBudget >= shieldCost) {
                 push(actions, shieldAction)
                 tpBudget -= shieldCost
-                debug("[TELEPORT-ESCAPE] Applying shield")
             }
         }
 
@@ -925,7 +915,6 @@ class ScenarioGenerator {
 
         push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell, this._target))
         tpBudget -= 5
-        debug("[EMERGENCY-APPROACH] Teleporting to cell " + bestCell + " (score: " + bestScore + ", turn: " + currentTurn + ")")
 
         // Follow up with attacks if we have TP
         var attackActions = this.getAttackActions(tpBudget, 1.0, bestCell)
@@ -1027,7 +1016,7 @@ class ScenarioGenerator {
                 push(actions, adrenalineBuff)
                 tpBudget -= 1
                 tpBudget += 5  
-                debug("[SCENARIO] LEATHER_BOOTS + ADRENALINE combo: Net +1 TP + mobility")
+                debugInfo("[SCENARIO] LEATHER_BOOTS + ADRENALINE combo: Net +1 TP + mobility")
             }
         }
 
@@ -1229,7 +1218,6 @@ class ScenarioGenerator {
             }
 
             if (bestOTKO != null) {
-                debug("[MOVE-OTKO] Prioritizing OTKO cell " + bestOTKO._id +
                       " (kill prob=" + floor(bestOTKO._otkoKillProbability * 100) +
                       "%, damage=" + floor(bestOTKO._otkoDamage) + ")")
                 return new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestOTKO._id, this._target)
@@ -1253,7 +1241,6 @@ class ScenarioGenerator {
             bestCell = this._fieldMap.getBestWeaponOrChipCell()
             if (bestCell == null || bestCell == -1) {
                 // Fallback: no attack cells available, just move toward enemy
-                debug("[MOVE-APPROACH] No attack cells available, moving toward enemy")
                 var approachCell = this.getApproachEnemyCell(mpBudget)
                 if (approachCell != null && approachCell != -1) {
                     return new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target)
@@ -1270,7 +1257,6 @@ class ScenarioGenerator {
                 }
                 if (bestCell == null || bestCell == -1) {
                     // Fallback: no reachable damage cells, just move toward enemy
-                    debug("[MOVE-APPROACH] No reachable damage cells, moving toward enemy")
                     var approachCell = this.getApproachEnemyCell(mpBudget)
                     if (approachCell != null && approachCell != -1) {
                         return new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target)
@@ -1341,13 +1327,11 @@ class ScenarioGenerator {
         }
 
         if (bestCell != null) {
-            debug("[APPROACH-ENEMY] Moving from dist=" + currentDist + " to dist=" + bestDist + " (cell " + bestCell + ")")
             return bestCell
         }
 
         // Fallback: No cell gets us closer, but we're stuck (e.g., in a corner)
         // Return any reachable cell to at least try to move
-        debug("[APPROACH-ENEMY] Stuck - no closer cells, trying any reachable cell")
         var fallbackCell = null
         var fallbackDist = 999
         for (var cellId in reachableCells) {
@@ -1365,7 +1349,6 @@ class ScenarioGenerator {
         }
 
         if (fallbackCell != null) {
-            debug("[APPROACH-ENEMY] Fallback move to cell " + fallbackCell + " (dist=" + fallbackDist + ")")
             return fallbackCell
         }
 
@@ -1444,7 +1427,6 @@ class ScenarioGenerator {
         // Only use if: high incoming damage + close combat + spare TP
         var expectedThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
         if (brambleReady && inCloseCombat && currentTP >= 15 && expectedThreat > 300) {
-            debug("[BRAMBLE-TACTICAL] High threat (" + floor(expectedThreat) + ") in close combat - using BRAMBLE burst")
             return new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player)
         }
 
@@ -1532,22 +1514,18 @@ class ScenarioGenerator {
         var hpRatio = currentHP / maxHP
 
         if (totalPoisonDamage > 200) {
-            debug("[ANTIDOTE] Using Antidote - high total poison damage: " + totalPoisonDamage + " over " + poisonRemaining + " turns")
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
         if (poisonDamagePerTurn > 50 && poisonRemaining >= 3) {
-            debug("[ANTIDOTE] Using Antidote - sustained poison: " + poisonDamagePerTurn + "/turn for " + poisonRemaining + " turns")
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
         if (hpRatio < 0.5 && totalPoisonDamage > 100) {
-            debug("[ANTIDOTE] Using Antidote - low HP (" + floor(hpRatio * 100) + "%) with poison: " + totalPoisonDamage)
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
         if (totalPoisonDamage > currentHP) {
-            debug("[ANTIDOTE] Using Antidote - LETHAL poison: " + totalPoisonDamage + " vs HP: " + currentHP)
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
@@ -1600,14 +1578,12 @@ class ScenarioGenerator {
             // Check if we need to reposition for AoE safety
             var repositionCell = bestAttack['repositionCell']
             if (repositionCell != null && repositionCell != -1 && repositionCell != simPos) {
-                debug("[ATTACK-CREATE] Adding reposition move to cell " + repositionCell + " before AoE attack")
                 var moveAction = new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, repositionCell, this._target)
                 push(actions, moveAction)
                 // Note: Simulator will update simPos after this movement
             }
 
             if (attackType == 'weapon') {
-                debug("[ATTACK-CREATE] Weapon action: id=" + attackId + " targetCell=" + attackTargetCell + " isSplash=" + bestAttack['isSplash'])
                 var weaponAction = new Action(Action.ACTION_DIRECT, attackId, -1, attackTargetCell, this._target)
                 weaponAction.isSplash = bestAttack['isSplash']
                 push(actions, weaponAction)
@@ -1615,7 +1591,6 @@ class ScenarioGenerator {
                 if (currentUses == null) currentUses = 0
                 weaponUses[attackId] = currentUses + 1
             } else {
-                debug("[ATTACK-CREATE] Chip action: id=" + attackId + " targetCell=" + attackTargetCell + " isSplash=" + bestAttack['isSplash'])
                 var chipAction = new Action(Action.ACTION_DIRECT, -1, attackId, attackTargetCell, this._target)
                 chipAction.isSplash = bestAttack['isSplash']
                 push(actions, chipAction)
@@ -1782,12 +1757,10 @@ class ScenarioGenerator {
                         repositionCell = this.findSafeAoEWeaponCell(weaponId, targetCell, simPos, weaponUses, chipCooldowns)
                         if (repositionCell != -1) {
                             isSafe = true  // Found safe position
-                            debug("[AOE-REPOSITION] Found safe cell " + repositionCell + " for " + getWeaponName(weaponId) + " attack")
                         } else {
                             // Fallback: Allow attack if damage is high enough
                             if (damage >= 200) {
                                 isSafe = true
-                                debug("[AOE-FALLBACK] Allowing " + getWeaponName(weaponId) + " despite self-damage (damage=" + floor(damage) + ")")
                             }
                         }
                     }
@@ -1851,12 +1824,10 @@ class ScenarioGenerator {
                         repositionCell = this.findSafeAoEAttackCell(chipId, chipTargetCell, simPos, weaponUses, chipCooldowns)
                         if (repositionCell != -1) {
                             isSafe = true  // Found safe position
-                            debug("[AOE-REPOSITION] Found safe cell " + repositionCell + " for " + getChipName(chipId) + " attack")
                         } else {
                             // Fallback: Allow attack if damage is high enough
                             if (damage >= 300) {
                                 isSafe = true
-                                debug("[AOE-FALLBACK] Allowing " + getChipName(chipId) + " despite self-damage (damage=" + floor(damage) + ")")
                             }
                         }
                     }
@@ -1940,7 +1911,6 @@ class ScenarioGenerator {
             return null  
         }
 
-        debug("[COMBO-NEUTRINO] Creating Neutrino stacking scenario (3x vuln + weapons)")
 
         if (getWeapon() != WEAPON_NEUTRINO) {
             push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
@@ -1993,7 +1963,6 @@ class ScenarioGenerator {
             return null
         }
 
-        debug("[COMBO-GRAPPLE-HS] Creating GRAPPLE-HEAVY_SWORD scenario (optimistic - simulator will validate)")
 
         var playerX = getCellX(simPos)
         var playerY = getCellY(simPos)
@@ -2003,7 +1972,6 @@ class ScenarioGenerator {
 
         var isOnSameLine = (playerY == enemyY) || (playerX == enemyX)
         if (!isOnSameLine) {
-            debug("[COMBO-GRAPPLE-HS] ABORT: Enemy not on same H/V line (player=" + simPos + " enemy=" + enemyPos + ")")
             return null
         }
 
@@ -2016,7 +1984,6 @@ class ScenarioGenerator {
             grappleCell = (enemyY < playerY) ? getCellFromXY(playerX, playerY - 1) : getCellFromXY(playerX, playerY + 1)
         }
 
-        debug("[COMBO-GRAPPLE-HS] Calculated grapple destination: cell " + grappleCell + " (enemy at " + enemyPos + ")")
 
         if (grappleCell == -1 || grappleCell == null) {
             return null
@@ -2078,7 +2045,6 @@ class ScenarioGenerator {
             return null
         }
 
-        debug("[COMBO-STEROID-OTKO] Creating STEROID + OTKO scenario (optimistic)")
 
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
         tpBudget -= 7
@@ -2123,7 +2089,6 @@ class ScenarioGenerator {
             return null
         }
 
-        debug("[COMBO-STEROID-RECHECK] Creating two-phase STEROID scenario (adaptive)")
 
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
         tpBudget -= 7
@@ -2135,7 +2100,6 @@ class ScenarioGenerator {
         var checkpoint = Action.createCheckpoint("BUFF_RECHECK", "evaluateBuffRecheckContinuation", context)
         push(actions, checkpoint)
 
-        debug("[COMBO-STEROID-RECHECK] Added checkpoint: will re-evaluate kill probability with +160 STR")
 
         return actions
     }
@@ -2161,7 +2125,6 @@ class ScenarioGenerator {
         if (!isOnAxis) return null
         if (dist < 2 || dist > 6) return null
 
-        debug("[COMBO-NEUTRINO-RECHECK] Creating two-phase Neutrino stacking scenario (adaptive)")
 
         var neutrinoCount = floor((tpBudget - 10) / 4)  
         if (neutrinoCount > 3) neutrinoCount = 3  
@@ -2182,7 +2145,6 @@ class ScenarioGenerator {
         var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
         push(actions, checkpoint)
 
-        debug("[COMBO-NEUTRINO-RECHECK] Added checkpoint: will re-evaluate with " + expectedVuln + "% vulnerability")
 
         return actions
     }
@@ -2215,7 +2177,6 @@ class ScenarioGenerator {
         if (dist == null) return null
         if (dist < 2 || dist > 8) return null  
 
-        debug("[COMBO-GRAPPLE-HS-RECHECK] Creating two-phase GRAPPLE pull scenario (adaptive)")
 
         var dx = getCellX(enemyPos) - getCellX(simPos)
         var dy = getCellY(enemyPos) - getCellY(simPos)
@@ -2240,7 +2201,6 @@ class ScenarioGenerator {
         var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
         push(actions, checkpoint)
 
-        debug("[COMBO-GRAPPLE-HS-RECHECK] Added checkpoint: will re-evaluate after pulling enemy to distance 2")
 
         return actions
     }
@@ -2268,7 +2228,6 @@ class ScenarioGenerator {
             return null
         }
 
-        debug("[COMBO-HEAL-RECHECK] Creating two-phase healing scenario (adaptive)")
 
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
         tpBudget -= 5
@@ -2280,7 +2239,6 @@ class ScenarioGenerator {
         var checkpoint = Action.createCheckpoint("HEAL_RECHECK", "evaluateHealRecheckContinuation", context)
         push(actions, checkpoint)
 
-        debug("[COMBO-HEAL-RECHECK] Added checkpoint: will re-evaluate aggression after healing")
 
         return actions
     }
@@ -2323,20 +2281,17 @@ class ScenarioGenerator {
         var onAxis = (playerX == enemyX || playerY == enemyY)
         if (!onAxis) return null
 
-        debug("[GRAPPLE-COVID] Creating combo: dist=" + dist + " onAxis=" + onAxis)
 
         // 1. GRAPPLE enemy closer (pulls to distance 2)
         if (tpBudget >= 4) {
             push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, this._target._cellPos, this._target))
             tpBudget -= 4
-            debug("[GRAPPLE-COVID] Step 1: GRAPPLE (TP remaining=" + tpBudget + ")")
         }
 
         // 2. Apply COVID if available (range 0-2, perfect after GRAPPLE)
         if (hasCovid && tpBudget >= 8) {
             push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, this._target._cellPos, this._target))
             tpBudget -= 8
-            debug("[GRAPPLE-COVID] Step 2: COVID (TP remaining=" + tpBudget + ")")
         }
 
         // 3. Apply ARSENIC if available (range 3-4, may not hit after pull but apply before if possible)
@@ -2351,7 +2306,6 @@ class ScenarioGenerator {
             }
             actions = tempActions
             tpBudget -= 8
-            debug("[GRAPPLE-COVID] Step 0: ARSENIC (applied before GRAPPLE)")
         }
 
         // 4. Kite away
@@ -2361,7 +2315,6 @@ class ScenarioGenerator {
         }
 
         if (count(actions) > 0) {
-            debug("[GRAPPLE-COVID] Created combo scenario with " + count(actions) + " actions")
             return actions
         }
 
@@ -2387,7 +2340,6 @@ class ScenarioGenerator {
             return null  // Not in bait phase
         }
 
-        debug("[POISON-BAIT] Creating harassment scenario with cheap poisons")
 
         // Use ONLY cheap poisons to bait Antidote: VENOM (4 TP), TOXIN (5 TP)
         var baitChips = []
@@ -2414,7 +2366,6 @@ class ScenarioGenerator {
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
             tpBudget -= getCachedChipCost(chipId)
             poisonsApplied++
-            debug("[POISON-BAIT] Applied " + getChipName(chipId) + " (bait)")
         }
 
         // Kite away
@@ -2424,7 +2375,6 @@ class ScenarioGenerator {
         }
 
         if (count(actions) > 0) {
-            debug("[POISON-BAIT] Created bait harassment with " + count(actions) + " actions")
             return actions
         }
 
@@ -2440,7 +2390,6 @@ class ScenarioGenerator {
             return null
         }
 
-        debug("[SHIELD-ROTATION] Creating shield cycling scenario")
 
         // Check shield status and rotate: FORTRESS (3t, 8 TP) / WALL (2t, 6 TP)
         var hasFortress = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)
@@ -2455,11 +2404,9 @@ class ScenarioGenerator {
         if (hasFortress && fortressTurns <= 1 && getCooldown(CHIP_FORTRESS, this._player._id) == 0 && tpBudget >= 8) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
             tpBudget -= 8
-            debug("[SHIELD-ROTATION] Applied FORTRESS (3 turns)")
         } else if (hasWall && wallTurns <= 1 && getCooldown(CHIP_WALL, this._player._id) == 0 && tpBudget >= 6) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
             tpBudget -= 6
-            debug("[SHIELD-ROTATION] Applied WALL (2 turns)")
         }
 
         // Add REMISSION if HP < 70%
@@ -2468,7 +2415,6 @@ class ScenarioGenerator {
             getCooldown(CHIP_REMISSION, this._player._id) == 0 && tpBudget >= 5) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
             tpBudget -= 5
-            debug("[SHIELD-ROTATION] Applied REMISSION (sustain)")
         }
 
         // Harassment: cheap poisons or weapons
@@ -2480,7 +2426,6 @@ class ScenarioGenerator {
         }
 
         if (count(actions) > 0) {
-            debug("[SHIELD-ROTATION] Created sustain scenario with " + count(actions) + " actions")
             return actions
         }
 
@@ -2514,12 +2459,10 @@ class ScenarioGenerator {
             return null  // Prevent spamming dumps
         }
 
-        debug("[POISON-DUMP] PHASE=DUMP detected - creating full poison dump scenario")
 
         // 1. If HP critical, add defensive actions first (survival + poison dump)
         var hpPercent = this._player._currHealth * 100 / this._player._maxHealth
         if (hpPercent < 50) {
-            debug("[POISON-DUMP] Critical HP (" + hpPercent + "%) - adding defensive actions")
 
             // Add shield (FORTRESS > WALL)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS) &&
@@ -2527,13 +2470,11 @@ class ScenarioGenerator {
                 tpBudget >= 6) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
                 tpBudget -= 6
-                debug("[POISON-DUMP] Applied FORTRESS shield")
             } else if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL) &&
                 getCooldown(CHIP_WALL, this._player._id) == 0 &&
                 tpBudget >= 5) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
                 tpBudget -= 5
-                debug("[POISON-DUMP] Applied WALL shield")
             }
 
             // Add healing (REMISSION)
@@ -2542,7 +2483,6 @@ class ScenarioGenerator {
                 tpBudget >= 5) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
                 tpBudget -= 5
-                debug("[POISON-DUMP] Applied REMISSION heal")
             }
         }
 
@@ -2558,7 +2498,6 @@ class ScenarioGenerator {
                     mpBudget -= moveCost
                 }
             }
-            debug("[POISON-DUMP] Moving to optimal attack cell " + simPos)
         }
 
         // 3. Cast WIZARDRY if available (+170 MAG)
@@ -2567,7 +2506,6 @@ class ScenarioGenerator {
             tpBudget >= 6) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
             tpBudget -= 6
-            debug("[POISON-DUMP] Applying WIZARDRY (+170 MAG)")
         }
 
         // 4. Get all poison chips sorted by damage (best first)
@@ -2591,7 +2529,6 @@ class ScenarioGenerator {
             // Add poison chip action
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
             tpBudget -= chipCost
-            debug("[POISON-DUMP] Applied " + getChipName(chipId) + " (remaining TP=" + tpBudget + ")")
         }
 
         // 6. Spam any remaining TP on weapons/chips
@@ -2618,8 +2555,6 @@ class ScenarioGenerator {
             // Update phase: DUMP → SUSTAIN (after dump completes)
             POISON_PHASE = "SUSTAIN"
             LAST_POISON_DUMP_TURN = currentTurn
-            debug("[POISON-DUMP] Created scenario with " + count(actions) + " actions")
-            debug("[POISON-PHASE] Transitioning DUMP → SUSTAIN (dump scheduled)")
 
             return actions
         }
@@ -2667,7 +2602,6 @@ class ScenarioGenerator {
             return null
         }
 
-        debug("[COMBO-NEUTRINO-OTKO] Creating Neutrino pre-stack + teleport OTKO scenario")
 
         if (getWeapon() != WEAPON_NEUTRINO) {
             push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
@@ -2724,7 +2658,6 @@ class ScenarioGenerator {
             return null
         }
 
-        debug("[COMBO-ADRENALINE] Using ADRENALINE to bridge " + tpGap + " TP gap for combo")
 
         var actions = []
 
@@ -2748,7 +2681,6 @@ class ScenarioGenerator {
         var tpBudget = availableTP
         var simPos = this._player._cellPos  
 
-        debug("[BASELINE-STATIC] Creating static attack scenario (no movement)")
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
         for (var atk in attackActions) {
@@ -2764,7 +2696,6 @@ class ScenarioGenerator {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
-        debug("[BASELINE-OFFENSIVE] Creating simple offensive scenario (move + attack)")
 
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
@@ -2834,7 +2765,6 @@ class ScenarioGenerator {
             return null  // Enemy is in range, normal scenarios should handle this
         }
 
-        debug("[BUFF-APPROACH] Enemy out of range - creating buff + approach scenario")
 
         // 1. Apply offensive buff based on build type (detect from player stats)
         var str = this._player._strength
@@ -2849,7 +2779,6 @@ class ScenarioGenerator {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
                 tpBudget -= 6
                 buffApplied = true
-                debug("[BUFF-APPROACH] Applied WIZARDRY buff (MAG build)")
             }
         } else if (str > mag && str > agi) {  // Strength build
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
@@ -2858,7 +2787,6 @@ class ScenarioGenerator {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
                 tpBudget -= 6
                 buffApplied = true
-                debug("[BUFF-APPROACH] Applied STEROID buff (STR build)")
             }
         } else if (agi > str && agi > mag) {  // Agility build
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
@@ -2867,7 +2795,6 @@ class ScenarioGenerator {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player))
                 tpBudget -= 6
                 buffApplied = true
-                debug("[BUFF-APPROACH] Applied WARM_UP buff (AGI build)")
             }
         }
 
@@ -2879,13 +2806,11 @@ class ScenarioGenerator {
                 tpBudget >= 6) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
                 tpBudget -= 6
-                debug("[BUFF-APPROACH] Applied FORTRESS shield")
             } else if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL) &&
                 getCooldown(CHIP_WALL, this._player._id) == 0 &&
                 tpBudget >= 5) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
                 tpBudget -= 5
-                debug("[BUFF-APPROACH] Applied WALL shield")
             }
         }
 
@@ -2893,12 +2818,10 @@ class ScenarioGenerator {
         var approachCell = this.getApproachEnemyCell(mpBudget)
         if (approachCell != null && approachCell != -1) {
             push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target))
-            debug("[BUFF-APPROACH] Moving toward enemy (cell " + approachCell + ")")
         }
 
         // Only return if we have at least one action (buff or movement)
         if (count(actions) > 0) {
-            debug("[BUFF-APPROACH] Created scenario with " + count(actions) + " actions")
             return actions
         }
 

@@ -20,7 +20,12 @@ global STRENGTH_WEIGHTS = [
     'distanceToTarget': -20,   // Slight penalty: prefer close range
     'threatReduction': 40,     // Moderate: avoid dangerous cells
     'otkoBonus': 5000,         // Massive: prioritize kill opportunities
-    'checkpointBonus': 2500    // Large: two-phase scenarios valuable
+    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
+    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
+    'bulbKillBonusHealer': 2500,  // Bulb targeting: healer kill bonus
+    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
+    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
+    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
 ]
 
 // Magic build weights - Maximize DoT attrition and kiting
@@ -37,7 +42,12 @@ global MAGIC_WEIGHTS = [
     'distanceToTarget': 30,    // Bonus: prefer far range
     'threatReduction': 80,     // High: avoid close-range danger
     'otkoBonus': 3000,         // Large: still want to close kills
-    'checkpointBonus': 2500    // Large: two-phase scenarios valuable
+    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
+    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
+    'bulbKillBonusHealer': 3000,  // Bulb targeting: healer kill bonus (EXTRA HIGH - stops healing in attrition)
+    'bulbKillBonusBuffer': 1800,  // Bulb targeting: buffer kill bonus (high priority)
+    'bulbKillBonusAttacker': 1000,// Bulb targeting: attacker kill bonus
+    'multiTargetBonus': 400    // Multi-target LoS: moderate value (kiting style)
 ]
 
 // Agility build weights - Balance damage and damage return
@@ -54,7 +64,12 @@ global AGILITY_WEIGHTS = [
     'distanceToTarget': -10,   // Slight penalty: close range for BRAMBLE
     'threatReduction': 50,     // Moderate: balanced approach
     'otkoBonus': 4500,         // Very high: finish fights fast
-    'checkpointBonus': 2500    // Large: two-phase scenarios valuable
+    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
+    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
+    'bulbKillBonusHealer': 2700,  // Bulb targeting: healer kill bonus (high - fast kills)
+    'bulbKillBonusBuffer': 1600,  // Bulb targeting: buffer kill bonus
+    'bulbKillBonusAttacker': 900, // Bulb targeting: attacker kill bonus
+    'multiTargetBonus': 550    // Multi-target LoS: high value (AoE weapons)
 ]
 
 // Strength/Science hybrid weights - Weapon damage + Nova max HP reduction
@@ -72,7 +87,12 @@ global STRENGTH_SCIENCE_WEIGHTS = [
     'threatReduction': 40,     // Moderate: avoid dangerous cells
     'otkoBonus': 5000,         // Massive: prioritize kill opportunities
     'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'novaEffects': 400         // Primary secondary focus: max HP reduction via science
+    'novaEffects': 400,        // Primary secondary focus: max HP reduction via science
+    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
+    'bulbKillBonusHealer': 2500,  // Bulb targeting: healer kill bonus
+    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
+    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
+    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
 ]
 
 // Boss fight weights - Specialized for crystal puzzle mechanics
@@ -120,21 +140,17 @@ function detectBuildType(player) {
 
     // Check for hybrids first (science threshold: 200+)
     if (strStat >= magStat && strStat >= agiStat && sciStat >= 200) {
-        debug("[BUILD-DETECT] Strength/Science hybrid: STR=" + strStat + " SCI=" + sciStat)
         return BUILD_STRENGTH_SCIENCE
     }
 
     // Check pure builds
     if (strStat >= magStat && strStat >= agiStat) {
-        debug("[BUILD-DETECT] Pure Strength: STR=" + strStat)
         return BUILD_STRENGTH
     }
     if (magStat >= strStat && magStat >= agiStat) {
-        debug("[BUILD-DETECT] Pure Magic: MAG=" + magStat)
         return BUILD_MAGIC
     }
     if (agiStat >= strStat && agiStat >= magStat) {
-        debug("[BUILD-DETECT] Pure Agility: AGI=" + agiStat)
         return BUILD_AGILITY
     }
 

@@ -294,33 +294,28 @@ class AtomicActionGenerator {
 
         // 1. Movement actions (top 10 tactical cells)
         var movements = this.generateMovementActions(worldState)
-        debug("[ActionGen] Movements: " + count(movements))
         for (var action in movements) {
             push(actions, action)
         }
 
         // 2. Attack actions (weapons + damage chips)
         var attacks = this.generateAttackActions(worldState)
-        debug("[ActionGen] Attacks: " + count(attacks))
         for (var action in attacks) {
             push(actions, action)
         }
 
         // 3. Buff actions (only if not already buffed)
         var buffs = this.generateBuffActions(worldState)
-        debug("[ActionGen] Buffs: " + count(buffs))
         for (var action in buffs) {
             push(actions, action)
         }
 
         // 4. Utility actions (weapon swaps, teleport)
         var utilities = this.generateUtilityActions(worldState)
-        debug("[ActionGen] Utilities: " + count(utilities))
         for (var action in utilities) {
             push(actions, action)
         }
 
-        debug("[ActionGen] Total actions: " + count(actions))
         return actions
     }
 
@@ -436,18 +431,14 @@ class AtomicActionGenerator {
         var actions = []
 
         // SESSION 3 DEBUG: Always generate at least one buff to test
-        debug("[BuffGen] damageBuff=" + worldState.damageBuffActive + " TP=" + worldState.tp + " depth=" + worldState.depth)
 
         // Damage buffs (STEROID, WARM_UP)
         if (!worldState.damageBuffActive) {
             var hasSteroid = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)
-            debug("[BuffGen] hasSteroid=" + hasSteroid)
             if (hasSteroid) {
                 var cost1 = getChipCost(CHIP_STEROID)
-                debug("[BuffGen] STEROID: cost=" + cost1 + " TP=" + worldState.tp)
                 if (worldState.tp >= cost1) {
                     push(actions, AtomicAction.createChipUse(CHIP_STEROID, -1, cost1, 0, 0, 0))
-                    debug("[BuffGen] Added STEROID")
                 }
             }
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP)) {

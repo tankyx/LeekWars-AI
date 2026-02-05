@@ -54,7 +54,6 @@ class ScenarioMutator {
 
         // 1. Aim Cell Optimization (for AoE weapons/chips)
         var aimDescriptors = this.generateAimCellDescriptors(scenario)
-        debugDetail("[Mutation] Aim cell descriptors: " + count(aimDescriptors))
         for (var desc in aimDescriptors) {
             push(descriptors, desc)
         }
@@ -228,7 +227,6 @@ class HybridMutationPlanner {
 
             // Generate mutations for this seed
             var descriptors = this._mutator.generateMutationDescriptors(seed)
-            debugDetail("[HybridMutation] Generated " + count(descriptors) + " descriptors for seed")
 
             // Limit mutations per seed
             var mutationLimit = min(count(descriptors), this.MAX_MUTATIONS_PER_SEED)

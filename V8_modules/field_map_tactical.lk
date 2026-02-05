@@ -78,7 +78,6 @@ class FieldMap extends FieldMapPatterns {
                 push(this._enemyAccessCacheIds, eid)
             }
             this._enemyAccessCacheTurn = curTurn
-            debug("[HNS][CACHE] Rebuilt enemy access cache size=" + count(this._enemyAccessCache))
         }
         return this._enemyAccessCache
     }
@@ -178,11 +177,9 @@ class FieldMap extends FieldMapPatterns {
 
         if (isApproachMode) {
             if (bestCell != playerPos) mark(bestCell, getColor(255, 200, 120), 3)
-            debug("[HNS-" + mode + "] bestCell=" + bestCell + " canAttack=" + bestCanAttack + " danger=" + bestDanger + " dist=" + bestDist + " cover=" + bestCover + " currentDist=" + currentDist)
             return ['cell': bestCell, 'danger': bestDanger, 'canAttack': bestCanAttack, 'dist': bestDist, 'cover': bestCover, 'safe': (bestDanger == 0)]
         } else {
             if (bestCell != playerPos) mark(bestCell, getColor(120, 200, 255), 3)
-            debug("[HNS-" + mode + "] bestCell=" + bestCell + " danger=" + bestDanger + " dist=" + bestDist + " cover=" + bestCover + " playerPos=" + playerPos)
             return ['cell': bestCell, 'danger': bestDanger, 'safe': (bestDanger == 0), 'dist': bestDist, 'cover': bestCover]
         }
     }
@@ -338,7 +335,6 @@ class FieldMap extends FieldMapPatterns {
             target
         )
 
-        debug("[OTKO-TELEPORT] bestCell=" + bestCell + " projectedDamage=" + floor(bestDamage) + " targetHP=" + targetHP + " killProbability=" + round(killProb * 100) + "%")
 
         return ['cell': bestCell, 'damage': bestDamage, 'killProbability': killProb]
     }
@@ -476,7 +472,6 @@ class FieldMap extends FieldMapPatterns {
                 if (mapContainsKey(this._threatMapCacheEnemyPositions, eid)) {
                     if (this._threatMapCacheEnemyPositions[eid] != enemy._cellPos) {
                         cacheValid = false
-                        debug("[THREAT-MAP] Cache invalid: enemy " + getName(eid) + " moved")
                         break
                     }
                 } else {
@@ -487,11 +482,9 @@ class FieldMap extends FieldMapPatterns {
         }
 
         if (cacheValid) {
-            debug("[THREAT-MAP] Using cached threat map (turn " + currentTurn + ")")
             return
         }
 
-        debug("[THREAT-MAP] Building new threat map for turn " + currentTurn)
         mapClear(this.enemyThreatMap)
         mapClear(this._threatMapCacheEnemyPositions)
         mapClear(this._lobbyThreatMap)
@@ -501,14 +494,12 @@ class FieldMap extends FieldMapPatterns {
         var enemyCount = count(mapKeys(enemies))
 
         if (enemyCount == 0) {
-            debug("[THREAT-MAP] No enemies detected")
             return
         }
 
         // Detect Battle Royale mode using built-in function
         this._isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
         if (this._isBattleRoyale) {
-            debug("[THREAT-MAP] Battle Royale mode detected: " + enemyCount + " enemies (FFA)")
         }
 
         // Battle Royale optimization: Sort enemies by distance, limit detailed calculation
@@ -548,17 +539,14 @@ class FieldMap extends FieldMapPatterns {
 
                 if (dist > 20) {
                     // Skip very distant enemies
-                    debug("[THREAT-MAP-BR] Skipping distant enemy " + getName(enemy._id) + " (dist=" + dist + ")")
                     continue
                 }
 
                 if (processed < 3 || dist <= 10) {
                     // Full computation for 3 closest or close enemies
-                    debug("[THREAT-MAP-BR] Full computation for enemy " + getName(enemy._id) + " (dist=" + dist + ", rank=" + (processed + 1) + ")")
                     this.addEnemyThreatToMap(enemy)
                 } else {
                     // Simplified estimation for distant enemies
-                    debug("[THREAT-MAP-BR] Simplified computation for enemy " + getName(enemy._id) + " (dist=" + dist + ")")
                     this.addSimplifiedThreatEstimate(enemy, dist)
                 }
 
@@ -572,7 +560,6 @@ class FieldMap extends FieldMapPatterns {
                 if (!isDead(eid)) totalEnemyMP += enemy._currMp
             }
             if (totalEnemyMP > 20) {
-                debug("[THREAT-MAP] SKIPPED - Total enemy MP too high (" + totalEnemyMP + ") - operations limit risk")
                 this._threatMapCacheTurn = currentTurn
                 return
             }
@@ -589,7 +576,6 @@ class FieldMap extends FieldMapPatterns {
         this._threatMapCacheTurn = currentTurn
 
         var threatenedCells = count(mapKeys(this.enemyThreatMap))
-        debug("[THREAT-MAP] Complete. " + threatenedCells + " cells threatened by " + enemyCount + " enemies")
     }
 
     addSimplifiedThreatEstimate(enemy, enemyDist) {
@@ -634,14 +620,12 @@ class FieldMap extends FieldMapPatterns {
         var enemyMP = enemy._currMp
         var enemyWeapons = getWeapons(enemy._id)
 
-        debug("[THREAT-MAP] Processing enemy " + getName(enemy._id) + " at cell " + enemyPos + " (MP=" + enemyMP + ", weapons=" + count(enemyWeapons) + ")")
 
         var totalThreats = 0
 
         // Optimization: Only calculate threat for cells player can actually reach
         var reachableCells = getReachableCells()
         if (count(reachableCells) == 0) {
-            debug("[THREAT-MAP]   No reachable cells, skipping threat calculation")
             return
         }
 
@@ -657,7 +641,6 @@ class FieldMap extends FieldMapPatterns {
             for (var cellId in reachableCells) {
                 // Safety valve (raised to 12M for deeper search)
                 if (getOperations() > 12000000) {
-                    debug("[THREAT-MAP] Operation limit at 12M, aborting threat calculation")
                     return
                 }
 
@@ -687,7 +670,6 @@ class FieldMap extends FieldMapPatterns {
             }
         }
 
-        debug("[THREAT-MAP]   Added " + totalThreats + " threat markers for " + getName(enemy._id))
     }
 
     getReachableCellsWithinMP(startCell, maxMP) {
@@ -817,7 +799,6 @@ class FieldMap extends FieldMapPatterns {
             }
         }
 
-        debug("[THREAT-MAP] Found " + count(safe) + " safe cells within " + maxMP + " MP (threat ≤ " + maxThreat + ")")
         return safe
     }
 
@@ -856,7 +837,6 @@ class FieldMap extends FieldMapPatterns {
         if (bestWaypoint != -1) {
             var threat = this.getThreatAtCell(bestWaypoint)
             var newDist = getCellDistance(bestWaypoint, targetCell)
-            debug("[MULTI-TURN] Waypoint to " + targetCell + ": cell " + bestWaypoint + " (threat=" + floor(threat) + ", remaining dist=" + newDist + ")")
         }
 
         return bestWaypoint
@@ -876,7 +856,10 @@ class FieldMap extends FieldMapPatterns {
             var ourDamage = cell._totalDamage
             var threat = this.getThreatAtCell(cell._id)
 
-            var score = ourDamage - (threat * threatWeight)
+            // Calculate multi-target LoS bonus (Phase 4)
+            var multiTargetBonus = this.calculateMultiTargetBonus(cell._id)
+
+            var score = ourDamage - (threat * threatWeight) + multiTargetBonus
 
             if (score > bestScore) {
                 bestScore = score
@@ -886,11 +869,57 @@ class FieldMap extends FieldMapPatterns {
 
         if (best != -1) {
             var threat = this.getThreatAtCell(best._id)
+            var multiTargetBonus = this.calculateMultiTargetBonus(best._id)
             var multiHitInfo = best._enemiesHitCount >= 2 ? ", MULTI-HIT: " + best._enemiesHitCount + " enemies" : ""
-            debug("[THREAT-MAP] Best tactical cell: " + best._id + " (damage=" + best._totalDamage + ", threat=" + threat + ", score=" + bestScore + multiHitInfo + ")")
         }
 
         return best
+    }
+
+    // Phase 4: Multi-target LoS positioning bonus
+    calculateMultiTargetBonus(cellId) {
+        var enemies = this.getEnemySubMap()
+        if (count(mapKeys(enemies)) <= 1) return 0
+
+        var hasLoSToBulb = false
+        var hasLoSToLeek = false
+        var bulbCount = 0
+        var leekCount = 0
+
+        for (var eid in mapKeys(enemies)) {
+            var enemy = enemies[eid]
+            if (enemy == null || isDead(eid)) continue
+
+            // Check LoS from cell to enemy
+            if (!lineOfSight(cellId, enemy._cellPos)) continue
+
+            // Classify enemy type
+            if (isBulb(enemy)) {
+                hasLoSToBulb = true
+                bulbCount++
+            } else {
+                hasLoSToLeek = true
+                leekCount++
+            }
+        }
+
+        var bonus = 0
+
+        // Bonus for having LoS to both types (AoE opportunity)
+        if (hasLoSToBulb && hasLoSToLeek) {
+            bonus += 500
+        } else if (hasLoSToBulb) {
+            bonus += 200
+        } else if (hasLoSToLeek) {
+            bonus += 200
+        }
+
+        // Additional bonus for multiple targets
+        if (bulbCount + leekCount >= 3) {
+            bonus += 300
+        }
+
+        return bonus
     }
 
     getHideAndSeekCell() {

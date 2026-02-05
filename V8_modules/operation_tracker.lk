@@ -9,7 +9,6 @@ function startOp() {
 
 function stopOp(title) {
     var ops = getOperations() - __debug_operation - 3  
-    debug("[OPS] " + title + ": " + ops + " ops")
     push(__operation_log, [title, ops])
     return ops
 }
@@ -20,24 +19,18 @@ function getTotalOps() {
 
 function logCheckpoint(label) {
     var total = getOperations()
-    debug("[OPS-CHECKPOINT] " + label + ": " + total + " total ops")
     push(__operation_totals, [label, total])
 }
 
 function printOpsSummary() {
-    debug("[OPS-SUMMARY] ========== OPERATION USAGE SUMMARY ==========")
 
     var grandTotal = 0
     for (var entry in __operation_log) {
         var title = entry[0]
         var ops = entry[1]
-        debug("[OPS-SUMMARY] " + title + ": " + ops + " ops")
         grandTotal += ops
     }
 
-    debug("[OPS-SUMMARY] Total tracked: " + grandTotal + " ops")
-    debug("[OPS-SUMMARY] Actual total: " + getOperations() + " ops")
-    debug("[OPS-SUMMARY] ============================================")
 }
 
 function clearOpsLog() {

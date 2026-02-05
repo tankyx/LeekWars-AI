@@ -321,7 +321,6 @@ class FieldMapPatterns extends FieldMapCore {
 
         if (this._lastCacheKey == cacheKey && this._lastCacheKey != "") {
             this.damageMap = this._damageMapCache
-            debug("[CACHE] Using cached damage map for enemy " + enemyId + " at cell " + oppCell)
             return this.damageMap
         }
 
@@ -336,7 +335,6 @@ class FieldMapPatterns extends FieldMapCore {
             if (count(dmCell._chipsList) > 0) push(chipCells, dmCell._id)
             else if (count(dmCell._weaponsList) > 0) push(weaponOnlyCells, dmCell._id)
         }
-        debug("[HITMAP][SUMMARY] chipCells=" + chipCells + " weaponOnlyCellsSample=" + (count(weaponOnlyCells) > 0 ? weaponOnlyCells : []))
 
         var multiHitCells = []
         for (var cell in this.damageMap) {
@@ -345,12 +343,9 @@ class FieldMapPatterns extends FieldMapCore {
             }
         }
         if (count(multiHitCells) > 0) {
-            debug("[MULTI-HIT] ⚡ Found " + count(multiHitCells) + " cells with 2+ enemy hits:")
             for (var mh in multiHitCells) {
-                debug("  Cell " + mh['cell'] + ": " + mh['enemies'] + " enemies, " + floor(mh['damage']) + " total AoE damage")
             }
         } else {
-            debug("[MULTI-HIT] No multi-enemy AoE opportunities detected")
         }
 
         var target = null
@@ -411,15 +406,12 @@ class FieldMapPatterns extends FieldMapCore {
             }
 
             if (otkoCount > 0) {
-                debug("[OTKO-CELLS] ⚡ Found " + otkoCount + " OTKO cells (checked " + cellsChecked + " candidates, enemy HP=" + target._currHealth + ")")
             } else {
-                debug("[OTKO-CELLS] No OTKO opportunities found (checked " + cellsChecked + " cells, enemy HP=" + target._currHealth + ")")
             }
         }
 
         this._damageMapCache = this.damageMap
         this._lastCacheKey = cacheKey
-        debug("[CACHE] Cached damage map for " + cacheKey)
 
         return this.damageMap
     }
@@ -450,6 +442,9 @@ class FieldMapPatterns extends FieldMapCore {
             }
 
             for (var chipId in cellData.usableChips) {
+                // Skip buff/heal/utility chips
+                if (this.isBuffChip(chipId)) continue
+
                 var chip = arsenal.playerEquippedChips[chipId]
                 if (chip != null) {
                     this.updateHitCells(this.damageMap, cellId, null, chip, oppCell)
@@ -466,13 +461,39 @@ class FieldMapPatterns extends FieldMapCore {
 
         for (var weaponId in mapKeys(this.weaponHitmap)) {
             var cells = this.weaponHitmap[weaponId]
-            debug("[HITMAP][WEAPON] " + getWeaponName(weaponId) + " shooterCells=[" + count(cells) + " cells]")
         }
 
         for (var chipId in mapKeys(this.chipHitmap)) {
             var cells = this.chipHitmap[chipId]
-            debug("[HITMAP][CHIP] " + getChipName(chipId) + " shooterCells=[" + count(cells) + " cells]")
         }
+    }
+
+    isBuffChip(chipId) {
+        // Buff chips (stat boosts)
+        if (chipId == CHIP_WIZARDRY || chipId == CHIP_STEROID || chipId == CHIP_WARM_UP) return true
+        if (chipId == CHIP_DOPING || chipId == CHIP_RAGE || chipId == CHIP_TRANQUILIZER) return true
+
+        // Shield/protection chips
+        if (chipId == CHIP_FORTRESS || chipId == CHIP_WALL || chipId == CHIP_HELMET) return true
+        if (chipId == CHIP_SHIELD || chipId == CHIP_PROTEIN) return true
+
+        // Heal/HP chips
+        if (chipId == CHIP_REMISSION || chipId == CHIP_REGENERATION || chipId == CHIP_CURE) return true
+        if (chipId == CHIP_DRIP || chipId == CHIP_BANDAGE) return true
+        if (chipId == CHIP_KNOWLEDGE || chipId == CHIP_ELEVATION || chipId == CHIP_ARMORING) return true
+
+        // Resource management chips
+        if (chipId == CHIP_LEATHER_BOOTS || chipId == CHIP_ADRENALINE) return true
+        if (chipId == CHIP_SPARK || chipId == CHIP_FEROCITY) return true
+
+        // Damage return chips
+        if (chipId == CHIP_MIRROR || chipId == CHIP_THORN || chipId == CHIP_BRAMBLE) return true
+
+        // Utility chips
+        if (chipId == CHIP_ANTIDOTE || chipId == CHIP_MOTIVATION) return true
+        if (chipId == CHIP_TELEPORTATION || chipId == CHIP_INVERSION) return true
+
+        return false  // Damage/debuff chips (offensive)
     }
 
     integrateEquippedItemsIntoDamageMap(oppCell) {
@@ -481,7 +502,6 @@ class FieldMapPatterns extends FieldMapCore {
         var useGraph = count(reachableCells) > 0
 
         if (useGraph) {
-            debug("[HITMAP][PHASE1] Using reachable graph (" + count(reachableCells) + " cells)")
         }
 
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
@@ -515,11 +535,14 @@ class FieldMapPatterns extends FieldMapCore {
             }
 
             this.weaponHitmap[wObj._id] = listIDs
-            debug("[HITMAP][WEAPON] " + getWeaponName(wObj._id) + " shooterCells=" + listIDs)
         }
 
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
+
+            // Skip buff/heal/utility chips (they don't need hitmaps)
+            if (this.isBuffChip(cid)) continue
+
             var listCID = []
 
             if (useGraph) {
@@ -550,7 +573,6 @@ class FieldMapPatterns extends FieldMapCore {
             }
 
             this.chipHitmap[chipObj._id] = listCID
-            debug("[HITMAP][CHIP] " + getChipName(chipObj._id) + " shooterCells=" + listCID)
         }
     }
 
@@ -579,7 +601,6 @@ class FieldMapPatterns extends FieldMapCore {
         var enemyCount = optimalAim['hitCount']
 
         if (optimalAimCell != targetCell) {
-            debug("[OPTIMAL-AIM] Cell " + curCell + " " +
                   (weapon != null ? getWeaponName(itemId) : getChipName(itemId)) +
                   ": aim " + optimalAimCell + " vs target " + targetCell +
                   " (damage: " + floor(totalDamage) + ", hits " + enemyCount + " enemies)")
@@ -703,7 +724,6 @@ class FieldMapPatterns extends FieldMapCore {
 
             var dist = getCachedPathLength(playerPos, c._id)
             if (dist == null) {
-                debug("No path to cell " + c._id)
                 continue
             }
 
@@ -723,7 +743,6 @@ class FieldMapPatterns extends FieldMapCore {
         for (var c in this.damageMap) {
             var dist = getCachedPathLength(playerPos, c._id)
             if (dist == null) {
-                debug("No path to cell " + c._id)
                 continue
             }
 

@@ -143,3 +143,88 @@ class Chest extends Entity {
         super(cellPos);
     }
 }
+
+// Bulb type classification
+global BULB_TYPE_HEALER = 1
+global BULB_TYPE_BUFFER = 2
+global BULB_TYPE_ATTACKER = 3
+global BULB_TYPE_UNKNOWN = 0
+
+// Bulb detection and classification
+function isBulb(entity) {
+    if (entity == null) return false
+    var entityType = getType(entity._id)
+
+    // LeekScript only has ENTITY_BULB for all bulb types
+    return (entityType == ENTITY_BULB)
+}
+
+function getBulbType(entity) {
+    if (entity == null || !isBulb(entity)) return BULB_TYPE_UNKNOWN
+
+    // Analyze chips to classify bulb type (no specific bulb type constants in LeekScript)
+    var chips = entity._chips
+    if (chips == null || count(chips) == 0) return BULB_TYPE_UNKNOWN
+
+    // Check for healing chips (highest priority)
+    for (var chipId in chips) {
+        if (chipId == CHIP_REGENERATION || chipId == CHIP_REMISSION ||
+            chipId == CHIP_CURE || chipId == CHIP_DRIP) {
+            return BULB_TYPE_HEALER
+        }
+    }
+
+    // Check for buff chips
+    for (var chipId in chips) {
+        if (chipId == CHIP_STEROID || chipId == CHIP_WARM_UP ||
+            chipId == CHIP_FORTRESS || chipId == CHIP_WALL ||
+            chipId == CHIP_PROTEIN || chipId == CHIP_SHIELD) {
+            return BULB_TYPE_BUFFER
+        }
+    }
+
+    // Default to attacker
+    return BULB_TYPE_ATTACKER
+}
+
+// Estimate bulb stat based on summoner level
+function estimateBulbStat(minStat, maxStat, summonerLevel) {
+    var level = min(300, summonerLevel)
+    return floor(minStat + (maxStat - minStat) * level / 300)
+}
+
+// Get summoner level (fallback: use bulb level as proxy)
+function getSummonerLevel(entityId) {
+    // LeekScript provides getLevel() for all entities
+    var level = getLevel(entityId)
+    if (level != null && level > 0) return level
+
+    // Fallback: assume mid-level summoner
+    return 150
+}
+
+// Estimate bulb HP based on summoner level
+function estimateBulbHP(entity) {
+    if (entity == null) return 0
+
+    // If we have actual HP, use it
+    if (entity._maxHealth > 0) return entity._maxHealth
+
+    var summonerLevel = getSummonerLevel(entity._id)
+
+    // Bulb HP range: 50-300 (scales with summoner level)
+    return estimateBulbStat(50, 300, summonerLevel)
+}
+
+// Check if bulb is killable this turn
+function canKillBulbThisTurn(bulb, availableDamage) {
+    if (bulb == null) return false
+
+    var estimatedHP = estimateBulbHP(bulb)
+    var currentHP = bulb._currHealth
+
+    // Use actual HP if available, otherwise use estimate
+    var targetHP = currentHP > 0 ? currentHP : estimatedHP
+
+    return availableDamage >= targetHP
+}

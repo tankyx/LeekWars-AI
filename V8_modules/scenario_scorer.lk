@@ -1,4 +1,5 @@
 include('game_entity.lk')
+include('cooldown_tracker.lk')
 
 class ScenarioScorer {
     _player = null
@@ -38,25 +39,21 @@ class ScenarioScorer {
         var effectiveDamage = totalDamage
         if (isBattleRoyale && simResult.totalLobbyDamage > 0) {
             effectiveDamage = simResult.totalLobbyDamage
-            debug("[SCORER-BR] Lobby damage: " + floor(simResult.totalLobbyDamage) +
                   " (primary=" + floor(totalDamage) + ", enemies hit=" + simResult.enemiesHit + ")")
         }
 
         // Bulb damage multiplier: configurable via weights
         var bulbDamageMultiplier = targetIsBulb ? this.getWeight('bulbDamageMultiplier', 1.2) : 1.0
         if (targetIsBulb) {
-            debug("[SCORER-BULB] Target is bulb (type=" + bulbType + ") - damage multiplier: " + bulbDamageMultiplier + "×")
         }
 
         var damageWeight = this.getWeight('burstDamage', this.calculateDamageWeight())
 
         if (killProbability >= 0.70) {
             damageWeight *= 5.0
-            debug("[SCORER-BOOST] Kill opportunity: dmg=" + floor(totalDamage) +
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 5x damage weight")
         } else if (killProbability >= 0.50) {
             damageWeight *= 2.5
-            debug("[SCORER-BOOST] Near-kill: dmg=" + floor(totalDamage) +
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
         }
 
@@ -69,13 +66,10 @@ class ScenarioScorer {
         if (targetIsBulb && killProbability >= 0.70) {
             if (bulbType == BULB_TYPE_HEALER) {
                 bulbKillBonus = this.getWeight('bulbKillBonusHealer', 2500)
-                debug("[SCORER-BULB] HEALER bulb kill bonus: +" + bulbKillBonus)
             } else if (bulbType == BULB_TYPE_BUFFER) {
                 bulbKillBonus = this.getWeight('bulbKillBonusBuffer', 1500)
-                debug("[SCORER-BULB] BUFFER bulb kill bonus: +" + bulbKillBonus)
             } else if (bulbType == BULB_TYPE_ATTACKER) {
                 bulbKillBonus = this.getWeight('bulbKillBonusAttacker', 800)
-                debug("[SCORER-BULB] ATTACKER bulb kill bonus: +" + bulbKillBonus)
             }
         }
         score += bulbKillBonus
@@ -84,14 +78,12 @@ class ScenarioScorer {
         if (isBattleRoyale && simResult.killsSecured > 0) {
             var lobbySizeBonus = simResult.killsSecured * 5000
             score += lobbySizeBonus
-            debug("[SCORER-BR] Lobby size reduction: +" + lobbySizeBonus + " (" + simResult.killsSecured + " kills)")
         }
 
         // Battle Royale: bonus for hitting multiple enemies with AoE
         if (isBattleRoyale && simResult.enemiesHit >= 2) {
             var aoeBonus = (simResult.enemiesHit - 1) * 1000
             score += aoeBonus
-            debug("[SCORER-BR] Multi-target AoE: +" + aoeBonus + " (" + simResult.enemiesHit + " enemies)")
         }
 
         var playerHPPercent = (this._player._currHealth * 100) / this._player._maxHealth
@@ -102,24 +94,31 @@ class ScenarioScorer {
             // Reduce penalty for early turns (turn 1-3) when positioning is expected
             if (currentTurn <= 3) {
                 noDamagePenalty = noDamagePenalty / 4  // -500 instead of -2000
-                debug("[SCORER-PENALTY] No damage dealt (early turn " + currentTurn + ") - reduced penalty: " + noDamagePenalty)
             } else {
-                debug("[SCORER-PENALTY] No damage dealt (turn " + currentTurn + ") - full penalty: " + noDamagePenalty)
             }
 
             score += noDamagePenalty
         }
 
         var dotWeight = this.getWeight('dotEffects', this.calculateDotWeight())
-        var dotScore = simResult.dotDamageQueued * dotWeight
+
+        // Dynamic DoT weight: scale by Antidote availability
+        var antidoteMultiplier = this.calculateAntidoteMultiplier()
+        var adjustedDotWeight = dotWeight * antidoteMultiplier
+
+        var dotScore = simResult.dotDamageQueued * adjustedDotWeight
         score += dotScore
+
+        if (dotScore > 0 && antidoteMultiplier != 1.0) {
+                  "× (base=" + floor(simResult.dotDamageQueued * dotWeight) +
+                  " → adjusted=" + floor(dotScore) + ")")
+        }
 
         var novaWeight = this.getWeight('novaEffects', (dotWeight + damageWeight) / 2.0)
         var novaDamageQueued = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
         var novaScore = novaDamageQueued * novaWeight
         score += novaScore
         if (novaScore > 0) {
-            debug("[SCORER-NOVA] Nova damage: " + floor(novaDamageQueued) + " × " + novaWeight + " = " + floor(novaScore))
         }
 
         var ehpWeight = this.calculateEhpWeight()
@@ -135,7 +134,6 @@ class ScenarioScorer {
             if (hpRatio < 0.3) healingUrgencyBonus = simResult.hpGained * 3.0
             else if (hpRatio < 0.5) healingUrgencyBonus = simResult.hpGained * 1.5
             else if (hpRatio < 0.8) healingUrgencyBonus = simResult.hpGained * 0.5
-            debug("[SCORER][HEAL] Healing urgency bonus: HP=" + floor(currentHP) + "/" + maxHP +
                   " (" + floor(hpRatio * 100) + "%), heal=" + floor(simResult.hpGained) +
                   ", bonus=" + floor(healingUrgencyBonus))
         }
@@ -164,7 +162,6 @@ class ScenarioScorer {
             var cell = this._fieldMap.damageMap[finalPos]
             if (cell._isOTKOCell) {
                 otkoBonus = this.getWeight('otkoBonus', 5000)
-                debug("[SCORER-OTKO] +" + otkoBonus + " bonus: Final position cell " + finalPos +
                       " is OTKO cell (kill prob=" + floor(cell._otkoKillProbability * 100) +
                       "%, damage=" + floor(cell._otkoDamage) + ")")
             }
@@ -172,16 +169,38 @@ class ScenarioScorer {
         score += otkoBonus
 
         var checkpointBonus = 0
+        var poisonDumpBonus = 0
         if (scenario != null && count(scenario) > 0) {
             for (var action in scenario) {
                 if (action.type == 15) {
-                    checkpointBonus = this.getWeight('checkpointBonus', 2500)
-                    debug("[SCORER-CHECKPOINT] +" + checkpointBonus + " bonus: Two-phase adaptive scenario (type=" + action.checkpointType + ")")
+                    if (action.checkpointType == "POISON_DUMP") {
+                        // Poison dump scenario - ALWAYS prioritize (must-use at all cost)
+                        poisonDumpBonus = 10000  // Massive bonus to guarantee selection
+                    } else {
+                        checkpointBonus = this.getWeight('checkpointBonus', 2500)
+                    }
                     break
                 }
             }
         }
-        score += checkpointBonus
+        score += checkpointBonus + poisonDumpBonus
+
+        // WEAPON_DESTROYER synergy: bonus when shredding high-Strength enemies
+        var destroyerBonus = 0
+        if (scenario != null && count(scenario) > 0 && this._target._strength > 150) {
+            var destroyerUses = 0
+            for (var action in scenario) {
+                if (action.weaponId == WEAPON_DESTROYER) {
+                    destroyerUses++
+                }
+            }
+            if (destroyerUses > 0) {
+                // Each use applies -17 STR debuff (stackable), protecting player from counterattacks
+                destroyerBonus = destroyerUses * 400
+                      " Destroyer uses vs high-STR target (" + this._target._strength + " STR)")
+            }
+        }
+        score += destroyerBonus
 
         // Battle Royale: Center avoidance penalty (EARLY phase only)
         var centerPenalty = 0
@@ -201,7 +220,6 @@ class ScenarioScorer {
                             // Moving closer to center = bad
                             var movementTowardCenter = currentDistToCenter - finalDistToCenter
                             centerPenalty = movementTowardCenter * 150  // Heavy penalty
-                            debug("[SCORER-BR] Center avoidance: moved " + movementTowardCenter + " cells closer, penalty=" + floor(centerPenalty))
                         }
                     }
                 }
@@ -218,25 +236,22 @@ class ScenarioScorer {
             if (hpRatio < 0.45 && (threatAtPos > 800 || !hasShield)) {
                 if (hpRatio < 0.30) {
                     survivalMultiplier = 50.0
-                    debug("[SCORER][SURVIVAL-CRITICAL] Extreme danger (HP=" + floor(hpRatio * 100) + "%, threat=" + floor(threatAtPos) + ") - 50x multiplier")
                 } else if (hpRatio < 0.40) {
                     survivalMultiplier = 25.0
-                    debug("[SCORER][SURVIVAL-CRITICAL] Critical danger (HP=" + floor(hpRatio * 100) + "%, threat=" + floor(threatAtPos) + ") - 25x multiplier")
                 } else {
                     survivalMultiplier = 10.0
-                    debug("[SCORER][SURVIVAL-CRITICAL] High danger (HP=" + floor(hpRatio * 100) + "%, threat=" + floor(threatAtPos) + ") - 10x multiplier")
                 }
             }
         }
 
         score *= survivalMultiplier
 
-        debug("[SCORE] Total=" + floor(score) + " (×" + survivalMultiplier + ") | dmg=" + floor(damageScore) + " dot=" + floor(dotScore) +
               " eHP=" + floor(shieldScore + relShieldScore + healScore) +
               " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
               " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
               " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus) +
-              " bulb=" + floor(bulbKillBonus))
+              " bulb=" + floor(bulbKillBonus) + " destr=" + floor(destroyerBonus) +
+              " poison=" + floor(poisonDumpBonus))
 
         return score
     }
@@ -269,8 +284,33 @@ class ScenarioScorer {
         if (mag > str && mag > agi) {
             return 2.0 + (mag / 1000.0)
         }
-        
+
         return 0.3
+    }
+
+    calculateAntidoteMultiplier() {
+        // Calculate DoT value multiplier based on enemy Antidote cooldown status
+        var enemyId = this._target._id
+        var tracker = new CooldownTracker(this._target)
+        var antidoteCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+
+        if (antidoteCd == 0) {
+            // Antidote READY → enemy will cleanse next turn
+            // Use cheap poison to bait (Venom, Toxin, Gazor)
+            return 0.2
+        } else if (antidoteCd == 1) {
+            // 1 turn remaining → light poison OK
+            return 1.7
+        } else if (antidoteCd == 2) {
+            // 2 turns remaining → medium investment
+            return 1.9
+        } else if (antidoteCd >= 3) {
+            // 3+ turns remaining → full dump window
+            return 2.1 + (antidoteCd * 0.2)
+        }
+
+        // Default: no tracking data → assume Antidote available
+        return 1.0
     }
 
     calculateEhpWeight() {
@@ -299,7 +339,6 @@ class ScenarioScorer {
         var threatAtPos = this._fieldMap.getThreatAtCell(playerPos)
         if (threatAtPos > 200) {
             urgencyMultiplier *= 1.5
-            debug("[SCORER][EHP] High threat (" + floor(threatAtPos) + ") - boosting eHP weight by 1.5x")
         }
 
         return baseWeight * urgencyMultiplier
@@ -366,7 +405,6 @@ class ScenarioScorer {
             var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
             if (hpPercent < 50) {
                 threatPenalty *= 2.0  
-                debug("[SCORER][THREAT] Low HP + high threat cell " + finalPos + ": threat=" + floor(threatAtPos) + ", penalty=" + floor(threatPenalty))
             }
         }
 
@@ -425,11 +463,9 @@ class ScenarioScorer {
         if (killMargin >= 1.1) {
             // Kill is guaranteed with 10% safety margin - heavily de-prioritize buffs
             buffMultiplier = 0.1
-            debug("[SCORER-BUFF] Kill guaranteed (margin=" + killMargin + ") - 90% buff penalty")
         } else if (killMargin < 0.7 && expectedDamage > 200) {
             // No kill possible + high threat - force buffs
             buffMultiplier = 5.0
-            debug("[SCORER-BUFF] No kill possible (margin=" + killMargin + ") + high threat - 5x buff bonus")
         }
 
         for (var buffChip in buffsApplied) {
@@ -455,7 +491,6 @@ class ScenarioScorer {
                 var wallValue = effectiveHP * 0.5  // Scale down to reasonable scorer range
                 if (wallValue < 80) wallValue = 80  // Minimum value
                 value += wallValue
-                debug("[SCORER-BUFF] WALL value: reduction=" + floor(reductionPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(wallValue))
             }
 
             if (buffChip == CHIP_FORTRESS) {
@@ -467,7 +502,6 @@ class ScenarioScorer {
                 var fortressValue = effectiveHP * 0.5  // Scale down to reasonable scorer range
                 if (fortressValue < 150) fortressValue = 150  // Minimum value
                 value += fortressValue
-                debug("[SCORER-BUFF] FORTRESS value: reduction=" + floor(reductionPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(fortressValue))
             }
 
             if (buffChip == CHIP_PROTEIN || buffChip == CHIP_LEATHER_BOOTS) value += 100
@@ -488,7 +522,6 @@ class ScenarioScorer {
                 var mirrorValue = returnDamage * 0.8  // Scale down to reasonable scorer range
                 if (mirrorValue < 100) mirrorValue = 100  // Minimum value
                 value += mirrorValue
-                debug("[SCORER-BUFF] MIRROR value: return=" + floor(returnPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(mirrorValue))
             }
 
             if (buffChip == CHIP_THORN) {
@@ -499,7 +532,6 @@ class ScenarioScorer {
                 var thornValue = returnDamage * 0.8  // Scale down to reasonable scorer range
                 if (thornValue < 80) thornValue = 80  // Minimum value
                 value += thornValue
-                debug("[SCORER-BUFF] THORN value: return=" + floor(returnPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(thornValue))
             }
 
             if (buffChip == CHIP_BRAMBLE) {
@@ -513,10 +545,8 @@ class ScenarioScorer {
                 var brambleValue = 0
                 if (expectedDamage > 300) {
                     brambleValue = returnDamage * 1.5  // Higher multiplier for burst value
-                    debug("[SCORER-BUFF] BRAMBLE tactical burst: return=" + floor(returnPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(brambleValue))
                 } else {
                     brambleValue = 50  // Minimal value if no threat (discourage usage)
-                    debug("[SCORER-BUFF] BRAMBLE low threat: discouraged (threat=" + floor(expectedDamage) + ")")
                 }
 
                 value += brambleValue

@@ -64,7 +64,6 @@ class BeamSearchPlanner {
     // =========================================================================
 
     findBestSequence() {
-        debug("[BeamSearch] Starting search (width=" + this.BEAM_WIDTH + ", depth=" + this.MAX_DEPTH + ")")
         var opsBefore = getOperations()
 
         // 1. Initialize beam with current game state
@@ -76,33 +75,27 @@ class BeamSearchPlanner {
         for (var seed in seeds) {
             push(beam, seed)
         }
-        debug("[BeamSearch] Initial beam: 1 empty state + " + count(seeds) + " seeds = " + count(beam) + " total")
 
         // 2. Expand beam for MAX_DEPTH iterations
         for (var depth = 1; depth <= this.MAX_DEPTH; depth++) {
             // Check operation budget
             if (getOperations() > this.OPS_LIMIT) {
-                debug("[BeamSearch] Ops limit reached at depth " + depth)
                 break
             }
 
-            debug("[BeamSearch] Depth " + depth + " - Expanding " + count(beam) + " states")
 
             // Expand beam
             var newBeam = this.expandBeam(beam)
 
-            debug("[BeamSearch] Depth " + depth + " - Generated " + count(newBeam) + " successor states")
 
             // Check if expansion failed (no valid actions)
             if (count(newBeam) == 0) {
-                debug("[BeamSearch] No valid actions at depth " + depth + ", stopping search")
                 break
             }
 
             // Score and prune
             beam = this.pruneBeam(newBeam)
 
-            debugDetail("BeamSearch: Depth " + depth + " - Pruned to " + count(beam) + " states")
 
             // Early termination if we found a kill
             var bestState = beam[0]
@@ -117,7 +110,6 @@ class BeamSearchPlanner {
         var sequence = this.extractSequence(bestState)
 
         var opsUsed = getOperations() - opsBefore
-        debug("[BeamSearch] Search complete - " + count(sequence) + " actions, score=" +
               floor(bestState.cumulativeScore) + ", ops=" + opsUsed)
 
         return sequence
@@ -135,7 +127,6 @@ class BeamSearchPlanner {
             // Generate valid actions from this state
             var actions = this._actionGenerator.generateActions(state)
 
-            debugVerbose("BeamSearch: State has " + count(actions) + " valid actions")
 
             // Apply each action to create successor states
             for (var action in actions) {
@@ -169,7 +160,6 @@ class BeamSearchPlanner {
         }
 
         if (prunedByHash > 0) {
-            debugDetail("BeamSearch: Pruned " + prunedByHash + " states via transposition table")
         }
 
         return successors
@@ -219,14 +209,12 @@ class BeamSearchPlanner {
     // =========================================================================
 
     generateSeedsFromScenarios() {
-        debug("[BeamSearch-Seeds] Generating scenario seeds...")
 
         // Create scenario generator (same as unified strategy uses)
         var generator = new ScenarioGenerator(this._arsenal, this._player, this._target, this._fieldMap, null)
 
         // Generate scenarios
         var scenarios = generator.generateScenarios()
-        debug("[BeamSearch-Seeds] Generated " + count(scenarios) + " scenarios")
 
         if (count(scenarios) == 0) {
             return []
@@ -241,7 +229,6 @@ class BeamSearchPlanner {
             var seed = this.convertScenarioToSeed(scenario)
             if (seed != null) {
                 push(seeds, seed)
-                debug("[BeamSearch-Seeds] Seed #" + (i+1) + ": " + count(seed.actionSequence) + " actions")
             }
         }
 

@@ -47,7 +47,6 @@ function trackEnemyChipUsage(enemyId, chipId) {
     __enemyChipUsage[enemyId][chipId] = currentTurn
 
     var chipName = "chip_" + chipId
-    debug("[COOLDOWN-TRACK] Enemy " + getName(enemyId) + " used " + chipName + " on turn " + currentTurn)
 }
 
 function predictChipAvailability(enemyId, chipId) {
@@ -174,13 +173,11 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         // Slightly reduce OTKO bonus (harder to isolate targets)
         adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 0.9)
 
-        debug("[WEIGHT-ADAPT] Multiple enemies (" + enemyCount + ") - Threat awareness boost")
     }
     else if (enemyCount == 2) {
         // Two enemies: Slight threat awareness
         adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.2)
 
-        debug("[WEIGHT-ADAPT] Two enemies - Slight threat boost")
     }
 
     // === Turn-Based Adaptation ===
@@ -188,7 +185,6 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         // Early game: Boost TP efficiency (proven helpful)
         adapted['tpEfficiency'] = floor(adapted['tpEfficiency'] * 1.5)
 
-        debug("[WEIGHT-ADAPT] Early game (turn " + currentTurn + ") - TP efficiency boost")
     }
 
     // === REMOVED: Late game burst boost ===

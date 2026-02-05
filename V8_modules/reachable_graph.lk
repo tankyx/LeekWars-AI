@@ -36,7 +36,6 @@ function initializeAdjacency() {
         push(GLOBAL_NEIGHBORS, neighbors)
     }
 
-    debug("[ADJACENCY] Initialized " + count(GLOBAL_NEIGHBORS) + " cells")
     return null
 }
 
@@ -55,7 +54,6 @@ function buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj)
     while (head < count(queue)) {
         // Safety valve (raised to 12M for deeper search)
         if (getOperations() > 12000000) {
-            debug("[REACHABLE-BFS] Safety valve triggered at 12M ops")
             break
         }
 
@@ -83,7 +81,6 @@ function buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj)
     var enrichOps = stopOp("Graph Enrichment")
 
     var cellCount = count(mapKeys(ReachableGraph))
-    debug("[REACHABLE-GRAPH] Built: " + cellCount + " cells, BFS=" + bfsOps + " ops, enrich=" + enrichOps + " ops")
 
     return ReachableGraph
 }

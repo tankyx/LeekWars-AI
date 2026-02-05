@@ -59,7 +59,6 @@ function init() {
         var buildType = detectBuildType(player)
         var weights = getWeightsForBuild(buildType)
 
-        debug("[INIT] Using UnifiedStrategy with build type: " + buildType)
         strategy = new UnifiedStrategy(weights, player, null, arsenal, fieldMap)
         strategy.resetTurnContext()
         strategy.turnOneBuffs()
@@ -72,7 +71,6 @@ function main() {
         __operation_log = []
         __operation_totals = []
         __debug_operation = 0
-        debug("[TURN-1-RESET] Cleared all static variables and caches")
 
         // Phase 1: Initialize adjacency map (one-time setup)
         initializeAdjacency()
@@ -82,7 +80,6 @@ function main() {
     }
 
     player.updateEntity()
-    debug("[MAIN-TURN-" + getTurn() + "] After updateEntity: TP=" + player._currTp + " MP=" + player._currMp)
     fieldMap.updateMapEntities()
 
     var target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
@@ -100,7 +97,6 @@ function main() {
         var killPlanner = new KillPlanner(arsenal, player, target)
         var killPlan = killPlanner.updateGlobalKillPlan()
         if (killPlan != null && mapContainsKey(killPlan, 'active') && killPlan['active']) {
-            debug("[MAIN] 2-turn kill - reserve " + killPlan['tpReserve'] + " TP")
         }
     }
 

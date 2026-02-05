@@ -24,7 +24,6 @@ function debugInfo(message) {
     }
 }
 
-function debugDetail(message) {
     // Level 2: Detailed execution, action queues, damage calculations
     if (DEBUG_LEVEL >= 2) {
         debug(message)

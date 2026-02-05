@@ -113,7 +113,6 @@ class WorldState {
         state.maxHP = player._maxHealth
         state.currentWeapon = player._inUseWeapon
 
-        debug("[WorldState] Created from game: TP=" + state.tp + " MP=" + state.mp + " HP=" + state.hp)
 
         // Player stats
         state.strength = player._strength

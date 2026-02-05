@@ -36,7 +36,7 @@ class UnifiedStrategy extends Strategy {
 
     resetTurnContext() {
         this.initializeTurnContext()
-        debug("[UNIFIED] Turn context reset")
+        debugInfo("[UNIFIED] Turn context reset")
     }
 
     createAndExecuteScenario(target, targetHitCell) {
@@ -45,14 +45,49 @@ class UnifiedStrategy extends Strategy {
         this._originalTP = player._currTp
         this._originalMP = player._currMp
 
-        debug("[UNIFIED] Player TP=" + player._currTp + " MP=" + player._currMp + " at start of turn")
-        debug("[UNIFIED] Using weight-driven scenario generation")
+        debugInfo("[UNIFIED] Player TP=" + player._currTp + " MP=" + player._currMp + " at start of turn")
+        debugInfo("[UNIFIED] Using weight-driven scenario generation")
 
         startOp()
         this.generateAndEvaluateBestScenario(target, targetHitCell)
         stopOp("Unified Multi-Scenario Evaluation")
 
-        this.executeScenario()
+        var targetDied = this.executeScenario()
+
+        // If target died mid-scenario, recalculate for remaining enemies
+        if (targetDied) {
+            var enemies = this._fieldMap.getEnemySubMap()
+            var aliveEnemies = []
+
+            for (var eid in mapKeys(enemies)) {
+                if (!isDead(eid)) {
+                    push(aliveEnemies, enemies[eid])
+                }
+            }
+
+            if (count(aliveEnemies) > 0) {
+
+                // Update player state
+                player.updateEntity()
+
+                // Pick new target (closest or lowest HP)
+                var newTarget = aliveEnemies[0]
+                for (var i = 1; i < count(aliveEnemies); i++) {
+                    var e = aliveEnemies[i]
+                    if (e._currHealth < newTarget._currHealth) {
+                        newTarget = e
+                    }
+                }
+
+                var newTargetHitCell = newTarget._cellPos
+
+                // Clear actions and regenerate
+                arrayClear(this._actions)
+                this.generateAndEvaluateBestScenario(newTarget, newTargetHitCell)
+                this.executeScenario()
+            } else {
+            }
+        }
     }
 
     generateAndEvaluateBestScenario(target, targetHitCell) {
@@ -66,17 +101,12 @@ class UnifiedStrategy extends Strategy {
         // CONCLUSION: Beam search architecture unsuitable for LeekWars domain
         var canUseBeamSearch = (USE_BEAM_SEARCH && currentTurn >= 2)
 
-        debug("[BEAM-SEARCH-FLAG] USE_BEAM_SEARCH=" + USE_BEAM_SEARCH + " turn=" + currentTurn + " enabled=" + canUseBeamSearch)
 
         if (canUseBeamSearch) {
-            debug("[BEAM-SEARCH] Using beam search planner...")
             var beamResult = this.executeWithBeamSearch(target)
-            debug("[BEAM-SEARCH] executeWithBeamSearch returned: " + beamResult)
             if (beamResult) {
-                debug("[BEAM-SEARCH] Beam search succeeded")
                 return
             }
-            debug("[BEAM-SEARCH] Beam search failed, falling back to scenarios")
         }
         // ===== END BEAM SEARCH INTEGRATION =====
 
@@ -93,7 +123,7 @@ class UnifiedStrategy extends Strategy {
         var genOps = stopOp("Generate scenarios (" + count(scenarios) + " total)")
 
         if (count(scenarios) == 0) {
-            debug("[UNIFIED] No scenarios generated - creating fallback")
+            debugInfo("[UNIFIED] No scenarios generated - creating fallback")
             this.createFallbackScenario(target, targetHitCell)
             return
         }
@@ -115,7 +145,7 @@ class UnifiedStrategy extends Strategy {
         var evaluateCount = min(topK, count(scenariosWithQuickScore))
         var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
 
-        debug("[UNIFIED-TOP-K] Quick scored " + count(scenariosWithQuickScore) + " scenarios, evaluating top " + evaluateCount)
+        debugInfo("[UNIFIED-TOP-K] Quick scored " + count(scenariosWithQuickScore) + " scenarios, evaluating top " + evaluateCount)
 
         // ===== PHASE 2: HYBRID MUTATION SYSTEM =====
         var USE_MUTATIONS = true  // Enable/disable mutation system
@@ -154,7 +184,6 @@ class UnifiedStrategy extends Strategy {
             }
 
             evaluateCount = count(scenariosWithQuickScore)
-            debug("[MUTATION] New candidate pool: " + evaluateCount + " scenarios (1 mutated + " + origLimit + " originals)")
         }
         // ===== END PHASE 2: HYBRID MUTATION SYSTEM =====
 
@@ -190,7 +219,7 @@ class UnifiedStrategy extends Strategy {
                 'quickScore': qScore
             ])
 
-            debug("[UNIFIED-TOP-K] Scenario #" + (i+1) + ": quickScore=" + floor(qScore) + " fullScore=" + floor(score))
+            debugInfo("[UNIFIED-TOP-K] Scenario #" + (i+1) + ": quickScore=" + floor(qScore) + " fullScore=" + floor(score))
 
             if (score > bestScore) {
                 bestScore = score
@@ -210,7 +239,6 @@ class UnifiedStrategy extends Strategy {
             var predictor = new EnemyPredictor(this._fieldMap, arsenal, player, target)
             var lookaheadCount = min(1, count(scenarioResults))
 
-            debug("[LOOKAHEAD] Evaluating top " + lookaheadCount + " scenario with enemy prediction")
 
             for (var i = 0; i < lookaheadCount; i++) {
                 var scenarioData = scenarioResults[i]
@@ -230,7 +258,6 @@ class UnifiedStrategy extends Strategy {
                 scenarioData['finalScore'] = lookahead['finalScore']
                 scenarioData['enemyDamage'] = lookahead['enemyDamage']
 
-                debug("[LOOKAHEAD] Scenario #" + (i+1) + ": base=" + floor(scenarioData['score']) +
                           " final=" + floor(lookahead['finalScore']) +
                           " enemyDmg=" + lookahead['enemyDamage'])
             }
@@ -248,24 +275,23 @@ class UnifiedStrategy extends Strategy {
             }
 
             var lookaheadOps = stopOp("Enemy Response Lookahead (top " + lookaheadCount + ")")
-            debug("[LOOKAHEAD] Complete - " + lookaheadOps + " ops")
         }
 
         if (bestScenario != null) {
-            debug("[UNIFIED-BEST] Selected scenario: score=" + floor(bestScore) +
+            debugInfo("[UNIFIED-BEST] Selected scenario: score=" + floor(bestScore) +
                   " dmg=" + floor(bestSimResult.damageDealt) +
                   " dot=" + floor(bestSimResult.dotDamageQueued) +
                   " tp=" + bestSimResult.tpSpent + " mp=" + bestSimResult.mpSpent)
 
             this._actions = bestScenario
         } else {
-            debug("[UNIFIED] No valid scenario found - creating fallback")
+            debugInfo("[UNIFIED] No valid scenario found - creating fallback")
             this.createFallbackScenario(target, targetHitCell)
         }
     }
 
     createFallbackScenario(target, targetHitCell) {
-        debug("[UNIFIED-FALLBACK] Creating basic offensive scenario")
+        debugInfo("[UNIFIED-FALLBACK] Creating basic offensive scenario")
 
         if (targetHitCell != null) {
             var pathLen = getCachedPathLength(player._cellPos, targetHitCell)
@@ -273,7 +299,7 @@ class UnifiedStrategy extends Strategy {
                 var action = new Action(Action.MOVEMENT_APPROACH, -1, -1, targetHitCell, null)
                 push(this._actions, action)
                 player._currMp -= pathLen
-                debug("[UNIFIED-FALLBACK] Move to hit cell " + targetHitCell)
+                debugInfo("[UNIFIED-FALLBACK] Move to hit cell " + targetHitCell)
             }
         }
 
@@ -286,13 +312,13 @@ class UnifiedStrategy extends Strategy {
                 var action = new Action(Action.ACTION_DIRECT, weaponId, -1, target._cellPos, null)
                 push(this._actions, action)
                 player._currTp -= weapon._cost
-                debug("[UNIFIED-FALLBACK] Attack with " + getWeaponName(weaponId))
+                debugInfo("[UNIFIED-FALLBACK] Attack with " + getWeaponName(weaponId))
             }
         }
     }
 
     turnOneBuffs() {
-        debug("[UNIFIED] Calling base turn one HP buffs")
+        debugInfo("[UNIFIED] Calling base turn one HP buffs")
         super.turnOneBuffs()
     }
 
@@ -305,21 +331,13 @@ class UnifiedStrategy extends Strategy {
     // =========================================================================
 
     executeWithBeamSearch(target) {
-        debug("[BEAM-SEARCH] Player TP=" + this._player._currTp + " MP=" + this._player._currMp + " before planner")
-        debug("[BEAM-SEARCH] Creating planner...")
         var planner = new BeamSearchPlanner(this._arsenal, this._fieldMap, this._player, target)
-        debug("[BEAM-SEARCH] Finding best sequence...")
         var actionSequence = planner.findBestSequence()
-        debug("[BEAM-SEARCH] Sequence length: " + (actionSequence == null ? "null" : count(actionSequence)))
         if (actionSequence == null || count(actionSequence) == 0) {
-            debug("[BEAM-SEARCH] No valid sequence found")
             return false
         }
-        debug("[BEAM-SEARCH] Creating executor...")
         var executor = new AtomicActionExecutor(this._arsenal, this._fieldMap, this._player)
-        debug("[BEAM-SEARCH] Executing " + count(actionSequence) + " actions...")
         var successCount = executor.execute(actionSequence)
-        debug("[BEAM-SEARCH] Executed " + successCount + " actions")
         return successCount > 0
     }
 }
