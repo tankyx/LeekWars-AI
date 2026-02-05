@@ -1,3 +1,4 @@
+include('game_entity.lk')
 
 class SimulationResult {
     damageDealt = 0
@@ -18,6 +19,12 @@ class SimulationResult {
     totalLobbyDamage = 0      // Sum of damage to all enemies
     enemiesHit = 0            // Number of enemies hit (AoE)
     killsSecured = 0          // Estimated kills from this scenario
+
+    // Bulb targeting system
+    bulbDamage = 0            // Damage dealt to bulbs
+    leekDamage = 0            // Damage dealt to leeks
+    bulbsHit = 0              // Number of bulbs hit
+    bulbKillsSecured = 0      // Estimated bulb kills
 
     constructor() {
         this.buffsApplied = []
@@ -49,10 +56,13 @@ class ScenarioSimulator {
         var simMagic = this._player._magic
         var simWisdom = this._player._wisdom
         var simScience = this._player._science
-        var simWeaponUses = [:]  
+        var simWeaponUses = [:]
 
         var simEnemyCurrHP = this._target._currHealth
         var simEnemyMaxHP = this._target._maxHealth
+
+        // Detect if target is a bulb
+        var targetIsBulb = isBulb(this._target)
 
         result.finalPosition = simPos
 
@@ -64,7 +74,7 @@ class ScenarioSimulator {
 
             if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT || action.type == Action.ACTION_DEBUFF) {
                 if (action.chip != -1) {
-                    
+
                     var chipCost = getChipCost(action.chip)
                     var chipDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target)
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
@@ -73,6 +83,13 @@ class ScenarioSimulator {
                     result.damageDealt += directDmg
                     simEnemyCurrHP -= directDmg
                     if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
+
+                    // Track bulb vs leek damage
+                    if (targetIsBulb) {
+                        result.bulbDamage += directDmg
+                    } else {
+                        result.leekDamage += directDmg
+                    }
 
                     result.dotDamageQueued += breakdown['dot']
 
@@ -122,6 +139,13 @@ class ScenarioSimulator {
                         simEnemyCurrHP -= directDmg
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
+                        // Track bulb vs leek damage
+                        if (targetIsBulb) {
+                            result.bulbDamage += directDmg
+                        } else {
+                            result.leekDamage += directDmg
+                        }
+
                         result.dotDamageQueued += weaponBreakdown['dot']
 
                         var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
@@ -152,30 +176,38 @@ class ScenarioSimulator {
                 }
             }
             else if (action.type == Action.ACTION_BUFF) {
-                
+
                 var buffCost = getChipCost(action.chip)
                 result.tpSpent += buffCost
                 simTP -= buffCost
                 push(result.buffsApplied, action.chip)
 
-                if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD || action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS) {
+                if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD) {
+                    // Absolute shields (flat HP reduction)
                     var shieldAmount = this.estimateShieldAmount(action.chip, simWisdom)
                     result.shieldsGained += shieldAmount
+                } else if (action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS) {
+                    // Relative shields (percentage damage reduction)
+                    var relShieldPercent = this.estimateRelativeShield(action.chip)
+                    result.relativeShieldGained += relShieldPercent
                 } else if (action.chip == CHIP_PROTEIN) {
                     result.relativeShieldGained += this.estimateRelativeShield(action.chip)
                 } else if (action.chip == CHIP_LEATHER_BOOTS) {
                     result.relativeShieldGained += this.estimateRelativeShield(action.chip)
-                    simMP += 2  
+                    simMP += 2
                 } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
                 } else if (action.chip == CHIP_STEROID || action.chip == CHIP_DOPING) {
-                    
+
                     simStrength += this.estimateStrengthBuff(action.chip)
                 } else if (action.chip == CHIP_WARM_UP) {
-                    
+
                 } else if (action.chip == CHIP_ADRENALINE) {
-                    
-                    simTP += 5  
+
+                    simTP += 5
+                } else if (action.chip == CHIP_MIRROR || action.chip == CHIP_THORN || action.chip == CHIP_BRAMBLE) {
+                    // Damage return buffs (tracked for scoring, not simulated in combat)
+                    // No simulation changes needed - these are defensive passives
                 }
 
                 result.actionsExecuted++
@@ -228,6 +260,17 @@ class ScenarioSimulator {
             }
         }
 
+        // Track bulb targeting metrics
+        if (targetIsBulb && result.bulbDamage > 0) {
+            result.bulbsHit = 1
+
+            // Estimate if we secured a bulb kill
+            var totalDamageToTarget = result.damageDealt + result.dotDamageQueued + (result.novaDamageQueued != null ? result.novaDamageQueued : 0)
+            if (totalDamageToTarget >= simEnemyCurrHP) {
+                result.bulbKillsSecured = 1
+            }
+        }
+
         return result
     }
 
@@ -273,16 +316,31 @@ class ScenarioSimulator {
     }
 
     estimateShieldAmount(chip, wisdom) {
+        // Absolute shields only (flat HP reduction)
         if (chip == CHIP_HELMET) return 50 + wisdom * 0.5
         if (chip == CHIP_SHIELD) return 100 + wisdom * 1.0
-        if (chip == CHIP_WALL) return 200 + wisdom * 2.0
-        if (chip == CHIP_FORTRESS) return 400 + wisdom * 4.0
         return 0
     }
 
     estimateRelativeShield(chip) {
-        if (chip == CHIP_PROTEIN) return 10  
-        if (chip == CHIP_LEATHER_BOOTS) return 20  
+        // Relative shields (percentage damage reduction, scales with Resistance)
+        var resistance = this._player._resistance
+        var scalingMultiplier = 1 + (resistance / 100.0)
+
+        if (chip == CHIP_WALL) {
+            var basePercent = 4.5  // 4-5% base at max level
+            return basePercent * scalingMultiplier
+        }
+        if (chip == CHIP_FORTRESS) {
+            var basePercent = 7.5  // 7-8% base at max level
+            return basePercent * scalingMultiplier
+        }
+        if (chip == CHIP_PROTEIN) {
+            return 10  // Fixed 10% (does not scale)
+        }
+        if (chip == CHIP_LEATHER_BOOTS) {
+            return 20  // Fixed 20% (does not scale)
+        }
         return 0
     }
 

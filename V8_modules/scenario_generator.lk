@@ -937,12 +937,16 @@ class ScenarioGenerator {
 
     getDefensiveBuff() {
         var currentTP = getTP()
+        var resistance = this._player._resistance
+
+        // Proactive refresh: higher threshold for high-Resistance builds
+        var refreshThreshold = (resistance >= 200) ? 2 : 1
 
         var hasShield = this._player.hasEffect(EFFECT_RELATIVE_SHIELD)
         var shieldRemaining = hasShield ? this._player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) : 0
 
-        if (hasShield && shieldRemaining > 1) {
-            return null  
+        if (hasShield && shieldRemaining > refreshThreshold) {
+            return null  // Shield still active, no need to refresh
         }
 
         var hasFortress = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)
@@ -951,15 +955,16 @@ class ScenarioGenerator {
         var fortressCd = hasFortress ? getCooldown(CHIP_FORTRESS, this._player._id) : 999
         var wallCd = hasWall ? getCooldown(CHIP_WALL, this._player._id) : 999
 
-        if (hasFortress && fortressCd == 0 && currentTP >= 9) {  
+        // Lower TP gates to allow buffing earlier
+        if (hasFortress && fortressCd == 0 && currentTP >= 6) {  // Was 9, now 6
             return new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player)
         }
 
-        if (hasWall && wallCd == 0 && currentTP >= 6) {  
+        if (hasWall && wallCd == 0 && currentTP >= 3) {  // Was 6, now 3
             return new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player)
         }
 
-        return null  
+        return null
     }
 
     getLeatherBootsBuff() {
@@ -1197,24 +1202,32 @@ class ScenarioGenerator {
         var mag = this._player._magic
         var agi = this._player._agility
 
-        if (agi <= str || agi <= mag) return null
+        // Check if damage return chips are equipped
+        var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        var hasAnyDamageReturn = hasMirror || hasThorn || hasBramble
+
+        // New condition: High AGI (>=300) + damage return chips equipped = AGI build
+        if (agi < 300 || !hasAnyDamageReturn) {
+            return null  // Not an AGI build or no damage return chips
+        }
 
         var currentTP = getTP()
+
+        // Proactive refresh: higher threshold for high-Agility builds
+        var refreshThreshold = (agi >= 200) ? 2 : 1
 
         var hasReturn = this._player.hasDamageReturn()
         var returnRemaining = hasReturn ? this._player.getDamageReturnRemaining() : 0
 
-        if (hasReturn && returnRemaining > 1) {
-            return null  
+        if (hasReturn && returnRemaining > refreshThreshold) {
+            return null  // Return buff still active, no need to refresh
         }
 
         var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
         if (distToEnemy == null) distToEnemy = 99
         var inCloseCombat = distToEnemy <= 8
-
-        var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
-        var hasThorn = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN)
-        var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
 
         var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, this._player._id) : 999
         var thornCd = hasThorn ? getCooldown(CHIP_THORN, this._player._id) : 999
@@ -1224,21 +1237,27 @@ class ScenarioGenerator {
         var thornReady = thornCd == 0 && hasThorn && currentTP >= 4
         var brambleReady = brambleCd == 0 && hasBramble && currentTP >= 4
 
-        if (brambleReady && inCloseCombat && currentTP >= 10) {
+        // BRAMBLE: Tactical-only usage (never for proactive maintenance)
+        // Only use if: high incoming damage + close combat + spare TP
+        var expectedThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
+        if (brambleReady && inCloseCombat && currentTP >= 15 && expectedThreat > 300) {
+            debug("[BRAMBLE-TACTICAL] High threat (" + floor(expectedThreat) + ") in close combat - using BRAMBLE burst")
             return new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player)
         }
 
-        if (currentTP < 15) {
+        // Lower TP gates for MIRROR/THORN to ensure uptime
+        if (currentTP < 10) {
             if (thornReady) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)  
+                return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)  // Was currentTP check, now just readiness
             }
-            if (mirrorReady && currentTP >= 10) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)  
+            if (mirrorReady) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)  // Was currentTP >= 10, now just readiness
             }
-            return null  
+            return null
         }
 
-        if (mirrorReady && thornReady && currentTP >= 15) {
+        // Priority: MIRROR > THORN when both available
+        if (mirrorReady && thornReady && currentTP >= 10) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)
         }
 
@@ -1250,7 +1269,7 @@ class ScenarioGenerator {
             return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)
         }
 
-        return null  
+        return null
     }
 
     getHealingAction(tpBudget, hpThreshold = 0.7) {

@@ -1,3 +1,4 @@
+include('game_entity.lk')
 
 class ScenarioScorer {
     _player = null
@@ -28,6 +29,10 @@ class ScenarioScorer {
         var totalDamage = simResult.damageDealt + dotDmg + novaDmg
         var killProbability = totalDamage / enemyHP
 
+        // Bulb detection and classification
+        var targetIsBulb = isBulb(this._target)
+        var bulbType = targetIsBulb ? getBulbType(this._target) : BULB_TYPE_UNKNOWN
+
         // Battle Royale mode: prioritize total lobby damage over single-target damage
         var isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
         var effectiveDamage = totalDamage
@@ -35,6 +40,12 @@ class ScenarioScorer {
             effectiveDamage = simResult.totalLobbyDamage
             debug("[SCORER-BR] Lobby damage: " + floor(simResult.totalLobbyDamage) +
                   " (primary=" + floor(totalDamage) + ", enemies hit=" + simResult.enemiesHit + ")")
+        }
+
+        // Bulb damage multiplier: configurable via weights
+        var bulbDamageMultiplier = targetIsBulb ? this.getWeight('bulbDamageMultiplier', 1.2) : 1.0
+        if (targetIsBulb) {
+            debug("[SCORER-BULB] Target is bulb (type=" + bulbType + ") - damage multiplier: " + bulbDamageMultiplier + "×")
         }
 
         var damageWeight = this.getWeight('burstDamage', this.calculateDamageWeight())
@@ -49,8 +60,25 @@ class ScenarioScorer {
                   " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
         }
 
-        var damageScore = effectiveDamage * damageWeight
+        // Apply bulb damage multiplier
+        var damageScore = effectiveDamage * damageWeight * bulbDamageMultiplier
         score += damageScore
+
+        // Bulb kill bonus: massive score for killing high-value bulbs (configurable via weights)
+        var bulbKillBonus = 0
+        if (targetIsBulb && killProbability >= 0.70) {
+            if (bulbType == BULB_TYPE_HEALER) {
+                bulbKillBonus = this.getWeight('bulbKillBonusHealer', 2500)
+                debug("[SCORER-BULB] HEALER bulb kill bonus: +" + bulbKillBonus)
+            } else if (bulbType == BULB_TYPE_BUFFER) {
+                bulbKillBonus = this.getWeight('bulbKillBonusBuffer', 1500)
+                debug("[SCORER-BULB] BUFFER bulb kill bonus: +" + bulbKillBonus)
+            } else if (bulbType == BULB_TYPE_ATTACKER) {
+                bulbKillBonus = this.getWeight('bulbKillBonusAttacker', 800)
+                debug("[SCORER-BULB] ATTACKER bulb kill bonus: +" + bulbKillBonus)
+            }
+        }
+        score += bulbKillBonus
 
         // Battle Royale: massive bonus for reducing lobby size (any kill)
         if (isBattleRoyale && simResult.killsSecured > 0) {
@@ -207,7 +235,8 @@ class ScenarioScorer {
               " eHP=" + floor(shieldScore + relShieldScore + healScore) +
               " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
               " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
-              " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus))
+              " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus) +
+              " bulb=" + floor(bulbKillBonus))
 
         return score
     }
@@ -380,47 +409,122 @@ class ScenarioScorer {
     evaluateBuffs(buffsApplied, simResult) {
         var value = 0
 
+        // Estimate expected incoming damage for defensive buff valuation
+        var playerPos = simResult.finalPosition != -1 ? simResult.finalPosition : this._player._cellPos
+        var expectedDamage = this._fieldMap.getThreatAtCell(playerPos)
+        if (expectedDamage == null || expectedDamage < 0) expectedDamage = 0
+
+        // Kill margin check: reduce buff value if kill is guaranteed
+        var enemyHP = this._target._currHealth
+        var dotDmg = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
+        var novaDmg = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
+        var totalDamage = simResult.damageDealt + dotDmg + novaDmg
+        var killMargin = totalDamage / enemyHP
+        var buffMultiplier = 1.0
+
+        if (killMargin >= 1.1) {
+            // Kill is guaranteed with 10% safety margin - heavily de-prioritize buffs
+            buffMultiplier = 0.1
+            debug("[SCORER-BUFF] Kill guaranteed (margin=" + killMargin + ") - 90% buff penalty")
+        } else if (killMargin < 0.7 && expectedDamage > 200) {
+            // No kill possible + high threat - force buffs
+            buffMultiplier = 5.0
+            debug("[SCORER-BUFF] No kill possible (margin=" + killMargin + ") + high threat - 5x buff bonus")
+        }
+
         for (var buffChip in buffsApplied) {
-            
+
+            // Offensive buffs: fixed values (not threat-dependent)
             if (buffChip == CHIP_STEROID) value += 200
             if (buffChip == CHIP_DOPING) value += 100
             if (buffChip == CHIP_WARM_UP) value += 150
             if (buffChip == CHIP_ADRENALINE) value += 100
 
-            if (buffChip == CHIP_HELMET || buffChip == CHIP_SHIELD) value += 80
-            if (buffChip == CHIP_WALL || buffChip == CHIP_FORTRESS) value += 150
+            // Shield buffs: dynamic threat-aware valuation
+            if (buffChip == CHIP_HELMET || buffChip == CHIP_SHIELD) {
+                // Absolute shields: flat HP value
+                value += 80  // Base value
+            }
+
+            if (buffChip == CHIP_WALL) {
+                // Relative shield: scales with Resistance
+                var resistance = this._player._resistance
+                var reductionPercent = 4.5 * (1 + resistance / 100.0)
+                var duration = 2  // 2 turns
+                var effectiveHP = (expectedDamage * duration) * (reductionPercent / 100.0)
+                var wallValue = effectiveHP * 0.5  // Scale down to reasonable scorer range
+                if (wallValue < 80) wallValue = 80  // Minimum value
+                value += wallValue
+                debug("[SCORER-BUFF] WALL value: reduction=" + floor(reductionPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(wallValue))
+            }
+
+            if (buffChip == CHIP_FORTRESS) {
+                // Relative shield: scales with Resistance
+                var resistance = this._player._resistance
+                var reductionPercent = 7.5 * (1 + resistance / 100.0)
+                var duration = 3  // 3 turns
+                var effectiveHP = (expectedDamage * duration) * (reductionPercent / 100.0)
+                var fortressValue = effectiveHP * 0.5  // Scale down to reasonable scorer range
+                if (fortressValue < 150) fortressValue = 150  // Minimum value
+                value += fortressValue
+                debug("[SCORER-BUFF] FORTRESS value: reduction=" + floor(reductionPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(fortressValue))
+            }
+
             if (buffChip == CHIP_PROTEIN || buffChip == CHIP_LEATHER_BOOTS) value += 100
 
+            // Healing buffs: fixed values
             if (buffChip == CHIP_REGENERATION) value += 80
             if (buffChip == CHIP_CURE) value += 120
             if (buffChip == CHIP_DRIP) value += 100
-
             if (buffChip == CHIP_LIBERATION) value += 120
             if (buffChip == CHIP_REMISSION) value += 100
 
-            if (buffChip == CHIP_MIRROR || buffChip == CHIP_THORN) {
-                if (this._player._agility > this._player._strength) value += 180
-                else value += 80
+            // Damage return buffs: dynamic threat-aware valuation
+            if (buffChip == CHIP_MIRROR) {
+                var agility = this._player._agility
+                var returnPercent = 5.5 * (1 + agility / 100.0)
+                var duration = 3  // 3 turns
+                var returnDamage = (expectedDamage * duration) * (returnPercent / 100.0)
+                var mirrorValue = returnDamage * 0.8  // Scale down to reasonable scorer range
+                if (mirrorValue < 100) mirrorValue = 100  // Minimum value
+                value += mirrorValue
+                debug("[SCORER-BUFF] MIRROR value: return=" + floor(returnPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(mirrorValue))
+            }
+
+            if (buffChip == CHIP_THORN) {
+                var agility = this._player._agility
+                var returnPercent = 3.5 * (1 + agility / 100.0)
+                var duration = 2  // 2 turns
+                var returnDamage = (expectedDamage * duration) * (returnPercent / 100.0)
+                var thornValue = returnDamage * 0.8  // Scale down to reasonable scorer range
+                if (thornValue < 80) thornValue = 80  // Minimum value
+                value += thornValue
+                debug("[SCORER-BUFF] THORN value: return=" + floor(returnPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(thornValue))
             }
 
             if (buffChip == CHIP_BRAMBLE) {
-                var brambleValue = 100  
+                // BRAMBLE: Tactical burst only (1 turn, 25% return, 8 turn cooldown)
+                var agility = this._player._agility
+                var returnPercent = 25.0 * (1 + agility / 100.0)
+                var duration = 1  // 1 turn only
+                var returnDamage = expectedDamage * (returnPercent / 100.0)
 
-                if (this._player._agility > this._player._strength && this._player._agility > this._player._magic) {
-                    brambleValue = 150  
-                }
-
-                var finalPos = simResult.finalPosition
-                var distToTarget = getCellDistance(finalPos, this._target._cellPos)
-
-                if (simResult.damageDealt > 0 && distToTarget != null && distToTarget <= 6) {
-                    brambleValue *= 2.5  
-                    debug("[SCORER][BRAMBLE] Active combat bonus: dist=" + distToTarget + ", dmg=" + floor(simResult.damageDealt) + ", value=" + floor(brambleValue))
+                // Only valuable in high-threat scenarios
+                var brambleValue = 0
+                if (expectedDamage > 300) {
+                    brambleValue = returnDamage * 1.5  // Higher multiplier for burst value
+                    debug("[SCORER-BUFF] BRAMBLE tactical burst: return=" + floor(returnPercent) + "%, threat=" + floor(expectedDamage) + ", value=" + floor(brambleValue))
+                } else {
+                    brambleValue = 50  // Minimal value if no threat (discourage usage)
+                    debug("[SCORER-BUFF] BRAMBLE low threat: discouraged (threat=" + floor(expectedDamage) + ")")
                 }
 
                 value += brambleValue
             }
         }
+
+        // Apply kill margin multiplier to ALL buff values
+        value *= buffMultiplier
 
         return value
     }
