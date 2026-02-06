@@ -22,7 +22,7 @@ def generate_effect_map(effects):
     # Group effects by effect ID, summing values
     effect_groups = {}
     for effect in effects:
-        effect_id = effect['type']  # The 'type' field is the effect constant (EFFECT_DAMAGE, EFFECT_POISON, etc.)
+        effect_id = effect['id']  # The 'id' field is the effect constant (EFFECT_DAMAGE, EFFECT_POISON, etc.)
 
         if effect_id not in effect_groups:
             effect_groups[effect_id] = {

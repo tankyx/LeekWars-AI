@@ -30,7 +30,7 @@ global WEAPON_DATABASE = [
         "neutrino",  // name
         2,  // min_range
         6,  // max_range
-        [1: [25, 5, 0], 0: [8, 0, 2]],  // effects
+        [1: [25, 5, 0], 26: [8, 0, 2]],  // effects
         4,  // tp_cost
         2,  // launch_type
         1  // area
@@ -39,7 +39,7 @@ global WEAPON_DATABASE = [
         "shotgun",  // name
         1,  // min_range
         5,  // max_range
-        [1: [33, 10, 0], 0: [25, 0, 1]],  // effects
+        [1: [33, 10, 0], 27: [25, 0, 1]],  // effects
         5,  // tp_cost
         1,  // launch_type
         1  // area
@@ -57,7 +57,7 @@ global WEAPON_DATABASE = [
         "broadsword",  // name
         1,  // min_range
         1,  // max_range
-        [1: [39, 2, 0], 5: [40, 0, 2]],  // effects
+        [1: [39, 2, 0], 38: [40, 0, 2]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1  // area
@@ -75,7 +75,7 @@ global WEAPON_DATABASE = [
         "double_gun",  // name
         2,  // min_range
         7,  // max_range
-        [1: [18, 7, 0], 6: [9, 3, 2]],  // effects
+        [1: [18, 7, 0], 13: [9, 3, 2]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1  // area
@@ -93,7 +93,7 @@ global WEAPON_DATABASE = [
         "sword",  // name
         1,  // min_range
         1,  // max_range
-        [1: [50, 10, 0], 0: [8, 0, 2]],  // effects
+        [1: [50, 10, 0], 54: [8, 0, 2]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1  // area
@@ -102,7 +102,7 @@ global WEAPON_DATABASE = [
         "destroyer",  // name
         1,  // min_range
         6,  // max_range
-        [1: [40, 20, 0], 7: [17, 0, 2]],  // effects
+        [1: [40, 20, 0], 19: [17, 0, 2]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1  // area
@@ -120,7 +120,7 @@ global WEAPON_DATABASE = [
         "flame_thrower",  // name
         2,  // min_range
         8,  // max_range
-        [1: [35, 5, 0], 6: [24, 6, 2]],  // effects
+        [1: [35, 5, 0], 13: [24, 6, 2]],  // effects
         6,  // tp_cost
         1,  // launch_type
         2  // area
@@ -138,7 +138,7 @@ global WEAPON_DATABASE = [
         "excalibur",  // name
         1,  // min_range
         1,  // max_range
-        [1: [150, 20, 0], 6: [150, 20, 2]],  // effects
+        [1: [150, 20, 0], 13: [150, 20, 2]],  // effects
         12,  // tp_cost
         7,  // launch_type
         1  // area
@@ -147,7 +147,7 @@ global WEAPON_DATABASE = [
         "axe",  // name
         1,  // min_range
         1,  // max_range
-        [1: [55, 22, 0], 7: [0.7, 0.1, 1]],  // effects
+        [1: [55, 22, 0], 17: [0.7, 0.1, 1]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1  // area
@@ -174,7 +174,7 @@ global WEAPON_DATABASE = [
         "j_laser",  // name
         5,  // min_range
         11,  // max_range
-        [0: [50, 0, 2]],  // effects
+        [27: [25, 0, 2], 29: [25, 0, 2]],  // effects
         5,  // tp_cost
         1,  // launch_type
         2  // area
@@ -219,7 +219,7 @@ global WEAPON_DATABASE = [
         "mysterious_electrisor",  // name
         7,  // min_range
         7,  // max_range
-        [1: [34, 6, 0], 0: [7, 0, 2]],  // effects
+        [30: [34, 6, 0], 26: [7, 0, 2]],  // effects
         7,  // tp_cost
         7,  // launch_type
         3  // area
@@ -237,7 +237,7 @@ global WEAPON_DATABASE = [
         "enhanced_lightninger",  // name
         6,  // min_range
         10,  // max_range
-        [1: [89, 4, 0], 0: [100, 0, 0]],  // effects
+        [1: [89, 4, 0], 57: [100, 0, 0]],  // effects
         9,  // tp_cost
         7,  // launch_type
         11  // area
@@ -246,7 +246,7 @@ global WEAPON_DATABASE = [
         "katana",  // name
         1,  // min_range
         1,  // max_range
-        [1: [77, 0, 0], 7: [0.3, 0.1, 1]],  // effects
+        [1: [77, 0, 0], 18: [0.3, 0.1, 1]],  // effects
         7,  // tp_cost
         7,  // launch_type
         1  // area
@@ -255,7 +255,7 @@ global WEAPON_DATABASE = [
         "dark_katana",  // name
         1,  // min_range
         1,  // max_range
-        [1: [143, 0, 0], 0: [15, 0, 1]],  // effects
+        [1: [143, 0, 0], 26: [15, 0, 1]],  // effects
         7,  // tp_cost
         7,  // launch_type
         1  // area
@@ -282,7 +282,7 @@ global WEAPON_DATABASE = [
         "quantum_rifle",  // name
         5,  // min_range
         10,  // max_range
-        [1: [136, 14, 0], 0: [0, 0, 0]],  // effects
+        [1: [68, 7, 0], 30: [68, 7, 0], 61: [0, 0, 0]],  // effects
         10,  // tp_cost
         7,  // launch_type
         9  // area
@@ -291,7 +291,7 @@ global WEAPON_DATABASE = [
         "heavy_sword",  // name
         1,  // min_range
         1,  // max_range
-        [1: [156, 17, 0], 0: [60, 0, 1]],  // effects
+        [1: [156, 17, 0], 27: [60, 0, 1]],  // effects
         15,  // tp_cost
         7,  // launch_type
         1  // area
@@ -300,7 +300,7 @@ global WEAPON_DATABASE = [
         "gazor",  // name
         2,  // min_range
         7,  // max_range
-        [6: [27, 5, 3]],  // effects
+        [13: [27, 5, 3]],  // effects
         8,  // tp_cost
         1,  // launch_type
         5  // area
@@ -327,7 +327,7 @@ global WEAPON_DATABASE = [
         "revoked_m_laser",  // name
         5,  // min_range
         12,  // max_range
-        [6: [50, 10, 2]],  // effects
+        [13: [50, 10, 2]],  // effects
         8,  // tp_cost
         1,  // launch_type
         2  // area
@@ -339,7 +339,7 @@ global CHIP_DATABASE = [
         "exasperation",  // name
         0,  // min_range
         0,  // max_range
-        [0: [120, 0, 1]],  // effects
+        [60: [100, 0, 0], 26: [20, 0, 1]],  // effects
         0,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -349,7 +349,7 @@ global CHIP_DATABASE = [
         "apocalypse",  // name
         0,  // min_range
         0,  // max_range
-        [1: [0, 0, 0]],  // effects
+        [16: [0, 0, 0]],  // effects
         5,  // tp_cost
         7,  // launch_type
         14,  // area
@@ -359,7 +359,7 @@ global CHIP_DATABASE = [
         "divine_protection",  // name
         0,  // min_range
         0,  // max_range
-        [9: [3, 0, -1]],  // effects
+        [59: [3, 0, -1]],  // effects
         5,  // tp_cost
         7,  // launch_type
         15,  // area
@@ -399,7 +399,7 @@ global CHIP_DATABASE = [
         "protein",  // name
         0,  // min_range
         4,  // max_range
-        [5: [80, 20, 2]],  // effects
+        [38: [80, 20, 2]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -419,7 +419,7 @@ global CHIP_DATABASE = [
         "helmet",  // name
         0,  // min_range
         4,  // max_range
-        [4: [15, 0, 2]],  // effects
+        [6: [15, 0, 2]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -439,7 +439,7 @@ global CHIP_DATABASE = [
         "motivation",  // name
         0,  // min_range
         5,  // max_range
-        [5: [2, 0, 3]],  // effects
+        [32: [2, 0, 3]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -449,7 +449,7 @@ global CHIP_DATABASE = [
         "stretching",  // name
         0,  // min_range
         5,  // max_range
-        [5: [80, 20, 2]],  // effects
+        [41: [80, 20, 2]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -459,7 +459,7 @@ global CHIP_DATABASE = [
         "wall",  // name
         0,  // min_range
         3,  // max_range
-        [4: [4, 1, 2]],  // effects
+        [5: [4, 1, 2]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -489,7 +489,7 @@ global CHIP_DATABASE = [
         "leather_boots",  // name
         0,  // min_range
         5,  // max_range
-        [5: [2, 0, 2]],  // effects
+        [31: [2, 0, 2]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -519,7 +519,7 @@ global CHIP_DATABASE = [
         "knowledge",  // name
         0,  // min_range
         7,  // max_range
-        [5: [250, 20, 2]],  // effects
+        [44: [250, 20, 2]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -529,7 +529,7 @@ global CHIP_DATABASE = [
         "shield",  // name
         0,  // min_range
         4,  // max_range
-        [4: [20, 0, 3]],  // effects
+        [6: [20, 0, 3]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -539,7 +539,7 @@ global CHIP_DATABASE = [
         "solidification",  // name
         0,  // min_range
         3,  // max_range
-        [5: [180, 20, 3]],  // effects
+        [42: [180, 20, 3]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -549,7 +549,7 @@ global CHIP_DATABASE = [
         "venom",  // name
         1,  // min_range
         10,  // max_range
-        [6: [15, 5, 3]],  // effects
+        [13: [15, 5, 3]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -559,7 +559,7 @@ global CHIP_DATABASE = [
         "puny_bulb",  // name
         1,  // min_range
         3,  // max_range
-        [8: [1, 0, 0]],  // effects
+        [14: [1, 0, 0]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -569,7 +569,7 @@ global CHIP_DATABASE = [
         "kemuridama",  // name
         1,  // min_range
         50,  // max_range
-        [9: [0, 0, 0]],  // effects
+        [10: [0, 0, 0]],  // effects
         8,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -589,7 +589,7 @@ global CHIP_DATABASE = [
         "shuriken",  // name
         1,  // min_range
         10,  // max_range
-        [1: [50, 10, 0], 0: [30, 0, 2]],  // effects
+        [1: [50, 10, 0], 26: [30, 0, 2]],  // effects
         6,  // tp_cost
         1,  // launch_type
         1,  // area
@@ -599,7 +599,7 @@ global CHIP_DATABASE = [
         "alteration",  // name
         6,  // min_range
         12,  // max_range
-        [1: [18, 2, 0]],  // effects
+        [30: [18, 2, 0]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -629,7 +629,7 @@ global CHIP_DATABASE = [
         "tranquilizer",  // name
         1,  // min_range
         8,  // max_range
-        [7: [0.5, 0.1, 1]],  // effects
+        [18: [0.5, 0.1, 1]],  // effects
         3,  // tp_cost
         7,  // launch_type
         3,  // area
@@ -639,7 +639,7 @@ global CHIP_DATABASE = [
         "armoring",  // name
         0,  // min_range
         3,  // max_range
-        [2: [25, 5, 0]],  // effects
+        [12: [25, 5, 0]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -649,7 +649,7 @@ global CHIP_DATABASE = [
         "jump",  // name
         1,  // min_range
         3,  // max_range
-        [9: [0, 0, 0], 5: [100, 0, 2]],  // effects
+        [10: [0, 0, 0], 41: [100, 0, 2]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -659,7 +659,7 @@ global CHIP_DATABASE = [
         "armor",  // name
         0,  // min_range
         4,  // max_range
-        [4: [25, 0, 4]],  // effects
+        [6: [25, 0, 4]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -689,7 +689,7 @@ global CHIP_DATABASE = [
         "mutation",  // name
         0,  // min_range
         8,  // max_range
-        [2: [15, 5, 0]],  // effects
+        [45: [15, 5, 0]],  // effects
         7,  // tp_cost
         7,  // launch_type
         12,  // area
@@ -699,7 +699,7 @@ global CHIP_DATABASE = [
         "prism",  // name
         0,  // min_range
         6,  // max_range
-        [5: [360, 0, 2]],  // effects
+        [38: [60, 0, 2], 44: [60, 0, 2], 41: [60, 0, 2], 42: [60, 0, 2], 40: [60, 0, 2], 39: [60, 0, 2]],  // effects
         6,  // tp_cost
         4,  // launch_type
         1,  // area
@@ -709,7 +709,7 @@ global CHIP_DATABASE = [
         "slow_down",  // name
         1,  // min_range
         8,  // max_range
-        [7: [0.3, 0.1, 1]],  // effects
+        [17: [0.3, 0.1, 1]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -749,7 +749,7 @@ global CHIP_DATABASE = [
         "kill",  // name
         0,  // min_range
         50,  // max_range
-        [1: [0, 0, 0]],  // effects
+        [16: [0, 0, 0]],  // effects
         1,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -759,7 +759,7 @@ global CHIP_DATABASE = [
         "rocky_bulb",  // name
         1,  // min_range
         3,  // max_range
-        [8: [4, 0, 0]],  // effects
+        [14: [4, 0, 0]],  // effects
         10,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -769,7 +769,7 @@ global CHIP_DATABASE = [
         "ferocity",  // name
         1,  // min_range
         8,  // max_range
-        [5: [50, 10, 2]],  // effects
+        [3: [50, 10, 2]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -779,7 +779,7 @@ global CHIP_DATABASE = [
         "loam",  // name
         1,  // min_range
         7,  // max_range
-        [2: [56, 10, 0]],  // effects
+        [12: [56, 10, 0]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -789,7 +789,7 @@ global CHIP_DATABASE = [
         "antidote",  // name
         0,  // min_range
         4,  // max_range
-        [9: [100, 0, 0], 2: [25, 10, 0]],  // effects
+        [23: [100, 0, 0], 2: [25, 10, 0]],  // effects
         3,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -799,7 +799,7 @@ global CHIP_DATABASE = [
         "rampart",  // name
         2,  // min_range
         7,  // max_range
-        [4: [13, 2, 3]],  // effects
+        [5: [13, 2, 3]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -809,7 +809,7 @@ global CHIP_DATABASE = [
         "whip",  // name
         0,  // min_range
         6,  // max_range
-        [5: [0.6, 0.1, 2]],  // effects
+        [8: [0.6, 0.1, 2]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -819,7 +819,7 @@ global CHIP_DATABASE = [
         "grapple",  // name
         1,  // min_range
         8,  // max_range
-        [9: [0, 0, 0], 5: [30, 10, 1], 7: [15, 5, 1]],  // effects
+        [46: [0, 0, 0], 44: [30, 10, 1], 47: [15, 5, 1]],  // effects
         3,  // tp_cost
         1,  // launch_type
         13,  // area
@@ -839,7 +839,7 @@ global CHIP_DATABASE = [
         "toxin",  // name
         1,  // min_range
         7,  // max_range
-        [6: [25, 10, 3]],  // effects
+        [13: [25, 10, 3]],  // effects
         5,  // tp_cost
         7,  // launch_type
         4,  // area
@@ -849,7 +849,7 @@ global CHIP_DATABASE = [
         "warm_up",  // name
         0,  // min_range
         3,  // max_range
-        [5: [170, 20, 3]],  // effects
+        [41: [170, 20, 3]],  // effects
         7,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -859,7 +859,7 @@ global CHIP_DATABASE = [
         "iced_bulb",  // name
         1,  // min_range
         2,  // max_range
-        [8: [5, 0, 0]],  // effects
+        [14: [5, 0, 0]],  // effects
         12,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -869,7 +869,7 @@ global CHIP_DATABASE = [
         "thorn",  // name
         0,  // min_range
         3,  // max_range
-        [3: [3, 1, 2]],  // effects
+        [20: [3, 1, 2]],  // effects
         4,  // tp_cost
         7,  // launch_type
         3,  // area
@@ -879,7 +879,7 @@ global CHIP_DATABASE = [
         "steroid",  // name
         0,  // min_range
         5,  // max_range
-        [5: [150, 20, 3]],  // effects
+        [38: [150, 20, 3]],  // effects
         7,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -889,7 +889,7 @@ global CHIP_DATABASE = [
         "covetousness",  // name
         0,  // min_range
         8,  // max_range
-        [5: [1, 0, 2]],  // effects
+        [32: [1, 0, 2]],  // effects
         2,  // tp_cost
         7,  // launch_type
         9,  // area
@@ -899,7 +899,7 @@ global CHIP_DATABASE = [
         "boxing_glove",  // name
         2,  // min_range
         8,  // max_range
-        [9: [0, 0, 0], 5: [30, 10, 1], 7: [10, 5, 1]],  // effects
+        [51: [0, 0, 0], 42: [30, 10, 1], 19: [10, 5, 1]],  // effects
         3,  // tp_cost
         1,  // launch_type
         13,  // area
@@ -909,7 +909,7 @@ global CHIP_DATABASE = [
         "carapace",  // name
         1,  // min_range
         6,  // max_range
-        [4: [70, 5, 3]],  // effects
+        [6: [70, 5, 3]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -919,7 +919,7 @@ global CHIP_DATABASE = [
         "acceleration",  // name
         0,  // min_range
         8,  // max_range
-        [5: [0.4, 0.1, 2]],  // effects
+        [7: [0.4, 0.1, 2]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -929,7 +929,7 @@ global CHIP_DATABASE = [
         "soporific",  // name
         1,  // min_range
         6,  // max_range
-        [7: [0.4, 0.1, 3]],  // effects
+        [18: [0.4, 0.1, 3]],  // effects
         5,  // tp_cost
         7,  // launch_type
         5,  // area
@@ -939,7 +939,7 @@ global CHIP_DATABASE = [
         "punishment",  // name
         1,  // min_range
         1,  // max_range
-        [1: [100, 0, 0]],  // effects
+        [28: [100, 0, 0]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -949,7 +949,7 @@ global CHIP_DATABASE = [
         "manumission",  // name
         0,  // min_range
         5,  // max_range
-        [9: [0, 0, 0], 5: [2, 0, 1]],  // effects
+        [49: [0, 0, 0], 32: [2, 0, 1]],  // effects
         6,  // tp_cost
         1,  // launch_type
         1,  // area
@@ -959,7 +959,7 @@ global CHIP_DATABASE = [
         "inversion",  // name
         1,  // min_range
         14,  // max_range
-        [9: [0, 0, 0], 2: [50, 0, 0], 0: [20, 0, 1]],  // effects
+        [11: [0, 0, 0], 2: [50, 0, 0], 26: [20, 0, 1]],  // effects
         4,  // tp_cost
         1,  // launch_type
         1,  // area
@@ -969,7 +969,7 @@ global CHIP_DATABASE = [
         "adrenaline",  // name
         0,  // min_range
         3,  // max_range
-        [5: [5, 0, 1]],  // effects
+        [32: [5, 0, 1]],  // effects
         1,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -979,7 +979,7 @@ global CHIP_DATABASE = [
         "crushing",  // name
         1,  // min_range
         8,  // max_range
-        [7: [45, 4, 2]],  // effects
+        [47: [45, 4, 2]],  // effects
         6,  // tp_cost
         3,  // launch_type
         1,  // area
@@ -999,7 +999,7 @@ global CHIP_DATABASE = [
         "repotting",  // name
         1,  // min_range
         14,  // max_range
-        [9: [0, 0, 0], 1: [18, 2, 0]],  // effects
+        [11: [0, 0, 0], 1: [18, 2, 0]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1009,7 +1009,7 @@ global CHIP_DATABASE = [
         "wizardry",  // name
         0,  // min_range
         6,  // max_range
-        [5: [150, 20, 2]],  // effects
+        [39: [150, 20, 2]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1039,7 +1039,7 @@ global CHIP_DATABASE = [
         "healer_bulb",  // name
         1,  // min_range
         2,  // max_range
-        [8: [3, 0, 0]],  // effects
+        [14: [3, 0, 0]],  // effects
         14,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1049,7 +1049,7 @@ global CHIP_DATABASE = [
         "winged_boots",  // name
         0,  // min_range
         2,  // max_range
-        [5: [3, 0, 1]],  // effects
+        [31: [3, 0, 1]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1079,7 +1079,7 @@ global CHIP_DATABASE = [
         "collar",  // name
         1,  // min_range
         6,  // max_range
-        [5: [80, 10, 2]],  // effects
+        [22: [80, 10, 2]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1089,7 +1089,7 @@ global CHIP_DATABASE = [
         "ball_and_chain",  // name
         1,  // min_range
         6,  // max_range
-        [7: [0.4, 0.1, 2]],  // effects
+        [17: [0.4, 0.1, 2]],  // effects
         5,  // tp_cost
         7,  // launch_type
         4,  // area
@@ -1099,7 +1099,7 @@ global CHIP_DATABASE = [
         "fire_bulb",  // name
         2,  // min_range
         3,  // max_range
-        [8: [2, 0, 0]],  // effects
+        [14: [2, 0, 0]],  // effects
         14,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1109,7 +1109,7 @@ global CHIP_DATABASE = [
         "precipitation",  // name
         0,  // min_range
         8,  // max_range
-        [5: [1, 0, 2]],  // effects
+        [31: [1, 0, 2]],  // effects
         3,  // tp_cost
         7,  // launch_type
         9,  // area
@@ -1119,7 +1119,7 @@ global CHIP_DATABASE = [
         "fortress",  // name
         0,  // min_range
         3,  // max_range
-        [4: [7, 1, 3]],  // effects
+        [5: [7, 1, 3]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1129,7 +1129,7 @@ global CHIP_DATABASE = [
         "reflexes",  // name
         0,  // min_range
         6,  // max_range
-        [5: [35, 5, 3]],  // effects
+        [4: [35, 5, 3]],  // effects
         5,  // tp_cost
         7,  // launch_type
         7,  // area
@@ -1149,7 +1149,7 @@ global CHIP_DATABASE = [
         "teleportation",  // name
         1,  // min_range
         12,  // max_range
-        [9: [0, 0, 0], 2: [15, 5, 0]],  // effects
+        [10: [0, 0, 0], 12: [15, 5, 0]],  // effects
         9,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1169,7 +1169,7 @@ global CHIP_DATABASE = [
         "awakening",  // name
         1,  // min_range
         50,  // max_range
-        [2: [0, 0, 0], 9: [3, 0, -1]],  // effects
+        [15: [0, 0, 0], 59: [3, 0, -1]],  // effects
         0,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1179,7 +1179,7 @@ global CHIP_DATABASE = [
         "seven_league_boots",  // name
         0,  // min_range
         8,  // max_range
-        [5: [0.4, 0.1, 3]],  // effects
+        [7: [0.4, 0.1, 3]],  // effects
         4,  // tp_cost
         7,  // launch_type
         6,  // area
@@ -1189,7 +1189,7 @@ global CHIP_DATABASE = [
         "fertilizer",  // name
         1,  // min_range
         5,  // max_range
-        [2: [80, 10, 0]],  // effects
+        [12: [80, 10, 0]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1199,7 +1199,7 @@ global CHIP_DATABASE = [
         "doping",  // name
         0,  // min_range
         6,  // max_range
-        [5: [30, 5, 3], 0: [30, 5, 3]],  // effects
+        [3: [30, 5, 3], 25: [30, 5, 3]],  // effects
         5,  // tp_cost
         7,  // launch_type
         4,  // area
@@ -1209,7 +1209,7 @@ global CHIP_DATABASE = [
         "burning",  // name
         4,  // min_range
         6,  // max_range
-        [1: [78, 9, 0], 6: [78, 9, 1]],  // effects
+        [1: [78, 9, 0], 13: [78, 9, 1], 16: [0, 0, 0]],  // effects
         5,  // tp_cost
         7,  // launch_type
         5,  // area
@@ -1219,7 +1219,7 @@ global CHIP_DATABASE = [
         "plague",  // name
         1,  // min_range
         5,  // max_range
-        [6: [40, 10, 4]],  // effects
+        [13: [40, 10, 4]],  // effects
         6,  // tp_cost
         7,  // launch_type
         5,  // area
@@ -1229,7 +1229,7 @@ global CHIP_DATABASE = [
         "wizard_bulb",  // name
         1,  // min_range
         3,  // max_range
-        [8: [8, 0, 0]],  // effects
+        [14: [8, 0, 0]],  // effects
         15,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1239,7 +1239,7 @@ global CHIP_DATABASE = [
         "covid",  // name
         0,  // min_range
         2,  // max_range
-        [6: [71, 10, 7]],  // effects
+        [43: [2, 0, 0], 13: [69, 10, 7]],  // effects
         8,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1249,7 +1249,7 @@ global CHIP_DATABASE = [
         "desintegration",  // name
         1,  // min_range
         6,  // max_range
-        [1: [70, 10, 0]],  // effects
+        [30: [70, 10, 0]],  // effects
         8,  // tp_cost
         1,  // launch_type
         11,  // area
@@ -1259,7 +1259,7 @@ global CHIP_DATABASE = [
         "rage",  // name
         0,  // min_range
         8,  // max_range
-        [5: [0.5, 0.1, 3]],  // effects
+        [8: [0.5, 0.1, 3]],  // effects
         4,  // tp_cost
         7,  // launch_type
         5,  // area
@@ -1269,7 +1269,7 @@ global CHIP_DATABASE = [
         "elevation",  // name
         0,  // min_range
         5,  // max_range
-        [2: [80, 0, 0]],  // effects
+        [12: [80, 0, 0]],  // effects
         6,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1279,7 +1279,7 @@ global CHIP_DATABASE = [
         "metallic_bulb",  // name
         1,  // min_range
         1,  // max_range
-        [8: [7, 0, 0]],  // effects
+        [14: [7, 0, 0]],  // effects
         16,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1289,7 +1289,7 @@ global CHIP_DATABASE = [
         "bark",  // name
         1,  // min_range
         6,  // max_range
-        [5: [60, 10, 2]],  // effects
+        [21: [60, 10, 2]],  // effects
         5,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1299,7 +1299,7 @@ global CHIP_DATABASE = [
         "fracture",  // name
         1,  // min_range
         6,  // max_range
-        [7: [17, 5, 2]],  // effects
+        [19: [17, 5, 2]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1309,7 +1309,7 @@ global CHIP_DATABASE = [
         "dome",  // name
         0,  // min_range
         0,  // max_range
-        [4: [11, 2, 4]],  // effects
+        [5: [11, 2, 4]],  // effects
         9,  // tp_cost
         7,  // launch_type
         5,  // area
@@ -1319,7 +1319,7 @@ global CHIP_DATABASE = [
         "mirror",  // name
         0,  // min_range
         2,  // max_range
-        [3: [5, 1, 3]],  // effects
+        [20: [5, 1, 3]],  // effects
         5,  // tp_cost
         7,  // launch_type
         4,  // area
@@ -1329,7 +1329,7 @@ global CHIP_DATABASE = [
         "savant_bulb",  // name
         1,  // min_range
         4,  // max_range
-        [8: [12, 0, 0]],  // effects
+        [14: [12, 0, 0]],  // effects
         16,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1339,7 +1339,7 @@ global CHIP_DATABASE = [
         "transmutation",  // name
         1,  // min_range
         6,  // max_range
-        [2: [40, 4, 0]],  // effects
+        [45: [40, 4, 0]],  // effects
         8,  // tp_cost
         1,  // launch_type
         11,  // area
@@ -1359,7 +1359,7 @@ global CHIP_DATABASE = [
         "brainwashing",  // name
         1,  // min_range
         8,  // max_range
-        [7: [32, 7, 2]],  // effects
+        [48: [32, 7, 2]],  // effects
         6,  // tp_cost
         3,  // launch_type
         1,  // area
@@ -1369,7 +1369,7 @@ global CHIP_DATABASE = [
         "tactician_bulb",  // name
         3,  // min_range
         3,  // max_range
-        [8: [11, 0, 0]],  // effects
+        [14: [11, 0, 0]],  // effects
         16,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1379,7 +1379,7 @@ global CHIP_DATABASE = [
         "bramble",  // name
         0,  // min_range
         7,  // max_range
-        [3: [25, 0, 1]],  // effects
+        [20: [25, 0, 1]],  // effects
         4,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1389,7 +1389,7 @@ global CHIP_DATABASE = [
         "lightning_bulb",  // name
         1,  // min_range
         5,  // max_range
-        [8: [6, 0, 0]],  // effects
+        [14: [6, 0, 0]],  // effects
         16,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1399,7 +1399,7 @@ global CHIP_DATABASE = [
         "arsenic",  // name
         3,  // min_range
         4,  // max_range
-        [6: [62, 5, 2]],  // effects
+        [13: [62, 5, 2]],  // effects
         8,  // tp_cost
         7,  // launch_type
         1,  // area
@@ -1419,7 +1419,7 @@ global CHIP_DATABASE = [
         "resurrection",  // name
         1,  // min_range
         2,  // max_range
-        [2: [0, 0, 0]],  // effects
+        [15: [0, 0, 0]],  // effects
         18,  // tp_cost
         7,  // launch_type
         1,  // area

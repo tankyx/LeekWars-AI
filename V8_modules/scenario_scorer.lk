@@ -406,11 +406,19 @@ class ScenarioScorer {
         var distToTarget = getCellDistance(finalPos, this._target._cellPos)
         var kitingValue = 0
         if (distToTarget != null) {
-            
-            if (this._player._magic > this._player._strength) {
-                kitingValue = distToTarget * 10  
+            // Check if we're out of all attack range (damageMap empty = no cells in range)
+            var outOfRange = (count(mapKeys(this._fieldMap.damageMap)) == 0)
+
+            if (outOfRange) {
+                // Out of range: reward approaching (closer = better) for ALL builds
+                var currentDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+                if (currentDist != null && distToTarget < currentDist) {
+                    kitingValue = (currentDist - distToTarget) * 50  // Strong approach bonus
+                }
+            } else if (this._player._magic > this._player._strength) {
+                kitingValue = distToTarget * 10
             } else {
-                kitingValue = max(0, (10 - distToTarget)) * 10  
+                kitingValue = max(0, (10 - distToTarget)) * 10
             }
         }
 
@@ -489,6 +497,9 @@ class ScenarioScorer {
             if (buffChip == CHIP_STEROID) value += 200
             if (buffChip == CHIP_DOPING) value += 100
             if (buffChip == CHIP_WARM_UP) value += 150
+            if (buffChip == CHIP_WIZARDRY) value += 200  // MAG offensive buff
+            if (buffChip == CHIP_KNOWLEDGE) value += 150  // WIS buff (healing power)
+            if (buffChip == CHIP_ELEVATION) value += 120  // RES buff (damage reduction)
             if (buffChip == CHIP_PRISM) value += 180  // +60 all stats, strong universal buff
             if (buffChip == CHIP_ADRENALINE) value += 100
 

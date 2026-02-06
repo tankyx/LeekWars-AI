@@ -1,0 +1,40 @@
+// Test if database is being used in Arsenal
+include('V8_modules/item_database.lk')
+include('V8_modules/item.lk')
+
+var arsenal = new Arsenal()
+
+debug("=== DATABASE USAGE TEST ===")
+
+// Check if database functions exist
+debug("Database functions available:")
+debug("  hasWeaponData: " + (hasWeaponData != null))
+debug("  hasChipData: " + (hasChipData != null))
+
+// Test weapon lookup
+var pistolData = getWeaponData(WEAPON_PISTOL)
+if (pistolData != null) {
+    debug("✅ Database: WEAPON_PISTOL found")
+    debug("   Name: " + pistolData[0])
+    debug("   Range: " + pistolData[1] + "-" + pistolData[2])
+    debug("   TP: " + pistolData[4])
+} else {
+    debug("❌ Database: WEAPON_PISTOL not found")
+}
+
+// Test chip lookup
+var shockData = getChipData(CHIP_SHOCK)
+if (shockData != null) {
+    debug("✅ Database: CHIP_SHOCK found")
+    debug("   Name: " + shockData[0])
+    debug("   Range: " + shockData[1] + "-" + shockData[2])
+    debug("   TP: " + shockData[4])
+} else {
+    debug("❌ Database: CHIP_SHOCK not found")
+}
+
+// Check Arsenal built correctly
+debug("Arsenal weaponsList count: " + count(mapKeys(arsenal.weaponsList)))
+debug("Arsenal chipsList count: " + count(mapKeys(arsenal.chipsList)))
+
+debug("=== TEST COMPLETE ===")

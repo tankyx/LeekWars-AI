@@ -67,8 +67,9 @@ class ScenarioHelpers {
                 // EARLY PHASE: Edge positioning, opportunistic only
                 if (playerHPPercent < 30) return "FLEE"
                 if (enemyHPPercent < 40) {
-                    var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
-                    if (estimatedDamage / enemyHP >= 0.85) return "KILL"  // Only kill if very confident
+                    var dmgEstimate = this.estimateMaxDamageThisTurn(availableTP)
+                    // KILL requires immediate damage only (poison lands next turn, can't OTKO)
+                    if (dmgEstimate['immediate'] / enemyHP >= 0.85) return "KILL"
                 }
                 return "ATTRITION"  // Conservative play, no aggressive buffs
             }
@@ -76,8 +77,8 @@ class ScenarioHelpers {
                 // MID PHASE: Tighten toward weaker targets
                 if (playerHPPercent < 35) return "FLEE"
                 if (enemyHPPercent < 50) {
-                    var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
-                    if (estimatedDamage / enemyHP >= 0.75) return "KILL"
+                    var dmgEstimate = this.estimateMaxDamageThisTurn(availableTP)
+                    if (dmgEstimate['immediate'] / enemyHP >= 0.75) return "KILL"
                 }
                 return "ATTRITION"
             }
@@ -89,7 +90,9 @@ class ScenarioHelpers {
 
         // Standard 1v1 logic
         // PRIORITY: Check if enemy is killable BEFORE fleeing
-        var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
+        var dmgEstimate = this.estimateMaxDamageThisTurn(availableTP)
+        // Use IMMEDIATE damage for KILL check (poison DoT lands turn N+1, cannot OTKO)
+        var estimatedDamage = dmgEstimate['immediate']
 
         // estimatedDamage already accounts for shields, TP budget, AND weapon range
         // Use 95% threshold to account for minor variance/rounding
@@ -194,8 +197,9 @@ class ScenarioHelpers {
             }
         }
 
-        // Also check damage chips
-        var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG]
+        // Also check damage + poison chips (MAG builds rely on poison chips for damage)
+        var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
+                           CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID]
         for (var chipId in damageChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
             var chip = this._arsenal.playerEquippedChips[chipId]
@@ -228,7 +232,10 @@ class ScenarioHelpers {
         var availableMP = this._player._currMp
 
         // Helper: Calculate damage with given stats and TP budget, accounting for range
+        // Returns ['immediate': X, 'total': Y] where immediate = direct + nova (this turn),
+        // total = direct + nova + dot (dot lands on turn N+1, cannot OTKO)
         var calcDmg = function(str, mag, wis, sci, tpBudget, arsenal, target, playerId, dist, mp) {
+            var immediateDamage = 0
             var totalDamage = 0
 
             for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
@@ -238,13 +245,36 @@ class ScenarioHelpers {
                 var closestDist = max(1, dist - mp)
                 if (closestDist > weapon._maxRange) continue  // Can't reach even after full move
 
-                var weaponDamage = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
+                var bd = arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
+                var directDmg = bd['direct']
+                var novaDmg = bd['nova']
+                var dotDmg = bd['dot']
+
+                // Apply shield reduction to direct damage only
+                var relShield = target._relShield / 100
+                var absShield = target._absShield
+                var netDirect = directDmg * (1 - relShield) - absShield
+                if (netDirect < 0) netDirect = 0
+
+                // Cap nova by HP deficit
+                var hpDeficit = target._maxHealth - target._currHealth
+                var cappedNova = novaDmg
+                if (netDirect > 0 && novaDmg > 0) {
+                    cappedNova = min(novaDmg, hpDeficit + netDirect)
+                } else if (novaDmg > 0) {
+                    cappedNova = min(novaDmg, hpDeficit)
+                }
+
                 var maxUses = min(weapon._maxUse, floor(tpBudget / weapon._cost))
-                totalDamage += weaponDamage * maxUses
+                immediateDamage += (netDirect + cappedNova) * maxUses
+                totalDamage += (netDirect + cappedNova + dotDmg) * maxUses
             }
 
-            var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG]
-            var bestChipDamage = 0
+            // Check damage chips (direct damage + poison chips)
+            var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
+                               CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID]
+            var bestChipImmediate = 0
+            var bestChipTotal = 0
             for (var chipId in damageChips) {
                 if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) continue
                 if (getCooldown(chipId, playerId) > 0) continue
@@ -254,16 +284,24 @@ class ScenarioHelpers {
                 var closestDist = max(1, dist - mp)
                 if (closestDist > chip._maxRange) continue
 
-                var chipDamage = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
-                bestChipDamage = max(bestChipDamage, chipDamage)
+                var cbd = arsenal.getDamageBreakdown(str, mag, wis, sci, chipId)
+                var chipImmediate = cbd['direct'] + cbd['nova']
+                var chipTotal = cbd['direct'] + cbd['nova'] + cbd['dot']
+                if (chipTotal > bestChipTotal) {
+                    bestChipImmediate = chipImmediate
+                    bestChipTotal = chipTotal
+                }
             }
-            totalDamage += bestChipDamage
+            immediateDamage += bestChipImmediate
+            totalDamage += bestChipTotal
 
-            return totalDamage
+            return ['immediate': immediateDamage, 'total': totalDamage]
         }
 
         // 1. Baseline: No buffs
-        var maxDamage = calcDmg(baseStr, baseMag, baseWis, baseSci, availableTP, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
+        var bestResult = calcDmg(baseStr, baseMag, baseWis, baseSci, availableTP, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
+        var maxImmediate = bestResult['immediate']
+        var maxTotal = bestResult['total']
 
         // 2. Consider ADRENALINE (net +4 TP for 1 TP cost)
         var hasAdrenaline = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE)
@@ -277,8 +315,8 @@ class ScenarioHelpers {
             var buffedStr = baseStr + 150
             var tpAfterBuff = availableTP - 7 + adrenalineBonus
             if (tpAfterBuff > 0) {
-                var dmgWithSteroid = calcDmg(buffedStr, baseMag, baseWis, baseSci, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
-                maxDamage = max(maxDamage, dmgWithSteroid)
+                var r = calcDmg(buffedStr, baseMag, baseWis, baseSci, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
+                if (r['total'] > maxTotal) { maxImmediate = r['immediate']; maxTotal = r['total'] }
             }
         }
 
@@ -289,8 +327,8 @@ class ScenarioHelpers {
             var buffedMag = baseMag + 150
             var tpAfterBuff = availableTP - 6 + adrenalineBonus
             if (tpAfterBuff > 0) {
-                var dmgWithWizardry = calcDmg(baseStr, buffedMag, baseWis, baseSci, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
-                maxDamage = max(maxDamage, dmgWithWizardry)
+                var r = calcDmg(baseStr, buffedMag, baseWis, baseSci, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
+                if (r['total'] > maxTotal) { maxImmediate = r['immediate']; maxTotal = r['total'] }
             }
         }
 
@@ -301,8 +339,8 @@ class ScenarioHelpers {
             var buffedSci = baseSci + 250
             var tpAfterBuff = availableTP - 5 + adrenalineBonus
             if (tpAfterBuff > 0) {
-                var dmgWithKnowledge = calcDmg(baseStr, baseMag, baseWis, buffedSci, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
-                maxDamage = max(maxDamage, dmgWithKnowledge)
+                var r = calcDmg(baseStr, baseMag, baseWis, buffedSci, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
+                if (r['total'] > maxTotal) { maxImmediate = r['immediate']; maxTotal = r['total'] }
             }
         }
 
@@ -312,12 +350,12 @@ class ScenarioHelpers {
         if (prismReady && availableTP >= 6) {
             var tpAfterBuff = availableTP - 6 + adrenalineBonus
             if (tpAfterBuff > 0) {
-                var dmgWithPrism = calcDmg(baseStr + 60, baseMag + 60, baseWis + 60, baseSci + 60, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
-                maxDamage = max(maxDamage, dmgWithPrism)
+                var r = calcDmg(baseStr + 60, baseMag + 60, baseWis + 60, baseSci + 60, tpAfterBuff, this._arsenal, this._target, this._player._id, distToEnemy, availableMP)
+                if (r['total'] > maxTotal) { maxImmediate = r['immediate']; maxTotal = r['total'] }
             }
         }
 
-        return maxDamage
+        return ['immediate': maxImmediate, 'total': maxTotal]
     }
 
     hasPoisonCapability() {

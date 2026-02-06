@@ -1,0 +1,29 @@
+// Quick test to verify database loading
+include('V8_modules/item_database.lk')
+
+// Test weapon lookup
+var pistolData = getWeaponData(1)
+if (pistolData != null) {
+    debug("Pistol data found:")
+    debug("  Name: " + pistolData[0])
+    debug("  Range: " + pistolData[1] + "-" + pistolData[2])
+    debug("  TP Cost: " + pistolData[4])
+    debug("  Effects: " + pistolData[3])
+} else {
+    debug("ERROR: Pistol data not found!")
+}
+
+// Test chip lookup
+var shockData = getChipData(1)
+if (shockData != null) {
+    debug("Shock chip data found:")
+    debug("  Name: " + shockData[0])
+    debug("  Range: " + shockData[1] + "-" + shockData[2])
+    debug("  TP Cost: " + shockData[4])
+    debug("  Cooldown: " + shockData[7])
+    debug("  Effects: " + shockData[3])
+} else {
+    debug("ERROR: Shock chip data not found!")
+}
+
+debug("Test complete!")

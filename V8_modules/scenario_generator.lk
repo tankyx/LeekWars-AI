@@ -78,6 +78,12 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, poisonDump)
         }
 
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            debugInfo("[STATE-KILL] Adding GRAPPLE-COVID combo scenario")
+            push(scenarios, grappleCovid)
+        }
+
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
             debugInfo("[STATE-KILL] Adding Shield Rotation scenario (universal)")
@@ -255,6 +261,12 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, poisonDump)
         }
 
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            debugInfo("[STATE-ATTRITION] Adding GRAPPLE-COVID combo scenario")
+            push(scenarios, grappleCovid)
+        }
+
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
             debugInfo("[STATE-ATTRITION] Adding Shield Rotation scenario (universal)")
@@ -294,6 +306,12 @@ class ScenarioGenerator extends ScenarioCombos {
         if (poisonDump != null) {
             debugInfo("[STATE-SUSTAIN] Adding Poison Dump scenario (Antidote window - use at all cost)")
             push(scenarios, poisonDump)
+        }
+
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            debugInfo("[STATE-SUSTAIN] Adding GRAPPLE-COVID combo scenario")
+            push(scenarios, grappleCovid)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
@@ -341,6 +359,12 @@ class ScenarioGenerator extends ScenarioCombos {
         if (poisonDump != null) {
             debugInfo("[STATE-FLEE] Adding Poison Dump scenario (Antidote window - use at all cost)")
             push(scenarios, poisonDump)
+        }
+
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            debugInfo("[STATE-FLEE] Adding GRAPPLE-COVID combo scenario")
+            push(scenarios, grappleCovid)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
