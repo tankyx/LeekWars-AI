@@ -278,13 +278,23 @@ class UnifiedStrategy extends Strategy {
             var lookaheadOps = stopOp("Enemy Response Lookahead (top " + lookaheadCount + ")")
         }
 
+        // If best scenario does 0 damage, use fallback instead (unless it's purely defensive)
         if (bestScenario != null) {
-            debugInfo("[UNIFIED-BEST] Selected scenario: score=" + floor(bestScore) +
-                  " dmg=" + floor(bestSimResult.damageDealt) +
-                  " dot=" + floor(bestSimResult.dotDamageQueued) +
-                  " tp=" + bestSimResult.tpSpent + " mp=" + bestSimResult.mpSpent)
+            var isDamaging = bestSimResult.damageDealt > 0 || bestSimResult.dotDamageQueued > 0
+            var isHealing = bestSimResult.hpGained > 0
+            var usesResources = bestSimResult.tpSpent > 0 || bestSimResult.mpSpent > 0
 
-            this._actions = bestScenario
+            if (!isDamaging && !isHealing && usesResources && bestScore < 500) {
+                debugInfo("[UNIFIED] Rejecting 0-value scenario (score=" + floor(bestScore) + ", no damage/healing) - using fallback")
+                this.createFallbackScenario(target, targetHitCell)
+            } else {
+                debugInfo("[UNIFIED-BEST] Selected scenario: score=" + floor(bestScore) +
+                      " dmg=" + floor(bestSimResult.damageDealt) +
+                      " dot=" + floor(bestSimResult.dotDamageQueued) +
+                      " tp=" + bestSimResult.tpSpent + " mp=" + bestSimResult.mpSpent)
+
+                this._actions = bestScenario
+            }
         } else {
             debugInfo("[UNIFIED] No valid scenario found - creating fallback")
             this.createFallbackScenario(target, targetHitCell)
