@@ -1506,21 +1506,46 @@ class ScenarioGenerator {
             return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
         }
 
-        if (hpRatio < 0.80 &&
-            getCooldown(CHIP_REMISSION, this._player._id) == 0 &&
-            mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
-            tpBudget >= 5) {
-            return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
+        // Smart healing for HP < 80%
+        if (hpRatio < 0.80 && tpBudget >= 5) {
+            var healAction = this.getSmartHealingAction()
+            if (healAction != null) {
+                return healAction
+            }
         }
 
         return null
     }
 
     getRemissionAction() {
+        // Smart healing: prefer ENHANCED_LIGHTNINGER for high-wisdom builds
+        return this.getSmartHealingAction()
+    }
+
+    getSmartHealingAction() {
+        var wisdom = this._player._wisdom
+
+        // High wisdom (>= 400): ENHANCED_LIGHTNINGER (9 TP) gives lifesteal + 100 HP bonus
+        // Low wisdom (< 400): REMISSION (5 TP) gives fixed ~400 HP
+        if (wisdom >= 400 && mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_ENHANCED_LIGHTNINGER)) {
+            // Check if we have enough TP and weapon is usable
+            if (getTP() >= 9) {
+                // Check if target is in range
+                var dist = getCellDistance(this._player._cellPos, this._target._cellPos)
+                if (dist != null && dist >= 1 && dist <= 8) {
+                    debugInfo("[SMART-HEAL] Using ENHANCED_LIGHTNINGER for wisdom lifesteal (WIS=" + wisdom + ")")
+                    // Return weapon attack action instead of buff action
+                    return new Action(Action.ACTION_DIRECT, WEAPON_ENHANCED_LIGHTNINGER, -1, this._target._cellPos, this._target)
+                }
+            }
+        }
+
+        // Fallback to REMISSION for low wisdom or when ENHANCED_LIGHTNINGER unavailable
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
             getCooldown(CHIP_REMISSION, this._player._id) == 0) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
         }
+
         return null
     }
 
@@ -2246,28 +2271,31 @@ class ScenarioGenerator {
         var actions = []
         var tpBudget = availableTP
 
-        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION)) {
-            return null
-        }
-        if (getCooldown(CHIP_REMISSION, this._player._id) > 0) {
-            return null
-        }
-
         var playerHP = this._player._currHealth
         var playerMaxHP = this._player._maxHealth
         var playerHPPercent = (playerHP * 100) / playerMaxHP
 
         if (playerHPPercent > 70) {
-            return null  
+            return null
         }
 
         if (tpBudget < 10) {
             return null
         }
 
+        // Use smart healing (ENHANCED_LIGHTNINGER for high wisdom, REMISSION for low wisdom)
+        var healAction = this.getSmartHealingAction()
+        if (healAction == null) {
+            return null
+        }
 
-        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
-        tpBudget -= 5
+        push(actions, healAction)
+        // Deduct TP cost (9 for ENHANCED_LIGHTNINGER, 5 for REMISSION)
+        if (healAction.weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+            tpBudget -= 9
+        } else {
+            tpBudget -= 5
+        }
 
         var context = [:]
         context['target'] = this._target
@@ -2428,15 +2456,6 @@ class ScenarioGenerator {
         // Minimum TP to ensure we can attack after buffing
         if (tpBudget < 10) {
             return null  // Not enough TP to buff + attack meaningfully
-        }
-
-        // Skip shield cycling if high wisdom (lifesteal healing is sufficient)
-        var wisdom = this._player._wisdom
-        var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
-        if (wisdom >= 400 && hpPercent < 70) {
-            // High wisdom + low HP: prefer attacking for lifesteal over shielding
-            debugInfo("[SHIELD-SKIP] High wisdom (" + wisdom + "), favoring lifesteal over shields")
-            return null
         }
 
         // Check shield status and rotate: FORTRESS (3t, 8 TP) / WALL (2t, 6 TP)
