@@ -58,10 +58,9 @@ class ScenarioScorer {
         var damageScore = effectiveDamage * damageWeight * bulbDamageMultiplier
         score += damageScore
 
-        // Lifesteal healing bonus: Factor in wisdom-based healing from damage
-        // Formula: Heal = Damage * Wisdom / 1000
-        var wisdom = this._player._wisdom
-        var lifestealHealing = (effectiveDamage * wisdom) / 1000
+        // Lifesteal healing bonus: Use pre-calculated healing from simulator
+        // (includes ENHANCED_LIGHTNINGER +100 HP bonus)
+        var lifestealHealing = simResult.lifestealHealing
         if (lifestealHealing > 0) {
             // Bonus scaling: lifesteal is valuable when HP is low
             var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth

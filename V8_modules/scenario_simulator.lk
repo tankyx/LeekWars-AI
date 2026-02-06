@@ -5,6 +5,7 @@ class SimulationResult {
     dotDamageQueued = 0
     novaDamageQueued = 0
     hpGained = 0
+    lifestealHealing = 0
     shieldsGained = 0
     relativeShieldGained = 0
     tpSpent = 0
@@ -84,6 +85,10 @@ class ScenarioSimulator {
                     simEnemyCurrHP -= directDmg
                     if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
+                    // Calculate lifesteal healing
+                    var lifesteal = (directDmg * simWisdom) / 1000
+                    result.lifestealHealing += lifesteal
+
                     // Track bulb vs leek damage
                     if (targetIsBulb) {
                         result.bulbDamage += directDmg
@@ -138,6 +143,15 @@ class ScenarioSimulator {
                         result.damageDealt += directDmg
                         simEnemyCurrHP -= directDmg
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
+
+                        // Calculate lifesteal healing
+                        var lifesteal = (directDmg * simWisdom) / 1000
+                        result.lifestealHealing += lifesteal
+
+                        // ENHANCED_LIGHTNINGER bonus: +100 HP healing
+                        if (action.weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+                            result.lifestealHealing += 100
+                        }
 
                         // Track bulb vs leek damage
                         if (targetIsBulb) {
