@@ -58,6 +58,23 @@ class ScenarioScorer {
         var damageScore = effectiveDamage * damageWeight * bulbDamageMultiplier
         score += damageScore
 
+        // Lifesteal healing bonus: Factor in wisdom-based healing from damage
+        // Formula: Heal = Damage * Wisdom / 1000
+        var wisdom = this._player._wisdom
+        var lifestealHealing = (effectiveDamage * wisdom) / 1000
+        if (lifestealHealing > 0) {
+            // Bonus scaling: lifesteal is valuable when HP is low
+            var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+            var lifestealMultiplier = 1.0
+            if (hpPercent < 50) {
+                lifestealMultiplier = 2.0  // Double value when HP < 50%
+            } else if (hpPercent < 70) {
+                lifestealMultiplier = 1.5  // 1.5x value when HP < 70%
+            }
+            var lifestealScore = lifestealHealing * lifestealMultiplier * 2.0  // Base multiplier
+            score += lifestealScore
+        }
+
         // Bulb kill bonus: massive score for killing high-value bulbs (configurable via weights)
         var bulbKillBonus = 0
         if (targetIsBulb && killProbability >= 0.70) {

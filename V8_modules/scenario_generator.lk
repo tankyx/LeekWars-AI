@@ -45,11 +45,15 @@ class ScenarioGenerator {
         this._target.updateEntity()
         debugInfo("[SCENARIO-GEN] Updated target entity (pos=" + this._target._cellPos + " HP=" + this._target._currHealth + ")")
 
-        // Detect Antidote usage by tracking poison duration changes
-        var currentPoison = this._target.getEffectRemaining(EFFECT_POISON)
-        var tracker = new CooldownTracker(this._target)
-        tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
-        // Note: PREV_ENEMY_POISON is updated at END of main.lk after scenario execution
+        // Only run Antidote detection if we have poison capabilities
+        if (this.hasPoisonCapability()) {
+            var currentPoison = this._target.getEffectRemaining(EFFECT_POISON)
+            var tracker = new CooldownTracker(this._target)
+            tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
+            // Note: PREV_ENEMY_POISON is updated at END of main.lk after scenario execution
+        } else {
+            debugInfo("[SCENARIO-GEN] No poison capability - skipping Antidote detection")
+        }
 
         var scenarios = []
         var availableTP = getTP()
@@ -2426,6 +2430,15 @@ class ScenarioGenerator {
             return null  // Not enough TP to buff + attack meaningfully
         }
 
+        // Skip shield cycling if high wisdom (lifesteal healing is sufficient)
+        var wisdom = this._player._wisdom
+        var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+        if (wisdom >= 400 && hpPercent < 70) {
+            // High wisdom + low HP: prefer attacking for lifesteal over shielding
+            debugInfo("[SHIELD-SKIP] High wisdom (" + wisdom + "), favoring lifesteal over shields")
+            return null
+        }
+
         // Check shield status and rotate: FORTRESS (3t, 8 TP) / WALL (2t, 6 TP)
         var hasFortress = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)
         var hasWall = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL)
@@ -2946,5 +2959,33 @@ class ScenarioGenerator {
         }
 
         return null
+    }
+
+    // =========================================================================
+    // Helper: Check if player has poison capabilities
+    // =========================================================================
+    hasPoisonCapability() {
+        // Check for poison weapons
+        if (mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_GAZOR)) return true
+        if (mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_DESTROYER)) return true
+
+        // Check for poison chips
+        var poisonChips = [CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID, CHIP_ARSENIC]
+        for (var chipId in poisonChips) {
+            if (mapContainsKey(this._arsenal.playerEquippedChips, chipId)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    // =========================================================================
+    // Helper: Calculate potential lifesteal healing from wisdom
+    // =========================================================================
+    calculateLifestealHealing(damage) {
+        // Lifesteal formula: Heal = Damage * Wisdom / 1000
+        var wisdom = this._player._wisdom
+        return (damage * wisdom) / 1000
     }
 }
