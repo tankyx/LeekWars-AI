@@ -107,7 +107,10 @@ class ScenarioScorer {
             // Reduce penalty for early turns (turn 1-3) when positioning is expected
             if (currentTurn <= 3) {
                 noDamagePenalty = noDamagePenalty / 4  // -500 instead of -2000
-            } else {
+            } else if (currentTurn >= 5) {
+                // Increase penalty on later turns - standing still dealing 0 damage
+                // must not be masked by shield/buff value
+                noDamagePenalty = noDamagePenalty * 3  // -6000 on turn 5+
             }
 
             score += noDamagePenalty
@@ -437,10 +440,7 @@ class ScenarioScorer {
 
         var healingTPCost = 0
         for (var buff in simResult.buffsApplied) {
-            if (buff == CHIP_REMISSION) healingTPCost += 5
-            if (buff == CHIP_REGENERATION) healingTPCost += 8
-            if (buff == CHIP_CURE) healingTPCost += 6
-            if (buff == CHIP_DRIP) healingTPCost += 8
+            if (isHealingChip(buff)) healingTPCost += getCachedChipCost(buff)
         }
 
         var offensiveTPSpent = simResult.tpSpent - healingTPCost
@@ -489,11 +489,11 @@ class ScenarioScorer {
             if (buffChip == CHIP_STEROID) value += 200
             if (buffChip == CHIP_DOPING) value += 100
             if (buffChip == CHIP_WARM_UP) value += 150
+            if (buffChip == CHIP_PRISM) value += 180  // +60 all stats, strong universal buff
             if (buffChip == CHIP_ADRENALINE) value += 100
 
-            // Shield buffs: dynamic threat-aware valuation
-            if (buffChip == CHIP_HELMET || buffChip == CHIP_SHIELD) {
-                // Absolute shields: flat HP value
+            // Absolute shield buffs: flat HP value
+            if (isAbsoluteShieldChip(buffChip)) {
                 value += 80  // Base value
             }
 
@@ -519,7 +519,7 @@ class ScenarioScorer {
                 value += fortressValue
             }
 
-            if (buffChip == CHIP_PROTEIN || buffChip == CHIP_LEATHER_BOOTS) value += 100
+            if (isRelativeShieldChip(buffChip) && buffChip != CHIP_WALL && buffChip != CHIP_FORTRESS) value += 100
 
             // Healing buffs: fixed values
             if (buffChip == CHIP_REGENERATION) value += 80
@@ -578,11 +578,9 @@ class ScenarioScorer {
         var value = 0
 
         for (var debuffChip in debuffsApplied) {
-            
-            if (debuffChip == CHIP_VENOM || debuffChip == CHIP_TOXIN) value += 100
+            if (isPoisonChip(debuffChip)) value += 100
             if (debuffChip == CHIP_STALACTITE || debuffChip == CHIP_ICEBERG) value += 120
             if (debuffChip == CHIP_ARMOR || debuffChip == CHIP_SOLIDIFICATION) value += 150
-
             if (debuffChip == CHIP_SLOW_DOWN || debuffChip == CHIP_BALL_AND_CHAIN) value += 80
         }
 

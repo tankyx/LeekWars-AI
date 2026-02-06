@@ -469,31 +469,7 @@ class FieldMapPatterns extends FieldMapCore {
     }
 
     isBuffChip(chipId) {
-        // Buff chips (stat boosts)
-        if (chipId == CHIP_WIZARDRY || chipId == CHIP_STEROID || chipId == CHIP_WARM_UP) return true
-        if (chipId == CHIP_DOPING || chipId == CHIP_RAGE || chipId == CHIP_TRANQUILIZER) return true
-
-        // Shield/protection chips
-        if (chipId == CHIP_FORTRESS || chipId == CHIP_WALL || chipId == CHIP_HELMET) return true
-        if (chipId == CHIP_SHIELD || chipId == CHIP_PROTEIN) return true
-
-        // Heal/HP chips
-        if (chipId == CHIP_REMISSION || chipId == CHIP_REGENERATION || chipId == CHIP_CURE) return true
-        if (chipId == CHIP_DRIP || chipId == CHIP_BANDAGE) return true
-        if (chipId == CHIP_KNOWLEDGE || chipId == CHIP_ELEVATION || chipId == CHIP_ARMORING) return true
-
-        // Resource management chips
-        if (chipId == CHIP_LEATHER_BOOTS || chipId == CHIP_ADRENALINE) return true
-        if (chipId == CHIP_SPARK || chipId == CHIP_FEROCITY) return true
-
-        // Damage return chips
-        if (chipId == CHIP_MIRROR || chipId == CHIP_THORN || chipId == CHIP_BRAMBLE) return true
-
-        // Utility chips
-        if (chipId == CHIP_ANTIDOTE || chipId == CHIP_MOTIVATION) return true
-        if (chipId == CHIP_TELEPORTATION || chipId == CHIP_INVERSION) return true
-
-        return false  // Damage/debuff chips (offensive)
+        return isBuffChipRole(chipId)
     }
 
     integrateEquippedItemsIntoDamageMap(oppCell) {

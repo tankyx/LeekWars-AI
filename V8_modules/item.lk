@@ -529,26 +529,6 @@ class Arsenal {
         }
     }
 
-    getAccurateKillProbability(itemIds, playerStr, playerMag, playerWis, playerSci, playerAgility, targetEntity) {
-        
-        var usedAdvanced = false
-        var killProb = 0.0
-
-        killProb = DamageProbabilityGetKillProbability(
-            itemIds,
-            targetEntity._currHealth,
-            playerStr,
-            playerMag,
-            playerWis,
-            targetEntity._absShield,
-            targetEntity._relShield,
-            playerAgility,
-            this
-        )
-
-        return killProb
-    }
-
     calculateNeutrinoAmplification(stacks, futureAttacks, avgWeaponDamage) {
         
         var vulnPercent = stacks * 8

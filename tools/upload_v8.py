@@ -207,6 +207,7 @@ class V8Uploader:
             "game_entity",
             "item",
             "item_database",
+            "item_roles",
             "field_map",
             "field_map_core",
             "field_map_patterns",
@@ -224,16 +225,14 @@ class V8Uploader:
             "reachable_graph",
             "scenario_simulator",
             "scenario_scorer",
+            "scenario_helpers",
+            "scenario_combos",
             "scenario_generator",
             "scenario_quick_scorer",
             "scenario_mutation",
             "weight_profiles",
-            # Beam Search / Emergent Planning modules
-            "world_state",
-            "atomic_action",
-            "atomic_action_executor",
-            "state_transition",
-            "beam_search_planner"
+            # Deleted: beam_search_planner, world_state, atomic_action,
+            # atomic_action_executor, state_transition (Phase 1 cleanup)
         ]
 
         for module_name in root_modules:

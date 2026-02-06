@@ -6,19 +6,24 @@ Development guide for LeekWars AI V8 system - modular, strategy-based combat AI 
 ## Project Structure
 ```
 LeekWars-AI/
-├── V8_modules/          # V8 AI (30 modules, ~5,800 lines)
+├── V8_modules/          # V8 AI (27 modules, ~15,400 lines)
 │   ├── main.lk         # Main entry point & strategy selection
 │   ├── game_entity.lk  # Player & enemy state tracking
 │   ├── field_map_*.lk  # Damage zones & tactical positioning (3 modules)
 │   ├── item.lk         # Weapon/chip definitions & damage calculations
+│   ├── item_database.lk       # Auto-generated weapon/chip stats database
+│   ├── item_roles.lk          # Centralized chip/weapon role classification
 │   ├── operation_tracker.lk   # Operation profiling (startOp/stopOp)
 │   ├── debug_config.lk        # Tiered DEBUG_LEVEL system (0-3)
-│   ├── cache_manager.lk       # Path length memoization
+│   ├── cache_manager.lk       # Path length & chip cost memoization
 │   ├── reachable_graph.lk     # BFS-based reachability precomputation
-│   ├── scenario_generator.lk  # State-based scenario generation
+│   ├── scenario_helpers.lk    # ScenarioHelpers base: state detection, helpers, utilities
+│   ├── scenario_combos.lk     # ScenarioCombos: all create*Scenario methods
+│   ├── scenario_generator.lk  # ScenarioGenerator: orchestration + state builders
 │   ├── scenario_simulator.lk  # Simulates scenarios without execution
 │   ├── scenario_scorer.lk     # Build-specific scenario scoring
 │   ├── scenario_quick_scorer.lk # Fast heuristic scoring
+│   ├── scenario_mutation.lk   # AoE aim cell optimization
 │   ├── performance_infra.lk   # Multi-enemy damage caching
 │   ├── tactical_awareness.lk  # Threat maps & positioning
 │   ├── weight_profiles.lk     # Build-specific weight sets
@@ -27,11 +32,6 @@ LeekWars-AI/
 │   ├── kill_planning.lk       # 2-turn kill detection (Phase 3)
 │   ├── cooldown_tracker.lk    # Enemy chip cooldown tracking (Phase 3)
 │   ├── enemy_predictor.lk     # Enemy response simulation (Phase 4)
-│   ├── math/           # Mathematical modeling (4 modules)
-│   │   ├── polynomial.lk
-│   │   ├── piecewise_function.lk
-│   │   ├── probability_distribution.lk
-│   │   └── damage_probability.lk
 │   └── strategy/       # Build-specific strategies (4 modules)
 │       ├── action.lk            # Action type definitions
 │       ├── base_strategy.lk     # Base combat logic & action executor
@@ -64,7 +64,7 @@ V8 uses a **two-phase execution model**:
 **V8 uses strategic state detection to generate 2-4 optimized scenarios per turn.**
 
 **System Components:**
-- **ScenarioGenerator**: State-based scenario generation (KILL, AGGRO, ATTRITION, SUSTAIN, FLEE)
+- **ScenarioHelpers** → **ScenarioCombos** → **ScenarioGenerator**: Inheritance chain for scenario generation (KILL, AGGRO, ATTRITION, SUSTAIN, FLEE)
 - **ScenarioSimulator**: Simulates each scenario without executing (tracks TP/MP/damage/positioning)
 - **ScenarioScorer**: Scores scenarios using build-specific weights (STR favors damage, MAG favors DoT, AGI favors positioning)
 
@@ -316,6 +316,14 @@ Pre-calculates damage zones and optimal attack positions:
 - **Circle Pattern**: AoE weapons (grenade launcher, electrisor)
 - Uses `getCellDistance()` for accurate range validation
 
+#### **item_roles.lk** - Centralized Chip/Weapon Classification
+Provides O(1) map-based role lookups for all chips and weapons:
+- **Role Maps**: `ROLE_HEALING`, `ROLE_POISON`, `ROLE_SHIELD_ABSOLUTE`, `ROLE_SHIELD_RELATIVE`, `ROLE_OFFENSIVE_BUFF`, `ROLE_DAMAGE_RETURN`, `ROLE_DEBUFF`, `ROLE_UTILITY`, `ROLE_RESOURCE`, `ROLE_POISON_WEAPON`
+- **Query Functions**: `isHealingChip()`, `isPoisonChip()`, `isPoisonWeapon()`, `isShieldChip()`, `isAbsoluteShieldChip()`, `isRelativeShieldChip()`, `isOffensiveBuff()`, `isDamageReturnChip()`, `isDebuffChip()`, `isUtilityChip()`, `isResourceChip()`
+- **Composite Queries**: `isBuffChipRole()` (any non-damage chip), `isDefensiveChip()` (shield + return + heal)
+- Initialized once via `initializeItemRoles()` in `init()`
+- Replaces 50+ scattered chip ID comparisons across 8 files
+
 #### **item.lk** - Arsenal Management
 `Arsenal` class manages equipped weapons & chips:
 - Damage calculations with stat scaling
@@ -390,36 +398,16 @@ Abstract base class providing:
 - `checkAoESafety()` / `findSafeCellForAoE()` - Prevents self-damage
 - `executeAndFlushActions()` - Mid-scenario execution for immediate state updates
 
-#### **strategy/strength_strategy.lk** - Strength Builds
-**Philosophy:** Maximize weapon damage output
+#### **Build-Specific Behavior (via ScenarioGenerator + weight_profiles.lk)**
 
-**Combat Flow:**
-1. Apply CHIP_STEROID buff (strength boost)
-2. Apply CHIP_LIBERATION (remove debuffs / strip enemy shields)
-3. Check OTKO opportunity (enemy HP < 35% or < 500 HP → teleport + weapon spam)
-4. Move to best weapon damage cell from field map
-5. Execute weapon-focused offensive (spam weapons, then damage chips)
-6. Hide-and-seek repositioning
+**Strength Builds:** Maximize weapon damage output
+- CHIP_STEROID buff → CHIP_LIBERATION → OTKO check → weapon spam → hide-and-seek
+- OTKO teleportation for low HP enemies (now correctly uses 9 TP)
 
-**Special Features:**
-- OTKO teleportation for low HP enemies
-- CHIP_ADRENALINE for TP boost when short by 1-4 TP
-- Proper weapon spam: `while (uses < maxUse && TP >= cost)`
+**Agility Builds:** Strength strategy + damage return buffs
+- CHIP_WARM_UP buff → damage return (MIRROR 5TP / THORN 4TP / BRAMBLE 4TP) → weapon spam → hide-and-seek
 
-#### **strategy/agility_strategy.lk** - Agility Builds
-**Philosophy:** Strength strategy + damage return buffs
-
-**Combat Flow:**
-1. Apply CHIP_WARM_UP (agility buff)
-2. Apply damage return buff (CHIP_MIRROR or CHIP_THORN)
-   - CHIP_MIRROR: 35.75% return, 3 turns, 5 TP
-   - CHIP_THORN: 22.75% return, 2 turns, 4 TP
-3. Execute weapon-focused offensive (shared with strength)
-4. Hide-and-seek repositioning
-
-**Key Differences:** Adds damage return layer before combat, uses CHIP_WARM_UP instead of CHIP_STEROID
-
-#### **strategy/magic_strategy.lk** - Magic Builds
+**Magic Builds:**
 **Philosophy:** DoT kiting, burst combos, and poison attrition
 
 **Combat Flow:**
@@ -428,9 +416,9 @@ Abstract base class providing:
    - Full offensive: After antidote on cooldown, apply strong poisons (COVID, PLAGUE)
 2. **Poison Attrition Mode** - Hide when poison will secure kill (enemy HP < 30%, or poison damage > HP before antidote available)
 3. **GRAPPLE-COVID Combo** (range 3-8, requires H/V alignment, 14-19 TP):
-   - GRAPPLE (4 TP): Pull enemy to distance 2
+   - GRAPPLE (3 TP): Pull enemy to distance 2
    - COVID (8 TP): Apply uncleansable poison (~450 damage over 7 turns)
-   - BOXING_GLOVE (2 TP): Push enemy away (range 2-8)
+   - BOXING_GLOVE (3 TP): Push enemy away (range 2-8)
    - BALL_AND_CHAIN (5 TP): Optional MP debuff
 4. **Weapon Spam** → **Poison Chips** → **Opportunistic Debuffs** → **Kite/Hide**
 
@@ -458,10 +446,10 @@ Abstract base class providing:
 3. **Smart Positioning**: Move toward TARGET (odd turns) or AXIS cells (even turns)
 
 **Available Chips:**
-- **CHIP_GRAPPLE** (range 1-8, 4 TP): `useChipOnCell(CHIP_GRAPPLE, destinationCell)` - Target the DESTINATION cell where you want to pull the crystal TO (between player and crystal on same line)
+- **CHIP_GRAPPLE** (range 1-8, 3 TP): `useChipOnCell(CHIP_GRAPPLE, destinationCell)` - Target the DESTINATION cell where you want to pull the crystal TO (between player and crystal on same line)
 - **CHIP_BOXING_GLOVE** (range 2-8, 3 TP): `useChipOnCell(CHIP_BOXING_GLOVE, destinationCell)` - Target the DESTINATION cell where you want to push the crystal TO (beyond crystal, away from player on same line)
 - **CHIP_INVERSION** (range 1-14, 4 TP): `useChipOnCell(CHIP_INVERSION, crystalCell)` - Target the crystal's CURRENT cell to swap positions with it
-- **CHIP_TELEPORTATION** (5 TP): Emergency repositioning
+- **CHIP_TELEPORTATION** (9 TP): Emergency repositioning
 
 **CRITICAL:** GRAPPLE and BOXING_GLOVE target the **destination cell** (where crystal will move TO), NOT the crystal's current position. INVERSION targets the crystal's current cell.
 
@@ -470,6 +458,69 @@ Abstract base class providing:
 ---
 
 ## Recent Improvements (December 2025 - February 2026)
+
+### Scenario Generator Refactoring (February 6, 2026)
+
+**Split 3,120-line monolith into 3-file inheritance chain using established FieldMap pattern.**
+
+**New Architecture: `ScenarioHelpers` → `ScenarioCombos` → `ScenarioGenerator`**
+
+| File | Lines | Contents |
+|------|-------|----------|
+| `scenario_helpers.lk` | 1,124 | Base class: state detection, buff/heal/move/attack helpers, utilities (28 methods) |
+| `scenario_combos.lk` | 1,621 | All 27 `create*Scenario()` methods (templates, combos, magic, checkpoints, fallbacks) |
+| `scenario_generator.lk` | 396 | Orchestration: `generateScenarios()` + 5 state-specific builders |
+
+**Key Changes:**
+- Extracted 416-line `generateScenarios()` into clean dispatch + 5 `build*Scenarios()` methods
+- `generateScenarios()` reduced from 416 → 55 lines (dispatch only)
+- Include chain: `scenario_generator.lk` → `scenario_combos.lk` → `scenario_helpers.lk` → `cooldown_tracker.lk`
+- Zero behavior changes — pure structural refactoring
+
+### ItemRoles Classifier Module (February 6, 2026)
+
+**Centralized 50+ scattered chip classification checks into a single module with O(1) lookups.**
+
+**New Module: `item_roles.lk` (~140 lines)**
+- 10 role maps initialized once via `initializeItemRoles()`
+- 13 query functions (11 primary + 2 composite)
+- O(1) map-based lookups replace long `chipId == X || chipId == Y` chains
+
+**Files Modified (8 files):**
+- `field_map_patterns.lk`: `isBuffChip()` method → delegates to `isBuffChipRole()`
+- `game_entity.lk`: Bulb type detection → `isHealingChip()`, `isOffensiveBuff()`, `isShieldChip()`
+- `scenario_generator.lk`: Poison chip/weapon checks → `isPoisonChip()`, `isPoisonWeapon()`
+- `base_strategy.lk`: Poison tracking chains → `isPoisonChip()`, `isPoisonWeapon()`
+- `scenario_scorer.lk`: Healing TP cost (hardcoded values → `isHealingChip()` + `getCachedChipCost()`), shield checks → `isAbsoluteShieldChip()`, `isRelativeShieldChip()`, debuff scoring → `isPoisonChip()`
+- `scenario_simulator.lk`: Shield/healing/buff estimation guards → `isAbsoluteShieldChip()`, `isRelativeShieldChip()`, `isHealingChip()`, `isOffensiveBuff()`
+
+**Bonus Fix:** `evaluateDebuffs()` in `scenario_scorer.lk` now scores ALL poison chips (was only VENOM/TOXIN, missing PLAGUE/COVID/ARSENIC)
+
+### Architectural Consolidation (February 6, 2026)
+
+**Eliminated dead code and fixed critical TP cost bugs.**
+
+**Dead Code Removal (~3,100 lines deleted):**
+1. **Beam Search stack** (5 files, ~2,160 lines): `beam_search_planner.lk`, `world_state.lk`, `state_transition.lk`, `atomic_action.lk`, `atomic_action_executor.lk` - disabled since Session 3 (0% WR), never executed
+2. **Math modules** (4 files, ~925 lines): `polynomial.lk`, `piecewise_function.lk`, `probability_distribution.lk`, `damage_probability.lk` - sole consumer `getAccurateKillProbability()` was never called
+3. **Cleaned unified_strategy.lk**: Removed beam search includes, `USE_BEAM_SEARCH` flag, `executeWithBeamSearch()` method
+
+**Critical TP Cost Bug Fixes (verified against LeekWars API via market_data.json):**
+
+| Chip | Was Hardcoded | Actual Cost | Impact |
+|------|--------------|-------------|--------|
+| **TELEPORTATION** | 5 TP (13+ locations) | **9 TP** | AI was overspending 4 TP on every teleport, causing TP budget miscalculations |
+| **GRAPPLE** | 4 TP (2 locations) | **3 TP** | AI was reserving 1 extra TP unnecessarily for Grapple combos |
+| **WALL** | 5 TP (4 locations) | **3 TP** | AI was wasting 2 TP on shield application |
+| **FORTRESS** | 8 TP (1 location) | **6 TP** | AI was over-reserving 2 TP for shield cycling |
+
+**Fix approach:** All hardcoded chip costs replaced with `getCachedChipCost(CHIP_*)` calls, ensuring costs always match the game API.
+
+**TP Cost Reference (from API, use `getCachedChipCost()` - NEVER hardcode):**
+- TELEPORTATION: 9, GRAPPLE: 3, BOXING_GLOVE: 3, INVERSION: 4
+- STEROID: 7, WARM_UP: 7, WIZARDRY: 6, FORTRESS: 6, WALL: 3
+- REMISSION: 5, REGENERATION: 8, CURE: 4, LIBERATION: 5
+- MIRROR: 5, THORN: 4, BRAMBLE: 4, ADRENALINE: 1, LEATHER_BOOTS: 3, ANTIDOTE: 3
 
 ### Phase 3 & 4 Integration (February 3, 2026)
 
@@ -670,7 +721,7 @@ python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>
 
 ---
 
-**Script ID:** 447626 (V8 main.lk - Production, February 2026)
+**Script ID:** 456711 (V8 main.lk - Production, February 2026)
 
 **Current Performance:** 88% WR vs Domingo (600 STR balanced) - 100 fight sample with Phase 3 & 4 enabled
 
@@ -679,4 +730,4 @@ python3 tools/lw_test_script.py <num_fights> <script_id> <opponent>
 - Phase 1 & 2 only: 98% WR (100 fights, smaller sample variance)
 - Phase 3 & 4 enabled: 88% WR (100 fights, +24pp vs baseline)
 
-*Document Version: 37.0 | Last Updated: February 4, 2026 - Battle Royale System: FFA adaptation with cumulative lobby threat tracking, phase-based positioning (EARLY/MID/LATE), multi-target AoE scoring, and center avoidance. Includes operations budget optimization for 7-enemy evaluation.*
+*Document Version: 40.0 | Last Updated: February 6, 2026 - Scenario Generator Refactoring: Split 3,120-line scenario_generator.lk into 3-file inheritance chain (ScenarioHelpers → ScenarioCombos → ScenarioGenerator). generateScenarios() reduced from 416 → 55 lines. ItemRoles Classifier: item_roles.lk centralizes 50+ chip classifications. Fixed debuff scoring + healing TP cost bugs.*

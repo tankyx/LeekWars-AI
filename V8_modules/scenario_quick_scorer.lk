@@ -53,9 +53,10 @@ class ScenarioQuickScorer {
                 var chipCost = getCachedChipCost(action.chip)
                 tpEstimate += chipCost
 
-                if (action.chip == CHIP_STEROID || action.chip == CHIP_WARM_UP || action.chip == CHIP_DOPING) {
+                if (action.chip == CHIP_STEROID || action.chip == CHIP_WARM_UP || action.chip == CHIP_DOPING || action.chip == CHIP_PRISM) {
                     hasOffensiveBuff = true
                     if (action.chip == CHIP_STEROID) push(comboSignature, "STEROID")
+                    if (action.chip == CHIP_PRISM) push(comboSignature, "PRISM")
                 }
                 if (action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS || action.chip == CHIP_PROTEIN) {
                     hasDefensiveBuff = true

@@ -168,17 +168,14 @@ function getBulbType(entity) {
 
     // Check for healing chips (highest priority)
     for (var chipId in chips) {
-        if (chipId == CHIP_REGENERATION || chipId == CHIP_REMISSION ||
-            chipId == CHIP_CURE || chipId == CHIP_DRIP) {
+        if (isHealingChip(chipId)) {
             return BULB_TYPE_HEALER
         }
     }
 
-    // Check for buff chips
+    // Check for buff chips (shields + offensive buffs)
     for (var chipId in chips) {
-        if (chipId == CHIP_STEROID || chipId == CHIP_WARM_UP ||
-            chipId == CHIP_FORTRESS || chipId == CHIP_WALL ||
-            chipId == CHIP_PROTEIN || chipId == CHIP_SHIELD) {
+        if (isOffensiveBuff(chipId) || isShieldChip(chipId)) {
             return BULB_TYPE_BUFFER
         }
     }

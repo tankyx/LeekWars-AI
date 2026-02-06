@@ -1181,16 +1181,17 @@ class Strategy {
                     }
                 }
 
+                var tpTeleportApproach = getCachedChipCost(CHIP_TELEPORTATION)
                 if (reachableCell == null &&
                     mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
                     getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-                    playerTP >= 5 &&
+                    playerTP >= tpTeleportApproach &&
                     bestWeaponCell != -1 && bestWeaponCell != null) {
 
                     var teleportDist = getCellDistance(playerPos, bestWeaponCell._id)
                     if (teleportDist != null && teleportDist >= 1 && teleportDist <= 10) {
-                        
-                        var tpAfterTeleport = playerTP - 5
+
+                        var tpAfterTeleport = playerTP - tpTeleportApproach
                         var primaryWeapon = bestWeaponCell._highestDamageWeapon
                         var canAffordPrimary = (primaryWeapon != -1 && primaryWeapon != null && tpAfterTeleport >= primaryWeapon._cost + 1)
                         var hasBackupAttacks = (count(bestWeaponCell._weaponsList) > 1 || count(bestWeaponCell._chipsList) > 0)
@@ -1199,7 +1200,7 @@ class Strategy {
                         } else {
 
                             var teleportResult = useChipOnCell(CHIP_TELEPORTATION, bestWeaponCell._id)
-                            playerTP -= 5
+                            playerTP -= tpTeleportApproach
 
                             if (teleportResult == USE_SUCCESS || teleportResult == USE_CRITICAL) {
                                 
@@ -1866,10 +1867,11 @@ class Strategy {
 
         var isCritical = (hpPercent < 10 || currentThreat >= playerHP)
 
+        var tpTeleportFlee = getCachedChipCost(CHIP_TELEPORTATION)
         if (isCritical &&
             mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
             getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            playerTP >= 5) {
+            playerTP >= tpTeleportFlee) {
 
 
             var bestSafeCell = -1
@@ -1905,7 +1907,7 @@ class Strategy {
 
                 var teleportAction = new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestSafeCell, target)
                 push(this._actions, teleportAction)
-                playerTP -= 5
+                playerTP -= tpTeleportFlee
 
                 var attackAfterTeleport = this.findBestAttackAtPosition(bestSafeCell, target)
                 if (attackAfterTeleport != null && playerTP >= attackAfterTeleport['cost']) {
@@ -1995,9 +1997,10 @@ class Strategy {
             return true
         }
 
+        var tpTeleportOTKO = getCachedChipCost(CHIP_TELEPORTATION)
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
             getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            playerTP >= 15) {  
+            playerTP >= tpTeleportOTKO + 6) {  // TELEPORT (9) + min attack
 
             var teleportInfo = fieldMap.findOptimalTeleportCell(target)
             if (teleportInfo != null) {
@@ -2024,7 +2027,7 @@ class Strategy {
         var sci = player._science
 
         if (fromPosition != player._cellPos && mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
-            tpBudget -= 5  
+            tpBudget -= getCachedChipCost(CHIP_TELEPORTATION)
         }
 
         for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
@@ -2396,19 +2399,12 @@ class Strategy {
                 var chipId = action.chip
                 var weaponId = action.weaponId
 
-                if (chipId > 0) {
-                    // Poison chips: VENOM, TOXIN, PLAGUE, COVID, ARSENIC
-                    if (chipId == CHIP_VENOM || chipId == CHIP_TOXIN || chipId == CHIP_PLAGUE ||
-                        chipId == CHIP_COVID || chipId == CHIP_ARSENIC) {
-                        poisonApplied = 1  // We applied poison
-                    }
+                if (chipId > 0 && isPoisonChip(chipId)) {
+                    poisonApplied = 1
                 }
 
-                if (weaponId > 0) {
-                    // Poison weapons: GAZOR, DESTROYER
-                    if (weaponId == WEAPON_GAZOR || weaponId == WEAPON_DESTROYER) {
-                        poisonApplied = 1  // We applied poison
-                    }
+                if (weaponId > 0 && isPoisonWeapon(weaponId)) {
+                    poisonApplied = 1
                 }
             }
         }
@@ -2518,17 +2514,18 @@ class Strategy {
 
     generateOTKOBurstContinuation(target, availableTP) {
         var actions = []
+        var tpTeleportBurst = getCachedChipCost(CHIP_TELEPORTATION)
 
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
             getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            availableTP >= 10) {
+            availableTP >= tpTeleportBurst + 3) {  // TELEPORT + min attack cost
 
             var bestOTKO = fieldMap.getBestOTKOCell()
             if (bestOTKO != null) {
                 var dist = getCellDistance(getCell(), bestOTKO._id)
                 if (dist != null && dist >= 1 && dist <= 12) {
                     push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, target))
-                    availableTP -= 5
+                    availableTP -= tpTeleportBurst
                 }
             }
         }

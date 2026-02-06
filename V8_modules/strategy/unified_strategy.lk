@@ -1,8 +1,6 @@
 include('action.lk')
 include('../weight_profiles.lk')
 include('../strategic_depth.lk')
-include('../beam_search_planner.lk')
-include('../atomic_action_executor.lk')
 include('../scenario_mutation.lk')
 
 class UnifiedStrategy extends Strategy {
@@ -91,25 +89,6 @@ class UnifiedStrategy extends Strategy {
     }
 
     generateAndEvaluateBestScenario(target, targetHitCell) {
-        // ===== BEAM SEARCH INTEGRATION (SESSION 3 - FINAL STATUS: DISABLED) =====
-        var USE_BEAM_SEARCH = false
-        var currentTurn = getTurn()
-
-        // ROOT CAUSE IDENTIFIED: Turn 1 TP=2 (turnOneBuffs() pre-spends 23 TP), Turn 2+ TP=25 ✓
-        // TESTED: Hybrid approach (scenarios T1, beam search T2+) with full 25 TP
-        // RESULT: 0% WR (0W-10L) - beam search still underperforms vs scenarios (80% WR)
-        // CONCLUSION: Beam search architecture unsuitable for LeekWars domain
-        var canUseBeamSearch = (USE_BEAM_SEARCH && currentTurn >= 2)
-
-
-        if (canUseBeamSearch) {
-            var beamResult = this.executeWithBeamSearch(target)
-            if (beamResult) {
-                return
-            }
-        }
-        // ===== END BEAM SEARCH INTEGRATION =====
-
         var generator = new ScenarioGenerator(
             arsenal,
             player,
@@ -304,27 +283,56 @@ class UnifiedStrategy extends Strategy {
     createFallbackScenario(target, targetHitCell) {
         debugInfo("[UNIFIED-FALLBACK] Creating basic offensive scenario")
 
+        // Step 1: Move toward enemy - try hit cell first, then just approach
+        var moved = false
         if (targetHitCell != null) {
             var pathLen = getCachedPathLength(player._cellPos, targetHitCell)
             if (pathLen != null && pathLen > 0 && player._currMp >= pathLen) {
                 var action = new Action(Action.MOVEMENT_APPROACH, -1, -1, targetHitCell, null)
                 push(this._actions, action)
                 player._currMp -= pathLen
+                moved = true
                 debugInfo("[UNIFIED-FALLBACK] Move to hit cell " + targetHitCell)
             }
         }
 
-        var weaponIds = mapKeys(arsenal.playerEquippedWeapons)
-        if (count(weaponIds) > 0) {
-            var weaponId = weaponIds[0]
-            var weapon = arsenal.playerEquippedWeapons[weaponId]
+        if (!moved && player._currMp > 0) {
+            // No hit cell available or can't reach it - just walk toward enemy
+            var action = new Action(Action.MOVEMENT_APPROACH, -1, -1, target._cellPos, null)
+            push(this._actions, action)
+            debugInfo("[UNIFIED-FALLBACK] Approaching enemy at cell " + target._cellPos)
+        }
 
-            if (weapon._cost <= player._currTp) {
-                var action = new Action(Action.ACTION_DIRECT, weaponId, -1, target._cellPos, null)
+        // Step 2: Spam all available weapons/chips with remaining TP
+        var weaponIds = mapKeys(arsenal.playerEquippedWeapons)
+
+        // Find best weapon (highest net damage per TP)
+        var bestWeaponId = null
+        var bestWeaponDPS = 0
+        for (var wid in weaponIds) {
+            var w = arsenal.playerEquippedWeapons[wid]
+            if (w._cost <= player._currTp) {
+                var dmg = arsenal.getNetDamageAgainstTarget(
+                    player._strength, player._magic, player._wisdom, player._science,
+                    wid, target)
+                var dps = dmg / w._cost
+                if (dps > bestWeaponDPS) {
+                    bestWeaponDPS = dps
+                    bestWeaponId = wid
+                }
+            }
+        }
+
+        if (bestWeaponId != null) {
+            var weapon = arsenal.playerEquippedWeapons[bestWeaponId]
+            var uses = 0
+            while (weapon._cost <= player._currTp && uses < weapon._maxUse) {
+                var action = new Action(Action.ACTION_DIRECT, bestWeaponId, -1, target._cellPos, null)
                 push(this._actions, action)
                 player._currTp -= weapon._cost
-                debugInfo("[UNIFIED-FALLBACK] Attack with " + getWeaponName(weaponId))
+                uses++
             }
+            debugInfo("[UNIFIED-FALLBACK] Attack " + uses + "x with " + getWeaponName(bestWeaponId))
         }
     }
 
@@ -337,18 +345,4 @@ class UnifiedStrategy extends Strategy {
         return true
     }
 
-    // =========================================================================
-    // BEAM SEARCH INTEGRATION (SESSION 1)
-    // =========================================================================
-
-    executeWithBeamSearch(target) {
-        var planner = new BeamSearchPlanner(this._arsenal, this._fieldMap, this._player, target)
-        var actionSequence = planner.findBestSequence()
-        if (actionSequence == null || count(actionSequence) == 0) {
-            return false
-        }
-        var executor = new AtomicActionExecutor(this._arsenal, this._fieldMap, this._player)
-        var successCount = executor.execute(actionSequence)
-        return successCount > 0
-    }
 }

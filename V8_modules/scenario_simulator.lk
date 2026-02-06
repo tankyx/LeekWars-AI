@@ -214,6 +214,9 @@ class ScenarioSimulator {
                 } else if (action.chip == CHIP_STEROID || action.chip == CHIP_DOPING) {
 
                     simStrength += this.estimateStrengthBuff(action.chip)
+                } else if (action.chip == CHIP_PRISM) {
+                    // PRISM: +60 all stats
+                    simStrength += 60
                 } else if (action.chip == CHIP_WARM_UP) {
 
                 } else if (action.chip == CHIP_ADRENALINE) {
@@ -331,6 +334,7 @@ class ScenarioSimulator {
 
     estimateShieldAmount(chip, wisdom) {
         // Absolute shields only (flat HP reduction)
+        if (!isAbsoluteShieldChip(chip)) return 0
         if (chip == CHIP_HELMET) return 50 + wisdom * 0.5
         if (chip == CHIP_SHIELD) return 100 + wisdom * 1.0
         return 0
@@ -338,6 +342,8 @@ class ScenarioSimulator {
 
     estimateRelativeShield(chip) {
         // Relative shields (percentage damage reduction, scales with Resistance)
+        if (!isRelativeShieldChip(chip)) return 0
+
         var resistance = this._player._resistance
         var scalingMultiplier = 1 + (resistance / 100.0)
 
@@ -359,13 +365,14 @@ class ScenarioSimulator {
     }
 
     estimateHealing(chip, wisdom) {
-        if (chip == CHIP_REGENERATION || chip == CHIP_REMISSION || chip == CHIP_CURE || chip == CHIP_DRIP) {
+        if (isHealingChip(chip)) {
             return arsenal.getExpectedHeal(chip, wisdom)
         }
         return 0
     }
 
     estimateStrengthBuff(chip) {
+        if (!isOffensiveBuff(chip)) return 0
         if (chip == CHIP_STEROID) return 100
         if (chip == CHIP_DOPING) return 50
         return 0

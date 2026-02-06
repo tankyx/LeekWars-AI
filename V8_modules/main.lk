@@ -9,17 +9,13 @@ global DEBUG_SCENARIO_TRACE = false  // Enable for score breakdown logging
 include('game_entity.lk')
 include('field_map_tactical.lk')
 include('item.lk')
-
-include('math/polynomial.lk')
-include('math/piecewise_function.lk')
-include('math/probability_distribution.lk')
-include('math/damage_probability.lk')
+include('item_roles.lk')
 
 include('operation_tracker.lk')
 include('debug_config.lk')
 include('monte_carlo_sim.lk')
 include('kill_planning.lk')
-include('cooldown_tracker.lk')
+// cooldown_tracker.lk included via scenario_generator chain
 include('enemy_predictor.lk')
 include('reachable_graph.lk')
 include('performance_infra.lk')
@@ -48,6 +44,7 @@ if (!_init) {
 main()
 
 function init() {
+    initializeItemRoles()
     player = Player(getCell())
     arsenal = new Arsenal();
     fieldMap = new FieldMap();

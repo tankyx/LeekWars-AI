@@ -1,0 +1,1681 @@
+include('scenario_helpers.lk')
+
+class ScenarioCombos extends ScenarioHelpers {
+
+    constructor(arsenal, player, target, fieldMap, strategy) {
+        super(arsenal, player, target, fieldMap, strategy)
+    }
+
+    // === Legacy Template Scenarios ===
+
+    createAggressiveScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var buffAction = this.getOffensiveBuff()
+        if (buffAction != null) {
+            push(actions, buffAction)
+            tpBudget -= getCachedChipCost(buffAction.chip)
+        }
+
+        var damageReturnAction = this.getDamageReturnBuff()
+        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
+            push(actions, damageReturnAction)
+            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        }
+
+        var debuffAction = this.getDebuffAction()
+        if (debuffAction != null && tpBudget >= 4) {
+            push(actions, debuffAction)
+            tpBudget -= 4
+        }
+
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    createConservativeScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var conservativeAntidote = this.getAntidoteAction(tpBudget)
+        if (conservativeAntidote != null) {
+            push(actions, conservativeAntidote)
+            tpBudget -= 3
+        }
+
+        var buffAction = this.getOffensiveBuff()
+        if (buffAction != null) {
+            push(actions, buffAction)
+            tpBudget -= getCachedChipCost(buffAction.chip)
+        }
+
+        var damageReturnAction = this.getDamageReturnBuff()
+        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
+            push(actions, damageReturnAction)
+            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        }
+
+        var defensiveBuff = this.getDefensiveBuff()
+        if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
+            push(actions, defensiveBuff)
+            tpBudget -= getCachedChipCost(defensiveBuff.chip)
+        }
+
+        var healAction = this.getHealingAction(tpBudget, 0.7)
+        if (healAction != null) {
+            push(actions, healAction)
+            tpBudget -= getCachedChipCost(healAction.chip)
+        }
+
+        var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.7))
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 0.7, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    createDefensiveScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var defensiveAntidote = this.getAntidoteAction(tpBudget)
+        if (defensiveAntidote != null) {
+            push(actions, defensiveAntidote)
+            tpBudget -= 3
+        }
+
+        var healAction = this.getHealingAction(tpBudget, 0.7)
+        if (healAction != null) {
+            push(actions, healAction)
+            tpBudget -= getCachedChipCost(healAction.chip)
+        }
+
+        var defensiveBuff = this.getDefensiveBuff()
+        if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
+            push(actions, defensiveBuff)
+            tpBudget -= getCachedChipCost(defensiveBuff.chip)
+        }
+
+        var moveAction = this.getMoveToOptimalCell(floor(mpBudget * 0.5))
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 0.5, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    createAllInDamageScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        if (this.checkOTKOOpportunity()) {
+
+            var distToTarget = getCellDistance(this._player._cellPos, this._target._cellPos)
+            var maxWeaponRange = 12
+            var tpTeleportOTKO = getCachedChipCost(CHIP_TELEPORTATION)
+
+            if (distToTarget > maxWeaponRange &&
+                mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                getCooldown(CHIP_TELEPORTATION, this._player._id) == 0 &&
+                tpBudget >= tpTeleportOTKO) {
+
+                var bestCell = this._fieldMap.getBestWeaponOrChipCell()
+                if (bestCell != null && bestCell != -1) {
+                    var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
+                    if (teleportDist >= 1 && teleportDist <= 12) {
+                        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
+                        tpBudget -= tpTeleportOTKO
+                        simPos = bestCell._id
+                    }
+                }
+            }
+
+            var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            for (var atk in attackActions) {
+                push(actions, atk)
+            }
+
+            return actions
+        }
+
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
+    createKitingScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var attackActions = this.getAttackActions(tpBudget, 0.6, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        var kiteAction = this.getKiteAwayAction(mpBudget)
+        if (kiteAction != null) {
+            push(actions, kiteAction)
+        }
+
+        return actions
+    }
+
+    createEfficientScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        if (tpBudget >= 30) {
+            var buffAction = this.getOffensiveBuff()
+            if (buffAction != null && getCachedChipCost(buffAction.chip) <= 6) {
+                push(actions, buffAction)
+                tpBudget -= getCachedChipCost(buffAction.chip)
+            }
+        }
+
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 0.8, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    createOTKOTeleportScenario(otkoCell, availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var tpTeleportOTKO = getCachedChipCost(CHIP_TELEPORTATION)
+
+        if (tpBudget >= tpTeleportOTKO) {
+            push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, otkoCell, this._target))
+            tpBudget -= tpTeleportOTKO
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, otkoCell)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
+    createTeleportEscapeScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var tpTeleportEscape = getCachedChipCost(CHIP_TELEPORTATION)
+
+        if (tpBudget < tpTeleportEscape) {
+            return null
+        }
+
+        var safestCell = -1
+        var bestScore = -99999
+        var playerPos = this._player._cellPos
+        var enemyPos = this._target._cellPos
+        var currentDistFromEnemy = getCellDistance(playerPos, enemyPos)
+
+        // Iterate through all reachable cells (not just damageMap which is near enemy)
+        var reachableCells = getReachableCells()
+        for (var cellId in reachableCells) {
+            var dist = getCellDistance(playerPos, cellId)
+            if (dist >= 1 && dist <= 12) {
+                var threat = this._fieldMap.getThreatAtCell(cellId)
+                var distFromEnemy = getCellDistance(cellId, enemyPos)
+
+                // ONLY consider cells FARTHER from enemy than current position
+                if (distFromEnemy <= currentDistFromEnemy) {
+                    continue
+                }
+
+                // Score: heavily prioritize distance from enemy, then low threat
+                // Distance weight 100x threat to ensure we move away
+                var score = distFromEnemy * 100 - threat
+
+                if (score > bestScore) {
+                    bestScore = score
+                    safestCell = cellId
+                }
+            }
+        }
+
+        if (safestCell == -1) {
+            return null
+        }
+
+        debugInfo("[TELEPORT-ESCAPE] Current dist from enemy: " + currentDistFromEnemy +
+                  " → Selected cell: dist=" + getCellDistance(safestCell, enemyPos) +
+                  ", threat=" + this._fieldMap.getThreatAtCell(safestCell))
+
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, safestCell, this._target))
+        tpBudget -= tpTeleportEscape
+
+        var escapeAntidote = this.getAntidoteAction(tpBudget)
+        if (escapeAntidote != null) {
+            push(actions, escapeAntidote)
+            tpBudget -= 3
+        }
+
+        if (tpBudget >= 4 && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
+            getCooldown(CHIP_REMISSION, this._player._id) == 0) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
+            tpBudget -= 4
+        }
+
+        var shieldAction = this.getDefensiveBuff()
+        if (shieldAction != null) {
+            var shieldCost = getCachedChipCost(shieldAction.chip)
+            if (tpBudget >= shieldCost) {
+                push(actions, shieldAction)
+                tpBudget -= shieldCost
+            }
+        }
+
+        return actions
+    }
+
+    createEmergencyApproachScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var tpTeleportApproach = getCachedChipCost(CHIP_TELEPORTATION)
+
+        if (tpBudget < tpTeleportApproach) {
+            return null
+        }
+
+        // Only use in early turns (1-5) when positioning is critical
+        var currentTurn = getTurn()
+        if (currentTurn > 5) {
+            return null
+        }
+
+        var bestCell = -1
+        var bestScore = -99999
+        var playerPos = this._player._cellPos
+
+        // Find best offensive cell to teleport to
+        for (var cellId in mapKeys(this._fieldMap.damageMap)) {
+            var cellData = this._fieldMap.damageMap[cellId]
+            var dist = getCellDistance(playerPos, cellId)
+
+            if (dist >= 2 && dist <= 12) {
+                // Score based on: damage potential - threat - distance
+                var damageScore = cellData._totalDamage
+                var threat = this._fieldMap.getThreatAtCell(cellId)
+                var distToEnemy = getCellDistance(cellId, this._target._cellPos)
+
+                // Prioritize: high damage, low threat, closer to enemy
+                var score = damageScore - (threat * 0.5) - (distToEnemy * 10)
+
+                if (score > bestScore) {
+                    bestScore = score
+                    bestCell = cellId
+                }
+            }
+        }
+
+        if (bestCell == -1) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell, this._target))
+        tpBudget -= tpTeleportApproach
+
+        // Follow up with attacks if we have TP
+        var attackActions = this.getAttackActions(tpBudget, 1.0, bestCell)
+        for (var aa in attackActions) {
+            push(actions, aa)
+        }
+
+        return actions
+    }
+
+    createParametricScenario(params, availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var antidoteAction = this.getAntidoteAction(tpBudget)
+        if (antidoteAction != null) {
+            push(actions, antidoteAction)
+            tpBudget -= 3
+        }
+
+        if (params.healThreshold >= 0) {
+
+            if (params.healThreshold >= 0.99) {
+                var currentHP = this._player._currHealth
+                var maxHP = this._player._maxHealth
+                var hpRatio = currentHP / maxHP
+
+                if (hpRatio < params.healThreshold) {
+
+                    var remissionAction = this.getRemissionAction()
+                    if (remissionAction != null && tpBudget >= 5) {
+                        push(actions, remissionAction)
+                        tpBudget -= 5
+                    }
+
+                    var regenAction = this.getRegenerationAction()
+                    if (regenAction != null && tpBudget >= 3) {
+                        push(actions, regenAction)
+                        tpBudget -= 3
+                    }
+                }
+            } else {
+
+                var healAction = this.getHealingAction(tpBudget, params.healThreshold)
+                if (healAction != null) {
+                    push(actions, healAction)
+                    tpBudget -= getCachedChipCost(healAction.chip)
+                }
+            }
+        }
+
+        if (params.buffStrategy == 1 || params.buffStrategy == 3) {
+
+            var offensiveBuff = this.getOffensiveBuff()
+            if (offensiveBuff != null && tpBudget >= getCachedChipCost(offensiveBuff.chip)) {
+                push(actions, offensiveBuff)
+                tpBudget -= getCachedChipCost(offensiveBuff.chip)
+            }
+        }
+
+        if (params.buffStrategy == 2 || params.buffStrategy == 3) {
+
+            var defensiveBuff = this.getDefensiveBuff()
+            if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
+                push(actions, defensiveBuff)
+                tpBudget -= getCachedChipCost(defensiveBuff.chip)
+            }
+        }
+
+        if (params.buffStrategy == 4) {
+
+            var damageReturnBuff = this.getDamageReturnBuff()
+            if (damageReturnBuff != null && tpBudget >= getCachedChipCost(damageReturnBuff.chip)) {
+                push(actions, damageReturnBuff)
+                tpBudget -= getCachedChipCost(damageReturnBuff.chip)
+            }
+
+            var debuffAction = this.getDebuffAction()
+            if (debuffAction != null && tpBudget >= 4) {
+                push(actions, debuffAction)
+                tpBudget -= 4
+            }
+        }
+
+        var appliedLeatherBoots = false
+        var leatherBootsBuff = this.getLeatherBootsBuff()
+        if (leatherBootsBuff != null && tpBudget >= 3) {
+            push(actions, leatherBootsBuff)
+            tpBudget -= 3
+            mpBudget += 2
+            appliedLeatherBoots = true
+        }
+
+        if (appliedLeatherBoots) {
+            var adrenalineBuff = this.getAdrenalineBuff()
+            if (adrenalineBuff != null && tpBudget >= 1) {
+                push(actions, adrenalineBuff)
+                tpBudget -= 1
+                tpBudget += 5
+                debugInfo("[SCENARIO] LEATHER_BOOTS + ADRENALINE combo: Net +1 TP + mobility")
+            }
+        }
+
+        var didTeleport = false
+        if (params.repositioning == "otko" && this.checkOTKOOpportunity()) {
+            var distToTarget = getCellDistance(this._player._cellPos, this._target._cellPos)
+            var maxWeaponRange = 12
+            var tpTeleportRepo = getCachedChipCost(CHIP_TELEPORTATION)
+
+            if (distToTarget > maxWeaponRange &&
+                mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
+                getCooldown(CHIP_TELEPORTATION, this._player._id) == 0 &&
+                tpBudget >= tpTeleportRepo) {
+
+                var bestCell = this._fieldMap.getBestWeaponOrChipCell()
+                if (bestCell != null && bestCell != -1) {
+                    var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
+                    if (teleportDist >= 1 && teleportDist <= 12) {
+                        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
+                        tpBudget -= tpTeleportRepo
+                        simPos = bestCell._id
+                        didTeleport = true
+                    }
+                }
+            }
+        }
+
+        // Fall back to normal movement if teleport wasn't used (or not an OTKO scenario)
+        if (params.movementFraction > 0 && !didTeleport) {
+            var mpToUse = floor(mpBudget * params.movementFraction)
+            var moveAction = this.getMoveToOptimalCell(mpToUse)
+            if (moveAction != null) {
+                push(actions, moveAction)
+                var moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999) {
+                    mpBudget -= moveCost
+                    simPos = moveAction.targetCell
+                }
+            }
+        }
+
+        if (tpBudget >= 4) {
+
+            var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            for (var atk in attackActions) {
+                push(actions, atk)
+            }
+        }
+
+        if (params.repositioning == "hide") {
+            var hideAction = this.getHideAndSeekAction(mpBudget)
+            if (hideAction != null) {
+                push(actions, hideAction)
+            }
+        } else if (params.repositioning == "kite") {
+            var kiteAction = this.getKiteAwayAction(mpBudget)
+            if (kiteAction != null) {
+                push(actions, kiteAction)
+            }
+        }
+
+        return actions
+    }
+
+    // === Combo Scenarios ===
+
+    createNeutrinoStackingScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            return null
+        }
+
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) return null
+
+        var isDiagonal = this.isDiagonal(simPos, this._target._cellPos)
+        if (!isDiagonal || dist < 2 || dist > 6) {
+            return null
+        }
+
+        if (!lineOfSight(simPos, this._target._cellPos)) {
+            return null
+        }
+
+        if (tpBudget < 16) {
+            return null
+        }
+
+        var currentStacks = this._arsenal.getVulnerabilityStacks(this._target)
+        var vulnRemaining = this._target.getEffectRemaining(EFFECT_VULNERABILITY)
+        if (currentStacks >= 3 && vulnRemaining >= 2) {
+            return null
+        }
+
+
+        if (getWeapon() != WEAPON_NEUTRINO) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
+            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            tpBudget -= 1
+        }
+
+        for (var i = 0; i < 3; i++) {
+            if (tpBudget >= 4) {
+                push(actions, new Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, -1, this._target._cellPos, this._target))
+                tpBudget -= 4
+            }
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    createGrappleHeavySwordScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+            return null
+        }
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) {
+            return null
+        }
+
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) {
+            return null
+        }
+
+        if (tpBudget < 10) {
+            return null
+        }
+
+
+        var playerX = getCellX(simPos)
+        var playerY = getCellY(simPos)
+        var enemyPos = this._target._cellPos
+        var enemyX = getCellX(enemyPos)
+        var enemyY = getCellY(enemyPos)
+
+        var isOnSameLine = (playerY == enemyY) || (playerX == enemyX)
+        if (!isOnSameLine) {
+            return null
+        }
+
+        var grappleCell = -1
+        if (playerY == enemyY) {
+
+            grappleCell = (enemyX < playerX) ? getCellFromXY(playerX - 1, playerY) : getCellFromXY(playerX + 1, playerY)
+        } else {
+
+            grappleCell = (enemyY < playerY) ? getCellFromXY(playerX, playerY - 1) : getCellFromXY(playerX, playerY + 1)
+        }
+
+
+        if (grappleCell == -1 || grappleCell == null) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
+        tpBudget -= 3
+
+        // After GRAPPLE, enemy is at grappleCell (adjacent to player)
+        // Update simulated position for subsequent attacks
+        var enemyPulledPosition = grappleCell
+
+        if (getWeapon() != WEAPON_HEAVY_SWORD) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_HEAVY_SWORD, -1, -1, this._target))
+            tpBudget -= 1
+        }
+
+        // Attack the pulled enemy position, not original position
+        push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, enemyPulledPosition, this._target))
+        tpBudget -= 15
+
+        // Note: getAttackActions would target original position, so we manually add follow-up attacks
+        // Spam HEAVY_SWORD while we have TP (max 2 uses per turn)
+        var heavySwordCost = getCachedWeaponCost(WEAPON_HEAVY_SWORD, this._arsenal)
+        if (heavySwordCost == null) heavySwordCost = 15
+
+        if (tpBudget >= heavySwordCost) {
+            push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, enemyPulledPosition, this._target))
+            tpBudget -= heavySwordCost
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    createSteroidOTKOScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) {
+            return null
+        }
+        if (getCooldown(CHIP_STEROID, this._player._id) > 0) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            return null
+        }
+        if (getCooldown(CHIP_TELEPORTATION, this._player._id) > 0) {
+            return null
+        }
+
+        var tpTeleportSteroid = getCachedChipCost(CHIP_TELEPORTATION)
+        if (tpBudget < 7 + tpTeleportSteroid) {  // STEROID (7) + TELEPORT (9)
+            return null
+        }
+
+
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+        tpBudget -= 7
+
+        var bestOTKO = this._fieldMap.getBestOTKOCell()
+        if (bestOTKO == null) {
+
+            bestOTKO = this._fieldMap.getBestWeaponOrChipCell()
+            if (bestOTKO == null || bestOTKO == -1) {
+                return null
+            }
+        }
+
+        var teleportDist = getCellDistance(this._player._cellPos, bestOTKO._id)
+        if (teleportDist == null || teleportDist < 1 || teleportDist > 12) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, this._target))
+        tpBudget -= tpTeleportSteroid
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, bestOTKO._id)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
+    // === Checkpoint Scenarios ===
+
+    createSteroidRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) {
+            return null
+        }
+        if (getCooldown(CHIP_STEROID, this._player._id) > 0) {
+            return null
+        }
+
+        if (tpBudget < 10) {
+            return null
+        }
+
+
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+        tpBudget -= 7
+
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+
+        var checkpoint = Action.createCheckpoint("BUFF_RECHECK", "evaluateBuffRecheckContinuation", context)
+        push(actions, checkpoint)
+
+
+        return actions
+    }
+
+    createNeutrinoRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var simPos = this._player._cellPos
+
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            return null
+        }
+
+        if (tpBudget < 15) {
+            return null
+        }
+
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) return null
+
+        var isOnAxis = getCellX(simPos) == getCellX(this._target._cellPos) ||
+                       getCellY(simPos) == getCellY(this._target._cellPos)
+        if (!isOnAxis) return null
+        if (dist < 2 || dist > 6) return null
+
+
+        var neutrinoCount = floor((tpBudget - 10) / 4)
+        if (neutrinoCount > 3) neutrinoCount = 3
+        if (neutrinoCount < 2) neutrinoCount = 2
+
+        for (var n = 0; n < neutrinoCount; n++) {
+            push(actions, new Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, -1, -1, this._target))
+            tpBudget -= 4
+        }
+
+        var expectedVuln = neutrinoCount * 8
+
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+        context['vulnerabilityPercent'] = expectedVuln
+
+        var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
+        push(actions, checkpoint)
+
+
+        return actions
+    }
+
+    createGrappleHSRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var simPos = this._player._cellPos
+
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+            return null
+        }
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) {
+            return null
+        }
+
+        if (tpBudget < 12) {
+            return null
+        }
+
+        var enemyPos = this._target._cellPos
+        var isOnAxis = getCellX(simPos) == getCellX(enemyPos) ||
+                       getCellY(simPos) == getCellY(enemyPos)
+        if (!isOnAxis) return null
+
+        var dist = getCellDistance(simPos, enemyPos)
+        if (dist == null) return null
+        if (dist < 2 || dist > 8) return null
+
+
+        var dx = getCellX(enemyPos) - getCellX(simPos)
+        var dy = getCellY(enemyPos) - getCellY(simPos)
+        var dirX = 0
+        var dirY = 0
+        if (dx != 0) dirX = dx / abs(dx)
+        if (dy != 0) dirY = dy / abs(dy)
+
+        var grappleTargetCell = getCellFromXY(getCellX(simPos) + dirX, getCellY(simPos) + dirY)
+        if (grappleTargetCell == null) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_GRAPPLE, grappleTargetCell, this._target))
+        tpBudget -= getCachedChipCost(CHIP_GRAPPLE)
+
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+        context['vulnerabilityPercent'] = 0
+
+        var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
+        push(actions, checkpoint)
+
+
+        return actions
+    }
+
+    createHealRecheckScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+
+        var playerHP = this._player._currHealth
+        var playerMaxHP = this._player._maxHealth
+        var playerHPPercent = (playerHP * 100) / playerMaxHP
+
+        if (playerHPPercent > 70) {
+            return null
+        }
+
+        if (tpBudget < 10) {
+            return null
+        }
+
+        // Use smart healing (ENHANCED_LIGHTNINGER for high wisdom, REMISSION for low wisdom)
+        var healAction = this.getSmartHealingAction()
+        if (healAction == null) {
+            return null
+        }
+
+        push(actions, healAction)
+        // Deduct TP cost (9 for ENHANCED_LIGHTNINGER, 5 for REMISSION)
+        if (healAction.weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
+            tpBudget -= 9
+        } else {
+            tpBudget -= 5
+        }
+
+        var context = [:]
+        context['target'] = this._target
+        context['remainingTP'] = tpBudget
+
+        var checkpoint = Action.createCheckpoint("HEAL_RECHECK", "evaluateHealRecheckContinuation", context)
+        push(actions, checkpoint)
+
+
+        return actions
+    }
+
+    // === Magic / Poison Scenarios ===
+
+    createGrappleCovidScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        // Only for magic builds
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        if (!(mag > str && mag > agi)) {
+            return null  // Not a magic build
+        }
+
+        // Check if we have GRAPPLE and either COVID or ARSENIC
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) return null
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) return null
+
+        var hasCovid = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_COVID) &&
+                      getCooldown(CHIP_COVID, this._player._id) == 0
+        var hasArsenic = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ARSENIC) &&
+                        getCooldown(CHIP_ARSENIC, this._player._id) == 0
+
+        if (!hasCovid && !hasArsenic) return null
+
+        // Check distance to target
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null || dist < 3 || dist > 8) return null  // GRAPPLE range 1-8, but need 3+ for pull
+
+        // Check if we're on same H/V line (GRAPPLE requirement)
+        var playerX = getCellX(simPos)
+        var playerY = getCellY(simPos)
+        var enemyX = getCellX(this._target._cellPos)
+        var enemyY = getCellY(this._target._cellPos)
+        var onAxis = (playerX == enemyX || playerY == enemyY)
+        if (!onAxis) return null
+
+
+        // 1. GRAPPLE enemy closer (pulls to distance 2)
+        var tpGrapple = getCachedChipCost(CHIP_GRAPPLE)
+        if (tpBudget >= tpGrapple) {
+            push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, this._target._cellPos, this._target))
+            tpBudget -= tpGrapple
+        }
+
+        // 2. Apply COVID if available (range 0-2, perfect after GRAPPLE)
+        if (hasCovid && tpBudget >= 8) {
+            push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, this._target._cellPos, this._target))
+            tpBudget -= 8
+        }
+
+        // 3. Apply ARSENIC if available (range 3-4, may not hit after pull but apply before if possible)
+        if (hasArsenic && tpBudget >= 8 && dist >= 3 && dist <= 4) {
+            // Apply ARSENIC before GRAPPLE if we're in range
+            var arsenicAction = new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, this._target._cellPos, this._target)
+            // Insert at beginning
+            var tempActions = []
+            push(tempActions, arsenicAction)
+            for (var a in actions) {
+                push(tempActions, a)
+            }
+            actions = tempActions
+            tpBudget -= 8
+        }
+
+        // 4. Kite away
+        var kiteAction = this.getKiteAwayAction(mpBudget)
+        if (kiteAction != null) {
+            push(actions, kiteAction)
+        }
+
+        if (count(actions) > 0) {
+            return actions
+        }
+
+        return null
+    }
+
+    createPoisonBaitScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        // Only for magic builds in BAIT phase
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        if (!(mag > str && mag > agi)) {
+            return null  // Not a magic build
+        }
+
+        if (POISON_PHASE != "BAIT") {
+            return null  // Not in bait phase
+        }
+
+
+        // Use ONLY cheap poisons to bait Antidote: VENOM (4 TP), TOXIN (5 TP)
+        var baitChips = []
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_VENOM) &&
+            getCooldown(CHIP_VENOM, this._player._id) == 0) {
+            push(baitChips, CHIP_VENOM)
+        }
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TOXIN) &&
+            getCooldown(CHIP_TOXIN, this._player._id) == 0) {
+            push(baitChips, CHIP_TOXIN)
+        }
+
+        // Apply 1-2 cheap poisons
+        var poisonsApplied = 0
+        for (var chipId in baitChips) {
+            if (poisonsApplied >= 2) break
+            if (tpBudget < getCachedChipCost(chipId)) continue
+
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            var chip = this._arsenal.playerEquippedChips[chipId]
+            if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
+            if (!lineOfSight(simPos, this._target._cellPos)) continue
+
+            push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
+            tpBudget -= getCachedChipCost(chipId)
+            poisonsApplied++
+        }
+
+        // Kite away
+        var kiteAction = this.getKiteAwayAction(mpBudget)
+        if (kiteAction != null) {
+            push(actions, kiteAction)
+        }
+
+        if (count(actions) > 0) {
+            return actions
+        }
+
+        return null
+    }
+
+    // === Buff Cycling Scenarios ===
+
+    createShieldRotationScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+
+        // UNIVERSAL SHIELD CYCLING: Works for ALL builds
+        // Maintains shield uptime while pressing attack
+
+        // Minimum TP to ensure we can attack after buffing
+        if (tpBudget < 10) {
+            return null  // Not enough TP to buff + attack meaningfully
+        }
+
+        // Check shield status and rotate: FORTRESS (3t, 8 TP) / WALL (2t, 6 TP)
+        var hasFortress = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)
+        var hasWall = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL)
+
+        // FORTRESS creates EFFECT_RELATIVE_SHIELD, WALL creates EFFECT_ABSOLUTE_SHIELD
+        var fortressTurns = this._player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
+        var wallTurns = this._player.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD)
+
+        var shieldApplied = false
+
+        // Apply shields to maintain coverage (reapply when <= 1 turn remaining)
+        // Prioritize FORTRESS (3 turns) over WALL (2 turns) for longer coverage
+        var tpFortressShield = getCachedChipCost(CHIP_FORTRESS)
+        var tpWallShield = getCachedChipCost(CHIP_WALL)
+        if (hasFortress && fortressTurns <= 1 && getCooldown(CHIP_FORTRESS, this._player._id) == 0 && tpBudget >= tpFortressShield) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
+            tpBudget -= tpFortressShield
+            shieldApplied = true
+        } else if (hasWall && wallTurns <= 1 && getCooldown(CHIP_WALL, this._player._id) == 0 && tpBudget >= tpWallShield) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
+            tpBudget -= tpWallShield
+            shieldApplied = true
+        }
+
+        // Only generate this scenario if shield was actually applied
+        if (!shieldApplied) {
+            return null
+        }
+
+        // CRITICAL: Press attack with 65% of remaining TP
+        // First try attacking from current position
+        var simPos = this._player._cellPos
+        var attackActions = []
+        if (tpBudget >= 4) {
+            attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
+        }
+
+        // If no attacks available from current position, approach enemy first
+        if (count(attackActions) == 0) {
+            var moveAction = this.getMoveToOptimalCell(availableMP)
+            if (moveAction != null) {
+                push(actions, moveAction)
+                var moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999) {
+                    simPos = moveAction.targetCell
+                }
+            }
+            // Retry attacks from new position
+            if (tpBudget >= 4) {
+                attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
+            }
+        }
+
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        if (count(actions) > 0) {
+            return actions
+        }
+
+        return null
+    }
+
+    createDamageReturnCyclingScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+
+        // DAMAGE RETURN CYCLING: For agility builds
+        // Maintains Mirror/Thorn/Bramble uptime while pressing attack
+
+        // Minimum TP to ensure we can attack after buffing (lowered to 8 for THORN + attack)
+        if (tpBudget < 8) {
+            return null
+        }
+
+        // Check if this is an agility build with damage return chips
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        var hasAnyDamageReturn = hasMirror || hasThorn || hasBramble
+
+        // Not an AGI build or no damage return chips
+        if (agi < 300 || !hasAnyDamageReturn) {
+            return null
+        }
+
+        // Check current damage return status
+        var returnRemaining = this._player.getDamageReturnRemaining()
+
+        // Check cooldowns
+        var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, this._player._id) : 999
+        var thornCd = hasThorn ? getCooldown(CHIP_THORN, this._player._id) : 999
+        var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, this._player._id) : 999
+
+        var buffApplied = false
+
+        // Apply damage return to maintain coverage (reapply when <= 2 turns remaining for better uptime)
+        // Priority: MIRROR (3t, 5 TP) > THORN (2t, 4 TP) > BRAMBLE (1t, 3 TP)
+
+        // BRAMBLE: Only if in close combat + high threat + spare TP
+        var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
+        if (distToEnemy == null) distToEnemy = 99
+        var inCloseCombat = distToEnemy <= 8
+        var expectedThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
+
+        if (hasBramble && returnRemaining <= 1 && brambleCd == 0 && tpBudget >= 12 && inCloseCombat && expectedThreat > 300) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player))
+            tpBudget -= 4
+            buffApplied = true
+        }
+        // MIRROR: Best coverage (3 turns) - cycle when <= 2 turns for better uptime
+        else if (hasMirror && returnRemaining <= 2 && mirrorCd == 0 && tpBudget >= 9) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player))
+            tpBudget -= 5
+            buffApplied = true
+        }
+        // THORN: Good coverage (2 turns) - cycle when <= 2 turns
+        else if (hasThorn && returnRemaining <= 2 && thornCd == 0 && tpBudget >= 8) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player))
+            tpBudget -= 4
+            buffApplied = true
+        }
+
+        // Only generate this scenario if damage return was actually applied
+        if (!buffApplied) {
+            return null
+        }
+
+        // CRITICAL: Press attack with 65% of remaining TP
+        // First try attacking from current position
+        var simPos = this._player._cellPos
+        var attackActions = []
+        if (tpBudget >= 4) {
+            attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
+        }
+
+        // If no attacks available from current position, approach enemy first
+        if (count(attackActions) == 0) {
+            var moveAction = this.getMoveToOptimalCell(availableMP)
+            if (moveAction != null) {
+                push(actions, moveAction)
+                var moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999) {
+                    simPos = moveAction.targetCell
+                }
+            }
+            // Retry attacks from new position
+            if (tpBudget >= 4) {
+                attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
+            }
+        }
+
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        if (count(actions) > 0) {
+            return actions
+        }
+
+        return null
+    }
+
+    // === Poison Dump ===
+
+    createPoisonDumpScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        // Only for magic builds
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        if (!(mag > str && mag > agi)) {
+            return null  // Not a magic build
+        }
+
+        // ONLY DUMP IF PHASE == "DUMP" (Antidote was used)
+        var currentTurn = getTurn()
+
+        if (POISON_PHASE != "DUMP") {
+            return null  // Not in dump phase yet
+        }
+
+        // Check if we already dumped this turn/recently
+        if (currentTurn - LAST_POISON_DUMP_TURN < 2) {
+            return null  // Prevent spamming dumps
+        }
+
+
+        // 1. If HP critical, add defensive actions first (survival + poison dump)
+        var hpPercent = this._player._currHealth * 100 / this._player._maxHealth
+        if (hpPercent < 50) {
+
+            // Add shield (FORTRESS > WALL)
+            var tpFortress = getCachedChipCost(CHIP_FORTRESS)
+            var tpWall = getCachedChipCost(CHIP_WALL)
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS) &&
+                getCooldown(CHIP_FORTRESS, this._player._id) == 0 &&
+                tpBudget >= tpFortress) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
+                tpBudget -= tpFortress
+            } else if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL) &&
+                getCooldown(CHIP_WALL, this._player._id) == 0 &&
+                tpBudget >= tpWall) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
+                tpBudget -= tpWall
+            }
+
+            // Add healing (REMISSION)
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
+                getCooldown(CHIP_REMISSION, this._player._id) == 0 &&
+                tpBudget >= 5) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
+                tpBudget -= 5
+            }
+        }
+
+        // 2. Move to optimal attack position
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            // Update simPos to track position after movement
+            if (moveAction.targetCell != -1) {
+                simPos = moveAction.targetCell
+                var moveCost = getGraphMPCost(simPos)
+                if (moveCost < 999) {
+                    mpBudget -= moveCost
+                }
+            }
+        }
+
+        // 3. Cast WIZARDRY if available (+170 MAG)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY) &&
+            getCooldown(CHIP_WIZARDRY, this._player._id) == 0 &&
+            tpBudget >= 6) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
+            tpBudget -= 6
+        }
+
+        // 4. Get all poison chips sorted by damage (best first)
+        var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)
+
+        // 5. Apply poison chips in priority order
+        for (var poisonChip in poisonChips) {
+            var chipId = poisonChip._id
+            var chipCost = getCachedChipCost(chipId)
+
+            if (tpBudget < chipCost) continue
+            if (getCooldown(chipId, this._player._id) > 0) continue
+
+            // Check range
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
+
+            // Check LOS
+            if (!lineOfSight(simPos, this._target._cellPos)) continue
+
+            // Add poison chip action
+            push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
+            tpBudget -= chipCost
+        }
+
+        // 6. Spam any remaining TP on weapons/chips
+        if (tpBudget >= 4) {
+            var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            for (var atk in attackActions) {
+                push(actions, atk)
+            }
+        }
+
+        // 7. Kite away
+        var kiteAction = this.getKiteAwayAction(mpBudget)
+        if (kiteAction != null) {
+            push(actions, kiteAction)
+        }
+
+        // Only return if we actually applied poison chips
+        if (count(actions) > 0) {
+            // Mark this as a poison dump scenario for scoring boost
+            var markerAction = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, this._target)
+            markerAction.checkpointType = "POISON_DUMP"
+            push(actions, markerAction)
+
+            // Update phase: DUMP → SUSTAIN (after dump completes)
+            POISON_PHASE = "SUSTAIN"
+            LAST_POISON_DUMP_TURN = currentTurn
+
+            return actions
+        }
+
+        return null
+    }
+
+    // === Neutrino OTKO ===
+
+    createNeutrinoOTKOScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
+            return null
+        }
+        if (getCooldown(CHIP_TELEPORTATION, this._player._id) > 0) {
+            return null
+        }
+
+        var tpTeleportNeutrino = getCachedChipCost(CHIP_TELEPORTATION)
+        if (tpBudget < 12 + tpTeleportNeutrino) {  // 3x Neutrino (12) + TELEPORT (9)
+            return null
+        }
+
+        var enemyHP = this._target._currHealth
+        var enemyMaxHP = this._target._maxHealth
+        var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
+
+        if (enemyHPPercent >= 40) {
+            return null
+        }
+
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) return null
+
+        var isDiagonal = this.isDiagonal(simPos, this._target._cellPos)
+        if (!isDiagonal || dist < 2 || dist > 6) {
+            return null
+        }
+
+        if (!lineOfSight(simPos, this._target._cellPos)) {
+            return null
+        }
+
+
+        if (getWeapon() != WEAPON_NEUTRINO) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
+            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            tpBudget -= 1
+        }
+
+        for (var i = 0; i < 3; i++) {
+            if (tpBudget >= 4) {
+                push(actions, new Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, -1, this._target._cellPos, this._target))
+                tpBudget -= 4
+            }
+        }
+
+        var bestOTKO = this._fieldMap.getBestOTKOCell()
+        if (bestOTKO == null) {
+            bestOTKO = this._fieldMap.getBestWeaponOrChipCell()
+            if (bestOTKO == null) {
+                return null
+            }
+        }
+
+        var teleportDist = getCellDistance(simPos, bestOTKO._id)
+        if (teleportDist == null || teleportDist < 1 || teleportDist > 12) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, this._target))
+        tpBudget -= tpTeleportNeutrino
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, bestOTKO._id)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
+    // === Adrenaline Combo ===
+
+    createAdrenalineComboScenario(comboScenarioCreator, requiredTP, availableTP, availableMP) {
+        var tpGap = requiredTP - availableTP
+
+        if (tpGap < 1 || tpGap > 4) {
+            return null
+        }
+
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE)) {
+            return null
+        }
+        if (getCooldown(CHIP_ADRENALINE, this._player._id) > 0) {
+            return null
+        }
+
+        if (availableTP < 1) {
+            return null
+        }
+
+
+        var actions = []
+
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
+        var newTPBudget = availableTP - 1 + 5
+
+        var comboActions = comboScenarioCreator(newTPBudget, availableMP)
+        if (comboActions == null || count(comboActions) == 0) {
+            return null
+        }
+
+        for (var action in comboActions) {
+            push(actions, action)
+        }
+
+        return actions
+    }
+
+    // === Fallback Scenarios ===
+
+    createStaticAttackScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var simPos = this._player._cellPos
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+
+        // If no attacks from current position, approach enemy and retry
+        if (count(attackActions) == 0) {
+            var moveAction = this.getMoveToOptimalCell(availableMP)
+            if (moveAction != null) {
+                push(actions, moveAction)
+                var moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999) {
+                    simPos = moveAction.targetCell
+                }
+            }
+            attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        }
+
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
+    createSimpleOffensiveScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
+    // === Buff Approach ===
+
+    createBuffApproachScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // Only create if enemy is out of range (no hit cells available)
+        var hasAnyHitCells = false
+        for (var weaponId in mapKeys(this._fieldMap.weaponHitmap)) {
+            var cells = this._fieldMap.weaponHitmap[weaponId]
+            if (count(cells) > 0) {
+                hasAnyHitCells = true
+                break
+            }
+        }
+        if (!hasAnyHitCells) {
+            for (var chipId in mapKeys(this._fieldMap.chipHitmap)) {
+                var cells = this._fieldMap.chipHitmap[chipId]
+                if (count(cells) > 0) {
+                    hasAnyHitCells = true
+                    break
+                }
+            }
+        }
+        if (hasAnyHitCells) {
+            return null  // Enemy is in range, normal scenarios should handle this
+        }
+
+
+        // 1. Apply offensive buff based on build type (detect from player stats)
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+        var buffApplied = false
+
+        if (mag > str && mag > agi) {  // Magic build
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY) &&
+                getCooldown(CHIP_WIZARDRY, this._player._id) == 0 &&
+                tpBudget >= 6) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
+                tpBudget -= 6
+                buffApplied = true
+            }
+        } else if (str > mag && str > agi) {  // Strength build
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
+                getCooldown(CHIP_STEROID, this._player._id) == 0 &&
+                tpBudget >= 6) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+                tpBudget -= 6
+                buffApplied = true
+            }
+        } else if (agi > str && agi > mag) {  // Agility build
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
+                getCooldown(CHIP_WARM_UP, this._player._id) == 0 &&
+                tpBudget >= 6) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player))
+                tpBudget -= 6
+                buffApplied = true
+            }
+        }
+
+        // 2. Apply shield if not already shielded
+        var hasShield = this._player.hasEffect(EFFECT_ABSOLUTE_SHIELD) || this._player.hasEffect(EFFECT_RELATIVE_SHIELD)
+        var tpFortressBR = getCachedChipCost(CHIP_FORTRESS)
+        var tpWallBR = getCachedChipCost(CHIP_WALL)
+        if (!hasShield && tpBudget >= tpWallBR) {
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS) &&
+                getCooldown(CHIP_FORTRESS, this._player._id) == 0 &&
+                tpBudget >= tpFortressBR) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
+                tpBudget -= tpFortressBR
+            } else if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL) &&
+                getCooldown(CHIP_WALL, this._player._id) == 0 &&
+                tpBudget >= tpWallBR) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
+                tpBudget -= tpWallBR
+            }
+        }
+
+        // 3. Move toward enemy
+        var approachCell = this.getApproachEnemyCell(mpBudget)
+        if (approachCell != null && approachCell != -1) {
+            push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target))
+        }
+
+        // Only return if we have at least one action (buff or movement)
+        if (count(actions) > 0) {
+            return actions
+        }
+
+        return null
+    }
+}
