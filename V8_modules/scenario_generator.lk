@@ -51,6 +51,18 @@ class ScenarioGenerator {
             var tracker = new CooldownTracker(this._target)
             tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
             // Note: PREV_ENEMY_POISON is updated at END of main.lk after scenario execution
+
+            // Check poison phase transitions (SUSTAIN → BAIT when Antidote ready again)
+            var currentTurn = getTurn()
+
+            if (POISON_PHASE == "SUSTAIN") {
+                var antidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE)
+
+                // If Antidote cooldown expired AND we've sustained for at least 3 turns → back to BAIT
+                if (antidoteCD == 0 && (currentTurn - LAST_POISON_DUMP_TURN) >= 3) {
+                    POISON_PHASE = "BAIT"
+                }
+            }
         } else {
             debugInfo("[SCENARIO-GEN] No poison capability - skipping Antidote detection")
         }
@@ -63,18 +75,6 @@ class ScenarioGenerator {
         // TP/MP reset to maximum each turn, so "reserving for next turn" is nonsensical
         // If we wanted to ensure defensive actions within THIS turn, scenarios should
         // compete on merit, not by handicapping offensive budget
-
-        // Check poison phase transitions (SUSTAIN → BAIT when Antidote ready again)
-        var currentTurn = getTurn()
-
-        if (POISON_PHASE == "SUSTAIN") {
-            var antidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE)
-
-            // If Antidote cooldown expired AND we've sustained for at least 3 turns → back to BAIT
-            if (antidoteCD == 0 && (currentTurn - LAST_POISON_DUMP_TURN) >= 3) {
-                POISON_PHASE = "BAIT"
-            }
-        }
 
         var state = this.determineStrategicState()
         debugInfo("[STATE] Strategic state: " + state + " | POISON_PHASE=" + POISON_PHASE)
