@@ -258,6 +258,7 @@ class UnifiedStrategy extends Strategy {
                 scenarioData['finalScore'] = lookahead['finalScore']
                 scenarioData['enemyDamage'] = lookahead['enemyDamage']
 
+                debugDetail("[LOOKAHEAD] Scenario " + i + ":" +
                           " final=" + floor(lookahead['finalScore']) +
                           " enemyDmg=" + lookahead['enemyDamage'])
             }

@@ -113,6 +113,7 @@ class AtomicActionExecutor {
 
         // Validate MP available
         if (this._player._currMp < pathLength) {
+            debugCritical("[EXECUTOR] Movement failed: need " + pathLength + " MP, have " +
                        this._player._currMp + " MP")
             return false
         }
@@ -146,6 +147,7 @@ class AtomicActionExecutor {
         // Validate TP cost
         var cost = getChipCost(chipId)
         if (this._player._currTp < cost) {
+            debugCritical("[EXECUTOR] Chip " + getChipName(chipId) + " failed: need " + cost +
                        " TP, have " + this._player._currTp + " TP")
             return false
         }
@@ -169,6 +171,7 @@ class AtomicActionExecutor {
 
         // Validate target exists and is alive
         if (!isAlive(targetEnemyId)) {
+            debugCritical("[EXECUTOR] Chip " + getChipName(chipId) + " failed: target " + targetEnemyId +
                        " not found or dead")
             return false
         }
@@ -181,11 +184,13 @@ class AtomicActionExecutor {
         var maxRange = getChipMaxRange(chipId)
 
         if (distance < minRange || distance > maxRange) {
+            debugCritical("[EXECUTOR] Chip " + getChipName(chipId) + " out of range: dist=" + distance +
                        ", range=" + minRange + "-" + maxRange)
             return false
         }
 
         // Execute chip
+        debugDetail("[EXECUTOR] Using chip " + getChipName(chipId) + " on enemy " + targetEnemyId +
                    " (cost=" + cost + " TP)")
         var result = useChip(chipId, targetEnemyId)
 
@@ -230,12 +235,14 @@ class AtomicActionExecutor {
         // Validate TP cost
         var weaponCost = weaponObj._cost
         if (this._player._currTp < weaponCost) {
+            debugCritical("[EXECUTOR] Weapon " + getWeaponName(weaponId) + " failed: need " + weaponCost +
                        " TP, have " + this._player._currTp + " TP")
             return false
         }
 
         // Validate target exists
         if (!isAlive(targetEnemyId)) {
+            debugCritical("[EXECUTOR] Weapon " + getWeaponName(weaponId) + " failed: target " + targetEnemyId +
                        " not found or dead")
             return false
         }
@@ -246,6 +253,7 @@ class AtomicActionExecutor {
         var distance = getCellDistance(playerCell, targetCell)
 
         if (distance < weaponObj._minRange || distance > weaponObj._maxRange) {
+            debugCritical("[EXECUTOR] Weapon " + getWeaponName(weaponId) + " out of range: dist=" + distance +
                        ", range=" + weaponObj._minRange + "-" + weaponObj._maxRange)
             return false
         }
@@ -260,6 +268,7 @@ class AtomicActionExecutor {
         }
 
         // Execute weapon
+        debugDetail("[EXECUTOR] Using weapon " + getWeaponName(weaponId) + " on enemy " + targetEnemyId +
                    " (cost=" + weaponCost + " TP)")
         var result = useWeapon(targetEnemyId)
 
@@ -314,6 +323,7 @@ class AtomicActionExecutor {
         // Validate TP cost
         var cost = getChipCost(CHIP_TELEPORTATION)
         if (this._player._currTp < cost) {
+            debugCritical("[EXECUTOR] Teleportation failed: need " + cost + " TP, have " +
                        this._player._currTp + " TP")
             return false
         }
@@ -350,11 +360,13 @@ class AtomicActionExecutor {
 
         // Check if we have resources for this action
         if (action.tpCost > 0 && this._player._currTp < action.tpCost) {
+            debugCritical("[EXECUTOR] Action failed: need " + action.tpCost + " TP" +
                        ", have " + this._player._currTp)
             return false
         }
 
         if (action.mpCost > 0 && this._player._currMp < action.mpCost) {
+            debugCritical("[EXECUTOR] Action failed: need " + action.mpCost + " MP" +
                        ", have " + this._player._currMp)
             return false
         }

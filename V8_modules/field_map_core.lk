@@ -242,6 +242,7 @@ class FieldMapCore {
                 var threatPenalty = threatAtEnemy * 0.5
                 score -= threatPenalty
 
+                debugDetail("[TARGET-BR] " + getName(e._id) + ": hp=" + hpPercent + "% dist=" + dist +
                       " threat=" + floor(threatAtEnemy) + " score=" + floor(score))
             } else if (priorityMode == "hp") {
 

@@ -110,6 +110,7 @@ class BeamSearchPlanner {
         var sequence = this.extractSequence(bestState)
 
         var opsUsed = getOperations() - opsBefore
+        debugInfo("[BEAM] Best sequence: depth=" + count(sequence) + ", score=" +
               floor(bestState.cumulativeScore) + ", ops=" + opsUsed)
 
         return sequence

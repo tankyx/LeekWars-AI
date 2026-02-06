@@ -601,6 +601,7 @@ class FieldMapPatterns extends FieldMapCore {
         var enemyCount = optimalAim['hitCount']
 
         if (optimalAimCell != targetCell) {
+            debugDetail("[AoE-OPT] " +
                   (weapon != null ? getWeaponName(itemId) : getChipName(itemId)) +
                   ": aim " + optimalAimCell + " vs target " + targetCell +
                   " (damage: " + floor(totalDamage) + ", hits " + enemyCount + " enemies)")
