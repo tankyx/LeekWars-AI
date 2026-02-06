@@ -863,23 +863,34 @@ class ScenarioGenerator {
         }
 
         var safestCell = -1
-        var lowestThreat = 99999
+        var bestScore = -99999
         var playerPos = this._player._cellPos
+        var enemyPos = this._target._cellPos
 
-        for (var cellId in mapKeys(this._fieldMap.damageMap)) {
+        // Iterate through all reachable cells (not just damageMap which is near enemy)
+        var reachableCells = getReachableCells()
+        for (var cellId in reachableCells) {
             var dist = getCellDistance(playerPos, cellId)
             if (dist >= 1 && dist <= 12) {
                 var threat = this._fieldMap.getThreatAtCell(cellId)
-                if (threat < lowestThreat) {
-                    lowestThreat = threat
+                var distFromEnemy = getCellDistance(cellId, enemyPos)
+
+                // Score: prefer low threat AND far from enemy
+                var score = distFromEnemy * 10 - threat
+
+                if (score > bestScore) {
+                    bestScore = score
                     safestCell = cellId
                 }
             }
         }
 
         if (safestCell == -1) {
-            return null  
+            return null
         }
+
+        debugInfo("[TELEPORT-ESCAPE] Selected cell: threat=" + this._fieldMap.getThreatAtCell(safestCell) +
+                  ", distFromEnemy=" + getCellDistance(safestCell, enemyPos))
 
         push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, safestCell, this._target))
         tpBudget -= 5
