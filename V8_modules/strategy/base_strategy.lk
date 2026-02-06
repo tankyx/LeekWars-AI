@@ -892,10 +892,11 @@ class Strategy {
                 var skipSteroidForOTKO = false
 
                 if (closestEnemy != null && player._currTp >= 15) {
-                    
+
                     var teleportInfo = fieldMap.findOptimalTeleportCell(closestEnemy)
                     if (teleportInfo != null && teleportInfo['killProbability'] >= 0.85) {
                         skipSteroidForOTKO = true
+                        debugDetail("[BUFF-SKIP] OTKO available via teleport: " +
                               round(teleportInfo['killProbability'] * 100) + "% kill prob, saving 7 TP for burst)")
                     }
                 }
@@ -937,6 +938,7 @@ class Strategy {
         ))
 
         if (aimCell != -1 && aimCell != target._cellPos) {
+            debugDetail("[AoE-AIM] " +
                   " aiming at OFFSET cell " + aimCell + " (target at " + target._cellPos + ")")
         } else {
         }
@@ -1907,6 +1909,7 @@ class Strategy {
 
                 var attackAfterTeleport = this.findBestAttackAtPosition(bestSafeCell, target)
                 if (attackAfterTeleport != null && playerTP >= attackAfterTeleport['cost']) {
+                    debugDetail("[FLEE-ATTACK] After teleport can use: " +
                           ((attackAfterTeleport['type'] == 'weapon') ? getWeaponName(attackAfterTeleport['id']) : getChipName(attackAfterTeleport['id'])) +
                           ")")
 
@@ -1987,6 +1990,7 @@ class Strategy {
         var killProbCurrent = burstFromCurrent / enemyHP
 
         if (killProbCurrent >= 0.85) {
+            debugDetail("[OTKO] From current position: damage=" + floor(burstFromCurrent) +
                   " vs HP=" + enemyHP + " (" + floor(killProbCurrent * 100) + "% kill probability)")
             return true
         }
@@ -2001,6 +2005,7 @@ class Strategy {
                 var killProbTeleport = projectedDamage / enemyHP
 
                 if (killProbTeleport >= 0.85) {
+                    debugDetail("[OTKO] Via teleport: damage=" + floor(projectedDamage) +
                           " vs HP=" + enemyHP + " (" + floor(killProbTeleport * 100) + "% kill probability, cell=" + teleportInfo['cell'] + ")")
                     return true
                 }
@@ -2197,6 +2202,7 @@ class Strategy {
                 scenarioData['finalScore'] = lookahead['finalScore']
                 scenarioData['enemyDamage'] = lookahead['enemyDamage']
 
+                debugDetail("[LOOKAHEAD] Scenario " + i + ":" +
                           " final=" + floor(lookahead['finalScore']) +
                           " enemyDmg=" + lookahead['enemyDamage'])
             }
@@ -2221,6 +2227,7 @@ class Strategy {
             return
         }
 
+        debugDetail("[SCENARIO] Best: score=" + floor(bestScore) + " damage=" + floor(bestSimResult.damageDealt) +
               " TP=" + bestSimResult.tpSpent + " | OPS: gen=" + genOps + " quick=" + quickOps + " eval=" + evalOps)
 
         logCheckpoint("After scenario evaluation")
