@@ -500,17 +500,18 @@ class ScenarioGenerator {
         }
 
         // Standard 1v1 logic
-        if (playerHPPercent < 40) {
-            return "FLEE"
+        // PRIORITY: Check if enemy is killable BEFORE fleeing
+        var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
+
+        // estimatedDamage already accounts for shields and TP budget
+        // Use 95% threshold to account for minor variance/rounding
+        if (estimatedDamage >= enemyHP * 0.95) {
+            return "KILL"
         }
 
-        if (enemyHPPercent < 40) {
-            var estimatedDamage = this.estimateMaxDamageThisTurn(availableTP)
-            var killProbability = estimatedDamage / enemyHP
-
-            if (killProbability >= 0.75) {
-                return "KILL"
-            }
+        // Only flee if we can't kill the enemy
+        if (playerHPPercent < 40) {
+            return "FLEE"
         }
 
         if (playerHPPercent >= 40 && playerHPPercent <= 60 && enemyHPPercent > 40) {
@@ -1517,12 +1518,18 @@ class ScenarioGenerator {
         var currentHP = this._player._currHealth
         var maxHP = this._player._maxHealth
         var hpRatio = currentHP / maxHP
+        var missingHP = maxHP - currentHP
 
-        if (hpRatio < 0.35 &&
-            getCooldown(CHIP_REGENERATION, this._player._id) == 0 &&
+        // Smart REGENERATION: Only use when missing HP justifies it
+        if (getCooldown(CHIP_REGENERATION, this._player._id) == 0 &&
             mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION) &&
             tpBudget >= 8) {
-            return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
+
+            var expectedHeal = this._arsenal.getExpectedHeal(CHIP_REGENERATION, this._player._wisdom)
+            // Use if missing HP >= 85% of heal amount (allows 15% overheal tolerance)
+            if (missingHP >= expectedHeal * 0.85) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
+            }
         }
 
         // Smart healing for HP < 80%
@@ -1543,6 +1550,9 @@ class ScenarioGenerator {
 
     getSmartHealingAction() {
         var wisdom = this._player._wisdom
+        var currentHP = this._player._currHealth
+        var maxHP = this._player._maxHealth
+        var missingHP = maxHP - currentHP
 
         // High wisdom (>= 400): ENHANCED_LIGHTNINGER (9 TP) gives lifesteal + 100 HP bonus
         // Low wisdom (< 400): REMISSION (5 TP) gives fixed ~400 HP
@@ -1552,9 +1562,12 @@ class ScenarioGenerator {
                 // Check if target is in range
                 var dist = getCellDistance(this._player._cellPos, this._target._cellPos)
                 if (dist != null && dist >= 1 && dist <= 8) {
-                    debugInfo("[SMART-HEAL] Using ENHANCED_LIGHTNINGER for wisdom lifesteal (WIS=" + wisdom + ")")
-                    // Return weapon attack action instead of buff action
-                    return new Action(Action.ACTION_DIRECT, WEAPON_ENHANCED_LIGHTNINGER, -1, this._target._cellPos, this._target)
+                    // ENHANCED_LIGHTNINGER: Estimate ~100-200 HP lifesteal
+                    var estimatedLifesteal = 150  // Conservative estimate
+                    if (missingHP >= estimatedLifesteal * 0.85) {
+                        debugInfo("[SMART-HEAL] Using ENHANCED_LIGHTNINGER for wisdom lifesteal (WIS=" + wisdom + ")")
+                        return new Action(Action.ACTION_DIRECT, WEAPON_ENHANCED_LIGHTNINGER, -1, this._target._cellPos, this._target)
+                    }
                 }
             }
         }
@@ -1562,7 +1575,12 @@ class ScenarioGenerator {
         // Fallback to REMISSION for low wisdom or when ENHANCED_LIGHTNINGER unavailable
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
             getCooldown(CHIP_REMISSION, this._player._id) == 0) {
-            return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
+
+            var expectedHeal = this._arsenal.getExpectedHeal(CHIP_REMISSION, wisdom)
+            // Use if missing HP >= 85% of heal amount (allows 15% overheal tolerance)
+            if (missingHP >= expectedHeal * 0.85) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player)
+            }
         }
 
         return null
@@ -1571,7 +1589,17 @@ class ScenarioGenerator {
     getRegenerationAction() {
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION) &&
             getCooldown(CHIP_REGENERATION, this._player._id) == 0) {
-            return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
+
+            // Smart REGENERATION: Only use when missing HP justifies it
+            var currentHP = this._player._currHealth
+            var maxHP = this._player._maxHealth
+            var missingHP = maxHP - currentHP
+            var expectedHeal = this._arsenal.getExpectedHeal(CHIP_REGENERATION, this._player._wisdom)
+
+            // Use if missing HP >= 85% of heal amount (allows 15% overheal tolerance)
+            if (missingHP >= expectedHeal * 0.85) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
+            }
         }
         return null
     }
@@ -1933,31 +1961,82 @@ class ScenarioGenerator {
     }
 
     estimateMaxDamageThisTurn(availableTP) {
-        var str = this._player._strength
-        var mag = this._player._magic
-        var wis = this._player._wisdom
-        var sci = this._player._science
-        var totalDamage = 0
+        var baseStr = this._player._strength
+        var baseMag = this._player._magic
+        var baseAgi = this._player._agility
+        var baseWis = this._player._wisdom
+        var baseSci = this._player._science
 
-        for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
-            var weapon = this._arsenal.playerEquippedWeapons[weaponId]
-            var weaponDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
-            var maxUses = min(weapon._maxUse, floor(availableTP / weapon._cost))
-            totalDamage += weaponDamage * maxUses
+        // Helper: Calculate damage with given stats and TP budget
+        var calcDmg = function(str, mag, wis, sci, tpBudget, arsenal, target, playerId) {
+            var totalDamage = 0
+
+            for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
+                var weapon = arsenal.playerEquippedWeapons[weaponId]
+                var weaponDamage = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
+                var maxUses = min(weapon._maxUse, floor(tpBudget / weapon._cost))
+                totalDamage += weaponDamage * maxUses
+            }
+
+            var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG]
+            var bestChipDamage = 0
+            for (var chipId in damageChips) {
+                if (!mapContainsKey(arsenal.playerEquippedChips, chipId)) continue
+                if (getCooldown(chipId, playerId) > 0) continue
+
+                var chipDamage = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
+                bestChipDamage = max(bestChipDamage, chipDamage)
+            }
+            totalDamage += bestChipDamage
+
+            return totalDamage
         }
 
-        var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG]
-        var bestChipDamage = 0
-        for (var chipId in damageChips) {
-            if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
-            if (getCooldown(chipId, this._player._id) > 0) continue
+        // 1. Baseline: No buffs
+        var maxDamage = calcDmg(baseStr, baseMag, baseWis, baseSci, availableTP, this._arsenal, this._target, this._player._id)
 
-            var chipDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, this._target)
-            bestChipDamage = max(bestChipDamage, chipDamage)
+        // 2. Consider ADRENALINE (net +4 TP for 1 TP cost)
+        var hasAdrenaline = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE)
+        var adrenalineReady = hasAdrenaline && getCooldown(CHIP_ADRENALINE, this._player._id) == 0
+        var adrenalineBonus = adrenalineReady ? 4 : 0  // Net TP gain
+
+        // 3. Strength buff: STEROID (+150 STR, 7 TP)
+        var hasSteroid = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)
+        var steroidReady = hasSteroid && getCooldown(CHIP_STEROID, this._player._id) == 0
+        if (steroidReady && availableTP >= 7) {
+            var buffedStr = baseStr + 150
+            var tpAfterBuff = availableTP - 7 + adrenalineBonus
+            if (tpAfterBuff > 0) {
+                var dmgWithSteroid = calcDmg(buffedStr, baseMag, baseWis, baseSci, tpAfterBuff, this._arsenal, this._target, this._player._id)
+                maxDamage = max(maxDamage, dmgWithSteroid)
+            }
         }
-        totalDamage += bestChipDamage
 
-        return totalDamage
+        // 4. Magic buff: WIZARDRY (+150 MAG, 6 TP)
+        var hasWizardry = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY)
+        var wizardryReady = hasWizardry && getCooldown(CHIP_WIZARDRY, this._player._id) == 0
+        if (wizardryReady && availableTP >= 6) {
+            var buffedMag = baseMag + 150
+            var tpAfterBuff = availableTP - 6 + adrenalineBonus
+            if (tpAfterBuff > 0) {
+                var dmgWithWizardry = calcDmg(baseStr, buffedMag, baseWis, baseSci, tpAfterBuff, this._arsenal, this._target, this._player._id)
+                maxDamage = max(maxDamage, dmgWithWizardry)
+            }
+        }
+
+        // 5. Science buff: KNOWLEDGE (+250 SCI, 5 TP)
+        var hasKnowledge = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_KNOWLEDGE)
+        var knowledgeReady = hasKnowledge && getCooldown(CHIP_KNOWLEDGE, this._player._id) == 0
+        if (knowledgeReady && availableTP >= 5) {
+            var buffedSci = baseSci + 250
+            var tpAfterBuff = availableTP - 5 + adrenalineBonus
+            if (tpAfterBuff > 0) {
+                var dmgWithKnowledge = calcDmg(baseStr, baseMag, baseWis, buffedSci, tpAfterBuff, this._arsenal, this._target, this._player._id)
+                maxDamage = max(maxDamage, dmgWithKnowledge)
+            }
+        }
+
+        return maxDamage
     }
 
     createNeutrinoStackingScenario(availableTP, availableMP) {

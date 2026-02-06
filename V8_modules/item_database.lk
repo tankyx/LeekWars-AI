@@ -1,0 +1,1451 @@
+// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
+// Generated from market_data.json by tools/generate_item_database.py
+//
+// This module provides static weapon and chip data for the V8 AI system.
+// Data format:
+//   Weapons: [name, min_range, max_range, effects, tp_cost, launch_type, area]
+//   Chips: [name, min_range, max_range, effects, tp_cost, launch_type, area, cooldown]
+//   Effects: [effect_type: [min_value, max_value, turns], ...]
+
+global WEAPON_DATABASE = [
+    1: [
+        "pistol",  // name
+        1,  // min_range
+        7,  // max_range
+        [1: [15, 5, 0]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    2: [
+        "machine_gun",  // name
+        1,  // min_range
+        6,  // max_range
+        [1: [30, 15, 0]],  // effects
+        4,  // tp_cost
+        1,  // launch_type
+        1  // area
+    ],
+    27: [
+        "neutrino",  // name
+        2,  // min_range
+        6,  // max_range
+        [1: [25, 5, 0], 0: [8, 0, 2]],  // effects
+        4,  // tp_cost
+        2,  // launch_type
+        1  // area
+    ],
+    4: [
+        "shotgun",  // name
+        1,  // min_range
+        5,  // max_range
+        [1: [33, 10, 0], 0: [25, 0, 1]],  // effects
+        5,  // tp_cost
+        1,  // launch_type
+        1  // area
+    ],
+    5: [
+        "magnum",  // name
+        1,  // min_range
+        8,  // max_range
+        [1: [25, 15, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    15: [
+        "broadsword",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [39, 2, 0], 5: [40, 0, 2]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    6: [
+        "laser",  // name
+        2,  // min_range
+        9,  // max_range
+        [1: [43, 16, 0]],  // effects
+        6,  // tp_cost
+        1,  // launch_type
+        2  // area
+    ],
+    3: [
+        "double_gun",  // name
+        2,  // min_range
+        7,  // max_range
+        [1: [18, 7, 0], 6: [9, 3, 2]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    37: [
+        "odachi",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [100, 20, 0]],  // effects
+        9,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    35: [
+        "sword",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [50, 10, 0], 0: [8, 0, 2]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    9: [
+        "destroyer",  // name
+        1,  // min_range
+        6,  // max_range
+        [1: [40, 20, 0], 7: [17, 0, 2]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    34: [
+        "unstable_destroyer",  // name
+        1,  // min_range
+        6,  // max_range
+        [1: [10, 80, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    8: [
+        "flame_thrower",  // name
+        2,  // min_range
+        8,  // max_range
+        [1: [35, 5, 0], 6: [24, 6, 2]],  // effects
+        6,  // tp_cost
+        1,  // launch_type
+        2  // area
+    ],
+    13: [
+        "b_laser",  // name
+        2,  // min_range
+        8,  // max_range
+        [1: [50, 10, 0], 2: [50, 10, 0]],  // effects
+        5,  // tp_cost
+        1,  // launch_type
+        2  // area
+    ],
+    38: [
+        "excalibur",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [150, 20, 0], 6: [150, 20, 2]],  // effects
+        12,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    16: [
+        "axe",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [55, 22, 0], 7: [0.7, 0.1, 1]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    7: [
+        "grenade_launcher",  // name
+        4,  // min_range
+        7,  // max_range
+        [1: [55, 8, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        4  // area
+    ],
+    18: [
+        "illicit_grenade_launcher",  // name
+        4,  // min_range
+        7,  // max_range
+        [1: [40, 0, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        4  // area
+    ],
+    17: [
+        "j_laser",  // name
+        5,  // min_range
+        11,  // max_range
+        [0: [50, 0, 2]],  // effects
+        5,  // tp_cost
+        1,  // launch_type
+        2  // area
+    ],
+    29: [
+        "bazooka",  // name
+        8,  // min_range
+        12,  // max_range
+        [1: [110, 8, 0]],  // effects
+        11,  // tp_cost
+        2,  // launch_type
+        5  // area
+    ],
+    23: [
+        "rhino",  // name
+        2,  // min_range
+        4,  // max_range
+        [1: [54, 6, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    39: [
+        "scythe",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [300, 50, 0]],  // effects
+        15,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    11: [
+        "electrisor",  // name
+        7,  // min_range
+        7,  // max_range
+        [1: [70, 10, 0]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        3  // area
+    ],
+    19: [
+        "mysterious_electrisor",  // name
+        7,  // min_range
+        7,  // max_range
+        [1: [34, 6, 0], 0: [7, 0, 2]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        3  // area
+    ],
+    25: [
+        "lightninger",  // name
+        6,  // min_range
+        10,  // max_range
+        [1: [99, 8, 0]],  // effects
+        9,  // tp_cost
+        3,  // launch_type
+        8  // area
+    ],
+    33: [
+        "enhanced_lightninger",  // name
+        6,  // min_range
+        10,  // max_range
+        [1: [89, 4, 0], 0: [100, 0, 0]],  // effects
+        9,  // tp_cost
+        7,  // launch_type
+        11  // area
+    ],
+    14: [
+        "katana",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [77, 0, 0], 7: [0.3, 0.1, 1]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    32: [
+        "dark_katana",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [143, 0, 0], 0: [15, 0, 1]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    22: [
+        "rifle",  // name
+        7,  // min_range
+        9,  // max_range
+        [1: [73, 6, 0]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    24: [
+        "explorer_rifle",  // name
+        7,  // min_range
+        9,  // max_range
+        [2: [78, 8, 0]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    40: [
+        "quantum_rifle",  // name
+        5,  // min_range
+        10,  // max_range
+        [1: [136, 14, 0], 0: [0, 0, 0]],  // effects
+        10,  // tp_cost
+        7,  // launch_type
+        9  // area
+    ],
+    36: [
+        "heavy_sword",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [156, 17, 0], 0: [60, 0, 1]],  // effects
+        15,  // tp_cost
+        7,  // launch_type
+        1  // area
+    ],
+    10: [
+        "gazor",  // name
+        2,  // min_range
+        7,  // max_range
+        [6: [27, 5, 3]],  // effects
+        8,  // tp_cost
+        1,  // launch_type
+        5  // area
+    ],
+    20: [
+        "unbridled_gazor",  // name
+        2,  // min_range
+        7,  // max_range
+        [1: [81, 4, 0]],  // effects
+        8,  // tp_cost
+        1,  // launch_type
+        5  // area
+    ],
+    12: [
+        "m_laser",  // name
+        5,  // min_range
+        12,  // max_range
+        [1: [90, 10, 0]],  // effects
+        8,  // tp_cost
+        1,  // launch_type
+        2  // area
+    ],
+    21: [
+        "revoked_m_laser",  // name
+        5,  // min_range
+        12,  // max_range
+        [6: [50, 10, 2]],  // effects
+        8,  // tp_cost
+        1,  // launch_type
+        2  // area
+    ]
+]
+
+global CHIP_DATABASE = [
+    425: [
+        "exasperation",  // name
+        0,  // min_range
+        0,  // max_range
+        [0: [120, 0, 1]],  // effects
+        0,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    418: [
+        "apocalypse",  // name
+        0,  // min_range
+        0,  // max_range
+        [1: [0, 0, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        14,  // area
+        0  // cooldown
+    ],
+    419: [
+        "divine_protection",  // name
+        0,  // min_range
+        0,  // max_range
+        [9: [3, 0, -1]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        15,  // area
+        0  // cooldown
+    ],
+    1: [
+        "shock",  // name
+        0,  // min_range
+        6,  // max_range
+        [1: [7, 2, 0]],  // effects
+        2,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        0  // cooldown
+    ],
+    3: [
+        "bandage",  // name
+        0,  // min_range
+        6,  // max_range
+        [2: [23, 5, 0]],  // effects
+        2,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    19: [
+        "pebble",  // name
+        0,  // min_range
+        5,  // max_range
+        [1: [2, 32, 0]],  // effects
+        2,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    8: [
+        "protein",  // name
+        0,  // min_range
+        4,  // max_range
+        [5: [80, 20, 2]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        3  // cooldown
+    ],
+    2: [
+        "ice",  // name
+        0,  // min_range
+        8,  // max_range
+        [1: [17, 2, 0]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        0  // cooldown
+    ],
+    21: [
+        "helmet",  // name
+        0,  // min_range
+        4,  // max_range
+        [4: [15, 0, 2]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        3  // cooldown
+    ],
+    7: [
+        "rock",  // name
+        2,  // min_range
+        6,  // max_range
+        [1: [38, 1, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    15: [
+        "motivation",  // name
+        0,  // min_range
+        5,  // max_range
+        [5: [2, 0, 3]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        6  // cooldown
+    ],
+    9: [
+        "stretching",  // name
+        0,  // min_range
+        5,  // max_range
+        [5: [80, 20, 2]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        3  // cooldown
+    ],
+    23: [
+        "wall",  // name
+        0,  // min_range
+        3,  // max_range
+        [4: [4, 1, 2]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        3  // cooldown
+    ],
+    18: [
+        "spark",  // name
+        0,  // min_range
+        10,  // max_range
+        [1: [8, 8, 0]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        0  // cooldown
+    ],
+    4: [
+        "cure",  // name
+        0,  // min_range
+        5,  // max_range
+        [2: [38, 8, 0]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        2  // cooldown
+    ],
+    14: [
+        "leather_boots",  // name
+        0,  // min_range
+        5,  // max_range
+        [5: [2, 0, 2]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    6: [
+        "flash",  // name
+        1,  // min_range
+        10,  // max_range
+        [1: [32, 3, 0]],  // effects
+        3,  // tp_cost
+        1,  // launch_type
+        3,  // area
+        1  // cooldown
+    ],
+    5: [
+        "flame",  // name
+        2,  // min_range
+        7,  // max_range
+        [1: [29, 2, 0]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        0  // cooldown
+    ],
+    155: [
+        "knowledge",  // name
+        0,  // min_range
+        7,  // max_range
+        [5: [250, 20, 2]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    20: [
+        "shield",  // name
+        0,  // min_range
+        4,  // max_range
+        [4: [20, 0, 3]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    96: [
+        "solidification",  // name
+        0,  // min_range
+        3,  // max_range
+        [5: [180, 20, 3]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    97: [
+        "venom",  // name
+        1,  // min_range
+        10,  // max_range
+        [6: [15, 5, 3]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    73: [
+        "puny_bulb",  // name
+        1,  // min_range
+        3,  // max_range
+        [8: [1, 0, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    412: [
+        "kemuridama",  // name
+        1,  // min_range
+        50,  // max_range
+        [9: [0, 0, 0]],  // effects
+        8,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        2  // cooldown
+    ],
+    30: [
+        "stalactite",  // name
+        2,  // min_range
+        7,  // max_range
+        [1: [64, 3, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        3  // cooldown
+    ],
+    411: [
+        "shuriken",  // name
+        1,  // min_range
+        10,  // max_range
+        [1: [50, 10, 0], 0: [30, 0, 2]],  // effects
+        6,  // tp_cost
+        1,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    141: [
+        "alteration",  // name
+        6,  // min_range
+        12,  // max_range
+        [1: [18, 2, 0]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    10: [
+        "drip",  // name
+        2,  // min_range
+        6,  // max_range
+        [2: [40, 5, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        1  // cooldown
+    ],
+    34: [
+        "liberation",  // name
+        0,  // min_range
+        6,  // max_range
+        [9: [40, 0, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    94: [
+        "tranquilizer",  // name
+        1,  // min_range
+        8,  // max_range
+        [7: [0.5, 0.1, 1]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        3,  // area
+        0  // cooldown
+    ],
+    67: [
+        "armoring",  // name
+        0,  // min_range
+        3,  // max_range
+        [2: [25, 5, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    144: [
+        "jump",  // name
+        1,  // min_range
+        3,  // max_range
+        [9: [0, 0, 0], 5: [100, 0, 2]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        3  // cooldown
+    ],
+    22: [
+        "armor",  // name
+        0,  // min_range
+        4,  // max_range
+        [4: [25, 0, 4]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    32: [
+        "rockfall",  // name
+        5,  // min_range
+        7,  // max_range
+        [1: [50, 8, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        1  // cooldown
+    ],
+    11: [
+        "vaccine",  // name
+        0,  // min_range
+        6,  // max_range
+        [2: [38, 4, 3]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    159: [
+        "mutation",  // name
+        0,  // min_range
+        8,  // max_range
+        [2: [15, 5, 0]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        12,  // area
+        4  // cooldown
+    ],
+    276: [
+        "prism",  // name
+        0,  // min_range
+        6,  // max_range
+        [5: [360, 0, 2]],  // effects
+        6,  // tp_cost
+        4,  // launch_type
+        1,  // area
+        6  // cooldown
+    ],
+    92: [
+        "slow_down",  // name
+        1,  // min_range
+        8,  // max_range
+        [7: [0.3, 0.1, 1]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        0  // cooldown
+    ],
+    414: [
+        "trebuchet",  // name
+        3,  // min_range
+        50,  // max_range
+        [1: [200, 20, 0]],  // effects
+        12,  // tp_cost
+        7,  // launch_type
+        5,  // area
+        3  // cooldown
+    ],
+    413: [
+        "fire_ball",  // name
+        3,  // min_range
+        6,  // max_range
+        [1: [80, 10, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        3,  // area
+        1  // cooldown
+    ],
+    31: [
+        "iceberg",  // name
+        3,  // min_range
+        5,  // max_range
+        [1: [82, 8, 0]],  // effects
+        7,  // tp_cost
+        1,  // launch_type
+        4,  // area
+        3  // cooldown
+    ],
+    417: [
+        "kill",  // name
+        0,  // min_range
+        50,  // max_range
+        [1: [0, 0, 0]],  // effects
+        1,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        0  // cooldown
+    ],
+    76: [
+        "rocky_bulb",  // name
+        1,  // min_range
+        3,  // max_range
+        [8: [4, 0, 0]],  // effects
+        10,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    102: [
+        "ferocity",  // name
+        1,  // min_range
+        8,  // max_range
+        [5: [50, 10, 2]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    89: [
+        "loam",  // name
+        1,  // min_range
+        7,  // max_range
+        [2: [56, 10, 0]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        2  // cooldown
+    ],
+    110: [
+        "antidote",  // name
+        0,  // min_range
+        4,  // max_range
+        [9: [100, 0, 0], 2: [25, 10, 0]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    24: [
+        "rampart",  // name
+        2,  // min_range
+        7,  // max_range
+        [4: [13, 2, 3]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        2  // cooldown
+    ],
+    88: [
+        "whip",  // name
+        0,  // min_range
+        6,  // max_range
+        [5: [0.6, 0.1, 2]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    162: [
+        "grapple",  // name
+        1,  // min_range
+        8,  // max_range
+        [9: [0, 0, 0], 5: [30, 10, 1], 7: [15, 5, 1]],  // effects
+        3,  // tp_cost
+        1,  // launch_type
+        13,  // area
+        0  // cooldown
+    ],
+    35: [
+        "regeneration",  // name
+        0,  // min_range
+        3,  // max_range
+        [2: [500, 0, 0]],  // effects
+        8,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        -1  // cooldown
+    ],
+    98: [
+        "toxin",  // name
+        1,  // min_range
+        7,  // max_range
+        [6: [25, 10, 3]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        2  // cooldown
+    ],
+    28: [
+        "warm_up",  // name
+        0,  // min_range
+        3,  // max_range
+        [5: [170, 20, 3]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    77: [
+        "iced_bulb",  // name
+        1,  // min_range
+        2,  // max_range
+        [8: [5, 0, 0]],  // effects
+        12,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    100: [
+        "thorn",  // name
+        0,  // min_range
+        3,  // max_range
+        [3: [3, 1, 2]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        3,  // area
+        3  // cooldown
+    ],
+    25: [
+        "steroid",  // name
+        0,  // min_range
+        5,  // max_range
+        [5: [150, 20, 3]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    120: [
+        "covetousness",  // name
+        0,  // min_range
+        8,  // max_range
+        [5: [1, 0, 2]],  // effects
+        2,  // tp_cost
+        7,  // launch_type
+        9,  // area
+        2  // cooldown
+    ],
+    163: [
+        "boxing_glove",  // name
+        2,  // min_range
+        8,  // max_range
+        [9: [0, 0, 0], 5: [30, 10, 1], 7: [10, 5, 1]],  // effects
+        3,  // tp_cost
+        1,  // launch_type
+        13,  // area
+        0  // cooldown
+    ],
+    81: [
+        "carapace",  // name
+        1,  // min_range
+        6,  // max_range
+        [4: [70, 5, 3]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    91: [
+        "acceleration",  // name
+        0,  // min_range
+        8,  // max_range
+        [5: [0.4, 0.1, 2]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    95: [
+        "soporific",  // name
+        1,  // min_range
+        6,  // max_range
+        [7: [0.4, 0.1, 3]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        5,  // area
+        1  // cooldown
+    ],
+    114: [
+        "punishment",  // name
+        1,  // min_range
+        1,  // max_range
+        [1: [100, 0, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        3  // cooldown
+    ],
+    174: [
+        "manumission",  // name
+        0,  // min_range
+        5,  // max_range
+        [9: [0, 0, 0], 5: [2, 0, 1]],  // effects
+        6,  // tp_cost
+        1,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    68: [
+        "inversion",  // name
+        1,  // min_range
+        14,  // max_range
+        [9: [0, 0, 0], 2: [50, 0, 0], 0: [20, 0, 1]],  // effects
+        4,  // tp_cost
+        1,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    16: [
+        "adrenaline",  // name
+        0,  // min_range
+        3,  // max_range
+        [5: [5, 0, 1]],  // effects
+        1,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        7  // cooldown
+    ],
+    169: [
+        "crushing",  // name
+        1,  // min_range
+        8,  // max_range
+        [7: [45, 4, 2]],  // effects
+        6,  // tp_cost
+        3,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    36: [
+        "meteorite",  // name
+        5,  // min_range
+        9,  // max_range
+        [1: [70, 10, 0]],  // effects
+        8,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        3  // cooldown
+    ],
+    157: [
+        "repotting",  // name
+        1,  // min_range
+        14,  // max_range
+        [9: [0, 0, 0], 1: [18, 2, 0]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        2  // cooldown
+    ],
+    156: [
+        "wizardry",  // name
+        0,  // min_range
+        6,  // max_range
+        [5: [150, 20, 2]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    80: [
+        "remission",  // name
+        0,  // min_range
+        7,  // max_range
+        [2: [66, 11, 0]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    85: [
+        "devil_strike",  // name
+        0,  // min_range
+        0,  // max_range
+        [1: [125, 0, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        5,  // area
+        3  // cooldown
+    ],
+    75: [
+        "healer_bulb",  // name
+        1,  // min_range
+        2,  // max_range
+        [8: [3, 0, 0]],  // effects
+        14,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        7  // cooldown
+    ],
+    13: [
+        "winged_boots",  // name
+        0,  // min_range
+        2,  // max_range
+        [5: [3, 0, 1]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        5  // cooldown
+    ],
+    121: [
+        "vampirization",  // name
+        0,  // min_range
+        8,  // max_range
+        [2: [42, 2, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        7,  // area
+        1  // cooldown
+    ],
+    33: [
+        "lightning",  // name
+        2,  // min_range
+        5,  // max_range
+        [1: [35, 12, 0]],  // effects
+        4,  // tp_cost
+        1,  // launch_type
+        4,  // area
+        0  // cooldown
+    ],
+    103: [
+        "collar",  // name
+        1,  // min_range
+        6,  // max_range
+        [5: [80, 10, 2]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    93: [
+        "ball_and_chain",  // name
+        1,  // min_range
+        6,  // max_range
+        [7: [0.4, 0.1, 2]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        2  // cooldown
+    ],
+    74: [
+        "fire_bulb",  // name
+        2,  // min_range
+        3,  // max_range
+        [8: [2, 0, 0]],  // effects
+        14,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        6  // cooldown
+    ],
+    122: [
+        "precipitation",  // name
+        0,  // min_range
+        8,  // max_range
+        [5: [1, 0, 2]],  // effects
+        3,  // tp_cost
+        7,  // launch_type
+        9,  // area
+        2  // cooldown
+    ],
+    29: [
+        "fortress",  // name
+        0,  // min_range
+        3,  // max_range
+        [4: [7, 1, 3]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        4  // cooldown
+    ],
+    27: [
+        "reflexes",  // name
+        0,  // min_range
+        6,  // max_range
+        [5: [35, 5, 3]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        7,  // area
+        2  // cooldown
+    ],
+    168: [
+        "serum",  // name
+        0,  // min_range
+        6,  // max_range
+        [2: [50, 5, 4]],  // effects
+        8,  // tp_cost
+        1,  // launch_type
+        11,  // area
+        5  // cooldown
+    ],
+    59: [
+        "teleportation",  // name
+        1,  // min_range
+        12,  // max_range
+        [9: [0, 0, 0], 2: [15, 5, 0]],  // effects
+        9,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        10  // cooldown
+    ],
+    416: [
+        "thunder",  // name
+        3,  // min_range
+        8,  // max_range
+        [1: [100, 20, 0]],  // effects
+        8,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        1  // cooldown
+    ],
+    415: [
+        "awakening",  // name
+        1,  // min_range
+        50,  // max_range
+        [2: [0, 0, 0], 9: [3, 0, -1]],  // effects
+        0,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    12: [
+        "seven_league_boots",  // name
+        0,  // min_range
+        8,  // max_range
+        [5: [0.4, 0.1, 3]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        6,  // area
+        2  // cooldown
+    ],
+    90: [
+        "fertilizer",  // name
+        1,  // min_range
+        5,  // max_range
+        [2: [80, 10, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        2  // cooldown
+    ],
+    26: [
+        "doping",  // name
+        0,  // min_range
+        6,  // max_range
+        [5: [30, 5, 3], 0: [30, 5, 3]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        1  // cooldown
+    ],
+    105: [
+        "burning",  // name
+        4,  // min_range
+        6,  // max_range
+        [1: [78, 9, 0], 6: [78, 9, 1]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        5,  // area
+        2  // cooldown
+    ],
+    99: [
+        "plague",  // name
+        1,  // min_range
+        5,  // max_range
+        [6: [40, 10, 4]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        5,  // area
+        4  // cooldown
+    ],
+    142: [
+        "wizard_bulb",  // name
+        1,  // min_range
+        3,  // max_range
+        [8: [8, 0, 0]],  // effects
+        15,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        7  // cooldown
+    ],
+    152: [
+        "covid",  // name
+        0,  // min_range
+        2,  // max_range
+        [6: [71, 10, 7]],  // effects
+        8,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        7  // cooldown
+    ],
+    160: [
+        "desintegration",  // name
+        1,  // min_range
+        6,  // max_range
+        [1: [70, 10, 0]],  // effects
+        8,  // tp_cost
+        1,  // launch_type
+        11,  // area
+        2  // cooldown
+    ],
+    17: [
+        "rage",  // name
+        0,  // min_range
+        8,  // max_range
+        [5: [0.5, 0.1, 3]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        5,  // area
+        2  // cooldown
+    ],
+    154: [
+        "elevation",  // name
+        0,  // min_range
+        5,  // max_range
+        [2: [80, 0, 0]],  // effects
+        6,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        -1  // cooldown
+    ],
+    79: [
+        "metallic_bulb",  // name
+        1,  // min_range
+        1,  // max_range
+        [8: [7, 0, 0]],  // effects
+        16,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        7  // cooldown
+    ],
+    104: [
+        "bark",  // name
+        1,  // min_range
+        6,  // max_range
+        [5: [60, 10, 2]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    106: [
+        "fracture",  // name
+        1,  // min_range
+        6,  // max_range
+        [7: [17, 5, 2]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    173: [
+        "dome",  // name
+        0,  // min_range
+        0,  // max_range
+        [4: [11, 2, 4]],  // effects
+        9,  // tp_cost
+        7,  // launch_type
+        5,  // area
+        8  // cooldown
+    ],
+    101: [
+        "mirror",  // name
+        0,  // min_range
+        2,  // max_range
+        [3: [5, 1, 3]],  // effects
+        5,  // tp_cost
+        7,  // launch_type
+        4,  // area
+        4  // cooldown
+    ],
+    167: [
+        "savant_bulb",  // name
+        1,  // min_range
+        4,  // max_range
+        [8: [12, 0, 0]],  // effects
+        16,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        7  // cooldown
+    ],
+    161: [
+        "transmutation",  // name
+        1,  // min_range
+        6,  // max_range
+        [2: [40, 4, 0]],  // effects
+        8,  // tp_cost
+        1,  // launch_type
+        11,  // area
+        9  // cooldown
+    ],
+    158: [
+        "therapy",  // name
+        1,  // min_range
+        5,  // max_range
+        [2: [75, 5, 0]],  // effects
+        7,  // tp_cost
+        7,  // launch_type
+        6,  // area
+        2  // cooldown
+    ],
+    170: [
+        "brainwashing",  // name
+        1,  // min_range
+        8,  // max_range
+        [7: [32, 7, 2]],  // effects
+        6,  // tp_cost
+        3,  // launch_type
+        1,  // area
+        1  // cooldown
+    ],
+    166: [
+        "tactician_bulb",  // name
+        3,  // min_range
+        3,  // max_range
+        [8: [11, 0, 0]],  // effects
+        16,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        7  // cooldown
+    ],
+    172: [
+        "bramble",  // name
+        0,  // min_range
+        7,  // max_range
+        [3: [25, 0, 1]],  // effects
+        4,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        8  // cooldown
+    ],
+    78: [
+        "lightning_bulb",  // name
+        1,  // min_range
+        5,  // max_range
+        [8: [6, 0, 0]],  // effects
+        16,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        6  // cooldown
+    ],
+    171: [
+        "arsenic",  // name
+        3,  // min_range
+        4,  // max_range
+        [6: [62, 5, 2]],  // effects
+        8,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        2  // cooldown
+    ],
+    143: [
+        "plasma",  // name
+        0,  // min_range
+        6,  // max_range
+        [1: [37, 2, 0]],  // effects
+        9,  // tp_cost
+        7,  // launch_type
+        6,  // area
+        3  // cooldown
+    ],
+    84: [
+        "resurrection",  // name
+        1,  // min_range
+        2,  // max_range
+        [2: [0, 0, 0]],  // effects
+        18,  // tp_cost
+        7,  // launch_type
+        1,  // area
+        15  // cooldown
+    ]
+]
+
+// Lookup functions
+function getWeaponData(weaponId) {
+    if (mapContainsKey(WEAPON_DATABASE, weaponId)) {
+        return WEAPON_DATABASE[weaponId]
+    }
+    return null
+}
+
+function getChipData(chipId) {
+    if (mapContainsKey(CHIP_DATABASE, chipId)) {
+        return CHIP_DATABASE[chipId]
+    }
+    return null
+}
+
+function hasWeaponData(weaponId) {
+    return mapContainsKey(WEAPON_DATABASE, weaponId)
+}
+
+function hasChipData(chipId) {
+    return mapContainsKey(CHIP_DATABASE, chipId)
+}

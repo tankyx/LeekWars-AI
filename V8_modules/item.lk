@@ -1,3 +1,5 @@
+include('item_database.lk')
+
 class EffectsInfos {
     _minEffectAmount = 0
     _maxEffectAmount = 0
@@ -66,39 +68,100 @@ class Arsenal {
     playerEquippedWeapons = [:]
     playerEquippedChips = [:]
 
+    // Helper: Convert database effects map to API effects array format
+    // Database: [effect_type: [min, max, turns], ...]
+    // API: [[effect_type, min, max, turns], ...]
+    convertEffectsMapToArray(effectsMap) {
+        var effectsArray = []
+        for (var effectType in mapKeys(effectsMap)) {
+            var effectData = effectsMap[effectType]
+            push(effectsArray, [effectType, effectData[0], effectData[1], effectData[2]])
+        }
+        return effectsArray
+    }
+
     buildAllWeaponsList() {
         var allWeapons = getAllWeapons()
+        var dbCount = 0
+        var apiCount = 0
 
         for (var w in allWeapons) {
-            mapPut(weaponsList, w, new Weapon(
-                w,
-                getWeaponMinRange(w),
-                getWeaponMaxRange(w),
-                getWeaponEffects(w),
-                getWeaponCost(w),
-                getWeaponMaxUses(w),
-                getWeaponLaunchType(w),
-                getWeaponArea(w)
-            ));
+            var weaponData = getWeaponData(w)
+
+            if (weaponData != null) {
+                // Use database data
+                dbCount++
+                // Format: [name, min_range, max_range, effects, tp_cost, launch_type, area]
+                var effects = this.convertEffectsMapToArray(weaponData[3])
+                mapPut(weaponsList, w, new Weapon(
+                    w,                  // id
+                    weaponData[1],      // min_range
+                    weaponData[2],      // max_range
+                    effects,            // effects (converted to array)
+                    weaponData[4],      // tp_cost
+                    1,                  // max_use (always 1 for weapons)
+                    weaponData[5],      // launch_type
+                    weaponData[6]       // area
+                ));
+            } else {
+                // Fallback to API
+                apiCount++
+                mapPut(weaponsList, w, new Weapon(
+                    w,
+                    getWeaponMinRange(w),
+                    getWeaponMaxRange(w),
+                    getWeaponEffects(w),
+                    getWeaponCost(w),
+                    getWeaponMaxUses(w),
+                    getWeaponLaunchType(w),
+                    getWeaponArea(w)
+                ));
+            }
         }
+        debug("Arsenal: " + dbCount + " weapons from DB, " + apiCount + " from API")
     }
 
     buildAllChipsList() {
         var allChips = getAllChips()
+        var dbCount = 0
+        var apiCount = 0
 
         for (var c in allChips) {
-            mapPut(chipsList, c, new Chip(
-                c,
-                getChipMinRange(c),
-                getChipMaxRange(c),
-                getChipEffects(c),
-                getChipCost(c),
-                getChipMaxUses(c),
-                getChipLaunchType(c),
-                getChipArea(c),
-                getCooldown(c, getEntity())
-            ));
+            var chipData = getChipData(c)
+
+            if (chipData != null) {
+                // Use database data
+                dbCount++
+                // Format: [name, min_range, max_range, effects, tp_cost, launch_type, area, cooldown]
+                var effects = this.convertEffectsMapToArray(chipData[3])
+                mapPut(chipsList, c, new Chip(
+                    c,                  // id
+                    chipData[1],        // min_range
+                    chipData[2],        // max_range
+                    effects,            // effects (converted to array)
+                    chipData[4],        // tp_cost
+                    1,                  // max_use (always 1 for chips)
+                    chipData[5],        // launch_type
+                    chipData[6],        // area
+                    chipData[7]         // cooldown
+                ));
+            } else {
+                // Fallback to API
+                apiCount++
+                mapPut(chipsList, c, new Chip(
+                    c,
+                    getChipMinRange(c),
+                    getChipMaxRange(c),
+                    getChipEffects(c),
+                    getChipCost(c),
+                    getChipMaxUses(c),
+                    getChipLaunchType(c),
+                    getChipArea(c),
+                    getCooldown(c, getEntity())
+                ));
+            }
         }
+        debug("Arsenal: " + dbCount + " chips from DB, " + apiCount + " from API")
     }
 
     getEquippedWeaponsSubMap() {

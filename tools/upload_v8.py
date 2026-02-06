@@ -206,6 +206,7 @@ class V8Uploader:
             "main",
             "game_entity",
             "item",
+            "item_database",
             "field_map",
             "field_map_core",
             "field_map_patterns",
