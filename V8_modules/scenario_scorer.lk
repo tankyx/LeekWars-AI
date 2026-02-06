@@ -39,7 +39,6 @@ class ScenarioScorer {
         var effectiveDamage = totalDamage
         if (isBattleRoyale && simResult.totalLobbyDamage > 0) {
             effectiveDamage = simResult.totalLobbyDamage
-                  " (primary=" + floor(totalDamage) + ", enemies hit=" + simResult.enemiesHit + ")")
         }
 
         // Bulb damage multiplier: configurable via weights
@@ -51,10 +50,8 @@ class ScenarioScorer {
 
         if (killProbability >= 0.70) {
             damageWeight *= 5.0
-                  " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 5x damage weight")
         } else if (killProbability >= 0.50) {
             damageWeight *= 2.5
-                  " vs HP=" + enemyHP + " (" + floor(killProbability * 100) + "%) - 2.5x damage weight")
         }
 
         // Apply bulb damage multiplier
@@ -110,8 +107,7 @@ class ScenarioScorer {
         score += dotScore
 
         if (dotScore > 0 && antidoteMultiplier != 1.0) {
-                  "× (base=" + floor(simResult.dotDamageQueued * dotWeight) +
-                  " → adjusted=" + floor(dotScore) + ")")
+            // Antidote multiplier applied
         }
 
         var novaWeight = this.getWeight('novaEffects', (dotWeight + damageWeight) / 2.0)
@@ -124,18 +120,29 @@ class ScenarioScorer {
         var ehpWeight = this.calculateEhpWeight()
         var shieldScore = simResult.shieldsGained * ehpWeight
         var relShieldScore = this.calculateRelativeShieldValue(simResult.relativeShieldGained) * ehpWeight
-        var healScore = simResult.hpGained * ehpWeight
+
+        // Healing score: Penalize for low wisdom builds (agility/strength)
+        var wisdom = this._player._wisdom
+        var wisdomMultiplier = 1.0
+        if (wisdom < 200) {
+            // Low wisdom: healing is 50% effective
+            wisdomMultiplier = 0.5
+        } else if (wisdom < 400) {
+            // Medium wisdom: healing is 75% effective
+            wisdomMultiplier = 0.75
+        }
+        // High wisdom (>=400): full healing value (multiplier = 1.0)
+
+        var healScore = simResult.hpGained * ehpWeight * wisdomMultiplier
 
         var currentHP = this._player._currHealth
         var maxHP = this._player._maxHealth
         var hpRatio = currentHP / maxHP
         var healingUrgencyBonus = 0
         if (simResult.hpGained > 0) {
-            if (hpRatio < 0.3) healingUrgencyBonus = simResult.hpGained * 3.0
-            else if (hpRatio < 0.5) healingUrgencyBonus = simResult.hpGained * 1.5
-            else if (hpRatio < 0.8) healingUrgencyBonus = simResult.hpGained * 0.5
-                  " (" + floor(hpRatio * 100) + "%), heal=" + floor(simResult.hpGained) +
-                  ", bonus=" + floor(healingUrgencyBonus))
+            if (hpRatio < 0.3) healingUrgencyBonus = simResult.hpGained * 3.0 * wisdomMultiplier
+            else if (hpRatio < 0.5) healingUrgencyBonus = simResult.hpGained * 1.5 * wisdomMultiplier
+            else if (hpRatio < 0.8) healingUrgencyBonus = simResult.hpGained * 0.5 * wisdomMultiplier
         }
 
         score += shieldScore + relShieldScore + healScore + healingUrgencyBonus
@@ -162,8 +169,6 @@ class ScenarioScorer {
             var cell = this._fieldMap.damageMap[finalPos]
             if (cell._isOTKOCell) {
                 otkoBonus = this.getWeight('otkoBonus', 5000)
-                      " is OTKO cell (kill prob=" + floor(cell._otkoKillProbability * 100) +
-                      "%, damage=" + floor(cell._otkoDamage) + ")")
             }
         }
         score += otkoBonus
@@ -197,7 +202,6 @@ class ScenarioScorer {
             if (destroyerUses > 0) {
                 // Each use applies -17 STR debuff (stackable), protecting player from counterattacks
                 destroyerBonus = destroyerUses * 400
-                      " Destroyer uses vs high-STR target (" + this._target._strength + " STR)")
             }
         }
         score += destroyerBonus
@@ -246,12 +250,7 @@ class ScenarioScorer {
 
         score *= survivalMultiplier
 
-              " eHP=" + floor(shieldScore + relShieldScore + healScore) +
-              " pos=" + floor(positionScore) + " eff=" + floor(efficiencyScore) +
-              " buff=" + floor(buffScore + debuffScore) + " crit=" + floor(critBonus) +
-              " otko=" + floor(otkoBonus) + " ckpt=" + floor(checkpointBonus) +
-              " bulb=" + floor(bulbKillBonus) + " destr=" + floor(destroyerBonus) +
-              " poison=" + floor(poisonDumpBonus))
+        // Debug: Score breakdown removed for compilation
 
         return score
     }

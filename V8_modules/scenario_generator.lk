@@ -98,8 +98,15 @@ class ScenarioGenerator {
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debugInfo("[STATE-KILL] Adding Shield Rotation scenario (sustain after dump)")
+                debugInfo("[STATE-KILL] Adding Shield Rotation scenario (universal)")
                 push(scenarios, shieldRotation)
+            }
+
+            // Damage return cycling for agility builds
+            var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+            if (damageReturnCycling != null) {
+                debugInfo("[STATE-KILL] Adding Damage Return Cycling scenario (agility)")
+                push(scenarios, damageReturnCycling)
             }
 
             var neutrinoOTKO = this.createNeutrinoOTKOScenario(availableTP, availableMP)
@@ -175,8 +182,15 @@ class ScenarioGenerator {
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debugInfo("[STATE-AGGRO] Adding Shield Rotation scenario (sustain after dump)")
+                debugInfo("[STATE-AGGRO] Adding Shield Rotation scenario (universal)")
                 push(scenarios, shieldRotation)
+            }
+
+            // Damage return cycling for agility builds
+            var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+            if (damageReturnCycling != null) {
+                debugInfo("[STATE-AGGRO] Adding Damage Return Cycling scenario (agility)")
+                push(scenarios, damageReturnCycling)
             }
 
             // GRAPPLE-COVID combo (Magic builds, COVID/ARSENIC with positioning)
@@ -276,8 +290,15 @@ class ScenarioGenerator {
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debugInfo("[STATE-ATTRITION] Adding Shield Rotation scenario (sustain after dump)")
+                debugInfo("[STATE-ATTRITION] Adding Shield Rotation scenario (universal)")
                 push(scenarios, shieldRotation)
+            }
+
+            // Damage return cycling for agility builds
+            var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+            if (damageReturnCycling != null) {
+                debugInfo("[STATE-ATTRITION] Adding Damage Return Cycling scenario (agility)")
+                push(scenarios, damageReturnCycling)
             }
 
             // Buff + Approach when enemy out of range
@@ -317,8 +338,15 @@ class ScenarioGenerator {
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debugInfo("[STATE-SUSTAIN] Adding Shield Rotation scenario (sustain + heal)")
+                debugInfo("[STATE-SUSTAIN] Adding Shield Rotation scenario (universal)")
                 push(scenarios, shieldRotation)
+            }
+
+            // Damage return cycling for agility builds
+            var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+            if (damageReturnCycling != null) {
+                debugInfo("[STATE-SUSTAIN] Adding Damage Return Cycling scenario (agility)")
+                push(scenarios, damageReturnCycling)
             }
 
             var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
@@ -364,8 +392,15 @@ class ScenarioGenerator {
             // SUSTAIN phase: Shield rotation + harassment
             var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
             if (shieldRotation != null) {
-                debugInfo("[STATE-FLEE] Adding Shield Rotation scenario (sustain while fleeing)")
+                debugInfo("[STATE-FLEE] Adding Shield Rotation scenario (universal)")
                 push(scenarios, shieldRotation)
+            }
+
+            // Damage return cycling for agility builds
+            var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+            if (damageReturnCycling != null) {
+                debugInfo("[STATE-FLEE] Adding Damage Return Cycling scenario (agility)")
+                push(scenarios, damageReturnCycling)
             }
 
             var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
@@ -1218,8 +1253,6 @@ class ScenarioGenerator {
             }
 
             if (bestOTKO != null) {
-                      " (kill prob=" + floor(bestOTKO._otkoKillProbability * 100) +
-                      "%, damage=" + floor(bestOTKO._otkoDamage) + ")")
                 return new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestOTKO._id, this._target)
             }
         }
@@ -2385,11 +2418,13 @@ class ScenarioGenerator {
         var actions = []
         var tpBudget = availableTP
 
-        // Only in SUSTAIN phase (after dump)
-        if (POISON_PHASE != "SUSTAIN") {
-            return null
-        }
+        // UNIVERSAL SHIELD CYCLING: Works for ALL builds
+        // Maintains shield uptime while pressing attack
 
+        // Minimum TP to ensure we can attack after buffing
+        if (tpBudget < 10) {
+            return null  // Not enough TP to buff + attack meaningfully
+        }
 
         // Check shield status and rotate: FORTRESS (3t, 8 TP) / WALL (2t, 6 TP)
         var hasFortress = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)
@@ -2399,27 +2434,112 @@ class ScenarioGenerator {
         var fortressTurns = this._player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
         var wallTurns = this._player.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD)
 
+        var shieldApplied = false
+
         // Apply shields to maintain coverage (reapply when <= 1 turn remaining)
         // Prioritize FORTRESS (3 turns) over WALL (2 turns) for longer coverage
-        if (hasFortress && fortressTurns <= 1 && getCooldown(CHIP_FORTRESS, this._player._id) == 0 && tpBudget >= 8) {
+        if (hasFortress && fortressTurns <= 1 && getCooldown(CHIP_FORTRESS, this._player._id) == 0 && tpBudget >= 12) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
             tpBudget -= 8
-        } else if (hasWall && wallTurns <= 1 && getCooldown(CHIP_WALL, this._player._id) == 0 && tpBudget >= 6) {
+            shieldApplied = true
+        } else if (hasWall && wallTurns <= 1 && getCooldown(CHIP_WALL, this._player._id) == 0 && tpBudget >= 10) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
             tpBudget -= 6
+            shieldApplied = true
         }
 
-        // Add REMISSION if HP < 70%
-        var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
-        if (hpPercent < 70 && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
-            getCooldown(CHIP_REMISSION, this._player._id) == 0 && tpBudget >= 5) {
-            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
-            tpBudget -= 5
+        // Only generate this scenario if shield was actually applied
+        if (!shieldApplied) {
+            return null
         }
 
-        // Harassment: cheap poisons or weapons
+        // CRITICAL: Press attack with 65% of remaining TP
         if (tpBudget >= 4) {
-            var attackActions = this.getAttackActions(tpBudget, 0.5, this._player._cellPos)
+            var attackActions = this.getAttackActions(tpBudget, 0.65, this._player._cellPos)
+            for (var atk in attackActions) {
+                push(actions, atk)
+            }
+        }
+
+        if (count(actions) > 0) {
+            return actions
+        }
+
+        return null
+    }
+
+    createDamageReturnCyclingScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+
+        // DAMAGE RETURN CYCLING: For agility builds
+        // Maintains Mirror/Thorn/Bramble uptime while pressing attack
+
+        // Minimum TP to ensure we can attack after buffing (lowered to 8 for THORN + attack)
+        if (tpBudget < 8) {
+            return null
+        }
+
+        // Check if this is an agility build with damage return chips
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        var hasAnyDamageReturn = hasMirror || hasThorn || hasBramble
+
+        // Not an AGI build or no damage return chips
+        if (agi < 300 || !hasAnyDamageReturn) {
+            return null
+        }
+
+        // Check current damage return status
+        var returnRemaining = this._player.getDamageReturnRemaining()
+
+        // Check cooldowns
+        var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, this._player._id) : 999
+        var thornCd = hasThorn ? getCooldown(CHIP_THORN, this._player._id) : 999
+        var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, this._player._id) : 999
+
+        var buffApplied = false
+
+        // Apply damage return to maintain coverage (reapply when <= 2 turns remaining for better uptime)
+        // Priority: MIRROR (3t, 5 TP) > THORN (2t, 4 TP) > BRAMBLE (1t, 3 TP)
+
+        // BRAMBLE: Only if in close combat + high threat + spare TP
+        var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
+        if (distToEnemy == null) distToEnemy = 99
+        var inCloseCombat = distToEnemy <= 8
+        var expectedThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
+
+        if (hasBramble && returnRemaining <= 1 && brambleCd == 0 && tpBudget >= 12 && inCloseCombat && expectedThreat > 300) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player))
+            tpBudget -= 4
+            buffApplied = true
+        }
+        // MIRROR: Best coverage (3 turns) - cycle when <= 2 turns for better uptime
+        else if (hasMirror && returnRemaining <= 2 && mirrorCd == 0 && tpBudget >= 9) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player))
+            tpBudget -= 5
+            buffApplied = true
+        }
+        // THORN: Good coverage (2 turns) - cycle when <= 2 turns
+        else if (hasThorn && returnRemaining <= 2 && thornCd == 0 && tpBudget >= 8) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player))
+            tpBudget -= 4
+            buffApplied = true
+        }
+
+        // Only generate this scenario if damage return was actually applied
+        if (!buffApplied) {
+            return null
+        }
+
+        // CRITICAL: Press attack with 65% of remaining TP
+        if (tpBudget >= 4) {
+            var attackActions = this.getAttackActions(tpBudget, 0.65, this._player._cellPos)
             for (var atk in attackActions) {
                 push(actions, atk)
             }

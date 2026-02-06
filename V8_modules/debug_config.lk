@@ -9,7 +9,7 @@
 //   2 = DEBUG (detailed execution traces, loop iterations)
 //   3 = VERBOSE (all debug output, high-frequency logs)
 
-global DEBUG_LEVEL = 0  // Set to 0 for production, 1+ for development
+global DEBUG_LEVEL = 1  // Set to 0 for production, 1+ for development
 
 // Debug wrapper functions
 function debugCritical(message) {
@@ -24,6 +24,7 @@ function debugInfo(message) {
     }
 }
 
+function debugDetail(message) {
     // Level 2: Detailed execution, action queues, damage calculations
     if (DEBUG_LEVEL >= 2) {
         debug(message)

@@ -147,11 +147,6 @@ class EnemyPredictor {
         // Combined score
         var finalScore = currentTurnValue + discountedNextTurn
 
-                   ", nextTurn=" + nextTurnValue +
-                   ", discounted=" + floor(discountedNextTurn) +
-                   ", final=" + floor(finalScore) +
-                   ", enemyDmg=" + enemyDamage)
-
         return [
             'currentTurnValue': currentTurnValue,
             'nextTurnValue': nextTurnValue,
