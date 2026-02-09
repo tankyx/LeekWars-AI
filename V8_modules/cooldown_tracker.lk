@@ -10,7 +10,7 @@ global COOLDOWN_STATE = [:]  // entityId → chip cooldown info
 global POISON_PHASE = "BAIT"  // Poison rotation phase: BAIT, DUMP, SUSTAIN
 global ANTIDOTE_USED_THIS_FIGHT = false  // Track if enemy has used Antidote
 global LAST_POISON_DUMP_TURN = -999  // Track when we last dumped poison
-global PREV_ENEMY_POISON = 0  // Track previous turn's poison duration for Antidote detection
+global PREV_ENEMY_POISON = 0  // Track previous turn's actual poison duration remaining for Antidote detection
 
 class CooldownTracker {
     _target = null

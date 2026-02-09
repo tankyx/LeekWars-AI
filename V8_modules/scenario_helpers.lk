@@ -154,6 +154,21 @@ class ScenarioHelpers {
             }
         }
 
+        else if (mag > str && mag > agi) {
+            // Magic build: WIZARDRY is the primary offensive buff
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WIZARDRY)) {
+                var wizardryActive = getCooldown(CHIP_WIZARDRY, this._player._id) > 0
+                if (!wizardryActive) {
+                    return true
+                }
+            } else if (mapContainsKey(arsenal.playerEquippedChips, CHIP_PRISM)) {
+                var prismActive = getCooldown(CHIP_PRISM, this._player._id) > 0
+                if (!prismActive) {
+                    return true
+                }
+            }
+        }
+
         else if (agi > str && agi > mag) {
             var hasReturn = this._player.hasDamageReturn()
             if (!hasReturn) {
@@ -270,9 +285,10 @@ class ScenarioHelpers {
                 totalDamage += (netDirect + cappedNova + dotDmg) * maxUses
             }
 
-            // Check damage chips (direct damage + poison chips)
+            // Check damage chips (direct damage + poison chips + denial chips)
             var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
-                               CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID]
+                               CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
+                               CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
             var bestChipImmediate = 0
             var bestChipTotal = 0
             for (var chipId in damageChips) {
@@ -903,12 +919,6 @@ class ScenarioHelpers {
     }
 
     getDebuffAction() {
-        var str = this._player._strength
-        var mag = this._player._magic
-        var agi = this._player._agility
-
-        if (str <= mag || str <= agi) return null
-
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LIBERATION)) return null
         if (getCooldown(CHIP_LIBERATION, this._player._id) != 0) return null
 
@@ -1053,6 +1063,15 @@ class ScenarioHelpers {
         var bestAttack = null
         var bestDamage = 0
 
+        // Magic builds: apply penalty to weapon damage so chips win when MAG > STR
+        // At 0 STR / 600 MAG, weapons still do base damage (~40-60) but chips do 300+
+        // This ensures chips are always preferred when magic is the primary stat
+        var weaponDamageMultiplier = 1.0
+        if (mag > str + 100) {
+            // Heavy magic build: penalize weapons proportionally to stat gap
+            weaponDamageMultiplier = 0.3  // Weapons score at 30% of actual damage
+        }
+
         for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
             var weapon = this._arsenal.playerEquippedWeapons[weaponId]
 
@@ -1107,7 +1126,9 @@ class ScenarioHelpers {
                 }
             }
 
-            var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
+            var rawDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
+            // Apply magic build weapon penalty (poison weapons exempt - they scale with MAG)
+            var damage = isPoisonWeapon(weaponId) ? rawDamage : rawDamage * weaponDamageMultiplier
             if (damage > bestDamage) {
                 // POISON WEAPONS: Always allow, never check AoE safety
                 var isPoison = isPoisonWeapon(weaponId)
@@ -1145,7 +1166,8 @@ class ScenarioHelpers {
 
         var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
                            CHIP_FIRE_BALL, CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE, CHIP_ARSENIC,
-                           CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID]
+                           CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
+                           CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
 
         for (var chipId in damageChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue

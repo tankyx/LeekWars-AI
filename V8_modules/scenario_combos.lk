@@ -1775,6 +1775,118 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
+    // === Nova Attrition (Tank/Science builds) ===
+
+    createNovaAttritionScenario(availableTP, availableMP) {
+        // Tank/Science win condition: shields + Nova (Max HP drain) + filler weapons
+        // Requires: high RES, high SCI, weapons with EFFECT_NOVA_DAMAGE
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var sci = this._player._science
+        var res = this._player._resistance
+        // Only for Tank/Science builds
+        if (sci < 200 || res < 200) return null
+
+        // 1. Antidote if poisoned
+        var antidoteAction = this.getAntidoteAction(tpBudget)
+        if (antidoteAction != null) {
+            push(actions, antidoteAction)
+            tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
+        }
+
+        // 2. Shields first (survival is the win condition)
+        var defensiveBuff = this.getDefensiveBuff()
+        if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
+            push(actions, defensiveBuff)
+            tpBudget -= getCachedChipCost(defensiveBuff.chip)
+        }
+
+        // 3. PRISM (+60 SCI amplifies Nova) or KNOWLEDGE (+260 WIS amplifies healing)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_PRISM) &&
+            getCooldown(CHIP_PRISM, this._player._id) == 0) {
+            var prismCost = getCachedChipCost(CHIP_PRISM)
+            if (tpBudget >= prismCost) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_PRISM, -1, this._player))
+                tpBudget -= prismCost
+            }
+        } else if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_KNOWLEDGE) &&
+                   getCooldown(CHIP_KNOWLEDGE, this._player._id) == 0) {
+            var knowledgeCost = getCachedChipCost(CHIP_KNOWLEDGE)
+            if (tpBudget >= knowledgeCost) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_KNOWLEDGE, -1, this._player))
+                tpBudget -= knowledgeCost
+            }
+        }
+
+        // 4. Heal if needed (tank sustain)
+        var healAction = this.getHealingAction(tpBudget, 0.80)
+        if (healAction != null) {
+            push(actions, healAction)
+            if (healAction.chip != -1) tpBudget -= getCachedChipCost(healAction.chip)
+        }
+
+        // 5. Leather Boots for mobility
+        var leatherBoots = this.getLeatherBootsBuff()
+        if (leatherBoots != null) {
+            var bootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= bootsCost) {
+                push(actions, leatherBoots)
+                tpBudget -= bootsCost
+                mpBudget += 2
+            }
+        }
+
+        // 6. Move to optimal attack position
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        // 7. Nova weapon first (primary win condition), then filler attacks
+        // Find Nova weapons (weapons with EFFECT_NOVA_DAMAGE)
+        var novaWeaponFired = false
+        for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var weapon = this._arsenal.playerEquippedWeapons[weaponId]
+            if (!mapContainsKey(weapon._effects, EFFECT_NOVA_DAMAGE)) continue
+
+            // Check range
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
+            if (!lineOfSight(simPos, this._target._cellPos)) continue
+
+            if (tpBudget >= weapon._cost) {
+                push(actions, new Action(Action.ACTION_DIRECT, weaponId, -1, this._target._cellPos, this._target))
+                tpBudget -= weapon._cost
+                novaWeaponFired = true
+                break  // Quantum Rifle is 1/round
+            }
+        }
+
+        // 8. Fill remaining TP with best available attacks
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        // 9. Position to cover
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        // Only return if we have meaningful actions
+        if (count(actions) < 2) return null
+        return actions
+    }
+
     // === Buff Approach ===
 
     createBuffApproachScenario(availableTP, availableMP) {

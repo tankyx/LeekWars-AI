@@ -181,11 +181,20 @@ The AI must tag weapons by **damage type** (`DIRECT`, `POISON`, `NOVA`, `DEBUFF`
    - KNOWLEDGE: added `simWisdom += 260` (was completely untracked)
    - ELEVATION: added `hpGained += 80` (was untracked)
 
-### Phase 3: Behavioral Logic
+### Phase 3: Behavioral Logic -- DONE
 
-1. **Margaret Fix** ? In `findBestAvailable`, prioritize chips over weapons when `MAG > STR`.
-2. **Kurt Fix** ? Add Nova as a distinct strategic goal: apply Nova effects early, then sustain with shields/resistance while Max HP drain wins the fight.
-3. **Poison Fix** ? Fix `PREV_ENEMY_POISON` to store actual duration, not a boolean flag. Recalculate optimal poison dump timing.
+1. **Margaret Fix** -- DONE
+   - `findBestAvailableAttack`: added `weaponDamageMultiplier = 0.3` when `MAG > STR + 100` (poison weapons exempt)
+   - Added `CHIP_SOPORIFIC` and `CHIP_BALL_AND_CHAIN` to damage chip lists (denial tools for MAG builds)
+   - Added Magic build detection in `checkCriticalBuffsExpired` (Wizardry expiry triggers AGGRO)
+   - Removed STR-only gate on `getDebuffAction` (Liberation now usable by all builds)
+2. **Kurt Fix** -- DONE
+   - New `createNovaAttritionScenario` in scenario_combos.lk: shields → Prism/Knowledge → heal → move → Nova weapon → filler → cover
+   - Registered in AGGRO, ATTRITION, SUSTAIN scenario builders
+   - New synergy bonuses: Prism+Shield (+300), Wizardry+Denial (+350), Poison+Denial (+300)
+3. **Poison Fix** -- DONE
+   - `PREV_ENEMY_POISON` now stores `target.getEffectRemaining(EFFECT_POISON)` (actual duration) instead of `1` (boolean)
+   - Fixed `this._target` scope error: extracts target entity from executed actions in `executeScenario`
 
 ### Phase 4: Validation
 

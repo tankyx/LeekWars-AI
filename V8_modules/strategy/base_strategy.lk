@@ -2409,27 +2409,19 @@ class Strategy {
         }
 
 
-        // Track poison we applied this turn for next turn's Antidote detection
-        // Check if we applied any poison chips/weapons to the target
-        var poisonApplied = 0
+        // Track actual poison duration on target for next turn's Antidote detection
+        // Store the real remaining duration, not a boolean flag
+        // Find the target entity from executed actions (first non-self targetEntity)
+        var poisonTrackTarget = null
         for (var action in this._actions) {
-            if (action.type == Action.ACTION_DIRECT) {
-                // Check if this was a poison chip or weapon
-                var chipId = action.chip
-                var weaponId = action.weaponId
-
-                if (chipId > 0 && isPoisonChip(chipId)) {
-                    poisonApplied = 1
-                }
-
-                if (weaponId > 0 && isPoisonWeapon(weaponId)) {
-                    poisonApplied = 1
-                }
+            if (action.targetEntity != null && action.targetEntity._id != player._id) {
+                poisonTrackTarget = action.targetEntity
+                break
             }
         }
-
-        if (poisonApplied > 0) {
-            PREV_ENEMY_POISON = poisonApplied  // Mark that enemy should have poison
+        if (poisonTrackTarget != null) {
+            poisonTrackTarget.updateEntity()
+            PREV_ENEMY_POISON = poisonTrackTarget.getEffectRemaining(EFFECT_POISON)
         }
 
         return targetDied

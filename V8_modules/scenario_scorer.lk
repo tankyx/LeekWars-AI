@@ -718,12 +718,19 @@ class ScenarioScorer {
         var hasTeleport = false
         var hasSteroid = false
         var hasNeutrino = false
+        var hasPrism = false
+        var hasNova = false
+        var hasShield = false
+        var hasDenial = false     // Soporific, Ball and Chain
 
         for (var action in scenario) {
             if (action.chip == CHIP_GRAPPLE) hasGrapple = true
             if (action.chip == CHIP_WIZARDRY) hasWizardry = true
             if (action.chip == CHIP_STEROID) hasSteroid = true
             if (action.chip == CHIP_TELEPORTATION) hasTeleport = true
+            if (action.chip == CHIP_PRISM) hasPrism = true
+            if (action.chip == CHIP_FORTRESS || action.chip == CHIP_WALL) hasShield = true
+            if (action.chip == CHIP_SOPORIFIC || action.chip == CHIP_BALL_AND_CHAIN) hasDenial = true
             if (action.weaponId == WEAPON_HEAVY_SWORD) hasMelee = true
             if (action.weaponId == WEAPON_NEUTRINO) hasNeutrino = true
             if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
@@ -736,6 +743,9 @@ class ScenarioScorer {
         // Wizardry + Poison: magic buff amplifies DoT
         if (hasWizardry && hasPoison) bonus += 400
 
+        // Wizardry + Denial: magic buff amplifies TP/MP removal
+        if (hasWizardry && hasDenial) bonus += 350
+
         // Steroid + Teleport: buff then gap-close for OTKO
         if (hasSteroid && hasTeleport) bonus += 250
 
@@ -744,6 +754,12 @@ class ScenarioScorer {
 
         // Wizardry + Neutrino: magic buff + magic weapon
         if (hasWizardry && hasNeutrino) bonus += 350
+
+        // Prism + Shield: all-stat buff with tank sustain
+        if (hasPrism && hasShield) bonus += 300
+
+        // Poison + Denial: poison stacking + enemy can't act
+        if (hasPoison && hasDenial) bonus += 300
 
         return bonus
     }

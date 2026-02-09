@@ -126,6 +126,13 @@ class ScenarioGenerator extends ScenarioCombos {
     buildAggroScenarios(scenarios, availableTP, availableMP) {
         debugInfo("[STATE-AGGRO] Early game / buff application phase")
 
+        // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
+        var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != null) {
+            debugInfo("[STATE-AGGRO] Adding Nova Attrition scenario (Tank/Sci win condition)")
+            push(scenarios, novaAttrition)
+        }
+
         var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
         if (grappleHS != null) {
             debugInfo("[STATE-AGGRO] Adding GRAPPLE-HEAVY_SWORD combo scenario")
@@ -208,6 +215,13 @@ class ScenarioGenerator extends ScenarioCombos {
 
     buildAttritionScenarios(scenarios, availableTP, availableMP) {
         debugInfo("[STATE-ATTRITION] Ongoing balanced combat")
+
+        // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
+        var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != null) {
+            debugInfo("[STATE-ATTRITION] Adding Nova Attrition scenario (Tank/Sci win condition)")
+            push(scenarios, novaAttrition)
+        }
 
         var playerHP = this._player._currHealth
         var enemyHP = this._target._currHealth
@@ -295,6 +309,13 @@ class ScenarioGenerator extends ScenarioCombos {
 
     buildSustainScenarios(scenarios, availableTP, availableMP) {
         debugInfo("[STATE-SUSTAIN] HP management phase")
+
+        // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
+        var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != null) {
+            debugInfo("[STATE-SUSTAIN] Adding Nova Attrition scenario (Tank/Sci win condition)")
+            push(scenarios, novaAttrition)
+        }
 
         var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
         if (poisonBait != null) {
