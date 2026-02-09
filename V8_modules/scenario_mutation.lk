@@ -172,10 +172,22 @@ class ScenarioMutator {
     }
 
     cloneScenario(scenario) {
-        // Stub - return original for now
-        // Issue: Creating new Action() objects breaks execution (0% WR)
-        // Likely cause: Action objects have internal state/references not copied
-        return scenario
+        // Deep clone: copy ALL Action fields to avoid execution breakage
+        var cloned = []
+        for (var i = 0; i < count(scenario); i++) {
+            var src = scenario[i]
+            var dst = new Action(src.type, src.weaponId, src.chip, src.targetCell, src.targetEntity)
+            dst.isSplash = src.isSplash
+            dst.checkpointType = src.checkpointType
+            dst.continuationFn = src.continuationFn
+            dst.context = src.context
+            // Copy any dynamically-set fields (e.g. weapon from weapon swap)
+            if (src.weapon != null) dst.weapon = src.weapon
+            if (src.damage != null) dst.damage = src.damage
+            if (src.description != null) dst.description = src.description
+            push(cloned, dst)
+        }
+        return cloned
     }
 }
 
@@ -262,12 +274,12 @@ class HybridMutationPlanner {
     }
 
     selectTopSeeds(scenarios) {
-        // Just take top N
+        // Clone before mutating to prevent corruption of original scenarios
         var limit = min(count(scenarios), this.MAX_SEEDS)
         var topSeeds = []
 
         for (var i = 0; i < limit; i++) {
-            push(topSeeds, scenarios[i])
+            push(topSeeds, this._mutator.cloneScenario(scenarios[i]))
         }
 
         return topSeeds

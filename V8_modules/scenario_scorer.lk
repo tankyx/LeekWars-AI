@@ -41,9 +41,43 @@ class ScenarioScorer {
             effectiveDamage = simResult.totalLobbyDamage
         }
 
-        // Bulb damage multiplier: configurable via weights
-        var bulbDamageMultiplier = targetIsBulb ? this.getWeight('bulbDamageMultiplier', 1.2) : 1.0
+        // Bulb Race Clock: decide whether to kill bulbs or race to kill summoner
+        var bulbRaceState = "BULB_CLEAR"  // Default: kill bulbs
         if (targetIsBulb) {
+            // Find the main enemy (non-bulb, the summoner) from enemy submap
+            var enemies = this._fieldMap.getEnemySubMap()
+            var summonerHP = 0
+            for (var eid in mapKeys(enemies)) {
+                if (!isDead(eid) && !isBulb(enemies[eid])) {
+                    summonerHP = enemies[eid]._currHealth
+                    break
+                }
+            }
+
+            if (summonerHP > 0) {
+                var playerDPS = max(1, this._player._strength + this._player._magic)
+                var turnsToKill = summonerHP / playerDPS
+
+                // Estimate enemy DPS from threat at our position
+                var playerPos = this._player._cellPos
+                var enemyDPS = max(1, this._fieldMap.getThreatAtCell(playerPos))
+                var bulbDamagePerTurn = 50  // Estimate: bulb chip/attack adds ~50/turn
+                var turnsTodie = this._player._currHealth / (enemyDPS + bulbDamagePerTurn)
+
+                if (turnsToKill < turnsTodie) {
+                    bulbRaceState = "RACE"  // Ignore bulbs, rush summoner
+                }
+            }
+        }
+
+        // Bulb damage multiplier: configurable via weights
+        var bulbDamageMultiplier = 1.0
+        if (targetIsBulb) {
+            if (bulbRaceState == "RACE") {
+                bulbDamageMultiplier = 0.3  // De-prioritize bulb damage in race mode
+            } else {
+                bulbDamageMultiplier = this.getWeight('bulbDamageMultiplier', 1.2)
+            }
         }
 
         var damageWeight = this.getWeight('burstDamage', this.calculateDamageWeight())
@@ -52,6 +86,20 @@ class ScenarioScorer {
             damageWeight *= 5.0
         } else if (killProbability >= 0.50) {
             damageWeight *= 2.5
+        }
+
+        // Kill-Reserve: penalize scenarios that waste TP on buffs when kill is near
+        if (killProbability >= 0.85 && killProbability < 1.1 && scenario != null && count(scenario) > 0) {
+            var buffCount = 0
+            var attackCount = 0
+            for (var action in scenario) {
+                if (action.type == Action.ACTION_BUFF) buffCount++
+                if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT) attackCount++
+            }
+            // Too many buffs, not enough attacks when kill is close
+            if (buffCount > 1 && attackCount < 2) {
+                score -= 800 * buffCount
+            }
         }
 
         // Apply bulb damage multiplier
@@ -208,6 +256,10 @@ class ScenarioScorer {
             }
         }
         score += checkpointBonus + poisonDumpBonus
+
+        // Synergy matrix: bonus for recognized combo patterns in the scenario
+        var synergyBonus = this.evaluateSynergyBonus(scenario)
+        score += synergyBonus
 
         // WEAPON_DESTROYER synergy: bonus when shredding high-Strength enemies
         var destroyerBonus = 0
@@ -424,17 +476,56 @@ class ScenarioScorer {
 
         var threatPenalty = 0
         var threatAtPos = this._fieldMap.getThreatAtCell(finalPos)
-        if (threatAtPos > 0) {
-            
-            threatPenalty = -threatAtPos * 0.5  
 
-            var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+        var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+
+        if (threatAtPos > 0) {
+            threatPenalty = -threatAtPos * 0.5
+
             if (hpPercent < 50) {
-                threatPenalty *= 2.0  
+                threatPenalty *= 2.0
             }
         }
 
-        var totalScore = offensiveValue + kitingValue + threatPenalty
+        // HNS: Threat-aware cover bonus for cells that break LoS to enemies
+        var coverBonus = 0
+        var enemies = this._fieldMap.getEnemySubMap()
+        var exposureCount = 0
+        for (var eid in mapKeys(enemies)) {
+            if (!isDead(eid)) {
+                var enemyCell = enemies[eid]._cellPos
+                if (enemyCell != null && lineOfSight(finalPos, enemyCell)) {
+                    exposureCount++
+                }
+            }
+        }
+
+        // Reward cover: fewer enemies with LoS = better
+        var totalEnemies = count(mapKeys(enemies))
+        if (totalEnemies > 0 && exposureCount < totalEnemies) {
+            var coverRatio = 1.0 - (exposureCount / totalEnemies)
+            // Weight tuning by HP: low HP values cover much more
+            var W1  // Threat weight
+            var W2  // Exposure weight
+            if (hpPercent < 40) {
+                W1 = 3.0
+                W2 = 2.0
+            } else if (hpPercent < 70) {
+                W1 = 2.0
+                W2 = 1.5
+            } else {
+                W1 = 1.0
+                W2 = 1.0
+            }
+            coverBonus = (coverRatio * W2 * 200) + (max(0, threatAtPos) * coverRatio * W1 * 0.3)
+        }
+
+        // Full cover (0 exposure) gets flat bonus
+        if (exposureCount == 0 && totalEnemies > 0) {
+            coverBonus += 400
+        }
+
+        var totalScore = offensiveValue + kitingValue + threatPenalty + coverBonus
         return totalScore
     }
 
@@ -614,5 +705,46 @@ class ScenarioScorer {
     calculateRelativeShieldValue(relativeShieldPercent) {
         var maxHP = this._player._maxHealth
         return (relativeShieldPercent / 100.0) * maxHP
+    }
+
+    evaluateSynergyBonus(scenario) {
+        if (scenario == null || count(scenario) == 0) return 0
+
+        var bonus = 0
+        var hasGrapple = false
+        var hasMelee = false      // HEAVY_SWORD or close-range weapon
+        var hasWizardry = false
+        var hasPoison = false
+        var hasTeleport = false
+        var hasSteroid = false
+        var hasNeutrino = false
+
+        for (var action in scenario) {
+            if (action.chip == CHIP_GRAPPLE) hasGrapple = true
+            if (action.chip == CHIP_WIZARDRY) hasWizardry = true
+            if (action.chip == CHIP_STEROID) hasSteroid = true
+            if (action.chip == CHIP_TELEPORTATION) hasTeleport = true
+            if (action.weaponId == WEAPON_HEAVY_SWORD) hasMelee = true
+            if (action.weaponId == WEAPON_NEUTRINO) hasNeutrino = true
+            if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
+            if (action.type == Action.ACTION_DOT) hasPoison = true
+        }
+
+        // Grapple + Melee: pull enemy in + heavy strike
+        if (hasGrapple && hasMelee) bonus += 300
+
+        // Wizardry + Poison: magic buff amplifies DoT
+        if (hasWizardry && hasPoison) bonus += 400
+
+        // Steroid + Teleport: buff then gap-close for OTKO
+        if (hasSteroid && hasTeleport) bonus += 250
+
+        // Grapple + Neutrino: pull + multi-hit
+        if (hasGrapple && hasNeutrino) bonus += 200
+
+        // Wizardry + Neutrino: magic buff + magic weapon
+        if (hasWizardry && hasNeutrino) bonus += 350
+
+        return bonus
     }
 }

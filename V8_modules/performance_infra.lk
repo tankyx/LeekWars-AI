@@ -23,6 +23,9 @@ global __multiEnemyDamageCache = [:]  // hash → damage result
 // ========================================
 
 function initializeAoEMasks() {
+    // Skip if already initialized (static data, only needs turn 1 init)
+    if (count(mapKeys(__aoePatternMasks)) > 0) return
+
     // Precompute relative cell offsets for each AoE pattern
     // Using numeric keys for compatibility (AREA_* constants)
 
@@ -190,8 +193,8 @@ function hashEnemyPositions(enemies) {
 function getCachedMultiEnemyDamage(shooterCell, itemId, aimCell, enemies, arsenal) {
     // Cache AoE damage calculations with position-aware key
     var enemyHash = hashEnemyPositions(enemies)
-    // Include shooterCell in cache key to prevent stale position bugs
-    var cacheKey = shooterCell * 1000000000 + itemId * 100000 + aimCell * 100 + (enemyHash % 100)
+    // Use unique composite string key to prevent hash collisions (was: enemyHash % 100)
+    var cacheKey = "" + shooterCell + ":" + itemId + ":" + aimCell + ":" + enemyHash
 
     if (mapContainsKey(__multiEnemyDamageCache, cacheKey)) {
         return __multiEnemyDamageCache[cacheKey]

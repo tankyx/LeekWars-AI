@@ -2250,6 +2250,8 @@ class Strategy {
         }
 
         var targetDied = false
+        var consecutiveFailures = 0
+        var maxConsecutiveFailures = 2  // Interrupt threshold
 
         for (var a in this._actions) {
             if (a.type == Action.MOVEMENT_APPROACH || a.type == Action.MOVEMENT_OFFENSIVE || a.type == Action.MOVEMENT_DEFENSIVE || a.type == Action.MOVEMENT_OTKO || a.type == Action.MOVEMENT_DOT_OFFENSIVE || a.type == Action.MOVEMENT_DEBUFF) {
@@ -2309,10 +2311,20 @@ class Strategy {
 
 
                     if (dist < minRange || dist > maxRange) {
+                        consecutiveFailures++
+                        if (consecutiveFailures >= maxConsecutiveFailures) {
+                            debugInfo("[INTERRUPT] Out of range " + consecutiveFailures + "x - triggering replan")
+                            break
+                        }
                         continue
                     }
 
                     if (!lineOfSight(currentPos, targetPos)) {
+                        consecutiveFailures++
+                        if (consecutiveFailures >= maxConsecutiveFailures) {
+                            debugInfo("[INTERRUPT] No LoS " + consecutiveFailures + "x - triggering replan")
+                            break
+                        }
                         continue
                     }
 
@@ -2328,7 +2340,14 @@ class Strategy {
                     var tpAfter = getTP()
 
                     if (result == USE_INVALID_TARGET || tpBefore == tpAfter) {
+                        consecutiveFailures++
+                        if (consecutiveFailures >= maxConsecutiveFailures) {
+                            debugInfo("[INTERRUPT] " + consecutiveFailures + " consecutive failures - triggering replan")
+                            break
+                        }
+                        continue
                     }
+                    consecutiveFailures = 0  // Reset on success
 
                     // Check if target died from this weapon attack
                     if (a.targetEntity != null && isDead(a.targetEntity._id)) {

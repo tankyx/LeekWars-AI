@@ -113,14 +113,46 @@ class UnifiedStrategy extends Strategy {
         var scenariosWithQuickScore = []
         for (var scenario in scenarios) {
             var qScore = quickScorer.quickScore(scenario)
-            push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore])
+            var family = quickScorer.classifyFamily(scenario)
+            push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore, 'family': family])
         }
 
         arraySort(scenariosWithQuickScore, function(a, b) {
             return b['quickScore'] - a['quickScore']
         })
 
-        var topK = 50  // Increased from 12 for deeper search
+        // Ensure diversity: guarantee at least 1 scenario per represented family in top-K
+        var familySeen = [:]
+        var diverseList = []
+        var overflow = []
+        for (var entry in scenariosWithQuickScore) {
+            var fam = entry['family']
+            if (!mapContainsKey(familySeen, fam)) {
+                familySeen[fam] = true
+                push(diverseList, entry)  // First of each family goes to front
+            } else {
+                push(overflow, entry)
+            }
+        }
+        // Merge: family representatives first, then rest by score
+        scenariosWithQuickScore = []
+        for (var d in diverseList) push(scenariosWithQuickScore, d)
+        for (var o in overflow) push(scenariosWithQuickScore, o)
+
+        // Adaptive Top-K: scale evaluation depth based on game state
+        var aliveEnemies = count(getAliveEnemies())
+        var topK
+        if (getTurn() < 5 || aliveEnemies > 3) {
+            topK = 20  // Early game / Battle Royale: conserve ops
+        } else if (aliveEnemies == 1) {
+            topK = 50  // 1v1 endgame: deep search
+        } else {
+            topK = 35  // Mid-game: balanced
+        }
+        // Ops budget checkpoint: reduce topK if already expensive
+        if (getOperations() > 8000000) {
+            topK = max(5, floor(topK * 0.5))
+        }
         var evaluateCount = min(topK, count(scenariosWithQuickScore))
         var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
 
@@ -204,6 +236,18 @@ class UnifiedStrategy extends Strategy {
                 bestScore = score
                 bestScenario = scenario
                 bestSimResult = simResult
+            }
+
+            // Early-exit: if best is far ahead after 10+ evaluations, stop searching
+            if (i >= 10 && (bestScore - score) > 2000) {
+                debugInfo("[EARLY-EXIT] Score gap > 2000 after " + (i + 1) + " scenarios, executing best")
+                break
+            }
+
+            // Ops budget hard stop: prevent timeout
+            if (getOperations() > 12000000) {
+                debugInfo("[BUDGET-EXIT] Ops > 12M after " + (i + 1) + " scenarios, executing best")
+                break
             }
         }
         var simOps = stopOp("Simulate & score top " + evaluateCount)

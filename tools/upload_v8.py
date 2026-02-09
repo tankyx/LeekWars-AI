@@ -231,6 +231,7 @@ class V8Uploader:
             "scenario_quick_scorer",
             "scenario_mutation",
             "weight_profiles",
+            "game_context",
             # Deleted: beam_search_planner, world_state, atomic_action,
             # atomic_action_executor, state_transition (Phase 1 cleanup)
         ]

@@ -67,7 +67,7 @@ class ScenarioQuickScorer {
             }
             else if (action.type == Action.ACTION_TELEPORT) {
                 hasTeleport = true
-                tpEstimate += 5
+                tpEstimate += getCachedChipCost(CHIP_TELEPORTATION)
                 finalPosition = action.targetCell
             }
             else if (action.type == Action.MOVEMENT_OFFENSIVE || action.type == Action.MOVEMENT_OTKO ||
@@ -82,11 +82,14 @@ class ScenarioQuickScorer {
             }
         }
 
-        var tpWeight = this.getTPWeight()
-        score += tpEstimate * tpWeight
-
-        score += weaponActions * 100
-        score += chipDamageActions * 80
+        // Efficiency-aware scoring: reward damage potential per TP, not raw TP spending
+        // Each weapon/chip action contributes estimated damage; score by efficiency
+        var damageEstimate = weaponActions * 400 + chipDamageActions * 300
+        if (tpEstimate > 0) {
+            var efficiency = damageEstimate / tpEstimate
+            score += efficiency * 50  // Reward efficient TP usage
+        }
+        score += damageEstimate * 0.3  // Base damage potential bonus
 
         if (hasOffensiveBuff) score += 300
         if (hasDefensiveBuff) {
@@ -177,5 +180,55 @@ class ScenarioQuickScorer {
 
     contains(str, substr) {
         return indexOf(str, substr) != -1
+    }
+
+    // Classify scenario into Template Family for diversity selection
+    static FAMILY_OFFENSIVE = "OFFENSIVE"
+    static FAMILY_DEFENSIVE = "DEFENSIVE"
+    static FAMILY_COMBO = "COMBO"
+    static FAMILY_UTILITY = "UTILITY"
+    static FAMILY_BULB = "BULB"
+
+    classifyFamily(scenario) {
+        var hasAttack = false
+        var hasBuff = false
+        var hasHeal = false
+        var hasTeleport = false
+        var hasGrapple = false
+        var hasPoison = false
+        var hasHide = false
+        var hasFlee = false
+
+        for (var action in scenario) {
+            if (action.type == Action.ACTION_DIRECT) hasAttack = true
+            if (action.type == Action.ACTION_DOT) { hasAttack = true; hasPoison = true }
+            if (action.type == Action.ACTION_BUFF) hasBuff = true
+            if (action.type == Action.ACTION_TELEPORT) hasTeleport = true
+            if (action.type == Action.MOVEMENT_HNS) hasHide = true
+            if (action.type == Action.MOVEMENT_FLEE) hasFlee = true
+            if (action.chip == CHIP_GRAPPLE) hasGrapple = true
+            if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION) hasHeal = true
+            if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
+        }
+
+        // COMBO: multi-mechanic synergy (Grapple+Attack, Buff+Poison, etc.)
+        if (hasGrapple && hasAttack) return ScenarioQuickScorer.FAMILY_COMBO
+        if (hasBuff && hasPoison) return ScenarioQuickScorer.FAMILY_COMBO
+        if (hasTeleport && hasAttack) return ScenarioQuickScorer.FAMILY_COMBO
+
+        // DEFENSIVE: heal/hide/flee focused
+        if (hasHeal && !hasAttack) return ScenarioQuickScorer.FAMILY_DEFENSIVE
+        if (hasFlee || hasHide) return ScenarioQuickScorer.FAMILY_DEFENSIVE
+
+        // UTILITY: teleport escape, antidote, etc.
+        if (hasTeleport && !hasAttack) return ScenarioQuickScorer.FAMILY_UTILITY
+
+        // OFFENSIVE: default for attack-heavy scenarios
+        if (hasAttack) return ScenarioQuickScorer.FAMILY_OFFENSIVE
+
+        // DEFENSIVE fallback for buff-only
+        if (hasBuff) return ScenarioQuickScorer.FAMILY_DEFENSIVE
+
+        return ScenarioQuickScorer.FAMILY_OFFENSIVE
     }
 }

@@ -1,0 +1,94 @@
+// GameContext - Centralized single source of truth for game state
+// All subsystems should read from GameContext instead of scattered globals
+
+global GameContext = [
+    'player': null,
+    'target': null,
+    'enemies': [],
+    'map': null,         // FieldMap reference
+    'arsenal': null,     // Arsenal reference
+    'turn': 0,
+    'fightType': null,
+    'phase': "EARLY",    // EARLY / MID / LATE (Battle Royale phases)
+
+    // Per-turn caches (invalidated each turn via resetTurnState)
+    'caches': [
+        'distances': [:],
+        'threats': [:],
+        'los': [:]
+    ]
+]
+
+// Initialize GameContext once per fight (called from init())
+function initGameContext(playerObj, arsenalObj, fieldMapObj) {
+    GameContext['player'] = playerObj
+    GameContext['arsenal'] = arsenalObj
+    GameContext['map'] = fieldMapObj
+    GameContext['fightType'] = getFightType()
+    GameContext['turn'] = 0
+    invalidateGameContextCaches()
+}
+
+// Update GameContext each turn (called from main())
+function updateGameContext(playerObj, targetObj, fieldMapObj) {
+    GameContext['player'] = playerObj
+    GameContext['target'] = targetObj
+    GameContext['map'] = fieldMapObj
+    GameContext['turn'] = getTurn()
+
+    // Scan alive enemies
+    var aliveEnemies = getAliveEnemies()
+    var enemyList = []
+    for (var eid in aliveEnemies) {
+        if (!isDead(eid)) {
+            push(enemyList, eid)
+        }
+    }
+    GameContext['enemies'] = enemyList
+
+    // Update Battle Royale phase
+    var enemyCount = count(enemyList)
+    if (enemyCount > 4) {
+        GameContext['phase'] = "EARLY"
+    } else if (enemyCount >= 3) {
+        GameContext['phase'] = "MID"
+    } else {
+        GameContext['phase'] = "LATE"
+    }
+
+    invalidateGameContextCaches()
+}
+
+// Invalidate per-turn caches
+function invalidateGameContextCaches() {
+    GameContext['caches'] = [
+        'distances': [:],
+        'threats': [:],
+        'los': [:]
+    ]
+}
+
+// Convenience accessors
+function getGameContextPlayer() {
+    return GameContext['player']
+}
+
+function getGameContextTarget() {
+    return GameContext['target']
+}
+
+function getGameContextEnemies() {
+    return GameContext['enemies']
+}
+
+function getGameContextPhase() {
+    return GameContext['phase']
+}
+
+function getGameContextTurn() {
+    return GameContext['turn']
+}
+
+function isGameContextBattleRoyale() {
+    return GameContext['fightType'] == FIGHT_TYPE_BATTLE_ROYALE
+}
