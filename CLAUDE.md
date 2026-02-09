@@ -1,464 +1,188 @@
-# LeekWars AI ? Technical Reference
+# LeekWars AI ? Multi-Paradigm Fix Plan
 
-> **Budget:** 14M ops · 7 MP · 24?25 TP per turn
-> **Build:** Offensive-focused with Magic/Poison capabilities
-> **Architecture:** Scenario-based planner (Beam Search disabled)
+## Problem Statement
 
----
+The AI (16,136 lines, 14M ops budget, 7 MP, 24?26 TP per turn) works well for **STR/WIS-AGI burst** builds but fails for two other paradigms:
 
-## Table of Contents
+| Leek | Build | Stats | Issue |
+|---|---|---|---|
+| **MargaretHamilton** | Magic / Poison / Sustain | 600 MAG, 500 WIS, 0 STR, 150 FREQ | AI treats her like a burst-damage leek, ignoring magic scaling |
+| **KurtGodel** | STR / Science / Resistance Tank | 400 STR, 400 SCI, 400 RES, 400 WIS, 220 FREQ | AI plays him as pure Strength, ignoring Science/Nova win condition |
 
-1. [Critical Bugs ? Fix Immediately](#1-critical-bugs)
-2. [Architecture Overview](#2-architecture)
-3. [Formulas & Constants](#3-formulas)
-4. [Scenario System](#4-scenario-system)
-5. [Combat Subsystems](#5-combat-subsystems)
-6. [Battle Royale Strategy](#6-battle-royale)
-7. [Code Patterns](#7-code-patterns)
-8. [Files to Delete](#8-cleanup)
-9. [Priority Roadmap](#9-roadmap)
+## Root Cause: Structural Bias
 
----
+The AI was architected for a **Burst** paradigm where the win condition is immediate damage and kiting. Both Margaret and Kurt fail because the AI forces them into that same pattern.
 
-## 1. Critical Bugs
+### Three Identified Failures
 
-### Cache Hash Collision
-```javascript
-// BUG: enemyHash % 100 causes collisions ? stale damage data
-var cacheKey = enemyHash % 100;
+1. **Build Detection Failure** ? `detectBuildType` is too narrow. Kurt (400 STR / 400 SCI) gets misclassified as pure Strength; Margaret (600 MAG) gets forced into weapon-based attack patterns.
+2. **Weapon Bias** ? The "Best Attack" search prioritizes weapons. For Margaret (0 STR), this selects a ~10-damage weapon swing over a ~300-damage Meteorite chip.
+3. **Scaling Errors** ? The internal simulator scales all direct damage by Strength, failing to account for Magic scaling on chips or Science scaling on Nova damage.
 
-// FIX: Use unique composite keys
-var cacheKey = "" + sourceCell + ":" + targetCell + ":" + enemyPositionHash;
-```
+### Weapon Loadouts
 
-### Mutation Corruption
-```javascript
-// BUG: In-place modification corrupts best scenario
-var mutated = topScenarios[i];
-mutated.actions.push(newAction);
+#### MargaretHamilton (0 STR, 600 MAG)
 
-// FIX: Clone before mutating
-var mutated = cloneScenario(topScenarios[i]);
-mutated.actions.push(newAction);
-```
+| Weapon | Range | TP | Max/Round | Direct Damage | Special |
+|---|---|---|---|---|---|
+| **Destroyer** | 1?6 | 6 | 2 | 40?60 | Removes 17 STR for 2 turns (stackable) |
+| **Flame Thrower** | 2?8 line | 6 | 2 | 35?40 | **Poison 24?30 for 2 turns** (stackable), AoE line |
+| **Axe** | 1 | 6 | 2 | 55?77 | Removes 0.70?0.80 MP for 1 turn (stackable) |
+| **Gazor** | 2?7 line | 8 | 2 | ? | **Poison 27?32 for 3 turns** (stackable), AoE circle 3 |
 
-### Teleport TP Cost Mismatch
-- Some files use `tpCost = 5`, others use `tpCost = 9`
-- FIX: Always use `getChipCost(chip)` from a centralized cache
+**Key insight:** Flame Thrower and Gazor deal **poison damage that scales with Magic, not Strength**. With 600 MAG, Margaret's poison weapons hit extremely hard. The AI must:
+- Prioritize Flame Thrower and Gazor as **primary** weapons for Margaret ? their poison scales off her 600 MAG, making them far more effective than direct-damage weapons at 0 STR.
+- Value Destroyer for its **STR debuff** (scales with Magic ? weakens enemy damage significantly at 600 MAG).
+- Value Axe for **MP removal** (scales with Magic ? at 600 MAG the fractional MP removal becomes devastating).
+- The simulator must use `poison = base * (1 + magic / 100)` for poison-dealing weapons, and `debuff = base * (1 + magic / 100)` for debuff effects, not `base * (1 + strength / 100)`.
 
-### Global State Leak
-```javascript
-// FIX: Add at turn start
-function resetTurnState() {
-    POISON_PHASE = false;
-    MOVEMENT_COMPLETED = false;
-    damageCache = {};
-    threatCache = {};
-    pathCache = {};
-}
-```
+##### MargaretHamilton Chips
 
-### QuickScorer TP Bias
-```javascript
-// BUG: Rewards spending TP as proxy for value
-score = damageEstimate + (tpEstimate * tpWeight);
+| Chip | Range | TP | Cooldown | Effect |
+|---|---|---|---|---|
+| **Armoring** | 0?3 | 5 | 5 turns | +25?30 Max HP & heal |
+| **Regeneration** | 0?3 | 8 | ? (once) | Restores 500 HP |
+| **Remission** | 0?7 | 5 | 1 turn | Restores 66?77 HP |
+| **Elevation** | 0?5 | 6 | ? (once) | +80 Max HP & heal |
+| **Leather Boots** | 0?5 | 3 | 5 turns | +2 MP, 2 turns |
+| **Knowledge** | 0?7 | 5 | 4 turns | +250?270 Wisdom, 2 turns |
+| **Adrenaline** | 0?3 | 1 | 7 turns | +5 TP, 1 turn |
+| **Wizardry** | 0?6 | 6 | 4 turns | +150?170 Magic, 2 turns |
+| **Toxin** | 1?7 | 5 | 2 turns | Poison 25?35, 3 turns (stackable, AoE circle 2) |
+| **Plague** | 1?5 | 6 | 4 turns | Poison 40?50, 4 turns (stackable, AoE circle 3) |
+| **COVID-19** | 0?2 | 8 | 7 turns | Poison 69?79, 7 turns (propagates to neighbors ?2 cells at end of turn, non-replaceable) |
+| **Arsenic** | 3?4 (through) | 8 | 2 turns | Poison 62?67, 2 turns (stackable) |
+| **Soporific** | 1?6 | 5 | 1 turn | ?0.40?0.50 TP, 3 turns (stackable, AoE circle 3) |
+| **Ball and Chain** | 1?6 | 5 | 2 turns | ?0.40?0.50 MP, 2 turns (stackable, AoE circle 2) |
+| **Antidote** | 0?4 | 3 | 4 turns | Removes all poisons, restores 25?35 HP |
+| **Grapple** | 1?8 line | 3 | ? (4/round) | Pulls target, +30?40 WIS, ?15?20 AGI (1 turn, stackable) |
+| **Teleportation** | 1?12 (through) | 9 | 10 turns (1 initial) | Teleports, +15?20 Max HP to caster |
 
-// FIX: Use efficiency-aware scoring
-score = (damageEstimate / tpEstimate) - (endPositionThreat * threatWeight);
-```
+**Chip strategy for Margaret:** The loadout is a **poison stacking + denial** engine:
 
----
+- **Poison arsenal (4 chips + 2 weapons = 6 poison sources):** This is Margaret's primary damage. The AI must calculate **total poison DPS across all active stacks**, not individual chip damage.
+  - **COVID-19** is the highest-value single cast: 69?79 poison/turn for 7 turns = ~520 total damage, and it **spreads** to nearby entities. The AI must prioritize landing this.
+  - **Arsenic** (62?67 for 2 turns) is the **burst poison** ? high per-turn but short. Best for finishing or when cooldowns align.
+  - **Plague** (40?50 for 4 turns, AoE circle 3) and **Toxin** (25?35 for 3 turns, AoE circle 2) are the **sustain poison stackers**.
+  - Combined with Flame Thrower and Gazor weapons, Margaret can have **6+ poison stacks ticking simultaneously**.
 
-## 2. Architecture
+- **Wizardry is Margaret's Prism:** +150?170 Magic for 2 turns is a massive spike. The AI should **time poison dumps during Wizardry windows** ? if magic scaling applies to poison chip values, this amplifies everything.
 
-### Target V9 Structure
-```
-GameContext (single source of truth)
-??? player { id, cell, hp, tp, mp, stats }
-??? enemies[]
-??? map (reachability graph)
-??? arsenal (weapons/chips)
-??? caches { distances, threats, los }
-        ?
-        ?
-Single-Path Scenario Planner
-??? 5?8 Template Families
-??? QuickScorer (fixed)
-??? Full Simulator (top 10 only)
-        ?
-        ?
-Scenario Executor (with validation guards)
-```
+- **Denial tools (Magic-scaled):** Soporific (?TP, stackable, spammable every turn) and Ball and Chain (?MP, stackable) both **scale with Magic**. At 600 MAG + Wizardry buff, these debuffs are devastating ? multiple Soporific stacks can strip most of an enemy's TP. The AI should weave these between poison applications ? **a poisoned enemy that can't move or attack is the ideal state**.
 
-### Template Families
-| Family | Contains |
-|--------|----------|
-| OFFENSIVE | OTKO, Burst, AoE, Poison Dump |
-| DEFENSIVE | Retreat, Heal, Shield, HNS |
-| COMBO | Grapple+Melee, Wizardry+Poison, Debuff+Burst |
-| UTILITY | Liberation, Antidote, Teleport Escape |
-| BULB | Bulb Clear, Bulb Ignore (Race) |
+- **Survivability:** Armoring + Elevation (both permanent Max HP increases) should be cast early. Remission is the per-turn heal. Regeneration is the emergency button. With 500 WIS and Knowledge (+250 WIS), healing is heavily amplified.
 
-### Ops Budget Allocation
-| Component | Target Ops |
-|-----------|------------|
-| Caches & maps | 1.0M |
-| Scenario generation | 1.5M |
-| Scenario simulation | 2.0M |
-| Threat map | 1.0M |
-| Safety buffer | 1.5M |
-| **Typical turn** | **~7M** |
+- **Positioning:** Grapple pulls enemies into close range for COVID-19 (range 0?2) or Axe (range 1). Teleportation is the escape valve.
 
----
+**Margaret's ideal turn sequence:**
+1. Wizardry (if available) ? 2. COVID-19 / Plague / Arsenic (biggest available poison) ? 3. Gazor / Flame Thrower (weapon poison) ? 4. Soporific (deny TP) ? 5. Remission (heal if needed)
 
-## 3. Formulas
+#### KurtGodel (400 STR, 400 SCI, 400 RES)
 
-### Damage
-```javascript
-FinalDamage = BaseDamage * (1 + Strength/100)  // Physical
-FinalDamage = BaseDamage * (1 + Magic/100)     // Magic/Poison
-```
+| Weapon | Range | TP | Max/Round | Direct Damage | Special |
+|---|---|---|---|---|---|
+| **Illicit Grenade Launcher** | 4?7 | 6 | 2 | 4×10 | Passive: +10% received poison as Science (permanent, stackable) |
+| **Rhino** | 2?4 | 5 | 3 | 54?60 | ? |
+| **Lightninger** | 6?10 star | 9 | 2 | 99?107 | AoE X 1 |
+| **Quantum Rifle** | 5?10 | 10 | 1 | 68?75 | **68?75 Nova damage** (reduces enemy Max HP), AoE X 2 |
 
-### Healing
-```javascript
-FinalHeal = BaseHeal * (1 + Wisdom/100)
-// CHIP_REGENERATION: Base 500, 8 TP, ? cooldown (once per match)
-// CHIP_REMISSION: Base 71.5 (avg 66-77), 5 TP, 1 turn cooldown
-```
+##### KurtGodel Chips
 
-### Shields (Relative)
-```javascript
-FinalRelativeShield = BaseRelativeShield * (1 + Resistance/100)
-FinalDamage = BaseDamage * (1 - RelativeShield/100) - AbsoluteShield
-// Example: FORTRESS (8%) at 200 Resistance = 24% reduction
-```
+| Chip | Range | TP | Cooldown | Effect |
+|---|---|---|---|---|
+| **Armoring** | 0?3 | 5 | 5 turns | +25?30 Max HP & heal |
+| **Regeneration** | 0?3 | 8 | ? (once) | Restores 500 HP |
+| **Remission** | 0?7 | 5 | 1 turn | Restores 66?77 HP |
+| **Transmutation** | 1?6 line | 8 | 9 turns | +40?44 Max HP (AoE square 1) |
+| **Wall** | 0?3 | 3 | 3 turns | ?4?5% damage taken, 2 turns |
+| **Fortress** | 0?3 | 6 | 4 turns | ?7?8% damage taken, 3 turns |
+| **Leather Boots** | 0?5 | 3 | 5 turns | +2 MP, 2 turns |
+| **Knowledge** | 0?7 | 5 | 4 turns | +250?270 Wisdom, 2 turns |
+| **Prism** | 0?6 inv. star | 6 | 6 turns | +60 STR/WIS/AGI/RES/SCI/MAG, 2 turns |
+| **Adrenaline** | 0?3 | 1 | 7 turns | +5 TP, 1 turn |
+| **Liberation** | 0?6 | 5 | 5 turns | ?40% all effects |
+| **Antidote** | 0?4 | 3 | 4 turns | Removes all poisons, restores 25?35 HP |
+| **Grapple** | 1?8 line | 3 | ? (4/round) | Pulls target, +30?40 WIS, ?15?20 AGI (1 turn, stackable) |
+| **Boxing Glove** | 2?8 line | 3 | ? (4/round) | Pushes target, +30?40 RES, ?10?15 STR (1 turn, stackable) |
+| **Teleportation** | 1?12 (through) | 9 | 10 turns (1 initial) | Teleports, +15?20 Max HP to caster |
 
-### Damage Return
-```javascript
-FinalDamageReturn = BaseDamageReturn * (1 + Agility/100)
-```
+**Chip strategy for Kurt:** The chip loadout is built for **sustained tanking and positioning control**:
+- **Survivability loop**: Fortress/Wall for damage reduction ? Armoring/Transmutation for Max HP growth ? Remission for per-turn healing ? Regeneration as a one-time emergency 500 HP burst.
+- **Buff stacking**: Prism (+60 to all stats including Science) and Knowledge (+250 WIS) amplify both Nova damage and wisdom-based returns. **Prism turns are power spikes** ? the AI should time Quantum Rifle shots to coincide with Prism's +60 SCI.
+- **Positioning**: Grapple (pull + WIS buff + AGI debuff) and Boxing Glove (push + RES buff + STR debuff) let Kurt control range while stacking defensive stats. The AI should use these to keep enemies in Quantum Rifle range (5?10) while debuffing their STR.
+- **Anti-poison**: Antidote + Liberation give Kurt tools to cleanse DoTs, critical against poison-heavy opponents.
+- **Adrenaline**: At only 1 TP cost, this gives +5 TP for burst turns ? the AI should combo this with Quantum Rifle (10 TP) + Rhino fills.
 
-### Poison
-```javascript
-FinalPoisonDamage = BasePoisonDamage * (1 + Magic/100)
-```
+**Key insight:** Quantum Rifle is Kurt's **strategic centerpiece** ? it deals Nova damage that permanently reduces enemy Max HP, scaled by Science. The AI must:
+- Prioritize Quantum Rifle usage **every turn** (1 use/round, 10 TP ? fits the budget).
+- Use Rhino as the **TP-efficient filler** (5 TP, 3 uses/round) for remaining TP after Quantum Rifle.
+- Recognize Illicit Grenade Launcher's passive as a **Science scaling engine** ? getting poisoned makes Kurt stronger.
+- Use Lightninger situationally for AoE or when range forces it.
+- The win condition is **attrition via Nova**: shield up, tank hits, and let Max HP drain close out the fight.
 
-### Bulb Stats
-```javascript
-characteristic = floor(min + (max - min) * min(300, summonerLevel) / 300)
-// Capped at level 300
-```
+### Poison-Dealing Weapons ? AI Implications
+
+The AI must tag weapons by **damage type** (`DIRECT`, `POISON`, `NOVA`, `DEBUFF`, `UTILITY`) and score them per build profile:
+
+- **Poison weapons** (Flame Thrower, Gazor): **scale with Magic, not Strength**. Valued by `base * (1 + magic / 100)` × duration × remaining turns. Critical for Magic/Sustain builds ? with 600 MAG, Margaret's poison weapons deal 7× base values.
+- **Nova weapons** (Quantum Rifle): valued by cumulative Max HP reduction. Critical for Tank/Science builds.
+- **Debuff weapons** (Destroyer ? STR removal, Axe ? MP removal): **scale with Magic**. At 600 MAG, these debuffs are massively amplified ? the AI must value them by their strategic impact on the enemy's stats, not by their negligible direct damage.
+- The `findBestAvailable` and Quick Scoring heuristics must weight these categories according to the detected build profile, not uniformly by Strength scaling.
+
+### Additional Bugs
+
+- **Antidote Tracking** ? `PREV_ENEMY_POISON` likely stores a boolean/1 instead of the actual duration, causing miscalculated poison dump timing on Margaret's build.
+- **Nova Logic Missing** ? The Scenario Generator has no Nova-specific logic. For Kurt, Science-based Nova damage (reduces Max HP) is a primary win condition the AI doesn't recognize.
+- **Quick Scoring Bias** ? The heuristic used to prune the search tree heavily weights Strength, so Science and Magic scenarios get discarded before simulation.
 
 ---
 
-## 4. Scenario System
+## Action Plan
 
-### Adaptive Top-K
-```javascript
-var topK;
-if (turn < 5 || aliveEnemies > 3) topK = 20;
-else if (aliveEnemies == 1) topK = 50;
-else topK = 35;
-```
+### Phase 1: Build Detection & Weighting (Foundation) -- DONE
 
-### Early-Exit Logic
-```javascript
-if (gap > 2000 && simulatedCount >= 10) break; // Execute best found
-```
+1. **Redefine `detectBuildType`** -- DONE
+   - If `abs(STR - MAG) < 100` ? classify as **Hybrid** (BUILD_HYBRID = 6)
+   - Add explicit Magic-primary detection (`MAG > STR + 100`)
+   - Priority-ordered: Tank/Sci > STR/SCI > Magic-primary > Hybrid > Agility > Magic > Strength
 
-### Budget Checkpoints
-```javascript
-if (getOperations() > 8_000_000) topK = Math.floor(topK * 0.5);
-if (getOperations() > 12_000_000) break; // Execute best found
-```
+2. **Add Tank Detection** -- DONE
+   - If `Resistance > 300` AND `Science > 300` ? assign **BUILD_TANK_SCI** (= 5) profile
 
-### Knapsack-Style TP Allocation
-```javascript
-var efficiency = damage / tpCost;
-if (weapon != equippedWeapon) efficiency = damage / (tpCost + 1);
-// Sort by efficiency, select greedily
-```
+3. **Adjust Weight Profiles** -- DONE
 
----
+   | Profile | Key Weights |
+   |---|---|
+   | **Magic** | `weaponUses: 0`, `dotEffects: 500`, `poisonStacks: 400`, `kiteDistance: 200` |
+   | **Tank/Sci** | `shieldValue: 400`, `threatReduction: 300`, `novaEffects: 400`, `healValue: 200` |
+   | **Hybrid** | `burstDamage: 200`, `dotEffects: 250`, `poisonStacks: 200` |
 
-## 5. Combat Subsystems
+4. **Fix Action class field errors** -- DONE
+   - Added `weapon = null` field to Action class (used by weapon swap in scenario_combos)
+   - Removed dead `.damage`/`.description` reads from scenario_mutation clone function
 
-### Healing Logic
-```javascript
-function getHealingAction(tpBudget) {
-    var hpRatio = currHealth / maxHealth;
-    
-    // Emergency: REGENERATION (8 TP)
-    if (hpRatio < 0.35 && getCooldown(CHIP_REGENERATION) == 0 && tpBudget >= 8) {
-        return CHIP_REGENERATION;
-    }
-    
-    // Sustain: REMISSION (5 TP)
-    if (hpRatio < 0.80 && getCooldown(CHIP_REMISSION) == 0 && tpBudget >= 5) {
-        return CHIP_REMISSION;
-    }
-    return null;
-}
-```
+### Phase 2: Fix Simulator Math (The "Lying" Problem)
 
-### Shield/Buff Uptime
-```javascript
-var threshold = (player.resistance >= 200) ? 2 : 1;
-if (shieldBuffTurns <= threshold) generateShieldActions();
+1. **Stat-Based Scaling**
+   - Old: `damage = base * (1 + strength / 100)`
+   - New for direct damage: `damage = base * (1 + (isChip ? magic : strength) / 100)`
+   - New for poison damage: `poison = base * (1 + magic / 100)` ? **applies to both chips AND weapons that deal poison**
+   - New for debuffs (STR removal, MP removal, TP removal, AGI removal): `debuff = base * (1 + magic / 100)` ? **all debuffs scale with Magic**
 
-// Kill Margin Override
-var killMargin = totalDamage / enemyHP;
-if (killMargin >= 1.1) buffWeight *= 0.1;      // Kill likely ? skip buffs
-else if (criticalBuffMissing) buffWeight *= 5.0; // Force buffs
-```
+2. **Nova Integration**
+   - Ensure `EFFECT_NOVA_DAMAGE` scales with Science: `1 + science / 100`
 
-### Poison ? Antidote Window
-```javascript
-var antidoteCD = cooldownTracker.get(enemy, CHIP_ANTIDOTE);
+3. **Fix Quick Scoring**
+   - Weight Science and Magic scenarios proportionally to the leek's actual stats, not a flat Strength bias.
 
-if (antidoteCD == 0) {
-    dotScore *= 0.2;  // Bait only (Venom, Toxin, Gazor)
-} else {
-    dotScore *= (1.5 + 0.2 * antidoteCD);  // Dump window
-}
+### Phase 3: Behavioral Logic
 
-// Never cast COVID unless antidoteCD >= 3
-```
+1. **Margaret Fix** ? In `findBestAvailable`, prioritize chips over weapons when `MAG > STR`.
+2. **Kurt Fix** ? Add Nova as a distinct strategic goal: apply Nova effects early, then sustain with shields/resistance while Max HP drain wins the fight.
+3. **Poison Fix** ? Fix `PREV_ENEMY_POISON` to store actual duration, not a boolean flag. Recalculate optimal poison dump timing.
 
-### Bulb Handling
-```javascript
-function classifyBulbThreat(entity) {
-    var name = getName(entity);
-    if (contains(name, "heal")) return "HEALER";   // Priority 1
-    if (contains(name, "buff")) return "BUFFER";   // Priority 2
-    return "ATTACKER";                              // Priority 3
-}
+### Phase 4: Validation
 
-// Race Clock
-var turnsToKill = enemyHP / yourDPS;
-var turnsToDie = yourHP / (enemyDPS + bulbDamagePerTurn);
-if (turnsToKill < turnsToDie) state = "RACE";      // Ignore bulbs
-else state = "BULB_CLEAR";                          // Kill healers first
-```
-
-### Damage Return ? Suicide Guard
-```javascript
-if (target.hasEffect(EFFECT_DAMAGE_RETURN)) {
-    var returnDmg = outgoingDamage * (returnPct / 100);
-    simulatedPlayerHP -= returnDmg;
-}
-
-if (simulatedPlayerHP <= 0) {
-    score += -1_000_000;  // Reject suicidal scenario
-    // Consider: CHIP_LIBERATION (strips 40%) or Retreat
-}
-```
-
-### Hide & Seek (HNS)
-```javascript
-// Utility scoring for cover cells
-Score(C) = -(ThreatMap[C] * W1)
-         - (ExposureCount * W2)
-         + (FutureDamagePotential * W3)
-
-// Weight tuning by HP
-// Low HP:  W1=3.0, W2=2.0, W3=0.5
-// Mid HP:  W1=2.0, W2=1.5, W3=1.5
-// High HP: W1=1.0, W2=1.0, W3=2.5
-```
-
----
-
-## 6. Battle Royale
-
-### Cumulative Threat
-```javascript
-function getLobbyThreatAtCell(cellId, enemies) {
-    var totalThreat = 0, sources = 0;
-    for (var enemy in enemies) {
-        var dmg = getEstimatedDamage(enemy, cellId);
-        if (dmg > 0) { totalThreat += dmg; sources++; }
-    }
-    return totalThreat * (1 + sources * 0.2);  // Multi-source penalty
-}
-```
-
-### Phase System
-```javascript
-if (aliveEnemies > 4) phase = "EARLY";      // Edge positioning, opportunistic
-else if (aliveEnemies >= 3) phase = "MID";  // Attrition, target isolated
-else phase = "LATE";                         // Full aggro 1v1
-```
-
-### Target Selection
-```javascript
-TargetScore = (100 - EnemyHP%) * 2
-            + (200 - Distance * 10)
-            - (ThreatAtEnemyPosition * 0.5)
-```
-
-### Ops Optimization for 7+ Enemies
-```javascript
-// Distance-tiered evaluation
-if (enemyDistance <= 10) fullDamageCalc();
-else if (enemyDistance <= 20) estimateDamage();
-else excludeFromThreatMap();
-```
-
----
-
-## 7. Code Patterns
-
-### GameContext Singleton
-```javascript
-var GameContext = {
-    player: null,
-    enemies: [],
-    caches: { distances: {}, threats: {}, los: {} },
-    
-    init: function() {
-        this.player = { /* populate */ };
-        this.enemies = scanEnemies();
-        this.invalidateCaches();
-    },
-    
-    invalidateCaches: function() {
-        this.caches = { distances: {}, threats: {}, los: {} };
-    }
-};
-```
-
-### Item Classifier
-```javascript
-var ItemRoles = {
-    BUFFS: [CHIP_STEROID, CHIP_DOPING, CHIP_WIZARDRY, CHIP_WALL, CHIP_FORTRESS],
-    HEALS: [CHIP_REGENERATION, CHIP_REMISSION],
-    POISONS: [CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID, CHIP_ARSENIC],
-    RETURNS: [CHIP_THORN, CHIP_MIRROR, CHIP_BRAMBLE],
-    
-    isBuff: function(id) { return contains(this.BUFFS, id); },
-    isHeal: function(id) { return contains(this.HEALS, id); },
-    isPoison: function(id) { return contains(this.POISONS, id); },
-    isReturn: function(id) { return contains(this.RETURNS, id); }
-};
-```
-
-### Lazy Debugging
-```javascript
-function debugInfo(fn) {
-    if (DEBUG_ENABLED) debug(fn());
-}
-// Usage: debugInfo(() => "Score: " + score);
-```
-
-### Execution Guard
-```javascript
-function executeScenario(scenario) {
-    for (var action in scenario.actions) {
-        if (!validateAction(action, GameContext)) break;
-        var result = executeAction(action);
-        if (result == ACTION_FAILED) break;
-        updateGameContext(result);
-    }
-}
-```
-
-### One BFS Per Turn
-```javascript
-// At turn start ONLY:
-var reachableGraph = computeReachableCells(playerCell, playerMP);
-var threatMap = computeThreatMap(reachableGraph, enemies);
-// Pass to all consumers ? never call BFS in loops
-```
-
----
-
-## 8. Cleanup
-
-### Files to DELETE
-- `beam_search_planner.lk`
-- `world_state.lk`
-- `state_transition.lk`
-- `atomic_action.lk`
-- `polynomial.lk`
-- `probability_distribution.lk`
-
-### Files to CREATE
-- `game_context.lk` ? Centralized state
-- `item_roles.lk` ? Unified chip/weapon classification
-
-### Files to REFACTOR
-- `scenario_generator.lk` ? Collapse 30 methods into 5?8 Template Families
-
----
-
-## 9. Roadmap
-
-### Week 1: Critical Fixes
-- [ ] Fix cache hash collision (`enemyHash % 100` ? unique keys)
-- [ ] Fix mutation corruption (clone before mutate)
-- [ ] Fix Teleport/Grapple TP cost mismatches
-- [ ] Implement `resetTurnState()`
-- [ ] Fix QuickScorer TP bias
-
-### Week 2: Efficiency
-- [ ] Cached BFS (once per turn)
-- [ ] Adaptive Top-K
-- [ ] Simulation early-exit
-- [ ] Delete dead Beam Search code
-- [ ] Create `GameContext` singleton
-
-### Week 3: Intelligence
-- [ ] Create `ItemRoles` classifier
-- [ ] Implement Interrupt & Replan logic
-- [ ] Add synergy matrix for combos
-- [ ] Threat-aware cover bonus (HNS)
-
-### Week 4: Polish
-- [ ] Consolidate Scenario Generators into Template Families
-- [ ] Kill-Reserve conditional logic
-- [ ] AoE masks to Turn 1 init only
-- [ ] Poison Antidote window scoring
-- [ ] Bulb Race Clock implementation
-
----
-
-## Quick Reference Tables
-
-### Chip Costs & Cooldowns
-| Chip | TP | Cooldown | Notes |
-|------|-----|----------|-------|
-| REGENERATION | 8 | ? | 500 base heal, once per match |
-| REMISSION | 5 | 1 | 66-77 base heal |
-| WALL | 3 | 3 | 4-5% shield, 2 turns |
-| FORTRESS | 6 | 4 | 7-8% shield, 3 turns |
-| THORN | 4 | 3 | 3-4% return, 2 turns |
-| MIRROR | 5 | 4 | 5-6% return, 3 turns |
-| BRAMBLE | 4 | 8 | 25% return, 1 turn (burst only) |
-| WIZARDRY | 6 | 4 | +150-170 Magic, 2 turns |
-| VENOM | 4 | 1 | 15-20 poison, 3 turns |
-| TOXIN | 5 | 2 | 25-35 poison, AoE, 3 turns |
-| PLAGUE | 6 | 4 | 40-50 poison, AoE, 4 turns |
-| COVID | 8 | 7 | 69-79 poison, spreads, 7 turns |
-| ARSENIC | 8 | 2 | 62-67 poison, through obstacles, 2 turns |
-| ANTIDOTE | 3 | 4 | Clears ALL poisons + 25-35 heal |
-| LIBERATION | ? | ? | Strips 40% enemy buffs/debuffs |
-
-### Scoring Bonuses
-| Event | Score |
-|-------|-------|
-| Kill any enemy | +5000 |
-| Kill healer bulb | +2500 |
-| Kill buffer bulb | +1500 |
-| Kill attacker bulb | +800 |
-| Synergy combo (Grapple+Melee) | +300 |
-| Synergy combo (Wizardry+Poison) | +400 |
-| End in cover (breaks LoS) | +400 |
-| Suicidal scenario | -1,000,000 |
-
-### Ops Safety Thresholds
-| Checkpoint | Action |
-|------------|--------|
-| > 8M ops | Reduce topK by 50% |
-| > 12M ops | Stop simulation, execute best found |
-| > 13.5M ops | Hard stop, return current best |
+- Test each build independently against known opponent archetypes.
+- Confirm the burst build (STR/WIS-AGI) is **not regressed** after changes.
+- Monitor ops budget ? ensure new logic paths stay within the 14M ops ceiling.

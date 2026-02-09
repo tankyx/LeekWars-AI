@@ -5,6 +5,8 @@ global BUILD_STRENGTH = 1
 global BUILD_MAGIC = 2
 global BUILD_AGILITY = 3
 global BUILD_STRENGTH_SCIENCE = 4
+global BUILD_TANK_SCI = 5
+global BUILD_HYBRID = 6
 
 // Strength build weights - Maximize burst damage and weapon spam
 global STRENGTH_WEIGHTS = [
@@ -95,6 +97,51 @@ global STRENGTH_SCIENCE_WEIGHTS = [
     'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
 ]
 
+// Tank/Science build weights - Maximize survivability + Nova attrition
+global TANK_SCI_WEIGHTS = [
+    'burstDamage': 150,        // Moderate: direct damage secondary to Nova
+    'weaponUses': 60,          // Low-moderate: Quantum Rifle limited to 1/round
+    'tpEfficiency': 50,        // Tertiary: TP conservation
+    'dotEffects': 0,           // Irrelevant: no DoT synergy
+    'kiteDistance': -50,       // Negative: tank wants to stay in fight, not kite
+    'damageReturn': 0,         // Irrelevant: no return buffs
+    'poisonStacks': 0,         // Irrelevant: no poison synergy
+    'shieldValue': 400,        // Primary: damage reduction is core survival loop
+    'healValue': 200,          // High: sustain is the win condition
+    'distanceToTarget': -10,   // Slight penalty: keep in weapon range
+    'threatReduction': 300,    // High: reduce incoming damage via debuffs
+    'otkoBonus': 3000,         // Moderate: kills happen via attrition not burst
+    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
+    'novaEffects': 400,        // Primary secondary: Max HP reduction via Science
+    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
+    'bulbKillBonusHealer': 3000,  // Bulb targeting: healer kill bonus (high - stops sustain)
+    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
+    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
+    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
+]
+
+// Hybrid (STR/MAG close) build weights - Balanced chip+weapon approach
+global HYBRID_WEIGHTS = [
+    'burstDamage': 200,        // Moderate-high: weapon damage still relevant
+    'weaponUses': 60,          // Moderate: weapons matter but chips too
+    'tpEfficiency': 50,        // Tertiary: TP conservation
+    'dotEffects': 250,         // Moderate-high: DoT chips scale with MAG
+    'kiteDistance': 50,        // Slight: flexible positioning
+    'damageReturn': 0,         // Irrelevant: no return buffs
+    'poisonStacks': 200,       // Moderate: poison stacking viable
+    'shieldValue': 100,        // Moderate: defensive sustainability
+    'healValue': 70,           // Moderate: emergency healing
+    'distanceToTarget': 0,     // Neutral: flexible range
+    'threatReduction': 60,     // Moderate: balanced approach
+    'otkoBonus': 4000,         // High: still want to close kills
+    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
+    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
+    'bulbKillBonusHealer': 2800,  // Bulb targeting: healer kill bonus
+    'bulbKillBonusBuffer': 1600,  // Bulb targeting: buffer kill bonus
+    'bulbKillBonusAttacker': 900, // Bulb targeting: attacker kill bonus
+    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
+]
+
 // Boss fight weights - Specialized for crystal puzzle mechanics
 global BOSS_WEIGHTS = [
     'burstDamage': 0,          // Irrelevant: no damage phase
@@ -128,6 +175,12 @@ function getWeightsForBuild(buildType) {
     if (buildType == BUILD_STRENGTH_SCIENCE) {
         return STRENGTH_SCIENCE_WEIGHTS
     }
+    if (buildType == BUILD_TANK_SCI) {
+        return TANK_SCI_WEIGHTS
+    }
+    if (buildType == BUILD_HYBRID) {
+        return HYBRID_WEIGHTS
+    }
     return STRENGTH_WEIGHTS  // Default fallback
 }
 
@@ -137,24 +190,40 @@ function detectBuildType(player) {
     var magStat = player._magic
     var agiStat = player._agility
     var sciStat = player._science
+    var resStat = player._resistance
 
-    // Check for hybrids first (science threshold: 200+)
+    // 1. Tank/Science: high Resistance + Science = attrition/Nova win condition
+    //    KurtGodel: 400 STR, 400 SCI, 400 RES -> should be TANK_SCI
+    if (resStat >= 300 && sciStat >= 300) {
+        return BUILD_TANK_SCI
+    }
+
+    // 2. Strength/Science hybrid: STR-dominant with significant Science
     if (strStat >= magStat && strStat >= agiStat && sciStat >= 200) {
         return BUILD_STRENGTH_SCIENCE
     }
 
-    // Check pure builds
-    if (strStat >= magStat && strStat >= agiStat) {
-        return BUILD_STRENGTH
-    }
-    if (magStat >= strStat && magStat >= agiStat) {
+    // 3. Magic-primary: MAG clearly dominant over STR
+    //    MargaretHamilton: 600 MAG, 0 STR -> should be MAGIC
+    if (magStat > strStat + 100) {
         return BUILD_MAGIC
     }
+
+    // 4. Hybrid: STR and MAG are close (within 100), both significant
+    //    Flexible build that can use both weapons and chips
+    if (abs(strStat - magStat) < 100 && magStat >= 100 && strStat >= 100) {
+        return BUILD_HYBRID
+    }
+
+    // 5. Pure builds: whichever stat dominates
     if (agiStat >= strStat && agiStat >= magStat) {
         return BUILD_AGILITY
     }
+    if (magStat >= strStat) {
+        return BUILD_MAGIC
+    }
 
-    return BUILD_STRENGTH  // Default
+    return BUILD_STRENGTH  // Default: STR-dominant
 }
 
 // Weight blending (future feature - adaptive mid-fight)

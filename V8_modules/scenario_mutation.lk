@@ -181,10 +181,8 @@ class ScenarioMutator {
             dst.checkpointType = src.checkpointType
             dst.continuationFn = src.continuationFn
             dst.context = src.context
-            // Copy any dynamically-set fields (e.g. weapon from weapon swap)
+            // Copy weapon swap target (set by OTKO/combo scenarios)
             if (src.weapon != null) dst.weapon = src.weapon
-            if (src.damage != null) dst.damage = src.damage
-            if (src.description != null) dst.description = src.description
             push(cloned, dst)
         }
         return cloned
