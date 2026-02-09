@@ -197,13 +197,15 @@ class Arsenal {
         return percentage
     }
 
-    computeEffectsBaseDamage(effectsMap, str, mag, sci, aoeModifier = 1.0) {
+    computeEffectsBaseDamage(effectsMap, str, mag, sci, aoeModifier = 1.0, isChip = false) {
         var total = 0
+        // Direct damage scaling: weapons use Strength, chips use Magic
+        var directStat = isChip ? mag : str
         for (var e in mapKeys(effectsMap)) {
             var info = effectsMap[e]
             if (e == EFFECT_DAMAGE) {
                 var avg = (info._minEffectAmount + info._maxEffectAmount) / 2
-                total += avg * (1 + (str / 100)) * aoeModifier
+                total += avg * (1 + (directStat / 100)) * aoeModifier
             } else if (e == EFFECT_POISON) {
                 var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
                 var totalOverTime = avg2 * info._effectDuration
@@ -218,9 +220,9 @@ class Arsenal {
     }
 
     getDamageBreakdown(str, mag, wis, sci, itemID, centerCell = -1, targetCell = -1) {
-        
+
         var isWeapon = mapContainsKey(this.playerEquippedWeapons, itemID)
-        
+
         var chipInFull = mapContainsKey(this.chipsList, itemID)
         var chipInEquipped = mapContainsKey(this.playerEquippedChips, itemID)
         var isChip = !isWeapon && (chipInFull || chipInEquipped)
@@ -232,6 +234,9 @@ class Arsenal {
             aoeModifier = this.computeAoEModifier(centerCell, targetCell, item._aoeType)
         }
 
+        // Direct damage scaling: weapons use Strength, chips use Magic
+        var directStat = isChip ? mag : str
+
         var direct = 0
         var dot = 0
         var nova = 0
@@ -242,10 +247,10 @@ class Arsenal {
             var info = item._effects[e]
             if (e == EFFECT_DAMAGE) {
                 var avg = (info._minEffectAmount + info._maxEffectAmount) / 2
-                direct += avg * (1 + (str / 100)) * aoeModifier
+                direct += avg * (1 + (directStat / 100)) * aoeModifier
 
-                minDmg += info._minEffectAmount * (1 + (str / 100)) * aoeModifier
-                maxDmg += info._maxEffectAmount * (1 + (str / 100)) * aoeModifier
+                minDmg += info._minEffectAmount * (1 + (directStat / 100)) * aoeModifier
+                maxDmg += info._maxEffectAmount * (1 + (directStat / 100)) * aoeModifier
             } else if (e == EFFECT_POISON) {
                 var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
                 var totalOverTime = avg2 * info._effectDuration

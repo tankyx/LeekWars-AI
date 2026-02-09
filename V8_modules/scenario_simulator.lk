@@ -215,8 +215,20 @@ class ScenarioSimulator {
 
                     simStrength += this.estimateStrengthBuff(action.chip)
                 } else if (action.chip == CHIP_PRISM) {
-                    // PRISM: +60 all stats
+                    // PRISM: +60 all stats (STR, MAG, WIS, SCI, AGI, RES)
                     simStrength += 60
+                    simMagic += 60
+                    simWisdom += 60
+                    simScience += 60
+                } else if (action.chip == CHIP_WIZARDRY) {
+                    // WIZARDRY: +150-170 Magic for 2 turns (avg 160)
+                    simMagic += 160
+                } else if (action.chip == CHIP_KNOWLEDGE) {
+                    // KNOWLEDGE: +250-270 Wisdom for 2 turns (avg 260)
+                    simWisdom += 260
+                } else if (action.chip == CHIP_ELEVATION) {
+                    // ELEVATION: +80 Max HP (one-time, also heals)
+                    result.hpGained += 80
                 } else if (action.chip == CHIP_WARM_UP) {
 
                 } else if (action.chip == CHIP_ADRENALINE) {

@@ -161,19 +161,25 @@ The AI must tag weapons by **damage type** (`DIRECT`, `POISON`, `NOVA`, `DEBUFF`
    - Added `weapon = null` field to Action class (used by weapon swap in scenario_combos)
    - Removed dead `.damage`/`.description` reads from scenario_mutation clone function
 
-### Phase 2: Fix Simulator Math (The "Lying" Problem)
+### Phase 2: Fix Simulator Math (The "Lying" Problem) -- DONE
 
-1. **Stat-Based Scaling**
-   - Old: `damage = base * (1 + strength / 100)`
-   - New for direct damage: `damage = base * (1 + (isChip ? magic : strength) / 100)`
-   - New for poison damage: `poison = base * (1 + magic / 100)` ? **applies to both chips AND weapons that deal poison**
-   - New for debuffs (STR removal, MP removal, TP removal, AGI removal): `debuff = base * (1 + magic / 100)` ? **all debuffs scale with Magic**
+1. **Stat-Based Scaling** -- DONE
+   - `getDamageBreakdown()` + `computeEffectsBaseDamage()`: `EFFECT_DAMAGE` now uses `isChip ? mag : str`
+   - `EFFECT_POISON` already scaled with Magic (was correct)
+   - `EFFECT_NOVA_DAMAGE` already scaled with Science (was correct)
 
-2. **Nova Integration**
-   - Ensure `EFFECT_NOVA_DAMAGE` scales with Science: `1 + science / 100`
+2. **Nova Integration** -- DONE (was already correct)
+   - `EFFECT_NOVA_DAMAGE` scales with `1 + science / 100` in both `getDamageBreakdown` and `computeEffectsBaseDamage`
 
-3. **Fix Quick Scoring**
-   - Weight Science and Magic scenarios proportionally to the leek's actual stats, not a flat Strength bias.
+3. **Fix Quick Scoring** -- DONE
+   - Weapon damage estimates now scale by `(1 + STR/200)`, chip estimates by `(1 + MAG/200)`
+   - Margaret's 600 MAG chip scenarios no longer pruned before simulation
+
+4. **Buff Simulation Fixes** -- DONE
+   - PRISM: now boosts `simMagic`, `simWisdom`, `simScience` (+60 all stats, was STR only)
+   - WIZARDRY: added `simMagic += 160` (was completely untracked)
+   - KNOWLEDGE: added `simWisdom += 260` (was completely untracked)
+   - ELEVATION: added `hpGained += 80` (was untracked)
 
 ### Phase 3: Behavioral Logic
 

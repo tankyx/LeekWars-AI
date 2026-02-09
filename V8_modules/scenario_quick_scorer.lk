@@ -83,8 +83,12 @@ class ScenarioQuickScorer {
         }
 
         // Efficiency-aware scoring: reward damage potential per TP, not raw TP spending
-        // Each weapon/chip action contributes estimated damage; score by efficiency
-        var damageEstimate = weaponActions * 400 + chipDamageActions * 300
+        // Scale estimates by primary stat: weapons by STR, chips by MAG
+        var str = this._player._strength
+        var mag = this._player._magic
+        var weaponDmgEstimate = 400 * (1 + str / 200.0)  // STR-scaled weapon value
+        var chipDmgEstimate = 300 * (1 + mag / 200.0)    // MAG-scaled chip value
+        var damageEstimate = weaponActions * weaponDmgEstimate + chipDamageActions * chipDmgEstimate
         if (tpEstimate > 0) {
             var efficiency = damageEstimate / tpEstimate
             score += efficiency * 50  // Reward efficient TP usage
