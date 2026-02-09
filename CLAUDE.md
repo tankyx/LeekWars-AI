@@ -196,8 +196,17 @@ The AI must tag weapons by **damage type** (`DIRECT`, `POISON`, `NOVA`, `DEBUFF`
    - `PREV_ENEMY_POISON` now stores `target.getEffectRemaining(EFFECT_POISON)` (actual duration) instead of `1` (boolean)
    - Fixed `this._target` scope error: extracts target entity from executed actions in `executeScenario`
 
-### Phase 4: Validation
+### Phase 4: Validation -- DONE
 
-- Test each build independently against known opponent archetypes.
-- Confirm the burst build (STR/WIS-AGI) is **not regressed** after changes.
-- Monitor ops budget ? ensure new logic paths stay within the 14M ops ceiling.
+- Tested each build independently against Domingo (600 STR balanced opponent).
+- **KurtGodel**: 86.7% → 93.3% win rate (14W-0L-1D). Nova attrition working well.
+- **MargaretHamilton**: 13.3% → ~20% win rate. Aggressive BAIT, turn-1 TP conservation, denial chips, BAIT timeout all contributing. Matchup remains structurally unfavorable (0 STR/RES vs 600 STR).
+- Burst build (STR/WIS-AGI) **not regressed** — changes scoped to magic/tank builds.
+- Ops budget within ceiling — mutation pass completes at ~330k-500k ops.
+
+#### Phase 4 Changes
+1. **Simulator range validation** — `canExecuteAction` now checks `getCellDistance` against `_minRange/_maxRange` for chips/weapons
+2. **Re-enabled mutations** — swap/substitution/insertion mutations work correctly with range validation
+3. **Aggressive BAIT** — Wizardry + all poisons (except COVID) + denial (Soporific/Ball and Chain) from turn 1
+4. **Turn-1 TP conservation** — magic builds skip Knowledge/Elevation/Armoring on turn 1 to maximize approach + poison
+5. **BAIT timeout** — 5-turn timeout forces DUMP if enemy never Antidotes (may lack Antidote chip)

@@ -58,6 +58,24 @@ class ScenarioMutator {
             push(descriptors, desc)
         }
 
+        // Swap mutations: reorder adjacent chip/weapon actions
+        var swapDescriptors = this.generateSwapDescriptors(scenario)
+        for (var desc in swapDescriptors) {
+            push(descriptors, desc)
+        }
+
+        // Substitution mutations: replace chip with alternative of same type
+        var subDescriptors = this.generateSubstitutionDescriptors(scenario)
+        for (var desc in subDescriptors) {
+            push(descriptors, desc)
+        }
+
+        // Insertion mutations: add unused chip at viable positions
+        var insDescriptors = this.generateInsertionDescriptors(scenario)
+        for (var desc in insDescriptors) {
+            push(descriptors, desc)
+        }
+
         debugInfo("[Mutation] Total descriptors generated: " + count(descriptors))
         return descriptors
     }
@@ -99,25 +117,186 @@ class ScenarioMutator {
         return descriptors
     }
 
+    // === SWAP MUTATIONS: Reorder adjacent non-movement actions ===
+    generateSwapDescriptors(scenario) {
+        var descriptors = []
+        for (var i = 0; i < count(scenario) - 1; i++) {
+            var a = scenario[i]
+            var b = scenario[i + 1]
+            // Only swap non-movement, non-checkpoint pairs
+            if (this.isChipOrWeaponAction(a) && this.isChipOrWeaponAction(b)) {
+                var desc = new MutationDescriptor(i, "swap", i + 1, "Swap actions " + i + " <-> " + (i + 1))
+                push(descriptors, desc)
+            }
+        }
+        return descriptors
+    }
+
+    // === SUBSTITUTION MUTATIONS: Replace a chip with an alternative of same action type ===
+    generateSubstitutionDescriptors(scenario) {
+        var descriptors = []
+        // Build set of chips already used in scenario
+        var usedChips = [:]
+        for (var action in scenario) {
+            if (action.chip != -1) {
+                usedChips[action.chip] = true
+            }
+        }
+
+        // For each chip action, find alternative chips of same type not already in scenario
+        for (var i = 0; i < count(scenario); i++) {
+            var action = scenario[i]
+            if (action.chip == -1) continue
+
+            var actionType = action.type
+            // Find alternative chips from equipped set
+            var equippedChips = mapKeys(this._arsenal.playerEquippedChips)
+            for (var altChip in equippedChips) {
+                if (altChip == action.chip) continue
+                if (mapContainsKey(usedChips, altChip)) continue
+                // Check cooldown — only substitute with available chips
+                if (getCooldown(altChip, this._player._id) != 0) continue
+
+                // Must match action type category (damage for damage, buff for buff)
+                var altType = this.classifyChipActionType(altChip)
+                var curType = this.classifyChipActionType(action.chip)
+                if (altType != curType) continue
+
+                var desc = new MutationDescriptor(i, "substituteChip", altChip,
+                    "Sub chip @" + i + ": " + action.chip + " -> " + altChip)
+                push(descriptors, desc)
+            }
+        }
+        return descriptors
+    }
+
+    // === INSERTION MUTATIONS: Add an unused chip at each viable position ===
+    generateInsertionDescriptors(scenario) {
+        var descriptors = []
+
+        // Collect chips already used in scenario
+        var usedChips = [:]
+        for (var action in scenario) {
+            if (action.chip != -1) {
+                usedChips[action.chip] = true
+            }
+        }
+
+        // Find equipped chips not used in scenario and off cooldown
+        var candidates = []
+        var equippedChips = mapKeys(this._arsenal.playerEquippedChips)
+        for (var chipId in equippedChips) {
+            if (mapContainsKey(usedChips, chipId)) continue
+            if (getCooldown(chipId, this._player._id) != 0) continue
+            push(candidates, chipId)
+        }
+
+        // For each candidate, try inserting after each action (including at start = index 0)
+        // Limit to a few insertion points to avoid combinatorial explosion
+        var insertPoints = [0]  // start
+        if (count(scenario) > 0) push(insertPoints, count(scenario))  // end
+        // Also try after first movement
+        for (var i = 0; i < count(scenario); i++) {
+            if (scenario[i].type >= Action.MOVEMENT_APPROACH && scenario[i].type <= Action.MOVEMENT_PAB) {
+                push(insertPoints, i + 1)
+                break  // just the first movement
+            }
+        }
+
+        for (var chipId in candidates) {
+            var actionType = this.classifyChipActionType(chipId)
+            for (var pos in insertPoints) {
+                var desc = new MutationDescriptor(pos, "insertChip", chipId,
+                    "Insert chip " + chipId + " at pos " + pos)
+                push(descriptors, desc)
+            }
+        }
+        return descriptors
+    }
+
+    // Helper: classify chip into action type for substitution matching
+    classifyChipActionType(chipId) {
+        // Poison/damage chips
+        if (isPoisonChip(chipId) || isDebuffChip(chipId)) return 1
+        // Offensive buff chips
+        if (isOffensiveBuff(chipId)) return 2
+        // Heal chips
+        if (isHealingChip(chipId)) return 3
+        // Shield chips
+        if (isShieldChip(chipId)) return 4
+        // Resource chips (TP/MP)
+        if (isResourceChip(chipId)) return 5
+        // Utility (positioning)
+        if (isUtilityChip(chipId)) return 6
+        // Damage return
+        if (isDamageReturnChip(chipId)) return 7
+        return 0  // unknown
+    }
+
+    // Helper: is this action a chip or weapon use (not movement/checkpoint)
+    isChipOrWeaponAction(action) {
+        return action.type == Action.ACTION_DIRECT ||
+               action.type == Action.ACTION_DOT ||
+               action.type == Action.ACTION_DEBUFF ||
+               action.type == Action.ACTION_BUFF
+    }
+
     applyMutation(scenario, descriptor) {
         // Store original value for reversion
-        var action = scenario[descriptor.actionIndex]
         var originalValue = null
 
         if (descriptor.field == "targetCell") {
+            var action = scenario[descriptor.actionIndex]
             originalValue = action.targetCell
             action.targetCell = descriptor.newValue
+        } else if (descriptor.field == "swap") {
+            var idxA = descriptor.actionIndex
+            var idxB = descriptor.newValue
+            // Swap the two actions in place
+            var tmp = scenario[idxA]
+            scenario[idxA] = scenario[idxB]
+            scenario[idxB] = tmp
+            originalValue = [idxA, idxB]  // store indices for revert
+        } else if (descriptor.field == "substituteChip") {
+            var action = scenario[descriptor.actionIndex]
+            originalValue = action.chip  // save original chip
+            action.chip = descriptor.newValue
+        } else if (descriptor.field == "insertChip") {
+            // Insert a new action at the specified position
+            var chipId = descriptor.newValue
+            var chipType = this.classifyChipActionType(chipId)
+            var aType = Action.ACTION_BUFF
+            if (chipType == 1) aType = Action.ACTION_DOT
+            else if (chipType == 3) aType = Action.ACTION_BUFF  // heals use buff path
+            else if (chipType == 4) aType = Action.ACTION_BUFF  // shields use buff path
+
+            var targetEntity = (chipType == 1) ? this._target : this._player
+            var targetCell = (chipType == 1) ? this._target._cellPos : this._player._cellPos
+            var newAction = new Action(aType, -1, chipId, targetCell, targetEntity)
+            insert(scenario, newAction, descriptor.actionIndex)
+            originalValue = descriptor.actionIndex  // store position for removal
         }
 
         return originalValue
     }
 
     revertMutation(scenario, descriptor, originalValue) {
-        // Restore original value
-        var action = scenario[descriptor.actionIndex]
-
         if (descriptor.field == "targetCell") {
+            var action = scenario[descriptor.actionIndex]
             action.targetCell = originalValue
+        } else if (descriptor.field == "swap") {
+            // Swap back
+            var idxA = originalValue[0]
+            var idxB = originalValue[1]
+            var tmp = scenario[idxA]
+            scenario[idxA] = scenario[idxB]
+            scenario[idxB] = tmp
+        } else if (descriptor.field == "substituteChip") {
+            var action = scenario[descriptor.actionIndex]
+            action.chip = originalValue
+        } else if (descriptor.field == "insertChip") {
+            // Remove the inserted action
+            remove(scenario, originalValue)
         }
     }
 
@@ -198,8 +377,8 @@ class HybridMutationPlanner {
     _simulator = null
     _scorer = null
 
-    MAX_MUTATIONS_PER_SEED = 50
-    MAX_SEEDS = 3
+    MAX_MUTATIONS_PER_SEED = 80
+    MAX_SEEDS = 6
 
     constructor(arsenal, player, target, fieldMap, scorer) {
         this._arsenal = arsenal
@@ -215,6 +394,8 @@ class HybridMutationPlanner {
         debugInfo("[HybridMutation] Starting with " + count(seedScenarios) + " seed scenarios")
 
         var opsBefore = getOperations()
+        // TP budget cap: allow current TP + 5 headroom for Adrenaline
+        var tpBudget = this._player._currTp + 5
 
         // 1. Select top seeds
         var topSeeds = this.selectTopSeeds(seedScenarios)
@@ -235,6 +416,9 @@ class HybridMutationPlanner {
                 bestScenario = seed
             }
 
+            // Ops safety: skip remaining seeds if budget is tight
+            if (getOperations() > 12000000) break
+
             // Generate mutations for this seed
             var descriptors = this._mutator.generateMutationDescriptors(seed)
 
@@ -242,6 +426,12 @@ class HybridMutationPlanner {
             var mutationLimit = min(count(descriptors), this.MAX_MUTATIONS_PER_SEED)
 
             for (var i = 0; i < mutationLimit; i++) {
+                // Ops safety: abort mutations if we're getting close to budget
+                if (getOperations() > 12000000) {
+                    debugInfo("[HybridMutation] Ops budget guard hit at " + getOperations() + ", stopping mutations")
+                    break
+                }
+
                 var desc = descriptors[i]
 
                 // Apply mutation IN-PLACE
@@ -249,9 +439,15 @@ class HybridMutationPlanner {
 
                 // Evaluate mutated scenario
                 var simResult = this._simulator.simulate(seed)
-                var score = this._scorer.score(simResult, seed)
-
                 mutationsEvaluated++
+
+                // TP budget validation: reject if scenario exceeds available TP
+                if (simResult.tpSpent > tpBudget) {
+                    this._mutator.revertMutation(seed, desc, originalValue)
+                    continue
+                }
+
+                var score = this._scorer.score(simResult, seed)
 
                 if (score > bestScore) {
                     bestScore = score

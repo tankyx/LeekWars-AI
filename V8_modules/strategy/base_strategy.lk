@@ -844,14 +844,20 @@ class Strategy {
         for (var c in mapKeys(arsenal.playerEquippedChips)) {
         }
 
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
-            useChip(CHIP_KNOWLEDGE, player._id)
-        }
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
-            useChip(CHIP_ELEVATION, player._id)
-        }
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
-            useChip(CHIP_ARMORING, player._id)
+        // Magic builds: skip turn-1 HP buffs entirely — save all 9 TP for
+        // the scenario engine (Wizardry + Boots + approach). Elevation/Armoring
+        // will be cast via mutation insertions on later turns when TP is banked.
+        var isMagicBuild = player._magic > player._strength + 100 && player._magic > player._agility + 100
+        if (!isMagicBuild) {
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
+                useChip(CHIP_KNOWLEDGE, player._id)
+            }
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
+                useChip(CHIP_ELEVATION, player._id)
+            }
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
+                useChip(CHIP_ARMORING, player._id)
+            }
         }
 
         var fightType = this.detectFightType()

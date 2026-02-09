@@ -27,6 +27,9 @@ class SimulationResult {
     bulbsHit = 0              // Number of bulbs hit
     bulbKillsSecured = 0      // Estimated bulb kills
 
+    // Poison source tracking for multi-stack scoring
+    poisonSourcesUsed = 0     // Count of distinct poison-applying actions
+
     constructor() {
         this.buffsApplied = []
         this.debuffsApplied = []
@@ -96,7 +99,9 @@ class ScenarioSimulator {
                         result.leekDamage += directDmg
                     }
 
-                    result.dotDamageQueued += breakdown['dot']
+                    var chipDot = breakdown['dot']
+                    result.dotDamageQueued += chipDot
+                    if (chipDot > 0) result.poisonSourcesUsed++
 
                     var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
                     var uncappedNova = breakdown['nova']
@@ -160,7 +165,9 @@ class ScenarioSimulator {
                             result.leekDamage += directDmg
                         }
 
-                        result.dotDamageQueued += weaponBreakdown['dot']
+                        var weaponDot = weaponBreakdown['dot']
+                        result.dotDamageQueued += weaponDot
+                        if (weaponDot > 0) result.poisonSourcesUsed++
 
                         var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
                         var uncappedNova = weaponBreakdown['nova']
@@ -308,16 +315,44 @@ class ScenarioSimulator {
             action.type == Action.ACTION_DEBUFF || action.type == Action.ACTION_BUFF) {
             if (action.chip != -1) {
                 var cost = getChipCost(action.chip)
-                return simTP >= cost
+                if (simTP < cost) return false
+                // Range validation for chips
+                if (mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
+                    var chipObj = this._arsenal.playerEquippedChips[action.chip]
+                    var tCell = action.targetCell
+                    if (tCell == -1 && action.targetEntity != null && action.targetEntity != -1) {
+                        tCell = action.targetEntity._cellPos
+                    }
+                    if (tCell != -1 && tCell != simPos) {
+                        var dist = getCellDistance(simPos, tCell)
+                        if (dist == null || dist < chipObj._minRange || dist > chipObj._maxRange) {
+                            return false
+                        }
+                    }
+                }
+                return true
             } else if (action.weaponId != -1) {
                     var weaponCost = null
+                    var weaponObj = null
                     if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
-                        var weaponObj = this._arsenal.playerEquippedWeapons[action.weaponId]
+                        weaponObj = this._arsenal.playerEquippedWeapons[action.weaponId]
                         weaponCost = weaponObj._cost
                     }
                 if (weaponCost == null) return false
                 var swapCost = (simWeapon != action.weaponId) ? 1 : 0
-                return simTP >= swapCost + weaponCost
+                if (simTP < swapCost + weaponCost) return false
+                // Range validation for weapons
+                var tCell = action.targetCell
+                if (tCell == -1 && action.targetEntity != null && action.targetEntity != -1) {
+                    tCell = action.targetEntity._cellPos
+                }
+                if (tCell != -1 && tCell != simPos) {
+                    var dist = getCellDistance(simPos, tCell)
+                    if (dist == null || dist < weaponObj._minRange || dist > weaponObj._maxRange) {
+                        return false
+                    }
+                }
+                return true
             }
         }
         else if (action.type == Action.ACTION_WEAPON_SWAP) {

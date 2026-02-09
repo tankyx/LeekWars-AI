@@ -158,7 +158,9 @@ class ScenarioScorer {
             } else if (currentTurn >= 5) {
                 // Increase penalty on later turns - standing still dealing 0 damage
                 // must not be masked by shield/buff value
-                noDamagePenalty = noDamagePenalty * 3  // -6000 on turn 5+
+                // Capped scaling: -6000 at turn 5, -10000 at turn 8, max -14000
+                var turnScale = min(7, 3 + floor((currentTurn - 5) / 2))
+                noDamagePenalty = noDamagePenalty * turnScale
             }
 
             score += noDamagePenalty
@@ -177,6 +179,14 @@ class ScenarioScorer {
             // Antidote multiplier applied
         }
 
+        // Poison stack bonus: reward scenarios with multiple distinct poison sources
+        var poisonStackWeight = this.getWeight('poisonStacks', 0)
+        if (poisonStackWeight > 0 && simResult.poisonSourcesUsed > 1) {
+            // Each additional source beyond the first gets bonus (diminishing)
+            var stackBonus = (simResult.poisonSourcesUsed - 1) * poisonStackWeight * 0.5
+            score += stackBonus
+        }
+
         var novaWeight = this.getWeight('novaEffects', (dotWeight + damageWeight) / 2.0)
         var novaDamageQueued = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
         var novaScore = novaDamageQueued * novaWeight
@@ -185,6 +195,11 @@ class ScenarioScorer {
         }
 
         var ehpWeight = this.calculateEhpWeight()
+        // Apply shieldValue weight as a multiplier when profile emphasizes shields
+        var shieldValueWeight = this.getWeight('shieldValue', 0)
+        if (shieldValueWeight > 100) {
+            ehpWeight *= (1.0 + (shieldValueWeight - 100) / 400.0)
+        }
         var shieldScore = simResult.shieldsGained * ehpWeight
         var relShieldScore = this.calculateRelativeShieldValue(simResult.relativeShieldGained) * ehpWeight
 

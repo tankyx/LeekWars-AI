@@ -143,15 +143,15 @@ class UnifiedStrategy extends Strategy {
         var aliveEnemies = count(getAliveEnemies())
         var topK
         if (getTurn() < 5 || aliveEnemies > 3) {
-            topK = 20  // Early game / Battle Royale: conserve ops
+            topK = 35  // Early game / Battle Royale: moderate search
         } else if (aliveEnemies == 1) {
-            topK = 50  // 1v1 endgame: deep search
+            topK = 80  // 1v1 endgame: deep search
         } else {
-            topK = 35  // Mid-game: balanced
+            topK = 55  // Mid-game: balanced
         }
         // Ops budget checkpoint: reduce topK if already expensive
-        if (getOperations() > 8000000) {
-            topK = max(5, floor(topK * 0.5))
+        if (getOperations() > 11000000) {
+            topK = max(8, floor(topK * 0.5))
         }
         var evaluateCount = min(topK, count(scenariosWithQuickScore))
         var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
@@ -160,7 +160,7 @@ class UnifiedStrategy extends Strategy {
 
         // ===== PHASE 2: HYBRID MUTATION SYSTEM =====
         var USE_MUTATIONS = true  // Enable/disable mutation system
-        var mutationOpsLimit = 10000000  // Only run if under 10M ops (2M safety margin)
+        var mutationOpsLimit = 12500000  // Only run if under 12.5M ops (1.5M safety margin)
 
         if (USE_MUTATIONS && getOperations() < mutationOpsLimit && count(scenariosWithQuickScore) >= 1) {
             debugInfo("[MUTATION] Starting hybrid mutation pass (ops=" + getOperations() + ")")
@@ -170,9 +170,9 @@ class UnifiedStrategy extends Strategy {
             var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
             var scorer = new ScenarioScorer(player, target, this._fieldMap, adaptedWeights)
 
-            // Extract top 3 scenarios as mutation seeds
+            // Extract top scenarios as mutation seeds
             var mutationSeeds = []
-            var seedLimit = min(3, count(scenariosWithQuickScore))
+            var seedLimit = min(6, count(scenariosWithQuickScore))
             for (var i = 0; i < seedLimit; i++) {
                 push(mutationSeeds, scenariosWithQuickScore[i]['scenario'])
             }
@@ -204,9 +204,6 @@ class UnifiedStrategy extends Strategy {
 
         var simulator = new ScenarioSimulator(arsenal, player, target, this._fieldMap)
         var scorer = new ScenarioScorer(player, target, this._fieldMap, adaptedWeights)
-
-        // Phase 3: Monte Carlo simulator (100 iterations for efficiency)
-        var monteCarloSim = new MonteCarloSimulator(arsenal, player, target, 100)
 
         var bestScore = -999999
         var bestScenario = null
@@ -245,22 +242,22 @@ class UnifiedStrategy extends Strategy {
             }
 
             // Ops budget hard stop: prevent timeout
-            if (getOperations() > 12000000) {
-                debugInfo("[BUDGET-EXIT] Ops > 12M after " + (i + 1) + " scenarios, executing best")
+            if (getOperations() > 13000000) {
+                debugInfo("[BUDGET-EXIT] Ops > 13M after " + (i + 1) + " scenarios, executing best")
                 break
             }
         }
         var simOps = stopOp("Simulate & score top " + evaluateCount)
 
-        // Phase 4: Enemy Response Lookahead (optimized: 1 scenario only)
-        if (count(scenarioResults) >= 1 && getOperations() < 10000000) {
+        // Phase 4: Enemy Response Lookahead (top 3 scenarios)
+        if (count(scenarioResults) >= 1 && getOperations() < 12500000) {
             startOp()
             arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
 
             var predictor = new EnemyPredictor(this._fieldMap, arsenal, player, target)
-            var lookaheadCount = min(1, count(scenarioResults))
+            var lookaheadCount = min(3, count(scenarioResults))
 
 
             for (var i = 0; i < lookaheadCount; i++) {

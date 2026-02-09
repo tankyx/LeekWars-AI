@@ -26,7 +26,16 @@ class ScenarioGenerator extends ScenarioCombos {
                 // If Antidote cooldown expired AND we've sustained for at least 3 turns → back to BAIT
                 if (antidoteCD == 0 && (currentTurn - LAST_POISON_DUMP_TURN) >= 3) {
                     POISON_PHASE = "BAIT"
+                    BAIT_START_TURN = currentTurn
                 }
+            }
+
+            // BAIT timeout: if we've been baiting for 5+ turns and enemy hasn't used Antidote,
+            // they likely don't have it or won't use it — allow COVID in BAIT scenarios
+            // (don't force DUMP — BAIT scenarios are more flexible with approach/positioning)
+            if (POISON_PHASE == "BAIT" && (currentTurn - BAIT_START_TURN) >= 5) {
+                debugInfo("[POISON-PHASE] BAIT timeout (5 turns) — enemy likely lacks Antidote, allowing COVID")
+                POISON_PHASE = "DUMP"
             }
         } else {
             debugInfo("[SCENARIO-GEN] No poison capability - skipping Antidote detection")

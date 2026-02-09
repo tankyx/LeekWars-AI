@@ -1170,19 +1170,40 @@ class ScenarioCombos extends ScenarioHelpers {
             return null  // Not in bait phase
         }
 
+        // AGGRESSIVE BAIT: Apply Wizardry + ALL poisons (except COVID, saved for DUMP)
+        // If enemy Antidotes this wave, great — we forced the cooldown for COVID.
+        // If they don't Antidote, even better — massive poison ticking.
 
-        // Use ONLY cheap poisons to bait Antidote: VENOM (4 TP), TOXIN (5 TP)
-        var baitChips = []
-        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_VENOM) &&
-            getCooldown(CHIP_VENOM, this._player._id) == 0) {
-            push(baitChips, CHIP_VENOM)
-        }
-        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TOXIN) &&
-            getCooldown(CHIP_TOXIN, this._player._id) == 0) {
-            push(baitChips, CHIP_TOXIN)
+        // 1. Wizardry FIRST — amplifies all subsequent poison by +150-170 Magic
+        var tpWiz = getCachedChipCost(CHIP_WIZARDRY)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY) &&
+            getCooldown(CHIP_WIZARDRY, this._player._id) == 0 &&
+            tpBudget >= tpWiz) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
+            tpBudget -= tpWiz
         }
 
-        // Move to attack position first (poison chips/weapons need range)
+        // 2. Leather Boots for extra MP (critical for getting in range)
+        var tpBoots = getCachedChipCost(CHIP_LEATHER_BOOTS)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
+            getCooldown(CHIP_LEATHER_BOOTS, this._player._id) == 0 &&
+            tpBudget >= tpBoots) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, -1, this._player))
+            tpBudget -= tpBoots
+            mpBudget += 2
+        }
+
+        // 3. Adrenaline for extra TP
+        var tpAdren = getCachedChipCost(CHIP_ADRENALINE)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE) &&
+            getCooldown(CHIP_ADRENALINE, this._player._id) == 0 &&
+            tpBudget >= tpAdren) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
+            tpBudget -= tpAdren
+            tpBudget += 5  // Adrenaline grants +5 TP
+        }
+
+        // 4. Move to attack position (poison chips/weapons need range)
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
@@ -1195,23 +1216,43 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // Apply 1-2 cheap poisons
-        var poisonsApplied = 0
-        for (var chipId in baitChips) {
-            if (poisonsApplied >= 2) break
-            if (tpBudget < getCachedChipCost(chipId)) continue
+        // 5. ALL poison chips sorted by damage (except COVID — save for DUMP phase)
+        var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)
+        for (var poisonChip in poisonChips) {
+            var chipId = poisonChip._id
+            if (chipId == CHIP_COVID) continue  // COVID saved for DUMP (needs Antidote CD >= 3)
+
+            var chipCost = getCachedChipCost(chipId)
+            if (tpBudget < chipCost) continue
+            if (getCooldown(chipId, this._player._id) > 0) continue
 
             var dist = getCellDistance(simPos, this._target._cellPos)
-            var chip = this._arsenal.playerEquippedChips[chipId]
-            if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
+            if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
             if (!lineOfSight(simPos, this._target._cellPos)) continue
 
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
-            tpBudget -= getCachedChipCost(chipId)
-            poisonsApplied++
+            tpBudget -= chipCost
         }
 
-        // Use remaining TP on weapon attacks (poison weapons like gazor/flame_thrower)
+        // 6. Denial chips — Soporific (TP drain) and Ball and Chain (MP drain)
+        //    These scale with Magic and cripple the enemy's ability to act
+        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+        for (var dChip in denialChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
+            if (getCooldown(dChip, this._player._id) > 0) continue
+            var dCost = getCachedChipCost(dChip)
+            if (tpBudget < dCost) continue
+
+            var dObj = this._arsenal.playerEquippedChips[dChip]
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            if (dist == null || dist < dObj._minRange || dist > dObj._maxRange) continue
+            if (!lineOfSight(simPos, this._target._cellPos)) continue
+
+            push(actions, new Action(Action.ACTION_DEBUFF, -1, dChip, this._target._cellPos, this._target))
+            tpBudget -= dCost
+        }
+
+        // 7. Weapon attacks with remaining TP (poison weapons like Gazor/Flame Thrower)
         if (tpBudget >= 4) {
             var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
             for (var atk in attackActions) {
@@ -1219,7 +1260,7 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // Kite away with remaining MP
+        // 8. Kite away with remaining MP
         var kiteAction = this.getKiteAwayAction(mpBudget)
         if (kiteAction != null) {
             push(actions, kiteAction)
@@ -1918,18 +1959,23 @@ class ScenarioCombos extends ScenarioHelpers {
 
 
         // 1. Apply offensive buff based on build type (detect from player stats)
+        //    IMPORTANT: Magic builds should NOT cast Wizardry out of range -- it
+        //    only lasts 2 turns and will expire before we reach the enemy. Save it
+        //    for when we are actually in poison range.
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
         var buffApplied = false
 
         if (mag > str && mag > agi) {  // Magic build
-            var tpWizBA = getCachedChipCost(CHIP_WIZARDRY)
-            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY) &&
-                getCooldown(CHIP_WIZARDRY, this._player._id) == 0 &&
-                tpBudget >= tpWizBA) {
-                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
-                tpBudget -= tpWizBA
+            // Skip Wizardry when out of range — buff expires before we can use it
+            // Use Knowledge (+260 WIS) or Adrenaline instead (longer cooldown, immediate value)
+            var tpKnowBA = getCachedChipCost(CHIP_KNOWLEDGE)
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_KNOWLEDGE) &&
+                getCooldown(CHIP_KNOWLEDGE, this._player._id) == 0 &&
+                tpBudget >= tpKnowBA) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_KNOWLEDGE, -1, this._player))
+                tpBudget -= tpKnowBA
                 buffApplied = true
             }
         } else if (str > mag && str > agi) {  // Strength build
