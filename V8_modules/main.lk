@@ -16,7 +16,7 @@ include('operation_tracker.lk')
 include('debug_config.lk')
 include('monte_carlo_sim.lk')
 include('kill_planning.lk')
-// cooldown_tracker.lk included via scenario_generator chain
+include('cooldown_tracker.lk')  // Must be included before scenario_generator to define POISON_PHASE globals
 include('enemy_predictor.lk')
 include('reachable_graph.lk')
 include('performance_infra.lk')

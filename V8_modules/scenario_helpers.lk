@@ -1130,15 +1130,12 @@ class ScenarioHelpers {
             // Apply magic build weapon penalty (poison weapons exempt - they scale with MAG)
             var damage = isPoisonWeapon(weaponId) ? rawDamage : rawDamage * weaponDamageMultiplier
             if (damage > bestDamage) {
-                // POISON WEAPONS: Always allow, never check AoE safety
-                var isPoison = isPoisonWeapon(weaponId)
-
-                var isSafe = isPoison  // Poison weapons always safe
+                var isSafe = true
                 var needsReposition = false
                 var repositionCell = -1
 
-                if (!isPoison && this._strategy != null) {
-                    // Only check AoE safety for non-poison weapons
+                if (this._strategy != null) {
+                    // Check AoE safety for ALL weapons (including poison)
                     var aoeCheck = this._strategy.checkAoEWeaponSafety(weaponId, targetCell, simPos)
                     isSafe = aoeCheck['safe']
                     needsReposition = aoeCheck['needsRepositioning']
@@ -1197,15 +1194,12 @@ class ScenarioHelpers {
 
             var damage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, this._target)
             if (damage > bestDamage) {
-                // POISON CHIPS: Always allow, never check AoE safety (can be used outside AoE)
-                var isPoison = isPoisonChip(chipId)
-
-                var isSafe = isPoison  // Poison chips always safe
+                var isSafe = true
                 var needsReposition = false
                 var repositionCell = -1
 
-                if (!isPoison && this._strategy != null) {
-                    // Only check AoE safety for non-poison chips
+                if (this._strategy != null) {
+                    // Check AoE safety for ALL chips (including poison/denial)
                     var aoeCheck = this._strategy.checkAoESafetyFromCell(chipId, chipTargetCell, simPos)
                     isSafe = aoeCheck['safe']
                     needsReposition = aoeCheck['needsRepositioning']

@@ -210,3 +210,55 @@ The AI must tag weapons by **damage type** (`DIRECT`, `POISON`, `NOVA`, `DEBUFF`
 3. **Aggressive BAIT** — Wizardry + all poisons (except COVID) + denial (Soporific/Ball and Chain) from turn 1
 4. **Turn-1 TP conservation** — magic builds skip Knowledge/Elevation/Armoring on turn 1 to maximize approach + poison
 5. **BAIT timeout** — 5-turn timeout forces DUMP if enemy never Antidotes (may lack Antidote chip)
+6. **AoE self-damage prevention** — All weapons/chips (including poison/denial) now go through AoE safety checks; `validateAndFilterActions` rejects any action whose blast radius includes the caster
+
+---
+
+## Testing
+
+### Upload code to LeekWars
+
+```bash
+python3 tools/upload_v8.py
+```
+
+This uploads all `.lk` files from `V8_modules/` to the LeekWars server under the `8.0/V8/` folder structure.
+
+### Run test fights
+
+```bash
+python3 tools/lw_test_script.py <num_tests> <script_id> <opponent> [--leek <name>] [--account <name>] [--map <id>]
+```
+
+**Important:** The correct script ID for the V8 AI is **456711** (the `main.lk` inside the `8.0/V8/` folder). Do NOT use 447461 — that is an old, broken script.
+
+**Examples:**
+
+```bash
+# MargaretHamilton (Magic/Poison) vs Domingo — 10 fights
+python3 tools/lw_test_script.py 10 456711 domingo --leek MargaretHamilton
+
+# KurtGodel (Tank/Science) vs Domingo — 10 fights
+python3 tools/lw_test_script.py 10 456711 domingo --leek KurtGodel
+
+# EdsgerDijkstra (STR/burst) vs Domingo — 10 fights
+python3 tools/lw_test_script.py 10 456711 domingo --leek EdsgerDijkstra
+```
+
+### Analyzing fight data
+
+Fight data is saved to `debug_fight_<id>.json`. Parse with:
+
+```python
+import json
+with open('debug_fight_<id>.json') as f:
+    d = json.load(f)
+data = d['data']       # fight_data: leeks, map, actions, dead, ops
+report = d['report']   # duration, win (1=team1, 2=team2, 0=draw)
+actions = data['actions']  # action tuples
+ops = data['ops']      # entity_id -> total ops consumed
+```
+
+**Key action codes:** 6=NEW_TURN, 7=LEEK_TURN, 8=END_TURN, 10=MOVE, 12=USE_CHIP, 13=SET_WEAPON, 16=USE_WEAPON, 101=LIFE_LOST, 103=CARE, 110=POISON_DAMAGE, 302=ADD_CHIP_EFFECT, 301=ADD_WEAPON_EFFECT, 5=PLAYER_DEAD, 1002=BUG/CRASH.
+
+**If entity 0 has 0 ops and action 1002 every turn**, the script has a runtime error — check the script ID is correct (456711) and that all includes resolve.

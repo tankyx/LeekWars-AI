@@ -1230,6 +1230,16 @@ class ScenarioCombos extends ScenarioHelpers {
             if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
             if (!lineOfSight(simPos, this._target._cellPos)) continue
 
+            // AoE safety check: skip if chip would hit caster
+            if (poisonChip._aoeType != AREA_POINT) {
+                var aoeCells = fieldMap.getAoEAffectedCells(this._target._cellPos, poisonChip._aoeType, simPos)
+                var hitsSelf = false
+                for (var ac in aoeCells) {
+                    if (ac == simPos) { hitsSelf = true; break }
+                }
+                if (hitsSelf) continue
+            }
+
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
             tpBudget -= chipCost
         }
@@ -1247,6 +1257,16 @@ class ScenarioCombos extends ScenarioHelpers {
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < dObj._minRange || dist > dObj._maxRange) continue
             if (!lineOfSight(simPos, this._target._cellPos)) continue
+
+            // AoE safety check: skip if chip would hit caster
+            if (dObj._aoeType != AREA_POINT) {
+                var aoeCells = fieldMap.getAoEAffectedCells(this._target._cellPos, dObj._aoeType, simPos)
+                var hitsSelf = false
+                for (var ac in aoeCells) {
+                    if (ac == simPos) { hitsSelf = true; break }
+                }
+                if (hitsSelf) continue
+            }
 
             push(actions, new Action(Action.ACTION_DEBUFF, -1, dChip, this._target._cellPos, this._target))
             tpBudget -= dCost

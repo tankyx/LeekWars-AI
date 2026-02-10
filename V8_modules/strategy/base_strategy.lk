@@ -2837,6 +2837,31 @@ class Strategy {
                     reason = "Out of range/LOS"
                 }
             }
+
+            // AoE self-damage guard: reject attacks that would hit the caster
+            if (isValid && (action.type == Action.ACTION_DIRECT ||
+                           action.type == Action.ACTION_DOT ||
+                           action.type == Action.ACTION_DEBUFF)) {
+                var aoeItem = null
+                if (action.chip != -1 && mapContainsKey(arsenal.playerEquippedChips, action.chip)) {
+                    aoeItem = arsenal.playerEquippedChips[action.chip]
+                } else if (action.weaponId != -1 && mapContainsKey(arsenal.playerEquippedWeapons, action.weaponId)) {
+                    aoeItem = arsenal.playerEquippedWeapons[action.weaponId]
+                }
+                if (aoeItem != null && aoeItem._aoeType != AREA_POINT) {
+                    var aimCell = action.targetCell
+                    if (aimCell != -1 && aimCell != simulatedPos) {
+                        var aoeCells = fieldMap.getAoEAffectedCells(aimCell, aoeItem._aoeType, simulatedPos)
+                        for (var ac in aoeCells) {
+                            if (ac == simulatedPos) {
+                                isValid = false
+                                reason = "AoE would hit caster"
+                                break
+                            }
+                        }
+                    }
+                }
+            }
             
             if (isValid) {
                 push(validActions, action)
