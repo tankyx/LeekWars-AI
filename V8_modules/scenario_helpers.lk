@@ -139,7 +139,35 @@ class ScenarioHelpers {
         var mag = this._player._magic
         var agi = this._player._agility
 
-        if (str > mag && str > agi) {
+        // Bruiser/Reflect: triggers AGGRO when EITHER Steroid OR damage return expires
+        if (str > 400 && agi > 400 &&
+            (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) ||
+             mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) ||
+             mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE))) {
+            // Check Steroid
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
+                var steroidActive = getCooldown(CHIP_STEROID, this._player._id) > 0
+                if (!steroidActive) return true
+            }
+            // Check Warm Up
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP)) {
+                var warmUpActive = getCooldown(CHIP_WARM_UP, this._player._id) > 0
+                if (!warmUpActive) return true
+            }
+            // Check damage return
+            var hasReturn = this._player.hasDamageReturn()
+            if (!hasReturn) {
+                var mirrorAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) &&
+                                     getCooldown(CHIP_MIRROR, this._player._id) == 0
+                var thornAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) &&
+                                    getCooldown(CHIP_THORN, this._player._id) == 0
+                var brambleAvailable = mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE) &&
+                                      getCooldown(CHIP_BRAMBLE, this._player._id) == 0
+                if (mirrorAvailable || thornAvailable || brambleAvailable) return true
+            }
+        }
+
+        else if (str > mag && str > agi) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
                 var steroidActive = getCooldown(CHIP_STEROID, this._player._id) > 0
                 if (!steroidActive) {
@@ -396,6 +424,19 @@ class ScenarioHelpers {
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
+
+        // Bruiser/Reflect build: alternate Steroid and Warm Up (both benefit the build)
+        if (str > 400 && agi > 400 &&
+            mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
+            mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP)) {
+            // Prefer whichever is off cooldown; Steroid first (damage primary)
+            if (getCooldown(CHIP_STEROID, this._player._id) == 0) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player)
+            }
+            if (getCooldown(CHIP_WARM_UP, this._player._id) == 0) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player)
+            }
+        }
 
         if (str > mag && str > agi) {
             // Strength build: CHIP_STEROID (+160 STR)

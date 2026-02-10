@@ -500,6 +500,14 @@ class ScenarioScorer {
             if (hpPercent < 50) {
                 threatPenalty *= 2.0
             }
+
+            // Bruiser/Reflect baiting: reduce threat penalty when damage return is active
+            // Standing in enemy LoS with reflect is a winning move — they hurt themselves
+            var hasDamageReturn = this._player.hasDamageReturn()
+            if (hasDamageReturn && this._player._agility > 400) {
+                // Reduce threat penalty by 70% when reflect is active + high AGI
+                threatPenalty *= 0.3
+            }
         }
 
         // HNS: Threat-aware cover bonus for cells that break LoS to enemies
@@ -737,6 +745,8 @@ class ScenarioScorer {
         var hasNova = false
         var hasShield = false
         var hasDenial = false     // Soporific, Ball and Chain
+        var hasDamageReturn = false  // Mirror, Thorn, Bramble
+        var hasWarmUp = false
 
         for (var action in scenario) {
             if (action.chip == CHIP_GRAPPLE) hasGrapple = true
@@ -746,6 +756,8 @@ class ScenarioScorer {
             if (action.chip == CHIP_PRISM) hasPrism = true
             if (action.chip == CHIP_FORTRESS || action.chip == CHIP_WALL) hasShield = true
             if (action.chip == CHIP_SOPORIFIC || action.chip == CHIP_BALL_AND_CHAIN) hasDenial = true
+            if (action.chip == CHIP_MIRROR || action.chip == CHIP_THORN || action.chip == CHIP_BRAMBLE) hasDamageReturn = true
+            if (action.chip == CHIP_WARM_UP) hasWarmUp = true
             if (action.weaponId == WEAPON_HEAVY_SWORD) hasMelee = true
             if (action.weaponId == WEAPON_NEUTRINO) hasNeutrino = true
             if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
@@ -775,6 +787,16 @@ class ScenarioScorer {
 
         // Poison + Denial: poison stacking + enemy can't act
         if (hasPoison && hasDenial) bonus += 300
+
+        // Bruiser synergies: damage return + offensive buffs + weapon spam
+        // Steroid + Damage Return: STR weapons hit harder while reflect punishes counterattacks
+        if (hasSteroid && hasDamageReturn) bonus += 350
+
+        // Warm Up + Damage Return: AGI boosts reflect % AND crit chance for Unstable Destroyer heal
+        if (hasWarmUp && hasDamageReturn) bonus += 400
+
+        // Steroid + Warm Up: dual-buff bruiser turn (massive stat spike)
+        if (hasSteroid && hasWarmUp) bonus += 300
 
         return bonus
     }

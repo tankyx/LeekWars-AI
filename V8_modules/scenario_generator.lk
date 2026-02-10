@@ -74,6 +74,13 @@ class ScenarioGenerator extends ScenarioCombos {
     buildKillScenarios(scenarios, availableTP, availableMP) {
         debugInfo("[STATE-KILL] Enemy killable - checking OTKO cells for optimal positioning")
 
+        // Bruiser/Reflect: reflect + buff + weapon spam
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            debugInfo("[STATE-KILL] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
+            push(scenarios, bruiserReflect)
+        }
+
         // Poison rotation scenarios (can finish with DoT)
         var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
         if (poisonBait != null) {
@@ -134,6 +141,13 @@ class ScenarioGenerator extends ScenarioCombos {
 
     buildAggroScenarios(scenarios, availableTP, availableMP) {
         debugInfo("[STATE-AGGRO] Early game / buff application phase")
+
+        // Bruiser/Reflect: reflect + buff + weapon spam
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            debugInfo("[STATE-AGGRO] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
+            push(scenarios, bruiserReflect)
+        }
 
         // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
         var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
@@ -224,6 +238,13 @@ class ScenarioGenerator extends ScenarioCombos {
 
     buildAttritionScenarios(scenarios, availableTP, availableMP) {
         debugInfo("[STATE-ATTRITION] Ongoing balanced combat")
+
+        // Bruiser/Reflect: reflect + buff + weapon spam
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            debugInfo("[STATE-ATTRITION] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
+            push(scenarios, bruiserReflect)
+        }
 
         // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
         var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
@@ -318,6 +339,13 @@ class ScenarioGenerator extends ScenarioCombos {
 
     buildSustainScenarios(scenarios, availableTP, availableMP) {
         debugInfo("[STATE-SUSTAIN] HP management phase")
+
+        // Bruiser/Reflect: reflect + buff + weapon spam (heal built-in)
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            debugInfo("[STATE-SUSTAIN] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
+            push(scenarios, bruiserReflect)
+        }
 
         // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
         var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)

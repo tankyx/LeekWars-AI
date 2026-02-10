@@ -158,6 +158,15 @@ class ScenarioSimulator {
                             result.lifestealHealing += 100
                         }
 
+                        // WEAPON_UNSTABLE_DESTROYER crit-heal passive: 50-150 HP on critical hit
+                        // Estimate: critChance * avgHeal = (agi/2000) * 100
+                        if (action.weaponId == WEAPON_UNSTABLE_DESTROYER) {
+                            var agi = this._player._agility
+                            var critChance = min(0.5, agi / 2000.0)
+                            var avgCritHeal = 100  // Average of 50-150 passive heal
+                            result.lifestealHealing += critChance * avgCritHeal
+                        }
+
                         // Track bulb vs leek damage
                         if (targetIsBulb) {
                             result.bulbDamage += directDmg
@@ -214,7 +223,7 @@ class ScenarioSimulator {
                 } else if (action.chip == CHIP_PROTEIN) {
                     result.relativeShieldGained += this.estimateRelativeShield(action.chip)
                 } else if (action.chip == CHIP_LEATHER_BOOTS) {
-                    result.relativeShieldGained += this.estimateRelativeShield(action.chip)
+                    // LEATHER_BOOTS: +2 MP resource, not a shield
                     simMP += 2
                 } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
@@ -237,7 +246,9 @@ class ScenarioSimulator {
                     // ELEVATION: +80 Max HP (one-time, also heals)
                     result.hpGained += 80
                 } else if (action.chip == CHIP_WARM_UP) {
-
+                    // WARM_UP: +170-190 AGI for 3 turns (avg 180)
+                    // AGI boosts crit chance and damage return % but isn't tracked in sim
+                    // (crit-heal uses base _agility which is acceptable approximation)
                 } else if (action.chip == CHIP_ADRENALINE) {
 
                     simTP += 5
@@ -404,9 +415,6 @@ class ScenarioSimulator {
         }
         if (chip == CHIP_PROTEIN) {
             return 10  // Fixed 10% (does not scale)
-        }
-        if (chip == CHIP_LEATHER_BOOTS) {
-            return 20  // Fixed 20% (does not scale)
         }
         return 0
     }

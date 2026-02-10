@@ -46,7 +46,7 @@ function initializeItemRoles() {
     ROLE_SHIELD_RELATIVE[CHIP_WALL] = true
     ROLE_SHIELD_RELATIVE[CHIP_FORTRESS] = true
     ROLE_SHIELD_RELATIVE[CHIP_PROTEIN] = true
-    ROLE_SHIELD_RELATIVE[CHIP_LEATHER_BOOTS] = true
+    // Note: CHIP_LEATHER_BOOTS is ROLE_RESOURCE (MP boost), not a shield
 
     // Offensive buffs (stat boosts)
     ROLE_OFFENSIVE_BUFF[CHIP_STEROID] = true
@@ -85,6 +85,7 @@ function initializeItemRoles() {
     // Resource management (TP/MP boosts)
     ROLE_RESOURCE[CHIP_ADRENALINE] = true
     ROLE_RESOURCE[CHIP_SPARK] = true
+    ROLE_RESOURCE[CHIP_LEATHER_BOOTS] = true
 }
 
 // === Primary query functions (O(1) map lookup) ===

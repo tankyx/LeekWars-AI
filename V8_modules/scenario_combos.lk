@@ -1948,6 +1948,97 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
+    // === Bruiser / Reflect Scenario ===
+
+    createBruiserReflectScenario(availableTP, availableMP) {
+        // STR/AGI hybrid: apply reflect buffs + offensive buff → approach mid-range → weapon spam
+        // Key: damage return BEFORE movement so reflect is active when enemy counterattacks
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var str = this._player._strength
+        var agi = this._player._agility
+        // Only for bruiser builds
+        if (str < 400 || agi < 400) return null
+
+        var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        if (!hasMirror && !hasThorn && !hasBramble) return null
+
+        // Minimum TP to make this worthwhile (buff + at least 1 weapon attack)
+        if (tpBudget < 10) return null
+
+        // 1. Damage return FIRST (active before we engage)
+        var damageReturnAction = this.getDamageReturnBuff()
+        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
+            push(actions, damageReturnAction)
+            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        }
+
+        // 2. Offensive buff (Steroid or Warm Up — getOffensiveBuff handles bruiser alternation)
+        var buffAction = this.getOffensiveBuff()
+        if (buffAction != null && tpBudget >= getCachedChipCost(buffAction.chip) &&
+            getCooldown(buffAction.chip, this._player._id) == 0) {
+            push(actions, buffAction)
+            tpBudget -= getCachedChipCost(buffAction.chip)
+        }
+
+        // 3. Healing if needed (before engaging — survive the counterattack)
+        var hpPercent = this._player._currHealth * 100 / this._player._maxHealth
+        if (hpPercent < 70) {
+            var healAction = this.getHealingAction(tpBudget, 0.7)
+            if (healAction != null) {
+                push(actions, healAction)
+                tpBudget -= getCachedChipCost(healAction.chip)
+            }
+        }
+
+        // 4. Leather Boots for extra mobility
+        var leatherBoots = this.getLeatherBootsBuff()
+        if (leatherBoots != null) {
+            var bootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= bootsCost) {
+                push(actions, leatherBoots)
+                tpBudget -= bootsCost
+                mpBudget += 2
+            }
+        }
+
+        // 5. Move to mid-range (5-6 sweet spot: Unstable Destroyer 1-6, M_Laser 5-12, Rifle 7-9)
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        // 6. Weapon attacks with remaining TP
+        if (tpBudget >= 5) {
+            var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            for (var atk in attackActions) {
+                push(actions, atk)
+            }
+        }
+
+        // 7. DON'T flee — stay in LoS to bait enemy attacks into reflect
+        // Only hide if HP is critically low
+        if (hpPercent < 30) {
+            var hideAction = this.getHideAndSeekAction(mpBudget)
+            if (hideAction != null) {
+                push(actions, hideAction)
+            }
+        }
+
+        if (count(actions) < 2) return null
+        return actions
+    }
+
     // === Buff Approach ===
 
     createBuffApproachScenario(availableTP, availableMP) {
@@ -1987,7 +2078,29 @@ class ScenarioCombos extends ScenarioHelpers {
         var agi = this._player._agility
         var buffApplied = false
 
-        if (mag > str && mag > agi) {  // Magic build
+        if (str > 400 && agi > 400 &&
+            (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR) ||
+             mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN) ||
+             mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE))) {
+            // Bruiser/Reflect build: Steroid first, then Warm Up
+            var tpSterBR = getCachedChipCost(CHIP_STEROID)
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
+                getCooldown(CHIP_STEROID, this._player._id) == 0 &&
+                tpBudget >= tpSterBR) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+                tpBudget -= tpSterBR
+                buffApplied = true
+            }
+            // Second buff: Warm Up (AGI for reflect + crit)
+            var tpWarmBR = getCachedChipCost(CHIP_WARM_UP)
+            if (!buffApplied && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
+                getCooldown(CHIP_WARM_UP, this._player._id) == 0 &&
+                tpBudget >= tpWarmBR) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player))
+                tpBudget -= tpWarmBR
+                buffApplied = true
+            }
+        } else if (mag > str && mag > agi) {  // Magic build
             // Skip Wizardry when out of range — buff expires before we can use it
             // Use Knowledge (+260 WIS) or Adrenaline instead (longer cooldown, immediate value)
             var tpKnowBA = getCachedChipCost(CHIP_KNOWLEDGE)

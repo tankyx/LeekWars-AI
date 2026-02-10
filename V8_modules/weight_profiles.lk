@@ -7,6 +7,7 @@ global BUILD_AGILITY = 3
 global BUILD_STRENGTH_SCIENCE = 4
 global BUILD_TANK_SCI = 5
 global BUILD_HYBRID = 6
+global BUILD_BRUISER_REFLECT = 7
 
 // Strength build weights - Maximize burst damage and weapon spam
 global STRENGTH_WEIGHTS = [
@@ -142,6 +143,28 @@ global HYBRID_WEIGHTS = [
     'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
 ]
 
+// Bruiser/Reflect build weights - STR weapons + AGI damage return baiting
+global BRUISER_REFLECT_WEIGHTS = [
+    'burstDamage': 250,        // High: STR weapons are primary damage
+    'weaponUses': 100,         // High: weapon spam like strength builds
+    'tpEfficiency': 50,        // Tertiary: TP conservation
+    'dotEffects': 0,           // Irrelevant: no DoT synergy
+    'kiteDistance': -30,       // Negative: WANT to be hit when reflect is active
+    'damageReturn': 400,       // Primary secondary: Mirror/Thorn/Bramble value
+    'poisonStacks': 0,         // Irrelevant: no poison synergy
+    'shieldValue': 60,         // Low-moderate: some defensive value
+    'healValue': 80,           // Moderate: crit-heal from Unstable Destroyer supplements
+    'distanceToTarget': -10,   // Slight penalty: prefer mid-range 4-7
+    'threatReduction': 30,     // Low: WANT to be hit when reflect active
+    'otkoBonus': 5000,         // Massive: prioritize kill opportunities
+    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
+    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
+    'bulbKillBonusHealer': 2500,  // Bulb targeting: healer kill bonus
+    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
+    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
+    'multiTargetBonus': 550    // Multi-target LoS: AoE opportunity value
+]
+
 // Boss fight weights - Specialized for crystal puzzle mechanics
 global BOSS_WEIGHTS = [
     'burstDamage': 0,          // Irrelevant: no damage phase
@@ -181,6 +204,9 @@ function getWeightsForBuild(buildType) {
     if (buildType == BUILD_HYBRID) {
         return HYBRID_WEIGHTS
     }
+    if (buildType == BUILD_BRUISER_REFLECT) {
+        return BRUISER_REFLECT_WEIGHTS
+    }
     return STRENGTH_WEIGHTS  // Default fallback
 }
 
@@ -198,7 +224,16 @@ function detectBuildType(player) {
         return BUILD_TANK_SCI
     }
 
-    // 2. Strength/Science hybrid: STR-dominant with significant Science
+    // 2. Bruiser/Reflect: STR + AGI hybrid with damage return chips
+    //    e.g. 600 STR, 500 AGI with Mirror/Thorn/Bramble
+    if (strStat > 400 && agiStat > 400 &&
+        (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) ||
+         mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) ||
+         mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE))) {
+        return BUILD_BRUISER_REFLECT
+    }
+
+    // 3. Strength/Science hybrid: STR-dominant with significant Science
     if (strStat >= magStat && strStat >= agiStat && sciStat >= 200) {
         return BUILD_STRENGTH_SCIENCE
     }
