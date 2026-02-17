@@ -362,6 +362,8 @@ class ScenarioMutator {
             dst.context = src.context
             // Copy weapon swap target (set by OTKO/combo scenarios)
             if (src.weapon != null) dst.weapon = src.weapon
+            // Copy bulb AI function reference (set by summon actions)
+            if (src.bulbAIFunc != null) dst.bulbAIFunc = src.bulbAIFunc
             push(cloned, dst)
         }
         return cloned
@@ -376,6 +378,7 @@ class HybridMutationPlanner {
     _mutator = null
     _simulator = null
     _scorer = null
+    _summonTPReserve = 0
 
     MAX_MUTATIONS_PER_SEED = 80
     MAX_SEEDS = 6
@@ -388,14 +391,25 @@ class HybridMutationPlanner {
         this._mutator = new ScenarioMutator(arsenal, player, target, fieldMap)
         this._simulator = new ScenarioSimulator(arsenal, player, target, fieldMap)
         this._scorer = scorer
+
+        // Reserve TP for post-combat bulb summoning
+        this._summonTPReserve = 0
+        var hasSavant = mapContainsKey(arsenal.playerEquippedChips, CHIP_SAVANT_BULB)
+        var hasMetallic = mapContainsKey(arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
+        if (hasSavant || hasMetallic) {
+            var bulbChip = hasSavant ? CHIP_SAVANT_BULB : CHIP_METALLIC_BULB
+            if (getCooldown(bulbChip, player._id) == 0) {
+                this._summonTPReserve = getChipCost(bulbChip)
+            }
+        }
     }
 
     planWithMutations(seedScenarios) {
         debugInfo("[HybridMutation] Starting with " + count(seedScenarios) + " seed scenarios")
 
         var opsBefore = getOperations()
-        // TP budget cap: allow current TP + 5 headroom for Adrenaline
-        var tpBudget = this._player._currTp + 5
+        // TP budget cap: allow current TP + 5 headroom for Adrenaline, minus summon reserve
+        var tpBudget = this._player._currTp + 5 - this._summonTPReserve
 
         // 1. Select top seeds
         var topSeeds = this.selectTopSeeds(seedScenarios)

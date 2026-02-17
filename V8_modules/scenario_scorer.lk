@@ -22,6 +22,11 @@ class ScenarioScorer {
     }
 
     score(simResult, scenario) {
+        // Boss PUZZLE phase: use dedicated puzzle scoring
+        if (_isBossFight && _bossPhase == "PUZZLE") {
+            return this.scorePuzzle(simResult, scenario)
+        }
+
         var score = 0
 
         var enemyHP = this._target._currHealth
@@ -300,7 +305,7 @@ class ScenarioScorer {
 
             if (enemyCount > 4) {
                 // EARLY PHASE: Penalize moving toward center
-                var centerCell = getCellFromXY(0, 0)  // Map center at (0, 0)
+                var centerCell = getCellFromXY(9, 9)  // Map center at (9, 9)
                 if (centerCell != null && simResult.finalPosition != -1) {
                     var currentDistToCenter = getCellDistance(this._player._cellPos, centerCell)
                     var finalDistToCenter = getCellDistance(simResult.finalPosition, centerCell)
@@ -377,7 +382,7 @@ class ScenarioScorer {
         // Calculate DoT value multiplier based on enemy Antidote cooldown status
         var enemyId = this._target._id
         var tracker = new CooldownTracker(this._target)
-        var antidoteCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+        var antidoteCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
 
         if (antidoteCd == 0) {
             // Antidote READY → enemy will cleanse next turn
@@ -799,5 +804,41 @@ class ScenarioScorer {
         if (hasSteroid && hasWarmUp) bonus += 300
 
         return bonus
+    }
+
+    // =========================================================================
+    // Boss PUZZLE Phase Scoring
+    // =========================================================================
+
+    scorePuzzle(simResult, scenario) {
+        var score = 0
+
+        // PRIMARY: crystal axis progress
+        score += simResult.crystalAxisReduction * this.getWeight('axisAlignment', 2000)
+
+        // MASSIVE: crystal fully solved
+        if (simResult.crystalSolved) {
+            score += this.getWeight('crystalSolved', 5000)
+        }
+
+        // SECONDARY: proximity improvement (getting within grapple range)
+        if (simResult.finalPosition != -1 && _bossTargetEID != null) {
+            var initialDist = getCellDistance(this._player._cellPos, _myCrystalCell)
+            var finalDist = getCellDistance(simResult.finalPosition, _myCrystalCell)
+            if (initialDist != null && finalDist != null) {
+                var proximityGain = initialDist - finalDist
+                score += proximityGain * this.getWeight('crystalProximity', 800)
+            }
+        }
+
+        // Healing bonus (minor — survive boss attacks)
+        score += simResult.hpGained * this.getWeight('healValue', 50) * 0.1
+
+        // Penalize doing nothing
+        if (simResult.actionsExecuted == 0) {
+            score -= 500
+        }
+
+        return score
     }
 }

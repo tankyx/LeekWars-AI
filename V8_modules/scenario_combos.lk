@@ -1022,7 +1022,7 @@ class ScenarioCombos extends ScenarioHelpers {
 
         // Never cast COVID unless enemy Antidote cooldown >= 3
         var covidTracker = new CooldownTracker(this._target)
-        var covidAntidoteCD = covidTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE)
+        var covidAntidoteCD = covidTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
         if (covidAntidoteCD < 3) return null
 
         var tpGrapple = getCachedChipCost(CHIP_GRAPPLE)
@@ -1550,7 +1550,7 @@ class ScenarioCombos extends ScenarioHelpers {
         // 3. GRAPPLE-COVID combo FIRST (highest priority — COVID is massive DoT)
         // Never cast COVID unless enemy Antidote cooldown >= 3
         var dumpTracker = new CooldownTracker(this._target)
-        var dumpAntidoteCD = dumpTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE)
+        var dumpAntidoteCD = dumpTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
 
         var hasGrapple = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
                          getCooldown(CHIP_GRAPPLE, this._player._id) == 0
@@ -2161,5 +2161,343 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         return null
+    }
+
+    // =========================================================================
+    // === Boss PUZZLE Phase: Crystal Scenario Creators ===
+    // =========================================================================
+
+    createCrystalSlideScenario(tp, mp) {
+        if (_bossTargetEID == null || _myCrystalSolved) {
+            debugInfo("[SLIDE] No crystal or solved")
+            return null
+        }
+        if (_graalEntity == null) {
+            debugInfo("[SLIDE] No graal")
+            return null
+        }
+
+        var primaryDir = getDirectionToSlide(null)
+        if (primaryDir == null) {
+            debugInfo("[SLIDE] No direction")
+            return null
+        }
+
+        // Try both directions: primary (optimal) and alternate (from other side)
+        var directions = [primaryDir]
+        var altDir = (primaryDir == "pull") ? "push" : "pull"
+        push(directions, altDir)
+
+        var playerCell = this._player._cellPos
+        debugInfo("[SLIDE] primaryDir=" + primaryDir + " playerCell=" + playerCell + " crystalCell=" + _myCrystalCell + " color=" + _myCrystalColor)
+
+        for (var direction in directions) {
+            var slideChip = (direction == "pull") ? CHIP_GRAPPLE : CHIP_BOXING_GLOVE
+            var minDist = (direction == "pull") ? 1 : 2
+            var maxDist = 8
+
+            // Check if chip is equipped
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, slideChip)) {
+                debugInfo("[SLIDE] " + direction + ": chip NOT equipped (chipId=" + slideChip + ")")
+                continue
+            }
+
+            var chipCost = getCachedChipCost(slideChip)
+            if (tp < chipCost) {
+                debugInfo("[SLIDE] " + direction + ": insufficient TP " + tp + " < " + chipCost)
+                continue
+            }
+
+            // Check if player is already in valid position
+            var distToCrystal = getCellDistance(playerCell, _myCrystalCell)
+            var onSameLine = isOnSameLine(playerCell, _myCrystalCell)
+            var inRange = distToCrystal != null && distToCrystal >= minDist && distToCrystal <= maxDist
+
+            debugInfo("[SLIDE] " + direction + ": dist=" + distToCrystal + " sameLine=" + onSameLine + " inRange=" + inRange)
+
+            if (inRange && onSameLine) {
+                // Verify correct side
+                var correctSide = this.checkCorrectSide(playerCell, null, direction)
+                debugInfo("[SLIDE] " + direction + ": correctSide=" + correctSide)
+                if (correctSide) {
+                    var actions = []
+                    push(actions, new Action(Action.ACTION_DEBUFF, -1, slideChip, _myCrystalCell, this._target))
+                    debugInfo("[SLIDE] SUCCESS: " + direction + " from current position!")
+                    return actions
+                }
+            }
+
+            // Need to reposition — find valid positioning cell
+            var posCell = this.findSlidePositionCell(null, direction, mp)
+            debugInfo("[SLIDE] " + direction + ": findSlidePositionCell=" + posCell)
+            if (posCell != null && posCell != -1) {
+                var moveCost = getGraphMPCost(posCell)
+                if (moveCost != null && moveCost < 999 && moveCost <= mp) {
+                    var actions = []
+                    push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, posCell, this._target))
+                    push(actions, new Action(Action.ACTION_DEBUFF, -1, slideChip, _myCrystalCell, this._target))
+                    debugInfo("[SLIDE] SUCCESS: " + direction + " with move to " + posCell)
+                    return actions
+                }
+            }
+        }
+
+        debugInfo("[SLIDE] FAILED: no direction worked")
+        return null
+    }
+
+    createMultiSlideScenario(tp, mp) {
+        if (_bossTargetEID == null || _myCrystalSolved) return null
+        if (_graalEntity == null) return null
+
+        var primaryDir = getDirectionToSlide(null)
+        if (primaryDir == null) return null
+
+        var playerCell = this._player._cellPos
+        var distToCrystal = getCellDistance(playerCell, _myCrystalCell)
+        var onSameLine = isOnSameLine(playerCell, _myCrystalCell)
+        if (!onSameLine || distToCrystal == null) return null
+
+        // Try both directions
+        var directions = [primaryDir]
+        var altDir = (primaryDir == "pull") ? "push" : "pull"
+        push(directions, altDir)
+
+        for (var direction in directions) {
+            var slideChip = (direction == "pull") ? CHIP_GRAPPLE : CHIP_BOXING_GLOVE
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, slideChip)) continue
+
+            var minDist = (direction == "pull") ? 1 : 2
+            if (distToCrystal < minDist || distToCrystal > 8) continue
+            if (!this.checkCorrectSide(playerCell, null, direction)) continue
+
+            var chipCost = getCachedChipCost(slideChip)
+            var maxUsesPerRound = 4
+
+            var actions = []
+            var tpBudget = tp
+            var usesAdded = 0
+
+            while (tpBudget >= chipCost && usesAdded < maxUsesPerRound) {
+                push(actions, new Action(Action.ACTION_DEBUFF, -1, slideChip, _myCrystalCell, this._target))
+                tpBudget -= chipCost
+                usesAdded++
+            }
+
+            if (usesAdded > 1) return actions
+        }
+
+        return null
+    }
+
+    createCrystalInversionScenario(tp, mp) {
+        if (_bossTargetEID == null || _myCrystalSolved) return null
+        if (_graalEntity == null) return null
+        if (_usedInversion) return null
+
+        var distToAxis = getDistanceToAxis(null)
+        if (distToAxis <= 8) return null  // Not far enough to justify inversion
+
+        // Check if CHIP_INVERSION is equipped
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_INVERSION)) return null
+
+        var chipCost = getCachedChipCost(CHIP_INVERSION)
+        if (tp < chipCost) return null
+
+        var actions = []
+        var playerCell = this._player._cellPos
+        var dist = getCellDistance(playerCell, _myCrystalCell)
+
+        // CHIP_INVERSION range: 1-14, requires LOS
+        if (dist != null && dist >= 1 && dist <= 14 && lineOfSight(playerCell, _myCrystalCell)) {
+            // Already in range
+            push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_INVERSION, _myCrystalCell, this._target))
+            return actions
+        }
+
+        // Need to approach crystal first
+        if (mp <= 0) return null
+
+        // Move toward crystal
+        var reachableCells = getReachableCells()
+        var bestCell = -1
+        var bestDist = 999
+
+        for (var cellId in reachableCells) {
+            var d = getCellDistance(cellId, _myCrystalCell)
+            if (d == null || d < 1 || d > 14) continue
+            if (!lineOfSight(cellId, _myCrystalCell)) continue
+            var pathCost = getGraphMPCost(cellId)
+            if (pathCost >= 999 || pathCost > mp) continue
+            if (d < bestDist) {
+                bestDist = d
+                bestCell = cellId
+            }
+        }
+
+        if (bestCell == -1) return null
+
+        push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, bestCell, this._target))
+        push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_INVERSION, _myCrystalCell, this._target))
+
+        return actions
+    }
+
+    createCrystalApproachScenario(tp, mp) {
+        if (_bossTargetEID == null || _myCrystalSolved) return null
+        if (_graalEntity == null) return null
+        if (mp <= 0) return null
+
+        var primaryDir = getDirectionToSlide(null)
+        if (primaryDir == null) return null
+
+        var actions = []
+        var tpBudget = tp
+        var mpBudget = mp
+
+        // Optionally use Leather Boots for extra MP
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
+            getCooldown(CHIP_LEATHER_BOOTS, this._player._id) == 0 &&
+            tpBudget >= getCachedChipCost(CHIP_LEATHER_BOOTS)) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, -1, this._player))
+            tpBudget -= getCachedChipCost(CHIP_LEATHER_BOOTS)
+            mpBudget += 2
+        }
+
+        // Try both directions — primary first, then alternate
+        var directions = [primaryDir]
+        var altDir = (primaryDir == "pull") ? "push" : "pull"
+        push(directions, altDir)
+
+        for (var direction in directions) {
+            var slideChip = (direction == "pull") ? CHIP_GRAPPLE : CHIP_BOXING_GLOVE
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, slideChip)) continue
+
+            // Find positioning cell reachable this turn
+            var posCell = this.findSlidePositionCell(null, direction, mpBudget)
+            if (posCell != null && posCell != -1) {
+                push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, posCell, this._target))
+                if (count(actions) > 0) return actions
+            }
+
+            // Fallback: move toward the IDEAL slide position for this direction
+            var idealCell = findIdealSlideCell(null, direction, this._player._cellPos)
+            if (idealCell != -1) {
+                push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, idealCell, this._target))
+                if (count(actions) > 0) return actions
+            }
+        }
+
+        // Last resort: move toward crystal cell
+        var approachCell = this.getApproachEnemyCell(mpBudget)
+        if (approachCell != null && approachCell != -1) {
+            push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target))
+        }
+
+        if (count(actions) > 0) return actions
+        return null
+    }
+
+    createPuzzleDefenseScenario(tp, mp) {
+        var actions = []
+        var tpBudget = tp
+
+        // Use available defensive buffs
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS) &&
+            getCooldown(CHIP_FORTRESS, this._player._id) == 0 &&
+            tpBudget >= getCachedChipCost(CHIP_FORTRESS)) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
+            tpBudget -= getCachedChipCost(CHIP_FORTRESS)
+        }
+
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL) &&
+            getCooldown(CHIP_WALL, this._player._id) == 0 &&
+            tpBudget >= getCachedChipCost(CHIP_WALL)) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
+            tpBudget -= getCachedChipCost(CHIP_WALL)
+        }
+
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ARMORING) &&
+            getCooldown(CHIP_ARMORING, this._player._id) == 0 &&
+            tpBudget >= getCachedChipCost(CHIP_ARMORING)) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ARMORING, -1, this._player))
+            tpBudget -= getCachedChipCost(CHIP_ARMORING)
+        }
+
+        // Heal if needed
+        var hpRatio = this._player._currHealth / this._player._maxHealth
+        if (hpRatio < 0.8) {
+            var healAction = this.getHealingAction(tpBudget, 0.8)
+            if (healAction != null) {
+                push(actions, healAction)
+            }
+        }
+
+        if (count(actions) > 0) return actions
+        return null
+    }
+
+    // =========================================================================
+    // === Boss PUZZLE Helpers ===
+    // =========================================================================
+
+    checkCorrectSide(playerCell, crystal, direction) {
+        var pcx = getCellX(playerCell)
+        var pcy = getCellY(playerCell)
+        var cx = _myCrystalX
+        var cy = _myCrystalY
+        var gx = _graalX
+        var gy = _graalY
+        var axis = _myCrystalGoalAxis
+
+        if (axis == "north" || axis == "south") {
+            if (direction == "pull") {
+                return (cx < gx && pcx > cx) || (cx > gx && pcx < cx)
+            } else {
+                return (cx < gx && pcx < cx) || (cx > gx && pcx > cx)
+            }
+        } else {
+            if (direction == "pull") {
+                return (cy < gy && pcy > cy) || (cy > gy && pcy < cy)
+            } else {
+                return (cy < gy && pcy < cy) || (cy > gy && pcy > cy)
+            }
+        }
+    }
+
+    findSlidePositionCell(crystal, direction, mpBudget) {
+        // Find a cell on the same line as the crystal, within grapple/boxing_glove range,
+        // on the correct side for the slide direction.
+        var minDist = (direction == "pull") ? 1 : 2
+        var maxDist = 8
+
+        var reachableCells = getReachableCells()
+        if (reachableCells == null || count(reachableCells) == 0) return -1
+
+        var bestCell = -1
+        var bestCost = 999
+
+        for (var cellId in reachableCells) {
+            // Must be on same line as crystal
+            if (!isOnSameLine(cellId, _myCrystalCell)) continue
+
+            var dist = getCellDistance(cellId, _myCrystalCell)
+            if (dist == null || dist < minDist || dist > maxDist) continue
+
+            if (!this.checkCorrectSide(cellId, crystal, direction)) continue
+
+            // Also reject if cell is occupied by another entity
+            if (isEntity(cellId) && cellId != this._player._cellPos) continue
+
+            var pathCost = getGraphMPCost(cellId)
+            if (pathCost >= 999 || pathCost > mpBudget) continue
+
+            if (pathCost < bestCost) {
+                bestCost = pathCost
+                bestCell = cellId
+            }
+        }
+
+        return bestCell
     }
 }

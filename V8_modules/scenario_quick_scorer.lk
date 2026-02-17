@@ -13,6 +13,18 @@ class ScenarioQuickScorer {
     }
 
     quickScore(scenario) {
+        // Boss PUZZLE: simplified scoring for crystal scenarios
+        if (_isBossFight && _bossPhase == "PUZZLE") {
+            var qs = 0
+            for (var a in scenario) {
+                if (a.chip == CHIP_GRAPPLE || a.chip == CHIP_BOXING_GLOVE) qs += 2000
+                if (a.chip == CHIP_INVERSION) qs += 3000
+                if (a.type >= Action.MOVEMENT_APPROACH && a.type <= Action.MOVEMENT_PAB) qs += 500
+                if (a.type == Action.ACTION_BUFF) qs += 100
+            }
+            return qs
+        }
+
         var score = 0
 
         var tpEstimate = 0

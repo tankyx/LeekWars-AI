@@ -30,6 +30,10 @@ class SimulationResult {
     // Poison source tracking for multi-stack scoring
     poisonSourcesUsed = 0     // Count of distinct poison-applying actions
 
+    // Boss PUZZLE crystal tracking
+    crystalAxisReduction = 0  // Cells of alignment improvement
+    crystalSolved = false      // Crystal reached goal axis with LOS
+
     constructor() {
         this.buffsApplied = []
         this.debuffsApplied = []
@@ -62,11 +66,15 @@ class ScenarioSimulator {
         var simScience = this._player._science
         var simWeaponUses = [:]
 
-        var simEnemyCurrHP = this._target._currHealth
-        var simEnemyMaxHP = this._target._maxHealth
+        var simEnemyCurrHP = 1
+        var simEnemyMaxHP = 1
+        if (this._target != null) {
+            simEnemyCurrHP = this._target._currHealth
+            simEnemyMaxHP = this._target._maxHealth
+        }
 
         // Detect if target is a bulb
-        var targetIsBulb = isBulb(this._target)
+        var targetIsBulb = (this._target != null) ? isBulb(this._target) : false
 
         result.finalPosition = simPos
 
@@ -80,10 +88,15 @@ class ScenarioSimulator {
                 if (action.chip != -1) {
 
                     var chipCost = getChipCost(action.chip)
-                    var chipDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target)
+                    var chipDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target) : 0
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
-                    var directDmg = breakdown['direct']
+                    // Use net damage (post-shield) for accurate scenario ranking
+                    var rawDirect = breakdown['direct']
+                    var relShield = (this._target != null) ? this._target._relShield / 100 : 0
+                    var absShield = (this._target != null) ? this._target._absShield : 0
+                    var directDmg = rawDirect * (1 - relShield) - absShield
+                    if (directDmg < 0) directDmg = 0
                     result.damageDealt += directDmg
                     simEnemyCurrHP -= directDmg
                     if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
@@ -141,10 +154,15 @@ class ScenarioSimulator {
 
                         var swapCost = (simWeapon != action.weaponId) ? 1 : 0
                         var weaponCost = weaponObj._cost
-                        var weaponDmg = this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.weaponId, this._target)
+                        var weaponDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.weaponId, this._target) : 0
                         var weaponBreakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
 
-                        var directDmg = weaponBreakdown['direct']
+                        // Use net damage (post-shield) for accurate scenario ranking
+                        var rawDirect = weaponBreakdown['direct']
+                        var relShield = (this._target != null) ? this._target._relShield / 100 : 0
+                        var absShield = (this._target != null) ? this._target._absShield : 0
+                        var directDmg = rawDirect * (1 - relShield) - absShield
+                        if (directDmg < 0) directDmg = 0
                         result.damageDealt += directDmg
                         simEnemyCurrHP -= directDmg
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
@@ -300,10 +318,19 @@ class ScenarioSimulator {
                     result.actionsExecuted++
                 }
             }
+            else if (action.type == Action.ACTION_SUMMON) {
+                // Summon costs TP but contributes future value (not simulated in detail)
+                if (action.chip != -1) {
+                    var summonCost = getChipCost(action.chip)
+                    result.tpSpent += summonCost
+                    simTP -= summonCost
+                    result.actionsExecuted++
+                }
+            }
             else if (action.type == Action.ACTION_CHECKPOINT) {
-                
+
                 result.actionsExecuted++
-                
+
             }
         }
 
@@ -316,6 +343,39 @@ class ScenarioSimulator {
             if (totalDamageToTarget >= simEnemyCurrHP) {
                 result.bulbKillsSecured = 1
             }
+        }
+
+        // Boss PUZZLE: simulate crystal movement from grapple/boxing_glove actions
+        if (_isBossFight && _bossPhase == "PUZZLE" && _bossTargetEID != null) {
+            var simCX = _myCrystalX
+            var simCY = _myCrystalY
+            var gX = _graalX
+            var gY = _graalY
+            var initialDist = getDistanceToAxis(null)
+
+            for (var action in actions) {
+                if (action.chip == CHIP_GRAPPLE && action.targetCell == _myCrystalCell) {
+                    // Grapple pulls crystal 1 cell toward simPos along line
+                    var pullDir = computePullDirection(simCX, simCY, simPos)
+                    simCX += pullDir[0]
+                    simCY += pullDir[1]
+                }
+                if (action.chip == CHIP_BOXING_GLOVE && action.targetCell == _myCrystalCell) {
+                    // Boxing glove pushes crystal 1 cell away from simPos
+                    var pushDir = computePushDirection(simCX, simCY, simPos)
+                    simCX += pushDir[0]
+                    simCY += pushDir[1]
+                }
+            }
+
+            var finalDist = computeAxisDist(simCX, simCY, gX, gY, _myCrystalGoalAxis)
+            result.crystalAxisReduction = initialDist - finalDist
+            result.crystalSolved = checkOnAxis(simCX, simCY, gX, gY, _myCrystalGoalAxis)
+
+            // Zero out damage during PUZZLE (enemies are invulnerable)
+            result.damageDealt = 0
+            result.dotDamageQueued = 0
+            result.novaDamageQueued = 0
         }
 
         return result
@@ -381,6 +441,11 @@ class ScenarioSimulator {
         }
         else if (action.type == Action.MOVEMENT_FLEE) {
             return simMP >= 1  
+        }
+        else if (action.type == Action.ACTION_SUMMON) {
+            if (action.chip == -1) return false
+            var summonCost = getChipCost(action.chip)
+            return simTP >= summonCost
         }
         else if (action.type == Action.ACTION_TELEPORT) {
             var tpCost = getChipCost(CHIP_TELEPORTATION)

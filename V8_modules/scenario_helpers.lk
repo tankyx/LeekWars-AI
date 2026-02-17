@@ -46,6 +46,11 @@ class ScenarioHelpers {
     // =========================================================================
 
     determineStrategicState() {
+        // Boss PUZZLE phase: override all standard states
+        if (_isBossFight && _bossPhase == "PUZZLE") {
+            return "PUZZLE"
+        }
+
         var playerHP = this._player._currHealth
         var playerMaxHP = this._player._maxHealth
         var enemyHP = this._target._currHealth
@@ -1295,5 +1300,112 @@ class ScenarioHelpers {
         // Lifesteal formula: Heal = Damage * Wisdom / 1000
         var wisdom = this._player._wisdom
         return (damage * wisdom) / 1000
+    }
+
+    // =========================================================================
+    // === Bulb Summoning Helpers ===
+    // =========================================================================
+
+    // Find an empty adjacent cell for bulb placement
+    // Returns cell ID or -1 if none found
+    // Applies choke point penalty: cells with <= 2 neighbors get deprioritized
+    findBulbSummonCell(fromCell, summonRange) {
+        var bestCell = -1
+        var bestScore = -999
+
+        // Check cells within summon range
+        for (var offset in [1, -1, 17, -17, 18, -18]) {
+            var candidate = fromCell + offset
+            if (candidate < 0 || candidate >= 613) continue
+            if (isObstacle(candidate) || isEntity(candidate)) continue
+
+            var dist = getCellDistance(fromCell, candidate)
+            if (dist == null || dist < 1 || dist > summonRange) continue
+
+            // Score: prefer cells with more open neighbors (avoid choke points)
+            var neighborCount = 0
+            for (var nOffset in [1, -1, 17, -17, 18, -18]) {
+                var n = candidate + nOffset
+                if (n >= 0 && n < 613 && !isObstacle(n)) {
+                    neighborCount++
+                }
+            }
+
+            // Choke point penalty: fewer than 3 open neighbors = narrow corridor
+            var score = neighborCount * 10
+            if (neighborCount <= 2) score -= 50
+
+            if (score > bestScore) {
+                bestScore = score
+                bestCell = candidate
+            }
+        }
+
+        return bestCell
+    }
+
+    // Calculate summon value for Metallic Bulb (defensive)
+    // Value = (Total Shield Value x 3 turns) + (Bulb HP / 2)
+    calculateMetallicBulbValue() {
+        // Shield: -20 dmg for 3 turns, Armor: -25 dmg for 4 turns, Wall: ~4.5% for 2 turns
+        var shieldValue = 20 * 3 + 25 * 4 + 15  // ~115 effective shielding
+        var bulbHP = estimateBulbStat(150, 400, getLevel())  // Metallic bulb HP range
+        return shieldValue * 3 + floor(bulbHP / 2)
+    }
+
+    // Calculate summon value for Savant Bulb (offensive)
+    // Value = (Mutation HP Buff x 1) + (Expected Alteration Damage x 2 turns)
+    calculateSavantBulbValue() {
+        var mutationHP = 17  // avg 15-20 max life
+        var alterationDmg = 19  // avg 18-20 nova damage per shot
+        var adrenalineTPValue = 5 * 30  // +5 TP worth ~150 damage value
+        return mutationHP + alterationDmg * 2 + adrenalineTPValue
+    }
+
+    // Create a summon action to append at the end of a scenario
+    // Strategy: Metallic when HP < 50%, Savant when HP >= 50%
+    createSummonAction() {
+        var playerHP = this._player._currHealth
+        var playerMaxHP = this._player._maxHealth
+        var hpPercent = (playerHP * 100) / playerMaxHP
+
+        // Check if Savant Bulb available
+        var hasSavant = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_SAVANT_BULB)
+        var savantReady = hasSavant && getCooldown(CHIP_SAVANT_BULB, this._player._id) == 0
+
+        // Check if Metallic Bulb available
+        var hasMetallic = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
+        var metallicReady = hasMetallic && getCooldown(CHIP_METALLIC_BULB, this._player._id) == 0
+
+        if (!savantReady && !metallicReady) return null
+
+        // Choose bulb based on HP threshold
+        var chosenChip = -1
+        var chosenAI = null
+        var summonRange = 1
+
+        if (hpPercent < 50 && metallicReady) {
+            chosenChip = CHIP_METALLIC_BULB
+            chosenAI = metallicBulbAI
+            summonRange = 1  // Metallic: range 1
+        } else if (savantReady) {
+            chosenChip = CHIP_SAVANT_BULB
+            chosenAI = savantBulbAI
+            summonRange = 4  // Savant: range 1-4
+        } else if (metallicReady) {
+            chosenChip = CHIP_METALLIC_BULB
+            chosenAI = metallicBulbAI
+            summonRange = 1
+        } else {
+            return null
+        }
+
+        // Find placement cell
+        var summonCell = this.findBulbSummonCell(this._player._cellPos, summonRange)
+        if (summonCell == -1) return null
+
+        var action = new Action(Action.ACTION_SUMMON, -1, chosenChip, summonCell, null)
+        action.bulbAIFunc = chosenAI
+        return action
     }
 }

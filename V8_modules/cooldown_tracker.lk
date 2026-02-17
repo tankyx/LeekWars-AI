@@ -16,14 +16,14 @@ global BAIT_START_TURN = 1  // Track when BAIT phase started (for timeout → DU
 class CooldownTracker {
     _target = null
 
-    // Known chip IDs (from LeekScript constants)
-    static CHIP_ANTIDOTE = 14
-    static CHIP_CURE = 15
-    static CHIP_REMISSION = 240
-    static CHIP_WALL = 103
-    static CHIP_FORTRESS = 201
-    static CHIP_MIRROR = 104
-    static CHIP_SHIELD = 22
+    // Use LeekScript global constants for chip IDs (avoids ID mismatch with CHIP_DATABASE)
+    static CHIP_ANTIDOTE_ID = CHIP_ANTIDOTE
+    static CHIP_CURE_ID = CHIP_CURE
+    static CHIP_REMISSION_ID = CHIP_REMISSION
+    static CHIP_WALL_ID = CHIP_WALL
+    static CHIP_FORTRESS_ID = CHIP_FORTRESS
+    static CHIP_MIRROR_ID = CHIP_MIRROR
+    static CHIP_SHIELD_ID = CHIP_SHIELD
 
     constructor(target) {
         this._target = target
@@ -93,15 +93,15 @@ class CooldownTracker {
     // Get chip cooldown duration (hardcoded for key chips)
     getChipCooldown(chipId) {
         // Antidote/healing chips
-        if (chipId == CooldownTracker.CHIP_ANTIDOTE) return 4
-        if (chipId == CooldownTracker.CHIP_CURE) return 3
-        if (chipId == CooldownTracker.CHIP_REMISSION) return 6
+        if (chipId == CooldownTracker.CHIP_ANTIDOTE_ID) return 4
+        if (chipId == CooldownTracker.CHIP_CURE_ID) return 3
+        if (chipId == CooldownTracker.CHIP_REMISSION_ID) return 6
 
         // Shield chips
-        if (chipId == CooldownTracker.CHIP_WALL) return 3
-        if (chipId == CooldownTracker.CHIP_FORTRESS) return 4
-        if (chipId == CooldownTracker.CHIP_SHIELD) return 4
-        if (chipId == CooldownTracker.CHIP_MIRROR) return 4
+        if (chipId == CooldownTracker.CHIP_WALL_ID) return 3
+        if (chipId == CooldownTracker.CHIP_FORTRESS_ID) return 4
+        if (chipId == CooldownTracker.CHIP_SHIELD_ID) return 4
+        if (chipId == CooldownTracker.CHIP_MIRROR_ID) return 4
 
         // Default: no cooldown tracking
         return 0
@@ -134,13 +134,24 @@ class CooldownTracker {
     }
 
     // Detect poison removal (indicates Antidote use)
+    // prevPoison = actual remaining duration stored last turn
+    // currPoison = current remaining duration from getEffectRemaining()
+    // Natural decay: poison ticks down 1 per turn, so expected = prevPoison - 1
+    // Antidote: clears ALL poison stacks instantly (currPoison = 0 when prevPoison > 1)
     detectAntidoteUse(enemyId, prevPoison, currPoison) {
         debugInfo("[ANTIDOTE-CHECK] enemyId=" + enemyId + " prevPoison=" + prevPoison + " currPoison=" + currPoison)
 
-        // If poison duration decreased unexpectedly, enemy used Antidote
-        if (prevPoison > 0 && currPoison == 0) {
+        // Natural decay: prevPoison -> prevPoison-1 is expected (1 turn passes)
+        // If prevPoison was 1, it naturally expires to 0 — NOT an Antidote
+        if (prevPoison <= 1) {
+            debugInfo("[ANTIDOTE-CHECK] Poison naturally expired (prevPoison <= 1)")
+            return false
+        }
+
+        // If poison was active (duration > 1) but now fully cleared, enemy used Antidote
+        if (prevPoison > 1 && currPoison == 0) {
             debugInfo("[COOLDOWN] Detected Antidote use by " + getName(enemyId))
-            this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+            this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
 
             // Update poison phase: BAIT → DUMP
             ANTIDOTE_USED_THIS_FIGHT = true
@@ -150,25 +161,25 @@ class CooldownTracker {
             return true
         }
 
-        // Check for early cleanse (duration dropped by more than 1 turn)
+        // Check for early cleanse (duration dropped by more than 1 turn = natural decay)
         if (prevPoison > currPoison + 1) {
             debugInfo("[COOLDOWN] Detected early poison cleanse by " + getName(enemyId))
-            this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+            this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
             return true
         }
 
-        debugInfo("[ANTIDOTE-CHECK] No Antidote detected (condition not met)")
+        debugInfo("[ANTIDOTE-CHECK] No Antidote detected (natural decay or condition not met)")
         return false
     }
 
     // Check if Antidote is available (not on cooldown)
     isAntidoteAvailable(enemyId) {
-        return !this.isChipOnCooldown(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+        return !this.isChipOnCooldown(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
     }
 
     // Get strategic poison window (turns until Antidote available)
     getPoisonWindow(enemyId) {
-        var remaining = this.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE)
+        var remaining = this.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
         if (remaining > 0) {
             return remaining  // Turns of guaranteed poison damage
         }

@@ -232,6 +232,8 @@ class V8Uploader:
             "scenario_mutation",
             "weight_profiles",
             "game_context",
+            "bulb_ai",
+            "boss_context",
             # Deleted: beam_search_planner, world_state, atomic_action,
             # atomic_action_executor, state_transition (Phase 1 cleanup)
         ]
@@ -322,6 +324,29 @@ class V8Uploader:
             else:
                 print("   ⚠️  No math directory found")
 
+        # Step 6: Re-save main.lk to force recompilation with updated includes
+        # Append a version comment to guarantee the code differs from cached version
+        print("\n6️⃣ Re-saving main.lk to recompile with updated includes...")
+        main_file = v8_dir / "main.lk"
+        if main_file.exists():
+            with open(main_file, 'r', encoding='utf-8') as f:
+                main_code = f.read()
+            # Add timestamp comment to force server recompilation
+            import datetime
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            resave_code = main_code.rstrip() + f"\n// build: {ts}\n"
+            main_ai_id = self.find_ai("main.lk", folder_v8, existing_ais)
+            if main_ai_id:
+                save_response = self.session.post(
+                    f"{self.base_url}/ai/save",
+                    data={"ai_id": str(main_ai_id), "code": resave_code}
+                )
+                if save_response.status_code == 200:
+                    print(f"   ✅ main.lk recompiled (ID: {main_ai_id}, build: {ts})")
+                else:
+                    print(f"   ❌ Failed to recompile main.lk")
+            time.sleep(1.0)
+
         # Summary
         print("\n" + "="*60)
         print("📊 UPLOAD COMPLETE")
@@ -410,7 +435,8 @@ def main():
                     "enemy_predictor", "performance_infra", "cache_manager", "tactical_awareness",
                     "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
                     "scenario_generator", "scenario_quick_scorer", "scenario_mutation", "weight_profiles",
-                    "world_state", "atomic_action", "atomic_action_executor", "state_transition", "beam_search_planner"]
+                    "boss_context", "game_context", "bulb_ai", "item_roles", "item_database",
+                    "scenario_helpers", "scenario_combos"]
     for module in root_modules:
         if (v8_dir / f"{module}.lk").exists():
             total_modules += 1

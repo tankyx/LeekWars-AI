@@ -24,8 +24,10 @@ include('cache_manager.lk')
 include('tactical_awareness.lk')
 include('weight_profiles.lk')
 include('strategic_depth.lk')
+include('boss_context.lk')
 
 include('strategy/action.lk')
+include('bulb_ai.lk')
 
 include('scenario_generator.lk')
 include('scenario_simulator.lk')
@@ -34,7 +36,6 @@ include('scenario_quick_scorer.lk')
 include('scenario_mutation.lk')
 
 include('strategy/base_strategy.lk')
-include('strategy/boss_strategy.lk')
 include('strategy/unified_strategy.lk')
 
 if (!_init) {
@@ -52,16 +53,19 @@ function init() {
     initGameContext(player, arsenal, fieldMap)
 
     if (detectBossFight()) {
-        strategy = new BossFightStrategy();
+        initBossContext()
     }
-    else {
-        var buildType = detectBuildType(player)
-        var weights = getWeightsForBuild(buildType)
 
-        strategy = new UnifiedStrategy(weights, player, null, arsenal, fieldMap)
-        strategy.resetTurnContext()
-        strategy.turnOneBuffs()
+    // ALWAYS use UnifiedStrategy
+    var buildType = detectBuildType(player)
+    var weights = getWeightsForBuild(buildType)
+    if (_isBossFight && _bossPhase == "PUZZLE") {
+        weights = BOSS_PUZZLE_WEIGHTS
     }
+
+    strategy = new UnifiedStrategy(weights, player, null, arsenal, fieldMap)
+    strategy.resetTurnContext()
+    strategy.turnOneBuffs()
 }
 
 function resetTurnState() {
@@ -88,8 +92,29 @@ function main() {
     player.updateEntity()
     fieldMap.updateMapEntities()
 
-    var target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
+    // Update boss context every turn
+    if (_isBossFight) updateBossContext()
 
+    // Debug: say() only works from included files, so call helper
+    if (_isBossFight) bossDiag(getCell())
+
+    // PUZZLE phase: direct crystal interaction — skip ALL combat setup.
+    // Must run BEFORE expensive init (buildReachableGraph, caches, threat maps)
+    // to avoid exhausting the ops budget before reaching puzzle logic.
+    if (_isBossFight && _bossPhase == "PUZZLE") {
+        if (executePuzzleTurn()) return
+    }
+
+    // Target selection: boss-aware override
+    var target = null
+    if (_isBossFight && _bossPhase == "PUZZLE") {
+        target = getBossPuzzleTarget(fieldMap)
+    } else if (_isBossFight && _bossPhase == "COMBAT") {
+        target = selectCombatTarget(fieldMap)
+    }
+    if (target == null) {
+        target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
+    }
     if (target == null) target = fieldMap.getClosestEnemy()
 
     // Update GameContext with current turn state
@@ -120,9 +145,29 @@ function main() {
 
     var targetHitCell = null
 
-    if (strategy.shouldBuildDamageMap()) {
+    if (target != null && strategy.shouldBuildDamageMap()) {
         fieldMap.buildHitMap(target._cellPos)
         targetHitCell = fieldMap.getBestWeaponOrChipCell();
+    }
+
+    // Ops hard stop: prevent timeout by checking budget before expensive work
+    if (getOperations() > 13000000) {
+        debugCritical("[OPS-HARDSTOP] Operations at " + getOperations() + " — skipping scenario engine, using fallback")
+        // Emergency: just move toward enemy and attack with best weapon
+        if (target != null) {
+            moveToward(target._id)
+            var bestWeapon = arsenal.getHighestDamageWeapon()
+            if (bestWeapon != null) {
+                setWeapon(bestWeapon)
+                useWeaponOnCell(target._cellPos)
+            }
+        }
+        return
+    }
+
+    // Boss weight hot-swap per phase
+    if (_isBossFight) {
+        strategy._weights = (_bossPhase == "PUZZLE") ? BOSS_PUZZLE_WEIGHTS : BOSS_COMBAT_WEIGHTS
     }
 
     // All strategies use unified scenario-based execution

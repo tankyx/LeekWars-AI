@@ -1,0 +1,166 @@
+// ========================================
+// Bulb AI Module
+// ========================================
+// Lightweight greedy AI for summoned bulbs.
+// CRITICAL: Bulb AI is READ-ONLY on global caches.
+//   Do NOT call resetTurnState(), clearCaches(), or modify __damageCache.
+//   Keep each bulb's logic under 50,000 operations.
+// Bulbs share the 14M ops budget with the Leek.
+
+include('debug_config.lk')
+
+// ========================================
+// Savant Bulb AI
+// ========================================
+// Priority: Adrenaline on summoner > Mutation on summoner > Alteration on enemy > Thorn on self/ally
+// Chips: CHIP_ADRENALINE (0-3, 1TP, CD7), CHIP_MUTATION (0-8 sq2, 7TP, CD4),
+//        CHIP_ALTERATION (6-12, 3TP, CD1), CHIP_THORN (0-3 circ1, 4TP, CD3)
+function savantBulbAI() {
+    var me = getEntity()
+    var summoner = getSummoner()
+    var myCell = getCell()
+    var summonerCell = getCell(summoner)
+    var myTP = getTP()
+
+    // 1. Move toward summoner if not adjacent
+    var distToSummoner = getCellDistance(myCell, summonerCell)
+    if (distToSummoner > 3) {
+        moveToward(summoner)
+        myCell = getCell()
+    }
+
+    // 2. ADRENALINE on summoner (+5 TP for 1 turn) — only if summoner needs TP and chip ready
+    if (myTP >= 1 && getCooldown(CHIP_ADRENALINE, me) == 0) {
+        var summonerTP = getTP(summoner)
+        if (summonerTP < 10) {
+            var dist = getCellDistance(myCell, summonerCell)
+            if (dist != null && dist >= 0 && dist <= 3 && lineOfSight(myCell, summonerCell)) {
+                useChip(CHIP_ADRENALINE, summoner)
+                myTP = getTP()
+            }
+        }
+    }
+
+    // 3. MUTATION on summoner (+15-20 max life) — if chip ready and in range
+    if (myTP >= 7 && getCooldown(CHIP_MUTATION, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 8 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_MUTATION, summoner)
+            myTP = getTP()
+        }
+    }
+
+    // 4. ALTERATION on lowest HP enemy in range 6-12
+    if (myTP >= 3 && getCooldown(CHIP_ALTERATION, me) == 0) {
+        var enemies = getAliveEnemies()
+        var bestTarget = null
+        var bestHP = 999999
+
+        for (var eid in enemies) {
+            if (isDead(eid)) continue
+            var enemyCell = getCell(eid)
+            var dist = getCellDistance(myCell, enemyCell)
+            if (dist != null && dist >= 6 && dist <= 12 && lineOfSight(myCell, enemyCell)) {
+                var hp = getLife(eid)
+                if (hp < bestHP) {
+                    bestHP = hp
+                    bestTarget = eid
+                }
+            }
+        }
+
+        if (bestTarget != null) {
+            useChip(CHIP_ALTERATION, bestTarget)
+            myTP = getTP()
+        }
+    }
+
+    // 5. THORN on self if any enemy within 5 cells (damage return shield)
+    if (myTP >= 4 && getCooldown(CHIP_THORN, me) == 0) {
+        var enemies = getAliveEnemies()
+        var nearbyEnemy = false
+        for (var eid in enemies) {
+            if (isDead(eid)) continue
+            var dist = getCellDistance(myCell, getCell(eid))
+            if (dist != null && dist <= 5) {
+                nearbyEnemy = true
+                break
+            }
+        }
+
+        if (nearbyEnemy) {
+            useChip(CHIP_THORN, me)
+            myTP = getTP()
+        }
+    }
+}
+
+// ========================================
+// Metallic Bulb AI
+// ========================================
+// Priority: Armor on summoner > Shield on summoner > Wall on summoner > Winged Boots if far
+// Chips: CHIP_ARMOR (0-4, 6TP, CD5), CHIP_SHIELD (0-4, 4TP, CD4),
+//        CHIP_WALL (0-3, 3TP, CD3), CHIP_WINGED_BOOTS (0-2, 6TP, CD5)
+function metallicBulbAI() {
+    var me = getEntity()
+    var summoner = getSummoner()
+    var myCell = getCell()
+    var summonerCell = getCell(summoner)
+    var myTP = getTP()
+
+    // 1. Move toward summoner if not adjacent
+    var distToSummoner = getCellDistance(myCell, summonerCell)
+    if (distToSummoner > 2) {
+        moveToward(summoner)
+        myCell = getCell()
+    }
+
+    // 2. ARMOR on summoner (-25 dmg taken for 4 turns) — highest value shield
+    if (myTP >= 6 && getCooldown(CHIP_ARMOR, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 4 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_ARMOR, summoner)
+            myTP = getTP()
+        }
+    }
+
+    // 3. SHIELD on summoner (-20 dmg taken for 3 turns)
+    if (myTP >= 4 && getCooldown(CHIP_SHIELD, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 4 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_SHIELD, summoner)
+            myTP = getTP()
+        }
+    }
+
+    // 4. WALL on summoner (-4-5% dmg taken for 2 turns)
+    if (myTP >= 3 && getCooldown(CHIP_WALL, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 3 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_WALL, summoner)
+            myTP = getTP()
+        }
+    }
+
+    // 5. WINGED_BOOTS on summoner (+3 MP) — only if summoner far from nearest enemy
+    if (myTP >= 6 && getCooldown(CHIP_WINGED_BOOTS, me) == 0) {
+        // Check if summoner is far from nearest enemy
+        var enemies = getAliveEnemies()
+        var nearestEnemyDist = 999
+        for (var eid in enemies) {
+            if (isDead(eid)) continue
+            var dist = getCellDistance(summonerCell, getCell(eid))
+            if (dist != null && dist < nearestEnemyDist) {
+                nearestEnemyDist = dist
+            }
+        }
+
+        if (nearestEnemyDist > 5) {
+            var dist = getCellDistance(myCell, summonerCell)
+            if (dist != null && dist >= 0 && dist <= 2 && lineOfSight(myCell, summonerCell)) {
+                useChip(CHIP_WINGED_BOOTS, summoner)
+                myTP = getTP()
+            }
+        }
+    }
+}

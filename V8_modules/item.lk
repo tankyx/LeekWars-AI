@@ -57,10 +57,10 @@ class Chip extends Item {
 
 class Arsenal {
     constructor() {
-        buildAllWeaponsList()
-        buildAllChipsList()
-        getEquippedWeaponsSubMap()
-        getEquippedChipsSubMap()
+        this.buildAllWeaponsList()
+        this.buildAllChipsList()
+        this.getEquippedWeaponsSubMap()
+        this.getEquippedChipsSubMap()
     }
 
     weaponsList = [:]
@@ -93,7 +93,7 @@ class Arsenal {
                 dbCount++
                 // Format: [name, min_range, max_range, effects, tp_cost, launch_type, area]
                 var effects = this.convertEffectsMapToArray(weaponData[3])
-                mapPut(weaponsList, w, new Weapon(
+                mapPut(this.weaponsList, w, new Weapon(
                     w,                  // id
                     weaponData[1],      // min_range
                     weaponData[2],      // max_range
@@ -106,7 +106,7 @@ class Arsenal {
             } else {
                 // Fallback to API
                 apiCount++
-                mapPut(weaponsList, w, new Weapon(
+                mapPut(this.weaponsList, w, new Weapon(
                     w,
                     getWeaponMinRange(w),
                     getWeaponMaxRange(w),
@@ -134,7 +134,7 @@ class Arsenal {
                 dbCount++
                 // Format: [name, min_range, max_range, effects, tp_cost, launch_type, area, cooldown]
                 var effects = this.convertEffectsMapToArray(chipData[3])
-                mapPut(chipsList, c, new Chip(
+                mapPut(this.chipsList, c, new Chip(
                     c,                  // id
                     chipData[1],        // min_range
                     chipData[2],        // max_range
@@ -148,7 +148,7 @@ class Arsenal {
             } else {
                 // Fallback to API
                 apiCount++
-                mapPut(chipsList, c, new Chip(
+                mapPut(this.chipsList, c, new Chip(
                     c,
                     getChipMinRange(c),
                     getChipMaxRange(c),
@@ -168,7 +168,7 @@ class Arsenal {
         var equippedWeapons = getWeapons()
 
         for (var w in equippedWeapons) {
-            mapPut(playerEquippedWeapons, w, weaponsList[w])
+            mapPut(this.playerEquippedWeapons, w, this.weaponsList[w])
         }
     }
 
@@ -176,7 +176,7 @@ class Arsenal {
         var equippedChips = getChips()
 
         for (var c in equippedChips) {
-            mapPut(playerEquippedChips, c, chipsList[c])
+            mapPut(this.playerEquippedChips, c, this.chipsList[c])
         }
     }
 

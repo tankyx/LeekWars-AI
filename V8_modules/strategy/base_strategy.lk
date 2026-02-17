@@ -257,11 +257,14 @@ class Strategy {
                               action.chip == CHIP_GRAPPLE)
 
         if (isPushPullChip && action.targetEntity != null) {
-            
+
             var enemyPos = action.targetEntity._cellPos
             var dist = getCellDistance(fromCell, enemyPos)
             if (dist == null) return false
             if (dist < minRange || dist > maxRange) {
+                return false
+            }
+            if (!isOnSameLine(fromCell, enemyPos)) {
                 return false
             }
             if (!lineOfSight(fromCell, enemyPos)) {
@@ -273,6 +276,11 @@ class Strategy {
         var dist = getCellDistance(fromCell, toCell)
         if (dist == null) return false
         if (dist < minRange || dist > maxRange) {
+            return false
+        }
+
+        // Push/pull chips require same-line alignment even when targeting by cell
+        if (isPushPullChip && !isOnSameLine(fromCell, toCell)) {
             return false
         }
 
@@ -2289,6 +2297,29 @@ class Strategy {
                 if (a.chip != -1) {
                     useChipOnCell(a.chip, a.targetCell)
 
+                    // Track INVERSION usage for boss PUZZLE phase
+                    if (a.chip == CHIP_INVERSION && _isBossFight) {
+                        _usedInversion = true
+                    }
+
+                    // After GRAPPLE/BOXING_GLOVE, update target entity position
+                    // so subsequent actions in this turn use the new cell
+                    if ((a.chip == CHIP_GRAPPLE || a.chip == CHIP_BOXING_GLOVE) && a.targetEntity != null && !isDead(a.targetEntity._id)) {
+                        var oldEnemyCell = a.targetEntity._cellPos
+                        a.targetEntity._cellPos = getCell(a.targetEntity._id)
+                        a.targetEntity.updateEntity()
+                        var newEnemyCell = a.targetEntity._cellPos
+
+                        // Patch remaining actions that target the old cell
+                        if (oldEnemyCell != newEnemyCell) {
+                            for (var futureAction in this._actions) {
+                                if (futureAction.targetCell == oldEnemyCell) {
+                                    futureAction.targetCell = newEnemyCell
+                                }
+                            }
+                        }
+                    }
+
                     // Check if target died from this attack
                     if (a.targetEntity != null && isDead(a.targetEntity._id)) {
                         targetDied = true
@@ -2397,15 +2428,26 @@ class Strategy {
                     }
                 }
             }
+            else if (a.type == Action.ACTION_SUMMON) {
+                // Summon handled post-combat now; this path kept as fallback
+                if (a.chip != -1 && a.targetCell != -1 && a.bulbAIFunc != null) {
+                    var cooldown = getCooldown(a.chip, getEntity())
+                    var cost = getChipCost(a.chip)
+                    if (cooldown == 0 && getTP() >= cost && !isObstacle(a.targetCell) && !isEntity(a.targetCell)) {
+                        summon(a.chip, a.targetCell, a.bulbAIFunc)
+                        debugInfo("[SUMMON] Summoned bulb at cell " + a.targetCell)
+                    }
+                }
+            }
             else if (a.type == Action.ACTION_CHECKPOINT) {
-                
+
 
                 player.updateEntity()
 
                 var continuation = this.evaluateCheckpoint(a)
 
                 if (continuation != null && count(continuation) > 0) {
-                    
+
                     for (var contAction in continuation) {
                         push(this._actions, contAction)
                     }
@@ -2414,6 +2456,28 @@ class Strategy {
             }
         }
 
+
+        // Post-combat bulb summoning: use remaining TP to summon a bulb
+        if (getTP() >= 16) {
+            player.updateEntity()  // Refresh position after combat movement
+            var _summonHelper = new ScenarioHelpers(arsenal, player, player, this._fieldMap, this)
+            var summonAction = _summonHelper.createSummonAction()
+            if (summonAction != null) {
+                var sChip = summonAction.chip
+                var sCell = summonAction.targetCell
+                var sAI = summonAction.bulbAIFunc
+                if (sChip != -1 && sCell != -1 && sAI != null) {
+                    var sCD = getCooldown(sChip, getEntity())
+                    var sCost = getChipCost(sChip)
+                    if (sCD == 0 && getTP() >= sCost && !isObstacle(sCell) && !isEntity(sCell)) {
+                        var sResult = summon(sChip, sCell, sAI)
+                        debugInfo("[SUMMON] Summoned bulb at cell " + sCell + " with " + getChipName(sChip) + " (result=" + sResult + ", TP remaining=" + getTP() + ")")
+                    } else {
+                        debugInfo("[SUMMON] Blocked post-combat: CD=" + sCD + " TP=" + getTP() + "/" + sCost + " obs=" + isObstacle(sCell) + " ent=" + isEntity(sCell))
+                    }
+                }
+            }
+        }
 
         // Track actual poison duration on target for next turn's Antidote detection
         // Store the real remaining duration, not a boolean flag
@@ -2767,11 +2831,24 @@ class Strategy {
                 continue
             }
 
+            if (action.type == Action.ACTION_SUMMON) {
+                // Validate summon: chip off cooldown, enough TP, target cell empty
+                if (action.chip != -1 && action.targetCell != -1) {
+                    var summonCost = getChipCost(action.chip)
+                    if (simulatedTP >= summonCost && getCooldown(action.chip, player._id) == 0 &&
+                        !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
+                        push(validActions, action)
+                        simulatedTP -= summonCost
+                    }
+                }
+                continue
+            }
+
             if (action.type == Action.ACTION_TELEPORT) {
                 var distTele = getCellDistance(simulatedPos, action.targetCell)
                 if (distTele != null && distTele >= 1 && distTele <= 12 && !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
                     push(validActions, action)
-                    simulatedPos = action.targetCell  
+                    simulatedPos = action.targetCell
                 } else {
                 }
                 continue
@@ -2835,6 +2912,21 @@ class Strategy {
                 if (!this.validateActionRangeAndLOS(action, simulatedPos)) {
                     isValid = false
                     reason = "Out of range/LOS"
+                }
+            }
+
+            // Apocalypse guard: PUZZLE phase — whitelist only safe actions
+            if (isValid && _isBossFight && _bossPhase == "PUZZLE") {
+                if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT) {
+                    isValid = false
+                    reason = "PUZZLE: damage action blocked (Apocalypse risk)"
+                }
+                if (isValid && action.type == Action.ACTION_DEBUFF) {
+                    // Only allow utility debuffs that move crystals
+                    if (action.chip != CHIP_GRAPPLE && action.chip != CHIP_BOXING_GLOVE && action.chip != CHIP_INVERSION) {
+                        isValid = false
+                        reason = "PUZZLE: non-crystal debuff blocked"
+                    }
                 }
             }
 

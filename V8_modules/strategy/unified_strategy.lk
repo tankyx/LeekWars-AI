@@ -162,6 +162,11 @@ class UnifiedStrategy extends Strategy {
         var USE_MUTATIONS = true  // Enable/disable mutation system
         var mutationOpsLimit = 12500000  // Only run if under 12.5M ops (1.5M safety margin)
 
+        // Disable mutations during boss PUZZLE phase — crystal scenarios are position-critical
+        if (_isBossFight && _bossPhase == "PUZZLE") {
+            USE_MUTATIONS = false
+        }
+
         if (USE_MUTATIONS && getOperations() < mutationOpsLimit && count(scenariosWithQuickScore) >= 1) {
             debugInfo("[MUTATION] Starting hybrid mutation pass (ops=" + getOperations() + ")")
 
@@ -337,7 +342,7 @@ class UnifiedStrategy extends Strategy {
             }
         }
 
-        if (!moved && player._currMp > 0) {
+        if (!moved && player._currMp > 0 && target != null) {
             // No hit cell available or can't reach it - just walk toward enemy
             var action = new Action(Action.MOVEMENT_APPROACH, -1, -1, target._cellPos, null)
             push(this._actions, action)

@@ -44,15 +44,14 @@ function buildReachableCellsCache(fromCell, mp) {
         var currentCell = current['cell']
         var currentCost = current['cost']
 
+        // 6 hex neighbors only (no diagonals 19/-19 on hex grid)
         var neighbors = [
             currentCell + 1,
             currentCell - 1,
             currentCell + 18,
             currentCell - 18,
             currentCell + 17,
-            currentCell - 17,
-            currentCell + 19,
-            currentCell - 19
+            currentCell - 17
         ]
 
         for (var neighbor in neighbors) {
@@ -106,13 +105,19 @@ function buildDamageCache(arsenal, player, target) {
 
     for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
         var bd = arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
-        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
+        var netDmg = 0
+        if (target != null) {
+            netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
+        }
         __damageCache[weaponId] = ['breakdown': bd, 'net': netDmg]
     }
 
     for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
         var bd = arsenal.getDamageBreakdown(str, mag, wis, sci, chipId)
-        var netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
+        var netDmg = 0
+        if (target != null) {
+            netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
+        }
         __damageCache[chipId] = ['breakdown': bd, 'net': netDmg]
     }
 }

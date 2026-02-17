@@ -165,23 +165,48 @@ global BRUISER_REFLECT_WEIGHTS = [
     'multiTargetBonus': 550    // Multi-target LoS: AoE opportunity value
 ]
 
-// Boss fight weights - Specialized for crystal puzzle mechanics
-global BOSS_WEIGHTS = [
-    'burstDamage': 0,          // Irrelevant: no damage phase
-    'weaponUses': 0,           // Irrelevant: puzzle mechanics only
-    'tpEfficiency': 200,       // High: chip usage crucial
-    'dotEffects': 0,           // Irrelevant: no damage phase
-    'kiteDistance': 0,         // Irrelevant: positioning is strategic
-    'damageReturn': 0,         // Irrelevant: no combat
-    'poisonStacks': 0,         // Irrelevant: no combat
-    'shieldValue': 0,          // Irrelevant: no damage taken
-    'healValue': 0,            // Irrelevant: no damage taken
-    'distanceToTarget': -100,  // Penalty: want to be ON axis
-    'threatReduction': 0,      // Irrelevant: no threat
-    'otkoBonus': 0,            // Irrelevant: no kills
-    'checkpointBonus': 0,      // Irrelevant: simple actions
-    'axisAlignment': 1000,     // Primary: GRAPPLE/BOXING_GLOVE require axis
-    'crystalProximity': 500    // Secondary: get close to crystal
+// Boss fight weights - PUZZLE phase: crystal alignment mechanics
+global BOSS_PUZZLE_WEIGHTS = [
+    'burstDamage': 0,
+    'weaponUses': 0,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 0,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 0,
+    'healValue': 50,
+    'distanceToTarget': -100,
+    'threatReduction': 0,
+    'novaEffects': 0,
+    'otkoBonus': 0,
+    'checkpointBonus': 0,
+    'noDamagePenalty': 0,
+    'axisAlignment': 2000,
+    'crystalProximity': 800,
+    'crystalSolved': 5000,
+    'multiTargetBonus': 0
+]
+
+// Boss fight weights - COMBAT phase: standard combat after graal dies
+global BOSS_COMBAT_WEIGHTS = [
+    'burstDamage': 300,
+    'weaponUses': 100,
+    'tpEfficiency': 50,
+    'dotEffects': 200,
+    'kiteDistance': 0,
+    'damageReturn': 0,
+    'poisonStacks': 100,
+    'shieldValue': 200,
+    'healValue': 150,
+    'distanceToTarget': -20,
+    'threatReduction': 100,
+    'novaEffects': 200,
+    'otkoBonus': 5000,
+    'checkpointBonus': 2500,
+    'noDamagePenalty': -2000,
+    'antidoteUrgency': 500,
+    'multiTargetBonus': 300
 ]
 
 // Runtime weight selector

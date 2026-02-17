@@ -7,11 +7,15 @@ class ScenarioGenerator extends ScenarioCombos {
     }
 
     generateScenarios() {
-        this._target.updateEntity()
-        debugInfo("[SCENARIO-GEN] Updated target entity (pos=" + this._target._cellPos + " HP=" + this._target._currHealth + ")")
+        if (this._target == null) {
+            debugInfo("[SCENARIO-GEN] Target is null — skipping target update")
+        } else {
+            this._target.updateEntity()
+            debugInfo("[SCENARIO-GEN] Updated target entity (pos=" + this._target._cellPos + " HP=" + this._target._currHealth + ")")
+        }
 
-        // Only run Antidote detection if we have poison capabilities
-        if (this.hasPoisonCapability()) {
+        // Only run Antidote detection if we have poison capabilities and a valid target
+        if (this._target != null && this.hasPoisonCapability()) {
             var currentPoison = this._target.getEffectRemaining(EFFECT_POISON)
             var tracker = new CooldownTracker(this._target)
             tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
@@ -21,7 +25,7 @@ class ScenarioGenerator extends ScenarioCombos {
             var currentTurn = getTurn()
 
             if (POISON_PHASE == "SUSTAIN") {
-                var antidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE)
+                var antidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
 
                 // If Antidote cooldown expired AND we've sustained for at least 3 turns → back to BAIT
                 if (antidoteCD == 0 && (currentTurn - LAST_POISON_DUMP_TURN) >= 3) {
@@ -48,7 +52,10 @@ class ScenarioGenerator extends ScenarioCombos {
         var state = this.determineStrategicState()
         debugInfo("[STATE] Strategic state: " + state + " | POISON_PHASE=" + POISON_PHASE)
 
-        if (state == "KILL") {
+        if (state == "PUZZLE") {
+            this.buildPuzzleScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "KILL") {
             this.buildKillScenarios(scenarios, availableTP, availableMP)
         }
         else if (state == "AGGRO") {
@@ -478,5 +485,52 @@ class ScenarioGenerator extends ScenarioCombos {
 
         push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
         push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
+    }
+
+    // =========================================================================
+    // Boss PUZZLE Phase Scenarios
+    // =========================================================================
+
+    buildPuzzleScenarios(scenarios, availableTP, availableMP) {
+        var crystalInfo = "null"
+        if (_bossTargetEID != null) {
+            crystalInfo = _myCrystalColor + " cell=" + _myCrystalCell + " solved=" + _myCrystalSolved
+        }
+        debugInfo("[STATE-PUZZLE] Boss PUZZLE phase — crystal=" + crystalInfo + " pos=" + this._player._cellPos)
+
+        // Crystal slide: move to position + grapple/boxing_glove
+        var slide = this.createCrystalSlideScenario(availableTP, availableMP)
+        if (slide != null) {
+            debugInfo("[STATE-PUZZLE] Adding Crystal Slide scenario")
+            push(scenarios, slide)
+        }
+
+        // Multi-slide: if positioned, do multiple grapples in one turn
+        var multiSlide = this.createMultiSlideScenario(availableTP, availableMP)
+        if (multiSlide != null) {
+            debugInfo("[STATE-PUZZLE] Adding Multi-Slide scenario")
+            push(scenarios, multiSlide)
+        }
+
+        // Inversion: teleport crystal when far from axis (>8 cells)
+        var inversion = this.createCrystalInversionScenario(availableTP, availableMP)
+        if (inversion != null) {
+            debugInfo("[STATE-PUZZLE] Adding Crystal Inversion scenario")
+            push(scenarios, inversion)
+        }
+
+        // Approach-only: when too far to act this turn
+        var approach = this.createCrystalApproachScenario(availableTP, availableMP)
+        if (approach != null) {
+            debugInfo("[STATE-PUZZLE] Adding Crystal Approach scenario")
+            push(scenarios, approach)
+        }
+
+        // Defense: heals/shields when crystal is solved or no action possible
+        var defense = this.createPuzzleDefenseScenario(availableTP, availableMP)
+        if (defense != null) {
+            debugInfo("[STATE-PUZZLE] Adding Puzzle Defense scenario")
+            push(scenarios, defense)
+        }
     }
 }
