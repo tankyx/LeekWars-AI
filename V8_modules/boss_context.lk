@@ -182,6 +182,26 @@ function assignCrystalByProximity() {
         _myAssignedCrystal = _crystalMap[ceid]
         _bossTargetEID = ceid
         syncCrystalScalars(_crystalMap[ceid])
+    } else if (count(unsolvedEIDs) > 0) {
+        // Extra leek: help nearest unsolved crystal instead of idling
+        var myCell = getCell()
+        var bestDist = 999
+        var bestCEID = null
+        for (var ceid in unsolvedEIDs) {
+            var cData = _crystalMap[ceid]
+            var d = getCellDistance(myCell, cData['cell'])
+            if (d < bestDist) {
+                bestDist = d
+                bestCEID = ceid
+            }
+        }
+        if (bestCEID != null) {
+            _myAssignedCrystal = _crystalMap[bestCEID]
+            _bossTargetEID = bestCEID
+            syncCrystalScalars(_crystalMap[bestCEID])
+        } else {
+            clearCrystalScalars()
+        }
     } else {
         clearCrystalScalars()
     }
@@ -572,64 +592,56 @@ function walkDiag(startCell, step, numSteps) {
 
 // Find BOXING_GLOVE stand: walk from crystal in OPPOSITE direction of move.
 // Returns cell at distance 2-8 from crystal on the diagonal, or -1.
+// Prefers myCell if it's a valid stand (avoids wasting MP on repositioning).
 function findBoxStand(crystalCell, step, myCell) {
     var pos = crystalCell
+    var firstStand = -1
+    var myCellValid = false
     for (var k = 1; k <= 8; k++) {
         pos -= step  // opposite direction
-        if (pos < 0 || pos > 612) return -1
-        if (isObstacle(pos)) return -1
-        if (pos != myCell && isEntity(pos)) return -1
-        if (k >= 2) return pos  // min range 2
+        if (pos < 0 || pos > 612) break
+        if (isObstacle(pos)) break
+        if (pos != myCell && isEntity(pos)) break
+        if (k >= 2) {
+            if (firstStand == -1) firstStand = pos
+            if (pos == myCell) { myCellValid = true; break }
+        }
     }
-    return -1
+    if (myCellValid) return myCell
+    return firstStand
 }
 
 // Find GRAPPLE stand: walk from targetCell in SAME direction as move (beyond target).
 // Crystal must be within range 1-8 from stand.
+// Prefers myCell if it's a valid stand (avoids wasting MP on repositioning).
 function findGrapStand(targetCell, step, crystalSteps, myCell) {
     var pos = targetCell
+    var firstStand = -1
+    var myCellValid = false
     for (var j = 1; j <= 8 - crystalSteps; j++) {
         pos += step  // beyond target
-        if (pos < 0 || pos > 612) return -1
-        if (isObstacle(pos)) return -1
-        if (pos != myCell && isEntity(pos)) return -1
-        return pos  // first clear cell
+        if (pos < 0 || pos > 612) break
+        if (isObstacle(pos)) break
+        if (pos != myCell && isEntity(pos)) break
+        if (firstStand == -1) firstStand = pos
+        if (pos == myCell) { myCellValid = true; break }
     }
-    return -1
+    if (myCellValid) return myCell
+    return firstStand
 }
 
-// Execute PUZZLE actions — greedy crystal movement toward cardinal point.
-//
-// Each turn: evaluate all 4 diagonal directions, pick the move that makes
-// the most progress (reduces Manhattan distance in diamond coordinates).
-// Handles wrong-side crystals by allowing perpendicular detour moves.
-function executePuzzleTurn() {
-    if (_myCrystalCell == -1 || _bossTargetEID == null) {
-        say("PZ: no crystal")
-        return false
-    }
-
-    var finalDest = computeCrystalFinalDest()
-    if (finalDest == null) {
-        say("PZ: no dest")
-        moveTowardCell(_myCrystalCell)
-        return true
-    }
-    if (finalDest == _myCrystalCell) {
-        say("PZ DONE c=" + _bossTargetEID)
-        _bossTargetEID = null
-        return true
-    }
-
-    var myCell = getCell()
+// Find the best chip move for a crystal. Evaluates all 4 diagonal directions,
+// picks the move that maximizes Manhattan distance reduction.
+// Returns null if no viable move, else ['stand', 'chip', 'target', 'score'].
+function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
+    var crystalX = getCellX(crystalCell)
+    var crystalY = getCellY(crystalCell)
     var fx = getCellX(finalDest)
     var fy = getCellY(finalDest)
-    var dx = fx - _myCrystalX
-    var dy = fy - _myCrystalY
+    var dx = fx - crystalX
+    var dy = fy - crystalY
     var curManhattan = abs(dx) + abs(dy)
 
-    // Evaluate all 4 diagonal directions
-    // Each entry: [step, deltaX_per_step, deltaY_per_step]
     var steps = [18, -18, 17, -17]
     var sdxs = [1, -1, 0, 0]
     var sdys = [0, 0, 1, -1]
@@ -639,7 +651,6 @@ function executePuzzleTurn() {
     var bestChip = null
     var bestTarget = -1
     var bestNavDist = 999
-    var bestStep = 0
 
     for (var si = 0; si < 4; si++) {
         var step = steps[si]
@@ -648,7 +659,7 @@ function executePuzzleTurn() {
 
         // Walk along this diagonal from crystal — find max clear distance
         var maxClear = 0
-        var pos = _myCrystalCell
+        var pos = crystalCell
         for (var d = 1; d <= 8; d++) {
             pos += step
             if (pos < 0 || pos > 612) break
@@ -672,58 +683,126 @@ function executePuzzleTurn() {
         }
         if (bestD == 0) continue
 
-        var targetCell = _myCrystalCell + step * bestD
+        var targetCell = crystalCell + step * bestD
 
-        // Find stand positions on the diagonal
-        var boxStand = findBoxStand(_myCrystalCell, step, myCell)
-        var grapStand = findGrapStand(targetCell, step, bestD, myCell)
-
-        // Pick the closer stand
-        var dBox = (boxStand != -1) ? getCellDistance(myCell, boxStand) : 999
-        var dGrap = (grapStand != -1) ? getCellDistance(myCell, grapStand) : 999
-
-        var stand = -1
-        var chip = null
-        var navDist = 999
-        if (dBox <= dGrap && boxStand != -1) {
-            stand = boxStand
-            chip = CHIP_BOXING_GLOVE
-            navDist = dBox
-        } else if (grapStand != -1) {
-            stand = grapStand
-            chip = CHIP_GRAPPLE
-            navDist = dGrap
+        // Try BOXING_GLOVE (stand behind crystal, push toward target)
+        if (boxUsed < 4) {
+            var boxStand = findBoxStand(crystalCell, step, myCell)
+            if (boxStand != -1) {
+                var dBox = getCellDistance(myCell, boxStand)
+                if (bestImprove > bestScore || (bestImprove == bestScore && dBox < bestNavDist)) {
+                    bestScore = bestImprove
+                    bestStand = boxStand
+                    bestChip = CHIP_BOXING_GLOVE
+                    bestTarget = targetCell
+                    bestNavDist = dBox
+                }
+            }
         }
-        if (stand == -1) continue
 
-        // Score: prefer higher improvement, then closer stand
-        if (bestImprove > bestScore ||
-            (bestImprove == bestScore && navDist < bestNavDist)) {
-            bestScore = bestImprove
-            bestStand = stand
-            bestChip = chip
-            bestTarget = targetCell
-            bestNavDist = navDist
-            bestStep = step
+        // Try GRAPPLE (stand beyond target, pull crystal to target)
+        if (grapUsed < 4) {
+            var grapStand = findGrapStand(targetCell, step, bestD, myCell)
+            if (grapStand != -1) {
+                var dGrap = getCellDistance(myCell, grapStand)
+                if (bestImprove > bestScore || (bestImprove == bestScore && dGrap < bestNavDist)) {
+                    bestScore = bestImprove
+                    bestStand = grapStand
+                    bestChip = CHIP_GRAPPLE
+                    bestTarget = targetCell
+                    bestNavDist = dGrap
+                }
+            }
         }
     }
 
-    if (bestStand == -1) {
-        say("PZ STUCK cr=" + _myCrystalCell + " dst=" + finalDest + " d=" + curManhattan)
+    if (bestStand == -1) return null
+    return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore]
+}
+
+// Execute PUZZLE actions — multi-chip greedy crystal movement.
+//
+// Fires up to 4 GRAPPLE + 4 BOXING_GLOVE per turn (8 total, 3 TP each = 24 TP).
+// After each chip fire, refreshes crystal position via getCell() and re-evaluates.
+// Prefers firing from current position (no MP cost) before navigating elsewhere.
+function executePuzzleTurn() {
+    if (_myCrystalCell == -1 || _bossTargetEID == null) {
+        say("PZ: no crystal")
+        return false
+    }
+
+    var finalDest = computeCrystalFinalDest()
+    if (finalDest == null) {
+        say("PZ: no dest")
         moveTowardCell(_myCrystalCell)
         return true
     }
+    if (finalDest == _myCrystalCell) {
+        say("PZ DONE c=" + _bossTargetEID)
+        _bossTargetEID = null
+        return true
+    }
 
-    // Navigate to stand and fire chip
-    moveTowardCell(bestStand)
-    var r = -99
-    if (getCell() == bestStand) {
-        r = useChipOnCell(bestChip, bestTarget)
+    var myCell = getCell()
+    var grapUsed = 0
+    var boxUsed = 0
+    var chipsFired = 0
+
+    // Multi-chip loop: keep making progress until out of chips/MP/TP
+    while (chipsFired < 8) {
+        // Refresh crystal position after each move
+        var crystalCell = getCell(_bossTargetEID)
+        if (crystalCell == null || crystalCell < 0) break
+
+        // Check if done
+        if (crystalCell == finalDest) break
+
+        // Check TP (both chips cost 3)
+        if (getTP() < 3) break
+
+        myCell = getCell()
+
+        // Find best move
+        var move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed)
+        if (move == null) break
+
+        var stand = move['stand']
+        var chip = move['chip']
+        var target = move['target']
+
+        // Navigate to stand (may use MP)
+        if (myCell != stand) {
+            moveTowardCell(stand)
+            myCell = getCell()
+            if (myCell != stand) break  // couldn't reach, out of MP
+        }
+
+        // Fire chip
+        var r = useChipOnCell(chip, target)
+        if (r != 1) break  // failed
+
+        chipsFired++
+        if (chip == CHIP_GRAPPLE) grapUsed++
+        else boxUsed++
     }
-    say("PZ s=" + bestStep + " to=" + bestTarget + " nav=" + bestStand + " me=" + getCell() + " r=" + r)
-    if (r == 1) {
-        moveTowardCell(bestTarget)
+
+    // Diagnostic (1 say per turn from this function)
+    var crCell = getCell(_bossTargetEID)
+    if (crCell != null && crCell >= 0 && crCell == finalDest) {
+        say("PZ DONE c=" + _bossTargetEID + " f=" + chipsFired)
+        _bossTargetEID = null
+    } else {
+        say("PZ f=" + chipsFired + " cr=" + crCell + " dst=" + finalDest)
     }
+
+    // Follow crystal with remaining MP
+    if (chipsFired > 0 && crCell != null && crCell >= 0) {
+        moveTowardCell(crCell)
+    } else if (chipsFired == 0) {
+        // Couldn't fire — navigate toward crystal for next turn
+        moveTowardCell(_myCrystalCell)
+    }
+
     return true
 }
 
