@@ -744,6 +744,14 @@ function executePuzzleTurn() {
     }
 
     var myCell = getCell()
+    var myID = getEntity()
+
+    // Buff MP with Leather Boots if available (+2 MP for 2 turns, 3 TP)
+    var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
+    if (bootsCd != null && bootsCd == 0 && getTP() >= 6) {
+        useChip(CHIP_LEATHER_BOOTS, myID)
+    }
+
     var grapUsed = 0
     var boxUsed = 0
     var chipsFired = 0
@@ -772,9 +780,12 @@ function executePuzzleTurn() {
 
         // Navigate to stand (may use MP)
         if (myCell != stand) {
+            if (getMP() == 0) break  // no MP to navigate
+            var prevCell = myCell
             moveTowardCell(stand)
             myCell = getCell()
-            if (myCell != stand) break  // couldn't reach, out of MP
+            if (myCell == prevCell) break  // blocked, no progress possible
+            if (myCell != stand) continue  // partial progress, re-evaluate next iteration
         }
 
         // Fire chip
