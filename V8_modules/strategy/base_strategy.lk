@@ -849,6 +849,10 @@ class Strategy {
     }
 
     turnOneBuffs() {
+        // Boss PUZZLE phase: skip ALL turn-1 buffs — save TP for teleportation (9 TP)
+        // into the crystal enclave. Enemies are invincible during PUZZLE anyway.
+        if (_isBossFight && _bossPhase == "PUZZLE") { return; }
+
         for (var c in mapKeys(arsenal.playerEquippedChips)) {
         }
 

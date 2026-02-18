@@ -149,18 +149,21 @@ function assignCrystalByProximity() {
     }
     sort(allAllies)
 
-    // Collect unsolved crystal EIDs — skip crystals already at their cardinal point
+    // Collect unsolved crystal EIDs — skip crystals already on correct axis with LoS to graal
     var unsolvedEIDs = []
     for (var eid in mapKeys(_crystalMap)) {
         var cData = _crystalMap[eid]
         var cAxis = cData['goalAxis']
         var cCell = cData['cell']
-        var cDest = null
-        if (cAxis == "north") cDest = getCellFromXY(_graalX, _graalY - 1)
-        else if (cAxis == "south") cDest = getCellFromXY(_graalX, _graalY + 1)
-        else if (cAxis == "east") cDest = getCellFromXY(_graalX + 1, _graalY)
-        else if (cAxis == "west") cDest = getCellFromXY(_graalX - 1, _graalY)
-        if (cDest != null && cDest == cCell) continue  // already at cardinal point, skip
+        var cx = cData['x']
+        var cy = cData['y']
+        // Solved = on correct cardinal axis + line of sight to graal
+        var onAxis = false
+        if (cAxis == "north") onAxis = (cx == _graalX && cy < _graalY)
+        else if (cAxis == "south") onAxis = (cx == _graalX && cy > _graalY)
+        else if (cAxis == "east") onAxis = (cy == _graalY && cx > _graalX)
+        else if (cAxis == "west") onAxis = (cy == _graalY && cx < _graalX)
+        if (onAxis && lineOfSight(cCell, _graalCell)) continue  // solved, skip
         push(unsolvedEIDs, eid)
     }
     sort(unsolvedEIDs)
@@ -782,13 +785,16 @@ function executePuzzleTurn() {
         return false
     }
 
+    // Use adjacent cell as pathfinding target (ensures correct side of graal),
+    // but the "done" check below uses axis+LoS so we stop early once aligned.
     var finalDest = computeCrystalFinalDest()
     if (finalDest == null) {
         say("PZ: no dest")
         moveTowardCell(_myCrystalCell)
         return true
     }
-    if (finalDest == _myCrystalCell) {
+    // Check if already solved: on correct axis + LoS to graal
+    if (isCrystalOnAxis() && lineOfSight(_myCrystalCell, _graalCell)) {
         say("PZ DONE c=" + _bossTargetEID)
         _bossTargetEID = null
         return true
@@ -797,33 +803,32 @@ function executePuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
-    // === Phase 0: Teleport into crystal enclave if too far to walk ===
+    // === Phase 0: Teleport into crystal enclave (always, boss PUZZLE) ===
+    // Crystals are behind walls — getCellDistance ignores walls, so distance
+    // checks are misleading. Always teleport when available to reach the enclave ASAP.
     var crystalCell0 = getCell(_bossTargetEID)
     if (crystalCell0 != null && crystalCell0 >= 0) {
-        var distToCrystal = getCellDistance(myCell, crystalCell0)
-        if (distToCrystal > getMP() + 2) {
-            var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
-            if (tpCd != null && tpCd == 0 && getTP() >= 12) {
-                var tpDone = false
-                // Strategy 1: teleport directly to optimal chip-firing stand
-                var preMove = findBestChipMove(crystalCell0, finalDest, myCell, 0, 0, 0)
-                if (preMove != null) {
-                    var preStand = preMove['stand']
-                    var dToStand = getCellDistance(myCell, preStand)
-                    if (dToStand >= 1 && dToStand <= 12) {
-                        if (useChipOnCell(CHIP_TELEPORTATION, preStand) == 1) {
-                            myCell = getCell()
-                            tpDone = true
-                        }
+        var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
+        if (tpCd != null && tpCd == 0 && getTP() >= 12) {
+            var tpDone = false
+            // Strategy 1: teleport directly to optimal chip-firing stand
+            var preMove = findBestChipMove(crystalCell0, finalDest, myCell, 0, 0, 0)
+            if (preMove != null) {
+                var preStand = preMove['stand']
+                var dToStand = getCellDistance(myCell, preStand)
+                if (dToStand >= 1 && dToStand <= 12) {
+                    if (useChipOnCell(CHIP_TELEPORTATION, preStand) == 1) {
+                        myCell = getCell()
+                        tpDone = true
                     }
                 }
-                // Strategy 2: teleport to any diagonal cell near crystal
-                if (!tpDone) {
-                    var tpTarget = findTeleportTarget(crystalCell0, myCell)
-                    if (tpTarget != -1) {
-                        if (useChipOnCell(CHIP_TELEPORTATION, tpTarget) == 1) {
-                            myCell = getCell()
-                        }
+            }
+            // Strategy 2: teleport to any diagonal cell near crystal
+            if (!tpDone) {
+                var tpTarget = findTeleportTarget(crystalCell0, myCell)
+                if (tpTarget != -1) {
+                    if (useChipOnCell(CHIP_TELEPORTATION, tpTarget) == 1) {
+                        myCell = getCell()
                     }
                 }
             }
@@ -847,8 +852,16 @@ function executePuzzleTurn() {
         var crystalCell = getCell(_bossTargetEID)
         if (crystalCell == null || crystalCell < 0) break
 
-        // Check if done
-        if (crystalCell == finalDest) break
+        // Check if done: on correct axis + LoS to graal
+        var crX = getCellX(crystalCell)
+        var crY = getCellY(crystalCell)
+        var onAx = false
+        var ax = _myCrystalGoalAxis
+        if (ax == "north") onAx = (crX == _graalX && crY < _graalY)
+        else if (ax == "south") onAx = (crX == _graalX && crY > _graalY)
+        else if (ax == "east") onAx = (crY == _graalY && crX > _graalX)
+        else if (ax == "west") onAx = (crY == _graalY && crX < _graalX)
+        if (onAx && lineOfSight(crystalCell, _graalCell)) break
 
         // Check TP (both chips cost 3)
         if (getTP() < 3) break
@@ -890,7 +903,18 @@ function executePuzzleTurn() {
 
     // Diagnostic (1 say per turn from this function)
     var crCell = getCell(_bossTargetEID)
-    if (crCell != null && crCell >= 0 && crCell == finalDest) {
+    var solved = false
+    if (crCell != null && crCell >= 0) {
+        var scX = getCellX(crCell)
+        var scY = getCellY(crCell)
+        var scAx = _myCrystalGoalAxis
+        if (scAx == "north") solved = (scX == _graalX && scY < _graalY)
+        else if (scAx == "south") solved = (scX == _graalX && scY > _graalY)
+        else if (scAx == "east") solved = (scY == _graalY && scX > _graalX)
+        else if (scAx == "west") solved = (scY == _graalY && scX < _graalX)
+        if (solved) solved = lineOfSight(crCell, _graalCell)
+    }
+    if (solved) {
         say("PZ DONE c=" + _bossTargetEID + " f=" + chipsFired)
         _bossTargetEID = null
     } else {
