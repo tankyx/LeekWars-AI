@@ -182,8 +182,9 @@ function assignCrystalByProximity() {
         _myAssignedCrystal = _crystalMap[ceid]
         _bossTargetEID = ceid
         syncCrystalScalars(_crystalMap[ceid])
-    } else if (count(unsolvedEIDs) > 0) {
-        // Extra leek: help nearest unsolved crystal instead of idling
+    } else if (count(unsolvedEIDs) > 0 && myIndex == count(unsolvedEIDs)) {
+        // Exactly 1 helper per crystal group — only the next leek by index helps.
+        // More than 1 helper causes crowding and deadlock (all block each other's diagonals).
         var myCell = getCell()
         var bestDist = 999
         var bestCEID = null
@@ -645,8 +646,9 @@ function findGrapStand(targetCell, step, crystalSteps, myCell) {
 
 // Find the best chip move for a crystal. Evaluates all 4 diagonal directions,
 // picks the move that maximizes Manhattan distance reduction.
-// Returns null if no viable move, else ['stand', 'chip', 'target', 'score'].
-function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
+// excludeStep: if nonzero, skip that direction (prevents oscillation).
+// Returns null if no viable move, else ['stand', 'chip', 'target', 'score', 'step'].
+function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, excludeStep) {
     var crystalX = getCellX(crystalCell)
     var crystalY = getCellY(crystalCell)
     var fx = getCellX(finalDest)
@@ -664,11 +666,15 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
     var bestChip = null
     var bestTarget = -1
     var bestNavDist = 999
+    var bestStep = 0
 
     for (var si = 0; si < 4; si++) {
         var step = steps[si]
         var sdx = sdxs[si]
         var sdy = sdys[si]
+
+        // Skip excluded direction (prevents oscillation — don't fire opposite to locked direction)
+        if (excludeStep != 0 && step == excludeStep) continue
 
         // Walk along this diagonal from crystal — find max clear distance
         var maxClear = 0
@@ -710,6 +716,7 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
                     bestChip = CHIP_BOXING_GLOVE
                     bestTarget = targetCell
                     bestNavDist = dBox
+                    bestStep = step
                 }
             }
         }
@@ -725,13 +732,14 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
                     bestChip = CHIP_GRAPPLE
                     bestTarget = targetCell
                     bestNavDist = dGrap
+                    bestStep = step
                 }
             }
         }
     }
 
     if (bestStand == -1) return null
-    return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore]
+    return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore, 'step': bestStep]
 }
 
 // Find a cell near the crystal on a diagonal, within teleport range of us.
@@ -798,7 +806,7 @@ function executePuzzleTurn() {
             if (tpCd != null && tpCd == 0 && getTP() >= 12) {
                 var tpDone = false
                 // Strategy 1: teleport directly to optimal chip-firing stand
-                var preMove = findBestChipMove(crystalCell0, finalDest, myCell, 0, 0)
+                var preMove = findBestChipMove(crystalCell0, finalDest, myCell, 0, 0, 0)
                 if (preMove != null) {
                     var preStand = preMove['stand']
                     var dToStand = getCellDistance(myCell, preStand)
@@ -832,6 +840,7 @@ function executePuzzleTurn() {
     var grapUsed = 0
     var boxUsed = 0
     var chipsFired = 0
+    var lockedStep = 0  // after first fire, exclude opposite direction to prevent oscillation
 
     while (chipsFired < 8) {
         // Refresh crystal position after each move
@@ -846,8 +855,8 @@ function executePuzzleTurn() {
 
         myCell = getCell()
 
-        // Find best move
-        var move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed)
+        // Find best move (exclude opposite of locked direction to prevent oscillation)
+        var move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
         if (move == null) break
 
         var stand = move['stand']
@@ -871,6 +880,12 @@ function executePuzzleTurn() {
         chipsFired++
         if (chip == CHIP_GRAPPLE) grapUsed++
         else boxUsed++
+
+        // Lock direction: exclude opposite step to prevent push-then-pull oscillation
+        if (lockedStep == 0) {
+            var firedStep = move['step']
+            lockedStep = -firedStep  // exclude the OPPOSITE direction
+        }
     }
 
     // Diagnostic (1 say per turn from this function)
@@ -882,12 +897,18 @@ function executePuzzleTurn() {
         say("PZ f=" + chipsFired + " cr=" + crCell + " dst=" + finalDest)
     }
 
-    // Follow crystal with remaining MP
+    // Follow crystal with remaining MP / deadlock self-clearing
     if (chipsFired > 0 && crCell != null && crCell >= 0) {
         moveTowardCell(crCell)
     } else if (chipsFired == 0) {
-        // Couldn't fire — navigate toward crystal for next turn
-        moveTowardCell(_myCrystalCell)
+        // Check if we're adjacent to crystal and blocking its path — step aside
+        var crystalNow = getCell(_bossTargetEID)
+        if (crystalNow != null && crystalNow >= 0 && getCellDistance(myCell, crystalNow) <= 1) {
+            // Move toward destination to clear the crystal's diagonal
+            moveTowardCell(finalDest)
+        } else {
+            moveTowardCell(_myCrystalCell)
+        }
     }
 
     return true
