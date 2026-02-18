@@ -580,12 +580,23 @@ function hasEntityBlockingLine(fromCell, toCell) {
 // GRAPPLE: caster beyond target, target between caster and entity. Entity pulled to target.
 // BOXING_GLOVE: entity between caster and target. Entity pushed to target. Min range 2.
 
-// Walk along a diagonal from startCell. Returns cell after numSteps, or -1 if blocked.
+// Take one diagonal step, validating against grid-edge wrapping.
+// The diamond grid alternates 18/17-cell rows; raw arithmetic can wrap
+// from the right edge to the left edge (or vice versa). We detect this
+// by verifying the stepped cell is actually adjacent (distance 1).
+function diagNext(cell, step) {
+    var next = cell + step
+    if (next < 0 || next > 612) return -1
+    if (getCellDistance(cell, next) != 1) return -1  // wrapped around grid edge
+    return next
+}
+
+// Walk along a diagonal from startCell. Returns cell after numSteps, or -1 if blocked/wrapped.
 function walkDiag(startCell, step, numSteps) {
     var cell = startCell
     for (var i = 0; i < numSteps; i++) {
-        cell += step
-        if (cell < 0 || cell > 612) return -1
+        cell = diagNext(cell, step)
+        if (cell == -1) return -1
     }
     return cell
 }
@@ -598,8 +609,9 @@ function findBoxStand(crystalCell, step, myCell) {
     var firstStand = -1
     var myCellValid = false
     for (var k = 1; k <= 8; k++) {
-        pos -= step  // opposite direction
-        if (pos < 0 || pos > 612) break
+        var next = diagNext(pos, -step)  // opposite direction
+        if (next == -1) break  // out of bounds or wrapped
+        pos = next
         if (isObstacle(pos)) break
         if (pos != myCell && isEntity(pos)) break
         if (k >= 2) {
@@ -619,8 +631,9 @@ function findGrapStand(targetCell, step, crystalSteps, myCell) {
     var firstStand = -1
     var myCellValid = false
     for (var j = 1; j <= 8 - crystalSteps; j++) {
-        pos += step  // beyond target
-        if (pos < 0 || pos > 612) break
+        var next = diagNext(pos, step)  // beyond target
+        if (next == -1) break  // out of bounds or wrapped
+        pos = next
         if (isObstacle(pos)) break
         if (pos != myCell && isEntity(pos)) break
         if (firstStand == -1) firstStand = pos
@@ -661,8 +674,9 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
         var maxClear = 0
         var pos = crystalCell
         for (var d = 1; d <= 8; d++) {
-            pos += step
-            if (pos < 0 || pos > 612) break
+            var next = diagNext(pos, step)
+            if (next == -1) break  // out of bounds or wrapped
+            pos = next
             if (isObstacle(pos)) break
             if (pos == _graalCell) break
             if (pos != finalDest && isEntity(pos)) break
@@ -721,7 +735,7 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
 }
 
 // Find a cell near the crystal on a diagonal, within teleport range of us.
-// Scans all 4 diagonals at distance 2-8 from crystal (valid stand positions).
+// Walks step-by-step along all 4 diagonals (distance 2-8 from crystal).
 // Returns closest to crystal that's within range 1-12 of myCell, or -1.
 function findTeleportTarget(crystalCell, myCell) {
     var bestCell = -1
@@ -729,16 +743,19 @@ function findTeleportTarget(crystalCell, myCell) {
     var diagSteps = [18, -18, 17, -17]
     for (var dsi = 0; dsi < 4; dsi++) {
         var ds = diagSteps[dsi]
-        for (var dd = 2; dd <= 8; dd++) {
-            var candidate = crystalCell + ds * dd
-            if (candidate < 0 || candidate > 612) continue
-            if (isObstacle(candidate)) continue
-            if (isEntity(candidate)) continue
-            var dFromMe = getCellDistance(myCell, candidate)
-            if (dFromMe < 1 || dFromMe > 12) continue
-            if (dd < bestDist) {
-                bestDist = dd
-                bestCell = candidate
+        var pos = crystalCell
+        for (var dd = 1; dd <= 8; dd++) {
+            var next = diagNext(pos, ds)
+            if (next == -1) break  // out of bounds or wrapped
+            pos = next
+            if (isObstacle(pos)) break
+            if (isEntity(pos)) break
+            if (dd >= 2) {
+                var dFromMe = getCellDistance(myCell, pos)
+                if (dFromMe >= 1 && dFromMe <= 12 && dd < bestDist) {
+                    bestDist = dd
+                    bestCell = pos
+                }
             }
         }
     }
