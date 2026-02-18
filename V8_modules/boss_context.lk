@@ -404,11 +404,14 @@ function computeCrystalAxisDest() {
     }
 }
 
-// Check if crystal is on the graal's axis (same X for N/S, same Y for E/W)
+// Check if crystal is on the graal's axis AND correct side (N/S/E/W)
 function isCrystalOnAxis() {
     var axis = _myCrystalGoalAxis
-    if (axis == "north" || axis == "south") return _myCrystalX == _graalX
-    return _myCrystalY == _graalY
+    if (axis == "north") return _myCrystalX == _graalX && _myCrystalY < _graalY
+    if (axis == "south") return _myCrystalX == _graalX && _myCrystalY > _graalY
+    if (axis == "east") return _myCrystalY == _graalY && _myCrystalX > _graalX
+    if (axis == "west") return _myCrystalY == _graalY && _myCrystalX < _graalX
+    return false
 }
 
 // Check if path from crystal to destination is clear of obstacles/entities
@@ -704,7 +707,27 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
                 bestD = d
             }
         }
-        if (bestD == 0) continue
+        if (bestD == 0 || bestImprove <= 0) continue
+
+        // Prevent pushing crystal to wrong side of graal (dead-end trap):
+        // If the move lands on graal's axis line on the wrong side, the graal
+        // blocks further movement toward the correct side. Clamp distance.
+        var newCX = crystalX + sdx * bestD
+        var newCY = crystalY + sdy * bestD
+        var goalAxis = _myCrystalGoalAxis
+        var trapped = false
+        if (goalAxis == "north" && newCX == _graalX && newCY >= _graalY) trapped = true
+        if (goalAxis == "south" && newCX == _graalX && newCY <= _graalY) trapped = true
+        if (goalAxis == "east" && newCY == _graalY && newCX <= _graalX) trapped = true
+        if (goalAxis == "west" && newCY == _graalY && newCX >= _graalX) trapped = true
+        if (trapped) {
+            bestD = bestD - 1
+            if (bestD <= 0) continue
+            bestImprove = curManhattan - (abs(dx - sdx * bestD) + abs(dy - sdy * bestD))
+            if (bestImprove <= 0) continue
+            newCX = crystalX + sdx * bestD
+            newCY = crystalY + sdy * bestD
+        }
 
         var targetCell = crystalCell + step * bestD
 
@@ -745,29 +768,62 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
     return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore, 'step': bestStep]
 }
 
-// Find a cell near the crystal on a diagonal, within teleport range of us.
-// Walks step-by-step along all 4 diagonals (distance 2-8 from crystal).
-// Returns closest to crystal that's within range 1-12 of myCell, or -1.
-function findTeleportTarget(crystalCell, myCell) {
+// BFS flood-fill from graal to get all enclave cells (blocking bottleneck 374/391).
+function getEnclaveCells() {
+    var visited = [:]
+    var queue = [_graalCell]
+    visited[_graalCell] = true
+    visited[374] = true
+    visited[391] = true
+    var idx = 0
+    while (idx < count(queue)) {
+        var cell = queue[idx]
+        idx++
+        var steps = [17, -17, 18, -18]
+        for (var s in steps) {
+            var next = cell + s
+            if (next < 0 || next > 612) continue
+            if (mapContainsKey(visited, next)) continue
+            if (getCellDistance(cell, next) != 1) continue
+            if (isObstacle(next)) continue
+            visited[next] = true
+            push(queue, next)
+        }
+    }
+    return queue
+}
+
+// Find nearest enclave cell to walk toward (no range limit).
+function findNearestEnclaveCell(myCell) {
+    var enclave = getEnclaveCells()
     var bestCell = -1
     var bestDist = 999
-    var diagSteps = [18, -18, 17, -17]
-    for (var dsi = 0; dsi < 4; dsi++) {
-        var ds = diagSteps[dsi]
-        var pos = crystalCell
-        for (var dd = 1; dd <= 8; dd++) {
-            var next = diagNext(pos, ds)
-            if (next == -1) break  // out of bounds or wrapped
-            pos = next
-            if (isObstacle(pos)) break
-            if (isEntity(pos)) break
-            if (dd >= 2) {
-                var dFromMe = getCellDistance(myCell, pos)
-                if (dFromMe >= 1 && dFromMe <= 12 && dd < bestDist) {
-                    bestDist = dd
-                    bestCell = pos
-                }
-            }
+    for (var cell in enclave) {
+        var d = getCellDistance(myCell, cell)
+        if (d < bestDist) {
+            bestDist = d
+            bestCell = cell
+        }
+    }
+    return bestCell
+}
+
+// Find an open cell INSIDE the enclave to teleport to.
+// Picks cell closest to our crystal within teleport range (1-12) of us.
+function findTeleportTarget(crystalCell, myCell) {
+    var queue = getEnclaveCells()
+
+    // Find enclave cell closest to crystal within teleport range
+    var bestCell = -1
+    var bestDist = 999
+    for (var cell in queue) {
+        if (isEntity(cell)) continue
+        var dFromMe = getCellDistance(myCell, cell)
+        if (dFromMe < 1 || dFromMe > 12) continue
+        var dFromCrystal = getCellDistance(crystalCell, cell)
+        if (dFromCrystal < bestDist) {
+            bestDist = dFromCrystal
+            bestCell = cell
         }
     }
     return bestCell
@@ -779,7 +835,42 @@ function findTeleportTarget(crystalCell, myCell) {
 // 1. Teleport into crystal enclave if too far to walk (CHIP_TELEPORTATION, 9 TP)
 // 2. Buff MP with Leather Boots if available (3 TP)
 // 3. Fire up to 8 chips (4 GRAPPLE + 4 BOXING_GLOVE) in a loop
+function logMapLayout() {
+    var obstacles = getObstacles()
+    var obsSet = [:]
+    for (var o in obstacles) {
+        obsSet[o] = true
+    }
+    var cellId = 0
+    for (var row = 0; row < 35; row++) {
+        var rowSize = (row % 2 == 0) ? 18 : 17
+        var line = ""
+        if (row % 2 != 0) line += "   "  // indent odd rows (17 cells)
+        for (var col = 0; col < rowSize; col++) {
+            if (mapContainsKey(obsSet, cellId)) {
+                line += "  X  "
+            } else {
+                if (cellId < 10) line += "  " + cellId + "  "
+                else if (cellId < 100) line += " " + cellId + "  "
+                else line += " " + cellId + " "
+            }
+            cellId++
+        }
+        debug(line)
+    }
+}
+
 function executePuzzleTurn() {
+    // Turn 1 map dump — only first leek logs to avoid spam
+    if (getTurn() == 1) {
+        var allA = []
+        push(allA, getEntity())
+        var als = getAliveAllies()
+        for (var a in als) push(allA, a)
+        sort(allA)
+        if (allA[0] == getEntity()) logMapLayout()
+    }
+
     if (_myCrystalCell == -1 || _bossTargetEID == null) {
         say("PZ: no crystal")
         return false
@@ -823,15 +914,38 @@ function executePuzzleTurn() {
                     }
                 }
             }
-            // Strategy 2: teleport to any diagonal cell near crystal
+            // Strategy 2: teleport to any enclave cell near crystal
             if (!tpDone) {
                 var tpTarget = findTeleportTarget(crystalCell0, myCell)
                 if (tpTarget != -1) {
                     if (useChipOnCell(CHIP_TELEPORTATION, tpTarget) == 1) {
                         myCell = getCell()
+                        tpDone = true
                     }
                 }
             }
+            // Strategy 3: out of range — walk toward nearest enclave cell, then retry
+            if (!tpDone) {
+                var nearest = findNearestEnclaveCell(myCell)
+                if (nearest != -1) {
+                    moveTowardCell(nearest)
+                    myCell = getCell()
+                    // Retry teleport from closer position
+                    var tpTarget2 = findTeleportTarget(crystalCell0, myCell)
+                    if (tpTarget2 != -1) {
+                        if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1) {
+                            myCell = getCell()
+                        }
+                    }
+                }
+                return true  // consumed the turn walking toward enclave
+            }
+        } else if (tpCd != null && tpCd > 0) {
+            // Teleport on cooldown — only wait if far from crystal (outside enclave).
+            // If already near crystal (inside enclave), fall through to chip loop.
+            var dToCrystal = getCellDistance(myCell, crystalCell0)
+            if (dToCrystal > 10) { return true; }
+            // Otherwise fall through to Phase 1 + Phase 2
         }
     }
 
