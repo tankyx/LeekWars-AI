@@ -720,11 +720,37 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed) {
     return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore]
 }
 
+// Find a cell near the crystal on a diagonal, within teleport range of us.
+// Scans all 4 diagonals at distance 2-8 from crystal (valid stand positions).
+// Returns closest to crystal that's within range 1-12 of myCell, or -1.
+function findTeleportTarget(crystalCell, myCell) {
+    var bestCell = -1
+    var bestDist = 999
+    var diagSteps = [18, -18, 17, -17]
+    for (var dsi = 0; dsi < 4; dsi++) {
+        var ds = diagSteps[dsi]
+        for (var dd = 2; dd <= 8; dd++) {
+            var candidate = crystalCell + ds * dd
+            if (candidate < 0 || candidate > 612) continue
+            if (isObstacle(candidate)) continue
+            if (isEntity(candidate)) continue
+            var dFromMe = getCellDistance(myCell, candidate)
+            if (dFromMe < 1 || dFromMe > 12) continue
+            if (dd < bestDist) {
+                bestDist = dd
+                bestCell = candidate
+            }
+        }
+    }
+    return bestCell
+}
+
 // Execute PUZZLE actions — multi-chip greedy crystal movement.
 //
-// Fires up to 4 GRAPPLE + 4 BOXING_GLOVE per turn (8 total, 3 TP each = 24 TP).
-// After each chip fire, refreshes crystal position via getCell() and re-evaluates.
-// Prefers firing from current position (no MP cost) before navigating elsewhere.
+// Turn sequence:
+// 1. Teleport into crystal enclave if too far to walk (CHIP_TELEPORTATION, 9 TP)
+// 2. Buff MP with Leather Boots if available (3 TP)
+// 3. Fire up to 8 chips (4 GRAPPLE + 4 BOXING_GLOVE) in a loop
 function executePuzzleTurn() {
     if (_myCrystalCell == -1 || _bossTargetEID == null) {
         say("PZ: no crystal")
@@ -746,17 +772,50 @@ function executePuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
-    // Buff MP with Leather Boots if available (+2 MP for 2 turns, 3 TP)
+    // === Phase 0: Teleport into crystal enclave if too far to walk ===
+    var crystalCell0 = getCell(_bossTargetEID)
+    if (crystalCell0 != null && crystalCell0 >= 0) {
+        var distToCrystal = getCellDistance(myCell, crystalCell0)
+        if (distToCrystal > getMP() + 2) {
+            var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
+            if (tpCd != null && tpCd == 0 && getTP() >= 12) {
+                var tpDone = false
+                // Strategy 1: teleport directly to optimal chip-firing stand
+                var preMove = findBestChipMove(crystalCell0, finalDest, myCell, 0, 0)
+                if (preMove != null) {
+                    var preStand = preMove['stand']
+                    var dToStand = getCellDistance(myCell, preStand)
+                    if (dToStand >= 1 && dToStand <= 12) {
+                        if (useChipOnCell(CHIP_TELEPORTATION, preStand) == 1) {
+                            myCell = getCell()
+                            tpDone = true
+                        }
+                    }
+                }
+                // Strategy 2: teleport to any diagonal cell near crystal
+                if (!tpDone) {
+                    var tpTarget = findTeleportTarget(crystalCell0, myCell)
+                    if (tpTarget != -1) {
+                        if (useChipOnCell(CHIP_TELEPORTATION, tpTarget) == 1) {
+                            myCell = getCell()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // === Phase 1: Buff MP with Leather Boots (+2 MP for 2 turns, 3 TP) ===
     var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
     if (bootsCd != null && bootsCd == 0 && getTP() >= 6) {
         useChip(CHIP_LEATHER_BOOTS, myID)
     }
 
+    // === Phase 2: Multi-chip loop ===
     var grapUsed = 0
     var boxUsed = 0
     var chipsFired = 0
 
-    // Multi-chip loop: keep making progress until out of chips/MP/TP
     while (chipsFired < 8) {
         // Refresh crystal position after each move
         var crystalCell = getCell(_bossTargetEID)
