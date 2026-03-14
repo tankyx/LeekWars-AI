@@ -9,6 +9,32 @@ include('operation_tracker.lk')
 include('weight_profiles.lk')
 
 // ========================================
+// Counter-Strategy Multipliers (GA-evolvable)
+// ========================================
+// Stored as percentages: 130 = ×1.30, 70 = ×0.70
+global COUNTER_MULTS = [
+    'vs_kiter_burst': 80,
+    'vs_kiter_heal': 135,
+    'vs_kiter_kite': 70,
+    'vs_kiter_dist': 150,
+    'vs_kiter_dot': 130,
+    'vs_burst_shield': 140,
+    'vs_burst_heal': 120,
+    'vs_burst_threat': 120,
+    'vs_burst_burst': 120,
+    'vs_tank_nova': 164,
+    'vs_tank_denial': 130,
+    'vs_tank_dot': 120,
+    'vs_reflect_on_burst': 47,
+    'vs_reflect_on_shield': 130,
+    'vs_reflect_on_heal': 168,
+    'vs_reflect_off_burst': 130,
+    'cd_shield_burst': 121,
+    'cd_shield_otko': 101,
+    'cd_heal_burst': 115,
+]
+
+// ========================================
 // Cooldown Tracker
 // ========================================
 
@@ -187,14 +213,86 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
 
     }
 
-    // === REMOVED: Late game burst boost ===
-    // Late game adaptations were reactive, not proactive
+    // === Counter-Strategy: Adapt weights based on enemy profile ===
+    var primaryEnemy = null
+    var primaryProfile = null
+    var enemies4 = mapKeys(enemies)
+    for (var eid in enemies4) {
+        if (!isDead(eid)) {
+            primaryProfile = getEnemyProfile(eid)
+            primaryEnemy = enemies[eid]
+            break
+        }
+    }
 
-    // === REMOVED: Buff coverage adaptation ===
-    // Wasn't providing meaningful value
+    if (primaryProfile != null) {
+        // vs Poison/Kiter build: close distance, burst them down
+        if (primaryProfile['isKiter'] && primaryProfile['hasPoison']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_kiter_burst'] / 100)
+            adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_kiter_heal'] / 100)
+            if (mapContainsKey(adapted, 'kiteDistance')) {
+                adapted['kiteDistance'] = floor(adapted['kiteDistance'] * COUNTER_MULTS['vs_kiter_kite'] / 100)
+            }
+            adapted['distanceToTarget'] = floor(adapted['distanceToTarget'] * COUNTER_MULTS['vs_kiter_dist'] / 100)
+            if (!primaryProfile['hasAntidote'] && mapContainsKey(adapted, 'dotEffects')) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * COUNTER_MULTS['vs_kiter_dot'] / 100)
+            }
+        }
 
-    // === REMOVED: Enemy threat adaptation ===
-    // High threat = already in trouble, adaptation too late
+        // vs Burst/STR build: boost defense to survive
+        if (primaryProfile['isBurstBuild']) {
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * COUNTER_MULTS['vs_burst_shield'] / 100)
+            adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_burst_heal'] / 100)
+            adapted['threatReduction'] = floor(adapted['threatReduction'] * COUNTER_MULTS['vs_burst_threat'] / 100)
+            if (!primaryProfile['hasShield']) {
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_burst_burst'] / 100)
+            }
+        }
+
+        // vs Tank build: boost attrition tools, keep OTKO viable
+        if (primaryProfile['isTank']) {
+            if (mapContainsKey(adapted, 'novaEffects')) {
+                adapted['novaEffects'] = floor(adapted['novaEffects'] * COUNTER_MULTS['vs_tank_nova'] / 100)
+            }
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * COUNTER_MULTS['vs_tank_denial'] / 100)
+            }
+            // Don't reduce otkoBonus — burst builds still need kill scenarios vs tanks
+            if (mapContainsKey(adapted, 'dotEffects') && adapted['dotEffects'] > 0) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * COUNTER_MULTS['vs_tank_dot'] / 100)
+            }
+        }
+
+        // vs Reflect build: scorer already penalizes attacks into reflect,
+        // so only apply mild weight shifts here
+        if (primaryProfile['hasReflect'] && primaryEnemy != null) {
+            var reflectActive = primaryEnemy.hasDamageReturn()
+            if (reflectActive) {
+                // Mild reduction — scorer reflect penalty does the heavy lifting
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_reflect_on_burst'] / 100)
+                adapted['shieldValue'] = floor(adapted['shieldValue'] * COUNTER_MULTS['vs_reflect_on_shield'] / 100)
+                adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_reflect_on_heal'] / 100)
+            } else {
+                // Reflect down — moderate attack window
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_reflect_off_burst'] / 100)
+            }
+        }
+
+        // Cooldown-driven tactical windows
+        if (primaryEnemy != null) {
+            var enemyId = primaryEnemy._id
+            if (primaryProfile['hasShield'] && !isEnemyShieldAvailable(enemyId)) {
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['cd_shield_burst'] / 100)
+                adapted['otkoBonus'] = floor(adapted['otkoBonus'] * COUNTER_MULTS['cd_shield_otko'] / 100)
+            }
+            if (primaryProfile['hasHeal']) {
+                var healAvail = predictChipAvailability(enemyId, 67)
+                if (!healAvail.isAvailable) {
+                    adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['cd_heal_burst'] / 100)
+                }
+            }
+        }
+    }
 
     return adapted
 }
