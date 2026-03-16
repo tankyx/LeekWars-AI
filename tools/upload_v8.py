@@ -436,7 +436,7 @@ def main():
                     "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
                     "scenario_generator", "scenario_quick_scorer", "scenario_mutation", "weight_profiles",
                     "boss_context", "game_context", "bulb_ai", "item_roles", "item_database",
-                    "scenario_helpers", "scenario_combos"]
+                    "scenario_helpers", "scenario_combos", "beam_search"]
     for module in root_modules:
         if (v8_dir / f"{module}.lk").exists():
             total_modules += 1
