@@ -23,11 +23,13 @@ include('performance_infra.lk')
 include('cache_manager.lk')
 include('tactical_awareness.lk')
 include('weight_profiles.lk')
+include('enemy_intelligence.lk')  // After weight_profiles (needs BUILD_*), before strategic_depth (provides getEnemyProfile)
 include('strategic_depth.lk')
 include('boss_context.lk')
 
 include('strategy/action.lk')
 include('bulb_ai.lk')
+include('beam_search.lk')
 
 include('scenario_generator.lk')
 include('scenario_simulator.lk')
@@ -85,12 +87,13 @@ function main() {
         // Phase 1: Initialize adjacency map (one-time setup)
         initializeAdjacency()
 
-        // Phase 3: Initialize cooldown tracker
-        initializeCooldownTracker()
     }
 
     player.updateEntity()
     fieldMap.updateMapEntities()
+
+    // Profile all enemies (cached — only runs once per enemy)
+    profileAllEnemies(fieldMap)
 
     // Update boss context every turn
     if (_isBossFight) updateBossContext()

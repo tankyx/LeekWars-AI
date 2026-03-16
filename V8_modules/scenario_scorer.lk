@@ -87,6 +87,24 @@ class ScenarioScorer {
 
         var damageWeight = this.getWeight('burstDamage', this.calculateDamageWeight())
 
+        // Enemy reflect awareness: penalize attacking into active damage return
+        var enemyHasActiveReflect = this._target.hasDamageReturn()
+        var enemyReflectTurns = this._target.getDamageReturnRemaining()
+
+        if (enemyHasActiveReflect && scenario != null && count(scenario) > 0) {
+            var attackActions = 0
+            for (var action in scenario) {
+                if (action.type == Action.ACTION_DIRECT) attackActions++
+            }
+            if (attackActions > 0) {
+                var reflectPenalty = attackActions * damageWeight * 0.8
+                score -= reflectPenalty
+                if (enemyReflectTurns <= 1) {
+                    score += reflectPenalty * 0.5
+                }
+            }
+        }
+
         if (killProbability >= 0.70) {
             damageWeight *= 5.0
         } else if (killProbability >= 0.50) {
@@ -280,6 +298,10 @@ class ScenarioScorer {
         // Synergy matrix: bonus for recognized combo patterns in the scenario
         var synergyBonus = this.evaluateSynergyBonus(scenario)
         score += synergyBonus
+
+        // Multi-turn continuation value: estimates future value of end-of-turn state
+        var continuationScore = this.evaluateContinuationValue(simResult, scenario)
+        score += continuationScore
 
         // WEAPON_DESTROYER synergy: bonus when shredding high-Strength enemies
         var destroyerBonus = 0
@@ -733,6 +755,67 @@ class ScenarioScorer {
     calculateRelativeShieldValue(relativeShieldPercent) {
         var maxHP = this._player._maxHealth
         return (relativeShieldPercent / 100.0) * maxHP
+    }
+
+    evaluateContinuationValue(simResult, scenario) {
+        var value = 0
+
+        // 1. Active buffs carrying into future turns
+        for (var buff in simResult.buffsApplied) {
+            if (buff == CHIP_WIZARDRY) value += 200
+            else if (buff == CHIP_STEROID) value += 150
+            else if (buff == CHIP_PRISM) value += 180
+            else if (buff == CHIP_FORTRESS) value += 120
+            else if (buff == CHIP_WALL) value += 80
+            else if (buff == CHIP_WARM_UP) value += 120
+            else if (buff == CHIP_MIRROR || buff == CHIP_THORN || buff == CHIP_BRAMBLE) value += 200
+        }
+
+        // 2. Poison ticking on enemy (guaranteed future damage, discounted)
+        if (simResult.dotDamageQueued > 0) {
+            value += simResult.dotDamageQueued * 0.5
+        }
+
+        // 3. Position quality for next turn
+        var finalPos = simResult.finalPosition
+        if (finalPos != -1 && this._target != null) {
+            var dist = getCellDistance(finalPos, this._target._cellPos)
+            if (dist != null) {
+                // Count items in range from end position
+                var attackable = 0
+                for (var wid in mapKeys(this._fieldMap.damageMap)) {
+                    // Approximate: just use distance-based check
+                }
+                for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+                    var wObj = arsenal.playerEquippedWeapons[wid]
+                    if (dist >= wObj._minRange && dist <= wObj._maxRange) attackable++
+                }
+                for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+                    if (isHealingChip(cid) || isOffensiveBuff(cid) || isShieldChip(cid) ||
+                        isDamageReturnChip(cid) || isResourceChip(cid)) continue
+                    var cObj = arsenal.playerEquippedChips[cid]
+                    if (dist >= cObj._minRange && dist <= cObj._maxRange) attackable++
+                }
+                value += attackable * 80
+                if (dist <= 8) value += (8 - dist) * 20
+            }
+        }
+
+        // 4. Nova damage = permanent max HP reduction
+        var novaDmg = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
+        if (novaDmg > 0 && this._target != null) {
+            var hpReductionRatio = novaDmg / this._target._maxHealth
+            value += hpReductionRatio * 500
+        }
+
+        // 5. TP waste penalty (unspent TP beyond 5)
+        var unspentTP = this._player._currTp - simResult.tpSpent
+        if (unspentTP > 5) {
+            value -= (unspentTP - 5) * 30
+        }
+
+        // 30% discount: future value < current value
+        return value * 0.3
     }
 
     evaluateSynergyBonus(scenario) {

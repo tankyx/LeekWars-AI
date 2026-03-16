@@ -21,6 +21,19 @@ class ScenarioGenerator extends ScenarioCombos {
             tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
             // Note: PREV_ENEMY_POISON is updated at END of main.lk after scenario execution
 
+            // Smart Antidote detection: if enemy doesn't have Antidote chip, skip BAIT entirely
+            if (POISON_PHASE == "BAIT") {
+                var enemyChips = this._target._chips
+                var enemyHasAntidote = false
+                for (var chipId in enemyChips) {
+                    if (chipId == CHIP_ANTIDOTE) { enemyHasAntidote = true; break }
+                }
+                if (!enemyHasAntidote) {
+                    debugInfo("[POISON-PHASE] Enemy has NO Antidote — skipping BAIT, immediate DUMP")
+                    POISON_PHASE = "DUMP"
+                }
+            }
+
             // Check poison phase transitions (SUSTAIN → BAIT when Antidote ready again)
             var currentTurn = getTurn()
 
@@ -69,6 +82,16 @@ class ScenarioGenerator extends ScenarioCombos {
         }
         else if (state == "FLEE") {
             this.buildFleeScenarios(scenarios, availableTP, availableMP)
+        }
+
+        // Beam Search: discover novel action sequences alongside templates
+        // Skip during PUZZLE (position-critical) and FLEE (emergency)
+        if (state != "PUZZLE" && state != "FLEE" && getOperations() < 11000000) {
+            var beamScenarios = beamSearchScenarios(this._player, this._target, this._arsenal, this._fieldMap)
+            for (var bs in beamScenarios) {
+                push(scenarios, bs)
+            }
+            debugInfo("[BEAM-SEARCH] Added " + count(beamScenarios) + " beam scenarios to " + (count(scenarios) - count(beamScenarios)) + " templates")
         }
 
         return scenarios

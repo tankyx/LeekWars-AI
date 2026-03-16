@@ -52,6 +52,11 @@ class UnifiedStrategy extends Strategy {
 
         var targetDied = this.executeScenario()
 
+        // Recover any leftover TP after scenario execution
+        if (!targetDied && target != null && !isDead(target._id) && getOperations() < 13500000) {
+            recoverRemainingTP(target)
+        }
+
         // If target died mid-scenario, recalculate for remaining enemies
         if (targetDied) {
             var enemies = this._fieldMap.getEnemySubMap()
@@ -82,7 +87,12 @@ class UnifiedStrategy extends Strategy {
                 // Clear actions and regenerate
                 arrayClear(this._actions)
                 this.generateAndEvaluateBestScenario(newTarget, newTargetHitCell)
-                this.executeScenario()
+                var retargetDied = this.executeScenario()
+
+                // TP recovery for re-targeted scenario
+                if (!retargetDied && !isDead(newTarget._id) && getOperations() < 13500000) {
+                    recoverRemainingTP(newTarget)
+                }
             } else {
             }
         }
@@ -391,4 +401,124 @@ class UnifiedStrategy extends Strategy {
         return true
     }
 
+}
+
+// Greedy TP Recovery: spend leftover TP after scenario execution
+function recoverRemainingTP(target) {
+    var maxAttempts = 5
+    var attempts = 0
+
+    while (getTP() >= 3 && attempts < maxAttempts) {
+        attempts++
+        var bestAction = null
+        var bestValue = -1
+
+        // Check all equipped chips
+        for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
+            var chipObj = arsenal.playerEquippedChips[chipId]
+            if (chipObj._cost > getTP()) continue
+            if (getCooldown(chipId, getEntity()) > 0) continue
+
+            var targetCell = null
+            var value = 0
+
+            if (isHealingChip(chipId) || isOffensiveBuff(chipId) || isShieldChip(chipId) ||
+                isDamageReturnChip(chipId) || isResourceChip(chipId)) {
+                targetCell = getCell()  // self-targeted
+                value = quickRecoveryChipValue(chipId, 'self')
+            } else if (isUtilityChip(chipId)) {
+                // Skip utility chips (teleport, grapple etc.) in recovery
+                continue
+            } else {
+                // Damage/poison/debuff: target enemy
+                targetCell = target._cellPos
+                var dist = getCellDistance(getCell(), targetCell)
+                if (dist == null) continue
+                if (dist < chipObj._minRange || dist > chipObj._maxRange) continue
+                if (!lineOfSight(getCell(), targetCell)) continue
+                value = quickRecoveryChipValue(chipId, 'enemy')
+            }
+
+            if (value > bestValue) {
+                bestValue = value
+                bestAction = ['type': 'chip', 'id': chipId, 'cell': targetCell]
+            }
+        }
+
+        // Check current weapon
+        var currentWeapon = getWeapon()
+        if (currentWeapon != null && currentWeapon != -1 &&
+            mapContainsKey(arsenal.playerEquippedWeapons, currentWeapon)) {
+            var weaponObj = arsenal.playerEquippedWeapons[currentWeapon]
+            if (weaponObj._cost <= getTP()) {
+                var dist = getCellDistance(getCell(), target._cellPos)
+                if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange) {
+                    if (lineOfSight(getCell(), target._cellPos)) {
+                        var value = quickRecoveryWeaponValue(currentWeapon)
+                        if (value > bestValue) {
+                            bestValue = value
+                            bestAction = ['type': 'weapon', 'cell': target._cellPos]
+                        }
+                    }
+                }
+            }
+        }
+
+        if (bestAction == null) break
+
+        if (bestAction['type'] == 'chip') {
+            useChipOnCell(bestAction['id'], bestAction['cell'])
+            debugInfo("[TP-RECOVERY] Used chip " + bestAction['id'] + " (TP remaining: " + getTP() + ")")
+        } else {
+            useWeaponOnCell(bestAction['cell'])
+            debugInfo("[TP-RECOVERY] Used weapon (TP remaining: " + getTP() + ")")
+        }
+
+        // Check if target died
+        if (isDead(target._id)) break
+    }
+}
+
+function quickRecoveryChipValue(chipId, mode) {
+    var bd = getCachedDamageBreakdown(chipId)
+    var value = 0
+
+    if (bd != null) {
+        if (mode == 'enemy') {
+            value += bd['direct'] * 2.0
+            value += bd['dot'] * 1.5
+            value += bd['nova'] * 2.5
+        }
+    }
+
+    if (mode == 'self') {
+        if (isHealingChip(chipId)) {
+            var hpMissing = player._maxHealth - player._currHealth
+            if (hpMissing > 0) {
+                value += min(hpMissing, beamEstimateHeal(chipId, player._wisdom)) * 1.5
+            }
+        } else if (isShieldChip(chipId)) {
+            value += 100
+        } else if (isDamageReturnChip(chipId)) {
+            value += 150
+        } else if (isOffensiveBuff(chipId)) {
+            value += 80  // Buffs less useful at end of turn
+        } else if (isResourceChip(chipId)) {
+            if (chipId == CHIP_ADRENALINE) value += 500  // +5 TP is huge
+            else value += 50
+        }
+    }
+
+    // Denial chips value
+    if (chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN) {
+        value += 200 * (1 + player._magic / 500)
+    }
+
+    return value
+}
+
+function quickRecoveryWeaponValue(weaponId) {
+    var bd = getCachedDamageBreakdown(weaponId)
+    if (bd == null) return 0
+    return bd['direct'] * 2.0 + bd['dot'] * 1.5 + bd['nova'] * 2.5
 }
