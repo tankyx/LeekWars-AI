@@ -28,15 +28,25 @@ class EnemyPredictor {
         var bestDamage = 0
 
         for (var weaponId in enemyWeapons) {
-            // Estimate damage (simplified - enemy stats unknown)
             var minRange = getWeaponMinRange(weaponId)
             var maxRange = getWeaponMaxRange(weaponId)
             var cost = getWeaponCost(weaponId)
 
             if (cost == null || cost <= 0) continue
 
-            // Rough damage estimate (100-300 per use, scaled by cost)
-            var estimatedDamage = 150 * (cost / 4.0)
+            // Use actual weapon effects + enemy stats for realistic damage estimation
+            var effects = getWeaponEffects(weaponId)
+            var estimatedDamage = 0
+            for (var eff in effects) {
+                if (eff[0] == EFFECT_DAMAGE) {
+                    var avgDmg = (eff[1] + eff[2]) / 2
+                    var statScale = 1 + this._enemy._strength / 100
+                    estimatedDamage += avgDmg * statScale
+                }
+            }
+            if (estimatedDamage == 0) {
+                estimatedDamage = 150 * (cost / 4.0)
+            }
 
             if (estimatedDamage > bestDamage) {
                 bestDamage = estimatedDamage
@@ -53,23 +63,44 @@ class EnemyPredictor {
         return bestWeapon
     }
 
+    // Predict enemy's best damage chip based on equipped chips + stats
+    predictEnemyBestChip() {
+        var enemyChips = getChips(this._enemy._id)
+        var bestDamage = 0
+        var bestCost = 0
+        for (var chipId in enemyChips) {
+            var effects = getChipEffects(chipId)
+            if (effects == null) continue
+            for (var eff in effects) {
+                if (eff[0] == EFFECT_DAMAGE) {
+                    var avgDmg = (eff[1] + eff[2]) / 2
+                    var statScale = 1 + this._enemy._magic / 100
+                    var chipDmg = avgDmg * statScale
+                    if (chipDmg > bestDamage) {
+                        bestDamage = chipDmg
+                        bestCost = getChipCost(chipId)
+                    }
+                }
+            }
+        }
+        if (bestDamage > 0) {
+            return ['damage': bestDamage, 'cost': bestCost]
+        }
+        return null
+    }
+
     // Predict enemy movement toward player
     predictEnemyMovement(playerEndPos, enemyMP) {
         var enemyPos = this._enemy._cellPos
         var distance = getCellDistance(enemyPos, playerEndPos)
 
         if (distance == null || distance <= 3) {
-            // Already in good range, don't move
             return enemyPos
         }
 
-        // Estimate new position (move closer by MP distance)
-        var moveDistance = min(enemyMP, distance - 3)
-        if (moveDistance <= 0) return enemyPos
-
-        // Simplified: Assume enemy moves straight toward player
-        // (Actual pathfinding would be too expensive)
-        return enemyPos  // Fallback: assume no movement for now
+        // Simplified: assume enemy stays put
+        // Real movement prediction over-penalizes squishy builds that need to approach
+        return enemyPos
     }
 
     // Simulate one enemy turn response
@@ -103,9 +134,20 @@ class EnemyPredictor {
             ]
         }
 
-        // Estimate damage
+        // Estimate weapon damage
         var totalDamage = weapon['damage'] * affordableUses
         var tpUsed = weapon['cost'] * affordableUses
+
+        // Add chip damage estimate (enemy may also use damage chips)
+        var remainingTP = enemyTP - tpUsed
+        if (remainingTP > 0) {
+            var bestChip = this.predictEnemyBestChip()
+            if (bestChip != null && bestChip['cost'] > 0 && remainingTP >= bestChip['cost']) {
+                var chipUses = floor(remainingTP / bestChip['cost'])
+                totalDamage += bestChip['damage'] * chipUses
+                tpUsed += bestChip['cost'] * chipUses
+            }
+        }
 
         return [
             'damage': floor(totalDamage),
@@ -125,9 +167,9 @@ class EnemyPredictor {
         // Simulate enemy response
         var enemyResponse = this.simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP)
         var enemyDamage = enemyResponse['damage']
+        var enemyEndPos = enemyResponse['enemyEndPos']
 
-        // Calculate next turn value (simplified)
-        // Penalty for taking damage, bonus for maintaining good HP
+        // Calculate next turn value
         var hpAfterEnemy = playerEndHP - enemyDamage
         var survivalPenalty = 0
 
@@ -139,7 +181,31 @@ class EnemyPredictor {
             survivalPenalty = -1000  // Low HP
         }
 
-        var nextTurnValue = survivalPenalty
+        // Next-turn offense potential: how much damage can we deal from end position?
+        var offenseBonus = 0
+        var distToEnemy = getCellDistance(playerEndPos, enemyEndPos)
+        if (distToEnemy != null) {
+            // Count weapons in range from end position → predicted enemy position
+            for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var wObj = this._arsenal.playerEquippedWeapons[wid]
+                if (distToEnemy >= wObj._minRange && distToEnemy <= wObj._maxRange) {
+                    var bd = getCachedDamageBreakdown(wid)
+                    if (bd != null) offenseBonus += bd['total'] * 0.3
+                }
+            }
+            // Count attack chips in range
+            for (var cid in mapKeys(this._arsenal.playerEquippedChips)) {
+                if (isHealingChip(cid) || isOffensiveBuff(cid) || isShieldChip(cid) ||
+                    isDamageReturnChip(cid) || isResourceChip(cid)) continue
+                var cObj = this._arsenal.playerEquippedChips[cid]
+                if (distToEnemy >= cObj._minRange && distToEnemy <= cObj._maxRange) {
+                    var bd = getCachedDamageBreakdown(cid)
+                    if (bd != null) offenseBonus += bd['total'] * 0.2
+                }
+            }
+        }
+
+        var nextTurnValue = survivalPenalty + offenseBonus
 
         // Apply discount factor to next turn value
         var discountedNextTurn = nextTurnValue * discountFactor

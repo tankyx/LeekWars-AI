@@ -76,6 +76,8 @@ class ScenarioMutator {
             push(descriptors, desc)
         }
 
+        // Removal mutations disabled — can hurt attrition builds by stripping setup actions
+
         debugInfo("[Mutation] Total descriptors generated: " + count(descriptors))
         return descriptors
     }
@@ -214,6 +216,22 @@ class ScenarioMutator {
         return descriptors
     }
 
+    // === REMOVAL MUTATIONS: Try removing each non-essential action ===
+    generateRemovalDescriptors(scenario) {
+        var descriptors = []
+        for (var i = 0; i < count(scenario); i++) {
+            var action = scenario[i]
+            // Only try removing direct damage actions (weapons/damage chips)
+            // Never remove buffs, shields, heals, or positioning — those are setup
+            if (action.type == Action.ACTION_DIRECT && (action.weaponId != -1 || action.chip != -1)) {
+                var desc = new MutationDescriptor(i, "removeAction", null,
+                    "Remove action @" + i)
+                push(descriptors, desc)
+            }
+        }
+        return descriptors
+    }
+
     // Helper: classify chip into action type for substitution matching
     classifyChipActionType(chipId) {
         // Poison/damage chips
@@ -275,6 +293,10 @@ class ScenarioMutator {
             var newAction = new Action(aType, -1, chipId, targetCell, targetEntity)
             insert(scenario, newAction, descriptor.actionIndex)
             originalValue = descriptor.actionIndex  // store position for removal
+        } else if (descriptor.field == "removeAction") {
+            // Remove action at index, store it for revert
+            originalValue = scenario[descriptor.actionIndex]
+            remove(scenario, descriptor.actionIndex)
         }
 
         return originalValue
@@ -297,6 +319,9 @@ class ScenarioMutator {
         } else if (descriptor.field == "insertChip") {
             // Remove the inserted action
             remove(scenario, originalValue)
+        } else if (descriptor.field == "removeAction") {
+            // Re-insert the removed action at its original position
+            insert(scenario, originalValue, descriptor.actionIndex)
         }
     }
 

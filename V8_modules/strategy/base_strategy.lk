@@ -2399,14 +2399,15 @@ class Strategy {
             }
             else if (a.type == Action.ACTION_BUFF) {
                 if (a.chip != -1) {
-                    useChip(a.chip, a.targetEntity._id)
+                    var buffTargetId = (a.targetEntity != null && a.targetEntity != -1) ? a.targetEntity._id : getEntity()
+                    useChip(a.chip, buffTargetId)
 
-                    if (a.chip == CHIP_LEATHER_BOOTS && a.targetEntity._id == player._id) {
-                        player._currMp = getMP()  
+                    if (a.chip == CHIP_LEATHER_BOOTS && buffTargetId == player._id) {
+                        player._currMp = getMP()
                     }
 
-                    if (a.chip == CHIP_ADRENALINE && a.targetEntity._id == player._id) {
-                        player._currTp = getTP()  
+                    if (a.chip == CHIP_ADRENALINE && buffTargetId == player._id) {
+                        player._currTp = getTP()
                     }
                 }
             }
