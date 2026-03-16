@@ -1,0 +1,133 @@
+// ========================================
+// Enemy Intelligence Module
+// ========================================
+// Profiles enemy build, capabilities, and patterns.
+// Called once per enemy on first sighting; data used by
+// weight adaptation, scorer, and predictor modules.
+
+global __enemyProfile = [:]   // enemyId -> profile map
+
+function profileEnemy(enemy) {
+    if (enemy == null) return null
+    var eid = enemy._id
+    if (mapContainsKey(__enemyProfile, eid)) return null  // Already profiled
+
+    var chips = enemy._chips
+    var weapons = enemy._weapons
+    var str = enemy._strength
+    var mag = enemy._magic
+    var agi = enemy._agility
+    var sci = enemy._science
+    var res = enemy._resistance
+    var wis = enemy._wisdom
+
+    var profile = [:]
+
+    // Detect enemy build type
+    profile['buildType'] = detectEnemyBuildType(str, mag, agi, sci, res)
+
+    // Estimated max single-turn burst damage from weapons
+    var maxBurst = 0
+    var bestRange = 0
+    var bestRangeDmg = 0
+    for (var weaponId in weapons) {
+        var effects = getWeaponEffects(weaponId)
+        var weaponDmg = 0
+        for (var eff in effects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                var avgDmg = (eff[1] + eff[2]) / 2
+                weaponDmg += avgDmg * (1 + str / 100)
+            }
+        }
+        var cost = getWeaponCost(weaponId)
+        if (cost != null && cost > 0) {
+            var uses = floor(12 / cost)  // Assume 12 TP budget
+            var totalDmg = weaponDmg * uses
+            if (totalDmg > maxBurst) {
+                maxBurst = totalDmg
+            }
+        }
+        // Track preferred range (weapon with highest per-hit damage)
+        if (weaponDmg > bestRangeDmg) {
+            bestRangeDmg = weaponDmg
+            bestRange = getWeaponMaxRange(weaponId)
+        }
+    }
+    // Add chip burst damage (MAG-based)
+    for (var chipId in chips) {
+        var effects = getChipEffects(chipId)
+        if (effects == null) continue
+        for (var eff in effects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                var avgDmg = (eff[1] + eff[2]) / 2
+                maxBurst += avgDmg * (1 + mag / 100)
+            }
+        }
+    }
+    profile['maxBurstDamage'] = floor(maxBurst)
+    profile['preferredRange'] = bestRange
+
+    __enemyProfile[eid] = profile
+
+    debugInfo("[ENEMY-INTEL] Profiled e" + eid +
+        " build=" + profile['buildType'] +
+        " burst=" + profile['maxBurstDamage'] +
+        " range=" + profile['preferredRange'])
+}
+
+function detectEnemyBuildType(str, mag, agi, sci, res) {
+    if (res >= 300 && sci >= 300) return BUILD_TANK_SCI
+    if (str > 400 && agi > 400) return BUILD_BRUISER_REFLECT
+    if (str >= mag && str >= agi && sci >= 200) return BUILD_STRENGTH_SCIENCE
+    if (mag > str + 100) return BUILD_MAGIC
+    if (abs(str - mag) < 100 && mag >= 100 && str >= 100) return BUILD_HYBRID
+    if (agi >= str && agi >= mag) return BUILD_AGILITY
+    if (mag >= str) return BUILD_MAGIC
+    return BUILD_STRENGTH
+}
+
+function getEnemyProfile(enemyId) {
+    if (mapContainsKey(__enemyProfile, enemyId)) {
+        return __enemyProfile[enemyId]
+    }
+    return null
+}
+
+function profileAllEnemies(fieldMap) {
+    var enemies = fieldMap.getEnemySubMap()
+    for (var eid in mapKeys(enemies)) {
+        if (!isDead(eid)) {
+            profileEnemy(enemies[eid])
+        }
+    }
+}
+
+// Check if enemy can move into attack range within turnsWindow turns
+// Uses enemy profile preferredRange if available, else scans weapons
+function predictEnemyCanAttackWithin(playerPos, enemy, turnsWindow) {
+    if (enemy == null) return true  // Assume yes if no enemy
+    var dist = getCellDistance(playerPos, enemy._cellPos)
+    if (dist == null) return true
+
+    // Get enemy's max weapon range
+    var maxRange = 8  // Default fallback
+    var profile = getEnemyProfile(enemy._id)
+    if (profile != null && profile['preferredRange'] != null && profile['preferredRange'] > 0) {
+        maxRange = profile['preferredRange']
+    } else {
+        // Scan enemy weapons for max range
+        var weapons = getWeapons(enemy._id)
+        if (weapons != null) {
+            for (var wid in weapons) {
+                var wr = getWeaponMaxRange(wid)
+                if (wr != null && wr > maxRange) maxRange = wr
+            }
+        }
+    }
+
+    var enemyMP = enemy._currMp
+    if (enemyMP == null || enemyMP <= 0) enemyMP = 7  // Default fallback
+
+    var gapToClose = max(0, dist - maxRange)
+    return gapToClose <= (enemyMP * turnsWindow)
+}

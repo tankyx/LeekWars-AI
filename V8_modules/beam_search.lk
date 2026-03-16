@@ -432,12 +432,17 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             if (fieldMap != null) threat = fieldMap.getThreatAtCell(partial['simPos'])
             if (threat > 300) value *= 2.0
         }
-        // Damage return chips
+        // Damage return chips — gate on enemy proximity
         else if (isDamageReturnChip(chipId)) {
-            value += 200
-            var threat = 0
-            if (fieldMap != null) threat = fieldMap.getThreatAtCell(partial['simPos'])
-            if (threat > 300) value *= 2.0
+            var drDuration = (chipId == CHIP_BRAMBLE) ? 1 : (chipId == CHIP_THORN) ? 2 : 3
+            if (predictEnemyCanAttackWithin(partial['simPos'], targetObj, drDuration)) {
+                value += 200
+                var threat = 0
+                if (fieldMap != null) threat = fieldMap.getThreatAtCell(partial['simPos'])
+                if (threat > 300) value *= 2.0
+            } else {
+                value += 10  // Minimal value — save for later
+            }
         }
         // Debuff/denial chips
         else if (isDebuffChip(chipId)) {

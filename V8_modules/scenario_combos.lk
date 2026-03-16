@@ -1287,6 +1287,10 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (count(actions) > 0) {
+            // Add BAIT checkpoint — strategic bonus for triggering Antidote
+            var checkpoint = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, null)
+            checkpoint.checkpointType = "POISON_BAIT"
+            push(actions, checkpoint)
             return actions
         }
 
@@ -1411,7 +1415,7 @@ class ScenarioCombos extends ScenarioHelpers {
         // Apply damage return to maintain coverage (reapply when <= 2 turns remaining for better uptime)
         // Priority: MIRROR (3t, 5 TP) > THORN (2t, 4 TP) > BRAMBLE (1t, 3 TP)
 
-        // BRAMBLE: Only if in close combat + high threat + spare TP
+        // BRAMBLE: Only if enemy can attack THIS turn (1-turn duration)
         var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
         if (distToEnemy == null) distToEnemy = 99
         var inCloseCombat = distToEnemy <= 8
@@ -1421,19 +1425,23 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpMirrorCost = getCachedChipCost(CHIP_MIRROR)
         var tpThornCost = getCachedChipCost(CHIP_THORN)
 
-        if (hasBramble && returnRemaining <= 1 && brambleCd == 0 && tpBudget >= tpBrambleCost + 8 && inCloseCombat && expectedThreat > 300) {
+        // Proximity gate: only apply short-duration damage return if enemy can attack during the buff
+        var enemyCanAttack1 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 1)
+        var enemyCanAttack2 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 2)
+
+        if (hasBramble && returnRemaining <= 1 && brambleCd == 0 && tpBudget >= tpBrambleCost + 8 && inCloseCombat && expectedThreat > 300 && enemyCanAttack1) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player))
             tpBudget -= tpBrambleCost
             buffApplied = true
         }
-        // MIRROR: Best coverage (3 turns) - cycle when <= 2 turns for better uptime
+        // MIRROR: Best coverage (3 turns) - cycle when <= 2 turns for better uptime (no proximity gate — long enough duration)
         else if (hasMirror && returnRemaining <= 2 && mirrorCd == 0 && tpBudget >= tpMirrorCost + 4) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player))
             tpBudget -= tpMirrorCost
             buffApplied = true
         }
-        // THORN: Good coverage (2 turns) - cycle when <= 2 turns
-        else if (hasThorn && returnRemaining <= 2 && thornCd == 0 && tpBudget >= tpThornCost + 4) {
+        // THORN: Good coverage (2 turns) - only if enemy can attack within 2 turns
+        else if (hasThorn && returnRemaining <= 2 && thornCd == 0 && tpBudget >= tpThornCost + 4 && enemyCanAttack2) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player))
             tpBudget -= tpThornCost
             buffApplied = true

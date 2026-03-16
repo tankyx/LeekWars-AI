@@ -603,20 +603,26 @@ class ScenarioHelpers {
         var thornReady = thornCd == 0 && hasThorn && currentTP >= 4
         var brambleReady = brambleCd == 0 && hasBramble && currentTP >= 4
 
+        // Proximity gate: only apply short-duration damage return if enemy can attack during the buff
+        var enemyCanAttack1 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 1)
+        var enemyCanAttack2 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 2)
+
         // BRAMBLE: Tactical-only usage (never for proactive maintenance)
-        // Only use if: high incoming damage + close combat + spare TP
+        // Only use if: high incoming damage + close combat + spare TP + enemy can attack this turn
         var expectedThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
-        if (brambleReady && inCloseCombat && currentTP >= 15 && expectedThreat > 300) {
+        if (brambleReady && inCloseCombat && currentTP >= 15 && expectedThreat > 300 && enemyCanAttack1) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player)
         }
 
         // Lower TP gates for MIRROR/THORN to ensure uptime
         if (currentTP < 10) {
-            if (thornReady) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)  // Was currentTP check, now just readiness
+            // THORN: only if enemy can attack within 2 turns
+            if (thornReady && enemyCanAttack2) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)
             }
+            // MIRROR: no proximity gate (3-turn duration covers approach)
             if (mirrorReady) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)  // Was currentTP >= 10, now just readiness
+                return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)
             }
             return null
         }
@@ -626,11 +632,13 @@ class ScenarioHelpers {
             return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)
         }
 
+        // MIRROR: no proximity gate
         if (mirrorReady) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player)
         }
 
-        if (thornReady) {
+        // THORN: only if enemy can attack within 2 turns
+        if (thornReady && enemyCanAttack2) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player)
         }
 
