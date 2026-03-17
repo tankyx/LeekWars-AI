@@ -2270,12 +2270,21 @@ class Strategy {
         var targetDied = false
         var consecutiveFailures = 0
         var maxConsecutiveFailures = 2  // Interrupt threshold
+        var attacksAttempted = 0
+        var attacksSucceeded = 0
+        var hasMoved = false
 
         for (var a in this._actions) {
             if (a.type == Action.MOVEMENT_APPROACH || a.type == Action.MOVEMENT_OFFENSIVE || a.type == Action.MOVEMENT_DEFENSIVE || a.type == Action.MOVEMENT_OTKO || a.type == Action.MOVEMENT_DOT_OFFENSIVE || a.type == Action.MOVEMENT_DEBUFF) {
+                // Skip post-attack movement if all attacks failed (prevents move-fail-move-back)
+                if (hasMoved && attacksAttempted > 0 && attacksSucceeded == 0) {
+                    debugInfo("[EXEC] Skipping movement — attacks failed, avoiding wasted repositioning")
+                    continue
+                }
                 var posBefore = getCell()
                 moveTowardCell(a.targetCell)
                 var posAfter = getCell()
+                hasMoved = true
             }
             else if (a.type == Action.MOVEMENT_FLEE) {
                 moveAwayFrom(a.targetEntity._id)
@@ -2331,6 +2340,7 @@ class Strategy {
                     }
                 }
                 else if (a.weaponId != -1) {
+                    attacksAttempted++
                     if (dist == null) {
                         continue
                     }
@@ -2389,6 +2399,7 @@ class Strategy {
                         continue
                     }
                     consecutiveFailures = 0  // Reset on success
+                    attacksSucceeded++
 
                     // Check if target died from this weapon attack
                     if (a.targetEntity != null && isDead(a.targetEntity._id)) {
@@ -2979,13 +2990,14 @@ class Strategy {
                     var chipCost = getChipCost(action.chip)
                     simulatedTP -= chipCost
 
-                    if (action.chip == CHIP_LEATHER_BOOTS && action.targetEntity._id == player._id) {
+                    var chipTargetId = (action.targetEntity != null && action.targetEntity != -1) ? action.targetEntity._id : player._id
+                    if (action.chip == CHIP_LEATHER_BOOTS && chipTargetId == player._id) {
                         var mpBefore = simulatedMP
-                        simulatedMP += 2  
+                        simulatedMP += 2
                     }
 
-                    if (action.chip == CHIP_ADRENALINE && action.targetEntity._id == player._id) {
-                        simulatedTP += 5  
+                    if (action.chip == CHIP_ADRENALINE && chipTargetId == player._id) {
+                        simulatedTP += 5
                     }
                 }
             } else {

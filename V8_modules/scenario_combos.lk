@@ -850,6 +850,51 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
+    createDualBuffAttackScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // Requires both STEROID and WARM_UP equipped and off cooldown
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP)) return null
+        if (getCooldown(CHIP_STEROID, this._player._id) > 0) return null
+        if (getCooldown(CHIP_WARM_UP, this._player._id) > 0) return null
+
+        var tpSteroid = getCachedChipCost(CHIP_STEROID)
+        var tpWarmUp = getCachedChipCost(CHIP_WARM_UP)
+        var buffCost = tpSteroid + tpWarmUp
+
+        // Need at least buff cost + 4 TP for a minimum attack
+        if (tpBudget < buffCost + 4) return null
+
+        // 1. Apply STEROID
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+        tpBudget -= tpSteroid
+
+        // 2. Apply WARM_UP
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player))
+        tpBudget -= tpWarmUp
+
+        // 3. Move if needed
+        var simPos = this._player._cellPos
+        var approachCell = this.getApproachEnemyCell(mpBudget)
+        if (approachCell != null && approachCell != -1) {
+            push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target))
+            simPos = approachCell
+        }
+
+        // 4. Fill remaining TP with attacks
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        if (count(actions) < 3) return null  // Need buffs + at least one attack
+
+        return actions
+    }
+
     createNeutrinoRecheckScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -2099,9 +2144,9 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpSterBR
                 buffApplied = true
             }
-            // Second buff: Warm Up (AGI for reflect + crit)
+            // Second buff: Warm Up (AGI for reflect + crit) — apply BOTH for bruiser
             var tpWarmBR = getCachedChipCost(CHIP_WARM_UP)
-            if (!buffApplied && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
                 getCooldown(CHIP_WARM_UP, this._player._id) == 0 &&
                 tpBudget >= tpWarmBR) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player))

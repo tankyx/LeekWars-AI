@@ -204,6 +204,12 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, steroidOTKO)
         }
 
+        var dualBuff = this.createDualBuffAttackScenario(availableTP, availableMP)
+        if (dualBuff != null) {
+            debugInfo("[STATE-AGGRO] Adding Dual-Buff (STEROID+WARM_UP) attack scenario")
+            push(scenarios, dualBuff)
+        }
+
         var steroidRecheck = this.createSteroidRecheckScenario(availableTP, availableMP)
         if (steroidRecheck != null) {
             debugInfo("[STATE-AGGRO] Adding STEROID-Recheck two-phase scenario")
@@ -309,6 +315,12 @@ class ScenarioGenerator extends ScenarioCombos {
         if (steroidOTKO != null) {
             debugInfo("[STATE-ATTRITION] Adding STEROID-OTKO combo scenario")
             push(scenarios, steroidOTKO)
+        }
+
+        var dualBuffAttr = this.createDualBuffAttackScenario(availableTP, availableMP)
+        if (dualBuffAttr != null) {
+            debugInfo("[STATE-ATTRITION] Adding Dual-Buff (STEROID+WARM_UP) attack scenario")
+            push(scenarios, dualBuffAttr)
         }
 
         var neutrinoRecheck = this.createNeutrinoRecheckScenario(availableTP, availableMP)

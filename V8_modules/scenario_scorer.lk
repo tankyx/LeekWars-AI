@@ -265,7 +265,7 @@ class ScenarioScorer {
         var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
         score += buffScore + debuffScore
 
-        var critBonus = this.calculateCritBonus(simResult.damageDealt)
+        var critBonus = this.calculateCritBonus(simResult.damageDealt, simResult.buffsApplied)
         score += critBonus
 
         var otkoBonus = 0
@@ -642,12 +642,19 @@ class ScenarioScorer {
             }
         }
 
+        // Pre-compute effective AGI from buffs applied in this scenario
+        var effectiveAgi = this._player._agility
+        for (var bc in buffsApplied) {
+            if (bc == CHIP_WARM_UP) effectiveAgi += 180
+            if (bc == CHIP_PRISM) effectiveAgi += 60
+        }
+
         for (var buffChip in buffsApplied) {
 
             // Offensive buffs: fixed values (not threat-dependent)
             if (buffChip == CHIP_STEROID) value += 200
             if (buffChip == CHIP_DOPING) value += 100
-            if (buffChip == CHIP_WARM_UP) value += 150
+            if (buffChip == CHIP_WARM_UP) value += 200
             if (buffChip == CHIP_WIZARDRY) value += 200  // MAG offensive buff
             if (buffChip == CHIP_KNOWLEDGE) value += 150  // WIS buff (healing power)
             if (buffChip == CHIP_ELEVATION) value += 120  // RES buff (damage reduction)
@@ -691,8 +698,9 @@ class ScenarioScorer {
             if (buffChip == CHIP_REMISSION) value += 100
 
             // Damage return buffs: dynamic threat-aware valuation
+            // Use effective AGI (base + WARM_UP boost if applied in this scenario)
             if (buffChip == CHIP_MIRROR) {
-                var agility = this._player._agility
+                var agility = effectiveAgi
                 var returnPercent = 5.5 * (1 + agility / 100.0)
                 var duration = 3  // 3 turns
                 var returnDamage = (expectedDamage * duration) * (returnPercent / 100.0)
@@ -702,7 +710,7 @@ class ScenarioScorer {
             }
 
             if (buffChip == CHIP_THORN) {
-                var agility = this._player._agility
+                var agility = effectiveAgi
                 var returnPercent = 3.5 * (1 + agility / 100.0)
                 var duration = 2  // 2 turns
                 var returnDamage = (expectedDamage * duration) * (returnPercent / 100.0)
@@ -713,7 +721,7 @@ class ScenarioScorer {
 
             if (buffChip == CHIP_BRAMBLE) {
                 // BRAMBLE: Tactical burst only (1 turn, 25% return, 8 turn cooldown)
-                var agility = this._player._agility
+                var agility = effectiveAgi
                 var returnPercent = 25.0 * (1 + agility / 100.0)
                 var duration = 1  // 1 turn only
                 var returnDamage = expectedDamage * (returnPercent / 100.0)
@@ -750,14 +758,21 @@ class ScenarioScorer {
         return value
     }
 
-    calculateCritBonus(damageDealt) {
+    calculateCritBonus(damageDealt, buffsApplied) {
         var agi = this._player._agility
+        if (buffsApplied != null) {
+            for (var b in buffsApplied) {
+                if (b == CHIP_WARM_UP) agi += 180
+                if (b == CHIP_PRISM) agi += 60
+            }
+        }
 
-        if (agi > this._player._strength && agi > this._player._magic) {
-            var critChance = min(0.5, agi / 2000.0)  
+        // Crit is valuable for any build with significant AGI (not just agi-dominant)
+        if (agi >= 300) {
+            var critChance = min(0.5, agi / 2000.0)
             var critMultiplier = 1.3
             var expectedCritBonus = damageDealt * critChance * (critMultiplier - 1.0)
-            return expectedCritBonus * 0.5  
+            return expectedCritBonus * 0.5
         }
 
         return 0
@@ -785,7 +800,7 @@ class ScenarioScorer {
             else if (buff == CHIP_PRISM) value += 180
             else if (buff == CHIP_FORTRESS) value += 120
             else if (buff == CHIP_WALL) value += 80
-            else if (buff == CHIP_WARM_UP) value += 120
+            else if (buff == CHIP_WARM_UP) value += 150
             else if (buff == CHIP_MIRROR || buff == CHIP_THORN || buff == CHIP_BRAMBLE) {
                 // Only value carrying damage return if enemy can attack during it
                 if (futureThreat > 0) value += 200

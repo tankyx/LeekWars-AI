@@ -64,6 +64,7 @@ class ScenarioSimulator {
         var simMagic = this._player._magic
         var simWisdom = this._player._wisdom
         var simScience = this._player._science
+        var simAgility = this._player._agility
         var simWeaponUses = [:]
 
         var simEnemyCurrHP = 1
@@ -179,7 +180,7 @@ class ScenarioSimulator {
                         // WEAPON_UNSTABLE_DESTROYER crit-heal passive: 50-150 HP on critical hit
                         // Estimate: critChance * avgHeal = (agi/2000) * 100
                         if (action.weaponId == WEAPON_UNSTABLE_DESTROYER) {
-                            var agi = this._player._agility
+                            var agi = simAgility
                             var critChance = min(0.5, agi / 2000.0)
                             var avgCritHeal = 100  // Average of 50-150 passive heal
                             result.lifestealHealing += critChance * avgCritHeal
@@ -265,8 +266,7 @@ class ScenarioSimulator {
                     result.hpGained += 80
                 } else if (action.chip == CHIP_WARM_UP) {
                     // WARM_UP: +170-190 AGI for 3 turns (avg 180)
-                    // AGI boosts crit chance and damage return % but isn't tracked in sim
-                    // (crit-heal uses base _agility which is acceptable approximation)
+                    simAgility += 180
                 } else if (action.chip == CHIP_ADRENALINE) {
 
                     simTP += 5
@@ -420,6 +420,10 @@ class ScenarioSimulator {
                 if (tCell != -1 && tCell != simPos) {
                     var dist = getCellDistance(simPos, tCell)
                     if (dist == null || dist < weaponObj._minRange || dist > weaponObj._maxRange) {
+                        return false
+                    }
+                    // LoS check: execution checks this, simulator must too
+                    if (!lineOfSight(simPos, tCell)) {
                         return false
                     }
                 }

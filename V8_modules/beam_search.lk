@@ -31,6 +31,8 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
         weaponMaxUses[wid] = getWeaponMaxUses(wid)
     }
 
+    var agi = playerObj._agility
+
     // Seed beam with empty candidate
     var beam = []
     push(beam, [
@@ -43,6 +45,7 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
         'simMag': mag,
         'simWis': wis,
         'simSci': sci,
+        'simAgi': agi,
         'chipUsed': [:],
         'weaponUses': [:],
         'cumScore': 0,
@@ -188,7 +191,8 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
             if (mapContainsKey(weaponUses, simWeapon)) currentUses = weaponUses[simWeapon]
             var maxUse = mapContainsKey(wMaxUses, simWeapon) ? wMaxUses[simWeapon] : 1
             if (currentUses < maxUse) {
-                if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange) {
+                if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange &&
+                    lineOfSight(simPos, targetPos)) {
                     push(actions, [
                         'type': 'weapon',
                         'actionType': Action.ACTION_DIRECT,
@@ -213,7 +217,8 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
         if (mapContainsKey(weaponUses, wid)) currentUses = weaponUses[wid]
         var maxUse = mapContainsKey(wMaxUses, wid) ? wMaxUses[wid] : 1
         if (currentUses >= maxUse) continue
-        if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange) {
+        if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange &&
+            lineOfSight(simPos, targetPos)) {
             push(actions, [
                 'type': 'weapon',
                 'actionType': Action.ACTION_DIRECT,
@@ -394,10 +399,13 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 var unusedHeals = beamCountUnusedHealChips(partial, arsenalObj)
                 if (unusedHeals > 0) value += 100 * unusedHeals
             } else if (chipId == CHIP_WARM_UP) {
-                value += 150
+                value += 200
                 // Enablement: damage return benefits from AGI
                 var unusedReturn = beamCountUnusedReturnChips(partial, arsenalObj)
                 if (unusedReturn > 0) value += 200
+                // Weapons benefit from crit chance boost too
+                var unusedWeaponsWU = beamCountUnusedWeapons(partial, arsenalObj)
+                if (unusedWeaponsWU > 0) value += 150
             } else if (chipId == CHIP_ADRENALINE) {
                 value += 400  // Very high: +5 TP unlocks many actions
             } else if (chipId == CHIP_ARMORING) {
@@ -577,6 +585,7 @@ function beamExtendCandidate(partial, actionInfo, value, targetObj) {
     var newMag = partial['simMag']
     var newWis = partial['simWis']
     var newSci = partial['simSci']
+    var newAgi = partial['simAgi']
     var newCumDamage = partial['cumDamage']
     var newMoveCount = partial['moveCount']
 
@@ -593,8 +602,9 @@ function beamExtendCandidate(partial, actionInfo, value, targetObj) {
         else if (chipId == CHIP_DOPING) newStr += 100
         else if (chipId == CHIP_WIZARDRY) newMag += 160
         else if (chipId == CHIP_KNOWLEDGE) newWis += 260
+        else if (chipId == CHIP_WARM_UP) newAgi += 180
         else if (chipId == CHIP_PRISM) {
-            newStr += 60; newMag += 60; newWis += 60; newSci += 60
+            newStr += 60; newMag += 60; newWis += 60; newSci += 60; newAgi += 60
         }
         else if (chipId == CHIP_ADRENALINE) newTP += 5
         else if (chipId == CHIP_LEATHER_BOOTS) newMP += 2
@@ -649,6 +659,7 @@ function beamExtendCandidate(partial, actionInfo, value, targetObj) {
         'simMag': newMag,
         'simWis': newWis,
         'simSci': newSci,
+        'simAgi': newAgi,
         'chipUsed': newChipUsed,
         'weaponUses': newWeaponUses,
         'cumScore': partial['cumScore'] + value,

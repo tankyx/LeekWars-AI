@@ -407,9 +407,17 @@ class UnifiedStrategy extends Strategy {
 function recoverRemainingTP(target) {
     var maxAttempts = 5
     var attempts = 0
+    var weaponUsesThisTurn = 0
+    var currentWeapon = getWeapon()
+    var weaponMaxUses = 0
+    if (currentWeapon != null && currentWeapon != -1) {
+        weaponMaxUses = getWeaponMaxUses(currentWeapon)
+        if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
+    }
 
     while (getTP() >= 3 && attempts < maxAttempts) {
         attempts++
+        var tpBefore = getTP()
         var bestAction = null
         var bestValue = -1
 
@@ -445,9 +453,9 @@ function recoverRemainingTP(target) {
             }
         }
 
-        // Check current weapon
-        var currentWeapon = getWeapon()
+        // Check current weapon (respect max uses per round)
         if (currentWeapon != null && currentWeapon != -1 &&
+            weaponUsesThisTurn < weaponMaxUses &&
             mapContainsKey(arsenal.playerEquippedWeapons, currentWeapon)) {
             var weaponObj = arsenal.playerEquippedWeapons[currentWeapon]
             if (weaponObj._cost <= getTP()) {
@@ -464,13 +472,47 @@ function recoverRemainingTP(target) {
             }
         }
 
+        // Check other weapons (with swap cost)
+        var myPos = getCell()
+        var distToTarget = getCellDistance(myPos, target._cellPos)
+        var hasLos = (distToTarget != null) ? lineOfSight(myPos, target._cellPos) : false
+        if (hasLos && distToTarget != null) {
+            for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+                if (wid == currentWeapon) continue
+                var wObj = arsenal.playerEquippedWeapons[wid]
+                var totalCost = 1 + wObj._cost  // swap + attack
+                if (totalCost > getTP()) continue
+                if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                var wValue = quickRecoveryWeaponValue(wid)
+                if (wValue > bestValue) {
+                    bestValue = wValue
+                    bestAction = ['type': 'weaponSwap', 'id': wid, 'cell': target._cellPos]
+                }
+            }
+        }
+
         if (bestAction == null) break
 
         if (bestAction['type'] == 'chip') {
             useChipOnCell(bestAction['id'], bestAction['cell'])
+            // Check if action actually consumed TP (failed actions don't)
+            if (getTP() >= tpBefore) break  // Action failed, stop trying
             debugInfo("[TP-RECOVERY] Used chip " + bestAction['id'] + " (TP remaining: " + getTP() + ")")
+        } else if (bestAction['type'] == 'weaponSwap') {
+            setWeapon(bestAction['id'])
+            currentWeapon = bestAction['id']
+            weaponMaxUses = getWeaponMaxUses(currentWeapon)
+            if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
+            weaponUsesThisTurn = 0
+            useWeaponOnCell(bestAction['cell'])
+            if (getTP() >= tpBefore) break
+            weaponUsesThisTurn++
+            debugInfo("[TP-RECOVERY] Swapped to weapon " + bestAction['id'] + " and attacked (TP remaining: " + getTP() + ")")
         } else {
             useWeaponOnCell(bestAction['cell'])
+            // Check if action actually consumed TP (failed = out of line, etc.)
+            if (getTP() >= tpBefore) break  // Action failed, stop trying
+            weaponUsesThisTurn++
             debugInfo("[TP-RECOVERY] Used weapon (TP remaining: " + getTP() + ")")
         }
 
