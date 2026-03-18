@@ -81,16 +81,40 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
 
         if (count(allCandidates) == 0) break
 
-        // Sort by cumulative score descending
+        // Diversity-aware beam selection
+        // Top 14 by cumulative score
         arraySort(allCandidates, function(a, b) {
             return b['cumScore'] - a['cumScore']
         })
 
-        // Keep top beamWidth candidates
         beam = []
-        var limit = min(beamWidth, count(allCandidates))
+        var selected = [:]  // Track selected candidate indices
+        var limit = min(14, count(allCandidates))
         for (var i = 0; i < limit; i++) {
             push(beam, allCandidates[i])
+            selected[i] = true
+        }
+
+        // Reserve 3 slots for defensive candidates (shield/heal/retreat)
+        var defAdded = 0
+        for (var i = 0; i < count(allCandidates) && defAdded < 3; i++) {
+            if (mapContainsKey(selected, i)) continue
+            if (beamHasDefensiveAction(allCandidates[i])) {
+                push(beam, allCandidates[i])
+                selected[i] = true
+                defAdded++
+            }
+        }
+
+        // Reserve 3 slots for utility candidates (denial/buff/poison)
+        var utilAdded = 0
+        for (var i = 0; i < count(allCandidates) && utilAdded < 3; i++) {
+            if (mapContainsKey(selected, i)) continue
+            if (beamHasUtilityAction(allCandidates[i])) {
+                push(beam, allCandidates[i])
+                selected[i] = true
+                utilAdded++
+            }
         }
 
         // Ops budget check
@@ -780,4 +804,24 @@ function beamEstimateHeal(chipId, wisdom) {
     if (chipId == CHIP_CURE) return 200 * (1 + wisdom / 100)
     if (chipId == CHIP_DRIP) return 100 * (1 + wisdom / 100)
     return 50 * (1 + wisdom / 100)
+}
+
+// Beam diversity helpers
+function beamHasDefensiveAction(candidate) {
+    for (var action in candidate['actions']) {
+        if (action.chip != null && action.chip != -1) {
+            if (isShieldChip(action.chip) || isHealingChip(action.chip)) return true
+            if (isDamageReturnChip(action.chip)) return true
+        }
+    }
+    return false
+}
+
+function beamHasUtilityAction(candidate) {
+    for (var action in candidate['actions']) {
+        if (action.type == Action.ACTION_DOT) return true
+        if (action.type == Action.ACTION_DEBUFF) return true
+        if (action.chip != null && action.chip != -1 && isOffensiveBuff(action.chip)) return true
+    }
+    return false
 }

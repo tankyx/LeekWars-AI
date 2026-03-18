@@ -1,6 +1,9 @@
 
 include('operation_tracker.lk')
 
+global __adversarialThreatCache = [:]
+global __adversarialThreatCacheBuilt = false
+
 global __reachableCellsCache = [:]
 global __damageCache = [:]
 global __chipCostCache = [:]
@@ -17,6 +20,8 @@ function clearCaches() {
     __chipCostCache = [:]
     __weaponCostCache = [:]
     __pathLengthCache = [:]
+    __adversarialThreatCache = [:]
+    __adversarialThreatCacheBuilt = false
     clearPerformanceInfra()
 }
 

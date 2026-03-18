@@ -170,6 +170,59 @@ function predictTotalThreatAtCell(targetCell, enemies, player, arsenal) {
 }
 
 // ========================================
+// Adversarial Position Cache
+// ========================================
+
+function buildAdversarialThreatCache(playerObj, enemies, arsenalObj) {
+    __adversarialThreatCache = [:]
+    __adversarialThreatCacheBuilt = false
+
+    var reachable = getReachableCells()
+    var playerCell = playerObj._cellPos
+    var cellsToEvaluate = []
+    push(cellsToEvaluate, playerCell)
+    for (var c in reachable) push(cellsToEvaluate, c)
+
+    // Collect alive enemies, limit to closest 2 for ops budget
+    var aliveEnemies = []
+    for (var eid in mapKeys(enemies)) {
+        if (!isDead(eid)) push(aliveEnemies, enemies[eid])
+    }
+
+    if (count(aliveEnemies) > 0) {
+        // Limit to 2 closest enemies for performance
+        if (count(aliveEnemies) > 2) {
+            arraySort(aliveEnemies, function(a, b) {
+                var da = getCellDistance(playerCell, a._cellPos)
+                var db = getCellDistance(playerCell, b._cellPos)
+                if (da == null) da = 999
+                if (db == null) db = 999
+                return da - db
+            })
+            aliveEnemies = [aliveEnemies[0], aliveEnemies[1]]
+        }
+
+        for (var i = 0; i < count(cellsToEvaluate); i++) {
+            if (getOperations() > 10000000) break
+            var evalCell = cellsToEvaluate[i]
+            var totalThreat = 0
+            for (var enemy in aliveEnemies) {
+                var pred = predictEnemyThreatAtCell(evalCell, enemy, playerObj, arsenalObj)
+                totalThreat += pred.maxDamage
+            }
+            __adversarialThreatCache[evalCell] = totalThreat
+        }
+        __adversarialThreatCacheBuilt = true
+    }
+}
+
+function getAdversarialThreat(cell) {
+    if (!__adversarialThreatCacheBuilt) return 0
+    if (mapContainsKey(__adversarialThreatCache, cell)) return __adversarialThreatCache[cell]
+    return 0
+}
+
+// ========================================
 // TP Reservation Logic
 // ========================================
 

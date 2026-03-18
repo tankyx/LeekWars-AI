@@ -151,6 +151,12 @@ function main() {
 
     fieldMap.buildEnemyThreatMap()
 
+    if (target != null && getOperations() < 9000000) {
+        startOp()
+        buildAdversarialThreatCache(player, fieldMap.getEnemySubMap(), arsenal)
+        stopOp("Build adversarial threat cache")
+    }
+
     var targetHitCell = null
 
     if (target != null && strategy.shouldBuildDamageMap()) {

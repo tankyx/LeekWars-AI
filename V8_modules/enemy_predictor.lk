@@ -93,14 +93,46 @@ class EnemyPredictor {
     predictEnemyMovement(playerEndPos, enemyMP) {
         var enemyPos = this._enemy._cellPos
         var distance = getCellDistance(enemyPos, playerEndPos)
+        if (distance == null || distance <= 1) return enemyPos
 
-        if (distance == null || distance <= 3) {
-            return enemyPos
+        // Find enemy's preferred weapon range
+        var bestWeapon = this.predictEnemyBestWeapon()
+        var targetRange = 1
+        if (bestWeapon != null) targetRange = bestWeapon['maxRange']
+
+        // How far must enemy close to get in range?
+        var gapToClose = max(0, distance - targetRange)
+        if (gapToClose <= 0) return enemyPos  // Already in range
+
+        // Predict approach: close min(MP, gap) cells
+        var closingDist = min(enemyMP, gapToClose)
+        if (closingDist <= 0) return enemyPos
+
+        // Find actual cell along approach path (limited search for ops)
+        if (closingDist <= 5) {
+            var bestCell = enemyPos
+            var bestDist = distance
+            var searchR = min(closingDist, 4)
+            for (var dx = -searchR; dx <= searchR; dx++) {
+                for (var dy = -searchR; dy <= searchR; dy++) {
+                    if (abs(dx) + abs(dy) > searchR || (dx == 0 && dy == 0)) continue
+                    var testCell = enemyPos + 18 * dx + 17 * dy
+                    if (testCell < 0 || testCell >= 613 || isObstacle(testCell)) continue
+                    var testDist = getCellDistance(testCell, playerEndPos)
+                    if (testDist == null) continue
+                    if (testDist < bestDist && testDist >= max(1, targetRange - 1)) {
+                        var pathLen = getCachedPathLength(enemyPos, testCell)
+                        if (pathLen != null && pathLen <= enemyMP) {
+                            bestDist = testDist
+                            bestCell = testCell
+                        }
+                    }
+                }
+            }
+            return bestCell
         }
 
-        // Simplified: assume enemy stays put
-        // Real movement prediction over-penalizes squishy builds that need to approach
-        return enemyPos
+        return enemyPos  // Too far to matter this turn
     }
 
     // Simulate one enemy turn response

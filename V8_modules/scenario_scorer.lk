@@ -256,6 +256,31 @@ class ScenarioScorer {
         var positionScore = this.evaluatePosition(simResult.finalPosition) * positionWeight
         score += positionScore
 
+        // === ADVERSARIAL POSITION PENALTY ===
+        var adversarialThreat = 0
+        if (__adversarialThreatCacheBuilt) {
+            var evalCell = simResult.finalPosition
+            if (evalCell == -1) evalCell = this._player._cellPos
+            adversarialThreat = getAdversarialThreat(evalCell)
+        }
+        if (adversarialThreat > 0) {
+            var effectiveHP = this._player._currHealth + simResult.hpGained + simResult.shieldsGained
+            var relShieldReduction = simResult.relativeShieldGained / 100.0
+            var effectiveEnemyDmg = adversarialThreat * (1.0 - relShieldReduction)
+            var survivalAfterEnemy = effectiveHP - effectiveEnemyDmg
+
+            if (survivalAfterEnemy <= 0) score -= 8000        // Death prediction
+            else if (survivalAfterEnemy < this._player._maxHealth * 0.25) score -= 3000
+
+            var threatWeight = this.getWeight('threatReduction', 40) / 100.0
+            score -= adversarialThreat * threatWeight
+
+            // Defensive value boost at dangerous positions
+            if (adversarialThreat > 300) {
+                score += (simResult.hpGained + simResult.shieldsGained) * (adversarialThreat / 1000.0)
+            }
+        }
+
         var efficiencyWeight = this.getWeight('tpEfficiency', this.calculateEfficiencyWeight())
         var efficiencyScore = this.calculateEfficiency(simResult) * efficiencyWeight
         score += efficiencyScore
