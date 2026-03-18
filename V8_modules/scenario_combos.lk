@@ -14,6 +14,12 @@ class ScenarioCombos extends ScenarioHelpers {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
+        var antidoteAction = this.getAntidoteAction(tpBudget)
+        if (antidoteAction != null) {
+            push(actions, antidoteAction)
+            tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
+        }
+
         var buffAction = this.getOffensiveBuff()
         if (buffAction != null) {
             push(actions, buffAction)
@@ -43,6 +49,12 @@ class ScenarioCombos extends ScenarioHelpers {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell
             }
+        }
+
+        var denialActions = this.getDenialActions(tpBudget, simPos)
+        for (var da in denialActions) {
+            push(actions, da)
+            tpBudget -= getCachedChipCost(da.chip)
         }
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
@@ -102,6 +114,12 @@ class ScenarioCombos extends ScenarioHelpers {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell
             }
+        }
+
+        var denialActionsC = this.getDenialActions(tpBudget, simPos)
+        for (var da in denialActionsC) {
+            push(actions, da)
+            tpBudget -= getCachedChipCost(da.chip)
         }
 
         var attackActions = this.getAttackActions(tpBudget, 0.7, simPos)
@@ -593,6 +611,12 @@ class ScenarioCombos extends ScenarioHelpers {
                     simPos = moveAction.targetCell
                 }
             }
+        }
+
+        var denialActionsP = this.getDenialActions(tpBudget, simPos)
+        for (var da in denialActionsP) {
+            push(actions, da)
+            tpBudget -= getCachedChipCost(da.chip)
         }
 
         if (tpBudget >= 4) {
@@ -1859,6 +1883,54 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
+    createTimePressureScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var tpAdren = getCachedChipCost(CHIP_ADRENALINE)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE) &&
+            getCooldown(CHIP_ADRENALINE, this._player._id) == 0 &&
+            tpBudget >= tpAdren) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
+            tpBudget -= tpAdren
+            tpBudget += 5
+        }
+
+        var tpBoots = getCachedChipCost(CHIP_LEATHER_BOOTS)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
+            getCooldown(CHIP_LEATHER_BOOTS, this._player._id) == 0 &&
+            tpBudget >= tpBoots) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, -1, this._player))
+            tpBudget -= tpBoots
+            mpBudget += 2
+        }
+
+        var moveAction = this.getMoveToOptimalCell(mpBudget)
+        if (moveAction != null) {
+            push(actions, moveAction)
+            var moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999) {
+                mpBudget -= moveCost
+                simPos = moveAction.targetCell
+            }
+        }
+
+        var denialActionsTP = this.getDenialActions(tpBudget, simPos)
+        for (var da in denialActionsTP) {
+            push(actions, da)
+            tpBudget -= getCachedChipCost(da.chip)
+        }
+
+        var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+        for (var atk in attackActions) {
+            push(actions, atk)
+        }
+
+        return actions
+    }
+
     createSimpleOffensiveScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -1874,6 +1946,12 @@ class ScenarioCombos extends ScenarioHelpers {
                 mpBudget -= moveCost
                 simPos = moveAction.targetCell
             }
+        }
+
+        var denialActionsS = this.getDenialActions(tpBudget, simPos)
+        for (var da in denialActionsS) {
+            push(actions, da)
+            tpBudget -= getCachedChipCost(da.chip)
         }
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)

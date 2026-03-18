@@ -6,6 +6,11 @@ global player = null
 global strategy = null
 global DEBUG_SCENARIO_TRACE = false  // Enable for score breakdown logging
 
+// Time-pressure anti-draw tracking
+global __avgDamageRate = 0
+global __lastEnemyHP = -1
+global __timePressure = false
+
 include('game_entity.lk')
 include('field_map_tactical.lk')
 include('item.lk')

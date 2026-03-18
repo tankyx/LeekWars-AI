@@ -268,6 +268,13 @@ class ScenarioGenerator extends ScenarioCombos {
 
         push(scenarios, this.createParametricScenario(new ScenarioParams(2, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
 
+        if (__timePressure) {
+            var timePressureScenario = this.createTimePressureScenario(availableTP, availableMP)
+            if (timePressureScenario != null && count(timePressureScenario) > 0) {
+                push(scenarios, timePressureScenario)
+            }
+        }
+
         push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
         push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
     }
@@ -374,6 +381,13 @@ class ScenarioGenerator extends ScenarioCombos {
         push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 0.8, 0.8, "hide"), availableTP, availableMP))
         push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.8, 0.8, "hide"), availableTP, availableMP))
         push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
+
+        if (__timePressure) {
+            var timePressureScenario = this.createTimePressureScenario(availableTP, availableMP)
+            if (timePressureScenario != null && count(timePressureScenario) > 0) {
+                push(scenarios, timePressureScenario)
+            }
+        }
 
         push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
         push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))

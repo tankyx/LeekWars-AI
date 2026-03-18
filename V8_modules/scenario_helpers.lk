@@ -93,6 +93,24 @@ class ScenarioHelpers {
             }
         }
 
+        // Time-pressure anti-draw tracking
+        if (currentTurn > 3 && __lastEnemyHP > 0) {
+            var netDamageThisTurn = __lastEnemyHP - enemyHP
+            __avgDamageRate = __avgDamageRate * 0.7 + netDamageThisTurn * 0.3
+        }
+        __lastEnemyHP = enemyHP
+
+        var turnsRemaining = 64 - currentTurn
+        if (currentTurn > 5 && __avgDamageRate > 0) {
+            var turnsToKill = enemyHP / __avgDamageRate
+            if (turnsToKill < 0) turnsToKill = 999
+            __timePressure = (turnsToKill > turnsRemaining)
+        } else if (currentTurn > 15 && enemyHP > enemyMaxHP * 0.7) {
+            __timePressure = true
+        } else {
+            __timePressure = false
+        }
+
         // Standard 1v1 logic
         // PRIORITY: Check if enemy is killable BEFORE fleeing
         var dmgEstimate = this.estimateMaxDamageThisTurn(availableTP)
@@ -120,12 +138,16 @@ class ScenarioHelpers {
             return "ATTRITION"
         }
 
-        // Only flee if we can't kill the enemy
+        // Time pressure: force aggression only in late-game stalls
+        if (__timePressure && currentTurn > 45 && enemyHPPercent > 50) {
+            return "AGGRO"
+        }
+
         if (playerHPPercent < 40) {
             return "FLEE"
         }
 
-        if (playerHPPercent >= 40 && playerHPPercent <= 60 && enemyHPPercent > 40) {
+        if (playerHPPercent >= 40 && playerHPPercent <= 60 && enemyHPPercent > 40 && !__timePressure) {
             return "SUSTAIN"
         }
 
@@ -953,7 +975,7 @@ class ScenarioHelpers {
         var maxHP = this._player._maxHealth
         var hpRatio = currentHP / maxHP
 
-        if (totalPoisonDamage > 200) {
+        if (totalPoisonDamage > 100) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
@@ -988,6 +1010,25 @@ class ScenarioHelpers {
         }
 
         return null
+    }
+
+    getDenialActions(tpBudget, simPos) {
+        var actions = []
+        var tpUsed = 0
+        if (this._player._magic <= this._player._strength + 100) return actions
+        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+        for (var dChip in denialChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
+            if (getCooldown(dChip, this._player._id) > 0) continue
+            var dCost = getCachedChipCost(dChip)
+            if (tpBudget - tpUsed < dCost) continue
+            var chipObj = this._arsenal.playerEquippedChips[dChip]
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            if (dist == null || dist < chipObj._minRange || dist > chipObj._maxRange) continue
+            push(actions, new Action(Action.ACTION_DEBUFF, -1, dChip, this._target._cellPos, this._target))
+            tpUsed += dCost
+        }
+        return actions
     }
 
     getAttackActions(tpBudget, fraction, simPos) {

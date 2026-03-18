@@ -265,6 +265,13 @@ class ScenarioScorer {
         var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
         score += buffScore + debuffScore
 
+        // Denial value scoring
+        if (simResult.denialApplied > 0) {
+            var enemyBestDPT = max(1, this._target._strength + this._target._magic) * 0.5
+            var denialValue = simResult.denialApplied * enemyBestDPT * 2.0
+            score += denialValue
+        }
+
         var critBonus = this.calculateCritBonus(simResult.damageDealt, simResult.buffsApplied)
         score += critBonus
 
@@ -365,6 +372,20 @@ class ScenarioScorer {
         }
 
         score *= survivalMultiplier
+
+        // Time-pressure anti-draw: boost damage value, don't penalize defense
+        if (__timePressure) {
+            var currentTurn = getTurn()
+            if (currentTurn > 10) {
+                var urgencyFactor = 1.0 + (currentTurn - 10) * 0.04
+                if (urgencyFactor > 3.0) urgencyFactor = 3.0
+
+                var dotDmgTP = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
+                var novaDmgTP = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
+                var totalDmgTP = simResult.damageDealt + dotDmgTP + novaDmgTP
+                score += totalDmgTP * (urgencyFactor - 1.0) * damageWeight
+            }
+        }
 
         // Debug: Score breakdown removed for compilation
 

@@ -30,6 +30,9 @@ class SimulationResult {
     // Poison source tracking for multi-stack scoring
     poisonSourcesUsed = 0     // Count of distinct poison-applying actions
 
+    // Denial tracking (Soporific/Ball and Chain TP/MP removal)
+    denialApplied = 0         // Total TP/MP denial value applied
+
     // Boss PUZZLE crystal tracking
     crystalAxisReduction = 0  // Cells of alignment improvement
     crystalSolved = false      // Crystal reached goal axis with LOS
@@ -134,6 +137,13 @@ class ScenarioSimulator {
 
                     if (action.type == Action.ACTION_DEBUFF) {
                         push(result.debuffsApplied, action.chip)
+                    }
+
+                    // Track denial chip effects
+                    if (action.chip == CHIP_SOPORIFIC) {
+                        result.denialApplied += 0.45 * (1 + simMagic / 100.0)
+                    } else if (action.chip == CHIP_BALL_AND_CHAIN) {
+                        result.denialApplied += 0.45 * (1 + simMagic / 100.0)
                     }
 
                     result.actionsExecuted++

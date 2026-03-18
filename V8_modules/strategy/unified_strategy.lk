@@ -43,6 +43,9 @@ class UnifiedStrategy extends Strategy {
         this._originalTP = player._currTp
         this._originalMP = player._currMp
 
+        // Pre-scenario self-Antidote: cleanse poison if it threatens us
+        this.checkSelfAntidote()
+
         debugInfo("[UNIFIED] Player TP=" + player._currTp + " MP=" + player._currMp + " at start of turn")
         debugInfo("[UNIFIED] Using weight-driven scenario generation")
 
@@ -395,6 +398,11 @@ class UnifiedStrategy extends Strategy {
     turnOneBuffs() {
         debugInfo("[UNIFIED] Calling base turn one HP buffs")
         super.turnOneBuffs()
+    }
+
+    checkSelfAntidote() {
+        // Implemented via scenario system: getAntidoteAction in scenario_helpers
+        // handles self-Antidote during scenario generation
     }
 
     shouldBuildDamageMap() {
