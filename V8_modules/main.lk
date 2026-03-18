@@ -100,6 +100,9 @@ function main() {
     // Profile all enemies (cached — only runs once per enemy)
     profileAllEnemies(fieldMap)
 
+    // Observe enemy behavior each turn (System 4: adaptive observation)
+    observeEnemyBehavior(fieldMap)
+
     // Update boss context every turn
     if (_isBossFight) updateBossContext()
 

@@ -6,6 +6,7 @@
 // weight adaptation, scorer, and predictor modules.
 
 global __enemyProfile = [:]   // enemyId -> profile map
+global __enemyObservations = [:]  // enemyId -> observation map (turn-by-turn tracking)
 
 function profileEnemy(enemy) {
     if (enemy == null) return null
@@ -67,12 +68,42 @@ function profileEnemy(enemy) {
     profile['maxBurstDamage'] = floor(maxBurst)
     profile['preferredRange'] = bestRange
 
+    // Capability detection for counter-strategy system
+    var hasShield = false
+    var hasHeal = false
+    var hasPoison = false
+    var hasReflect = false
+    var hasAntidote = false
+    for (var cid in chips) {
+        if (mapContainsKey(ROLE_SHIELD_RELATIVE, cid) || mapContainsKey(ROLE_SHIELD_ABSOLUTE, cid)) hasShield = true
+        if (mapContainsKey(ROLE_HEALING, cid)) hasHeal = true
+        if (mapContainsKey(ROLE_POISON, cid)) hasPoison = true
+        if (mapContainsKey(ROLE_DAMAGE_RETURN, cid)) hasReflect = true
+        if (cid == CHIP_ANTIDOTE) hasAntidote = true
+    }
+    if (!hasPoison) {
+        for (var wid in weapons) {
+            if (mapContainsKey(ROLE_POISON_WEAPON, wid)) { hasPoison = true; break }
+        }
+    }
+    profile['hasShield'] = hasShield
+    profile['hasHeal'] = hasHeal
+    profile['hasPoison'] = hasPoison
+    profile['hasReflect'] = hasReflect
+    profile['hasAntidote'] = hasAntidote
+    profile['isTank'] = (profile['buildType'] == BUILD_TANK_SCI || res >= 300)
+    profile['isBurstBuild'] = (str >= 400 && !profile['isTank'])
+    profile['isKiter'] = (profile['buildType'] == BUILD_AGILITY || agi >= 400)
+
     __enemyProfile[eid] = profile
 
     debugInfo("[ENEMY-INTEL] Profiled e" + eid +
         " build=" + profile['buildType'] +
         " burst=" + profile['maxBurstDamage'] +
-        " range=" + profile['preferredRange'])
+        " range=" + profile['preferredRange'] +
+        " shield=" + hasShield + " heal=" + hasHeal +
+        " poison=" + hasPoison + " reflect=" + hasReflect +
+        " tank=" + profile['isTank'] + " burst_build=" + profile['isBurstBuild'])
 }
 
 function detectEnemyBuildType(str, mag, agi, sci, res) {
@@ -130,4 +161,49 @@ function predictEnemyCanAttackWithin(playerPos, enemy, turnsWindow) {
 
     var gapToClose = max(0, dist - maxRange)
     return gapToClose <= (enemyMP * turnsWindow)
+}
+
+// ========================================
+// Adaptive Enemy Observation (System 4)
+// ========================================
+
+function observeEnemyBehavior(fieldMap) {
+    var currentTurn = getTurn()
+    var enemies = fieldMap.getEnemySubMap()
+
+    for (var eid in mapKeys(enemies)) {
+        if (isDead(eid)) continue
+        var enemy = enemies[eid]
+
+        if (!mapContainsKey(__enemyObservations, eid)) {
+            __enemyObservations[eid] = [
+                'turnsObserved': 0,
+                'timesShielded': 0,
+                'lastHP': enemy._currHealth,
+                'hpTrend': 0
+            ]
+        }
+
+        var obs = __enemyObservations[eid]
+        obs['turnsObserved'] = obs['turnsObserved'] + 1
+
+        // Track HP trend (EMA of HP changes — positive = gaining HP)
+        var hpChange = enemy._currHealth - obs['lastHP']
+        obs['hpTrend'] = obs['hpTrend'] * 0.7 + hpChange * 0.3
+        obs['lastHP'] = enemy._currHealth
+
+        // Track shielding behavior
+        if (enemy.hasEffect(EFFECT_RELATIVE_SHIELD) || enemy.hasEffect(EFFECT_ABSOLUTE_SHIELD)) {
+            obs['timesShielded'] = obs['timesShielded'] + 1
+        }
+
+        __enemyObservations[eid] = obs
+    }
+}
+
+function getEnemyObservation(enemyId) {
+    if (mapContainsKey(__enemyObservations, enemyId)) {
+        return __enemyObservations[enemyId]
+    }
+    return null
 }

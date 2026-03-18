@@ -111,6 +111,14 @@ class ScenarioHelpers {
             __timePressure = false
         }
 
+        // Stalemate signal: both sides above 80% HP after turn 15 = draw forming
+        if (!__timePressure && currentTurn > 15) {
+            if (playerHPPercent > 80 && enemyHPPercent > 80) {
+                __timePressure = true
+                debugInfo("[TIME-PRESSURE] Stalemate detected: both sides >80% HP at turn " + currentTurn)
+            }
+        }
+
         // Standard 1v1 logic
         // PRIORITY: Check if enemy is killable BEFORE fleeing
         var dmgEstimate = this.estimateMaxDamageThisTurn(availableTP)
@@ -149,6 +157,12 @@ class ScenarioHelpers {
 
         if (playerHPPercent >= 40 && playerHPPercent <= 60 && enemyHPPercent > 40 && !__timePressure) {
             return "SUSTAIN"
+        }
+
+        // Force aggression under time pressure: never sit back when drawing
+        if (__timePressure && currentTurn > 30) {
+            debugInfo("[STATE] Time pressure override: forcing ATTRITION (turn " + currentTurn + ")")
+            return "ATTRITION"
         }
 
         var earlyGame = (currentTurn >= 1 && currentTurn <= 4)

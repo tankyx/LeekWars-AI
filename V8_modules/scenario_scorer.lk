@@ -198,6 +198,15 @@ class ScenarioScorer {
         var dotScore = simResult.dotDamageQueued * adjustedDotWeight
         score += dotScore
 
+        // Compound poison value: reward longer-duration poisons more heavily
+        if (simResult.poisonTurnsQueued > 0 && simResult.poisonSourcesUsed > 0) {
+            var avgDuration = simResult.poisonTurnsQueued / simResult.poisonSourcesUsed
+            // Scale: 2-turn=1.0x, 4-turn=2.0x, 7-turn=3.0x (capped)
+            var durationFactor = min(3.0, avgDuration / 2.0)
+            var lifetimeBonus = simResult.dotDamageQueued * adjustedDotWeight * 0.15 * durationFactor
+            score += lifetimeBonus
+        }
+
         if (dotScore > 0 && antidoteMultiplier != 1.0) {
             // Antidote multiplier applied
         }
@@ -290,11 +299,23 @@ class ScenarioScorer {
         var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
         score += buffScore + debuffScore
 
-        // Denial value scoring
+        // Denial cascade value: compound denial strips enemy capability
         if (simResult.denialApplied > 0) {
-            var enemyBestDPT = max(1, this._target._strength + this._target._magic) * 0.5
-            var denialValue = simResult.denialApplied * enemyBestDPT * 2.0
+            var enemyTP = max(1, this._target._currTp)
+            var denialRatio = min(1.0, simResult.denialApplied / enemyTP)
+            var enemyBestDPT = max(1, this._target._strength + this._target._magic) * 1.5
+            var denialValue = denialRatio * enemyBestDPT * 3.0
+            // Bonus for near-total denial (>50% of enemy TP denied = catastrophic)
+            if (denialRatio > 0.5) denialValue *= 1.5
             score += denialValue
+        }
+
+        // Vulnerability stacking: multiplicative future damage amplification
+        if (simResult.vulnerabilityApplied > 0) {
+            var avgDPT = max(1, this._player._strength + this._player._magic) * 1.5
+            var vulnMultiplier = simResult.vulnerabilityApplied / 100.0
+            var futureAmplification = avgDPT * vulnMultiplier * 3.0
+            score += futureAmplification
         }
 
         var critBonus = this.calculateCritBonus(simResult.damageDealt, simResult.buffsApplied)
@@ -398,17 +419,35 @@ class ScenarioScorer {
 
         score *= survivalMultiplier
 
-        // Time-pressure anti-draw: boost damage value, don't penalize defense
+        // Time-pressure anti-draw: phased escalation
         if (__timePressure) {
             var currentTurn = getTurn()
-            if (currentTurn > 10) {
-                var urgencyFactor = 1.0 + (currentTurn - 10) * 0.04
-                if (urgencyFactor > 3.0) urgencyFactor = 3.0
+            var turnsRemaining = 64 - currentTurn
+            var urgencyFactor = 1.0
 
-                var dotDmgTP = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
-                var novaDmgTP = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
-                var totalDmgTP = simResult.damageDealt + dotDmgTP + novaDmgTP
-                score += totalDmgTP * (urgencyFactor - 1.0) * damageWeight
+            if (currentTurn > 50) {
+                // Phase 3 (turns 50-64): desperate all-in
+                urgencyFactor = 3.0 + (currentTurn - 50) * 0.32
+                if (urgencyFactor > 7.5) urgencyFactor = 7.5
+            } else if (currentTurn > 30) {
+                // Phase 2 (turns 30-50): strong escalation
+                urgencyFactor = 1.8 + (currentTurn - 30) * 0.06
+            } else if (currentTurn > 10) {
+                // Phase 1 (turns 10-30): match baseline (0.04/turn)
+                urgencyFactor = 1.0 + (currentTurn - 10) * 0.04
+            }
+
+            var dotDmgTP = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
+            var novaDmgTP = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
+            var totalDmgTP = simResult.damageDealt + dotDmgTP + novaDmgTP
+            score += totalDmgTP * (urgencyFactor - 1.0) * damageWeight
+
+            // Draw-breaking bonuses under time pressure
+            if (turnsRemaining < 30) {
+                // Nova = permanent HP reduction = draw breaker
+                if (novaDmgTP > 0) score += novaDmgTP * 5.0
+                // Denial = deny enemy sustain
+                if (simResult.denialApplied > 0) score += 500
             }
         }
 
@@ -839,18 +878,18 @@ class ScenarioScorer {
             futureThreat = this._fieldMap.getThreatAtCell(finalPos)
         }
 
-        // 1. Active buffs carrying into future turns
+        // 1. Active buffs carrying into future turns (duration-aware)
         for (var buff in simResult.buffsApplied) {
-            if (buff == CHIP_WIZARDRY) value += 200
-            else if (buff == CHIP_STEROID) value += 150
-            else if (buff == CHIP_PRISM) value += 180
-            else if (buff == CHIP_FORTRESS) value += 120
-            else if (buff == CHIP_WALL) value += 80
-            else if (buff == CHIP_WARM_UP) value += 150
+            if (buff == CHIP_WIZARDRY) value += 300       // 2 turns of +160 MAG
+            else if (buff == CHIP_STEROID) value += 200    // 2 turns of +STR
+            else if (buff == CHIP_PRISM) value += 250      // 2 turns of +60 all
+            else if (buff == CHIP_FORTRESS) value += 200   // 3 turns × high shield
+            else if (buff == CHIP_WALL) value += 100       // 2 turns × lower shield
+            else if (buff == CHIP_WARM_UP) value += 200    // 2 turns
             else if (buff == CHIP_MIRROR || buff == CHIP_THORN || buff == CHIP_BRAMBLE) {
-                // Only value carrying damage return if enemy can attack during it
-                if (futureThreat > 0) value += 200
+                if (futureThreat > 0) value += 250
             }
+            else if (buff == CHIP_KNOWLEDGE) value += 200  // +250 WIS for 2 turns
         }
 
         // 2. Poison ticking on enemy (guaranteed future damage, discounted)
@@ -895,8 +934,8 @@ class ScenarioScorer {
             value -= (unspentTP - 5) * 30
         }
 
-        // 30% discount: future value < current value
-        return value * 0.3
+        // 35% discount: future value < current value (raised from 30% for better multi-turn planning)
+        return value * 0.35
     }
 
     evaluateSynergyBonus(scenario) {
@@ -968,6 +1007,76 @@ class ScenarioScorer {
         if (hasSteroid && hasWarmUp) bonus += 300
 
         return bonus
+    }
+
+    // =========================================================================
+    // 2-Ply Planning: Project Next Turn Value (System 3)
+    // =========================================================================
+
+    project2ndTurnValue(simResult) {
+        if (this._target == null) return 0
+
+        var value = 0
+        var finalPos = simResult.finalPosition
+        if (finalPos == -1) finalPos = this._player._cellPos
+
+        // 1. Predict incoming damage from adversarial threat cache
+        var incomingDmg = 0
+        if (__adversarialThreatCacheBuilt) {
+            incomingDmg = getAdversarialThreat(finalPos)
+        }
+
+        // 2. Project our HP after enemy attacks
+        var projectedHP = this._player._currHealth + simResult.hpGained - incomingDmg
+        var relShieldReduction = simResult.relativeShieldGained / 100.0
+        projectedHP += incomingDmg * relShieldReduction  // Shield mitigates some damage
+        projectedHP += simResult.shieldsGained  // Absolute shield absorbs
+
+        // Death penalty: if projected HP <= 0, this position is a death trap
+        if (projectedHP <= 0) return -2000
+
+        // 3. Estimate next-turn TP (current - spent + base regen, typically ~10)
+        var nextTurnTP = max(0, this._player._currTp - simResult.tpSpent) + 10
+        if (nextTurnTP > 25) nextTurnTP = 25  // Cap at realistic max
+
+        // 4. Estimate next-turn damage potential from final position
+        var nextTurnDmg = 0
+        var dist = getCellDistance(finalPos, this._target._cellPos)
+        if (dist != null) {
+            // Check weapons that can attack from this position
+            for (var wid in mapKeys(this._fieldMap.damageMap != null ? arsenal.playerEquippedWeapons : [:])) {
+                if (!mapContainsKey(arsenal.playerEquippedWeapons, wid)) continue
+                var wObj = arsenal.playerEquippedWeapons[wid]
+                if (dist >= wObj._minRange && dist <= wObj._maxRange && wObj._cost <= nextTurnTP) {
+                    var bd = arsenal.getDamageBreakdown(
+                        this._player._strength, this._player._magic,
+                        this._player._wisdom, this._player._science, wid)
+                    var uses = min(wObj._maxUse, floor(nextTurnTP / wObj._cost))
+                    nextTurnDmg += bd['total'] * uses
+                    break  // Best weapon approximation
+                }
+            }
+        }
+
+        value += nextTurnDmg
+
+        // 5. Active poison ticks (guaranteed future damage from this turn's poisons)
+        if (simResult.dotDamageQueued > 0 && simResult.poisonTurnsQueued > 0) {
+            // Poison keeps ticking next turn — add remaining tick value
+            var avgDuration = simResult.poisonTurnsQueued / max(1, simResult.poisonSourcesUsed)
+            var remainingTicks = max(0, avgDuration - 1)  // -1 for this turn's tick
+            var perTurnPoison = simResult.dotDamageQueued / max(1, simResult.poisonTurnsQueued)
+            value += perTurnPoison * remainingTicks
+        }
+
+        // 6. Buff amplification bonus (buffs carry into next turn)
+        for (var buff in simResult.buffsApplied) {
+            if (buff == CHIP_STEROID || buff == CHIP_WIZARDRY || buff == CHIP_PRISM || buff == CHIP_WARM_UP) {
+                value += 150  // Buff will amplify next turn's attacks
+            }
+        }
+
+        return value * 0.4  // 40% discount for future turn
     }
 
     // =========================================================================

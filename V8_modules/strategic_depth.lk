@@ -213,6 +213,33 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
 
     }
 
+    // === Observation-Driven Adaptation (System 4) ===
+    var enemies3 = mapKeys(enemies)
+    for (var eid3 in enemies3) {
+        if (isDead(eid3)) continue
+        var obs = getEnemyObservation(eid3)
+        if (obs == null) continue
+        var turnsObs = obs['turnsObserved']
+        if (turnsObs < 5) continue  // Need enough data
+
+        // Enemy HP trending up after 5+ turns: they're out-sustaining us
+        if (obs['hpTrend'] > 20) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.3)
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.5)
+            }
+            debugInfo("[ADAPT-OBS] Enemy e" + eid3 + " HP trending up (" + floor(obs['hpTrend']) + "), boosting burst+denial")
+        }
+
+        // Enemy never shields after 5+ turns: they lack defensive chips
+        if (obs['timesShielded'] == 0) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.2)
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * 0.8)
+            debugInfo("[ADAPT-OBS] Enemy e" + eid3 + " never shields, boosting burst, reducing shields")
+        }
+        break  // Only adapt for primary enemy
+    }
+
     // === Counter-Strategy: Adapt weights based on enemy profile ===
     var primaryEnemy = null
     var primaryProfile = null

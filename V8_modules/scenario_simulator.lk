@@ -29,6 +29,7 @@ class SimulationResult {
 
     // Poison source tracking for multi-stack scoring
     poisonSourcesUsed = 0     // Count of distinct poison-applying actions
+    poisonTurnsQueued = 0     // Sum of durations across all poison sources (for compound scoring)
 
     // Denial tracking (Soporific/Ball and Chain TP/MP removal)
     denialApplied = 0         // Total TP/MP denial value applied
@@ -118,7 +119,16 @@ class ScenarioSimulator {
 
                     var chipDot = breakdown['dot']
                     result.dotDamageQueued += chipDot
-                    if (chipDot > 0) result.poisonSourcesUsed++
+                    if (chipDot > 0) {
+                        result.poisonSourcesUsed++
+                        // Track poison duration for compound scoring
+                        if (mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
+                            var pChipItem = this._arsenal.playerEquippedChips[action.chip]
+                            if (mapContainsKey(pChipItem._effects, EFFECT_POISON)) {
+                                result.poisonTurnsQueued += pChipItem._effects[EFFECT_POISON]._effectDuration
+                            }
+                        }
+                    }
 
                     var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
                     var uncappedNova = breakdown['nova']
@@ -205,7 +215,13 @@ class ScenarioSimulator {
 
                         var weaponDot = weaponBreakdown['dot']
                         result.dotDamageQueued += weaponDot
-                        if (weaponDot > 0) result.poisonSourcesUsed++
+                        if (weaponDot > 0) {
+                            result.poisonSourcesUsed++
+                            // Track poison duration for compound scoring
+                            if (mapContainsKey(weaponObj._effects, EFFECT_POISON)) {
+                                result.poisonTurnsQueued += weaponObj._effects[EFFECT_POISON]._effectDuration
+                            }
+                        }
 
                         var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
                         var uncappedNova = weaponBreakdown['nova']

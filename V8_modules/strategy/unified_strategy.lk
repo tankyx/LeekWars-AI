@@ -267,6 +267,27 @@ class UnifiedStrategy extends Strategy {
         }
         var simOps = stopOp("Simulate & score top " + evaluateCount)
 
+        // Phase 3.5: 2-Ply Planning — project next-turn value for top 5
+        if (count(scenarioResults) >= 2 && getOperations() < 11000000) {
+            startOp()
+            arraySort(scenarioResults, function(a, b) {
+                return b['score'] - a['score']
+            })
+
+            var twoplyCount = min(5, count(scenarioResults))
+            for (var i = 0; i < twoplyCount; i++) {
+                var sd = scenarioResults[i]
+                var twoplyBonus = scorer.project2ndTurnValue(sd['simResult'])
+                sd['score'] = sd['score'] + twoplyBonus
+                if (sd['score'] > bestScore) {
+                    bestScore = sd['score']
+                    bestScenario = sd['scenario']
+                    bestSimResult = sd['simResult']
+                }
+            }
+            var twoplyOps = stopOp("2-Ply planning (top " + twoplyCount + ")")
+        }
+
         // Phase 4: Enemy Response Lookahead (top 3 scenarios)
         if (count(scenarioResults) >= 1 && getOperations() < 12500000) {
             startOp()
