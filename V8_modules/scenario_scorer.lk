@@ -176,12 +176,14 @@ class ScenarioScorer {
             var noDamagePenalty = this.getWeight('noDamagePenalty', -2000)
 
             // Reduce penalty for early turns (turn 1-3) when positioning is expected
+            // But NOT for builds with poison/DoT capability — they must pressure early
             if (currentTurn <= 3) {
-                // Magic builds get steeper penalty — must approach + poison, not turtle with buffs
-                if (this._player._magic > this._player._strength + 100) {
-                    noDamagePenalty = noDamagePenalty / 2  // -1000 for magic
+                if (this._player._magic >= 200) {
+                    // Poison-capable builds: full penalty on turns 1-3
+                    // Buff-stacking without poison = giving enemy free setup time
+                    noDamagePenalty = noDamagePenalty  // -2000 (no reduction)
                 } else {
-                    noDamagePenalty = noDamagePenalty / 4  // -500 for others
+                    noDamagePenalty = noDamagePenalty / 4  // -500 for pure STR/AGI
                 }
             } else if (currentTurn >= 5) {
                 // Increase penalty on later turns - standing still dealing 0 damage
@@ -346,7 +348,8 @@ class ScenarioScorer {
                         poisonDumpBonus = 10000  // Massive bonus to guarantee selection
                     } else if (action.checkpointType == "POISON_BAIT") {
                         // BAIT scenario: strategic bonus for triggering Antidote use
-                        checkpointBonus = 4000
+                        // Must outweigh buff stacking (2-3 buffs = ~3000-5000)
+                        checkpointBonus = 6000
                     } else {
                         checkpointBonus = this.getWeight('checkpointBonus', 2500)
                     }
