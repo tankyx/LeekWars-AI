@@ -989,15 +989,15 @@ class ScenarioHelpers {
         var maxHP = this._player._maxHealth
         var hpRatio = currentHP / maxHP
 
-        if (totalPoisonDamage > 100) {
+        if (totalPoisonDamage > 60) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
-        if (poisonDamagePerTurn > 50 && poisonRemaining >= 3) {
+        if (poisonDamagePerTurn > 30 && poisonRemaining >= 2) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
-        if (hpRatio < 0.5 && totalPoisonDamage > 100) {
+        if (hpRatio < 0.5 && totalPoisonDamage > 50) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
         }
 
@@ -1011,6 +1011,10 @@ class ScenarioHelpers {
     getDebuffAction() {
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LIBERATION)) return null
         if (getCooldown(CHIP_LIBERATION, this._player._id) != 0) return null
+
+        // Range check (0-6)
+        var dist = getCellDistance(this._player._cellPos, this._target._cellPos)
+        if (dist == null || dist > 6) return null
 
         var targetBuffs = 0
         if (this._target.hasEffect(EFFECT_ABSOLUTE_SHIELD)) targetBuffs++
@@ -1254,11 +1258,6 @@ class ScenarioHelpers {
                         repositionCell = this.findSafeAoEWeaponCell(weaponId, targetCell, simPos, weaponUses, chipCooldowns)
                         if (repositionCell != -1) {
                             isSafe = true  // Found safe position
-                        } else {
-                            // Fallback: Allow attack if damage is high enough
-                            if (damage >= 200) {
-                                isSafe = true
-                            }
                         }
                     }
                 }
@@ -1318,11 +1317,6 @@ class ScenarioHelpers {
                         repositionCell = this.findSafeAoEAttackCell(chipId, chipTargetCell, simPos, weaponUses, chipCooldowns)
                         if (repositionCell != -1) {
                             isSafe = true  // Found safe position
-                        } else {
-                            // Fallback: Allow attack if damage is high enough
-                            if (damage >= 300) {
-                                isSafe = true
-                            }
                         }
                     }
                 }

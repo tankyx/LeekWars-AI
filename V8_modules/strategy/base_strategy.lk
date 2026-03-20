@@ -45,12 +45,8 @@ class Strategy {
 
         if (chip._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
 
-        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType, fromCell)
-
-        for (var i = 0; i < count(aoeCells); i++) {
-            if (aoeCells[i] == fromCell) {
-                return ['safe': false, 'needsRepositioning': true]
-            }
+        if (fieldMap.wouldAoEHitCell(targetCell, chip._aoeType, fromCell, fromCell)) {
+            return ['safe': false, 'needsRepositioning': true]
         }
 
         return ['safe': true, 'needsRepositioning': false]
@@ -62,12 +58,8 @@ class Strategy {
 
         if (weapon._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
 
-        var aoeCells = fieldMap.getAoEAffectedCells(targetCell, weapon._aoeType, fromCell)
-
-        for (var i = 0; i < count(aoeCells); i++) {
-            if (aoeCells[i] == fromCell) {
-                return ['safe': false, 'needsRepositioning': true]
-            }
+        if (fieldMap.wouldAoEHitCell(targetCell, weapon._aoeType, fromCell, fromCell)) {
+            return ['safe': false, 'needsRepositioning': true]
         }
 
         return ['safe': true, 'needsRepositioning': false]
@@ -2273,6 +2265,7 @@ class Strategy {
         var attacksAttempted = 0
         var attacksSucceeded = 0
         var hasMoved = false
+        var weaponsDisabled = false
 
         for (var a in this._actions) {
             if (a.type == Action.MOVEMENT_APPROACH || a.type == Action.MOVEMENT_OFFENSIVE || a.type == Action.MOVEMENT_DEFENSIVE || a.type == Action.MOVEMENT_OTKO || a.type == Action.MOVEMENT_DOT_OFFENSIVE || a.type == Action.MOVEMENT_DEBUFF) {
@@ -2308,6 +2301,20 @@ class Strategy {
 
 
                 if (a.chip != -1) {
+                    // Runtime AoE self-hit check (actual position, not simulated)
+                    if (a.targetEntity != null && a.targetEntity._id != player._id) {
+                        var chipItem = null
+                        if (mapContainsKey(arsenal.playerEquippedChips, a.chip)) {
+                            chipItem = arsenal.playerEquippedChips[a.chip]
+                        }
+                        if (chipItem != null && chipItem._aoeType != AREA_POINT) {
+                            if (fieldMap.wouldAoEHitCell(targetPos, chipItem._aoeType, currentPos, currentPos)) {
+                                debugInfo("[EXEC] Skipping chip " + getChipName(a.chip) + " — AoE would self-hit")
+                                continue
+                            }
+                        }
+                    }
+
                     useChipOnCell(a.chip, a.targetCell)
 
                     // Track INVERSION usage for boss PUZZLE phase
@@ -2317,7 +2324,7 @@ class Strategy {
 
                     // After GRAPPLE/BOXING_GLOVE, update target entity position
                     // so subsequent actions in this turn use the new cell
-                    if ((a.chip == CHIP_GRAPPLE || a.chip == CHIP_BOXING_GLOVE) && a.targetEntity != null && !isDead(a.targetEntity._id)) {
+                    if ((a.chip == CHIP_GRAPPLE || a.chip == CHIP_BOXING_GLOVE || a.chip == CHIP_INVERSION) && a.targetEntity != null && !isDead(a.targetEntity._id)) {
                         var oldEnemyCell = a.targetEntity._cellPos
                         a.targetEntity._cellPos = getCell(a.targetEntity._id)
                         a.targetEntity.updateEntity()
@@ -2340,6 +2347,7 @@ class Strategy {
                     }
                 }
                 else if (a.weaponId != -1) {
+                    if (weaponsDisabled) continue
                     attacksAttempted++
                     if (dist == null) {
                         continue
@@ -2364,8 +2372,9 @@ class Strategy {
                     if (dist < minRange || dist > maxRange) {
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
-                            debugInfo("[INTERRUPT] Out of range " + consecutiveFailures + "x - triggering replan")
-                            break
+                            debugInfo("[INTERRUPT] Out of range " + consecutiveFailures + "x - disabling weapons")
+                            weaponsDisabled = true
+                            continue
                         }
                         continue
                     }
@@ -2373,10 +2382,21 @@ class Strategy {
                     if (!lineOfSight(currentPos, targetPos)) {
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
-                            debugInfo("[INTERRUPT] No LoS " + consecutiveFailures + "x - triggering replan")
-                            break
+                            debugInfo("[INTERRUPT] No LoS " + consecutiveFailures + "x - disabling weapons")
+                            weaponsDisabled = true
+                            continue
                         }
                         continue
+                    }
+
+                    // Runtime AoE self-hit check for weapons
+                    var weaponItem = arsenal.playerEquippedWeapons[a.weaponId]
+                    if (weaponItem != null && weaponItem._aoeType != AREA_POINT) {
+                        if (fieldMap.wouldAoEHitCell(targetPos, weaponItem._aoeType, currentPos, currentPos)) {
+                            debugInfo("[EXEC] Skipping weapon — AoE would self-hit")
+                            weaponsDisabled = true
+                            continue
+                        }
                     }
 
                     if (currentWeap != a.weaponId) {
@@ -2393,8 +2413,9 @@ class Strategy {
                     if (result == USE_INVALID_TARGET || tpBefore == tpAfter) {
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
-                            debugInfo("[INTERRUPT] " + consecutiveFailures + " consecutive failures - triggering replan")
-                            break
+                            debugInfo("[INTERRUPT] " + consecutiveFailures + " consecutive failures - disabling weapons")
+                            weaponsDisabled = true
+                            continue
                         }
                         continue
                     }
@@ -2959,13 +2980,10 @@ class Strategy {
                 if (aoeItem != null && aoeItem._aoeType != AREA_POINT) {
                     var aimCell = action.targetCell
                     if (aimCell != -1 && aimCell != simulatedPos) {
-                        var aoeCells = fieldMap.getAoEAffectedCells(aimCell, aoeItem._aoeType, simulatedPos)
-                        for (var ac in aoeCells) {
-                            if (ac == simulatedPos) {
-                                isValid = false
-                                reason = "AoE would hit caster"
-                                break
-                            }
+                        // Use game engine distance for reliable self-hit detection
+                        if (fieldMap.wouldAoEHitCell(aimCell, aoeItem._aoeType, simulatedPos, simulatedPos)) {
+                            isValid = false
+                            reason = "AoE would hit caster"
                         }
                     }
                 }

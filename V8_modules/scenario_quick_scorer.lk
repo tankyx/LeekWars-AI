@@ -59,6 +59,10 @@ class ScenarioQuickScorer {
                     tpEstimate += chipCost
 
                     if (action.chip == CHIP_GRAPPLE) push(comboSignature, "GRAPPLE")
+                    if (action.chip == CHIP_INVERSION && !_isBossFight) {
+                        chipDamageActions++  // Vulnerability enables burst
+                        score += 600         // Vulnerability + position swap + heal
+                    }
                 }
             }
             else if (action.type == Action.ACTION_BUFF) {

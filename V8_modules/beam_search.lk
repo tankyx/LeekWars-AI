@@ -166,7 +166,8 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
             isSelfTarget = true
         } else if (isUtilityChip(chipId)) {
             // Skip positioning chips — handled separately
-            if (chipId == CHIP_TELEPORTATION || chipId == CHIP_INVERSION) continue
+            if (chipId == CHIP_TELEPORTATION) continue
+            if (chipId == CHIP_INVERSION && _isBossFight) continue
             // Grapple/Boxing Glove: target enemy
             chipTargetCell = targetPos
         } else {

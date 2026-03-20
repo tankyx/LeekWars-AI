@@ -73,9 +73,13 @@ class ScenarioSimulator {
 
         var simEnemyCurrHP = 1
         var simEnemyMaxHP = 1
+        var simEnemyAbsShield = 0
+        var simEnemyRelShield = 0
         if (this._target != null) {
             simEnemyCurrHP = this._target._currHealth
             simEnemyMaxHP = this._target._maxHealth
+            simEnemyAbsShield = this._target._absShield
+            simEnemyRelShield = this._target._relShield / 100.0
         }
 
         // Detect if target is a bulb
@@ -92,15 +96,45 @@ class ScenarioSimulator {
             if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT || action.type == Action.ACTION_DEBUFF) {
                 if (action.chip != -1) {
 
+                    // CHIP_INVERSION: position swap + vulnerability + heal
+                    if (action.chip == CHIP_INVERSION && !_isBossFight) {
+                        var invCost = getChipCost(CHIP_INVERSION)
+                        result.tpSpent += invCost
+                        simTP -= invCost
+                        // Position swap to target's cell
+                        if (action.targetEntity != null) {
+                            simPos = action.targetEntity._cellPos
+                            result.finalPosition = simPos
+                        }
+                        // Vulnerability (20% for 1 turn)
+                        result.vulnerabilityApplied += 20
+                        // Heal 50 HP
+                        result.hpGained += 50
+                        push(result.debuffsApplied, action.chip)
+                        result.actionsExecuted++
+                        continue
+                    }
+
+                    // CHIP_LIBERATION: 40% reduction on enemy effects (shields, buffs)
+                    if (action.chip == CHIP_LIBERATION) {
+                        var libCost = getChipCost(CHIP_LIBERATION)
+                        result.tpSpent += libCost
+                        simTP -= libCost
+                        // Model 40% reduction on enemy shields for subsequent damage calcs
+                        simEnemyAbsShield = floor(simEnemyAbsShield * 0.6)
+                        simEnemyRelShield = simEnemyRelShield * 0.6
+                        push(result.debuffsApplied, action.chip)
+                        result.actionsExecuted++
+                        continue
+                    }
+
                     var chipCost = getChipCost(action.chip)
                     var chipDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target) : 0
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
                     // Use net damage (post-shield) for accurate scenario ranking
                     var rawDirect = breakdown['direct']
-                    var relShield = (this._target != null) ? this._target._relShield / 100 : 0
-                    var absShield = (this._target != null) ? this._target._absShield : 0
-                    var directDmg = rawDirect * (1 - relShield) - absShield
+                    var directDmg = rawDirect * (1 - simEnemyRelShield) - simEnemyAbsShield
                     if (directDmg < 0) directDmg = 0
                     result.damageDealt += directDmg
                     simEnemyCurrHP -= directDmg
@@ -180,9 +214,7 @@ class ScenarioSimulator {
 
                         // Use net damage (post-shield) for accurate scenario ranking
                         var rawDirect = weaponBreakdown['direct']
-                        var relShield = (this._target != null) ? this._target._relShield / 100 : 0
-                        var absShield = (this._target != null) ? this._target._absShield : 0
-                        var directDmg = rawDirect * (1 - relShield) - absShield
+                        var directDmg = rawDirect * (1 - simEnemyRelShield) - simEnemyAbsShield
                         if (directDmg < 0) directDmg = 0
                         result.damageDealt += directDmg
                         simEnemyCurrHP -= directDmg
@@ -296,6 +328,10 @@ class ScenarioSimulator {
                 } else if (action.chip == CHIP_ADRENALINE) {
 
                     simTP += 5
+                } else if (action.chip == CHIP_ANTIDOTE) {
+                    // Antidote: heals 25-35 (avg 30, wisdom-scaled) + removes poisons
+                    var antidoteHeal = 30 * (1 + simWisdom / 500.0)
+                    result.hpGained += antidoteHeal
                 } else if (action.chip == CHIP_MIRROR || action.chip == CHIP_THORN || action.chip == CHIP_BRAMBLE) {
                     // Damage return buffs (tracked for scoring, not simulated in combat)
                     // No simulation changes needed - these are defensive passives
