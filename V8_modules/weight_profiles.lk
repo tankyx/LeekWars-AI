@@ -264,8 +264,12 @@ function detectBuildType(player) {
     }
 
     // 3. Magic-primary: MAG clearly dominant over STR
-    //    MargaretHamilton: 600 MAG, 0 STR -> should be MAGIC
+    //    Pure magic (MAG 500, STR 0) -> MAGIC
+    //    Magic hybrid (MAG 600, STR 300) -> HYBRID (significant STR = use weapons too)
     if (magStat > strStat + 100) {
+        if (strStat >= 200) {
+            return BUILD_HYBRID
+        }
         return BUILD_MAGIC
     }
 
