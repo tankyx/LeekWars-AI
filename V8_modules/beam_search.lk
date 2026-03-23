@@ -61,8 +61,8 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
             }
 
             for (var actionInfo in legalActions) {
-                var value = beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj)
-                var newCandidate = beamExtendCandidate(partial, actionInfo, value, targetObj)
+                var value = beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fieldMapObj)
+                var newCandidate = beamExtendCandidate(partial, actionInfo, value, targetObj, arsenalObj)
                 push(allCandidates, newCandidate)
             }
         }
@@ -152,6 +152,7 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
         if (!isSelfTarget && chipTargetCell != -1) {
             var chipDist = getCellDistance(simPos, chipTargetCell)
             if (chipDist == null || chipDist < chipObj._minRange || chipDist > chipObj._maxRange) continue
+            if (!lineOfSight(simPos, chipTargetCell)) continue
         }
 
         var actionType = Action.ACTION_BUFF
@@ -309,7 +310,7 @@ function beamGetMoveCells(simPos, targetPos, simMP, arsenalObj, partial) {
     return cells
 }
 
-function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj) {
+function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fieldMapObj) {
     var value = 0
     var simStr = partial['simStr']
     var simMag = partial['simMag']
@@ -404,7 +405,7 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
         else if (isShieldChip(chipId)) {
             value += 150
             var threat = 0
-            if (fieldMap != null) threat = fieldMap.getThreatAtCell(partial['simPos'])
+            if (fieldMapObj != null) threat = fieldMapObj.getThreatAtCell(partial['simPos'])
             if (threat > 300) value *= 2.0
         }
         else if (isDamageReturnChip(chipId)) {
@@ -412,7 +413,7 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             if (predictEnemyCanAttackWithin(partial['simPos'], targetObj, drDuration)) {
                 value += 200
                 var threat = 0
-                if (fieldMap != null) threat = fieldMap.getThreatAtCell(partial['simPos'])
+                if (fieldMapObj != null) threat = fieldMapObj.getThreatAtCell(partial['simPos'])
                 if (threat > 300) value *= 2.0
             } else {
                 value += 10
@@ -499,8 +500,8 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 value += (oldDist - newDist) * 50
             }
 
-            if (fieldMap != null) {
-                var enemies = fieldMap.getEnemySubMap()
+            if (fieldMapObj != null) {
+                var enemies = fieldMapObj.getEnemySubMap()
                 var exposureNew = 0
                 var exposureOld = 0
                 for (var eid in mapKeys(enemies)) {
@@ -520,7 +521,7 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
     return value
 }
 
-function beamExtendCandidate(partial, actionInfo, value, targetObj) {
+function beamExtendCandidate(partial, actionInfo, value, targetObj, arsenalObj) {
     var newActions = []
     for (var a in partial['actions']) push(newActions, a)
 
@@ -562,7 +563,7 @@ function beamExtendCandidate(partial, actionInfo, value, targetObj) {
         else if (chipId == CHIP_LEATHER_BOOTS) newMP += 2
 
         if (actionInfo['actionType'] == Action.ACTION_DIRECT || actionInfo['actionType'] == Action.ACTION_DOT) {
-            var bd = arsenal.getDamageBreakdown(newStr, newMag, newWis, newSci, chipId)
+            var bd = arsenalObj.getDamageBreakdown(newStr, newMag, newWis, newSci, chipId)
             if (bd != null) {
                 newCumDamage += bd['direct'] + bd['dot'] + bd['nova']
             }
@@ -584,7 +585,7 @@ function beamExtendCandidate(partial, actionInfo, value, targetObj) {
         newWeaponUses[wid] = uses + 1
         newWeapon = wid
 
-        var bd = arsenal.getDamageBreakdown(newStr, newMag, newWis, newSci, wid)
+        var bd = arsenalObj.getDamageBreakdown(newStr, newMag, newWis, newSci, wid)
         if (bd != null) {
             newCumDamage += bd['direct'] + bd['dot'] + bd['nova']
         }

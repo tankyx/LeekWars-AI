@@ -912,6 +912,11 @@ class ScenarioHelpers {
             return new Action(Action.ACTION_DEBUFF, -1, CHIP_LIBERATION, this._target._cellPos, this._target)
         }
 
+        var targetProfile = getEnemyProfile(this._target._id)
+        if (targetProfile != null && targetProfile['isTank'] && targetProfile['hasShield']) {
+            return new Action(Action.ACTION_DEBUFF, -1, CHIP_LIBERATION, this._target._cellPos, this._target)
+        }
+
         return null
     }
 

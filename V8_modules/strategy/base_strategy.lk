@@ -2150,7 +2150,7 @@ class Strategy {
 
         for (var a in this._actions) {
             if (a.type == Action.MOVEMENT_APPROACH || a.type == Action.MOVEMENT_OFFENSIVE || a.type == Action.MOVEMENT_DEFENSIVE || a.type == Action.MOVEMENT_OTKO || a.type == Action.MOVEMENT_DOT_OFFENSIVE || a.type == Action.MOVEMENT_DEBUFF) {
-                if (hasMoved && attacksAttempted > 0 && attacksSucceeded == 0) {
+                if (hasMoved && attacksSucceeded == 0) {
                     continue
                 }
                 var posBefore = getCell()
@@ -2159,10 +2159,18 @@ class Strategy {
                 hasMoved = true
             }
             else if (a.type == Action.MOVEMENT_FLEE) {
+                if (hasMoved && attacksSucceeded == 0) {
+                    continue
+                }
                 moveAwayFrom(a.targetEntity._id)
+                hasMoved = true
             }
             else if (a.type == Action.MOVEMENT_HNS) {
+                if (hasMoved && attacksSucceeded == 0) {
+                    continue
+                }
                 moveTowardCell(a.targetCell)
+                hasMoved = true
             }
             else if (a.type == Action.ACTION_WEAPON_SWAP) {
                 setWeapon(a.weaponId)

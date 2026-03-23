@@ -99,11 +99,13 @@ class EnemyPredictor {
             var bestCell = enemyPos
             var bestDist = distance
             var searchR = min(closingDist, 4)
+            var ex = getCellX(enemyPos)
+            var ey = getCellY(enemyPos)
             for (var dx = -searchR; dx <= searchR; dx++) {
                 for (var dy = -searchR; dy <= searchR; dy++) {
                     if (abs(dx) + abs(dy) > searchR || (dx == 0 && dy == 0)) continue
-                    var testCell = enemyPos + 18 * dx + 17 * dy
-                    if (testCell < 0 || testCell >= 613 || isObstacle(testCell)) continue
+                    var testCell = getCellFromXY(ex + dx, ey + dy)
+                    if (testCell == null || isObstacle(testCell)) continue
                     var testDist = getCellDistance(testCell, playerEndPos)
                     if (testDist == null) continue
                     if (testDist < bestDist && testDist >= max(1, targetRange - 1)) {

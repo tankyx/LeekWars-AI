@@ -203,6 +203,10 @@ class ScenarioScorer {
             if (__timePressure) {
                 erosionWeight = 4.0
             }
+            var targetProfile = getEnemyProfile(this._target._id)
+            if (targetProfile != null && targetProfile['isTank']) {
+                erosionWeight *= 2.0
+            }
             score += simResult.erosionDamage * erosionWeight
         }
 
@@ -290,6 +294,10 @@ class ScenarioScorer {
             var remainingTP = max(0, getTP() - simResult.tpSpent)
             var estimatedFutureDamage = remainingTP * 100
             var vulnValue = estimatedFutureDamage * vulnPercent * 2.0
+            var targetProfile2 = getEnemyProfile(this._target._id)
+            if (targetProfile2 != null && targetProfile2['isTank']) {
+                vulnValue *= 2.0
+            }
             score += vulnValue * (this.getWeight('burstDamage', 200) / 200.0)
         }
 
