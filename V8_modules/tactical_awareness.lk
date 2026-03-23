@@ -77,6 +77,11 @@ function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
         }
     }
 
+    // Apply enemy crit expected value
+    var enemyCritChance = min(0.5, enemy._agility / 2000.0)
+    var enemyCritMult = 1.0 + enemyCritChance * 0.3
+    maxDamageAfterMovement *= enemyCritMult
+
     prediction.maxDamage = maxDamageAfterMovement
     prediction.assumedPosition = bestPosition
     prediction.confidence = (bestPosition == enemy._cellPos) ? 1.0 : 0.8

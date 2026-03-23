@@ -34,6 +34,9 @@ class SimulationResult {
     // Denial tracking (Soporific/Ball and Chain TP/MP removal)
     denialApplied = 0         // Total TP/MP denial value applied
 
+    // Erosion tracking (permanent max HP reduction from damage)
+    erosionDamage = 0         // 5% of direct damage, 10% of poison damage
+
     // Boss PUZZLE crystal tracking
     crystalAxisReduction = 0  // Cells of alignment improvement
     crystalSolved = false      // Crystal reached goal axis with LOS
@@ -70,6 +73,9 @@ class ScenarioSimulator {
         var simScience = this._player._science
         var simAgility = this._player._agility
         var simWeaponUses = [:]
+
+        // Expected crit multiplier: critChance x 30% bonus
+        var expectedCritMult = 1.0 + min(0.5, simAgility / 2000.0) * 0.3
 
         var simEnemyCurrHP = 1
         var simEnemyMaxHP = 1
@@ -108,6 +114,7 @@ class ScenarioSimulator {
                         }
                         // Vulnerability (20% for 1 turn)
                         result.vulnerabilityApplied += 20
+                        simEnemyRelShield -= 0.20
                         // Heal 50 HP
                         result.hpGained += 50
                         push(result.debuffsApplied, action.chip)
@@ -133,10 +140,11 @@ class ScenarioSimulator {
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
                     // Use net damage (post-shield) for accurate scenario ranking
-                    var rawDirect = breakdown['direct']
+                    var rawDirect = breakdown['direct'] * expectedCritMult
                     var directDmg = rawDirect * (1 - simEnemyRelShield) - simEnemyAbsShield
                     if (directDmg < 0) directDmg = 0
                     result.damageDealt += directDmg
+                    result.erosionDamage += directDmg * 0.05
                     simEnemyCurrHP -= directDmg
                     if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
@@ -151,8 +159,9 @@ class ScenarioSimulator {
                         result.leekDamage += directDmg
                     }
 
-                    var chipDot = breakdown['dot']
+                    var chipDot = breakdown['dot'] * expectedCritMult
                     result.dotDamageQueued += chipDot
+                    result.erosionDamage += chipDot * 0.10
                     if (chipDot > 0) {
                         result.poisonSourcesUsed++
                         // Track poison duration for compound scoring
@@ -213,10 +222,11 @@ class ScenarioSimulator {
                         var weaponBreakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
 
                         // Use net damage (post-shield) for accurate scenario ranking
-                        var rawDirect = weaponBreakdown['direct']
+                        var rawDirect = weaponBreakdown['direct'] * expectedCritMult
                         var directDmg = rawDirect * (1 - simEnemyRelShield) - simEnemyAbsShield
                         if (directDmg < 0) directDmg = 0
                         result.damageDealt += directDmg
+                        result.erosionDamage += directDmg * 0.05
                         simEnemyCurrHP -= directDmg
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
@@ -245,8 +255,9 @@ class ScenarioSimulator {
                             result.leekDamage += directDmg
                         }
 
-                        var weaponDot = weaponBreakdown['dot']
+                        var weaponDot = weaponBreakdown['dot'] * expectedCritMult
                         result.dotDamageQueued += weaponDot
+                        result.erosionDamage += weaponDot * 0.10
                         if (weaponDot > 0) {
                             result.poisonSourcesUsed++
                             // Track poison duration for compound scoring
@@ -273,9 +284,11 @@ class ScenarioSimulator {
                         simWeaponUses[action.weaponId] = currentUses + 1
 
                         if (action.weaponId == WEAPON_NEUTRINO) {
-                            result.vulnerabilityApplied += 8  
+                            result.vulnerabilityApplied += 8
+                            simEnemyRelShield -= 0.08
                         } else if (action.weaponId == WEAPON_HEAVY_SWORD) {
-                            result.vulnerabilityApplied += 60  
+                            result.vulnerabilityApplied += 60
+                            simEnemyRelShield -= 0.60
                         }
 
                         result.actionsExecuted++
@@ -313,6 +326,8 @@ class ScenarioSimulator {
                     simMagic += 60
                     simWisdom += 60
                     simScience += 60
+                    simAgility += 60
+                    expectedCritMult = 1.0 + min(0.5, simAgility / 2000.0) * 0.3
                 } else if (action.chip == CHIP_WIZARDRY) {
                     // WIZARDRY: +150-170 Magic for 2 turns (avg 160)
                     simMagic += 160
@@ -325,6 +340,7 @@ class ScenarioSimulator {
                 } else if (action.chip == CHIP_WARM_UP) {
                     // WARM_UP: +170-190 AGI for 3 turns (avg 180)
                     simAgility += 180
+                    expectedCritMult = 1.0 + min(0.5, simAgility / 2000.0) * 0.3
                 } else if (action.chip == CHIP_ADRENALINE) {
 
                     simTP += 5

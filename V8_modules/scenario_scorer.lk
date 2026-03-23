@@ -230,7 +230,19 @@ class ScenarioScorer {
         var novaDamageQueued = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
         var novaScore = novaDamageQueued * novaWeight
         score += novaScore
-        if (novaScore > 0) {
+
+        // Erosion: permanent max HP reduction (draw-breaker)
+        if (simResult.erosionDamage > 0) {
+            var erosionWeight = 2.0  // Erosion is worth 2x face value (permanent, compounds)
+            if (__timePressure) {
+                erosionWeight = 4.0  // Under time pressure, erosion is critical
+            }
+            score += simResult.erosionDamage * erosionWeight
+        }
+
+        // Poison erosion bonus: 10% erosion vs 5% for direct = 2x draw-breaking power
+        if (__timePressure && simResult.dotDamageQueued > 0) {
+            score += simResult.dotDamageQueued * 0.5
         }
 
         var ehpWeight = this.calculateEhpWeight()
@@ -319,10 +331,12 @@ class ScenarioScorer {
 
         // Vulnerability stacking: multiplicative future damage amplification
         if (simResult.vulnerabilityApplied > 0) {
-            var avgDPT = max(1, this._player._strength + this._player._magic) * 1.5
-            var vulnMultiplier = simResult.vulnerabilityApplied / 100.0
-            var futureAmplification = avgDPT * vulnMultiplier * 3.0
-            score += futureAmplification
+            var vulnPercent = simResult.vulnerabilityApplied / 100.0
+            // Value = estimated future damage amplified by vulnerability
+            var remainingTP = max(0, getTP() - simResult.tpSpent)
+            var estimatedFutureDamage = remainingTP * 100  // ~100 damage per TP rough estimate
+            var vulnValue = estimatedFutureDamage * vulnPercent * 2.0  // x2 for multi-turn carryover
+            score += vulnValue * (this.getWeight('burstDamage', 200) / 200.0)
         }
 
         var critBonus = this.calculateCritBonus(simResult.damageDealt, simResult.buffsApplied)

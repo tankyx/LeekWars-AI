@@ -473,6 +473,8 @@ function recoverRemainingTP(target) {
                 if (dist == null) continue
                 if (dist < chipObj._minRange || dist > chipObj._maxRange) continue
                 if (!lineOfSight(getCell(), targetCell)) continue
+                // AoE self-hit check
+                if (chipObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())) continue
                 value = quickRecoveryChipValue(chipId, 'enemy')
             }
 
@@ -491,10 +493,13 @@ function recoverRemainingTP(target) {
                 var dist = getCellDistance(getCell(), target._cellPos)
                 if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange) {
                     if (lineOfSight(getCell(), target._cellPos)) {
-                        var value = quickRecoveryWeaponValue(currentWeapon)
-                        if (value > bestValue) {
-                            bestValue = value
-                            bestAction = ['type': 'weapon', 'cell': target._cellPos]
+                        // AoE self-hit check
+                        if (weaponObj._aoeType == AREA_POINT || !fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell())) {
+                            var value = quickRecoveryWeaponValue(currentWeapon)
+                            if (value > bestValue) {
+                                bestValue = value
+                                bestAction = ['type': 'weapon', 'cell': target._cellPos]
+                            }
                         }
                     }
                 }
@@ -512,6 +517,8 @@ function recoverRemainingTP(target) {
                 var totalCost = 1 + wObj._cost  // swap + attack
                 if (totalCost > getTP()) continue
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                // AoE self-hit check
+                if (wObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)) continue
                 var wValue = quickRecoveryWeaponValue(wid)
                 if (wValue > bestValue) {
                     bestValue = wValue
@@ -520,7 +527,7 @@ function recoverRemainingTP(target) {
             }
         }
 
-        if (bestAction == null) break
+        if (bestAction == null || bestValue < 30) break  // Don't waste TP on < 30 value actions
 
         if (bestAction['type'] == 'chip') {
             useChipOnCell(bestAction['id'], bestAction['cell'])
@@ -573,7 +580,28 @@ function quickRecoveryChipValue(chipId, mode) {
         } else if (isDamageReturnChip(chipId)) {
             value += 150
         } else if (isOffensiveBuff(chipId)) {
-            value += 80  // Buffs less useful at end of turn
+            // Buffs at end-of-turn carry to NEXT turn, amplifying full attack budget
+            var turnsLeft = 64 - getTurn()
+            if (turnsLeft > 3) {
+                if (chipId == CHIP_STEROID) value += 350       // +100 STR ~ 17% damage boost
+                else if (chipId == CHIP_WARM_UP) value += 300  // +180 AGI ~ 9% crit chance + damage
+                else if (chipId == CHIP_PRISM) value += 300    // +60 all stats
+                else if (chipId == CHIP_WIZARDRY) value += 250 // +160 MAG for magic builds
+                else if (chipId == CHIP_DOPING) value += 200   // +100 STR
+                else value += 120
+            } else {
+                value += 50  // Low value near end of fight
+            }
+            // Wisdom-amplifying buffs: account for heal amplification
+            if (chipId == CHIP_KNOWLEDGE || chipId == CHIP_PRISM) {
+                var hpMissing = player._maxHealth - player._currHealth
+                if (hpMissing > 50) {
+                    var wisBoost = (chipId == CHIP_KNOWLEDGE) ? 260 : 60
+                    var baseHealEst = min(hpMissing, 300)
+                    var amplification = baseHealEst * wisBoost / (100 + player._wisdom)
+                    value += amplification * 1.5
+                }
+            }
         } else if (isResourceChip(chipId)) {
             if (chipId == CHIP_ADRENALINE) value += 500  // +5 TP is huge
             else value += 50
