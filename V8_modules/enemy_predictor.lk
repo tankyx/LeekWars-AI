@@ -1,10 +1,4 @@
-// ========================================
-// Enemy Response Predictor Module
-// ========================================
-// Simulates one "average" enemy response turn for scenario evaluation
-// Enables 2-turn lookahead with outcome discounting
 
-include('debug_config.lk')
 
 class EnemyPredictor {
     _fieldMap = null
@@ -19,7 +13,6 @@ class EnemyPredictor {
         this._enemy = enemy
     }
 
-    // Predict enemy's best weapon based on equipped arsenal
     predictEnemyBestWeapon() {
         var enemyWeapons = getWeapons(this._enemy._id)
         if (count(enemyWeapons) == 0) return null
@@ -34,7 +27,6 @@ class EnemyPredictor {
 
             if (cost == null || cost <= 0) continue
 
-            // Use actual weapon effects + enemy stats for realistic damage estimation
             var effects = getWeaponEffects(weaponId)
             var estimatedDamage = 0
             for (var eff in effects) {
@@ -63,7 +55,6 @@ class EnemyPredictor {
         return bestWeapon
     }
 
-    // Predict enemy's best damage chip based on equipped chips + stats
     predictEnemyBestChip() {
         var enemyChips = getChips(this._enemy._id)
         var bestDamage = 0
@@ -89,26 +80,21 @@ class EnemyPredictor {
         return null
     }
 
-    // Predict enemy movement toward player
     predictEnemyMovement(playerEndPos, enemyMP) {
         var enemyPos = this._enemy._cellPos
         var distance = getCellDistance(enemyPos, playerEndPos)
         if (distance == null || distance <= 1) return enemyPos
 
-        // Find enemy's preferred weapon range
         var bestWeapon = this.predictEnemyBestWeapon()
         var targetRange = 1
         if (bestWeapon != null) targetRange = bestWeapon['maxRange']
 
-        // How far must enemy close to get in range?
         var gapToClose = max(0, distance - targetRange)
-        if (gapToClose <= 0) return enemyPos  // Already in range
+        if (gapToClose <= 0) return enemyPos
 
-        // Predict approach: close min(MP, gap) cells
         var closingDist = min(enemyMP, gapToClose)
         if (closingDist <= 0) return enemyPos
 
-        // Find actual cell along approach path (limited search for ops)
         if (closingDist <= 5) {
             var bestCell = enemyPos
             var bestDist = distance
@@ -132,15 +118,13 @@ class EnemyPredictor {
             return bestCell
         }
 
-        return enemyPos  // Too far to matter this turn
+        return enemyPos
     }
 
-    // Simulate one enemy turn response
     simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP) {
-        var enemyTP = min(12, this._enemy._currTp + 6)  // Assume 6 TP regen
+        var enemyTP = min(12, this._enemy._currTp + 6)
         var enemyMP = this._enemy._currMp
 
-        // Predict enemy weapon
         var weapon = this.predictEnemyBestWeapon()
         if (weapon == null) {
             return [
@@ -150,15 +134,12 @@ class EnemyPredictor {
             ]
         }
 
-        // Predict enemy movement
         var enemyEndPos = this.predictEnemyMovement(playerEndPos, enemyMP)
 
-        // Calculate potential weapon uses
         var affordableUses = floor(enemyTP / weapon['cost'])
         var distance = getCellDistance(enemyEndPos, playerEndPos)
 
         if (distance == null || distance < weapon['minRange'] || distance > weapon['maxRange']) {
-            // Out of range, can't attack
             return [
                 'damage': 0,
                 'tpUsed': 0,
@@ -166,11 +147,9 @@ class EnemyPredictor {
             ]
         }
 
-        // Estimate weapon damage
         var totalDamage = weapon['damage'] * affordableUses
         var tpUsed = weapon['cost'] * affordableUses
 
-        // Add chip damage estimate (enemy may also use damage chips)
         var remainingTP = enemyTP - tpUsed
         if (remainingTP > 0) {
             var bestChip = this.predictEnemyBestChip()
@@ -188,36 +167,30 @@ class EnemyPredictor {
         ]
     }
 
-    // Evaluate scenario with 1-turn lookahead
     evaluateScenarioWithLookahead(scenarioResult, discountFactor = 0.7) {
-        // Extract end state from scenario
         var playerEndPos = scenarioResult['endPosition']
         var playerEndHP = scenarioResult['endHP']
         var playerEndTP = scenarioResult['endTP']
         var currentTurnValue = scenarioResult['score']
 
-        // Simulate enemy response
         var enemyResponse = this.simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP)
         var enemyDamage = enemyResponse['damage']
         var enemyEndPos = enemyResponse['enemyEndPos']
 
-        // Calculate next turn value
         var hpAfterEnemy = playerEndHP - enemyDamage
         var survivalPenalty = 0
 
         if (hpAfterEnemy <= 0) {
-            survivalPenalty = -10000  // Death = very bad
+            survivalPenalty = -10000
         } else if (hpAfterEnemy < playerEndHP * 0.3) {
-            survivalPenalty = -2000  // Critical HP
+            survivalPenalty = -2000
         } else if (hpAfterEnemy < playerEndHP * 0.5) {
-            survivalPenalty = -1000  // Low HP
+            survivalPenalty = -1000
         }
 
-        // Next-turn offense potential: how much damage can we deal from end position?
         var offenseBonus = 0
         var distToEnemy = getCellDistance(playerEndPos, enemyEndPos)
         if (distToEnemy != null) {
-            // Count weapons in range from end position → predicted enemy position
             for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
                 var wObj = this._arsenal.playerEquippedWeapons[wid]
                 if (distToEnemy >= wObj._minRange && distToEnemy <= wObj._maxRange) {
@@ -225,7 +198,6 @@ class EnemyPredictor {
                     if (bd != null) offenseBonus += bd['total'] * 0.3
                 }
             }
-            // Count attack chips in range
             for (var cid in mapKeys(this._arsenal.playerEquippedChips)) {
                 if (isHealingChip(cid) || isOffensiveBuff(cid) || isShieldChip(cid) ||
                     isDamageReturnChip(cid) || isResourceChip(cid)) continue
@@ -239,10 +211,8 @@ class EnemyPredictor {
 
         var nextTurnValue = survivalPenalty + offenseBonus
 
-        // Apply discount factor to next turn value
         var discountedNextTurn = nextTurnValue * discountFactor
 
-        // Combined score
         var finalScore = currentTurnValue + discountedNextTurn
 
         return [
@@ -256,28 +226,22 @@ class EnemyPredictor {
     }
 }
 
-// Helper function to add lookahead to top scenarios
 function enhanceScenariosWithLookahead(scenarios, topK, fieldMap, arsenal, player, enemy) {
     if (count(scenarios) == 0) return scenarios
 
     var predictor = new EnemyPredictor(fieldMap, arsenal, player, enemy)
     var enhancedCount = min(topK, count(scenarios))
 
-    debugInfo("[LOOKAHEAD] Evaluating top " + enhancedCount + " scenarios with enemy response prediction")
-
     for (var i = 0; i < enhancedCount; i++) {
-        // Safety valve
         if (getOperations() > 12000000) {
-            debugInfo("[LOOKAHEAD] Operation limit reached, stopping at scenario " + i)
             break
         }
 
         var scenario = scenarios[i]
-        var scenarioResult = scenario  // Assume scenario contains result data
+        var scenarioResult = scenario
 
         var lookahead = predictor.evaluateScenarioWithLookahead(scenarioResult, 0.7)
 
-        // Update scenario with lookahead score
         scenario['lookaheadScore'] = lookahead['finalScore']
         scenario['enemyDamagePrediction'] = lookahead['enemyDamage']
         scenario['playerHPAfterEnemy'] = lookahead['playerHPAfter']

@@ -1,18 +1,12 @@
-// Boss Context — Pure-data module for Fennel King boss fight
-// Provides globals and functions for the scenario engine to use during boss fights.
-// No strategy class — all logic flows through UnifiedStrategy + scenario engine.
-// NOTE: Crystal/graal objects are maps — use bracket notation (obj['key']), not dot notation.
 
-global _bossPhase = null           // "PUZZLE" | "COMBAT" | null
-global _graalEntity = null         // ['id', 'cell', 'x', 'y'] (internal map — use _graal* globals cross-file)
-global _crystalMap = [:]           // eid -> ['id', 'color', 'goalAxis', 'cell', 'x', 'y', 'solved']
-global _myAssignedCrystal = null   // crystal map from _crystalMap (internal — use _myCrystal* globals cross-file)
-global _bossTargetEID = null // Persistent: crystal entity ID (survives re-assignment)
+global _bossPhase = null
+global _graalEntity = null
+global _crystalMap = [:]
+global _myAssignedCrystal = null
+global _bossTargetEID = null
 global _usedInversion = false
 global _isBossFight = false
 
-// Scalar globals for cross-file access (LeekScript bracket notation on maps
-// doesn't work across compilation units — "Field unknown in class" error)
 global _graalCell = -1
 global _graalX = 0
 global _graalY = 0
@@ -23,7 +17,6 @@ global _myCrystalColor = null
 global _myCrystalGoalAxis = null
 global _myCrystalSolved = false
 
-// Detect boss fight by scanning for graal entity
 function detectBossFight() {
     var entities = getAliveEnemies()
     for (var eid in entities) {
@@ -35,13 +28,11 @@ function detectBossFight() {
     return false
 }
 
-// Called once from init()
 function initBossContext() {
     _isBossFight = true
     updateBossContext()
 }
 
-// Called every turn from main()
 function updateBossContext() {
     if (!_isBossFight) return
 
@@ -51,8 +42,6 @@ function updateBossContext() {
     _graalY = 0
     _crystalMap = [:]
 
-    // Use getAliveEnemies() + getAliveAllies() to find boss entities reliably
-    // (isEntity(cellId) scan doesn't work for all boss entity types)
     var allEntities = []
     var enemies = getAliveEnemies()
     for (var eid in enemies) {
@@ -66,8 +55,6 @@ function updateBossContext() {
     for (var eid in allEntities) {
         var entityType = getName(eid)
         var cellId = getCell(eid)
-
-        debugInfo("[BOSS] Entity " + eid + " name=" + entityType + " cell=" + cellId)
 
         if (entityType == "graal") {
             _graalEntity = [
@@ -97,24 +84,18 @@ function updateBossContext() {
         }
     }
 
-    // Set phase
     if (_graalEntity != null) {
         _bossPhase = "PUZZLE"
     } else {
         _bossPhase = "COMBAT"
     }
 
-    // Assign crystals to allies
     assignCrystalByProximity()
 }
 
 function getBossPhase() {
     return _bossPhase
 }
-
-// =========================================================================
-// === Crystal Assignment ===
-// =========================================================================
 
 function syncCrystalScalars(crystal) {
     _myCrystalCell = crystal['cell']
@@ -135,11 +116,6 @@ function clearCrystalScalars() {
 }
 
 function assignCrystalByProximity() {
-    // Deterministic assignment: sorted allies → sorted unsolved crystals by index.
-    // Each leek runs this independently, but since both lists are sorted by entity ID
-    // and the mapping is position-independent, all leeks compute the same result.
-    // (Old proximity-based algorithm was non-deterministic because ally positions
-    // change mid-turn as each leek moves before the next one runs.)
     var myID = getEntity()
     var allAllies = []
     push(allAllies, myID)
@@ -149,7 +125,6 @@ function assignCrystalByProximity() {
     }
     sort(allAllies)
 
-    // Collect unsolved crystal EIDs — skip crystals already on correct axis with LoS to graal
     var unsolvedEIDs = []
     for (var eid in mapKeys(_crystalMap)) {
         var cData = _crystalMap[eid]
@@ -157,18 +132,16 @@ function assignCrystalByProximity() {
         var cCell = cData['cell']
         var cx = cData['x']
         var cy = cData['y']
-        // Solved = on correct cardinal axis + line of sight to graal
         var onAxis = false
         if (cAxis == "north") onAxis = (cx == _graalX && cy < _graalY)
         else if (cAxis == "south") onAxis = (cx == _graalX && cy > _graalY)
         else if (cAxis == "east") onAxis = (cy == _graalY && cx > _graalX)
         else if (cAxis == "west") onAxis = (cy == _graalY && cx < _graalX)
-        if (onAxis && lineOfSight(cCell, _graalCell)) continue  // solved, skip
+        if (onAxis && lineOfSight(cCell, _graalCell)) continue
         push(unsolvedEIDs, eid)
     }
     sort(unsolvedEIDs)
 
-    // Find my index in the sorted ally list
     var myIndex = -1
     for (var i = 0; i < count(allAllies); i++) {
         if (allAllies[i] == myID) {
@@ -177,7 +150,6 @@ function assignCrystalByProximity() {
         }
     }
 
-    // Map: ally[myIndex] → crystal[myIndex]
     _myAssignedCrystal = null
     _bossTargetEID = null
     if (myIndex >= 0 && myIndex < count(unsolvedEIDs)) {
@@ -186,8 +158,6 @@ function assignCrystalByProximity() {
         _bossTargetEID = ceid
         syncCrystalScalars(_crystalMap[ceid])
     } else if (count(unsolvedEIDs) > 0 && myIndex == count(unsolvedEIDs)) {
-        // Exactly 1 helper per crystal group — only the next leek by index helps.
-        // More than 1 helper causes crowding and deadlock (all block each other's diagonals).
         var myCell = getCell()
         var bestDist = 999
         var bestCEID = null
@@ -210,10 +180,6 @@ function assignCrystalByProximity() {
         clearCrystalScalars()
     }
 }
-
-// =========================================================================
-// === Geometry Functions ===
-// =========================================================================
 
 function getGoalAxis(color) {
     if (color == "red") return "south"
@@ -254,7 +220,6 @@ function isCrystalSolved(crystal) {
     return isOnGoalAxis(crystal) && hasLOSToGraal(crystal)
 }
 
-// getDistanceToAxis: uses scalar globals only (safe cross-file)
 function getDistanceToAxis(ignoredCrystal) {
     if (_graalCell == -1) return 999
 
@@ -271,7 +236,6 @@ function getDistanceToAxis(ignoredCrystal) {
     }
 }
 
-// getDirectionToSlide: uses scalar globals only (safe cross-file)
 function getDirectionToSlide(ignoredCrystal) {
     if (_graalCell == -1) return null
 
@@ -330,10 +294,6 @@ function getTargetAxisCell(ignoredCrystal) {
     return -1
 }
 
-// =========================================================================
-// === Crystal Movement Simulation Helpers ===
-// =========================================================================
-
 function computePullDirection(cx, cy, playerCell) {
     var px = getCellX(playerCell)
     var py = getCellY(playerCell)
@@ -378,11 +338,6 @@ function checkOnAxis(cx, cy, gx, gy, goalAxis) {
     return false
 }
 
-// =========================================================================
-// === Crystal Destination & Stand Position ===
-// =========================================================================
-
-// Compute the FINAL destination: the cell adjacent to the graal in the crystal's cardinal direction
 function computeCrystalFinalDest() {
     var axis = _myCrystalGoalAxis
     var gx = _graalX
@@ -394,17 +349,15 @@ function computeCrystalFinalDest() {
     return null
 }
 
-// Compute the axis-aligned intermediate destination (same X for N/S, same Y for E/W)
 function computeCrystalAxisDest() {
     var axis = _myCrystalGoalAxis
     if (axis == "north" || axis == "south") {
-        return getCellFromXY(_graalX, _myCrystalY)  // align X to graal
+        return getCellFromXY(_graalX, _myCrystalY)
     } else {
-        return getCellFromXY(_myCrystalX, _graalY)  // align Y to graal
+        return getCellFromXY(_myCrystalX, _graalY)
     }
 }
 
-// Check if crystal is on the graal's axis AND correct side (N/S/E/W)
 function isCrystalOnAxis() {
     var axis = _myCrystalGoalAxis
     if (axis == "north") return _myCrystalX == _graalX && _myCrystalY < _graalY
@@ -414,7 +367,6 @@ function isCrystalOnAxis() {
     return false
 }
 
-// Check if path from crystal to destination is clear of obstacles/entities
 function isPathClear(fromX, fromY, toX, toY) {
     var dx = (toX > fromX) ? 1 : (toX < fromX) ? -1 : 0
     var dy = (toY > fromY) ? 1 : (toY < fromY) ? -1 : 0
@@ -427,14 +379,11 @@ function isPathClear(fromX, fromY, toX, toY) {
         x += dx
         y += dy
     }
-    // Check destination cell itself
     var destC = getCellFromXY(toX, toY)
     if (destC == null || isObstacle(destC)) return false
     return true
 }
 
-// Backward-compatible wrapper for scenario_combos.lk
-// Uses scalar globals only (safe cross-file). Not limited by MP — returns target to path toward.
 function findIdealSlideCell(ignoredCrystal, direction, playerCell) {
     if (_myCrystalCell == -1 || _graalCell == -1) return -1
 
@@ -447,7 +396,6 @@ function findIdealSlideCell(ignoredCrystal, direction, playerCell) {
     var sign = (delta > 0) ? 1 : -1
 
     if (direction == "pull") {
-        // GRAPPLE: stand beyond destination (further from crystal)
         var destX = (moveAxis == "x") ? _graalX : cx
         var destY = (moveAxis == "y") ? _graalY : cy
         var maxD = 8 - absDelta
@@ -466,7 +414,6 @@ function findIdealSlideCell(ignoredCrystal, direction, playerCell) {
             return cell
         }
     } else {
-        // BOXING_GLOVE: stand on opposite side of crystal from destination
         for (var d = 2; d <= 8; d++) {
             var tx = cx
             var ty = cy
@@ -485,11 +432,6 @@ function findIdealSlideCell(ignoredCrystal, direction, playerCell) {
     return -1
 }
 
-// =========================================================================
-// === Combat Phase Target Selection ===
-// =========================================================================
-
-// COMBAT phase priority: fennel_king > fennel_knight > fennel_scribe > fennel_squire
 function selectCombatTarget(fieldMapObj) {
     var enemies = getAliveEnemies()
     if (count(enemies) == 0) return null
@@ -507,7 +449,6 @@ function selectCombatTarget(fieldMapObj) {
         }
     }
 
-    // Fallback: lowest-HP enemy
     var bestTarget = null
     var bestHP = 999999
     for (var eid in enemies) {
@@ -532,20 +473,17 @@ function isCrystalEntity(eid) {
     return mapContainsKey(_crystalMap, eid)
 }
 
-// Diagnostic — say() only works from included files, not main.lk
 function bossDiag(myCell) {
     say("B1 PH=" + _bossPhase + " CC=" + _myCrystalCell + " EID=" + _bossTargetEID + " me=" + myCell + " cr=" + count(mapKeys(_crystalMap)))
 }
 
-// Check if any entity blocks the line between two cells (for LINE chips like GRAPPLE)
 function hasEntityBlockingLine(fromCell, toCell) {
     var dTotal = getCellDistance(fromCell, toCell)
     if (dTotal == null || dTotal <= 1) return false
 
-    // Check all enemies (crystals, graal, other boss entities)
     var enemies = getAliveEnemies()
     for (var eid in enemies) {
-        if (eid == _bossTargetEID) continue  // Skip the target crystal itself
+        if (eid == _bossTargetEID) continue
         var eCell = getCell(eid)
         if (eCell == fromCell || eCell == toCell) continue
         if (isOnSameLine(fromCell, eCell) && isOnSameLine(eCell, toCell)) {
@@ -555,7 +493,6 @@ function hasEntityBlockingLine(fromCell, toCell) {
         }
     }
 
-    // Check allies (our own leeks also block the line)
     var allies = getAliveAllies()
     for (var aid in allies) {
         var aCell = getCell(aid)
@@ -570,35 +507,13 @@ function hasEntityBlockingLine(fromCell, toCell) {
     return false
 }
 
-// =========================================================================
-// === Greedy Crystal Movement Engine ===
-// =========================================================================
-//
-// Diamond grid diagonal directions have CONSTANT step sizes:
-//   +18 (SE): X+1, Y unchanged
-//   -18 (NW): X-1, Y unchanged
-//   +17 (SW): Y+1, X unchanged
-//   -17 (NE): Y-1, X unchanged
-//
-// LINE chips (GRAPPLE/BOXING_GLOVE) only work along these diagonals.
-// Stand positions MUST be found by walking along diagonals from the crystal,
-// NOT by offsetting getCellFromXY coordinates (which may land off-diagonal).
-//
-// GRAPPLE: caster beyond target, target between caster and entity. Entity pulled to target.
-// BOXING_GLOVE: entity between caster and target. Entity pushed to target. Min range 2.
-
-// Take one diagonal step, validating against grid-edge wrapping.
-// The diamond grid alternates 18/17-cell rows; raw arithmetic can wrap
-// from the right edge to the left edge (or vice versa). We detect this
-// by verifying the stepped cell is actually adjacent (distance 1).
 function diagNext(cell, step) {
     var next = cell + step
     if (next < 0 || next > 612) return -1
-    if (getCellDistance(cell, next) != 1) return -1  // wrapped around grid edge
+    if (getCellDistance(cell, next) != 1) return -1
     return next
 }
 
-// Walk along a diagonal from startCell. Returns cell after numSteps, or -1 if blocked/wrapped.
 function walkDiag(startCell, step, numSteps) {
     var cell = startCell
     for (var i = 0; i < numSteps; i++) {
@@ -608,16 +523,13 @@ function walkDiag(startCell, step, numSteps) {
     return cell
 }
 
-// Find BOXING_GLOVE stand: walk from crystal in OPPOSITE direction of move.
-// Returns cell at distance 2-8 from crystal on the diagonal, or -1.
-// Prefers myCell if it's a valid stand (avoids wasting MP on repositioning).
 function findBoxStand(crystalCell, step, myCell) {
     var pos = crystalCell
     var firstStand = -1
     var myCellValid = false
     for (var k = 1; k <= 8; k++) {
-        var next = diagNext(pos, -step)  // opposite direction
-        if (next == -1) break  // out of bounds or wrapped
+        var next = diagNext(pos, -step)
+        if (next == -1) break
         pos = next
         if (isObstacle(pos)) break
         if (pos != myCell && isEntity(pos)) break
@@ -630,16 +542,13 @@ function findBoxStand(crystalCell, step, myCell) {
     return firstStand
 }
 
-// Find GRAPPLE stand: walk from targetCell in SAME direction as move (beyond target).
-// Crystal must be within range 1-8 from stand.
-// Prefers myCell if it's a valid stand (avoids wasting MP on repositioning).
 function findGrapStand(targetCell, step, crystalSteps, myCell) {
     var pos = targetCell
     var firstStand = -1
     var myCellValid = false
     for (var j = 1; j <= 8 - crystalSteps; j++) {
-        var next = diagNext(pos, step)  // beyond target
-        if (next == -1) break  // out of bounds or wrapped
+        var next = diagNext(pos, step)
+        if (next == -1) break
         pos = next
         if (isObstacle(pos)) break
         if (pos != myCell && isEntity(pos)) break
@@ -650,10 +559,6 @@ function findGrapStand(targetCell, step, crystalSteps, myCell) {
     return firstStand
 }
 
-// Find the best chip move for a crystal. Evaluates all 4 diagonal directions,
-// picks the move that maximizes Manhattan distance reduction.
-// excludeStep: if nonzero, skip that direction (prevents oscillation).
-// Returns null if no viable move, else ['stand', 'chip', 'target', 'score', 'step'].
 function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, excludeStep) {
     var crystalX = getCellX(crystalCell)
     var crystalY = getCellY(crystalCell)
@@ -679,15 +584,13 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
         var sdx = sdxs[si]
         var sdy = sdys[si]
 
-        // Skip excluded direction (prevents oscillation — don't fire opposite to locked direction)
         if (excludeStep != 0 && step == excludeStep) continue
 
-        // Walk along this diagonal from crystal — find max clear distance
         var maxClear = 0
         var pos = crystalCell
         for (var d = 1; d <= 8; d++) {
             var next = diagNext(pos, step)
-            if (next == -1) break  // out of bounds or wrapped
+            if (next == -1) break
             pos = next
             if (isObstacle(pos)) break
             if (pos == _graalCell) break
@@ -696,7 +599,6 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
         }
         if (maxClear == 0) continue
 
-        // Find optimal move distance (most improvement in Manhattan distance)
         var bestD = 0
         var bestImprove = -999
         for (var d = 1; d <= maxClear; d++) {
@@ -709,9 +611,6 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
         }
         if (bestD == 0 || bestImprove <= 0) continue
 
-        // Prevent pushing crystal to wrong side of graal (dead-end trap):
-        // If the move lands on graal's axis line on the wrong side, the graal
-        // blocks further movement toward the correct side. Clamp distance.
         var newCX = crystalX + sdx * bestD
         var newCY = crystalY + sdy * bestD
         var goalAxis = _myCrystalGoalAxis
@@ -731,7 +630,6 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
 
         var targetCell = crystalCell + step * bestD
 
-        // Try BOXING_GLOVE (stand behind crystal, push toward target)
         if (boxUsed < 4) {
             var boxStand = findBoxStand(crystalCell, step, myCell)
             if (boxStand != -1) {
@@ -747,7 +645,6 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
             }
         }
 
-        // Try GRAPPLE (stand beyond target, pull crystal to target)
         if (grapUsed < 4) {
             var grapStand = findGrapStand(targetCell, step, bestD, myCell)
             if (grapStand != -1) {
@@ -768,7 +665,6 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
     return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore, 'step': bestStep]
 }
 
-// BFS flood-fill from graal to get all enclave cells (blocking bottleneck 374/391).
 function getEnclaveCells() {
     var visited = [:]
     var queue = [_graalCell]
@@ -793,7 +689,6 @@ function getEnclaveCells() {
     return queue
 }
 
-// Find nearest enclave cell to walk toward (no range limit).
 function findNearestEnclaveCell(myCell) {
     var enclave = getEnclaveCells()
     var bestCell = -1
@@ -808,12 +703,9 @@ function findNearestEnclaveCell(myCell) {
     return bestCell
 }
 
-// Find an open cell INSIDE the enclave to teleport to.
-// Picks cell closest to our crystal within teleport range (1-12) of us.
 function findTeleportTarget(crystalCell, myCell) {
     var queue = getEnclaveCells()
 
-    // Find enclave cell closest to crystal within teleport range
     var bestCell = -1
     var bestDist = 999
     for (var cell in queue) {
@@ -829,12 +721,6 @@ function findTeleportTarget(crystalCell, myCell) {
     return bestCell
 }
 
-// Execute PUZZLE actions — multi-chip greedy crystal movement.
-//
-// Turn sequence:
-// 1. Teleport into crystal enclave if too far to walk (CHIP_TELEPORTATION, 9 TP)
-// 2. Buff MP with Leather Boots if available (3 TP)
-// 3. Fire up to 8 chips (4 GRAPPLE + 4 BOXING_GLOVE) in a loop
 function logMapLayout() {
     var obstacles = getObstacles()
     var obsSet = [:]
@@ -845,7 +731,7 @@ function logMapLayout() {
     for (var row = 0; row < 35; row++) {
         var rowSize = (row % 2 == 0) ? 18 : 17
         var line = ""
-        if (row % 2 != 0) line += "   "  // indent odd rows (17 cells)
+        if (row % 2 != 0) line += "   "
         for (var col = 0; col < rowSize; col++) {
             if (mapContainsKey(obsSet, cellId)) {
                 line += "  X  "
@@ -861,7 +747,6 @@ function logMapLayout() {
 }
 
 function executePuzzleTurn() {
-    // Turn 1 map dump — only first leek logs to avoid spam
     if (getTurn() == 1) {
         var allA = []
         push(allA, getEntity())
@@ -876,15 +761,12 @@ function executePuzzleTurn() {
         return false
     }
 
-    // Use adjacent cell as pathfinding target (ensures correct side of graal),
-    // but the "done" check below uses axis+LoS so we stop early once aligned.
     var finalDest = computeCrystalFinalDest()
     if (finalDest == null) {
         say("PZ: no dest")
         moveTowardCell(_myCrystalCell)
         return true
     }
-    // Check if already solved: on correct axis + LoS to graal
     if (isCrystalOnAxis() && lineOfSight(_myCrystalCell, _graalCell)) {
         say("PZ DONE c=" + _bossTargetEID)
         _bossTargetEID = null
@@ -894,15 +776,11 @@ function executePuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
-    // === Phase 0: Teleport into crystal enclave (always, boss PUZZLE) ===
-    // Crystals are behind walls — getCellDistance ignores walls, so distance
-    // checks are misleading. Always teleport when available to reach the enclave ASAP.
     var crystalCell0 = getCell(_bossTargetEID)
     if (crystalCell0 != null && crystalCell0 >= 0) {
         var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (tpCd != null && tpCd == 0 && getTP() >= 12) {
             var tpDone = false
-            // Strategy 1: teleport directly to optimal chip-firing stand
             var preMove = findBestChipMove(crystalCell0, finalDest, myCell, 0, 0, 0)
             if (preMove != null) {
                 var preStand = preMove['stand']
@@ -914,7 +792,6 @@ function executePuzzleTurn() {
                     }
                 }
             }
-            // Strategy 2: teleport to any enclave cell near crystal
             if (!tpDone) {
                 var tpTarget = findTeleportTarget(crystalCell0, myCell)
                 if (tpTarget != -1) {
@@ -924,13 +801,11 @@ function executePuzzleTurn() {
                     }
                 }
             }
-            // Strategy 3: out of range — walk toward nearest enclave cell, then retry
             if (!tpDone) {
                 var nearest = findNearestEnclaveCell(myCell)
                 if (nearest != -1) {
                     moveTowardCell(nearest)
                     myCell = getCell()
-                    // Retry teleport from closer position
                     var tpTarget2 = findTeleportTarget(crystalCell0, myCell)
                     if (tpTarget2 != -1) {
                         if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1) {
@@ -938,35 +813,28 @@ function executePuzzleTurn() {
                         }
                     }
                 }
-                return true  // consumed the turn walking toward enclave
+                return true
             }
         } else if (tpCd != null && tpCd > 0) {
-            // Teleport on cooldown — only wait if far from crystal (outside enclave).
-            // If already near crystal (inside enclave), fall through to chip loop.
             var dToCrystal = getCellDistance(myCell, crystalCell0)
             if (dToCrystal > 10) { return true; }
-            // Otherwise fall through to Phase 1 + Phase 2
         }
     }
 
-    // === Phase 1: Buff MP with Leather Boots (+2 MP for 2 turns, 3 TP) ===
     var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
     if (bootsCd != null && bootsCd == 0 && getTP() >= 6) {
         useChip(CHIP_LEATHER_BOOTS, myID)
     }
 
-    // === Phase 2: Multi-chip loop ===
     var grapUsed = 0
     var boxUsed = 0
     var chipsFired = 0
-    var lockedStep = 0  // after first fire, exclude opposite direction to prevent oscillation
+    var lockedStep = 0
 
     while (chipsFired < 8) {
-        // Refresh crystal position after each move
         var crystalCell = getCell(_bossTargetEID)
         if (crystalCell == null || crystalCell < 0) break
 
-        // Check if done: on correct axis + LoS to graal
         var crX = getCellX(crystalCell)
         var crY = getCellY(crystalCell)
         var onAx = false
@@ -977,12 +845,10 @@ function executePuzzleTurn() {
         else if (ax == "west") onAx = (crY == _graalY && crX < _graalX)
         if (onAx && lineOfSight(crystalCell, _graalCell)) break
 
-        // Check TP (both chips cost 3)
         if (getTP() < 3) break
 
         myCell = getCell()
 
-        // Find best move (exclude opposite of locked direction to prevent oscillation)
         var move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
         if (move == null) break
 
@@ -990,32 +856,28 @@ function executePuzzleTurn() {
         var chip = move['chip']
         var target = move['target']
 
-        // Navigate to stand (may use MP)
         if (myCell != stand) {
-            if (getMP() == 0) break  // no MP to navigate
+            if (getMP() == 0) break
             var prevCell = myCell
             moveTowardCell(stand)
             myCell = getCell()
-            if (myCell == prevCell) break  // blocked, no progress possible
-            if (myCell != stand) continue  // partial progress, re-evaluate next iteration
+            if (myCell == prevCell) break
+            if (myCell != stand) continue
         }
 
-        // Fire chip
         var r = useChipOnCell(chip, target)
-        if (r != 1) break  // failed
+        if (r != 1) break
 
         chipsFired++
         if (chip == CHIP_GRAPPLE) grapUsed++
         else boxUsed++
 
-        // Lock direction: exclude opposite step to prevent push-then-pull oscillation
         if (lockedStep == 0) {
             var firedStep = move['step']
-            lockedStep = -firedStep  // exclude the OPPOSITE direction
+            lockedStep = -firedStep
         }
     }
 
-    // Diagnostic (1 say per turn from this function)
     var crCell = getCell(_bossTargetEID)
     var solved = false
     if (crCell != null && crCell >= 0) {
@@ -1035,14 +897,11 @@ function executePuzzleTurn() {
         say("PZ f=" + chipsFired + " cr=" + crCell + " dst=" + finalDest)
     }
 
-    // Follow crystal with remaining MP / deadlock self-clearing
     if (chipsFired > 0 && crCell != null && crCell >= 0) {
         moveTowardCell(crCell)
     } else if (chipsFired == 0) {
-        // Check if we're adjacent to crystal and blocking its path — step aside
         var crystalNow = getCell(_bossTargetEID)
         if (crystalNow != null && crystalNow >= 0 && getCellDistance(myCell, crystalNow) <= 1) {
-            // Move toward destination to clear the crystal's diagonal
             moveTowardCell(finalDest)
         } else {
             moveTowardCell(_myCrystalCell)
@@ -1052,7 +911,6 @@ function executePuzzleTurn() {
     return true
 }
 
-// Boss PUZZLE target selection — keeps all crystal map access in boss_context.lk
 function getBossPuzzleTarget(fieldMapObj) {
     if (_bossTargetEID == null) return null
 
@@ -1063,7 +921,6 @@ function getBossPuzzleTarget(fieldMapObj) {
     if (mapContainsKey(fieldMapObj.entities, _bossTargetEID)) {
         return fieldMapObj.entities[_bossTargetEID]
     }
-    // Fallback: create minimal Enemy at crystal cell
     if (_myCrystalCell != -1) {
         return new Enemy(_myCrystalCell)
     }

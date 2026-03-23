@@ -16,30 +16,24 @@ class SimulationResult {
     actionsExecuted = 0
     vulnerabilityApplied = 0
 
-    // Battle Royale multi-target tracking
-    totalLobbyDamage = 0      // Sum of damage to all enemies
-    enemiesHit = 0            // Number of enemies hit (AoE)
-    killsSecured = 0          // Estimated kills from this scenario
+    totalLobbyDamage = 0
+    enemiesHit = 0
+    killsSecured = 0
 
-    // Bulb targeting system
-    bulbDamage = 0            // Damage dealt to bulbs
-    leekDamage = 0            // Damage dealt to leeks
-    bulbsHit = 0              // Number of bulbs hit
-    bulbKillsSecured = 0      // Estimated bulb kills
+    bulbDamage = 0
+    leekDamage = 0
+    bulbsHit = 0
+    bulbKillsSecured = 0
 
-    // Poison source tracking for multi-stack scoring
-    poisonSourcesUsed = 0     // Count of distinct poison-applying actions
-    poisonTurnsQueued = 0     // Sum of durations across all poison sources (for compound scoring)
+    poisonSourcesUsed = 0
+    poisonTurnsQueued = 0
 
-    // Denial tracking (Soporific/Ball and Chain TP/MP removal)
-    denialApplied = 0         // Total TP/MP denial value applied
+    denialApplied = 0
 
-    // Erosion tracking (permanent max HP reduction from damage)
-    erosionDamage = 0         // 5% of direct damage, 10% of poison damage
+    erosionDamage = 0
 
-    // Boss PUZZLE crystal tracking
-    crystalAxisReduction = 0  // Cells of alignment improvement
-    crystalSolved = false      // Crystal reached goal axis with LOS
+    crystalAxisReduction = 0
+    crystalSolved = false
 
     constructor() {
         this.buffsApplied = []
@@ -74,7 +68,6 @@ class ScenarioSimulator {
         var simAgility = this._player._agility
         var simWeaponUses = [:]
 
-        // Expected crit multiplier: critChance x 30% bonus
         var expectedCritMult = 1.0 + min(0.5, simAgility / 2000.0) * 0.3
 
         var simEnemyCurrHP = 1
@@ -88,13 +81,12 @@ class ScenarioSimulator {
             simEnemyRelShield = this._target._relShield / 100.0
         }
 
-        // Detect if target is a bulb
         var targetIsBulb = (this._target != null) ? isBulb(this._target) : false
 
         result.finalPosition = simPos
 
         for (var action in actions) {
-            
+
             if (!this.canExecuteAction(action, simPos, simTP, simMP, simWeapon)) {
                 continue
             }
@@ -102,32 +94,26 @@ class ScenarioSimulator {
             if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT || action.type == Action.ACTION_DEBUFF) {
                 if (action.chip != -1) {
 
-                    // CHIP_INVERSION: position swap + vulnerability + heal
                     if (action.chip == CHIP_INVERSION && !_isBossFight) {
                         var invCost = getChipCost(CHIP_INVERSION)
                         result.tpSpent += invCost
                         simTP -= invCost
-                        // Position swap to target's cell
                         if (action.targetEntity != null) {
                             simPos = action.targetEntity._cellPos
                             result.finalPosition = simPos
                         }
-                        // Vulnerability (20% for 1 turn)
                         result.vulnerabilityApplied += 20
                         simEnemyRelShield -= 0.20
-                        // Heal 50 HP
                         result.hpGained += 50
                         push(result.debuffsApplied, action.chip)
                         result.actionsExecuted++
                         continue
                     }
 
-                    // CHIP_LIBERATION: 40% reduction on enemy effects (shields, buffs)
                     if (action.chip == CHIP_LIBERATION) {
                         var libCost = getChipCost(CHIP_LIBERATION)
                         result.tpSpent += libCost
                         simTP -= libCost
-                        // Model 40% reduction on enemy shields for subsequent damage calcs
                         simEnemyAbsShield = floor(simEnemyAbsShield * 0.6)
                         simEnemyRelShield = simEnemyRelShield * 0.6
                         push(result.debuffsApplied, action.chip)
@@ -139,7 +125,6 @@ class ScenarioSimulator {
                     var chipDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target) : 0
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
-                    // Use net damage (post-shield) for accurate scenario ranking
                     var rawDirect = breakdown['direct'] * expectedCritMult
                     var directDmg = rawDirect * (1 - simEnemyRelShield) - simEnemyAbsShield
                     if (directDmg < 0) directDmg = 0
@@ -148,11 +133,9 @@ class ScenarioSimulator {
                     simEnemyCurrHP -= directDmg
                     if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
-                    // Calculate lifesteal healing
                     var lifesteal = (directDmg * simWisdom) / 1000
                     result.lifestealHealing += lifesteal
 
-                    // Track bulb vs leek damage
                     if (targetIsBulb) {
                         result.bulbDamage += directDmg
                     } else {
@@ -164,7 +147,6 @@ class ScenarioSimulator {
                     result.erosionDamage += chipDot * 0.10
                     if (chipDot > 0) {
                         result.poisonSourcesUsed++
-                        // Track poison duration for compound scoring
                         if (mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
                             var pChipItem = this._arsenal.playerEquippedChips[action.chip]
                             if (mapContainsKey(pChipItem._effects, EFFECT_POISON)) {
@@ -192,7 +174,6 @@ class ScenarioSimulator {
                         push(result.debuffsApplied, action.chip)
                     }
 
-                    // Track denial chip effects
                     if (action.chip == CHIP_SOPORIFIC) {
                         result.denialApplied += 0.45 * (1 + simMagic / 100.0)
                     } else if (action.chip == CHIP_BALL_AND_CHAIN) {
@@ -201,14 +182,14 @@ class ScenarioSimulator {
 
                     result.actionsExecuted++
                 } else if (action.weaponId != -1) {
-                    
+
                     var weaponObj = null
                     if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
                         weaponObj = this._arsenal.playerEquippedWeapons[action.weaponId]
                     }
 
                     if (weaponObj != null) {
-                        
+
                         var currentUses = simWeaponUses[action.weaponId]
                         if (currentUses == null) currentUses = 0
 
@@ -221,7 +202,6 @@ class ScenarioSimulator {
                         var weaponDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.weaponId, this._target) : 0
                         var weaponBreakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
 
-                        // Use net damage (post-shield) for accurate scenario ranking
                         var rawDirect = weaponBreakdown['direct'] * expectedCritMult
                         var directDmg = rawDirect * (1 - simEnemyRelShield) - simEnemyAbsShield
                         if (directDmg < 0) directDmg = 0
@@ -230,25 +210,20 @@ class ScenarioSimulator {
                         simEnemyCurrHP -= directDmg
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
-                        // Calculate lifesteal healing
                         var lifesteal = (directDmg * simWisdom) / 1000
                         result.lifestealHealing += lifesteal
 
-                        // ENHANCED_LIGHTNINGER bonus: +100 HP healing
                         if (action.weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
                             result.lifestealHealing += 100
                         }
 
-                        // WEAPON_UNSTABLE_DESTROYER crit-heal passive: 50-150 HP on critical hit
-                        // Estimate: critChance * avgHeal = (agi/2000) * 100
                         if (action.weaponId == WEAPON_UNSTABLE_DESTROYER) {
                             var agi = simAgility
                             var critChance = min(0.5, agi / 2000.0)
-                            var avgCritHeal = 100  // Average of 50-150 passive heal
+                            var avgCritHeal = 100
                             result.lifestealHealing += critChance * avgCritHeal
                         }
 
-                        // Track bulb vs leek damage
                         if (targetIsBulb) {
                             result.bulbDamage += directDmg
                         } else {
@@ -260,7 +235,6 @@ class ScenarioSimulator {
                         result.erosionDamage += weaponDot * 0.10
                         if (weaponDot > 0) {
                             result.poisonSourcesUsed++
-                            // Track poison duration for compound scoring
                             if (mapContainsKey(weaponObj._effects, EFFECT_POISON)) {
                                 result.poisonTurnsQueued += weaponObj._effects[EFFECT_POISON]._effectDuration
                             }
@@ -303,17 +277,14 @@ class ScenarioSimulator {
                 push(result.buffsApplied, action.chip)
 
                 if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD) {
-                    // Absolute shields (flat HP reduction)
                     var shieldAmount = this.estimateShieldAmount(action.chip, simWisdom)
                     result.shieldsGained += shieldAmount
                 } else if (action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS) {
-                    // Relative shields (percentage damage reduction)
                     var relShieldPercent = this.estimateRelativeShield(action.chip)
                     result.relativeShieldGained += relShieldPercent
                 } else if (action.chip == CHIP_PROTEIN) {
                     result.relativeShieldGained += this.estimateRelativeShield(action.chip)
                 } else if (action.chip == CHIP_LEATHER_BOOTS) {
-                    // LEATHER_BOOTS: +2 MP resource, not a shield
                     simMP += 2
                 } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
@@ -321,7 +292,6 @@ class ScenarioSimulator {
 
                     simStrength += this.estimateStrengthBuff(action.chip)
                 } else if (action.chip == CHIP_PRISM) {
-                    // PRISM: +60 all stats (STR, MAG, WIS, SCI, AGI, RES)
                     simStrength += 60
                     simMagic += 60
                     simWisdom += 60
@@ -329,28 +299,20 @@ class ScenarioSimulator {
                     simAgility += 60
                     expectedCritMult = 1.0 + min(0.5, simAgility / 2000.0) * 0.3
                 } else if (action.chip == CHIP_WIZARDRY) {
-                    // WIZARDRY: +150-170 Magic for 2 turns (avg 160)
                     simMagic += 160
                 } else if (action.chip == CHIP_KNOWLEDGE) {
-                    // KNOWLEDGE: +250-270 Wisdom for 2 turns (avg 260)
                     simWisdom += 260
                 } else if (action.chip == CHIP_ELEVATION) {
-                    // ELEVATION: +80 Max HP (one-time, also heals)
                     result.hpGained += 80
                 } else if (action.chip == CHIP_WARM_UP) {
-                    // WARM_UP: +170-190 AGI for 3 turns (avg 180)
                     simAgility += 180
                     expectedCritMult = 1.0 + min(0.5, simAgility / 2000.0) * 0.3
                 } else if (action.chip == CHIP_ADRENALINE) {
 
                     simTP += 5
                 } else if (action.chip == CHIP_ANTIDOTE) {
-                    // Antidote: heals 25-35 (avg 30, wisdom-scaled) + removes poisons
                     var antidoteHeal = 30 * (1 + simWisdom / 500.0)
                     result.hpGained += antidoteHeal
-                } else if (action.chip == CHIP_MIRROR || action.chip == CHIP_THORN || action.chip == CHIP_BRAMBLE) {
-                    // Damage return buffs (tracked for scoring, not simulated in combat)
-                    // No simulation changes needed - these are defensive passives
                 }
 
                 result.actionsExecuted++
@@ -368,7 +330,7 @@ class ScenarioSimulator {
                      action.type == Action.MOVEMENT_DEFENSIVE || action.type == Action.MOVEMENT_OTKO ||
                      action.type == Action.MOVEMENT_DOT_OFFENSIVE || action.type == Action.MOVEMENT_DEBUFF ||
                      action.type == Action.MOVEMENT_HNS || action.type == Action.MOVEMENT_PAB) {
-                
+
                 var pathLength = getCachedPathLength(simPos, action.targetCell)
                 if (pathLength != null && pathLength <= simMP) {
                     result.mpSpent += pathLength
@@ -379,7 +341,7 @@ class ScenarioSimulator {
                 }
             }
             else if (action.type == Action.MOVEMENT_FLEE) {
-                
+
                 var estimatedMP = min(simMP, 3)  
                 result.mpSpent += estimatedMP
                 simMP -= estimatedMP
@@ -397,7 +359,6 @@ class ScenarioSimulator {
                 }
             }
             else if (action.type == Action.ACTION_SUMMON) {
-                // Summon costs TP but contributes future value (not simulated in detail)
                 if (action.chip != -1) {
                     var summonCost = getChipCost(action.chip)
                     result.tpSpent += summonCost
@@ -412,18 +373,15 @@ class ScenarioSimulator {
             }
         }
 
-        // Track bulb targeting metrics
         if (targetIsBulb && result.bulbDamage > 0) {
             result.bulbsHit = 1
 
-            // Estimate if we secured a bulb kill
             var totalDamageToTarget = result.damageDealt + result.dotDamageQueued + (result.novaDamageQueued != null ? result.novaDamageQueued : 0)
             if (totalDamageToTarget >= simEnemyCurrHP) {
                 result.bulbKillsSecured = 1
             }
         }
 
-        // Boss PUZZLE: simulate crystal movement from grapple/boxing_glove actions
         if (_isBossFight && _bossPhase == "PUZZLE" && _bossTargetEID != null) {
             var simCX = _myCrystalX
             var simCY = _myCrystalY
@@ -433,13 +391,11 @@ class ScenarioSimulator {
 
             for (var action in actions) {
                 if (action.chip == CHIP_GRAPPLE && action.targetCell == _myCrystalCell) {
-                    // Grapple pulls crystal 1 cell toward simPos along line
                     var pullDir = computePullDirection(simCX, simCY, simPos)
                     simCX += pullDir[0]
                     simCY += pullDir[1]
                 }
                 if (action.chip == CHIP_BOXING_GLOVE && action.targetCell == _myCrystalCell) {
-                    // Boxing glove pushes crystal 1 cell away from simPos
                     var pushDir = computePushDirection(simCX, simCY, simPos)
                     simCX += pushDir[0]
                     simCY += pushDir[1]
@@ -450,7 +406,6 @@ class ScenarioSimulator {
             result.crystalAxisReduction = initialDist - finalDist
             result.crystalSolved = checkOnAxis(simCX, simCY, gX, gY, _myCrystalGoalAxis)
 
-            // Zero out damage during PUZZLE (enemies are invulnerable)
             result.damageDealt = 0
             result.dotDamageQueued = 0
             result.novaDamageQueued = 0
@@ -465,7 +420,6 @@ class ScenarioSimulator {
             if (action.chip != -1) {
                 var cost = getChipCost(action.chip)
                 if (simTP < cost) return false
-                // Range validation for chips
                 if (mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
                     var chipObj = this._arsenal.playerEquippedChips[action.chip]
                     var tCell = action.targetCell
@@ -490,7 +444,6 @@ class ScenarioSimulator {
                 if (weaponCost == null) return false
                 var swapCost = (simWeapon != action.weaponId) ? 1 : 0
                 if (simTP < swapCost + weaponCost) return false
-                // Range validation for weapons
                 var tCell = action.targetCell
                 if (tCell == -1 && action.targetEntity != null && action.targetEntity != -1) {
                     tCell = action.targetEntity._cellPos
@@ -500,7 +453,6 @@ class ScenarioSimulator {
                     if (dist == null || dist < weaponObj._minRange || dist > weaponObj._maxRange) {
                         return false
                     }
-                    // LoS check: execution checks this, simulator must too
                     if (!lineOfSight(simPos, tCell)) {
                         return false
                     }
@@ -538,7 +490,6 @@ class ScenarioSimulator {
     }
 
     estimateShieldAmount(chip, wisdom) {
-        // Absolute shields only (flat HP reduction)
         if (!isAbsoluteShieldChip(chip)) return 0
         if (chip == CHIP_HELMET) return 50 + wisdom * 0.5
         if (chip == CHIP_SHIELD) return 100 + wisdom * 1.0
@@ -546,22 +497,21 @@ class ScenarioSimulator {
     }
 
     estimateRelativeShield(chip) {
-        // Relative shields (percentage damage reduction, scales with Resistance)
         if (!isRelativeShieldChip(chip)) return 0
 
         var resistance = this._player._resistance
         var scalingMultiplier = 1 + (resistance / 100.0)
 
         if (chip == CHIP_WALL) {
-            var basePercent = 4.5  // 4-5% base at max level
+            var basePercent = 4.5
             return basePercent * scalingMultiplier
         }
         if (chip == CHIP_FORTRESS) {
-            var basePercent = 7.5  // 7-8% base at max level
+            var basePercent = 7.5
             return basePercent * scalingMultiplier
         }
         if (chip == CHIP_PROTEIN) {
-            return 10  // Fixed 10% (does not scale)
+            return 10
         }
         return 0
     }

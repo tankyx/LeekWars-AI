@@ -212,9 +212,6 @@ class V8Uploader:
             "field_map_core",
             "field_map_patterns",
             "field_map_tactical",
-            "operation_tracker",
-            "debug_config",
-            "monte_carlo_sim",
             "kill_planning",
             "cooldown_tracker",
             "enemy_predictor",
@@ -430,8 +427,8 @@ def main():
     # Count total modules
     total_modules = 0
     root_modules = ["main", "game_entity", "item", "field_map", "field_map_core",
-                    "field_map_patterns", "field_map_tactical", "operation_tracker",
-                    "debug_config", "monte_carlo_sim", "kill_planning", "cooldown_tracker",
+                    "field_map_patterns", "field_map_tactical",
+                    "kill_planning", "cooldown_tracker",
                     "enemy_predictor", "enemy_intelligence", "performance_infra", "cache_manager", "tactical_awareness",
                     "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
                     "scenario_generator", "scenario_quick_scorer", "scenario_mutation", "weight_profiles",

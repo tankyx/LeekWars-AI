@@ -6,8 +6,6 @@ class ScenarioCombos extends ScenarioHelpers {
         super(arsenal, player, target, fieldMap, strategy)
     }
 
-    // === Legacy Template Scenarios ===
-
     createAggressiveScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -327,7 +325,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var enemyPos = this._target._cellPos
         var currentDistFromEnemy = getCellDistance(playerPos, enemyPos)
 
-        // Iterate through all reachable cells (not just damageMap which is near enemy)
         var reachableCells = getReachableCells()
         for (var cellId in reachableCells) {
             var dist = getCellDistance(playerPos, cellId)
@@ -335,13 +332,10 @@ class ScenarioCombos extends ScenarioHelpers {
                 var threat = this._fieldMap.getThreatAtCell(cellId)
                 var distFromEnemy = getCellDistance(cellId, enemyPos)
 
-                // ONLY consider cells FARTHER from enemy than current position
                 if (distFromEnemy <= currentDistFromEnemy) {
                     continue
                 }
 
-                // Score: heavily prioritize distance from enemy, then low threat
-                // Distance weight 100x threat to ensure we move away
                 var score = distFromEnemy * 100 - threat
 
                 if (score > bestScore) {
@@ -354,10 +348,6 @@ class ScenarioCombos extends ScenarioHelpers {
         if (safestCell == -1) {
             return null
         }
-
-        debugInfo("[TELEPORT-ESCAPE] Current dist from enemy: " + currentDistFromEnemy +
-                  " → Selected cell: dist=" + getCellDistance(safestCell, enemyPos) +
-                  ", threat=" + this._fieldMap.getThreatAtCell(safestCell))
 
         push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, safestCell, this._target))
         tpBudget -= tpTeleportEscape
@@ -384,7 +374,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // Use remaining TP on long-range poison chips from escape position
         if (tpBudget >= 3) {
             var distAfterTeleport = getCellDistance(safestCell, this._target._cellPos)
             var poisonChips = [CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_ARSENIC, CHIP_COVID]
@@ -400,7 +389,6 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= chipCost
             }
 
-            // Also try poison weapons if in range
             var attackActions = this.getAttackActions(tpBudget, 1.0, safestCell)
             for (var atk in attackActions) {
                 push(actions, atk)
@@ -420,7 +408,6 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-        // Only use in early turns (1-5) when positioning is critical
         var currentTurn = getTurn()
         if (currentTurn > 5) {
             return null
@@ -430,18 +417,15 @@ class ScenarioCombos extends ScenarioHelpers {
         var bestScore = -99999
         var playerPos = this._player._cellPos
 
-        // Find best offensive cell to teleport to
         for (var cellId in mapKeys(this._fieldMap.damageMap)) {
             var cellData = this._fieldMap.damageMap[cellId]
             var dist = getCellDistance(playerPos, cellId)
 
             if (dist >= 2 && dist <= 12) {
-                // Score based on: damage potential - threat - distance
                 var damageScore = cellData._totalDamage
                 var threat = this._fieldMap.getThreatAtCell(cellId)
                 var distToEnemy = getCellDistance(cellId, this._target._cellPos)
 
-                // Prioritize: high damage, low threat, closer to enemy
                 var score = damageScore - (threat * 0.5) - (distToEnemy * 10)
 
                 if (score > bestScore) {
@@ -458,7 +442,6 @@ class ScenarioCombos extends ScenarioHelpers {
         push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell, this._target))
         tpBudget -= tpTeleportApproach
 
-        // Follow up with attacks if we have TP
         var attackActions = this.getAttackActions(tpBudget, 1.0, bestCell)
         for (var aa in attackActions) {
             push(actions, aa)
@@ -477,6 +460,42 @@ class ScenarioCombos extends ScenarioHelpers {
         if (antidoteAction != null) {
             push(actions, antidoteAction)
             tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
+        }
+
+        if (params.buffStrategy == 1 || params.buffStrategy == 3) {
+
+            var offensiveBuff = this.getOffensiveBuff()
+            if (offensiveBuff != null && tpBudget >= getCachedChipCost(offensiveBuff.chip)) {
+                push(actions, offensiveBuff)
+                tpBudget -= getCachedChipCost(offensiveBuff.chip)
+            }
+        }
+
+        if (params.buffStrategy == 2 || params.buffStrategy == 3) {
+
+            var defensiveBuff = this.getDefensiveBuff()
+            if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
+                push(actions, defensiveBuff)
+                tpBudget -= getCachedChipCost(defensiveBuff.chip)
+            }
+        }
+
+        if (params.buffStrategy == 4) {
+
+            var damageReturnBuff = this.getDamageReturnBuff()
+            if (damageReturnBuff != null && tpBudget >= getCachedChipCost(damageReturnBuff.chip)) {
+                push(actions, damageReturnBuff)
+                tpBudget -= getCachedChipCost(damageReturnBuff.chip)
+            }
+
+            var debuffAction = this.getDebuffAction()
+            if (debuffAction != null && debuffAction.chip != -1) {
+                var debuffCostParam = getCachedChipCost(debuffAction.chip)
+                if (tpBudget >= debuffCostParam) {
+                    push(actions, debuffAction)
+                    tpBudget -= debuffCostParam
+                }
+            }
         }
 
         if (params.healThreshold >= 0) {
@@ -516,42 +535,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        if (params.buffStrategy == 1 || params.buffStrategy == 3) {
-
-            var offensiveBuff = this.getOffensiveBuff()
-            if (offensiveBuff != null && tpBudget >= getCachedChipCost(offensiveBuff.chip)) {
-                push(actions, offensiveBuff)
-                tpBudget -= getCachedChipCost(offensiveBuff.chip)
-            }
-        }
-
-        if (params.buffStrategy == 2 || params.buffStrategy == 3) {
-
-            var defensiveBuff = this.getDefensiveBuff()
-            if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
-                push(actions, defensiveBuff)
-                tpBudget -= getCachedChipCost(defensiveBuff.chip)
-            }
-        }
-
-        if (params.buffStrategy == 4) {
-
-            var damageReturnBuff = this.getDamageReturnBuff()
-            if (damageReturnBuff != null && tpBudget >= getCachedChipCost(damageReturnBuff.chip)) {
-                push(actions, damageReturnBuff)
-                tpBudget -= getCachedChipCost(damageReturnBuff.chip)
-            }
-
-            var debuffAction = this.getDebuffAction()
-            if (debuffAction != null && debuffAction.chip != -1) {
-                var debuffCostParam = getCachedChipCost(debuffAction.chip)
-                if (tpBudget >= debuffCostParam) {
-                    push(actions, debuffAction)
-                    tpBudget -= debuffCostParam
-                }
-            }
-        }
-
         var appliedLeatherBoots = false
         var leatherBootsBuff = this.getLeatherBootsBuff()
         if (leatherBootsBuff != null) {
@@ -571,7 +554,6 @@ class ScenarioCombos extends ScenarioHelpers {
                 push(actions, adrenalineBuff)
                 tpBudget -= tpAdrenaline
                 tpBudget += 5
-                debugInfo("[SCENARIO] LEATHER_BOOTS + ADRENALINE combo: Net +1 TP + mobility")
             }
         }
 
@@ -599,7 +581,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // Fall back to normal movement if teleport wasn't used (or not an OTKO scenario)
         if (params.movementFraction > 0 && !didTeleport) {
             var mpToUse = floor(mpBudget * params.movementFraction)
             var moveAction = this.getMoveToOptimalCell(mpToUse)
@@ -642,8 +623,6 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
-    // === Combo Scenarios ===
-
     createNeutrinoStackingScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -675,7 +654,6 @@ class ScenarioCombos extends ScenarioHelpers {
         if (currentStacks >= 3 && vulnRemaining >= 2) {
             return null
         }
-
 
         if (getWeapon() != WEAPON_NEUTRINO) {
             push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
@@ -728,7 +706,6 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-
         var playerX = getCellX(simPos)
         var playerY = getCellY(simPos)
         var enemyPos = this._target._cellPos
@@ -749,7 +726,6 @@ class ScenarioCombos extends ScenarioHelpers {
             grappleCell = (enemyY < playerY) ? getCellFromXY(playerX, playerY - 1) : getCellFromXY(playerX, playerY + 1)
         }
 
-
         if (grappleCell == -1 || grappleCell == null) {
             return null
         }
@@ -757,8 +733,6 @@ class ScenarioCombos extends ScenarioHelpers {
         push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
         tpBudget -= getCachedChipCost(CHIP_GRAPPLE)
 
-        // After GRAPPLE, enemy is at grappleCell (adjacent to player)
-        // Update simulated position for subsequent attacks
         var enemyPulledPosition = grappleCell
 
         if (getWeapon() != WEAPON_HEAVY_SWORD) {
@@ -766,14 +740,10 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= 1
         }
 
-        // Attack the pulled enemy position, not original position
         var heavySwordCost = getCachedWeaponCost(WEAPON_HEAVY_SWORD, this._arsenal)
         if (heavySwordCost == null) heavySwordCost = 15
         push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, enemyPulledPosition, this._target))
         tpBudget -= heavySwordCost
-
-        // Note: getAttackActions would target original position, so we manually add follow-up attacks
-        // Spam HEAVY_SWORD while we have TP (max 2 uses per turn)
 
         if (tpBudget >= heavySwordCost) {
             push(actions, new Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, -1, enemyPulledPosition, this._target))
@@ -812,7 +782,6 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
         tpBudget -= tpSteroidCost
 
@@ -841,8 +810,6 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
-    // === Checkpoint Scenarios ===
-
     createSteroidRecheckScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -859,7 +826,6 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
         tpBudget -= tpSteroidRecheck
 
@@ -870,7 +836,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var checkpoint = Action.createCheckpoint("BUFF_RECHECK", "evaluateBuffRecheckContinuation", context)
         push(actions, checkpoint)
 
-
         return actions
     }
 
@@ -879,7 +844,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpBudget = availableTP
         var mpBudget = availableMP
 
-        // Requires both STEROID and WARM_UP equipped and off cooldown
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) return null
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP)) return null
         if (getCooldown(CHIP_STEROID, this._player._id) > 0) return null
@@ -889,18 +853,14 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpWarmUp = getCachedChipCost(CHIP_WARM_UP)
         var buffCost = tpSteroid + tpWarmUp
 
-        // Need at least buff cost + 4 TP for a minimum attack
         if (tpBudget < buffCost + 4) return null
 
-        // 1. Apply STEROID
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
         tpBudget -= tpSteroid
 
-        // 2. Apply WARM_UP
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player))
         tpBudget -= tpWarmUp
 
-        // 3. Move if needed
         var simPos = this._player._cellPos
         var approachCell = this.getApproachEnemyCell(mpBudget)
         if (approachCell != null && approachCell != -1) {
@@ -908,13 +868,12 @@ class ScenarioCombos extends ScenarioHelpers {
             simPos = approachCell
         }
 
-        // 4. Fill remaining TP with attacks
         var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
         for (var atk in attackActions) {
             push(actions, atk)
         }
 
-        if (count(actions) < 3) return null  // Need buffs + at least one attack
+        if (count(actions) < 3) return null
 
         return actions
     }
@@ -940,7 +899,6 @@ class ScenarioCombos extends ScenarioHelpers {
         if (!isOnAxis) return null
         if (dist < 2 || dist > 6) return null
 
-
         var neutrinoCount = floor((tpBudget - 10) / 4)
         if (neutrinoCount > 3) neutrinoCount = 3
         if (neutrinoCount < 2) neutrinoCount = 2
@@ -959,7 +917,6 @@ class ScenarioCombos extends ScenarioHelpers {
 
         var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
         push(actions, checkpoint)
-
 
         return actions
     }
@@ -992,7 +949,6 @@ class ScenarioCombos extends ScenarioHelpers {
         if (dist == null) return null
         if (dist < 2 || dist > 8) return null
 
-
         var dx = getCellX(enemyPos) - getCellX(simPos)
         var dy = getCellY(enemyPos) - getCellY(simPos)
         var dirX = 0
@@ -1016,7 +972,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
         push(actions, checkpoint)
 
-
         return actions
     }
 
@@ -1036,14 +991,12 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-        // Use smart healing (ENHANCED_LIGHTNINGER for high wisdom, REMISSION for low wisdom)
         var healAction = this.getSmartHealingAction()
         if (healAction == null) {
             return null
         }
 
         push(actions, healAction)
-        // Deduct TP cost dynamically
         if (healAction.weaponId != -1 && healAction.weaponId != null) {
             var healWeaponCost = getCachedWeaponCost(healAction.weaponId, this._arsenal)
             if (healWeaponCost == null) healWeaponCost = 9
@@ -1059,11 +1012,8 @@ class ScenarioCombos extends ScenarioHelpers {
         var checkpoint = Action.createCheckpoint("HEAL_RECHECK", "evaluateHealRecheckContinuation", context)
         push(actions, checkpoint)
 
-
         return actions
     }
-
-    // === Magic / Poison Scenarios ===
 
     createGrappleCovidScenario(availableTP, availableMP) {
         var actions = []
@@ -1071,16 +1021,14 @@ class ScenarioCombos extends ScenarioHelpers {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
-        // Only for magic builds
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
 
         if (!(mag > str && mag > agi)) {
-            return null  // Not a magic build
+            return null
         }
 
-        // Check if we have GRAPPLE and COVID
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) return null
         if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) return null
 
@@ -1089,7 +1037,6 @@ class ScenarioCombos extends ScenarioHelpers {
 
         if (!hasCovid) return null
 
-        // Never cast COVID unless enemy Antidote cooldown >= 3
         var covidTracker = new CooldownTracker(this._target)
         var covidAntidoteCD = covidTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
         if (covidAntidoteCD < 3) return null
@@ -1098,26 +1045,21 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpCovid = getCachedChipCost(CHIP_COVID)
         if (tpBudget < tpGrapple + tpCovid) return null
 
-        // Find a GRAPPLE-eligible cell: on H/V axis with enemy, dist 3-8, reachable
         var enemyPos = this._target._cellPos
         var enemyX = getCellX(enemyPos)
         var enemyY = getCellY(enemyPos)
 
-        // Check if already on axis
         var playerX = getCellX(simPos)
         var playerY = getCellY(simPos)
         var onAxis = (playerX == enemyX || playerY == enemyY)
         var dist = getCellDistance(simPos, enemyPos)
 
-        var grappleCell = simPos  // Default: current position
+        var grappleCell = simPos
         var moveCost = 0
 
         if (onAxis && dist != null && dist >= 3 && dist <= 8 && lineOfSight(simPos, enemyPos)) {
-            // Already in position
             grappleCell = simPos
-            debugInfo("[GRAPPLE-SEEK] Already on axis at dist=" + dist)
         } else {
-            // Search reachable cells for best GRAPPLE position
             var reachableCells = getReachableCells()
             if (reachableCells == null || count(reachableCells) == 0) return null
 
@@ -1138,9 +1080,8 @@ class ScenarioCombos extends ScenarioHelpers {
 
                 if (!lineOfSight(cellId, enemyPos)) continue
 
-                // Score: prefer closer to minimize wasted MP, prefer dist 4-6 for safety
                 var score = 1000 - pathCost * 50
-                if (cellDist >= 4 && cellDist <= 6) score += 200  // Ideal range
+                if (cellDist >= 4 && cellDist <= 6) score += 200
                 if (score > bestScore) {
                     bestScore = score
                     bestCell = cellId
@@ -1148,20 +1089,17 @@ class ScenarioCombos extends ScenarioHelpers {
                 }
             }
 
-            if (bestCell == -1) return null  // No GRAPPLE-eligible cell reachable
+            if (bestCell == -1) return null
 
             grappleCell = bestCell
-            debugInfo("[GRAPPLE-SEEK] Moving to axis cell " + bestCell + " (cost=" + moveCost + "MP, dist=" + getCellDistance(bestCell, enemyPos) + ")")
         }
 
-        // 1. Move to GRAPPLE position
         if (grappleCell != simPos) {
             push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, grappleCell, this._target))
             mpBudget -= moveCost
             simPos = grappleCell
         }
 
-        // 2. Apply ARSENIC before GRAPPLE if in range 3-4 (GRAPPLE will change dist to 2)
         var grappleDist = getCellDistance(grappleCell, enemyPos)
         var hasArsenic = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ARSENIC) &&
                         getCooldown(CHIP_ARSENIC, this._player._id) == 0
@@ -1170,21 +1108,16 @@ class ScenarioCombos extends ScenarioHelpers {
             if (tpBudget >= tpGrapple + tpCovid + tpArsenic) {
                 push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, enemyPos, this._target))
                 tpBudget -= tpArsenic
-                debugInfo("[GRAPPLE-SEEK] ARSENIC pre-pull (range 3-4)")
             }
         }
 
-        // 3. GRAPPLE pull → dist 2
         push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, enemyPos, this._target))
         tpBudget -= tpGrapple
 
-        // 4. COVID (range 0-2, guaranteed after GRAPPLE)
         push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, enemyPos, this._target))
         tpBudget -= tpCovid
         var covidBreakdown = this._arsenal.getDamageBreakdown(str, mag, this._player._wisdom, this._player._science, CHIP_COVID)
-        debugInfo("[GRAPPLE-SEEK] GRAPPLE → COVID combo queued (covid dot=" + covidBreakdown['dot'] + " direct=" + covidBreakdown['direct'] + ")")
 
-        // 5. Apply remaining poison chips at dist 2
         var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)
         for (var poisonChip in poisonChips) {
             var chipId = poisonChip._id
@@ -1192,13 +1125,11 @@ class ScenarioCombos extends ScenarioHelpers {
             var chipCost = getCachedChipCost(chipId)
             if (tpBudget < chipCost) continue
             if (getCooldown(chipId, this._player._id) > 0) continue
-            // After GRAPPLE, enemy at dist 2
             if (2 < poisonChip._minRange || 2 > poisonChip._maxRange) continue
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, enemyPos, this._target))
             tpBudget -= chipCost
         }
 
-        // 6. Weapon spam with remaining TP
         if (tpBudget >= 3) {
             var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
             for (var atk in attackActions) {
@@ -1206,13 +1137,11 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 7. Kite away
         var kiteAction = this.getKiteAwayAction(mpBudget)
         if (kiteAction != null) {
             push(actions, kiteAction)
         }
 
-        // Mark as POISON_DUMP for massive scoring bonus
         var markerAction = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, this._target)
         markerAction.checkpointType = "POISON_DUMP"
         push(actions, markerAction)
@@ -1226,33 +1155,18 @@ class ScenarioCombos extends ScenarioHelpers {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
-        // Only for magic builds in BAIT phase
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
 
         if (!(mag > str && mag > agi)) {
-            return null  // Not a magic build
+            return null
         }
 
         if (POISON_PHASE != "BAIT") {
-            return null  // Not in bait phase
+            return null
         }
 
-        // AGGRESSIVE BAIT: Apply Wizardry + ALL poisons (except COVID, saved for DUMP)
-        // If enemy Antidotes this wave, great — we forced the cooldown for COVID.
-        // If they don't Antidote, even better — massive poison ticking.
-
-        // 1. Wizardry FIRST — amplifies all subsequent poison by +150-170 Magic
-        var tpWiz = getCachedChipCost(CHIP_WIZARDRY)
-        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY) &&
-            getCooldown(CHIP_WIZARDRY, this._player._id) == 0 &&
-            tpBudget >= tpWiz) {
-            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
-            tpBudget -= tpWiz
-        }
-
-        // 2. Leather Boots for extra MP (critical for getting in range)
         var tpBoots = getCachedChipCost(CHIP_LEATHER_BOOTS)
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
             getCooldown(CHIP_LEATHER_BOOTS, this._player._id) == 0 &&
@@ -1262,21 +1176,25 @@ class ScenarioCombos extends ScenarioHelpers {
             mpBudget += 2
         }
 
-        // 3. Adrenaline for extra TP
-        var tpAdren = getCachedChipCost(CHIP_ADRENALINE)
-        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE) &&
-            getCooldown(CHIP_ADRENALINE, this._player._id) == 0 &&
-            tpBudget >= tpAdren) {
-            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
-            tpBudget -= tpAdren
-            tpBudget += 5  // Adrenaline grants +5 TP
+        var distToEnemy = getCellDistance(simPos, this._target._cellPos)
+        var moveAction = null
+        if (distToEnemy != null && distToEnemy > 6) {
+            moveAction = new Action(Action.MOVEMENT_APPROACH, -1, -1, this._target._cellPos, this._target)
+        } else {
+            moveAction = this.getMoveToOptimalCell(mpBudget)
         }
-
-        // 4. Move to attack position (poison chips/weapons need range)
-        var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
-            if (moveAction.targetCell != -1) {
+            if (moveAction.type == Action.MOVEMENT_APPROACH) {
+                var path = getPath(simPos, this._target._cellPos)
+                if (path != null && count(path) > 1) {
+                    var maxSteps = min(mpBudget, count(path) - 1)
+                    if (maxSteps > 0) {
+                        simPos = path[maxSteps]
+                        mpBudget -= maxSteps
+                    }
+                }
+            } else if (moveAction.targetCell != -1) {
                 simPos = moveAction.targetCell
                 var moveCost = getGraphMPCost(simPos)
                 if (moveCost < 999) {
@@ -1285,11 +1203,27 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 5. ALL poison chips sorted by damage (except COVID — save for DUMP phase)
+        var tpWiz = getCachedChipCost(CHIP_WIZARDRY)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY) &&
+            getCooldown(CHIP_WIZARDRY, this._player._id) == 0 &&
+            tpBudget >= tpWiz) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
+            tpBudget -= tpWiz
+        }
+
+        var tpAdren = getCachedChipCost(CHIP_ADRENALINE)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE) &&
+            getCooldown(CHIP_ADRENALINE, this._player._id) == 0 &&
+            tpBudget >= tpAdren) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
+            tpBudget -= tpAdren
+            tpBudget += 5
+        }
+
         var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)
         for (var poisonChip in poisonChips) {
             var chipId = poisonChip._id
-            if (chipId == CHIP_COVID) continue  // COVID saved for DUMP (needs Antidote CD >= 3)
+            if (chipId == CHIP_COVID) continue
 
             var chipCost = getCachedChipCost(chipId)
             if (tpBudget < chipCost) continue
@@ -1299,22 +1233,14 @@ class ScenarioCombos extends ScenarioHelpers {
             if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
             if (!lineOfSight(simPos, this._target._cellPos)) continue
 
-            // AoE safety check: skip if chip would hit caster
             if (poisonChip._aoeType != AREA_POINT) {
-                var aoeCells = fieldMap.getAoEAffectedCells(this._target._cellPos, poisonChip._aoeType, simPos)
-                var hitsSelf = false
-                for (var ac in aoeCells) {
-                    if (ac == simPos) { hitsSelf = true; break }
-                }
-                if (hitsSelf) continue
+                if (fieldMap.wouldAoEHitCell(this._target._cellPos, poisonChip._aoeType, simPos, simPos)) continue
             }
 
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
             tpBudget -= chipCost
         }
 
-        // 6. Denial chips — Soporific (TP drain) and Ball and Chain (MP drain)
-        //    These scale with Magic and cripple the enemy's ability to act
         var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
         for (var dChip in denialChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
@@ -1327,21 +1253,14 @@ class ScenarioCombos extends ScenarioHelpers {
             if (dist == null || dist < dObj._minRange || dist > dObj._maxRange) continue
             if (!lineOfSight(simPos, this._target._cellPos)) continue
 
-            // AoE safety check: skip if chip would hit caster
             if (dObj._aoeType != AREA_POINT) {
-                var aoeCells = fieldMap.getAoEAffectedCells(this._target._cellPos, dObj._aoeType, simPos)
-                var hitsSelf = false
-                for (var ac in aoeCells) {
-                    if (ac == simPos) { hitsSelf = true; break }
-                }
-                if (hitsSelf) continue
+                if (fieldMap.wouldAoEHitCell(this._target._cellPos, dObj._aoeType, simPos, simPos)) continue
             }
 
             push(actions, new Action(Action.ACTION_DEBUFF, -1, dChip, this._target._cellPos, this._target))
             tpBudget -= dCost
         }
 
-        // 7. Weapon attacks with remaining TP (poison weapons like Gazor/Flame Thrower)
         if (tpBudget >= 4) {
             var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
             for (var atk in attackActions) {
@@ -1349,14 +1268,12 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 8. Kite away with remaining MP
         var kiteAction = this.getKiteAwayAction(mpBudget)
         if (kiteAction != null) {
             push(actions, kiteAction)
         }
 
         if (count(actions) > 0) {
-            // Add BAIT checkpoint — strategic bonus for triggering Antidote
             var checkpoint = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, null)
             checkpoint.checkpointType = "POISON_BAIT"
             push(actions, checkpoint)
@@ -1366,32 +1283,22 @@ class ScenarioCombos extends ScenarioHelpers {
         return null
     }
 
-    // === Buff Cycling Scenarios ===
-
     createShieldRotationScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
 
-        // UNIVERSAL SHIELD CYCLING: Works for ALL builds
-        // Maintains shield uptime while pressing attack
-
-        // Minimum TP to ensure we can attack after buffing
         if (tpBudget < 10) {
-            return null  // Not enough TP to buff + attack meaningfully
+            return null
         }
 
-        // Check shield status and rotate: FORTRESS (3t, 8 TP) / WALL (2t, 6 TP)
         var hasFortress = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS)
         var hasWall = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL)
 
-        // FORTRESS creates EFFECT_RELATIVE_SHIELD, WALL creates EFFECT_ABSOLUTE_SHIELD
         var fortressTurns = this._player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
         var wallTurns = this._player.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD)
 
         var shieldApplied = false
 
-        // Apply shields to maintain coverage (reapply when <= 1 turn remaining)
-        // Prioritize FORTRESS (3 turns) over WALL (2 turns) for longer coverage
         var tpFortressShield = getCachedChipCost(CHIP_FORTRESS)
         var tpWallShield = getCachedChipCost(CHIP_WALL)
         if (hasFortress && fortressTurns <= 1 && getCooldown(CHIP_FORTRESS, this._player._id) == 0 && tpBudget >= tpFortressShield) {
@@ -1404,20 +1311,16 @@ class ScenarioCombos extends ScenarioHelpers {
             shieldApplied = true
         }
 
-        // Only generate this scenario if shield was actually applied
         if (!shieldApplied) {
             return null
         }
 
-        // CRITICAL: Press attack with 65% of remaining TP
-        // First try attacking from current position
         var simPos = this._player._cellPos
         var attackActions = []
         if (tpBudget >= 4) {
             attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
         }
 
-        // If no attacks available from current position, approach enemy first
         if (count(attackActions) == 0) {
             var moveAction = this.getMoveToOptimalCell(availableMP)
             if (moveAction != null) {
@@ -1427,7 +1330,6 @@ class ScenarioCombos extends ScenarioHelpers {
                     simPos = moveAction.targetCell
                 }
             }
-            // Retry attacks from new position
             if (tpBudget >= 4) {
                 attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
             }
@@ -1448,15 +1350,10 @@ class ScenarioCombos extends ScenarioHelpers {
         var actions = []
         var tpBudget = availableTP
 
-        // DAMAGE RETURN CYCLING: For agility builds
-        // Maintains Mirror/Thorn/Bramble uptime while pressing attack
-
-        // Minimum TP to ensure we can attack after buffing (lowered to 8 for THORN + attack)
         if (tpBudget < 8) {
             return null
         }
 
-        // Check if this is an agility build with damage return chips
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
@@ -1466,25 +1363,18 @@ class ScenarioCombos extends ScenarioHelpers {
         var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
         var hasAnyDamageReturn = hasMirror || hasThorn || hasBramble
 
-        // Not an AGI build or no damage return chips
         if (agi < 300 || !hasAnyDamageReturn) {
             return null
         }
 
-        // Check current damage return status
         var returnRemaining = this._player.getDamageReturnRemaining()
 
-        // Check cooldowns
         var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, this._player._id) : 999
         var thornCd = hasThorn ? getCooldown(CHIP_THORN, this._player._id) : 999
         var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, this._player._id) : 999
 
         var buffApplied = false
 
-        // Apply damage return to maintain coverage (reapply when <= 2 turns remaining for better uptime)
-        // Priority: MIRROR (3t, 5 TP) > THORN (2t, 4 TP) > BRAMBLE (1t, 3 TP)
-
-        // BRAMBLE: Only if enemy can attack THIS turn (1-turn duration)
         var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
         if (distToEnemy == null) distToEnemy = 99
         var inCloseCombat = distToEnemy <= 8
@@ -1494,7 +1384,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpMirrorCost = getCachedChipCost(CHIP_MIRROR)
         var tpThornCost = getCachedChipCost(CHIP_THORN)
 
-        // Proximity gate: only apply short-duration damage return if enemy can attack during the buff
         var enemyCanAttack1 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 1)
         var enemyCanAttack2 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 2)
 
@@ -1503,33 +1392,27 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= tpBrambleCost
             buffApplied = true
         }
-        // MIRROR: Best coverage (3 turns) - cycle when <= 2 turns for better uptime (no proximity gate — long enough duration)
         else if (hasMirror && returnRemaining <= 2 && mirrorCd == 0 && tpBudget >= tpMirrorCost + 4) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player))
             tpBudget -= tpMirrorCost
             buffApplied = true
         }
-        // THORN: Good coverage (2 turns) - only if enemy can attack within 2 turns
         else if (hasThorn && returnRemaining <= 2 && thornCd == 0 && tpBudget >= tpThornCost + 4 && enemyCanAttack2) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player))
             tpBudget -= tpThornCost
             buffApplied = true
         }
 
-        // Only generate this scenario if damage return was actually applied
         if (!buffApplied) {
             return null
         }
 
-        // CRITICAL: Press attack with 65% of remaining TP
-        // First try attacking from current position
         var simPos = this._player._cellPos
         var attackActions = []
         if (tpBudget >= 4) {
             attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
         }
 
-        // If no attacks available from current position, approach enemy first
         if (count(attackActions) == 0) {
             var moveAction = this.getMoveToOptimalCell(availableMP)
             if (moveAction != null) {
@@ -1539,7 +1422,6 @@ class ScenarioCombos extends ScenarioHelpers {
                     simPos = moveAction.targetCell
                 }
             }
-            // Retry attacks from new position
             if (tpBudget >= 4) {
                 attackActions = this.getAttackActions(tpBudget, 0.65, simPos)
             }
@@ -1556,36 +1438,29 @@ class ScenarioCombos extends ScenarioHelpers {
         return null
     }
 
-    // === Poison Dump ===
-
     createPoisonDumpScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
-        // Only for magic builds
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
 
         if (!(mag > str && mag > agi)) {
-            return null  // Not a magic build
+            return null
         }
 
-        // ONLY DUMP IF PHASE == "DUMP" (Antidote was used)
         var currentTurn = getTurn()
 
         if (POISON_PHASE != "DUMP") {
-            return null  // Not in dump phase yet
+            return null
         }
 
-
-        // 1. If HP critical, add defensive actions first (survival + poison dump)
         var hpPercent = this._player._currHealth * 100 / this._player._maxHealth
         if (hpPercent < 50) {
 
-            // Add shield (FORTRESS > WALL)
             var tpFortress = getCachedChipCost(CHIP_FORTRESS)
             var tpWall = getCachedChipCost(CHIP_WALL)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS) &&
@@ -1600,7 +1475,6 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpWall
             }
 
-            // Add healing (REMISSION)
             var tpRemissionDump = getCachedChipCost(CHIP_REMISSION)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
                 getCooldown(CHIP_REMISSION, this._player._id) == 0 &&
@@ -1610,11 +1484,9 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 2. Move to optimal attack position
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
-            // Update simPos to track position after movement
             if (moveAction.targetCell != -1) {
                 simPos = moveAction.targetCell
                 var moveCost = getGraphMPCost(simPos)
@@ -1624,8 +1496,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 3. GRAPPLE-COVID combo FIRST (highest priority — COVID is massive DoT)
-        // Never cast COVID unless enemy Antidote cooldown >= 3
         var dumpTracker = new CooldownTracker(this._target)
         var dumpAntidoteCD = dumpTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
 
@@ -1640,7 +1510,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var simDist = getCellDistance(simPos, this._target._cellPos)
 
         if (hasGrapple && hasCovid && tpBudget >= tpGrapple + tpCovid && simDist != null) {
-            // Apply ARSENIC (range 3-4) BEFORE grapple if in range (pull changes dist to 2)
             var hasArsenic = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ARSENIC) &&
                              getCooldown(CHIP_ARSENIC, this._player._id) == 0
             if (hasArsenic && simDist >= 3 && simDist <= 4) {
@@ -1648,26 +1517,20 @@ class ScenarioCombos extends ScenarioHelpers {
                 if (tpBudget >= tpGrapple + tpCovid + tpArsenic && lineOfSight(simPos, this._target._cellPos)) {
                     push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, this._target._cellPos, this._target))
                     tpBudget -= tpArsenic
-                    debugInfo("[DUMP-COMBO] ARSENIC applied before GRAPPLE (range 3-4)")
                 }
             }
 
-            // GRAPPLE: pull enemy to distance 2 (range 1-8, needs LOS)
             if (simDist >= 1 && simDist <= 8 && lineOfSight(simPos, this._target._cellPos)) {
                 push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, this._target._cellPos, this._target))
                 tpBudget -= tpGrapple
                 grapplePulled = true
-                simDist = 2  // After grapple, enemy is at distance 2
-                debugInfo("[DUMP-COMBO] GRAPPLE pull → dist=2")
+                simDist = 2
 
-                // COVID: range 0-2, perfect after GRAPPLE
                 push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, this._target._cellPos, this._target))
                 tpBudget -= tpCovid
-                debugInfo("[DUMP-COMBO] COVID applied (range 0-2, massive DoT)")
             }
         }
 
-        // 4b. Cast WIZARDRY if TP allows (after GRAPPLE-COVID priority)
         var tpWizardryDump = getCachedChipCost(CHIP_WIZARDRY)
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WIZARDRY) &&
             getCooldown(CHIP_WIZARDRY, this._player._id) == 0 &&
@@ -1676,14 +1539,11 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= tpWizardryDump
         }
 
-        // 5. Get all poison chips sorted by damage (best first)
         var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)
 
-        // 6. Apply remaining poison chips in priority order
         for (var poisonChip in poisonChips) {
             var chipId = poisonChip._id
 
-            // Skip chips already applied in GRAPPLE-COVID combo
             if (grapplePulled && (chipId == CHIP_COVID || chipId == CHIP_ARSENIC || chipId == CHIP_GRAPPLE)) continue
 
             var chipCost = getCachedChipCost(chipId)
@@ -1691,20 +1551,16 @@ class ScenarioCombos extends ScenarioHelpers {
             if (tpBudget < chipCost) continue
             if (getCooldown(chipId, this._player._id) > 0) continue
 
-            // Check range (use simDist which accounts for GRAPPLE pull)
             var dist = getCellDistance(simPos, this._target._cellPos)
-            if (grapplePulled) dist = simDist  // Enemy was pulled closer
+            if (grapplePulled) dist = simDist
             if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
 
-            // Check LOS
             if (!lineOfSight(simPos, this._target._cellPos)) continue
 
-            // Add poison chip action
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
             tpBudget -= chipCost
         }
 
-        // 6. Spam any remaining TP on weapons/chips
         if (tpBudget >= 4) {
             var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
             for (var atk in attackActions) {
@@ -1712,20 +1568,16 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 7. Kite away
         var kiteAction = this.getKiteAwayAction(mpBudget)
         if (kiteAction != null) {
             push(actions, kiteAction)
         }
 
-        // Only return if we actually applied poison chips
         if (count(actions) > 0) {
-            // Mark this as a poison dump scenario for scoring boost
             var markerAction = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, this._target)
             markerAction.checkpointType = "POISON_DUMP"
             push(actions, markerAction)
 
-            // Update phase: DUMP → SUSTAIN (after dump completes)
             POISON_PHASE = "SUSTAIN"
             LAST_POISON_DUMP_TURN = currentTurn
 
@@ -1734,8 +1586,6 @@ class ScenarioCombos extends ScenarioHelpers {
 
         return null
     }
-
-    // === Neutrino OTKO ===
 
     createNeutrinoOTKOScenario(availableTP, availableMP) {
         var actions = []
@@ -1754,7 +1604,7 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         var tpTeleportNeutrino = getCachedChipCost(CHIP_TELEPORTATION)
-        if (tpBudget < 12 + tpTeleportNeutrino) {  // 3x Neutrino (12) + TELEPORT (9)
+        if (tpBudget < 12 + tpTeleportNeutrino) {
             return null
         }
 
@@ -1777,7 +1627,6 @@ class ScenarioCombos extends ScenarioHelpers {
         if (!lineOfSight(simPos, this._target._cellPos)) {
             return null
         }
-
 
         if (getWeapon() != WEAPON_NEUTRINO) {
             push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
@@ -1816,8 +1665,6 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
-    // === Adrenaline Combo ===
-
     createAdrenalineComboScenario(comboScenarioCreator, requiredTP, availableTP, availableMP) {
         var tpGap = requiredTP - availableTP
 
@@ -1836,7 +1683,6 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-
         var actions = []
 
         push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
@@ -1854,8 +1700,6 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
-    // === Fallback Scenarios ===
-
     createStaticAttackScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -1863,7 +1707,6 @@ class ScenarioCombos extends ScenarioHelpers {
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
 
-        // If no attacks from current position, approach enemy and retry
         if (count(attackActions) == 0) {
             var moveAction = this.getMoveToOptimalCell(availableMP)
             if (moveAction != null) {
@@ -1937,7 +1780,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
-
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
@@ -1967,11 +1809,7 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
-    // === Nova Attrition (Tank/Science builds) ===
-
     createNovaAttritionScenario(availableTP, availableMP) {
-        // Tank/Science win condition: shields + Nova (Max HP drain) + filler weapons
-        // Requires: high RES, high SCI, weapons with EFFECT_NOVA_DAMAGE
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
@@ -1979,24 +1817,20 @@ class ScenarioCombos extends ScenarioHelpers {
 
         var sci = this._player._science
         var res = this._player._resistance
-        // Only for Tank/Science builds
         if (sci < 200 || res < 200) return null
 
-        // 1. Antidote if poisoned
         var antidoteAction = this.getAntidoteAction(tpBudget)
         if (antidoteAction != null) {
             push(actions, antidoteAction)
             tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
         }
 
-        // 2. Shields first (survival is the win condition)
         var defensiveBuff = this.getDefensiveBuff()
         if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
             push(actions, defensiveBuff)
             tpBudget -= getCachedChipCost(defensiveBuff.chip)
         }
 
-        // 3. PRISM (+60 SCI amplifies Nova) or KNOWLEDGE (+260 WIS amplifies healing)
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_PRISM) &&
             getCooldown(CHIP_PRISM, this._player._id) == 0) {
             var prismCost = getCachedChipCost(CHIP_PRISM)
@@ -2013,14 +1847,12 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 4. Heal if needed (tank sustain)
         var healAction = this.getHealingAction(tpBudget, 0.80)
         if (healAction != null) {
             push(actions, healAction)
             if (healAction.chip != -1) tpBudget -= getCachedChipCost(healAction.chip)
         }
 
-        // 5. Leather Boots for mobility
         var leatherBoots = this.getLeatherBootsBuff()
         if (leatherBoots != null) {
             var bootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
@@ -2031,7 +1863,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 6. Move to optimal attack position
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
@@ -2042,14 +1873,11 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 7. Nova weapon first (primary win condition), then filler attacks
-        // Find Nova weapons (weapons with EFFECT_NOVA_DAMAGE)
         var novaWeaponFired = false
         for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
             var weapon = this._arsenal.playerEquippedWeapons[weaponId]
             if (!mapContainsKey(weapon._effects, EFFECT_NOVA_DAMAGE)) continue
 
-            // Check range
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
             if (!lineOfSight(simPos, this._target._cellPos)) continue
@@ -2058,32 +1886,25 @@ class ScenarioCombos extends ScenarioHelpers {
                 push(actions, new Action(Action.ACTION_DIRECT, weaponId, -1, this._target._cellPos, this._target))
                 tpBudget -= weapon._cost
                 novaWeaponFired = true
-                break  // Quantum Rifle is 1/round
+                break
             }
         }
 
-        // 8. Fill remaining TP with best available attacks
         var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
         for (var atk in attackActions) {
             push(actions, atk)
         }
 
-        // 9. Position to cover
         var hideAction = this.getHideAndSeekAction(mpBudget)
         if (hideAction != null) {
             push(actions, hideAction)
         }
 
-        // Only return if we have meaningful actions
         if (count(actions) < 2) return null
         return actions
     }
 
-    // === Bruiser / Reflect Scenario ===
-
     createBruiserReflectScenario(availableTP, availableMP) {
-        // STR/AGI hybrid: apply reflect buffs + offensive buff → approach mid-range → weapon spam
-        // Key: damage return BEFORE movement so reflect is active when enemy counterattacks
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
@@ -2091,7 +1912,6 @@ class ScenarioCombos extends ScenarioHelpers {
 
         var str = this._player._strength
         var agi = this._player._agility
-        // Only for bruiser builds
         if (str < 400 || agi < 400) return null
 
         var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
@@ -2099,17 +1919,14 @@ class ScenarioCombos extends ScenarioHelpers {
         var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
         if (!hasMirror && !hasThorn && !hasBramble) return null
 
-        // Minimum TP to make this worthwhile (buff + at least 1 weapon attack)
         if (tpBudget < 10) return null
 
-        // 1. Damage return FIRST (active before we engage)
         var damageReturnAction = this.getDamageReturnBuff()
         if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
             push(actions, damageReturnAction)
             tpBudget -= getCachedChipCost(damageReturnAction.chip)
         }
 
-        // 2. Offensive buff (Steroid or Warm Up — getOffensiveBuff handles bruiser alternation)
         var buffAction = this.getOffensiveBuff()
         if (buffAction != null && tpBudget >= getCachedChipCost(buffAction.chip) &&
             getCooldown(buffAction.chip, this._player._id) == 0) {
@@ -2117,7 +1934,6 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= getCachedChipCost(buffAction.chip)
         }
 
-        // 3. Healing if needed (before engaging — survive the counterattack)
         var hpPercent = this._player._currHealth * 100 / this._player._maxHealth
         if (hpPercent < 70) {
             var healAction = this.getHealingAction(tpBudget, 0.7)
@@ -2127,7 +1943,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 4. Leather Boots for extra mobility
         var leatherBoots = this.getLeatherBootsBuff()
         if (leatherBoots != null) {
             var bootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
@@ -2138,7 +1953,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 5. Move to mid-range (5-6 sweet spot: Unstable Destroyer 1-6, M_Laser 5-12, Rifle 7-9)
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
@@ -2149,7 +1963,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 6. Weapon attacks with remaining TP
         if (tpBudget >= 5) {
             var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
             for (var atk in attackActions) {
@@ -2157,8 +1970,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 7. DON'T flee — stay in LoS to bait enemy attacks into reflect
-        // Only hide if HP is critically low
         if (hpPercent < 30) {
             var hideAction = this.getHideAndSeekAction(mpBudget)
             if (hideAction != null) {
@@ -2170,14 +1981,11 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
-    // === Buff Approach ===
-
     createBuffApproachScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
 
-        // Only create if enemy is out of range (no hit cells available)
         var hasAnyHitCells = false
         for (var weaponId in mapKeys(this._fieldMap.weaponHitmap)) {
             var cells = this._fieldMap.weaponHitmap[weaponId]
@@ -2196,14 +2004,9 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
         if (hasAnyHitCells) {
-            return null  // Enemy is in range, normal scenarios should handle this
+            return null
         }
 
-
-        // 1. Apply offensive buff based on build type (detect from player stats)
-        //    IMPORTANT: Magic builds should NOT cast Wizardry out of range -- it
-        //    only lasts 2 turns and will expire before we reach the enemy. Save it
-        //    for when we are actually in poison range.
         var str = this._player._strength
         var mag = this._player._magic
         var agi = this._player._agility
@@ -2213,7 +2016,6 @@ class ScenarioCombos extends ScenarioHelpers {
             (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR) ||
              mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN) ||
              mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE))) {
-            // Bruiser/Reflect build: Steroid first, then Warm Up
             var tpSterBR = getCachedChipCost(CHIP_STEROID)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
                 getCooldown(CHIP_STEROID, this._player._id) == 0 &&
@@ -2222,7 +2024,6 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpSterBR
                 buffApplied = true
             }
-            // Second buff: Warm Up (AGI for reflect + crit) — apply BOTH for bruiser
             var tpWarmBR = getCachedChipCost(CHIP_WARM_UP)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
                 getCooldown(CHIP_WARM_UP, this._player._id) == 0 &&
@@ -2231,9 +2032,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpWarmBR
                 buffApplied = true
             }
-        } else if (mag > str && mag > agi) {  // Magic build
-            // Skip Wizardry when out of range — buff expires before we can use it
-            // Use Knowledge (+260 WIS) or Adrenaline instead (longer cooldown, immediate value)
+        } else if (mag > str && mag > agi) {
             var tpKnowBA = getCachedChipCost(CHIP_KNOWLEDGE)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_KNOWLEDGE) &&
                 getCooldown(CHIP_KNOWLEDGE, this._player._id) == 0 &&
@@ -2242,7 +2041,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpKnowBA
                 buffApplied = true
             }
-        } else if (str > mag && str > agi) {  // Strength build
+        } else if (str > mag && str > agi) {
             var tpSterBA = getCachedChipCost(CHIP_STEROID)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
                 getCooldown(CHIP_STEROID, this._player._id) == 0 &&
@@ -2251,7 +2050,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpSterBA
                 buffApplied = true
             }
-        } else if (agi > str && agi > mag) {  // Agility build
+        } else if (agi > str && agi > mag) {
             var tpWarmBA = getCachedChipCost(CHIP_WARM_UP)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
                 getCooldown(CHIP_WARM_UP, this._player._id) == 0 &&
@@ -2262,7 +2061,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 2. Apply shield if not already shielded
         var hasShield = this._player.hasEffect(EFFECT_ABSOLUTE_SHIELD) || this._player.hasEffect(EFFECT_RELATIVE_SHIELD)
         var tpFortressBR = getCachedChipCost(CHIP_FORTRESS)
         var tpWallBR = getCachedChipCost(CHIP_WALL)
@@ -2280,13 +2078,11 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // 3. Move toward enemy
         var approachCell = this.getApproachEnemyCell(mpBudget)
         if (approachCell != null && approachCell != -1) {
             push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target))
         }
 
-        // Only return if we have at least one action (buff or movement)
         if (count(actions) > 0) {
             return actions
         }
@@ -2294,86 +2090,64 @@ class ScenarioCombos extends ScenarioHelpers {
         return null
     }
 
-    // =========================================================================
-    // === Boss PUZZLE Phase: Crystal Scenario Creators ===
-    // =========================================================================
-
     createCrystalSlideScenario(tp, mp) {
         if (_bossTargetEID == null || _myCrystalSolved) {
-            debugInfo("[SLIDE] No crystal or solved")
             return null
         }
         if (_graalEntity == null) {
-            debugInfo("[SLIDE] No graal")
             return null
         }
 
         var primaryDir = getDirectionToSlide(null)
         if (primaryDir == null) {
-            debugInfo("[SLIDE] No direction")
             return null
         }
 
-        // Try both directions: primary (optimal) and alternate (from other side)
         var directions = [primaryDir]
         var altDir = (primaryDir == "pull") ? "push" : "pull"
         push(directions, altDir)
 
         var playerCell = this._player._cellPos
-        debugInfo("[SLIDE] primaryDir=" + primaryDir + " playerCell=" + playerCell + " crystalCell=" + _myCrystalCell + " color=" + _myCrystalColor)
 
         for (var direction in directions) {
             var slideChip = (direction == "pull") ? CHIP_GRAPPLE : CHIP_BOXING_GLOVE
             var minDist = (direction == "pull") ? 1 : 2
             var maxDist = 8
 
-            // Check if chip is equipped
             if (!mapContainsKey(this._arsenal.playerEquippedChips, slideChip)) {
-                debugInfo("[SLIDE] " + direction + ": chip NOT equipped (chipId=" + slideChip + ")")
                 continue
             }
 
             var chipCost = getCachedChipCost(slideChip)
             if (tp < chipCost) {
-                debugInfo("[SLIDE] " + direction + ": insufficient TP " + tp + " < " + chipCost)
                 continue
             }
 
-            // Check if player is already in valid position
             var distToCrystal = getCellDistance(playerCell, _myCrystalCell)
             var onSameLine = isOnSameLine(playerCell, _myCrystalCell)
             var inRange = distToCrystal != null && distToCrystal >= minDist && distToCrystal <= maxDist
 
-            debugInfo("[SLIDE] " + direction + ": dist=" + distToCrystal + " sameLine=" + onSameLine + " inRange=" + inRange)
-
             if (inRange && onSameLine) {
-                // Verify correct side
                 var correctSide = this.checkCorrectSide(playerCell, null, direction)
-                debugInfo("[SLIDE] " + direction + ": correctSide=" + correctSide)
                 if (correctSide) {
                     var actions = []
                     push(actions, new Action(Action.ACTION_DEBUFF, -1, slideChip, _myCrystalCell, this._target))
-                    debugInfo("[SLIDE] SUCCESS: " + direction + " from current position!")
                     return actions
                 }
             }
 
-            // Need to reposition — find valid positioning cell
             var posCell = this.findSlidePositionCell(null, direction, mp)
-            debugInfo("[SLIDE] " + direction + ": findSlidePositionCell=" + posCell)
             if (posCell != null && posCell != -1) {
                 var moveCost = getGraphMPCost(posCell)
                 if (moveCost != null && moveCost < 999 && moveCost <= mp) {
                     var actions = []
                     push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, posCell, this._target))
                     push(actions, new Action(Action.ACTION_DEBUFF, -1, slideChip, _myCrystalCell, this._target))
-                    debugInfo("[SLIDE] SUCCESS: " + direction + " with move to " + posCell)
                     return actions
                 }
             }
         }
 
-        debugInfo("[SLIDE] FAILED: no direction worked")
         return null
     }
 
@@ -2389,7 +2163,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var onSameLine = isOnSameLine(playerCell, _myCrystalCell)
         if (!onSameLine || distToCrystal == null) return null
 
-        // Try both directions
         var directions = [primaryDir]
         var altDir = (primaryDir == "pull") ? "push" : "pull"
         push(directions, altDir)
@@ -2427,9 +2200,8 @@ class ScenarioCombos extends ScenarioHelpers {
         if (_usedInversion) return null
 
         var distToAxis = getDistanceToAxis(null)
-        if (distToAxis <= 8) return null  // Not far enough to justify inversion
+        if (distToAxis <= 8) return null
 
-        // Check if CHIP_INVERSION is equipped
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_INVERSION)) return null
 
         var chipCost = getCachedChipCost(CHIP_INVERSION)
@@ -2439,17 +2211,13 @@ class ScenarioCombos extends ScenarioHelpers {
         var playerCell = this._player._cellPos
         var dist = getCellDistance(playerCell, _myCrystalCell)
 
-        // CHIP_INVERSION range: 1-14, requires LOS
         if (dist != null && dist >= 1 && dist <= 14 && lineOfSight(playerCell, _myCrystalCell)) {
-            // Already in range
             push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_INVERSION, _myCrystalCell, this._target))
             return actions
         }
 
-        // Need to approach crystal first
         if (mp <= 0) return null
 
-        // Move toward crystal
         var reachableCells = getReachableCells()
         var bestCell = -1
         var bestDist = 999
@@ -2486,7 +2254,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpBudget = tp
         var mpBudget = mp
 
-        // Optionally use Leather Boots for extra MP
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
             getCooldown(CHIP_LEATHER_BOOTS, this._player._id) == 0 &&
             tpBudget >= getCachedChipCost(CHIP_LEATHER_BOOTS)) {
@@ -2495,7 +2262,6 @@ class ScenarioCombos extends ScenarioHelpers {
             mpBudget += 2
         }
 
-        // Try both directions — primary first, then alternate
         var directions = [primaryDir]
         var altDir = (primaryDir == "pull") ? "push" : "pull"
         push(directions, altDir)
@@ -2504,14 +2270,12 @@ class ScenarioCombos extends ScenarioHelpers {
             var slideChip = (direction == "pull") ? CHIP_GRAPPLE : CHIP_BOXING_GLOVE
             if (!mapContainsKey(this._arsenal.playerEquippedChips, slideChip)) continue
 
-            // Find positioning cell reachable this turn
             var posCell = this.findSlidePositionCell(null, direction, mpBudget)
             if (posCell != null && posCell != -1) {
                 push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, posCell, this._target))
                 if (count(actions) > 0) return actions
             }
 
-            // Fallback: move toward the IDEAL slide position for this direction
             var idealCell = findIdealSlideCell(null, direction, this._player._cellPos)
             if (idealCell != -1) {
                 push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, idealCell, this._target))
@@ -2519,7 +2283,6 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        // Last resort: move toward crystal cell
         var approachCell = this.getApproachEnemyCell(mpBudget)
         if (approachCell != null && approachCell != -1) {
             push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target))
@@ -2533,7 +2296,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var actions = []
         var tpBudget = tp
 
-        // Use available defensive buffs
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS) &&
             getCooldown(CHIP_FORTRESS, this._player._id) == 0 &&
             tpBudget >= getCachedChipCost(CHIP_FORTRESS)) {
@@ -2555,7 +2317,6 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= getCachedChipCost(CHIP_ARMORING)
         }
 
-        // Heal if needed
         var hpRatio = this._player._currHealth / this._player._maxHealth
         if (hpRatio < 0.8) {
             var healAction = this.getHealingAction(tpBudget, 0.8)
@@ -2567,10 +2328,6 @@ class ScenarioCombos extends ScenarioHelpers {
         if (count(actions) > 0) return actions
         return null
     }
-
-    // =========================================================================
-    // === Boss PUZZLE Helpers ===
-    // =========================================================================
 
     checkCorrectSide(playerCell, crystal, direction) {
         var pcx = getCellX(playerCell)
@@ -2597,8 +2354,6 @@ class ScenarioCombos extends ScenarioHelpers {
     }
 
     findSlidePositionCell(crystal, direction, mpBudget) {
-        // Find a cell on the same line as the crystal, within grapple/boxing_glove range,
-        // on the correct side for the slide direction.
         var minDist = (direction == "pull") ? 1 : 2
         var maxDist = 8
 
@@ -2609,7 +2364,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var bestCost = 999
 
         for (var cellId in reachableCells) {
-            // Must be on same line as crystal
             if (!isOnSameLine(cellId, _myCrystalCell)) continue
 
             var dist = getCellDistance(cellId, _myCrystalCell)
@@ -2617,7 +2371,6 @@ class ScenarioCombos extends ScenarioHelpers {
 
             if (!this.checkCorrectSide(cellId, crystal, direction)) continue
 
-            // Also reject if cell is occupied by another entity
             if (isEntity(cellId) && cellId != this._player._cellPos) continue
 
             var pathCost = getGraphMPCost(cellId)

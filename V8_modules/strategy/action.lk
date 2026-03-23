@@ -30,7 +30,7 @@ class Action {
     checkpointType = ""
     continuationFn = ""
     context = null
-    bulbAIFunc = null  // Function reference for bulb AI (used by ACTION_SUMMON)
+    bulbAIFunc = null
 
     constructor(type, weaponId, chip, targetCell, targetEntity) {
         this.type = type

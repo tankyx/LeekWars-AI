@@ -4,9 +4,7 @@ global fieldMap = null
 global arsenal = null
 global player = null
 global strategy = null
-global DEBUG_SCENARIO_TRACE = false  // Enable for score breakdown logging
 
-// Time-pressure anti-draw tracking
 global __avgDamageRate = 0
 global __lastEnemyHP = -1
 global __timePressure = false
@@ -17,18 +15,15 @@ include('item.lk')
 include('item_roles.lk')
 include('game_context.lk')
 
-include('operation_tracker.lk')
-include('debug_config.lk')
-include('monte_carlo_sim.lk')
 include('kill_planning.lk')
-include('cooldown_tracker.lk')  // Must be included before scenario_generator to define POISON_PHASE globals
+include('cooldown_tracker.lk')
 include('enemy_predictor.lk')
 include('reachable_graph.lk')
 include('performance_infra.lk')
 include('cache_manager.lk')
 include('tactical_awareness.lk')
 include('weight_profiles.lk')
-include('enemy_intelligence.lk')  // After weight_profiles (needs BUILD_*), before strategic_depth (provides getEnemyProfile)
+include('enemy_intelligence.lk')
 include('strategic_depth.lk')
 include('boss_context.lk')
 
@@ -44,7 +39,6 @@ include('scenario_mutation.lk')
 
 include('strategy/base_strategy.lk')
 include('strategy/unified_strategy.lk')
-
 if (!_init) {
     init()
     _init = true
@@ -63,7 +57,6 @@ function init() {
         initBossContext()
     }
 
-    // ALWAYS use UnifiedStrategy
     var buildType = detectBuildType(player)
     var weights = getWeightsForBuild(buildType)
     if (_isBossFight && _bossPhase == "PUZZLE") {
@@ -76,20 +69,14 @@ function init() {
 }
 
 function resetTurnState() {
-    // Reset all per-turn global state to prevent stale data leaks
     clearCaches()
     clearPerformanceInfra()
-    __operation_log = []
-    __operation_totals = []
-    __debug_operation = 0
 }
 
 function main() {
-    // Reset per-turn state EVERY turn (not just turn 1)
     resetTurnState()
 
     if (getTurn() == 1) {
-        // Phase 1: Initialize adjacency map (one-time setup)
         initializeAdjacency()
 
     }
@@ -97,26 +84,18 @@ function main() {
     player.updateEntity()
     fieldMap.updateMapEntities()
 
-    // Profile all enemies (cached — only runs once per enemy)
     profileAllEnemies(fieldMap)
 
-    // Observe enemy behavior each turn (System 4: adaptive observation)
     observeEnemyBehavior(fieldMap)
 
-    // Update boss context every turn
     if (_isBossFight) updateBossContext()
 
-    // Debug: say() only works from included files, so call helper
     if (_isBossFight) bossDiag(getCell())
 
-    // PUZZLE phase: direct crystal interaction — skip ALL combat setup.
-    // Must run BEFORE expensive init (buildReachableGraph, caches, threat maps)
-    // to avoid exhausting the ops budget before reaching puzzle logic.
     if (_isBossFight && _bossPhase == "PUZZLE") {
         if (executePuzzleTurn()) return
     }
 
-    // Target selection: boss-aware override
     var target = null
     if (_isBossFight && _bossPhase == "PUZZLE") {
         target = getBossPuzzleTarget(fieldMap)
@@ -128,10 +107,8 @@ function main() {
     }
     if (target == null) target = fieldMap.getClosestEnemy()
 
-    // Update GameContext with current turn state
     updateGameContext(player, target, fieldMap)
 
-    // Phase 3: Cooldown tracking & kill planning
     if (target != null) {
         var cooldownTracker = new CooldownTracker(target)
         var enemies = getAliveEnemies()
@@ -140,24 +117,17 @@ function main() {
         }
 
         var killPlanner = new KillPlanner(arsenal, player, target)
-        var killPlan = killPlanner.updateGlobalKillPlan()
-        if (killPlan != null && mapContainsKey(killPlan, 'active') && killPlan['active']) {
-        }
+        killPlanner.updateGlobalKillPlan()
     }
 
-    // Phase 1: Build reachable graph (replaces redundant pathfinding)
     buildReachableGraph(player._cellPos, player._currMp, player, target, arsenal)
 
-    startOp()
     initializeCaches(player, target, arsenal)
-    stopOp("Initialize all caches")
 
     fieldMap.buildEnemyThreatMap()
 
     if (target != null && getOperations() < 9000000) {
-        startOp()
         buildAdversarialThreatCache(player, fieldMap.getEnemySubMap(), arsenal)
-        stopOp("Build adversarial threat cache")
     }
 
     var targetHitCell = null
@@ -167,10 +137,7 @@ function main() {
         targetHitCell = fieldMap.getBestWeaponOrChipCell();
     }
 
-    // Ops hard stop: prevent timeout by checking budget before expensive work
     if (getOperations() > 13000000) {
-        debugCritical("[OPS-HARDSTOP] Operations at " + getOperations() + " — skipping scenario engine, using fallback")
-        // Emergency: just move toward enemy and attack with best weapon
         if (target != null) {
             moveToward(target._id)
             var bestWeapon = arsenal.getHighestDamageWeapon()
@@ -182,11 +149,9 @@ function main() {
         return
     }
 
-    // Boss weight hot-swap per phase
     if (_isBossFight) {
         strategy._weights = (_bossPhase == "PUZZLE") ? BOSS_PUZZLE_WEIGHTS : BOSS_COMBAT_WEIGHTS
     }
 
-    // All strategies use unified scenario-based execution
     strategy.createAndExecuteScenario(target, targetHitCell)
 }

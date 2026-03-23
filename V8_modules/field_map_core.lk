@@ -108,7 +108,7 @@ class FieldMapCore {
                     }
                 }
                 else {
-                    
+
                     var entityName = getName(entID)
 
                     if (entityName == "graal") {
@@ -189,7 +189,7 @@ class FieldMapCore {
 
         var enemies = this.getEnemySubMap()
         for (var e in enemies) {
-            
+
             if (isDead(e._id)) continue
 
             var dist = getCellDistance(playerPos, e._cellPos)
@@ -212,7 +212,6 @@ class FieldMapCore {
         var penalizeBuffed = criteria != null && mapContainsKey(criteria, 'penalizeBuffed') ? criteria['penalizeBuffed'] : false
         var bonusForDebuffed = criteria != null && mapContainsKey(criteria, 'bonusForDebuffed') ? criteria['bonusForDebuffed'] : false
 
-        // Battle Royale mode: use enhanced target selection
         var isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
 
         var bestTarget = null
@@ -233,17 +232,13 @@ class FieldMapCore {
             var hpPercent = (enemyHP * 100) / enemyMaxHP
 
             if (isBattleRoyale) {
-                // Battle Royale formula: TargetScore = (100 - HP%) × 2 + (200 - Distance × 10) - (ThreatAtPosition × 0.5)
-                score += (100 - hpPercent) * 2  // Prioritize low HP
-                score += (200 - dist * 10)       // Penalize distance heavily
+                score += (100 - hpPercent) * 2
+                score += (200 - dist * 10)
 
-                // Penalize targets in dangerous positions (focus fire zones)
                 var threatAtEnemy = this.getThreatAtCell(e._cellPos)
                 var threatPenalty = threatAtEnemy * 0.5
                 score -= threatPenalty
 
-                debugDetail("[TARGET-BR] " + getName(e._id) + ": hp=" + hpPercent + "% dist=" + dist +
-                      " threat=" + floor(threatAtEnemy) + " score=" + floor(score))
             } else if (priorityMode == "hp") {
 
                 score += (100 - hpPercent) * 2
@@ -294,9 +289,6 @@ class FieldMapCore {
             }
         }
 
-        if (bestTarget != null) {
-        }
-
         return bestTarget
     }
 
@@ -307,7 +299,7 @@ class FieldMapCore {
 
         var chests = this.getChestSubMap()
         for (var c in chests) {
-            
+
             if (isDead(c._id)) continue
 
             var dist = getCellDistance(playerPos, c._cellPos)
@@ -361,6 +353,32 @@ class FieldMapCore {
         return cells
     }
 
+    wouldAoEHitCell(centerCell, aoeType, shooterCell, checkCell) {
+        if (aoeType == AREA_POINT) return checkCell == centerCell
+        if (checkCell == centerCell) return true
+
+        var dist = getCellDistance(centerCell, checkCell)
+        if (dist == null) return false
+
+        if (aoeType == AREA_CIRCLE_1 || aoeType == AREA_PLUS_1) return dist <= 1
+        if (aoeType == AREA_CIRCLE_2) return dist <= 2
+        if (aoeType == AREA_CIRCLE_3) return dist <= 3
+
+        if (aoeType == AREA_PLUS_2) return dist <= 2
+        if (aoeType == AREA_PLUS_3) return dist <= 3
+
+        if (aoeType == AREA_X_1) return dist <= 1
+        if (aoeType == AREA_X_2) return dist <= 2
+        if (aoeType == AREA_X_3) return dist <= 3
+
+        if (aoeType == AREA_SQUARE_1) return dist <= 1
+        if (aoeType == AREA_SQUARE_2) return dist <= 2
+
+        if (aoeType == AREA_LASER_LINE) return false
+
+        return false
+    }
+
     getAoEAffectedCells(centerCell, aoeType, shooterCell = -1) {
         var affected = []
 
@@ -385,7 +403,7 @@ class FieldMapCore {
                 }
             }
         }
-        
+
         else if (aoeType == AREA_PLUS_1 || aoeType == AREA_PLUS_2 || aoeType == AREA_PLUS_3) {
             var radius = (aoeType == AREA_PLUS_1) ? 1 : ((aoeType == AREA_PLUS_2) ? 2 : 3)
             for (var d = 1; d <= radius; d++) {
@@ -400,7 +418,7 @@ class FieldMapCore {
                 }
             }
         }
-        
+
         else if (aoeType == AREA_X_1 || aoeType == AREA_X_2 || aoeType == AREA_X_3) {
             var radius = (aoeType == AREA_X_1) ? 1 : ((aoeType == AREA_X_2) ? 2 : 3)
             var up_right_offset = FieldMapCore.x_offset - FieldMapCore.y_offset
@@ -419,7 +437,7 @@ class FieldMapCore {
                 }
             }
         }
-        
+
         else if (aoeType == AREA_SQUARE_1 || aoeType == AREA_SQUARE_2) {
             var radius = (aoeType == AREA_SQUARE_1) ? 1 : 2
             for (var dx = -radius; dx <= radius; dx++) {
@@ -432,22 +450,22 @@ class FieldMapCore {
                 }
             }
         }
-        
+
         else if (aoeType == AREA_LASER_LINE) {
             if (shooterCell != -1 && shooterCell != centerCell) {
-                
+
                 var lineCells = this.getCellsInLine(shooterCell, centerCell)
                 if (lineCells != null) {
                     for (var i = 0; i < count(lineCells); i++) {
                         var c = lineCells[i]
-                        
+
                         if (c != shooterCell && c != centerCell) {
                             push(affected, c)
                         }
                     }
                 }
             }
-            
+
         }
 
         return affected
@@ -472,8 +490,6 @@ class FieldMapCore {
         return hitEnemies
     }
 
-    // Stub method - overridden in FieldMapTactical
-    // Returns threat level at a given cell (0 if not implemented)
     getThreatAtCell(cellId) {
         return 0
     }

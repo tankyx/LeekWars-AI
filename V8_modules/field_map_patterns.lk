@@ -33,13 +33,13 @@ class FieldMapPatterns extends FieldMapCore {
                 } else if (dir == 3) {
                     curCell = cell - x_offset * dist
                 }
-                
+
                 var actualDist = getCellDistance(cell, curCell)
                 if (actualDist == null || actualDist < minR || actualDist > maxR) continue
 
                 var _hasLOS = lineOfSight(cell, curCell)
                 if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
-                    
+
                     this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                 }
             }
@@ -60,13 +60,13 @@ class FieldMapPatterns extends FieldMapCore {
                 } else if (dir == 3) {
                     curCell = cell + up_left_offset * dist
                 }
-                
+
                 var actualDist = getCellDistance(cell, curCell)
                 if (actualDist == null || actualDist < minR || actualDist > maxR) continue
 
                 var _hasLOS = lineOfSight(cell, curCell)
                 if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
-                    
+
                     this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                 }
             }
@@ -91,7 +91,7 @@ class FieldMapPatterns extends FieldMapCore {
                     var curCell = cell + FieldMapPatterns.x_offset * dx + FieldMapPatterns.y_offset * dy
                     var _hasLOS = lineOfSight(cell, curCell)
                     if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
-                        
+
                         this.updateHitCells(hitCells, curCell, weapon, chip, cell)
                     }
                 }
@@ -120,12 +120,9 @@ class FieldMapPatterns extends FieldMapCore {
             return candidates
         }
 
-        // Global aim optimization: Scan all enemy positions and area around them
-        // instead of just small radius around primary target
         var enemies = this.getEnemySubMap()
-        var processedCells = [:]  // Track cells we've already added
+        var processedCells = [:]
 
-        // Add all enemy positions as candidates
         for (var e in mapValues(enemies)) {
             if (!isDead(e._id) && !mapContainsKey(processedCells, e._cellPos)) {
                 push(candidates, e._cellPos)
@@ -133,11 +130,10 @@ class FieldMapPatterns extends FieldMapCore {
             }
         }
 
-        // Expand around each enemy based on AoE size
         var aoeRadius = 1
         if (aoeType == AREA_CIRCLE_3 || aoeType == AREA_PLUS_3 ||
             aoeType == AREA_X_3 || aoeType == AREA_SQUARE_2) {
-            aoeRadius = 3  // Larger expansion for bigger AoE
+            aoeRadius = 3
         } else if (aoeType == AREA_CIRCLE_2 || aoeType == AREA_PLUS_2) {
             aoeRadius = 2
         }
@@ -168,9 +164,9 @@ class FieldMapPatterns extends FieldMapCore {
     }
 
     findOptimalAimPoint(shooterCell, item, isWeapon, primaryTarget) {
-        
+
         if (item._aoeType == AREA_POINT) {
-            
+
             var enemies = this.getEnemySubMap()
             var enemiesArray = mapValues(enemies)
             var result = arsenal.calculateMultiEnemyDamage(shooterCell, primaryTarget._cellPos, item._id, enemiesArray)
@@ -198,7 +194,7 @@ class FieldMapPatterns extends FieldMapCore {
         var bestHitCount = 0
 
         for (var aimCell in aimCandidates) {
-            
+
             var dist = getCellDistance(shooterCell, aimCell)
             if (dist == null || dist < item._minRange || dist > item._maxRange) continue
             if (!lineOfSight(shooterCell, aimCell)) continue
@@ -345,7 +341,6 @@ class FieldMapPatterns extends FieldMapCore {
         if (count(multiHitCells) > 0) {
             for (var mh in multiHitCells) {
             }
-        } else {
         }
 
         var target = null
@@ -405,9 +400,6 @@ class FieldMapPatterns extends FieldMapCore {
                 }
             }
 
-            if (otkoCount > 0) {
-            } else {
-            }
         }
 
         this._damageMapCache = this.damageMap
@@ -442,7 +434,6 @@ class FieldMapPatterns extends FieldMapCore {
             }
 
             for (var chipId in cellData.usableChips) {
-                // Skip buff/heal/utility chips
                 if (this.isBuffChip(chipId)) continue
 
                 var chip = arsenal.playerEquippedChips[chipId]
@@ -473,26 +464,20 @@ class FieldMapPatterns extends FieldMapCore {
     }
 
     integrateEquippedItemsIntoDamageMap(oppCell) {
-        // Phase 1: Use reachable graph if available (filters to 60-120 cells)
         var reachableCells = getReachableCells()
         var useGraph = count(reachableCells) > 0
-
-        if (useGraph) {
-        }
 
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
             var wObj = arsenal.playerEquippedWeapons[wid]
             var listIDs = []
 
             if (useGraph) {
-                // Optimized: Only check reachable cells (still use buildSingleItemHitMap)
                 var localWeaponMap = [:]
                 localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
 
                 for (var cellRef in localWeaponMap) {
                     if (cellRef._isObstacle) continue
 
-                    // Only add if cell is reachable
                     var cellId = cellRef._id
                     if (mapContainsKey(ReachableGraph, cellId)) {
                         this.updateHitCells(this.damageMap, cellId, wObj, null, oppCell)
@@ -500,7 +485,6 @@ class FieldMapPatterns extends FieldMapCore {
                     }
                 }
             } else {
-                // Fallback: Original scan-based approach
                 var localWeaponMap = [:]
                 localWeaponMap = this.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, true)
                 for (var cellRef in localWeaponMap) {
@@ -516,20 +500,17 @@ class FieldMapPatterns extends FieldMapCore {
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
 
-            // Skip buff/heal/utility chips (they don't need hitmaps)
             if (this.isBuffChip(cid)) continue
 
             var listCID = []
 
             if (useGraph) {
-                // Optimized: Only check reachable cells (still use buildSingleItemHitMap)
                 var localChipMap = [:]
                 localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
 
                 for (var cellRef2 in localChipMap) {
                     if (cellRef2._isObstacle) continue
 
-                    // Only add if cell is reachable
                     var cellId = cellRef2._id
                     if (mapContainsKey(ReachableGraph, cellId)) {
                         this.updateHitCells(this.damageMap, cellId, null, chipObj, oppCell)
@@ -537,7 +518,6 @@ class FieldMapPatterns extends FieldMapCore {
                     }
                 }
             } else {
-                // Fallback: Original scan-based approach
                 var localChipMap = [:]
                 localChipMap = this.buildSingleItemHitMap(localChipMap, oppCell, chipObj, false)
                 for (var cellRef2 in localChipMap) {
@@ -576,13 +556,6 @@ class FieldMapPatterns extends FieldMapCore {
         var hitEnemies = optimalAim['enemies']
         var enemyCount = optimalAim['hitCount']
 
-        if (optimalAimCell != targetCell) {
-            debugDetail("[AoE-OPT] " +
-                  (weapon != null ? getWeaponName(itemId) : getChipName(itemId)) +
-                  ": aim " + optimalAimCell + " vs target " + targetCell +
-                  " (damage: " + floor(totalDamage) + ", hits " + enemyCount + " enemies)")
-        }
-
         if (mapContainsKey(hitCells, curCell)) {
             var cell = hitCells[curCell]
 
@@ -596,20 +569,20 @@ class FieldMapPatterns extends FieldMapCore {
 
                     mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
                 }
-                
+
                 var already = false
                 for (var w in cell._weaponsList) {
                     if (w._id == weapon._id) { already = true; break }
                 }
                 if (!already) {
                     push(cell._weaponsList, weapon)
-                    
+
                     mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
                 }
             } else {
                 cell._chipDamage += totalDamage
                 cell._totalAoEDamage += totalDamage
-                
+
                 for (var e in hitEnemies) {
                     var found = false
                     for (var existing in cell._enemiesHit) {
@@ -625,7 +598,7 @@ class FieldMapPatterns extends FieldMapCore {
                 mapPut(cell._chipOptimalAims, itemId, optimalAimCell)
             }
         } else {
-            
+
             var newCell = new Cell(curCell, false, getEntityOnCell(curCell),
                                    weapon != null ? totalDamage : 0,
                                    chip != null ? totalDamage : 0,
@@ -636,12 +609,12 @@ class FieldMapPatterns extends FieldMapCore {
 
             if (weapon != null) {
                 push(newCell._weaponsList, weapon)
-                
+
                 mapPut(newCell._weaponOptimalAims, itemId, optimalAimCell)
             }
             if (chip != null) {
                 push(newCell._chipsList, chip)
-                
+
                 mapPut(newCell._chipOptimalAims, itemId, optimalAimCell)
             }
 

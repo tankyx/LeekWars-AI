@@ -1,17 +1,11 @@
-// ========================================
-// Enemy Intelligence Module
-// ========================================
-// Profiles enemy build, capabilities, and patterns.
-// Called once per enemy on first sighting; data used by
-// weight adaptation, scorer, and predictor modules.
 
-global __enemyProfile = [:]   // enemyId -> profile map
-global __enemyObservations = [:]  // enemyId -> observation map (turn-by-turn tracking)
+global __enemyProfile = [:]
+global __enemyObservations = [:]
 
 function profileEnemy(enemy) {
     if (enemy == null) return null
     var eid = enemy._id
-    if (mapContainsKey(__enemyProfile, eid)) return null  // Already profiled
+    if (mapContainsKey(__enemyProfile, eid)) return null
 
     var chips = enemy._chips
     var weapons = enemy._weapons
@@ -24,10 +18,8 @@ function profileEnemy(enemy) {
 
     var profile = [:]
 
-    // Detect enemy build type
     profile['buildType'] = detectEnemyBuildType(str, mag, agi, sci, res)
 
-    // Estimated max single-turn burst damage from weapons
     var maxBurst = 0
     var bestRange = 0
     var bestRangeDmg = 0
@@ -42,19 +34,17 @@ function profileEnemy(enemy) {
         }
         var cost = getWeaponCost(weaponId)
         if (cost != null && cost > 0) {
-            var uses = floor(12 / cost)  // Assume 12 TP budget
+            var uses = floor(12 / cost)
             var totalDmg = weaponDmg * uses
             if (totalDmg > maxBurst) {
                 maxBurst = totalDmg
             }
         }
-        // Track preferred range (weapon with highest per-hit damage)
         if (weaponDmg > bestRangeDmg) {
             bestRangeDmg = weaponDmg
             bestRange = getWeaponMaxRange(weaponId)
         }
     }
-    // Add chip burst damage (MAG-based)
     for (var chipId in chips) {
         var effects = getChipEffects(chipId)
         if (effects == null) continue
@@ -68,7 +58,6 @@ function profileEnemy(enemy) {
     profile['maxBurstDamage'] = floor(maxBurst)
     profile['preferredRange'] = bestRange
 
-    // Capability detection for counter-strategy system
     var hasShield = false
     var hasHeal = false
     var hasPoison = false
@@ -97,13 +86,6 @@ function profileEnemy(enemy) {
 
     __enemyProfile[eid] = profile
 
-    debugInfo("[ENEMY-INTEL] Profiled e" + eid +
-        " build=" + profile['buildType'] +
-        " burst=" + profile['maxBurstDamage'] +
-        " range=" + profile['preferredRange'] +
-        " shield=" + hasShield + " heal=" + hasHeal +
-        " poison=" + hasPoison + " reflect=" + hasReflect +
-        " tank=" + profile['isTank'] + " burst_build=" + profile['isBurstBuild'])
 }
 
 function detectEnemyBuildType(str, mag, agi, sci, res) {
@@ -133,20 +115,16 @@ function profileAllEnemies(fieldMap) {
     }
 }
 
-// Check if enemy can move into attack range within turnsWindow turns
-// Uses enemy profile preferredRange if available, else scans weapons
 function predictEnemyCanAttackWithin(playerPos, enemy, turnsWindow) {
-    if (enemy == null) return true  // Assume yes if no enemy
+    if (enemy == null) return true
     var dist = getCellDistance(playerPos, enemy._cellPos)
     if (dist == null) return true
 
-    // Get enemy's max weapon range
-    var maxRange = 8  // Default fallback
+    var maxRange = 8
     var profile = getEnemyProfile(enemy._id)
     if (profile != null && profile['preferredRange'] != null && profile['preferredRange'] > 0) {
         maxRange = profile['preferredRange']
     } else {
-        // Scan enemy weapons for max range
         var weapons = getWeapons(enemy._id)
         if (weapons != null) {
             for (var wid in weapons) {
@@ -157,15 +135,11 @@ function predictEnemyCanAttackWithin(playerPos, enemy, turnsWindow) {
     }
 
     var enemyMP = enemy._currMp
-    if (enemyMP == null || enemyMP <= 0) enemyMP = 7  // Default fallback
+    if (enemyMP == null || enemyMP <= 0) enemyMP = 7
 
     var gapToClose = max(0, dist - maxRange)
     return gapToClose <= (enemyMP * turnsWindow)
 }
-
-// ========================================
-// Adaptive Enemy Observation (System 4)
-// ========================================
 
 function observeEnemyBehavior(fieldMap) {
     var currentTurn = getTurn()
@@ -187,12 +161,10 @@ function observeEnemyBehavior(fieldMap) {
         var obs = __enemyObservations[eid]
         obs['turnsObserved'] = obs['turnsObserved'] + 1
 
-        // Track HP trend (EMA of HP changes — positive = gaining HP)
         var hpChange = enemy._currHealth - obs['lastHP']
         obs['hpTrend'] = obs['hpTrend'] * 0.7 + hpChange * 0.3
         obs['lastHP'] = enemy._currHealth
 
-        // Track shielding behavior
         if (enemy.hasEffect(EFFECT_RELATIVE_SHIELD) || enemy.hasEffect(EFFECT_ABSOLUTE_SHIELD)) {
             obs['timesShielded'] = obs['timesShielded'] + 1
         }

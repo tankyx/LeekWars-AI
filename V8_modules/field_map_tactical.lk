@@ -1,7 +1,7 @@
 include('field_map_patterns.lk')
 
 class FieldMap extends FieldMapPatterns {
-    
+
     _enemyAccessCache = []
     _enemyAccessCacheTurn = -1
     _enemyAccessCacheIds = []
@@ -10,10 +10,9 @@ class FieldMap extends FieldMapPatterns {
     _threatMapCacheTurn = -1
     _threatMapCacheEnemyPositions = [:]
 
-    // Battle Royale cumulative threat tracking
-    _lobbyThreatMap = [:]           // Total damage sum
-    _lobbyThreatSources = [:]       // Number of enemies that can hit each cell
-    _isBattleRoyale = false         // Set externally based on enemy count
+    _lobbyThreatMap = [:]
+    _lobbyThreatSources = [:]
+    _isBattleRoyale = false
 
     private static board_cell_count = 613
 
@@ -27,7 +26,6 @@ class FieldMap extends FieldMapPatterns {
         var mp = entity._currMp
         var origin = entity._cellPos
 
-        // For player: Use precomputed ReachableGraph (O(n) where n = reachable cells)
         if (entity._id == getEntity()) {
             var reachable = getReachableCells()
             for (var cellId in reachable) {
@@ -36,7 +34,6 @@ class FieldMap extends FieldMapPatterns {
             return acc
         }
 
-        // For enemies: Fall back to full scan (cannot use player's ReachableGraph)
         for (var cid = 0; cid < FieldMap.board_cell_count; cid++) {
             if (isObstacle(cid)) continue
             var approx = getCellDistance(origin, cid)
@@ -107,7 +104,7 @@ class FieldMap extends FieldMapPatterns {
                 distMetric = getCellDistance(cand, targetPos)
                 if (distMetric == null) continue
             } else {
-                
+
                 var closestEnemyDist = 999
                 for (var ea = 0; ea < count(enemyAccess); ea++) {
                     var enemyRef = enemyAccess[ea]['enemy']
@@ -120,7 +117,7 @@ class FieldMap extends FieldMapPatterns {
 
             var canAttack = false
             if (isApproachMode) {
-                
+
                 if (distMetric > currentDist) {
                     if (mapContainsKey(this.damageMap, cand)) {
                         var cellRef = this.damageMap[cand]
@@ -144,7 +141,7 @@ class FieldMap extends FieldMapPatterns {
             if (bestCell == -1) {
                 shouldUpdate = true
             } else if (isApproachMode) {
-                
+
                 if (canAttack && !bestCanAttack) {
                     shouldUpdate = true
                 } else if (canAttack == bestCanAttack) {
@@ -156,7 +153,7 @@ class FieldMap extends FieldMapPatterns {
                     }
                 }
             } else {
-                
+
                 if (danger < bestDanger ||
                     (danger == bestDanger && distMetric > bestDist) ||
                     (danger == bestDanger && distMetric == bestDist && coverScore > bestCover)) {
@@ -335,7 +332,6 @@ class FieldMap extends FieldMapPatterns {
             target
         )
 
-
         return ['cell': bestCell, 'damage': bestDamage, 'killProbability': killProb]
     }
 
@@ -497,17 +493,12 @@ class FieldMap extends FieldMapPatterns {
             return
         }
 
-        // Detect Battle Royale mode using built-in function
         this._isBattleRoyale = (getFightType() == FIGHT_TYPE_BATTLE_ROYALE)
-        if (this._isBattleRoyale) {
-        }
 
-        // Battle Royale optimization: Sort enemies by distance, limit detailed calculation
         if (this._isBattleRoyale && enemyCount > 3) {
             var playerPos = player._cellPos
             var enemyList = []
 
-            // Build array with distance info
             for (var eid in mapKeys(enemies)) {
                 var enemy = enemies[eid]
                 if (isDead(eid)) continue
@@ -518,7 +509,6 @@ class FieldMap extends FieldMapPatterns {
                 push(enemyList, ['enemy': enemy, 'distance': dist])
             }
 
-            // Sort by distance (bubble sort for simplicity)
             for (var i = 0; i < count(enemyList) - 1; i++) {
                 for (var j = 0; j < count(enemyList) - i - 1; j++) {
                     if (enemyList[j]['distance'] > enemyList[j + 1]['distance']) {
@@ -529,7 +519,6 @@ class FieldMap extends FieldMapPatterns {
                 }
             }
 
-            // Process enemies with distance-based budget
             var processed = 0
             for (var entry in enemyList) {
                 var enemy = entry['enemy']
@@ -538,22 +527,18 @@ class FieldMap extends FieldMapPatterns {
                 this._threatMapCacheEnemyPositions[enemy._id] = enemy._cellPos
 
                 if (dist > 20) {
-                    // Skip very distant enemies
                     continue
                 }
 
                 if (processed < 3 || dist <= 10) {
-                    // Full computation for 3 closest or close enemies
                     this.addEnemyThreatToMap(enemy)
                 } else {
-                    // Simplified estimation for distant enemies
                     this.addSimplifiedThreatEstimate(enemy, dist)
                 }
 
                 processed++
             }
         } else {
-            // Standard 1v1 or low-enemy-count processing
             var totalEnemyMP = 0
             for (var eid in mapKeys(enemies)) {
                 var enemy = enemies[eid]
@@ -579,8 +564,6 @@ class FieldMap extends FieldMapPatterns {
     }
 
     addSimplifiedThreatEstimate(enemy, enemyDist) {
-        // Fast heuristic: Assume enemy has weapons with range ~8, damage ~300
-        // Only mark cells within approximate threat range
         var enemyPos = enemy._cellPos
         var estimatedRange = 8 + enemy._currMp
         var estimatedDamage = 300
@@ -592,9 +575,7 @@ class FieldMap extends FieldMapPatterns {
             var distToCell = getCellDistance(enemyPos, cellId)
             if (distToCell == null || distToCell > estimatedRange) continue
 
-            // Only mark cells within plausible attack range
             if (distToCell <= estimatedRange) {
-                // Legacy 1v1 mode
                 if (!mapContainsKey(this.enemyThreatMap, cellId)) {
                     this.enemyThreatMap[cellId] = 0
                 }
@@ -602,7 +583,6 @@ class FieldMap extends FieldMapPatterns {
                     this.enemyThreatMap[cellId] = estimatedDamage
                 }
 
-                // Battle Royale mode
                 if (this._isBattleRoyale) {
                     if (!mapContainsKey(this._lobbyThreatMap, cellId)) {
                         this._lobbyThreatMap[cellId] = 0
@@ -620,10 +600,8 @@ class FieldMap extends FieldMapPatterns {
         var enemyMP = enemy._currMp
         var enemyWeapons = getWeapons(enemy._id)
 
-
         var totalThreats = 0
 
-        // Optimization: Only calculate threat for cells player can actually reach
         var reachableCells = getReachableCells()
         if (count(reachableCells) == 0) {
             return
@@ -637,9 +615,7 @@ class FieldMap extends FieldMapPatterns {
 
             var damage = this.estimateEnemyWeaponDamage(weaponId, enemy)
 
-            // Iterate only over reachable cells instead of full grid scan
             for (var cellId in reachableCells) {
-                // Safety valve (raised to 12M for deeper search)
                 if (getOperations() > 12000000) {
                     return
                 }
@@ -649,7 +625,6 @@ class FieldMap extends FieldMapPatterns {
 
                 if (dist < minRange && dist < enemyMP) continue
 
-                // Legacy 1v1 mode: track max damage
                 if (!mapContainsKey(this.enemyThreatMap, cellId)) {
                     this.enemyThreatMap[cellId] = 0
                 }
@@ -658,7 +633,6 @@ class FieldMap extends FieldMapPatterns {
                     totalThreats++
                 }
 
-                // Battle Royale mode: accumulate total damage + sources
                 if (this._isBattleRoyale) {
                     if (!mapContainsKey(this._lobbyThreatMap, cellId)) {
                         this._lobbyThreatMap[cellId] = 0
@@ -723,7 +697,7 @@ class FieldMap extends FieldMapPatterns {
     }
 
     estimateEnemyWeaponDamage(weaponId, enemy) {
-        
+
         var effects = getWeaponEffects(weaponId)
         var minDmg = 0
         var maxDmg = 0
@@ -744,11 +718,11 @@ class FieldMap extends FieldMapPatterns {
         var enemyWis = enemy._wisdom
 
         if (enemyStr != null && enemyStr > 0) {
-            
+
             var scaledDmg = baseDmg * (1 + enemyStr / 100)
             return scaledDmg
         } else if (enemyMag != null && enemyMag > 0) {
-            
+
             var scaledDmg = baseDmg * (1 + enemyMag / 100)
             return scaledDmg
         }
@@ -757,12 +731,10 @@ class FieldMap extends FieldMapPatterns {
     }
 
     getThreatAtCell(cellId) {
-        // Battle Royale mode: use cumulative threat with exponential penalty
         if (this._isBattleRoyale) {
             return this.getLobbyThreatAtCell(cellId)
         }
 
-        // Legacy 1v1 mode: max damage from single enemy
         if (mapContainsKey(this.enemyThreatMap, cellId)) {
             return this.enemyThreatMap[cellId]
         }
@@ -777,8 +749,6 @@ class FieldMap extends FieldMapPatterns {
         var totalThreat = this._lobbyThreatMap[cellId]
         var sources = this._lobbyThreatSources[cellId]
 
-        // Exponential penalty for being in multiple lines of sight
-        // Being hit by 1 enemy = 1.0x, 2 enemies = 1.2x, 3 enemies = 1.4x, etc.
         var focusFireMultiplier = 1.0 + (sources * 0.2)
 
         return totalThreat * focusFireMultiplier
@@ -856,7 +826,6 @@ class FieldMap extends FieldMapPatterns {
             var ourDamage = cell._totalDamage
             var threat = this.getThreatAtCell(cell._id)
 
-            // Calculate multi-target LoS bonus (Phase 4)
             var multiTargetBonus = this.calculateMultiTargetBonus(cell._id)
 
             var score = ourDamage - (threat * threatWeight) + multiTargetBonus
@@ -876,7 +845,6 @@ class FieldMap extends FieldMapPatterns {
         return best
     }
 
-    // Phase 4: Multi-target LoS positioning bonus
     calculateMultiTargetBonus(cellId) {
         var enemies = this.getEnemySubMap()
         if (count(mapKeys(enemies)) <= 1) return 0
@@ -890,10 +858,8 @@ class FieldMap extends FieldMapPatterns {
             var enemy = enemies[eid]
             if (enemy == null || isDead(eid)) continue
 
-            // Check LoS from cell to enemy
             if (!lineOfSight(cellId, enemy._cellPos)) continue
 
-            // Classify enemy type
             if (isBulb(enemy)) {
                 hasLoSToBulb = true
                 bulbCount++
@@ -905,7 +871,6 @@ class FieldMap extends FieldMapPatterns {
 
         var bonus = 0
 
-        // Bonus for having LoS to both types (AoE opportunity)
         if (hasLoSToBulb && hasLoSToLeek) {
             bonus += 500
         } else if (hasLoSToBulb) {
@@ -914,7 +879,6 @@ class FieldMap extends FieldMapPatterns {
             bonus += 200
         }
 
-        // Additional bonus for multiple targets
         if (bulbCount + leekCount >= 3) {
             bonus += 300
         }
@@ -938,27 +902,20 @@ class FieldMap extends FieldMapPatterns {
         return (x1 == x2 || y1 == y2)
     }
 
-    // =========================================================================
-    // Beam Search Helper Methods
-    // =========================================================================
-
-    // Get top N tactical cells sorted by score (damage - threat)
     getTopTacticalCells(limit, playerHP, playerMaxHP) {
         var hpRatio = playerHP / playerMaxHP
-        var threatWeight = 0.3  // Default: mostly offensive
+        var threatWeight = 0.3
 
-        // Adjust threat weight based on HP
         if (hpRatio < 0.4) {
-            threatWeight = 0.8  // Defensive when low HP
+            threatWeight = 0.8
         } else if (hpRatio < 0.7) {
-            threatWeight = 0.5  // Balanced
+            threatWeight = 0.5
         }
 
         var candidates = []
 
-        // Score all cells in damage map
         for (var cell in this.damageMap) {
-            if (cell._totalDamage <= 0) continue  // Skip useless cells
+            if (cell._totalDamage <= 0) continue
 
             var threat = this.getThreatAtCell(cell._id)
             var score = cell._totalDamage - (threat * threatWeight)
@@ -972,12 +929,10 @@ class FieldMap extends FieldMapPatterns {
             ])
         }
 
-        // Sort by score descending
         arraySort(candidates, function(a, b) {
             return b['score'] - a['score']
         })
 
-        // Return top N
         var result = []
         var actualLimit = min(limit, count(candidates))
         for (var i = 0; i < actualLimit; i++) {
@@ -987,7 +942,6 @@ class FieldMap extends FieldMapPatterns {
         return result
     }
 
-    // Get safest reachable cell (lowest threat)
     getSafestCell(fromCell) {
         var minThreat = 99999
         var safestCell = -1

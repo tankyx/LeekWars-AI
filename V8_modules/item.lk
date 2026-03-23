@@ -68,9 +68,6 @@ class Arsenal {
     playerEquippedWeapons = [:]
     playerEquippedChips = [:]
 
-    // Helper: Convert database effects map to API effects array format
-    // Database: [effect_type: [min, max, turns], ...]
-    // API: [[effect_type, min, max, turns], ...]
     convertEffectsMapToArray(effectsMap) {
         var effectsArray = []
         for (var effectType in mapKeys(effectsMap)) {
@@ -89,22 +86,19 @@ class Arsenal {
             var weaponData = getWeaponData(w)
 
             if (weaponData != null) {
-                // Use database data
                 dbCount++
-                // Format: [name, min_range, max_range, effects, tp_cost, launch_type, area]
                 var effects = this.convertEffectsMapToArray(weaponData[3])
                 mapPut(this.weaponsList, w, new Weapon(
-                    w,                  // id
-                    weaponData[1],      // min_range
-                    weaponData[2],      // max_range
-                    effects,            // effects (converted to array)
-                    weaponData[4],      // tp_cost
-                    1,                  // max_use (always 1 for weapons)
-                    weaponData[5],      // launch_type
-                    weaponData[6]       // area
+                    w,
+                    weaponData[1],
+                    weaponData[2],
+                    effects,
+                    weaponData[4],
+                    1,
+                    weaponData[5],
+                    weaponData[6]
                 ));
             } else {
-                // Fallback to API
                 apiCount++
                 mapPut(this.weaponsList, w, new Weapon(
                     w,
@@ -130,23 +124,20 @@ class Arsenal {
             var chipData = getChipData(c)
 
             if (chipData != null) {
-                // Use database data
                 dbCount++
-                // Format: [name, min_range, max_range, effects, tp_cost, launch_type, area, cooldown]
                 var effects = this.convertEffectsMapToArray(chipData[3])
                 mapPut(this.chipsList, c, new Chip(
-                    c,                  // id
-                    chipData[1],        // min_range
-                    chipData[2],        // max_range
-                    effects,            // effects (converted to array)
-                    chipData[4],        // tp_cost
-                    1,                  // max_use (always 1 for chips)
-                    chipData[5],        // launch_type
-                    chipData[6],        // area
-                    chipData[7]         // cooldown
+                    c,
+                    chipData[1],
+                    chipData[2],
+                    effects,
+                    chipData[4],
+                    1,
+                    chipData[5],
+                    chipData[6],
+                    chipData[7]
                 ));
             } else {
-                // Fallback to API
                 apiCount++
                 mapPut(this.chipsList, c, new Chip(
                     c,
@@ -181,7 +172,7 @@ class Arsenal {
     }
 
     computeAoEModifier(centerCell, targetCell, aoeType) {
-        
+
         if (aoeType == AREA_POINT) {
             return (centerCell == targetCell) ? 1.0 : 0.0
         }
@@ -199,7 +190,6 @@ class Arsenal {
 
     computeEffectsBaseDamage(effectsMap, str, mag, sci, aoeModifier = 1.0, isChip = false) {
         var total = 0
-        // Direct damage scaling: weapons use Strength, chips use Magic
         var directStat = isChip ? mag : str
         for (var e in mapKeys(effectsMap)) {
             var info = effectsMap[e]
@@ -211,7 +201,7 @@ class Arsenal {
                 var totalOverTime = avg2 * info._effectDuration
                 total += totalOverTime * (1 + (mag / 100)) * aoeModifier
             } else if (e == EFFECT_NOVA_DAMAGE) {
-                
+
                 var avgNova = (info._minEffectAmount + info._maxEffectAmount) / 2
                 total += avgNova * (1 + (sci / 100)) * aoeModifier
             }
@@ -234,7 +224,6 @@ class Arsenal {
             aoeModifier = this.computeAoEModifier(centerCell, targetCell, item._aoeType)
         }
 
-        // Direct damage scaling: weapons use Strength, chips use Magic
         var directStat = isChip ? mag : str
 
         var direct = 0
@@ -261,7 +250,7 @@ class Arsenal {
                 minDmg += minPoison
                 maxDmg += maxPoison
             } else if (e == EFFECT_NOVA_DAMAGE) {
-                
+
                 var avgNova = (info._minEffectAmount + info._maxEffectAmount) / 2
                 nova += avgNova * (1 + (sci / 100)) * aoeModifier
 
@@ -282,7 +271,7 @@ class Arsenal {
             var bd = this.getDamageBreakdown(str, mag, wis, sci, cid)
             push(arr, ['chip': chip, 'dot': bd['dot'], 'direct': bd['direct'], 'nova': bd['nova'], 'total': bd['total']])
         }
-        
+
         var sorted = []
         while (count(arr) > 0) {
             var bestIdx = 0
@@ -309,14 +298,14 @@ class Arsenal {
             }
         }
         if (count(arr) == 0) {
-            
+
             for (var wid2 in mapKeys(this.playerEquippedWeapons)) {
                 var w2 = this.playerEquippedWeapons[wid2]
                 var bd2 = this.getDamageBreakdown(str, mag, wis, sci, wid2)
                 push(arr, ['weapon': w2, 'dot': bd2['dot'], 'nova': bd2['nova'], 'direct': bd2['direct'], 'total': bd2['total']])
             }
         }
-        
+
         var sorted = []
         while (count(arr) > 0) {
             var bestIdx = 0
@@ -373,17 +362,13 @@ class Arsenal {
         var hitEnemies = []
         var breakdown = [:]
 
-        // OPTIMIZATION: Use AoE masks to check only affected cells
-        // O(m) where m = AoE size, instead of O(n) where n = all enemies
-
         var aoeType = item._aoeType
         var useOptimization = mapContainsKey(__aoePatternMasks, aoeType) &&
-                               aoeType != 4  // AREA_LASER_LINE
+                               aoeType != 4
 
         if (useOptimization) {
-            // Fast path: Check only AoE cells using occupancy map
             var mask = __aoePatternMasks[aoeType]
-            var processedEnemies = [:]  // Track to avoid duplicates
+            var processedEnemies = [:]
 
             for (var offset in mask) {
                 var checkCell = aimCell + offset
@@ -393,7 +378,6 @@ class Arsenal {
                 if (entityId == null) continue
                 if (mapContainsKey(processedEnemies, entityId)) continue
 
-                // Find this enemy in the provided enemies array
                 var enemyObj = null
                 for (var e in enemies) {
                     if (e._id == entityId && !isDead(e._id)) {
@@ -405,7 +389,6 @@ class Arsenal {
                 if (enemyObj == null) continue
                 mapPut(processedEnemies, entityId, true)
 
-                // Calculate damage with AoE falloff
                 var aoeModifier = this.computeAoEModifier(aimCell, enemyObj._cellPos, aoeType)
                 if (aoeModifier <= 0) continue
 
@@ -433,7 +416,6 @@ class Arsenal {
                 mapPut(breakdown, enemyObj._id, netDmg)
             }
         } else {
-            // Fallback: Original O(n) loop for uncommon AoE types
             for (var e in enemies) {
                 if (isDead(e._id)) continue
 
@@ -492,15 +474,15 @@ class Arsenal {
         var baseMax = 0
 
         if (chipID == CHIP_BRAMBLE) {
-            
+
             baseMin = 25
             baseMax = 25
         } else if (chipID == CHIP_MIRROR) {
-            
+
             baseMin = 5
             baseMax = 6
         } else if (chipID == CHIP_THORN) {
-            
+
             baseMin = 3
             baseMax = 4
         } else {
@@ -517,7 +499,7 @@ class Arsenal {
     }
 
     getKillProbability(itemIds, playerStr, playerMag, playerWis, playerSci, playerAgility, targetEntity) {
-        
+
         var totalDmg = 0
         for (var i = 0; i < count(itemIds); i++) {
             var bd = this.getDamageBreakdown(playerStr, playerMag, playerWis, playerSci, itemIds[i])
@@ -535,7 +517,7 @@ class Arsenal {
     }
 
     calculateNeutrinoAmplification(stacks, futureAttacks, avgWeaponDamage) {
-        
+
         var vulnPercent = stacks * 8
         var multiplier = 1 + (vulnPercent / 100.0)
 

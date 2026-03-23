@@ -13,7 +13,6 @@ class ScenarioQuickScorer {
     }
 
     quickScore(scenario) {
-        // Boss PUZZLE: simplified scoring for crystal scenarios
         if (_isBossFight && _bossPhase == "PUZZLE") {
             var qs = 0
             for (var a in scenario) {
@@ -60,8 +59,8 @@ class ScenarioQuickScorer {
 
                     if (action.chip == CHIP_GRAPPLE) push(comboSignature, "GRAPPLE")
                     if (action.chip == CHIP_INVERSION && !_isBossFight) {
-                        chipDamageActions++  // Vulnerability enables burst
-                        score += 600         // Vulnerability + position swap + heal
+                        chipDamageActions++
+                        score += 600
                     }
                 }
             }
@@ -98,18 +97,16 @@ class ScenarioQuickScorer {
             }
         }
 
-        // Efficiency-aware scoring: reward damage potential per TP, not raw TP spending
-        // Scale estimates by primary stat: weapons by STR, chips by MAG
         var str = this._player._strength
         var mag = this._player._magic
-        var weaponDmgEstimate = 400 * (1 + str / 200.0)  // STR-scaled weapon value
-        var chipDmgEstimate = 300 * (1 + mag / 200.0)    // MAG-scaled chip value
+        var weaponDmgEstimate = 400 * (1 + str / 200.0)
+        var chipDmgEstimate = 300 * (1 + mag / 200.0)
         var damageEstimate = weaponActions * weaponDmgEstimate + chipDamageActions * chipDmgEstimate
         if (tpEstimate > 0) {
             var efficiency = damageEstimate / tpEstimate
-            score += efficiency * 50  // Reward efficient TP usage
+            score += efficiency * 50
         }
-        score += damageEstimate * 0.3  // Base damage potential bonus
+        score += damageEstimate * 0.3
 
         if (hasOffensiveBuff) score += 300
         if (hasDefensiveBuff) {
@@ -202,7 +199,6 @@ class ScenarioQuickScorer {
         return indexOf(str, substr) != -1
     }
 
-    // Classify scenario into Template Family for diversity selection
     static FAMILY_OFFENSIVE = "OFFENSIVE"
     static FAMILY_DEFENSIVE = "DEFENSIVE"
     static FAMILY_COMBO = "COMBO"
@@ -231,22 +227,17 @@ class ScenarioQuickScorer {
             if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
         }
 
-        // COMBO: multi-mechanic synergy (Grapple+Attack, Buff+Poison, etc.)
         if (hasGrapple && hasAttack) return ScenarioQuickScorer.FAMILY_COMBO
         if (hasBuff && hasPoison) return ScenarioQuickScorer.FAMILY_COMBO
         if (hasTeleport && hasAttack) return ScenarioQuickScorer.FAMILY_COMBO
 
-        // DEFENSIVE: heal/hide/flee focused
         if (hasHeal && !hasAttack) return ScenarioQuickScorer.FAMILY_DEFENSIVE
         if (hasFlee || hasHide) return ScenarioQuickScorer.FAMILY_DEFENSIVE
 
-        // UTILITY: teleport escape, antidote, etc.
         if (hasTeleport && !hasAttack) return ScenarioQuickScorer.FAMILY_UTILITY
 
-        // OFFENSIVE: default for attack-heavy scenarios
         if (hasAttack) return ScenarioQuickScorer.FAMILY_OFFENSIVE
 
-        // DEFENSIVE fallback for buff-only
         if (hasBuff) return ScenarioQuickScorer.FAMILY_DEFENSIVE
 
         return ScenarioQuickScorer.FAMILY_OFFENSIVE

@@ -1,5 +1,3 @@
-// Phase 2: Policy-Based Unification - Weight Profiles
-// Build-specific scoring weights for unified scenario evaluation
 
 global BUILD_STRENGTH = 1
 global BUILD_MAGIC = 2
@@ -9,163 +7,155 @@ global BUILD_TANK_SCI = 5
 global BUILD_HYBRID = 6
 global BUILD_BRUISER_REFLECT = 7
 
-// Strength build weights - Maximize burst damage and weapon spam
 global STRENGTH_WEIGHTS = [
-    'burstDamage': 300,        // Primary focus: raw damage output
-    'weaponUses': 100,         // Secondary: weapon spam efficiency
-    'tpEfficiency': 50,        // Tertiary: TP conservation
-    'dotEffects': -50,         // Discourage: DoT chips (poor scaling)
-    'kiteDistance': 0,         // Irrelevant: no kiting strategy
-    'damageReturn': 0,         // Irrelevant: no return buffs
-    'poisonStacks': 0,         // Irrelevant: no poison synergy
-    'shieldValue': 80,         // Moderate: defensive sustainability
-    'healValue': 60,           // Moderate: emergency healing
-    'distanceToTarget': -20,   // Slight penalty: prefer close range
-    'threatReduction': 40,     // Moderate: avoid dangerous cells
-    'otkoBonus': 5000,         // Massive: prioritize kill opportunities
-    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
-    'bulbKillBonusHealer': 2500,  // Bulb targeting: healer kill bonus
-    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
-    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
-    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
+    'burstDamage': 300,
+    'weaponUses': 100,
+    'tpEfficiency': 50,
+    'dotEffects': -50,
+    'kiteDistance': 0,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 80,
+    'healValue': 60,
+    'distanceToTarget': -20,
+    'threatReduction': 40,
+    'otkoBonus': 5000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 500
 ]
 
-// Magic build weights - Maximize DoT attrition and kiting
 global MAGIC_WEIGHTS = [
-    'burstDamage': 100,        // Moderate: direct damage matters but not primary
-    'weaponUses': 0,           // Irrelevant: weapons scale poorly
-    'tpEfficiency': 50,        // Tertiary: TP conservation
-    'dotEffects': 500,         // Primary focus: poison/burn damage over time
-    'kiteDistance': 200,       // Secondary: maintain distance for safety
-    'damageReturn': 0,         // Irrelevant: no return buffs
-    'poisonStacks': 400,       // High: poison stacking synergy
-    'shieldValue': 100,        // High: fragile build needs defense
-    'healValue': 80,           // High: sustain crucial for attrition
-    'distanceToTarget': 30,    // Bonus: prefer far range
-    'threatReduction': 80,     // High: avoid close-range danger
-    'otkoBonus': 3000,         // Large: still want to close kills
-    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
-    'bulbKillBonusHealer': 3000,  // Bulb targeting: healer kill bonus (EXTRA HIGH - stops healing in attrition)
-    'bulbKillBonusBuffer': 1800,  // Bulb targeting: buffer kill bonus (high priority)
-    'bulbKillBonusAttacker': 1000,// Bulb targeting: attacker kill bonus
-    'multiTargetBonus': 400    // Multi-target LoS: moderate value (kiting style)
+    'burstDamage': 100,
+    'weaponUses': 0,
+    'tpEfficiency': 50,
+    'dotEffects': 500,
+    'kiteDistance': 200,
+    'damageReturn': 0,
+    'poisonStacks': 400,
+    'shieldValue': 100,
+    'healValue': 80,
+    'distanceToTarget': 30,
+    'threatReduction': 80,
+    'otkoBonus': 3000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 3000,
+    'bulbKillBonusBuffer': 1800,
+    'bulbKillBonusAttacker': 1000,
+    'multiTargetBonus': 400
 ]
 
-// Agility build weights - Balance damage and damage return
 global AGILITY_WEIGHTS = [
-    'burstDamage': 250,        // High: weapon damage with agi scaling
-    'weaponUses': 100,         // High: weapon spam like strength
-    'tpEfficiency': 50,        // Tertiary: TP conservation
-    'dotEffects': 0,           // Irrelevant: no DoT synergy
-    'kiteDistance': 50,        // Minor: hit-and-run tactics
-    'damageReturn': 300,       // Secondary focus: MIRROR/THORN/BRAMBLE
-    'poisonStacks': 0,         // Irrelevant: no poison synergy
-    'shieldValue': 80,         // Moderate: defensive sustainability
-    'healValue': 60,           // Moderate: emergency healing
-    'distanceToTarget': -10,   // Slight penalty: close range for BRAMBLE
-    'threatReduction': 50,     // Moderate: balanced approach
-    'otkoBonus': 4500,         // Very high: finish fights fast
-    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
-    'bulbKillBonusHealer': 2700,  // Bulb targeting: healer kill bonus (high - fast kills)
-    'bulbKillBonusBuffer': 1600,  // Bulb targeting: buffer kill bonus
-    'bulbKillBonusAttacker': 900, // Bulb targeting: attacker kill bonus
-    'multiTargetBonus': 550    // Multi-target LoS: high value (AoE weapons)
+    'burstDamage': 250,
+    'weaponUses': 100,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 50,
+    'damageReturn': 300,
+    'poisonStacks': 0,
+    'shieldValue': 80,
+    'healValue': 60,
+    'distanceToTarget': -10,
+    'threatReduction': 50,
+    'otkoBonus': 4500,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2700,
+    'bulbKillBonusBuffer': 1600,
+    'bulbKillBonusAttacker': 900,
+    'multiTargetBonus': 550
 ]
 
-// Strength/Science hybrid weights - Weapon damage + Nova max HP reduction
 global STRENGTH_SCIENCE_WEIGHTS = [
-    'burstDamage': 250,        // High: weapon damage from STR
-    'weaponUses': 80,          // Moderate: balance weapons with nova chips
-    'tpEfficiency': 50,        // Tertiary: TP conservation
-    'dotEffects': 0,           // Irrelevant: no DoT synergy
-    'kiteDistance': 0,         // Irrelevant: aggressive playstyle
-    'damageReturn': 0,         // Irrelevant: no return buffs
-    'poisonStacks': 0,         // Irrelevant: no poison synergy
-    'shieldValue': 80,         // Moderate: defensive sustainability
-    'healValue': 60,           // Moderate: emergency healing
-    'distanceToTarget': -15,   // Slight penalty: prefer close range
-    'threatReduction': 40,     // Moderate: avoid dangerous cells
-    'otkoBonus': 5000,         // Massive: prioritize kill opportunities
-    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'novaEffects': 400,        // Primary secondary focus: max HP reduction via science
-    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
-    'bulbKillBonusHealer': 2500,  // Bulb targeting: healer kill bonus
-    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
-    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
-    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
+    'burstDamage': 250,
+    'weaponUses': 80,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 0,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 80,
+    'healValue': 60,
+    'distanceToTarget': -15,
+    'threatReduction': 40,
+    'otkoBonus': 5000,
+    'checkpointBonus': 2500,
+    'novaEffects': 400,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 500
 ]
 
-// Tank/Science build weights - Maximize survivability + Nova attrition
 global TANK_SCI_WEIGHTS = [
-    'burstDamage': 150,        // Moderate: direct damage secondary to Nova
-    'weaponUses': 60,          // Low-moderate: Quantum Rifle limited to 1/round
-    'tpEfficiency': 50,        // Tertiary: TP conservation
-    'dotEffects': 0,           // Irrelevant: no DoT synergy
-    'kiteDistance': -50,       // Negative: tank wants to stay in fight, not kite
-    'damageReturn': 0,         // Irrelevant: no return buffs
-    'poisonStacks': 0,         // Irrelevant: no poison synergy
-    'shieldValue': 400,        // Primary: damage reduction is core survival loop
-    'healValue': 200,          // High: sustain is the win condition
-    'distanceToTarget': -10,   // Slight penalty: keep in weapon range
-    'threatReduction': 300,    // High: reduce incoming damage via debuffs
-    'otkoBonus': 3000,         // Moderate: kills happen via attrition not burst
-    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'novaEffects': 400,        // Primary secondary: Max HP reduction via Science
-    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
-    'bulbKillBonusHealer': 3000,  // Bulb targeting: healer kill bonus (high - stops sustain)
-    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
-    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
-    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
+    'burstDamage': 150,
+    'weaponUses': 60,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': -50,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 400,
+    'healValue': 200,
+    'distanceToTarget': -10,
+    'threatReduction': 300,
+    'otkoBonus': 3000,
+    'checkpointBonus': 2500,
+    'novaEffects': 400,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 3000,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 500
 ]
 
-// Hybrid (STR/MAG close) build weights - Balanced chip+weapon approach
 global HYBRID_WEIGHTS = [
-    'burstDamage': 200,        // Moderate-high: weapon damage still relevant
-    'weaponUses': 60,          // Moderate: weapons matter but chips too
-    'tpEfficiency': 50,        // Tertiary: TP conservation
-    'dotEffects': 250,         // Moderate-high: DoT chips scale with MAG
-    'kiteDistance': 50,        // Slight: flexible positioning
-    'damageReturn': 0,         // Irrelevant: no return buffs
-    'poisonStacks': 200,       // Moderate: poison stacking viable
-    'shieldValue': 100,        // Moderate: defensive sustainability
-    'healValue': 70,           // Moderate: emergency healing
-    'distanceToTarget': 0,     // Neutral: flexible range
-    'threatReduction': 60,     // Moderate: balanced approach
-    'otkoBonus': 4000,         // High: still want to close kills
-    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
-    'bulbKillBonusHealer': 2800,  // Bulb targeting: healer kill bonus
-    'bulbKillBonusBuffer': 1600,  // Bulb targeting: buffer kill bonus
-    'bulbKillBonusAttacker': 900, // Bulb targeting: attacker kill bonus
-    'multiTargetBonus': 500    // Multi-target LoS: AoE opportunity value
+    'burstDamage': 200,
+    'weaponUses': 60,
+    'tpEfficiency': 50,
+    'dotEffects': 250,
+    'kiteDistance': 50,
+    'damageReturn': 0,
+    'poisonStacks': 200,
+    'shieldValue': 100,
+    'healValue': 70,
+    'distanceToTarget': 0,
+    'threatReduction': 60,
+    'otkoBonus': 4000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2800,
+    'bulbKillBonusBuffer': 1600,
+    'bulbKillBonusAttacker': 900,
+    'multiTargetBonus': 500
 ]
 
-// Bruiser/Reflect build weights - STR weapons + AGI damage return baiting
 global BRUISER_REFLECT_WEIGHTS = [
-    'burstDamage': 250,        // High: STR weapons are primary damage
-    'weaponUses': 100,         // High: weapon spam like strength builds
-    'tpEfficiency': 50,        // Tertiary: TP conservation
-    'dotEffects': 0,           // Irrelevant: no DoT synergy
-    'kiteDistance': -30,       // Negative: WANT to be hit when reflect is active
-    'damageReturn': 400,       // Primary secondary: Mirror/Thorn/Bramble value
-    'poisonStacks': 0,         // Irrelevant: no poison synergy
-    'shieldValue': 60,         // Low-moderate: some defensive value
-    'healValue': 80,           // Moderate: crit-heal from Unstable Destroyer supplements
-    'distanceToTarget': -10,   // Slight penalty: prefer mid-range 4-7
-    'threatReduction': 30,     // Low: WANT to be hit when reflect active
-    'otkoBonus': 5000,         // Massive: prioritize kill opportunities
-    'checkpointBonus': 2500,   // Large: two-phase scenarios valuable
-    'bulbDamageMultiplier': 1.2,  // Bulb targeting: damage value multiplier
-    'bulbKillBonusHealer': 2500,  // Bulb targeting: healer kill bonus
-    'bulbKillBonusBuffer': 1500,  // Bulb targeting: buffer kill bonus
-    'bulbKillBonusAttacker': 800, // Bulb targeting: attacker kill bonus
-    'multiTargetBonus': 550    // Multi-target LoS: AoE opportunity value
+    'burstDamage': 250,
+    'weaponUses': 100,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': -30,
+    'damageReturn': 400,
+    'poisonStacks': 0,
+    'shieldValue': 60,
+    'healValue': 80,
+    'distanceToTarget': -10,
+    'threatReduction': 30,
+    'otkoBonus': 5000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 550
 ]
 
-// Boss fight weights - PUZZLE phase: crystal alignment mechanics
 global BOSS_PUZZLE_WEIGHTS = [
     'burstDamage': 0,
     'weaponUses': 0,
@@ -188,7 +178,6 @@ global BOSS_PUZZLE_WEIGHTS = [
     'multiTargetBonus': 0
 ]
 
-// Boss fight weights - COMBAT phase: standard combat after graal dies
 global BOSS_COMBAT_WEIGHTS = [
     'burstDamage': 300,
     'weaponUses': 100,
@@ -209,7 +198,6 @@ global BOSS_COMBAT_WEIGHTS = [
     'multiTargetBonus': 300
 ]
 
-// Runtime weight selector
 function getWeightsForBuild(buildType) {
     if (buildType == BUILD_STRENGTH) {
         return STRENGTH_WEIGHTS
@@ -232,10 +220,9 @@ function getWeightsForBuild(buildType) {
     if (buildType == BUILD_BRUISER_REFLECT) {
         return BRUISER_REFLECT_WEIGHTS
     }
-    return STRENGTH_WEIGHTS  // Default fallback
+    return STRENGTH_WEIGHTS
 }
 
-// Detect build type from player stats
 function detectBuildType(player) {
     var strStat = player._strength
     var magStat = player._magic
@@ -243,14 +230,10 @@ function detectBuildType(player) {
     var sciStat = player._science
     var resStat = player._resistance
 
-    // 1. Tank/Science: high Resistance + Science = attrition/Nova win condition
-    //    KurtGodel: 400 STR, 400 SCI, 400 RES -> should be TANK_SCI
     if (resStat >= 300 && sciStat >= 300) {
         return BUILD_TANK_SCI
     }
 
-    // 2. Bruiser/Reflect: STR + AGI hybrid with damage return chips
-    //    e.g. 600 STR, 500 AGI with Mirror/Thorn/Bramble
     if (strStat > 400 && agiStat > 400 &&
         (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) ||
          mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) ||
@@ -258,14 +241,10 @@ function detectBuildType(player) {
         return BUILD_BRUISER_REFLECT
     }
 
-    // 3. Strength/Science hybrid: STR-dominant with significant Science
     if (strStat >= magStat && strStat >= agiStat && sciStat >= 200) {
         return BUILD_STRENGTH_SCIENCE
     }
 
-    // 3. Magic-primary: MAG clearly dominant over STR
-    //    Pure magic (MAG 500, STR 0) -> MAGIC
-    //    Magic hybrid (MAG 600, STR 300) -> HYBRID (significant STR = use weapons too)
     if (magStat > strStat + 100) {
         if (strStat >= 200) {
             return BUILD_HYBRID
@@ -273,13 +252,10 @@ function detectBuildType(player) {
         return BUILD_MAGIC
     }
 
-    // 4. Hybrid: STR and MAG are close (within 100), both significant
-    //    Flexible build that can use both weapons and chips
     if (abs(strStat - magStat) < 100 && magStat >= 100 && strStat >= 100) {
         return BUILD_HYBRID
     }
 
-    // 5. Pure builds: whichever stat dominates
     if (agiStat >= strStat && agiStat >= magStat) {
         return BUILD_AGILITY
     }
@@ -287,10 +263,9 @@ function detectBuildType(player) {
         return BUILD_MAGIC
     }
 
-    return BUILD_STRENGTH  // Default: STR-dominant
+    return BUILD_STRENGTH
 }
 
-// Weight blending (future feature - adaptive mid-fight)
 function blendWeights(weights1, weights2, ratio) {
     var blended = [:]
 

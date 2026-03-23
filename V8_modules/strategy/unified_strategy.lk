@@ -34,7 +34,6 @@ class UnifiedStrategy extends Strategy {
 
     resetTurnContext() {
         this.initializeTurnContext()
-        debugInfo("[UNIFIED] Turn context reset")
     }
 
     createAndExecuteScenario(target, targetHitCell) {
@@ -43,24 +42,16 @@ class UnifiedStrategy extends Strategy {
         this._originalTP = player._currTp
         this._originalMP = player._currMp
 
-        // Pre-scenario self-Antidote: cleanse poison if it threatens us
         this.checkSelfAntidote()
 
-        debugInfo("[UNIFIED] Player TP=" + player._currTp + " MP=" + player._currMp + " at start of turn")
-        debugInfo("[UNIFIED] Using weight-driven scenario generation")
-
-        startOp()
         this.generateAndEvaluateBestScenario(target, targetHitCell)
-        stopOp("Unified Multi-Scenario Evaluation")
 
         var targetDied = this.executeScenario()
 
-        // Recover any leftover TP after scenario execution
         if (!targetDied && target != null && !isDead(target._id) && getOperations() < 13500000) {
             recoverRemainingTP(target)
         }
 
-        // If target died mid-scenario, recalculate for remaining enemies
         if (targetDied) {
             var enemies = this._fieldMap.getEnemySubMap()
             var aliveEnemies = []
@@ -73,10 +64,8 @@ class UnifiedStrategy extends Strategy {
 
             if (count(aliveEnemies) > 0) {
 
-                // Update player state
                 player.updateEntity()
 
-                // Pick new target (closest or lowest HP)
                 var newTarget = aliveEnemies[0]
                 for (var i = 1; i < count(aliveEnemies); i++) {
                     var e = aliveEnemies[i]
@@ -87,16 +76,13 @@ class UnifiedStrategy extends Strategy {
 
                 var newTargetHitCell = newTarget._cellPos
 
-                // Clear actions and regenerate
                 arrayClear(this._actions)
                 this.generateAndEvaluateBestScenario(newTarget, newTargetHitCell)
                 var retargetDied = this.executeScenario()
 
-                // TP recovery for re-targeted scenario
                 if (!retargetDied && !isDead(newTarget._id) && getOperations() < 13500000) {
                     recoverRemainingTP(newTarget)
                 }
-            } else {
             }
         }
     }
@@ -110,19 +96,15 @@ class UnifiedStrategy extends Strategy {
             this
         )
 
-        startOp()
         var scenarios = generator.generateScenarios()
-        var genOps = stopOp("Generate scenarios (" + count(scenarios) + " total)")
 
         if (count(scenarios) == 0) {
-            debugInfo("[UNIFIED] No scenarios generated - creating fallback")
             this.createFallbackScenario(target, targetHitCell)
             return
         }
 
         var quickScorer = new ScenarioQuickScorer(player, target, this._fieldMap, arsenal)
 
-        startOp()
         var scenariosWithQuickScore = []
         for (var scenario in scenarios) {
             var qScore = quickScorer.quickScore(scenario)
@@ -134,7 +116,6 @@ class UnifiedStrategy extends Strategy {
             return b['quickScore'] - a['quickScore']
         })
 
-        // Ensure diversity: guarantee at least 1 scenario per represented family in top-K
         var familySeen = [:]
         var diverseList = []
         var overflow = []
@@ -142,71 +123,54 @@ class UnifiedStrategy extends Strategy {
             var fam = entry['family']
             if (!mapContainsKey(familySeen, fam)) {
                 familySeen[fam] = true
-                push(diverseList, entry)  // First of each family goes to front
+                push(diverseList, entry)
             } else {
                 push(overflow, entry)
             }
         }
-        // Merge: family representatives first, then rest by score
         scenariosWithQuickScore = []
         for (var d in diverseList) push(scenariosWithQuickScore, d)
         for (var o in overflow) push(scenariosWithQuickScore, o)
 
-        // Adaptive Top-K: scale evaluation depth based on game state
         var aliveEnemies = count(getAliveEnemies())
         var topK
         if (getTurn() < 5 || aliveEnemies > 3) {
-            topK = 35  // Early game / Battle Royale: moderate search
+            topK = 35
         } else if (aliveEnemies == 1) {
-            topK = 80  // 1v1 endgame: deep search
+            topK = 80
         } else {
-            topK = 55  // Mid-game: balanced
+            topK = 55
         }
-        // Ops budget checkpoint: reduce topK if already expensive
         if (getOperations() > 11000000) {
             topK = max(8, floor(topK * 0.5))
         }
         var evaluateCount = min(topK, count(scenariosWithQuickScore))
-        var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
 
-        debugInfo("[UNIFIED-TOP-K] Quick scored " + count(scenariosWithQuickScore) + " scenarios, evaluating top " + evaluateCount)
+        var USE_MUTATIONS = true
+        var mutationOpsLimit = 12500000
 
-        // ===== PHASE 2: HYBRID MUTATION SYSTEM =====
-        var USE_MUTATIONS = true  // Enable/disable mutation system
-        var mutationOpsLimit = 12500000  // Only run if under 12.5M ops (1.5M safety margin)
-
-        // Disable mutations during boss PUZZLE phase — crystal scenarios are position-critical
         if (_isBossFight && _bossPhase == "PUZZLE") {
             USE_MUTATIONS = false
         }
 
         if (USE_MUTATIONS && getOperations() < mutationOpsLimit && count(scenariosWithQuickScore) >= 1) {
-            debugInfo("[MUTATION] Starting hybrid mutation pass (ops=" + getOperations() + ")")
 
-            // Adapt weights BEFORE mutation (needed by scorer)
             var enemies = this._fieldMap.getEnemySubMap()
             var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
             var scorer = new ScenarioScorer(player, target, this._fieldMap, adaptedWeights)
 
-            // Extract top scenarios as mutation seeds
             var mutationSeeds = []
             var seedLimit = min(6, count(scenariosWithQuickScore))
             for (var i = 0; i < seedLimit; i++) {
                 push(mutationSeeds, scenariosWithQuickScore[i]['scenario'])
             }
 
-            startOp()
             var mutationPlanner = new HybridMutationPlanner(arsenal, player, target, this._fieldMap, scorer)
             var bestMutatedScenario = mutationPlanner.planWithMutations(mutationSeeds)
-            var mutationOps = stopOp("Hybrid mutation pass")
 
-            debugInfo("[MUTATION] Mutation pass complete, ops=" + mutationOps)
-
-            // Replace scenarios with mutated result + originals
             scenariosWithQuickScore = []
             push(scenariosWithQuickScore, ['scenario': bestMutatedScenario, 'quickScore': 9999])
 
-            // Keep top 3 originals as fallback
             var origLimit = min(3, seedLimit)
             for (var i = 0; i < origLimit; i++) {
                 push(scenariosWithQuickScore, ['scenario': mutationSeeds[i], 'quickScore': 8000 - i * 100])
@@ -214,9 +178,7 @@ class UnifiedStrategy extends Strategy {
 
             evaluateCount = count(scenariosWithQuickScore)
         }
-        // ===== END PHASE 2: HYBRID MUTATION SYSTEM =====
 
-        // Phase 3: Adapt weights to current situation
         var enemies = this._fieldMap.getEnemySubMap()
         var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
 
@@ -228,7 +190,6 @@ class UnifiedStrategy extends Strategy {
         var bestSimResult = null
         var scenarioResults = []
 
-        startOp()
         for (var i = 0; i < evaluateCount; i++) {
             var scenarioData = scenariosWithQuickScore[i]
             var scenario = scenarioData['scenario']
@@ -237,7 +198,6 @@ class UnifiedStrategy extends Strategy {
             var simResult = simulator.simulate(scenario)
             var score = scorer.score(simResult, scenario)
 
-            // Store scenario with simulation result for lookahead
             push(scenarioResults, [
                 'scenario': scenario,
                 'simResult': simResult,
@@ -245,31 +205,22 @@ class UnifiedStrategy extends Strategy {
                 'quickScore': qScore
             ])
 
-            debugInfo("[UNIFIED-TOP-K] Scenario #" + (i+1) + ": quickScore=" + floor(qScore) + " fullScore=" + floor(score))
-
             if (score > bestScore) {
                 bestScore = score
                 bestScenario = scenario
                 bestSimResult = simResult
             }
 
-            // Early-exit: if best is far ahead after 10+ evaluations, stop searching
             if (i >= 10 && (bestScore - score) > 2000) {
-                debugInfo("[EARLY-EXIT] Score gap > 2000 after " + (i + 1) + " scenarios, executing best")
                 break
             }
 
-            // Ops budget hard stop: prevent timeout
             if (getOperations() > 13000000) {
-                debugInfo("[BUDGET-EXIT] Ops > 13M after " + (i + 1) + " scenarios, executing best")
                 break
             }
         }
-        var simOps = stopOp("Simulate & score top " + evaluateCount)
 
-        // Phase 3.5: 2-Ply Planning — project next-turn value for top 5
         if (count(scenarioResults) >= 2 && getOperations() < 11000000) {
-            startOp()
             arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
@@ -285,12 +236,9 @@ class UnifiedStrategy extends Strategy {
                     bestSimResult = sd['simResult']
                 }
             }
-            var twoplyOps = stopOp("2-Ply planning (top " + twoplyCount + ")")
         }
 
-        // Phase 4: Enemy Response Lookahead (top 3 scenarios)
         if (count(scenarioResults) >= 1 && getOperations() < 12500000) {
-            startOp()
             arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
@@ -298,31 +246,24 @@ class UnifiedStrategy extends Strategy {
             var predictor = new EnemyPredictor(this._fieldMap, arsenal, player, target)
             var lookaheadCount = min(3, count(scenarioResults))
 
-
             for (var i = 0; i < lookaheadCount; i++) {
                 var scenarioData = scenarioResults[i]
                 var simResult = scenarioData['simResult']
 
-                // Create end state map for predictor (can't add fields to class instance)
                 var endState = [
                     'endPosition': simResult.finalPosition,
-                    'endHP': player._currHealth + simResult.hpGained,  // HP after heals
+                    'endHP': player._currHealth + simResult.hpGained,
                     'endTP': player._currTp - simResult.tpSpent,
                     'score': scenarioData['score']
                 ]
 
                 var lookahead = predictor.evaluateScenarioWithLookahead(endState, 0.7)
 
-                // Update score with lookahead
                 scenarioData['finalScore'] = lookahead['finalScore']
                 scenarioData['enemyDamage'] = lookahead['enemyDamage']
 
-                debugDetail("[LOOKAHEAD] Scenario " + i + ":" +
-                          " final=" + floor(lookahead['finalScore']) +
-                          " enemyDmg=" + lookahead['enemyDamage'])
             }
 
-            // Re-evaluate best scenario with lookahead scores
             for (var i = 0; i < lookaheadCount; i++) {
                 var scenarioData = scenarioResults[i]
                 if (mapContainsKey(scenarioData, 'finalScore')) {
@@ -334,36 +275,26 @@ class UnifiedStrategy extends Strategy {
                 }
             }
 
-            var lookaheadOps = stopOp("Enemy Response Lookahead (top " + lookaheadCount + ")")
         }
 
-        // If best scenario does 0 damage, use fallback instead (unless it's purely defensive)
         if (bestScenario != null) {
             var isDamaging = bestSimResult.damageDealt > 0 || bestSimResult.dotDamageQueued > 0
             var isHealing = bestSimResult.hpGained > 0
             var usesResources = bestSimResult.tpSpent > 0 || bestSimResult.mpSpent > 0
 
             if (!isDamaging && !isHealing && usesResources && bestScore < 500) {
-                debugInfo("[UNIFIED] Rejecting 0-value scenario (score=" + floor(bestScore) + ", no damage/healing) - using fallback")
                 this.createFallbackScenario(target, targetHitCell)
             } else {
-                debugInfo("[UNIFIED-BEST] Selected scenario: score=" + floor(bestScore) +
-                      " dmg=" + floor(bestSimResult.damageDealt) +
-                      " dot=" + floor(bestSimResult.dotDamageQueued) +
-                      " tp=" + bestSimResult.tpSpent + " mp=" + bestSimResult.mpSpent)
 
                 this._actions = bestScenario
             }
         } else {
-            debugInfo("[UNIFIED] No valid scenario found - creating fallback")
             this.createFallbackScenario(target, targetHitCell)
         }
     }
 
     createFallbackScenario(target, targetHitCell) {
-        debugInfo("[UNIFIED-FALLBACK] Creating basic offensive scenario")
 
-        // Step 1: Move toward enemy - try hit cell first, then just approach
         var moved = false
         if (targetHitCell != null) {
             var pathLen = getCachedPathLength(player._cellPos, targetHitCell)
@@ -372,21 +303,16 @@ class UnifiedStrategy extends Strategy {
                 push(this._actions, action)
                 player._currMp -= pathLen
                 moved = true
-                debugInfo("[UNIFIED-FALLBACK] Move to hit cell " + targetHitCell)
             }
         }
 
         if (!moved && player._currMp > 0 && target != null) {
-            // No hit cell available or can't reach it - just walk toward enemy
             var action = new Action(Action.MOVEMENT_APPROACH, -1, -1, target._cellPos, null)
             push(this._actions, action)
-            debugInfo("[UNIFIED-FALLBACK] Approaching enemy at cell " + target._cellPos)
         }
 
-        // Step 2: Spam all available weapons/chips with remaining TP
         var weaponIds = mapKeys(arsenal.playerEquippedWeapons)
 
-        // Find best weapon (highest net damage per TP)
         var bestWeaponId = null
         var bestWeaponDPS = 0
         for (var wid in weaponIds) {
@@ -412,18 +338,14 @@ class UnifiedStrategy extends Strategy {
                 player._currTp -= weapon._cost
                 uses++
             }
-            debugInfo("[UNIFIED-FALLBACK] Attack " + uses + "x with " + getWeaponName(bestWeaponId))
         }
     }
 
     turnOneBuffs() {
-        debugInfo("[UNIFIED] Calling base turn one HP buffs")
         super.turnOneBuffs()
     }
 
     checkSelfAntidote() {
-        // Implemented via scenario system: getAntidoteAction in scenario_helpers
-        // handles self-Antidote during scenario generation
     }
 
     shouldBuildDamageMap() {
@@ -432,7 +354,6 @@ class UnifiedStrategy extends Strategy {
 
 }
 
-// Greedy TP Recovery: spend leftover TP after scenario execution
 function recoverRemainingTP(target) {
     var maxAttempts = 5
     var attempts = 0
@@ -450,7 +371,6 @@ function recoverRemainingTP(target) {
         var bestAction = null
         var bestValue = -1
 
-        // Check all equipped chips
         for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[chipId]
             if (chipObj._cost > getTP()) continue
@@ -461,19 +381,16 @@ function recoverRemainingTP(target) {
 
             if (isHealingChip(chipId) || isOffensiveBuff(chipId) || isShieldChip(chipId) ||
                 isDamageReturnChip(chipId) || isResourceChip(chipId)) {
-                targetCell = getCell()  // self-targeted
+                targetCell = getCell()
                 value = quickRecoveryChipValue(chipId, 'self')
             } else if (isUtilityChip(chipId)) {
-                // Skip utility chips (teleport, grapple etc.) in recovery
                 continue
             } else {
-                // Damage/poison/debuff: target enemy
                 targetCell = target._cellPos
                 var dist = getCellDistance(getCell(), targetCell)
                 if (dist == null) continue
                 if (dist < chipObj._minRange || dist > chipObj._maxRange) continue
                 if (!lineOfSight(getCell(), targetCell)) continue
-                // AoE self-hit check
                 if (chipObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())) continue
                 value = quickRecoveryChipValue(chipId, 'enemy')
             }
@@ -484,7 +401,6 @@ function recoverRemainingTP(target) {
             }
         }
 
-        // Check current weapon (respect max uses per round)
         if (currentWeapon != null && currentWeapon != -1 &&
             weaponUsesThisTurn < weaponMaxUses &&
             mapContainsKey(arsenal.playerEquippedWeapons, currentWeapon)) {
@@ -493,7 +409,6 @@ function recoverRemainingTP(target) {
                 var dist = getCellDistance(getCell(), target._cellPos)
                 if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange) {
                     if (lineOfSight(getCell(), target._cellPos)) {
-                        // AoE self-hit check
                         if (weaponObj._aoeType == AREA_POINT || !fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell())) {
                             var value = quickRecoveryWeaponValue(currentWeapon)
                             if (value > bestValue) {
@@ -506,7 +421,6 @@ function recoverRemainingTP(target) {
             }
         }
 
-        // Check other weapons (with swap cost)
         var myPos = getCell()
         var distToTarget = getCellDistance(myPos, target._cellPos)
         var hasLos = (distToTarget != null) ? lineOfSight(myPos, target._cellPos) : false
@@ -514,10 +428,9 @@ function recoverRemainingTP(target) {
             for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
                 if (wid == currentWeapon) continue
                 var wObj = arsenal.playerEquippedWeapons[wid]
-                var totalCost = 1 + wObj._cost  // swap + attack
+                var totalCost = 1 + wObj._cost
                 if (totalCost > getTP()) continue
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
-                // AoE self-hit check
                 if (wObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)) continue
                 var wValue = quickRecoveryWeaponValue(wid)
                 if (wValue > bestValue) {
@@ -527,13 +440,11 @@ function recoverRemainingTP(target) {
             }
         }
 
-        if (bestAction == null || bestValue < 30) break  // Don't waste TP on < 30 value actions
+        if (bestAction == null || bestValue < 30) break
 
         if (bestAction['type'] == 'chip') {
             useChipOnCell(bestAction['id'], bestAction['cell'])
-            // Check if action actually consumed TP (failed actions don't)
-            if (getTP() >= tpBefore) break  // Action failed, stop trying
-            debugInfo("[TP-RECOVERY] Used chip " + bestAction['id'] + " (TP remaining: " + getTP() + ")")
+            if (getTP() >= tpBefore) break
         } else if (bestAction['type'] == 'weaponSwap') {
             setWeapon(bestAction['id'])
             currentWeapon = bestAction['id']
@@ -543,16 +454,12 @@ function recoverRemainingTP(target) {
             useWeaponOnCell(bestAction['cell'])
             if (getTP() >= tpBefore) break
             weaponUsesThisTurn++
-            debugInfo("[TP-RECOVERY] Swapped to weapon " + bestAction['id'] + " and attacked (TP remaining: " + getTP() + ")")
         } else {
             useWeaponOnCell(bestAction['cell'])
-            // Check if action actually consumed TP (failed = out of line, etc.)
-            if (getTP() >= tpBefore) break  // Action failed, stop trying
+            if (getTP() >= tpBefore) break
             weaponUsesThisTurn++
-            debugInfo("[TP-RECOVERY] Used weapon (TP remaining: " + getTP() + ")")
         }
 
-        // Check if target died
         if (isDead(target._id)) break
     }
 }
@@ -580,19 +487,17 @@ function quickRecoveryChipValue(chipId, mode) {
         } else if (isDamageReturnChip(chipId)) {
             value += 150
         } else if (isOffensiveBuff(chipId)) {
-            // Buffs at end-of-turn carry to NEXT turn, amplifying full attack budget
             var turnsLeft = 64 - getTurn()
             if (turnsLeft > 3) {
-                if (chipId == CHIP_STEROID) value += 350       // +100 STR ~ 17% damage boost
-                else if (chipId == CHIP_WARM_UP) value += 300  // +180 AGI ~ 9% crit chance + damage
-                else if (chipId == CHIP_PRISM) value += 300    // +60 all stats
-                else if (chipId == CHIP_WIZARDRY) value += 250 // +160 MAG for magic builds
-                else if (chipId == CHIP_DOPING) value += 200   // +100 STR
+                if (chipId == CHIP_STEROID) value += 350
+                else if (chipId == CHIP_WARM_UP) value += 300
+                else if (chipId == CHIP_PRISM) value += 300
+                else if (chipId == CHIP_WIZARDRY) value += 250
+                else if (chipId == CHIP_DOPING) value += 200
                 else value += 120
             } else {
-                value += 50  // Low value near end of fight
+                value += 50
             }
-            // Wisdom-amplifying buffs: account for heal amplification
             if (chipId == CHIP_KNOWLEDGE || chipId == CHIP_PRISM) {
                 var hpMissing = player._maxHealth - player._currHealth
                 if (hpMissing > 50) {
@@ -603,12 +508,11 @@ function quickRecoveryChipValue(chipId, mode) {
                 }
             }
         } else if (isResourceChip(chipId)) {
-            if (chipId == CHIP_ADRENALINE) value += 500  // +5 TP is huge
+            if (chipId == CHIP_ADRENALINE) value += 500
             else value += 50
         }
     }
 
-    // Denial chips value
     if (chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN) {
         value += 200 * (1 + player._magic / 500)
     }

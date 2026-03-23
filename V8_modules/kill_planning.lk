@@ -1,12 +1,6 @@
-// ========================================
-// Kill Planning Module
-// ========================================
-// Detects 2-turn kill opportunities and manages TP reservation
-// Prevents wasting TP on buffs when enemy can be killed next turn
 
-include('debug_config.lk')
 
-global KILL_PLAN_STATE = null  // Global kill plan state
+global KILL_PLAN_STATE = null
 
 class KillPlanner {
     _arsenal = null
@@ -19,11 +13,9 @@ class KillPlanner {
         this._target = target
     }
 
-    // Calculate maximum possible damage this turn with all TP
     calculateMaxDamageThisTurn(availableTP) {
         var damageItems = []
 
-        // Get all equipped damage-dealing weapons
         var weapons = mapValues(this._arsenal.playerEquippedWeapons)
         for (var weapon in weapons) {
             if (weapon._cost <= availableTP) {
@@ -48,7 +40,6 @@ class KillPlanner {
             }
         }
 
-        // Get all equipped damage-dealing chips
         var chips = mapValues(this._arsenal.playerEquippedChips)
         for (var chip in chips) {
             if (chip._cost <= availableTP) {
@@ -73,14 +64,12 @@ class KillPlanner {
             }
         }
 
-        // Sort by damage/cost ratio (greedy selection)
         arraySort(damageItems, function(a, b) {
             var ratioA = a['damage'] / a['cost']
             var ratioB = b['damage'] / b['cost']
             return ratioB - ratioA
         })
 
-        // Greedy TP allocation
         var remainingTP = availableTP
         var totalDamage = 0
 
@@ -91,14 +80,12 @@ class KillPlanner {
             var isWeapon = item['isWeapon']
 
             if (isWeapon) {
-                // Weapons can be used multiple times
                 var affordableUses = floor(remainingTP / cost)
                 var actualUses = min(affordableUses, maxUse)
 
                 totalDamage += damage * actualUses
                 remainingTP -= cost * actualUses
             } else {
-                // Chips can only be used once
                 if (remainingTP >= cost) {
                     totalDamage += damage
                     remainingTP -= cost
@@ -109,23 +96,18 @@ class KillPlanner {
         return totalDamage
     }
 
-    // Detect 2-turn kill opportunity
     detect2TurnKill() {
         var targetHP = this._target._currHealth
         var currentTP = this._player._currTp
 
-        // Calculate damage we can do this turn with ALL TP
         var damage1 = this.calculateMaxDamageThisTurn(currentTP)
 
-        // Calculate damage we can do next turn (assume full TP regen)
-        var nextTurnTP = min(12, currentTP + 6)  // Assume 6 TP regen
+        var nextTurnTP = min(12, currentTP + 6)
         var damage2 = this.calculateMaxDamageThisTurn(nextTurnTP)
 
-        // Check if 2-turn kill is possible
         var totalDamage = damage1 + damage2
         var canKill2Turn = (totalDamage >= targetHP)
 
-        // Check if 1-turn kill is already possible
         var canKill1Turn = (damage1 >= targetHP)
 
         var result = [
@@ -139,20 +121,16 @@ class KillPlanner {
         ]
 
         if (canKill2Turn && !canKill1Turn) {
-            // Calculate minimum TP needed next turn to finish
             var hpAfterThisTurn = targetHP - damage1
             var minTPNeeded = this.calculateMinTPForDamage(hpAfterThisTurn)
 
             result['tpReserveNeeded'] = minTPNeeded
-            debugInfo("[KILL-PLAN] 2-turn kill detected! Need " + minTPNeeded + " TP next turn to finish (" + hpAfterThisTurn + " HP remaining)")
         }
 
         return result
     }
 
-    // Calculate minimum TP needed to deal specified damage
     calculateMinTPForDamage(targetDamage) {
-        // Find most efficient damage source
         var weapons = mapValues(this._arsenal.playerEquippedWeapons)
         var bestRatio = 0
         var bestCost = 12
@@ -181,10 +159,9 @@ class KillPlanner {
             return min(12, usesNeeded * bestCost)
         }
 
-        return 12  // Fallback: reserve full TP
+        return 12
     }
 
-    // Update global kill plan state
     updateGlobalKillPlan() {
         var plan = this.detect2TurnKill()
 
@@ -200,20 +177,17 @@ class KillPlanner {
     }
 }
 
-// Helper: Check if we're in KILL_RESERVE state
 function isKillReserveActive() {
     if (KILL_PLAN_STATE == null) return false
     return KILL_PLAN_STATE['active']
 }
 
-// Helper: Get reserved TP amount
 function getReservedTP() {
     if (KILL_PLAN_STATE == null) return 0
     if (!KILL_PLAN_STATE['active']) return 0
     return KILL_PLAN_STATE['tpReserve']
 }
 
-// Helper: Get available TP after reservation
 function getAvailableTPAfterReservation(currentTP) {
     var reserved = getReservedTP()
     return max(0, currentTP - reserved)

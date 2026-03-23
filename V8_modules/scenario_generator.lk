@@ -8,20 +8,15 @@ class ScenarioGenerator extends ScenarioCombos {
 
     generateScenarios() {
         if (this._target == null) {
-            debugInfo("[SCENARIO-GEN] Target is null — skipping target update")
         } else {
             this._target.updateEntity()
-            debugInfo("[SCENARIO-GEN] Updated target entity (pos=" + this._target._cellPos + " HP=" + this._target._currHealth + ")")
         }
 
-        // Only run Antidote detection if we have poison capabilities and a valid target
         if (this._target != null && this.hasPoisonCapability()) {
             var currentPoison = this._target.getEffectRemaining(EFFECT_POISON)
             var tracker = new CooldownTracker(this._target)
             tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
-            // Note: PREV_ENEMY_POISON is updated at END of main.lk after scenario execution
 
-            // Smart Antidote detection: if enemy doesn't have Antidote chip, skip BAIT entirely
             if (POISON_PHASE == "BAIT") {
                 var enemyChips = this._target._chips
                 var enemyHasAntidote = false
@@ -29,33 +24,24 @@ class ScenarioGenerator extends ScenarioCombos {
                     if (chipId == CHIP_ANTIDOTE) { enemyHasAntidote = true; break }
                 }
                 if (!enemyHasAntidote) {
-                    debugInfo("[POISON-PHASE] Enemy has NO Antidote — skipping BAIT, immediate DUMP")
                     POISON_PHASE = "DUMP"
                 }
             }
 
-            // Check poison phase transitions (SUSTAIN → BAIT when Antidote ready again)
             var currentTurn = getTurn()
 
             if (POISON_PHASE == "SUSTAIN") {
                 var antidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
 
-                // If Antidote cooldown expired AND we've sustained for at least 3 turns → back to BAIT
                 if (antidoteCD == 0 && (currentTurn - LAST_POISON_DUMP_TURN) >= 3) {
                     POISON_PHASE = "BAIT"
                     BAIT_START_TURN = currentTurn
                 }
             }
 
-            // BAIT timeout: if we've been baiting for 5+ turns and enemy hasn't used Antidote,
-            // they likely don't have it or won't use it — allow COVID in BAIT scenarios
-            // (don't force DUMP — BAIT scenarios are more flexible with approach/positioning)
             if (POISON_PHASE == "BAIT" && (currentTurn - BAIT_START_TURN) >= 5) {
-                debugInfo("[POISON-PHASE] BAIT timeout (5 turns) — enemy likely lacks Antidote, allowing COVID")
                 POISON_PHASE = "DUMP"
             }
-        } else {
-            debugInfo("[SCENARIO-GEN] No poison capability - skipping Antidote detection")
         }
 
         var scenarios = []
@@ -63,7 +49,6 @@ class ScenarioGenerator extends ScenarioCombos {
         var availableMP = getMP()
 
         var state = this.determineStrategicState()
-        debugInfo("[STATE] Strategic state: " + state + " | POISON_PHASE=" + POISON_PHASE)
 
         if (state == "PUZZLE") {
             this.buildPuzzleScenarios(scenarios, availableTP, availableMP)
@@ -84,67 +69,50 @@ class ScenarioGenerator extends ScenarioCombos {
             this.buildFleeScenarios(scenarios, availableTP, availableMP)
         }
 
-        // Beam Search: discover novel action sequences alongside templates
-        // Skip during PUZZLE (position-critical) and FLEE (emergency)
         if (state != "PUZZLE" && state != "FLEE" && getOperations() < 11000000) {
             var beamScenarios = beamSearchScenarios(this._player, this._target, this._arsenal, this._fieldMap)
             for (var bs in beamScenarios) {
                 push(scenarios, bs)
             }
-            debugInfo("[BEAM-SEARCH] Added " + count(beamScenarios) + " beam scenarios to " + (count(scenarios) - count(beamScenarios)) + " templates")
         }
 
         return scenarios
     }
 
-    // =========================================================================
-    // State-Specific Scenario Builders
-    // =========================================================================
-
     buildKillScenarios(scenarios, availableTP, availableMP) {
-        debugInfo("[STATE-KILL] Enemy killable - checking OTKO cells for optimal positioning")
 
-        // Bruiser/Reflect: reflect + buff + weapon spam
         var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
         if (bruiserReflect != null) {
-            debugInfo("[STATE-KILL] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
             push(scenarios, bruiserReflect)
         }
 
-        // Poison rotation scenarios (can finish with DoT)
         var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
         if (poisonBait != null) {
-            debugInfo("[STATE-KILL] Adding Poison Bait scenario (trigger Antidote)")
             push(scenarios, poisonBait)
         }
 
         var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
         if (poisonDump != null) {
-            debugInfo("[STATE-KILL] Adding Poison Dump scenario (Antidote window - finish with DoT)")
             push(scenarios, poisonDump)
         }
 
         var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
         if (grappleCovid != null) {
-            debugInfo("[STATE-KILL] Adding GRAPPLE-COVID combo scenario")
             push(scenarios, grappleCovid)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
-            debugInfo("[STATE-KILL] Adding Shield Rotation scenario (universal)")
             push(scenarios, shieldRotation)
         }
 
         var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
         if (damageReturnCycling != null) {
-            debugInfo("[STATE-KILL] Adding Damage Return Cycling scenario (agility)")
             push(scenarios, damageReturnCycling)
         }
 
         var neutrinoOTKO = this.createNeutrinoOTKOScenario(availableTP, availableMP)
         if (neutrinoOTKO != null) {
-            debugInfo("[STATE-KILL] Adding Neutrino-OTKO combo scenario")
             push(scenarios, neutrinoOTKO)
         }
 
@@ -156,8 +124,6 @@ class ScenarioGenerator extends ScenarioCombos {
         if (bestOTKO != null && teleportReady && availableTP >= teleportCost + 10) {
             var distToOTKO = getCellDistance(player._cellPos, bestOTKO._id)
             if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= 12) {
-                debugInfo("[STATE-KILL] Teleporting to OTKO cell " + bestOTKO._id +
-                      " (kill prob=" + floor(bestOTKO._otkoKillProbability * 100) + "%)")
                 push(scenarios, this.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
             }
         }
@@ -170,95 +136,77 @@ class ScenarioGenerator extends ScenarioCombos {
     }
 
     buildAggroScenarios(scenarios, availableTP, availableMP) {
-        debugInfo("[STATE-AGGRO] Early game / buff application phase")
 
-        // Bruiser/Reflect: reflect + buff + weapon spam
         var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
         if (bruiserReflect != null) {
-            debugInfo("[STATE-AGGRO] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
             push(scenarios, bruiserReflect)
         }
 
-        // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
         var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
         if (novaAttrition != null) {
-            debugInfo("[STATE-AGGRO] Adding Nova Attrition scenario (Tank/Sci win condition)")
             push(scenarios, novaAttrition)
         }
 
         var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
         if (grappleHS != null) {
-            debugInfo("[STATE-AGGRO] Adding GRAPPLE-HEAVY_SWORD combo scenario")
             push(scenarios, grappleHS)
         }
 
         var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
         if (neutrinoStack != null) {
-            debugInfo("[STATE-AGGRO] Adding Neutrino stacking combo scenario")
             push(scenarios, neutrinoStack)
         }
 
         var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
         if (steroidOTKO != null) {
-            debugInfo("[STATE-AGGRO] Adding STEROID-OTKO combo scenario")
             push(scenarios, steroidOTKO)
         }
 
         var dualBuff = this.createDualBuffAttackScenario(availableTP, availableMP)
         if (dualBuff != null) {
-            debugInfo("[STATE-AGGRO] Adding Dual-Buff (STEROID+WARM_UP) attack scenario")
             push(scenarios, dualBuff)
         }
 
         var steroidRecheck = this.createSteroidRecheckScenario(availableTP, availableMP)
         if (steroidRecheck != null) {
-            debugInfo("[STATE-AGGRO] Adding STEROID-Recheck two-phase scenario")
             push(scenarios, steroidRecheck)
         }
 
         var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
         if (poisonBait != null) {
-            debugInfo("[STATE-AGGRO] Adding Poison Bait scenario (trigger Antidote)")
             push(scenarios, poisonBait)
         }
 
         var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
         if (poisonDump != null) {
-            debugInfo("[STATE-AGGRO] Adding Poison Dump scenario (Antidote window exploitation)")
             push(scenarios, poisonDump)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
-            debugInfo("[STATE-AGGRO] Adding Shield Rotation scenario (universal)")
             push(scenarios, shieldRotation)
         }
 
         var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
         if (damageReturnCycling != null) {
-            debugInfo("[STATE-AGGRO] Adding Damage Return Cycling scenario (agility)")
             push(scenarios, damageReturnCycling)
         }
 
         var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
         if (grappleCovid != null) {
-            debugInfo("[STATE-AGGRO] Adding GRAPPLE-COVID combo scenario")
             push(scenarios, grappleCovid)
         }
 
-        // Emergency teleport when all enemies out of range (bulb handling)
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
             getCooldown(CHIP_TELEPORTATION, this._player._id) == 0) {
             var emergencyApproach = this.createEmergencyApproachScenario(availableTP, availableMP)
             if (emergencyApproach != null) {
-                debugInfo("[STATE-AGGRO] Adding emergency approach scenario")
                 push(scenarios, emergencyApproach)
             }
         }
 
         var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
         if (buffApproach != null) {
-            debugInfo("[STATE-AGGRO] Adding Buff + Approach scenario (enemy out of range)")
             push(scenarios, buffApproach)
         }
 
@@ -280,19 +228,14 @@ class ScenarioGenerator extends ScenarioCombos {
     }
 
     buildAttritionScenarios(scenarios, availableTP, availableMP) {
-        debugInfo("[STATE-ATTRITION] Ongoing balanced combat")
 
-        // Bruiser/Reflect: reflect + buff + weapon spam
         var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
         if (bruiserReflect != null) {
-            debugInfo("[STATE-ATTRITION] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
             push(scenarios, bruiserReflect)
         }
 
-        // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
         var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
         if (novaAttrition != null) {
-            debugInfo("[STATE-ATTRITION] Adding Nova Attrition scenario (Tank/Sci win condition)")
             push(scenarios, novaAttrition)
         }
 
@@ -301,80 +244,67 @@ class ScenarioGenerator extends ScenarioCombos {
         var losingHPRace = (playerHP < enemyHP)
 
         if (losingHPRace) {
-            debugInfo("[STATE-ATTRITION] Losing HP race (" + playerHP + " < " + enemyHP + ") - adding defensive scenarios")
             push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.7, 0.7, "hide"), availableTP, availableMP))
             push(scenarios, this.createParametricScenario(new ScenarioParams(3, 0.5, 0.8, 0.8, "hide"), availableTP, availableMP))
         }
 
         var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
         if (grappleHS != null) {
-            debugInfo("[STATE-ATTRITION] Adding GRAPPLE-HEAVY_SWORD combo scenario")
             push(scenarios, grappleHS)
         }
 
         var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
         if (neutrinoStack != null) {
-            debugInfo("[STATE-ATTRITION] Adding Neutrino stacking combo scenario")
             push(scenarios, neutrinoStack)
         }
 
         var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
         if (steroidOTKO != null) {
-            debugInfo("[STATE-ATTRITION] Adding STEROID-OTKO combo scenario")
             push(scenarios, steroidOTKO)
         }
 
         var dualBuffAttr = this.createDualBuffAttackScenario(availableTP, availableMP)
         if (dualBuffAttr != null) {
-            debugInfo("[STATE-ATTRITION] Adding Dual-Buff (STEROID+WARM_UP) attack scenario")
             push(scenarios, dualBuffAttr)
         }
 
         var neutrinoRecheck = this.createNeutrinoRecheckScenario(availableTP, availableMP)
         if (neutrinoRecheck != null) {
-            debugInfo("[STATE-ATTRITION] Adding Neutrino-Recheck checkpoint scenario")
             push(scenarios, neutrinoRecheck)
         }
 
         var grappleHSRecheck = this.createGrappleHSRecheckScenario(availableTP, availableMP)
         if (grappleHSRecheck != null) {
-            debugInfo("[STATE-ATTRITION] Adding GRAPPLE-HS-Recheck checkpoint scenario")
             push(scenarios, grappleHSRecheck)
         }
 
         var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
         if (poisonBait != null) {
-            debugInfo("[STATE-ATTRITION] Adding Poison Bait scenario (trigger Antidote)")
             push(scenarios, poisonBait)
         }
 
         var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
         if (poisonDump != null) {
-            debugInfo("[STATE-ATTRITION] Adding Poison Dump scenario (Antidote window exploitation)")
             push(scenarios, poisonDump)
         }
 
         var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
         if (grappleCovid != null) {
-            debugInfo("[STATE-ATTRITION] Adding GRAPPLE-COVID combo scenario")
             push(scenarios, grappleCovid)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
-            debugInfo("[STATE-ATTRITION] Adding Shield Rotation scenario (universal)")
             push(scenarios, shieldRotation)
         }
 
         var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
         if (damageReturnCycling != null) {
-            debugInfo("[STATE-ATTRITION] Adding Damage Return Cycling scenario (agility)")
             push(scenarios, damageReturnCycling)
         }
 
         var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
         if (buffApproach != null) {
-            debugInfo("[STATE-ATTRITION] Adding Buff + Approach scenario (enemy out of range)")
             push(scenarios, buffApproach)
         }
 
@@ -394,61 +324,49 @@ class ScenarioGenerator extends ScenarioCombos {
     }
 
     buildSustainScenarios(scenarios, availableTP, availableMP) {
-        debugInfo("[STATE-SUSTAIN] HP management phase")
 
-        // Bruiser/Reflect: reflect + buff + weapon spam (heal built-in)
         var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
         if (bruiserReflect != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Bruiser Reflect scenario (STR/AGI hybrid)")
             push(scenarios, bruiserReflect)
         }
 
-        // Nova Attrition: Tank/Science builds prioritize shields + Nova damage
         var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
         if (novaAttrition != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Nova Attrition scenario (Tank/Sci win condition)")
             push(scenarios, novaAttrition)
         }
 
         var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
         if (poisonBait != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Poison Bait scenario (trigger Antidote)")
             push(scenarios, poisonBait)
         }
 
         var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
         if (poisonDump != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Poison Dump scenario (Antidote window - use at all cost)")
             push(scenarios, poisonDump)
         }
 
         var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
         if (grappleCovid != null) {
-            debugInfo("[STATE-SUSTAIN] Adding GRAPPLE-COVID combo scenario")
             push(scenarios, grappleCovid)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Shield Rotation scenario (universal)")
             push(scenarios, shieldRotation)
         }
 
         var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
         if (damageReturnCycling != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Damage Return Cycling scenario (agility)")
             push(scenarios, damageReturnCycling)
         }
 
         var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
         if (healRecheck != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Heal-Recheck checkpoint scenario")
             push(scenarios, healRecheck)
         }
 
         var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
         if (buffApproach != null) {
-            debugInfo("[STATE-SUSTAIN] Adding Buff + Approach scenario (enemy out of range)")
             push(scenarios, buffApproach)
         }
 
@@ -461,35 +379,29 @@ class ScenarioGenerator extends ScenarioCombos {
     }
 
     buildFleeScenarios(scenarios, availableTP, availableMP) {
-        debugInfo("[STATE-FLEE] Emergency survival mode")
 
         var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
         if (poisonBait != null) {
-            debugInfo("[STATE-FLEE] Adding Poison Bait scenario (trigger Antidote while fleeing)")
             push(scenarios, poisonBait)
         }
 
         var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
         if (poisonDump != null) {
-            debugInfo("[STATE-FLEE] Adding Poison Dump scenario (Antidote window - use at all cost)")
             push(scenarios, poisonDump)
         }
 
         var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
         if (grappleCovid != null) {
-            debugInfo("[STATE-FLEE] Adding GRAPPLE-COVID combo scenario")
             push(scenarios, grappleCovid)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
-            debugInfo("[STATE-FLEE] Adding Shield Rotation scenario (universal)")
             push(scenarios, shieldRotation)
         }
 
         var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
         if (damageReturnCycling != null) {
-            debugInfo("[STATE-FLEE] Adding Damage Return Cycling scenario (agility)")
             push(scenarios, damageReturnCycling)
         }
 
@@ -499,7 +411,6 @@ class ScenarioGenerator extends ScenarioCombos {
         if (teleportReady) {
             var currentThreat = this._fieldMap.getThreatAtCell(player._cellPos)
             if (currentThreat > 200) {
-                debugInfo("[STATE-FLEE] High threat detected (" + currentThreat + ") - prioritizing TELEPORT escape")
                 var escapeScenario = this.createTeleportEscapeScenario(availableTP, availableMP)
                 if (escapeScenario != null) {
                     push(scenarios, escapeScenario)
@@ -509,13 +420,11 @@ class ScenarioGenerator extends ScenarioCombos {
 
         var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
         if (healRecheck != null) {
-            debugInfo("[STATE-FLEE] Adding emergency Heal-Recheck checkpoint scenario")
             push(scenarios, healRecheck)
         }
 
         var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
         if (buffApproach != null) {
-            debugInfo("[STATE-FLEE] Adding Buff + Approach scenario (enemy out of range)")
             push(scenarios, buffApproach)
         }
 
@@ -523,11 +432,9 @@ class ScenarioGenerator extends ScenarioCombos {
         var regenAvailable = hasRegen && getCooldown(CHIP_REGENERATION, player._id) == 0
 
         if (regenAvailable) {
-            debugInfo("[STATE-FLEE] REGENERATION available - defensive healing")
             push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))
             push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "hide"), availableTP, availableMP))
         } else {
-            debugInfo("[STATE-FLEE] REGENERATION on cooldown - lifesteal strategy (ENHANCED_LIGHTNINGER spam)")
             push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))
             push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))
         }
@@ -536,49 +443,34 @@ class ScenarioGenerator extends ScenarioCombos {
         push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
     }
 
-    // =========================================================================
-    // Boss PUZZLE Phase Scenarios
-    // =========================================================================
-
     buildPuzzleScenarios(scenarios, availableTP, availableMP) {
         var crystalInfo = "null"
         if (_bossTargetEID != null) {
             crystalInfo = _myCrystalColor + " cell=" + _myCrystalCell + " solved=" + _myCrystalSolved
         }
-        debugInfo("[STATE-PUZZLE] Boss PUZZLE phase — crystal=" + crystalInfo + " pos=" + this._player._cellPos)
 
-        // Crystal slide: move to position + grapple/boxing_glove
         var slide = this.createCrystalSlideScenario(availableTP, availableMP)
         if (slide != null) {
-            debugInfo("[STATE-PUZZLE] Adding Crystal Slide scenario")
             push(scenarios, slide)
         }
 
-        // Multi-slide: if positioned, do multiple grapples in one turn
         var multiSlide = this.createMultiSlideScenario(availableTP, availableMP)
         if (multiSlide != null) {
-            debugInfo("[STATE-PUZZLE] Adding Multi-Slide scenario")
             push(scenarios, multiSlide)
         }
 
-        // Inversion: teleport crystal when far from axis (>8 cells)
         var inversion = this.createCrystalInversionScenario(availableTP, availableMP)
         if (inversion != null) {
-            debugInfo("[STATE-PUZZLE] Adding Crystal Inversion scenario")
             push(scenarios, inversion)
         }
 
-        // Approach-only: when too far to act this turn
         var approach = this.createCrystalApproachScenario(availableTP, availableMP)
         if (approach != null) {
-            debugInfo("[STATE-PUZZLE] Adding Crystal Approach scenario")
             push(scenarios, approach)
         }
 
-        // Defense: heals/shields when crystal is solved or no action possible
         var defense = this.createPuzzleDefenseScenario(availableTP, availableMP)
         if (defense != null) {
-            debugInfo("[STATE-PUZZLE] Adding Puzzle Defense scenario")
             push(scenarios, defense)
         }
     }

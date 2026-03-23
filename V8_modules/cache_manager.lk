@@ -1,5 +1,4 @@
 
-include('operation_tracker.lk')
 
 global __adversarialThreatCache = [:]
 global __adversarialThreatCacheBuilt = false
@@ -38,7 +37,6 @@ function buildReachableCellsCache(fromCell, mp) {
     mapPut(reachable, fromCell, 0)
 
     while (queueIndex < count(queue)) {
-        // Safety valve (raised to 12M for deeper search)
         if (getOperations() > 12000000) {
             break
         }
@@ -49,7 +47,6 @@ function buildReachableCellsCache(fromCell, mp) {
         var currentCell = current['cell']
         var currentCost = current['cost']
 
-        // 6 hex neighbors only (no diagonals 19/-19 on hex grid)
         var neighbors = [
             currentCell + 1,
             currentCell - 1,
@@ -81,12 +78,10 @@ function buildReachableCellsCache(fromCell, mp) {
 }
 
 function isCachedReachableCell(fromCell, toCell, mp) {
-    // Use new ReachableGraph from performance_infra.lk
     return isReachable(fromCell, toCell, mp)
 }
 
 function getCachedMPCost(fromCell, toCell, mp) {
-    // O(1) lookup for MP cost (replaces multiple getCachedPathLength calls)
     return getMPCostToCell(fromCell, toCell, mp)
 }
 
@@ -142,7 +137,7 @@ function getCachedNetDamage(itemId) {
 }
 
 function buildCostCache(arsenal) {
-    
+
     for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
         __chipCostCache[chipId] = getChipCost(chipId)
     }
@@ -157,7 +152,7 @@ function getCachedChipCost(chipId) {
     if (mapContainsKey(__chipCostCache, chipId)) {
         return __chipCostCache[chipId]
     }
-    
+
     var cost = getChipCost(chipId)
     __chipCostCache[chipId] = cost
     return cost
@@ -167,7 +162,7 @@ function getCachedWeaponCost(weaponId, arsenal) {
     if (mapContainsKey(__weaponCostCache, weaponId)) {
         return __weaponCostCache[weaponId]
     }
-    
+
     var weapon = null
     if (mapContainsKey(arsenal.playerEquippedWeapons, weaponId)) {
         weapon = arsenal.playerEquippedWeapons[weaponId]
@@ -182,19 +177,11 @@ function getCachedWeaponCost(weaponId, arsenal) {
 }
 
 function initializeCaches(player, target, arsenal) {
-    startOp()
     clearCaches()
-    stopOp("Clear caches")
 
-    startOp()
     initializePerformanceInfra()
-    stopOp("Initialize performance infrastructure")
 
-    startOp()
     buildDamageCache(arsenal, player, target)
-    stopOp("Build damage cache")
 
-    startOp()
     buildCostCache(arsenal)
-    stopOp("Build cost cache")
 }

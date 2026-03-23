@@ -1,27 +1,22 @@
-// Unified Reachable Graph - Phase 1 Optimization
-// Precomputes reachability data once per turn, shared by all consumers
 
-// Global adjacency map (initialized once on turn 1)
-global GLOBAL_NEIGHBORS = null
+global GLOBAL_NEIGHBORS = []
 global ReachableGraph = null
 
-// Initialize adjacency map (run once on turn 1)
 function initializeAdjacency() {
-    if (GLOBAL_NEIGHBORS != null) return null
+    if (count(GLOBAL_NEIGHBORS) > 0) return null
 
     GLOBAL_NEIGHBORS = []
 
     for (var cell = 0; cell < 613; cell++) {
         var neighbors = []
 
-        // Hexagonal grid neighbors
         var candidates = [
-            cell - 18,  // NW
-            cell - 17,  // NE
-            cell - 1,   // W
-            cell + 1,   // E
-            cell + 17,  // SW
-            cell + 18   // SE
+            cell - 18,
+            cell - 17,
+            cell - 1,
+            cell + 1,
+            cell + 17,
+            cell + 18
         ]
 
         for (var n in candidates) {
@@ -39,20 +34,15 @@ function initializeAdjacency() {
     return null
 }
 
-// Build reachable graph with BFS (flat arrays for parser safety)
 function buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj) {
-    startOp()
 
-    // Use map instead of array for mpCost (LeekScript doesn't support direct array indexing)
     var mpCost = [:]
 
-    // BFS queue (head-pointer to avoid expensive remove)
     var queue = [startCell]
     var head = 0
     mpCost[startCell] = 0
 
     while (head < count(queue)) {
-        // Safety valve (raised to 12M for deeper search)
         if (getOperations() > 12000000) {
             break
         }
@@ -63,7 +53,6 @@ function buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj)
         var currentCost = mpCost[current]
         if (currentCost >= maxMP) continue
 
-        // Use precomputed neighbors
         var neighbors = GLOBAL_NEIGHBORS[current]
         for (var neighbor in neighbors) {
             if (!mapContainsKey(mpCost, neighbor)) {
@@ -73,35 +62,26 @@ function buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj)
         }
     }
 
-    var bfsOps = stopOp("BFS Pathfinding")
-
-    // Enrich with damage/threat data
-    startOp()
     ReachableGraph = enrichReachableGraph(mpCost, playerObj, targetObj, arsenalObj)
-    var enrichOps = stopOp("Graph Enrichment")
 
     var cellCount = count(mapKeys(ReachableGraph))
 
     return ReachableGraph
 }
 
-// Enrich graph with threat data (simplified - no damage calculation)
 function enrichReachableGraph(mpCost, playerObj, targetObj, arsenalObj) {
     var graph = [:]
 
-    // Iterate only over reachable cells (keys in mpCost map)
     for (var cellId in mapKeys(mpCost)) {
-        // Store simple data structure
         graph[cellId] = [
             'mp': mpCost[cellId],
-            'threat': 0  // Will be set by field map
+            'threat': 0
         ]
     }
 
     return graph
 }
 
-// O(1) lookup helpers
 function getGraphMPCost(cellId) {
     if (ReachableGraph == null) return 999
     if (!mapContainsKey(ReachableGraph, cellId)) return 999

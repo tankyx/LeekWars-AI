@@ -31,7 +31,7 @@ class Strategy {
         var y1 = getCellY(cell1)
         var x2 = getCellX(cell2)
         var y2 = getCellY(cell2)
-        
+
         return abs(x2 - x1) == abs(y2 - y1)
     }
 
@@ -271,7 +271,6 @@ class Strategy {
             return false
         }
 
-        // Push/pull chips require same-line alignment even when targeting by cell
         if (isPushPullChip && !isOnSameLine(fromCell, toCell)) {
             return false
         }
@@ -282,27 +281,27 @@ class Strategy {
 
         return true
     }
-    
+
     hasResourcesFor(action) {
         var tpCost = 0
         var mpCost = 0
-        
+
         if (action.weaponId != -1) {
             var weapon = arsenal.playerEquippedWeapons[action.weaponId]
             if (weapon != null) tpCost += weapon._cost
         }
-        
+
         if (action.chip != -1) {
             tpCost += getChipCost(action.chip)
         }
-        
+
         if (action.type == Action.MOVEMENT_OFFENSIVE ||
             action.type == Action.MOVEMENT_HNS ||
             action.type == Action.MOVEMENT_APPROACH) {
             var pathLen = getCachedPathLength(player._cellPos, action.targetCell)
             if (pathLen != null && pathLen > player._currMp) return false
         }
-        
+
         return player._currTp >= tpCost
     }
 
@@ -343,7 +342,7 @@ class Strategy {
                 return true
             }
         }
-        
+
         else {
             var pathToSecondary = getCachedPathLength(targetCell, secondaryCell)
             if (pathToSecondary == null) return false
@@ -393,7 +392,7 @@ class Strategy {
         }
 
         if (minWeaponTP == 999) {
-            
+
             var cheapestCost = 999
             for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
                 var wObj = arsenal.playerEquippedWeapons[wid]
@@ -438,7 +437,6 @@ class Strategy {
         var maxKite = playerMaxRange     
         var optimalKite = minKite + 1    
 
-
         return ['min': minKite, 'max': maxKite, 'optimal': optimalKite, 'enemyRange': enemyMaxRange, 'playerRange': playerMaxRange]
     }
 
@@ -447,7 +445,6 @@ class Strategy {
     }
 
     debugStrategy(message) {
-        debugInfo("[" + this.getStrategyName() + "] " + message)
     }
 
     selectBestTarget() {
@@ -479,14 +476,11 @@ class Strategy {
                 score -= dist * 10
             }
 
-
             if (score > bestScore) {
                 bestScore = score
                 best = e
             }
         }
-
-        debugInfo("[TARGET-SELECTION] " + (best != null ? "Selected " + getName(best._id) + " (score=" + bestScore + ")" : "No targets found"))
 
         return best
     }
@@ -555,7 +549,7 @@ class Strategy {
 
         if (includeBuffs) {
             if (this.getStrategyName() == "STR") {
-                
+
                 if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID) &&
                     getCooldown(CHIP_STEROID, player._id) == 0 &&
                     !player.hasEffect(EFFECT_BUFF_STRENGTH)) {
@@ -564,7 +558,7 @@ class Strategy {
                 }
             }
             else if (this.getStrategyName() == "AGI") {
-                
+
                 if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP) &&
                     getCooldown(CHIP_WARM_UP, player._id) == 0 &&
                     !player.hasEffect(EFFECT_BUFF_AGILITY)) {
@@ -645,7 +639,7 @@ class Strategy {
 
             if (mapContainsKey(fieldMap.damageMap, cell)) {
                 var cellObj = fieldMap.damageMap[cell]
-                
+
                 if (cellObj._totalDamage > bestDamage || (cellObj._totalDamage == bestDamage && distToCell < bestDist)) {
                     bestDamage = cellObj._totalDamage
                     bestCell = cellObj
@@ -654,7 +648,6 @@ class Strategy {
             }
         }
 
-
         return bestCell
     }
 
@@ -662,7 +655,6 @@ class Strategy {
         var playerPos = player._cellPos
         var originalTP = availableTP
         var minTPReserve = 2  
-
 
         var usableChips = []
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
@@ -716,9 +708,8 @@ class Strategy {
 
         var tpSpent = originalTP - availableTP
         if (chipsUsed > 0) {
-            
+
             player.updateEntity()
-        } else {
         }
 
         return tpSpent
@@ -740,17 +731,13 @@ class Strategy {
             var distToSafeFromHere = getCachedPathLength(cellObj._id, safeCell)
 
             if (distToSafeFromHere != null && distToSafeFromHere <= remainingMP) {
-                
+
                 if (cellObj._totalDamage > bestDamage || (cellObj._totalDamage == bestDamage && distToCell < bestDist)) {
                     bestDamage = cellObj._totalDamage
                     bestCell = cellObj
                     bestDist = distToCell
                 }
             }
-        }
-
-        if (bestCell != null) {
-        } else {
         }
 
         return bestCell
@@ -783,7 +770,7 @@ class Strategy {
                 var distToSafeFromHere = getCachedPathLength(pathCell, safeCell)
 
                 if (distToSafeFromHere != null && distToSafeFromHere <= remainingMP) {
-                    
+
                     if (cellObj._totalDamage > bestDamage || (cellObj._totalDamage == bestDamage && distToCell < bestDist)) {
                         bestDamage = cellObj._totalDamage
                         bestCell = cellObj
@@ -791,10 +778,6 @@ class Strategy {
                     }
                 }
             }
-        }
-
-        if (bestCell != null) {
-        } else {
         }
 
         return bestCell
@@ -841,16 +824,11 @@ class Strategy {
     }
 
     turnOneBuffs() {
-        // Boss PUZZLE phase: skip ALL turn-1 buffs — save TP for teleportation (9 TP)
-        // into the crystal enclave. Enemies are invincible during PUZZLE anyway.
         if (_isBossFight && _bossPhase == "PUZZLE") { return; }
 
         for (var c in mapKeys(arsenal.playerEquippedChips)) {
         }
 
-        // Magic builds: skip turn-1 HP buffs entirely — save all 9 TP for
-        // the scenario engine (Wizardry + Boots + approach). Elevation/Armoring
-        // will be cast via mutation insertions on later turns when TP is banked.
         var isMagicBuild = player._magic > player._strength + 100 && player._magic > player._agility + 100
         if (!isMagicBuild) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
@@ -896,28 +874,6 @@ class Strategy {
             }
         }
 
-        if (player._strength >= player._agility && player._strength >= player._magic) {
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID)) {
-                
-                var skipSteroidForOTKO = false
-
-                if (closestEnemy != null && player._currTp >= 15) {
-
-                    var teleportInfo = fieldMap.findOptimalTeleportCell(closestEnemy)
-                    if (teleportInfo != null && teleportInfo['killProbability'] >= 0.85) {
-                        skipSteroidForOTKO = true
-                        debugDetail("[BUFF-SKIP] OTKO available via teleport: " +
-                              round(teleportInfo['killProbability'] * 100) + "% kill prob, saving 7 TP for burst)")
-                    }
-                }
-
-                if (false && !skipSteroidForOTKO) {
-                    useChip(CHIP_STEROID, player._id)
-                }
-            } else {
-            }
-        }
-
         if (getWeapon() == null) {
             setWeapon(arsenal.getHighestDamageWeapon())
         }
@@ -936,7 +892,7 @@ class Strategy {
     }
 
     createAttackAction(type, target, weaponID = -1, chipID = -1, aimCell = -1) {
-        
+
         var targetCell = (aimCell != -1) ? aimCell : target._cellPos
 
         push(this._actions, new Action(
@@ -947,30 +903,25 @@ class Strategy {
             target
         ))
 
-        if (aimCell != -1 && aimCell != target._cellPos) {
-            debugDetail("[AoE-AIM] " +
-                  " aiming at OFFSET cell " + aimCell + " (target at " + target._cellPos + ")")
-        } else {
-        }
     }
 
     createOffensiveScenario(target, targetHitCell) {
-        
+
         if (player._magic > player._strength) {
-            
+
             var weightedCell = fieldMap.getBestWeightedDamageCell(1.5, 1)
             if (weightedCell != -1) {
                 targetHitCell = weightedCell
             }
         }
-        
+
         var hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
         if (hnsApproach != null) {
-            
+
             var adopt = false
             if (hnsApproach['canAttack'] || targetHitCell == -1) adopt = true
             else if (targetHitCell != -1 && targetHitCell != null) {
-                
+
                 if (mapContainsKey(fieldMap.damageMap, hnsApproach['cell']) && mapContainsKey(fieldMap.damageMap, targetHitCell._id)) {
                     var hCellObj = fieldMap.damageMap[hnsApproach['cell']]
                     if (hCellObj._totalDamage == targetHitCell._totalDamage) {
@@ -981,40 +932,36 @@ class Strategy {
                 }
             }
             if (adopt) {
-                if (targetHitCell != -1 && targetHitCell != null && targetHitCell._id != hnsApproach['cell']) {
-                }
-                
+
                 if (mapContainsKey(fieldMap.damageMap, hnsApproach['cell'])) {
                     targetHitCell = fieldMap.damageMap[hnsApproach['cell']]
                 } else {
-                    
+
                     targetHitCell = new Cell(hnsApproach['cell'], false, -1, 0, 0, false, -1, -1)
                 }
             }
         }
-        
+
         var playerPos = player._cellPos
         var playerMP = player._currMp
         var playerTP = player._currTp
         var pathLength = getCachedPathLength(playerPos, targetHitCell._id)
 
-
         if (pathLength > playerMP) {
-            
+
             createMovementAction(Action.MOVEMENT_APPROACH, targetHitCell._id, target)
             return;
         }
-        
+
         if (pathLength > 0) {
             createMovementAction(Action.MOVEMENT_OFFENSIVE, targetHitCell._id, target)
-        } else {
         }
 
         playerPos = targetHitCell._id
         playerMP -= pathLength
 
         if (targetHitCell._bestType == 0 && targetHitCell._highestDamageWeapon != -1) {
-            
+
             if (getWeapon() != targetHitCell._highestDamageWeapon._id) {
                 if (playerTP < 1 + targetHitCell._highestDamageWeapon._cost) {
                 } else {
@@ -1030,9 +977,9 @@ class Strategy {
             }
         }
         else if (targetHitCell._bestType == 1 && targetHitCell._highestDamageChip != -1) {
-            
+
             var chipRef = targetHitCell._highestDamageChip
-            
+
             var chipUses = chipRef._maxUse
             while (playerTP >= chipRef._cost && chipUses > 0) {
                 createAttackAction(Action.ACTION_DIRECT, target, -1, chipRef._id)
@@ -1061,7 +1008,6 @@ class Strategy {
                 if (secondPathLength > 0) {
                     createMovementAction(Action.MOVEMENT_OFFENSIVE, secondHitCell._id, target)
                     playerMP -= secondPathLength
-                } else {
                 }
                 createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, -1)
                 playerTP -= 1
@@ -1074,7 +1020,7 @@ class Strategy {
 
         if (playerTP > 0) {
             if (targetHitCell._bestType == 0) {
-                
+
                 for (var c in arsenal.playerEquippedChips) {
                     if (playerTP < c._cost) continue
                     if (!mapContainsKey(c._effects, EFFECT_DAMAGE) && !mapContainsKey(c._effects, EFFECT_POISON)) continue
@@ -1082,7 +1028,7 @@ class Strategy {
                     playerTP -= c._cost
                 }
             } else {
-                
+
                 var activeWeapon = getWeapon()
                 if (activeWeapon != null && mapContainsKey(arsenal.playerEquippedWeapons, activeWeapon)) {
                     var aw = arsenal.playerEquippedWeapons[activeWeapon]
@@ -1105,16 +1051,14 @@ class Strategy {
                     if (legLen != null && legLen <= playerMP) {
                         createMovementAction(Action.MOVEMENT_HNS, hideCellId, target)
                         playerMP -= legLen
-                    } else if (legLen != null) {
                     }
-                } else {
                 }
             }
         }
     }
 
     executeWeaponFocusedOffensive(target, bestWeaponCell, playerPos, playerMP, playerTP, chipExclusionList, debugPrefix, skipHideAndSeek) {
-        
+
         if (skipHideAndSeek == null) skipHideAndSeek = false
 
         var hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
@@ -1135,11 +1079,11 @@ class Strategy {
         if (pathLen == null) pathLen = 99999
         var reachedWeaponCell = false
         if (pathLen > playerMP) {
-            
+
             var reachableCell = this.findBestReachableDamageCell(playerMP)
 
             if (reachableCell != null && reachableCell._id != playerPos) {
-                
+
                 this.createMovementAction(Action.MOVEMENT_APPROACH, reachableCell._id, target)
 
                 this.executeAndFlushActions()
@@ -1152,18 +1096,17 @@ class Strategy {
                     bestWeaponCell = reachableCell  
                 }
             } else {
-                
 
                 var usedLeatherBoots = false
                 if (mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
                     getCooldown(CHIP_LEATHER_BOOTS, player._id) == 0 &&
                     playerTP >= 3) {
-                    
+
                     var boostedMP = playerMP + 2  
                     var wouldReachCell = this.findBestReachableDamageCell(boostedMP)
 
                     if (wouldReachCell != null) {
-                        
+
                         useChip(CHIP_LEATHER_BOOTS, player._id)
                         playerTP -= 3
 
@@ -1172,11 +1115,10 @@ class Strategy {
                         usedLeatherBoots = true
 
                         reachableCell = this.findBestReachableDamageCell(playerMP)
-                    } else {
                     }
 
                     if (reachableCell != null && reachableCell._id != playerPos) {
-                        
+
                         this.createMovementAction(Action.MOVEMENT_APPROACH, reachableCell._id, target)
 
                         this.executeAndFlushActions()
@@ -1213,21 +1155,17 @@ class Strategy {
                             playerTP -= tpTeleportApproach
 
                             if (teleportResult == USE_SUCCESS || teleportResult == USE_CRITICAL) {
-                                
+
                                 player.updateEntity()
                                 playerPos = player._cellPos
                                 playerMP = player._currMp
                                 playerTP = player._currTp
 
-
                                 if (playerPos == bestWeaponCell._id) {
                                     reachedWeaponCell = true
-                                } else {
                                 }
-                            } else {
                             }
                         }
-                    } else {
                     }
                 }
 
@@ -1236,7 +1174,7 @@ class Strategy {
                     var cellOnPath = this.findBestDamageCellOnPath(bestWeaponCell._id, playerMP)
 
                     if (cellOnPath != null && cellOnPath._id != playerPos) {
-                        
+
                         this.createMovementAction(Action.MOVEMENT_APPROACH, cellOnPath._id, target)
 
                         this.executeAndFlushActions()
@@ -1249,7 +1187,6 @@ class Strategy {
                             bestWeaponCell = cellOnPath
                         }
                     } else {
-                        
 
                         var tpSpentOnChips = this.useApproachChipsFromCurrentPosition(target, playerTP, debugPrefix)
                         if (tpSpentOnChips > 0) {
@@ -1269,7 +1206,6 @@ class Strategy {
                                 reachedWeaponCell = true
                                 bestWeaponCell = fieldMap.damageMap[playerPos]
                             }
-                        } else {
                         }
                     }
                 }
@@ -1283,7 +1219,6 @@ class Strategy {
         } else {
             reachedWeaponCell = true
         }
-
 
         if (!reachedWeaponCell && playerMP == 0) {
             var curCellCheck = mapContainsKey(fieldMap.damageMap, playerPos) ? fieldMap.damageMap[playerPos] : null
@@ -1301,14 +1236,13 @@ class Strategy {
                     this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, primaryWeapon._id, -1)
                     playerTP -= 1
                     primaryWeaponReady = true
-                } else {
                 }
             } else {
                 primaryWeaponReady = true
             }
 
             if (primaryWeaponReady) {
-                
+
                 var currentCellObj = mapContainsKey(fieldMap.damageMap, playerPos) ?
                                      fieldMap.damageMap[playerPos] : null
                 var optimalAim = target._cellPos  
@@ -1325,7 +1259,6 @@ class Strategy {
                     uses -= 1
                 }
             }
-        } else if (!reachedWeaponCell) {
         }
 
         var primaryWid = (reachedWeaponCell && primaryWeapon != -1 && primaryWeapon != null) ? primaryWeapon._id : -1
@@ -1335,7 +1268,7 @@ class Strategy {
         }
 
         if (curCellObj != null && count(curCellObj._weaponsList) > 0) {
-            
+
             for (var wL = 0; wL < count(curCellObj._weaponsList); wL++) {
                 var wObj = curCellObj._weaponsList[wL]
                 if (wObj == null) continue
@@ -1362,7 +1295,6 @@ class Strategy {
                 }
             }
         } else if (curCellObj == null && playerTP > 0) {
-            
 
             var fallbackWeapons = []
             for (var fwid in mapKeys(arsenal.playerEquippedWeapons)) {
@@ -1409,20 +1341,16 @@ class Strategy {
                     fwuses += 1
                 }
 
-                if (fwuses > 0) {
-                }
-
                 if (playerTP <= 0) break
             }
 
             if (count(fallbackWeapons) == 0) {
             }
-        } else {
         }
 
         if (playerTP > 0 && curCellObj != null && count(curCellObj._chipsList) > 0) {
             var dmgChips = []
-            
+
             for (var cL = 0; cL < count(curCellObj._chipsList); cL++) {
                 var chipObj = curCellObj._chipsList[cL]
                 if (chipObj == null) continue
@@ -1483,7 +1411,6 @@ class Strategy {
                 if (playerTP <= 0) break
             }
         } else if (playerTP > 0 && curCellObj == null) {
-            
 
             var fallbackChips = []
             for (var fcid in mapKeys(arsenal.playerEquippedChips)) {
@@ -1534,15 +1461,11 @@ class Strategy {
                     factualUses += 1
                 }
 
-                if (factualUses > 0) {
-                }
-
                 if (playerTP <= 0) break
             }
 
             if (count(fallbackChips) == 0) {
             }
-        } else if (playerTP > 0) {
         }
 
         if (!skipHideAndSeek && playerMP > 0) {
@@ -1557,7 +1480,6 @@ class Strategy {
                     }
                 }
             }
-        } else if (skipHideAndSeek) {
         }
 
         return ['playerMP': playerMP, 'playerTP': playerTP]
@@ -1579,7 +1501,7 @@ class Strategy {
             var weapon = cell._weaponsList[wIdx]
 
             if (distToTarget >= weapon._minRange && distToTarget <= weapon._maxRange) {
-                
+
                 if (lineOfSight(position, target._cellPos)) {
                     var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, weapon._id)
                     var dmg = bd['total']
@@ -1609,7 +1531,7 @@ class Strategy {
                 var weapon = cell._weaponsList[wIdx]
 
                 if (distToTarget >= weapon._minRange && distToTarget <= weapon._maxRange) {
-                    
+
                     if (lineOfSight(position, target._cellPos)) {
                         var bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, weapon._id)
                         var dmg = bd['total']
@@ -1631,9 +1553,9 @@ class Strategy {
                 }
 
                 if (distToTarget >= chip._minRange && distToTarget <= chip._maxRange) {
-                    
+
                     if (lineOfSight(position, target._cellPos)) {
-                        
+
                         if (getCooldown(chip._id, player._id) == 0) {
                             var chipBd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chip._id)
                             var chipDmg = chipBd['total']
@@ -1677,7 +1599,7 @@ class Strategy {
                              fieldMap.damageMap[playerPos] : null
 
             if (attackType == 'weapon') {
-                
+
                 if (currPosObj != null && mapContainsKey(currPosObj._weaponOptimalAims, attackId)) {
                     fleeOptimalAim = currPosObj._weaponOptimalAims[attackId]
                 }
@@ -1695,7 +1617,7 @@ class Strategy {
                     uses -= 1
                 }
             } else {
-                
+
                 if (currPosObj != null && mapContainsKey(currPosObj._chipOptimalAims, attackId)) {
                     fleeOptimalAim = currPosObj._chipOptimalAims[attackId]
                 }
@@ -1716,14 +1638,14 @@ class Strategy {
         if (hns != null) {
             var hCell = hns['cell']
             if (hCell != player._cellPos) {
-                
+
                 if (!attackedFromCurrentPos && playerTP >= 6) {  
-                    
+
                     var nearbyDamageCell = this.findNearbyDamageCellWithEscape(hCell, playerMP)
                     var damageCellOnPath = nearbyDamageCell != null ? nearbyDamageCell : this.findDamageCellOnEscapeRoute(hCell, playerMP)
 
                     if (damageCellOnPath != null) {
-                        
+
                         this.createMovementAction(Action.MOVEMENT_HNS, damageCellOnPath._id, target)
 
                         this.executeAndFlushActions()
@@ -1744,7 +1666,7 @@ class Strategy {
                                             fieldMap.damageMap[newPos] : null
 
                             if (escapeAttackType == 'weapon') {
-                                
+
                                 if (newPosObj != null && mapContainsKey(newPosObj._weaponOptimalAims, escapeAttackId)) {
                                     newPosOptimalAim = newPosObj._weaponOptimalAims[escapeAttackId]
                                 }
@@ -1762,7 +1684,7 @@ class Strategy {
                                     uses2 -= 1
                                 }
                             } else {
-                                
+
                                 if (newPosObj != null && mapContainsKey(newPosObj._chipOptimalAims, escapeAttackId)) {
                                     newPosOptimalAim = newPosObj._chipOptimalAims[escapeAttackId]
                                 }
@@ -1786,17 +1708,16 @@ class Strategy {
                             }
                         }
                     } else {
-                        
+
                         this.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
                     }
                 } else {
-                    
+
                     this.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
                 }
-            } else {
             }
         } else {
-            
+
             var usedMp = moveAwayFrom(target._id)
         }
     }
@@ -1883,7 +1804,6 @@ class Strategy {
             getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
             playerTP >= tpTeleportFlee) {
 
-
             var bestSafeCell = -1
             var bestSafeCellDist = -1
 
@@ -1921,12 +1841,9 @@ class Strategy {
 
                 var attackAfterTeleport = this.findBestAttackAtPosition(bestSafeCell, target)
                 if (attackAfterTeleport != null && playerTP >= attackAfterTeleport['cost']) {
-                    debugDetail("[FLEE-ATTACK] After teleport can use: " +
-                          ((attackAfterTeleport['type'] == 'weapon') ? getWeaponName(attackAfterTeleport['id']) : getChipName(attackAfterTeleport['id'])) +
-                          ")")
 
                     if (attackAfterTeleport['type'] == 'weapon') {
-                        
+
                         var currentWeapon = getWeapon()
                         if (currentWeapon != attackAfterTeleport['id'] && playerTP >= 1 + attackAfterTeleport['cost']) {
                             this.createAttackAction(Action.ACTION_WEAPON_SWAP, target, attackAfterTeleport['id'], -1)
@@ -1940,7 +1857,7 @@ class Strategy {
                             uses -= 1
                         }
                     } else {
-                        
+
                         var chipUses = attackAfterTeleport['maxUse']
                         while (playerTP >= attackAfterTeleport['cost'] && chipUses > 0) {
                             this.createAttackAction(Action.ACTION_DIRECT, target, -1, attackAfterTeleport['id'], target._cellPos)
@@ -1967,11 +1884,9 @@ class Strategy {
         var useMultiScenario = true  
 
         if (useMultiScenario) {
-            startOp()
             this.generateAndEvaluateBestScenario(target, targetHitCell)
-            stopOp("Total Multi-Scenario Evaluation")
         } else {
-            
+
             if (this.shouldEnterEmergencyMode(target)) {
                 this.createEmergencyScenario(target, targetHitCell)
             } else {
@@ -1983,7 +1898,7 @@ class Strategy {
     }
 
     createOTKOScenario(target, targetHitCell) {
-        
+
         return false
     }
 
@@ -2002,15 +1917,13 @@ class Strategy {
         var killProbCurrent = burstFromCurrent / enemyHP
 
         if (killProbCurrent >= 0.85) {
-            debugDetail("[OTKO] From current position: damage=" + floor(burstFromCurrent) +
-                  " vs HP=" + enemyHP + " (" + floor(killProbCurrent * 100) + "% kill probability)")
             return true
         }
 
         var tpTeleportOTKO = getCachedChipCost(CHIP_TELEPORTATION)
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
             getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            playerTP >= tpTeleportOTKO + 6) {  // TELEPORT (9) + min attack
+            playerTP >= tpTeleportOTKO + 6) {
 
             var teleportInfo = fieldMap.findOptimalTeleportCell(target)
             if (teleportInfo != null) {
@@ -2018,8 +1931,6 @@ class Strategy {
                 var killProbTeleport = projectedDamage / enemyHP
 
                 if (killProbTeleport >= 0.85) {
-                    debugDetail("[OTKO] Via teleport: damage=" + floor(projectedDamage) +
-                          " vs HP=" + enemyHP + " (" + floor(killProbTeleport * 100) + "% kill probability, cell=" + teleportInfo['cell'] + ")")
                     return true
                 }
             }
@@ -2091,7 +2002,6 @@ class Strategy {
     }
 
     generateAndEvaluateBestScenario(target, targetHitCell) {
-        logCheckpoint("Start of multi-scenario evaluation")
 
         if (this.hasOTKOOpportunity(target)) {
             if (this.createOTKOScenario(target, targetHitCell)) {
@@ -2110,25 +2020,20 @@ class Strategy {
         var canAttackThisTurn = (distToTarget != null && distToTarget <= maxWeaponRange + currentMP)
 
         if (!canAttackThisTurn && distToTarget != null && distToTarget > 25) {
-            
+
             this.createMovementAction(Action.MOVEMENT_APPROACH, target._cellPos, target)
             return
         }
 
-        startOp()
         var generator = new ScenarioGenerator(arsenal, player, target, fieldMap, this)
         var scenarios = generator.generateScenarios()
         var scenarioCount = count(scenarios)
-        var genOps = stopOp("Scenario Generation (" + scenarioCount + " scenarios)")
 
         if (count(scenarios) == 0) {
             this.createOffensiveScenario(target, targetHitCell)
             return
         }
 
-        logCheckpoint("After scenario generation")
-
-        startOp()
         var quickScorer = new ScenarioQuickScorer(player, target, fieldMap, arsenal)
         var scenariosWithQuickScore = []
 
@@ -2144,23 +2049,17 @@ class Strategy {
             return b['quickScore'] - a['quickScore']
         })
 
-        var topK = 50  // Increased from 12 for deeper search
+        var topK = 50
         var evaluateCount = min(topK, count(scenariosWithQuickScore))
-        var quickOps = stopOp("Quick Score & Sort (" + count(scenariosWithQuickScore) + " -> top " + evaluateCount + ")")
-
 
         var simulator = new ScenarioSimulator(arsenal, player, target, fieldMap)
         var scorer = new ScenarioScorer(player, target, fieldMap, null)
-
-        // Phase 3: Monte Carlo simulator (100 iterations for efficiency)
-        var monteCarloSim = new MonteCarloSimulator(arsenal, player, target, 100)
 
         var bestScore = -999999
         var bestScenario = null
         var bestSimResult = null
         var scenarioResults = []
 
-        startOp()
         for (var i = 0; i < evaluateCount; i++) {
             var scenarioData = scenariosWithQuickScore[i]
             var scenario = scenarioData['scenario']
@@ -2169,7 +2068,6 @@ class Strategy {
             var simResult = simulator.simulate(scenario)
             var score = scorer.score(simResult, scenario)
 
-            // Store scenario with simulation result for lookahead
             push(scenarioResults, [
                 'scenario': scenario,
                 'simResult': simResult,
@@ -2177,18 +2075,14 @@ class Strategy {
                 'quickScore': qScore
             ])
 
-
             if (score > bestScore) {
                 bestScore = score
                 bestScenario = scenario
                 bestSimResult = simResult
             }
         }
-        var evalOps = stopOp("Full Simulation+Scoring (" + evaluateCount + " scenarios)")
 
-        // Phase 4: Enemy Response Lookahead (optimized: 1 scenario only)
         if (count(scenarioResults) >= 1 && getOperations() < 10000000) {
-            startOp()
             arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
@@ -2196,31 +2090,24 @@ class Strategy {
             var predictor = new EnemyPredictor(fieldMap, arsenal, player, target)
             var lookaheadCount = min(1, count(scenarioResults))
 
-
             for (var i = 0; i < lookaheadCount; i++) {
                 var scenarioData = scenarioResults[i]
                 var simResult = scenarioData['simResult']
 
-                // Create end state map for predictor (can't add fields to class instance)
                 var endState = [
                     'endPosition': simResult.finalPosition,
-                    'endHP': player._currHealth + simResult.hpGained,  // HP after heals
+                    'endHP': player._currHealth + simResult.hpGained,
                     'endTP': player._currTp - simResult.tpSpent,
                     'score': scenarioData['score']
                 ]
 
                 var lookahead = predictor.evaluateScenarioWithLookahead(endState, 0.7)
 
-                // Update score with lookahead
                 scenarioData['finalScore'] = lookahead['finalScore']
                 scenarioData['enemyDamage'] = lookahead['enemyDamage']
 
-                debugDetail("[LOOKAHEAD] Scenario " + i + ":" +
-                          " final=" + floor(lookahead['finalScore']) +
-                          " enemyDmg=" + lookahead['enemyDamage'])
             }
 
-            // Re-evaluate best scenario with lookahead scores
             for (var i = 0; i < lookaheadCount; i++) {
                 var scenarioData = scenarioResults[i]
                 if (mapContainsKey(scenarioData, 'finalScore')) {
@@ -2232,18 +2119,12 @@ class Strategy {
                 }
             }
 
-            var lookaheadOps = stopOp("Enemy Response Lookahead (top " + lookaheadCount + ")")
         }
 
         if (bestScenario == null) {
             this.createOffensiveScenario(target, targetHitCell)
             return
         }
-
-        debugDetail("[SCENARIO] Best: score=" + floor(bestScore) + " damage=" + floor(bestSimResult.damageDealt) +
-              " TP=" + bestSimResult.tpSpent + " | OPS: gen=" + genOps + " quick=" + quickOps + " eval=" + evalOps)
-
-        logCheckpoint("After scenario evaluation")
 
         arrayClear(this._actions)
         for (var action in bestScenario) {
@@ -2261,7 +2142,7 @@ class Strategy {
 
         var targetDied = false
         var consecutiveFailures = 0
-        var maxConsecutiveFailures = 2  // Interrupt threshold
+        var maxConsecutiveFailures = 2
         var attacksAttempted = 0
         var attacksSucceeded = 0
         var hasMoved = false
@@ -2269,9 +2150,7 @@ class Strategy {
 
         for (var a in this._actions) {
             if (a.type == Action.MOVEMENT_APPROACH || a.type == Action.MOVEMENT_OFFENSIVE || a.type == Action.MOVEMENT_DEFENSIVE || a.type == Action.MOVEMENT_OTKO || a.type == Action.MOVEMENT_DOT_OFFENSIVE || a.type == Action.MOVEMENT_DEBUFF) {
-                // Skip post-attack movement if all attacks failed (prevents move-fail-move-back)
                 if (hasMoved && attacksAttempted > 0 && attacksSucceeded == 0) {
-                    debugInfo("[EXEC] Skipping movement — attacks failed, avoiding wasted repositioning")
                     continue
                 }
                 var posBefore = getCell()
@@ -2289,7 +2168,6 @@ class Strategy {
                 setWeapon(a.weaponId)
             }
             else if (a.type == Action.ACTION_DIRECT || a.type == Action.ACTION_DOT || a.type == Action.ACTION_DEBUFF) {
-                // Check if target is still alive before attacking
                 if (a.targetEntity != null && isDead(a.targetEntity._id)) {
                     continue
                 }
@@ -2299,9 +2177,7 @@ class Strategy {
                 var targetPos = a.targetCell
                 var dist = getCellDistance(currentPos, targetPos)
 
-
                 if (a.chip != -1) {
-                    // Runtime AoE self-hit check (actual position, not simulated)
                     if (a.targetEntity != null && a.targetEntity._id != player._id) {
                         var chipItem = null
                         if (mapContainsKey(arsenal.playerEquippedChips, a.chip)) {
@@ -2309,7 +2185,6 @@ class Strategy {
                         }
                         if (chipItem != null && chipItem._aoeType != AREA_POINT) {
                             if (fieldMap.wouldAoEHitCell(targetPos, chipItem._aoeType, currentPos, currentPos)) {
-                                debugInfo("[EXEC] Skipping chip " + getChipName(a.chip) + " — AoE would self-hit")
                                 continue
                             }
                         }
@@ -2317,20 +2192,16 @@ class Strategy {
 
                     useChipOnCell(a.chip, a.targetCell)
 
-                    // Track INVERSION usage for boss PUZZLE phase
                     if (a.chip == CHIP_INVERSION && _isBossFight) {
                         _usedInversion = true
                     }
 
-                    // After GRAPPLE/BOXING_GLOVE, update target entity position
-                    // so subsequent actions in this turn use the new cell
                     if ((a.chip == CHIP_GRAPPLE || a.chip == CHIP_BOXING_GLOVE || a.chip == CHIP_INVERSION) && a.targetEntity != null && !isDead(a.targetEntity._id)) {
                         var oldEnemyCell = a.targetEntity._cellPos
                         a.targetEntity._cellPos = getCell(a.targetEntity._id)
                         a.targetEntity.updateEntity()
                         var newEnemyCell = a.targetEntity._cellPos
 
-                        // Patch remaining actions that target the old cell
                         if (oldEnemyCell != newEnemyCell) {
                             for (var futureAction in this._actions) {
                                 if (futureAction.targetCell == oldEnemyCell) {
@@ -2340,7 +2211,6 @@ class Strategy {
                         }
                     }
 
-                    // Check if target died from this attack
                     if (a.targetEntity != null && isDead(a.targetEntity._id)) {
                         targetDied = true
                         break
@@ -2368,11 +2238,9 @@ class Strategy {
                         continue
                     }
 
-
                     if (dist < minRange || dist > maxRange) {
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
-                            debugInfo("[INTERRUPT] Out of range " + consecutiveFailures + "x - disabling weapons")
                             weaponsDisabled = true
                             continue
                         }
@@ -2382,18 +2250,15 @@ class Strategy {
                     if (!lineOfSight(currentPos, targetPos)) {
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
-                            debugInfo("[INTERRUPT] No LoS " + consecutiveFailures + "x - disabling weapons")
                             weaponsDisabled = true
                             continue
                         }
                         continue
                     }
 
-                    // Runtime AoE self-hit check for weapons
                     var weaponItem = arsenal.playerEquippedWeapons[a.weaponId]
                     if (weaponItem != null && weaponItem._aoeType != AREA_POINT) {
                         if (fieldMap.wouldAoEHitCell(targetPos, weaponItem._aoeType, currentPos, currentPos)) {
-                            debugInfo("[EXEC] Skipping weapon — AoE would self-hit")
                             weaponsDisabled = true
                             continue
                         }
@@ -2413,16 +2278,14 @@ class Strategy {
                     if (result == USE_INVALID_TARGET || tpBefore == tpAfter) {
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
-                            debugInfo("[INTERRUPT] " + consecutiveFailures + " consecutive failures - disabling weapons")
                             weaponsDisabled = true
                             continue
                         }
                         continue
                     }
-                    consecutiveFailures = 0  // Reset on success
+                    consecutiveFailures = 0
                     attacksSucceeded++
 
-                    // Check if target died from this weapon attack
                     if (a.targetEntity != null && isDead(a.targetEntity._id)) {
                         targetDied = true
                         break
@@ -2450,7 +2313,6 @@ class Strategy {
                     var currentPos = getCell()
                     var dist = getCellDistance(currentPos, a.targetCell)
 
-
                     var isObst = isObstacle(a.targetCell)
                     var isEnt = isEntity(a.targetCell)
 
@@ -2458,26 +2320,22 @@ class Strategy {
                         if (isObst || isEnt) {
                         } else if (dist == null || dist < 1 || dist > 12) {
                         } else {
-                            
+
                             var result = useChipOnCell(a.chip, a.targetCell)
                         }
-                    } else {
                     }
                 }
             }
             else if (a.type == Action.ACTION_SUMMON) {
-                // Summon handled post-combat now; this path kept as fallback
                 if (a.chip != -1 && a.targetCell != -1 && a.bulbAIFunc != null) {
                     var cooldown = getCooldown(a.chip, getEntity())
                     var cost = getChipCost(a.chip)
                     if (cooldown == 0 && getTP() >= cost && !isObstacle(a.targetCell) && !isEntity(a.targetCell)) {
                         summon(a.chip, a.targetCell, a.bulbAIFunc)
-                        debugInfo("[SUMMON] Summoned bulb at cell " + a.targetCell)
                     }
                 }
             }
             else if (a.type == Action.ACTION_CHECKPOINT) {
-
 
                 player.updateEntity()
 
@@ -2488,15 +2346,12 @@ class Strategy {
                     for (var contAction in continuation) {
                         push(this._actions, contAction)
                     }
-                } else {
                 }
             }
         }
 
-
-        // Post-combat bulb summoning: use remaining TP to summon a bulb
         if (getTP() >= 16) {
-            player.updateEntity()  // Refresh position after combat movement
+            player.updateEntity()
             var _summonHelper = new ScenarioHelpers(arsenal, player, player, this._fieldMap, this)
             var summonAction = _summonHelper.createSummonAction()
             if (summonAction != null) {
@@ -2508,17 +2363,11 @@ class Strategy {
                     var sCost = getChipCost(sChip)
                     if (sCD == 0 && getTP() >= sCost && !isObstacle(sCell) && !isEntity(sCell)) {
                         var sResult = summon(sChip, sCell, sAI)
-                        debugInfo("[SUMMON] Summoned bulb at cell " + sCell + " with " + getChipName(sChip) + " (result=" + sResult + ", TP remaining=" + getTP() + ")")
-                    } else {
-                        debugInfo("[SUMMON] Blocked post-combat: CD=" + sCD + " TP=" + getTP() + "/" + sCost + " obs=" + isObstacle(sCell) + " ent=" + isEntity(sCell))
                     }
                 }
             }
         }
 
-        // Track actual poison duration on target for next turn's Antidote detection
-        // Store the real remaining duration, not a boolean flag
-        // Find the target entity from executed actions (first non-self targetEntity)
         var poisonTrackTarget = null
         for (var action in this._actions) {
             if (action.targetEntity != null && action.targetEntity._id != player._id) {
@@ -2567,15 +2416,13 @@ class Strategy {
         var currentPos = getCell()
         var enemyHP = target._currHealth
 
-
         var burstDamage = this.calculateBurstDamage(target, currentPos, currentTP)
         var killProb = burstDamage / enemyHP
-
 
         if (killProb >= 0.85) {
             return this.generateOTKOBurstContinuation(target, currentTP)
         }
-        
+
         else {
             return this.generateNormalAttackContinuation(target, currentTP)
         }
@@ -2596,12 +2443,11 @@ class Strategy {
         var baseDamage = this.calculateBurstDamage(target, getCell(), currentTP)
         var amplifiedDamage = baseDamage * multiplier
 
-
         var damageRatio = amplifiedDamage / enemyHP
         if (damageRatio >= 0.7) {
             return this.generateAggressiveBurstContinuation(target, currentTP)
         }
-        
+
         else {
             return this.generateBalancedAttackContinuation(target, currentTP)
         }
@@ -2616,15 +2462,14 @@ class Strategy {
         var hpPercent = (currentHP * 100) / maxHP
         var currentTP = getTP()
 
-
         if (hpPercent > 60) {
             return this.generateAggressiveBurstContinuation(target, currentTP)
         }
-        
+
         else if (hpPercent > 40) {
             return this.generateBalancedAttackContinuation(target, currentTP)
         }
-        
+
         else {
             return this.generateDefensiveKiteContinuation(target, currentTP)
         }
@@ -2636,7 +2481,7 @@ class Strategy {
 
         if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
             getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            availableTP >= tpTeleportBurst + 3) {  // TELEPORT + min attack cost
+            availableTP >= tpTeleportBurst + 3) {
 
             var bestOTKO = fieldMap.getBestOTKOCell()
             if (bestOTKO != null) {
@@ -2670,7 +2515,7 @@ class Strategy {
                 push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, target._cellPos, target))
             }
         } else {
-            
+
             var hideCell = fieldMap.getHideAndSeekCell()
             if (hideCell != null && getMP() >= 2) {
                 push(actions, new Action(Action.MOVEMENT_HNS, -1, -1, hideCell, target))
@@ -2786,7 +2631,7 @@ class Strategy {
 
         var path = getPath(player._cellPos, originalCell)
         if (path != null && count(path) > 0) {
-            
+
             for (var i = count(path) - 1; i >= 0; i--) {
                 var cell = path[i]
                 if (cell == player._cellPos) continue
@@ -2804,7 +2649,6 @@ class Strategy {
         var validActions = []
         var initialActionCount = count(this._actions)
         var fallbacksAdded = 0
-
 
         var simulatedPos = player._cellPos
         var simulatedTP = this._originalTP  
@@ -2825,7 +2669,6 @@ class Strategy {
                 action.type == Action.MOVEMENT_FLEE ||
                 action.type == Action.MOVEMENT_HNS) {
 
-                // Skip movement if already at target cell
                 if (action.targetCell != -1 && simulatedPos == action.targetCell) {
                     continue
                 }
@@ -2838,7 +2681,7 @@ class Strategy {
                         simulatedPos = action.targetCell  
                         simulatedMP -= mpCost  
                     } else {
-                        
+
                         var altCell = this.findAlternativeMovementCell(action.targetCell, simulatedMP)
                         if (altCell != -1) {
                             action.targetCell = altCell
@@ -2848,11 +2691,10 @@ class Strategy {
                             simulatedPos = altCell
                             simulatedMP -= altMpCost
                             fallbacksAdded += 1
-                        } else {
                         }
                     }
                 } else {
-                    
+
                     var altCell2 = this.findAlternativeMovementCell(action.targetCell, simulatedMP)
                     if (altCell2 != -1) {
                         action.targetCell = altCell2
@@ -2862,14 +2704,12 @@ class Strategy {
                         simulatedPos = altCell2
                         simulatedMP -= altMpCost2
                         fallbacksAdded += 1
-                    } else {
                     }
                 }
                 continue
             }
 
             if (action.type == Action.ACTION_SUMMON) {
-                // Validate summon: chip off cooldown, enough TP, target cell empty
                 if (action.chip != -1 && action.targetCell != -1) {
                     var summonCost = getChipCost(action.chip)
                     if (simulatedTP >= summonCost && getCooldown(action.chip, player._id) == 0 &&
@@ -2886,11 +2726,10 @@ class Strategy {
                 if (distTele != null && distTele >= 1 && distTele <= 12 && !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
                     push(validActions, action)
                     simulatedPos = action.targetCell
-                } else {
                 }
                 continue
             }
-            
+
             if (action.targetEntity != null && !action.targetEntity._isAlive) {
                 isValid = false
                 reason = "Target dead (ID: " + action.targetEntity._id + ")"
@@ -2899,7 +2738,7 @@ class Strategy {
             if (isValid && action.weaponId != -1 && action.type != Action.ACTION_WEAPON_SWAP && action.weaponId != simulatedEquippedWeapon) {
                 var weapon = arsenal.playerEquippedWeapons[action.weaponId]
                 if (weapon != null && simulatedTP >= 1 + weapon._cost) {
-                    
+
                     var swapAction = new Action(Action.ACTION_WEAPON_SWAP, action.weaponId, -1, -1, action.targetEntity)
                     push(validActions, swapAction)
                     simulatedTP -= 1
@@ -2941,7 +2780,7 @@ class Strategy {
                     reason = "Chip on cooldown: " + getChipName(action.chip)
                 }
             }
-            
+
             if (isValid && (action.type == Action.ACTION_DIRECT ||
                            action.type == Action.ACTION_DOT ||
                            action.type == Action.ACTION_DEBUFF ||
@@ -2952,14 +2791,12 @@ class Strategy {
                 }
             }
 
-            // Apocalypse guard: PUZZLE phase — whitelist only safe actions
             if (isValid && _isBossFight && _bossPhase == "PUZZLE") {
                 if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT) {
                     isValid = false
                     reason = "PUZZLE: damage action blocked (Apocalypse risk)"
                 }
                 if (isValid && action.type == Action.ACTION_DEBUFF) {
-                    // Only allow utility debuffs that move crystals
                     if (action.chip != CHIP_GRAPPLE && action.chip != CHIP_BOXING_GLOVE && action.chip != CHIP_INVERSION) {
                         isValid = false
                         reason = "PUZZLE: non-crystal debuff blocked"
@@ -2967,7 +2804,6 @@ class Strategy {
                 }
             }
 
-            // AoE self-damage guard: reject attacks that would hit the caster
             if (isValid && (action.type == Action.ACTION_DIRECT ||
                            action.type == Action.ACTION_DOT ||
                            action.type == Action.ACTION_DEBUFF)) {
@@ -2980,7 +2816,6 @@ class Strategy {
                 if (aoeItem != null && aoeItem._aoeType != AREA_POINT) {
                     var aimCell = action.targetCell
                     if (aimCell != -1 && aimCell != simulatedPos) {
-                        // Use game engine distance for reliable self-hit detection
                         if (fieldMap.wouldAoEHitCell(aimCell, aoeItem._aoeType, simulatedPos, simulatedPos)) {
                             isValid = false
                             reason = "AoE would hit caster"
@@ -2988,7 +2823,7 @@ class Strategy {
                     }
                 }
             }
-            
+
             if (isValid) {
                 push(validActions, action)
 
@@ -2999,7 +2834,7 @@ class Strategy {
                 } else if (action.weaponId != -1) {
                     var weapon = arsenal.playerEquippedWeapons[action.weaponId]
                     if (weapon != null) {
-                        
+
                         var swapCost = (simulatedEquippedWeapon != action.weaponId) ? 1 : 0
                         simulatedTP -= swapCost + weapon._cost
                         simulatedEquippedWeapon = action.weaponId  
@@ -3018,15 +2853,11 @@ class Strategy {
                         simulatedTP += 5
                     }
                 }
-            } else {
             }
         }
-        
-        var removedCount = initialActionCount - count(validActions)
-        if (removedCount > 0 || fallbacksAdded > 0) {
-        }
 
-        // Check if we have any damage-dealing actions remaining
+        var removedCount = initialActionCount - count(validActions)
+
         var hasDamageActions = false
         for (var action in validActions) {
             if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DEBUFF) {
@@ -3035,15 +2866,12 @@ class Strategy {
             }
         }
 
-        // Remove orphaned HNS movements (hide-and-seek after all attacks removed)
         if (!hasDamageActions) {
             var beforeCleanup = count(validActions)
             var cleanedActions = []
             for (var action in validActions) {
-                // Keep non-HNS movements and all other actions
                 if (action.type != Action.MOVEMENT_HNS) {
                     push(cleanedActions, action)
-                } else {
                 }
             }
 
@@ -3059,7 +2887,7 @@ class Strategy {
         if (!this.isChipAvailable(CHIP_ADRENALINE)) return false
 
         var playerTP = player._currTp
-        
+
         var shortage = requiredTP - playerTP
         if (shortage >= 1 && shortage <= 4) {
             return true
