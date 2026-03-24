@@ -58,6 +58,7 @@ function init() {
     }
 
     var buildType = detectBuildType(player)
+    __playerBuildType = buildType
     var weights = getWeightsForBuild(buildType)
     if (_isBossFight && _bossPhase == "PUZZLE") {
         weights = BOSS_PUZZLE_WEIGHTS

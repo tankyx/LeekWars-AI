@@ -135,6 +135,15 @@ class ScenarioHelpers {
             return "ATTRITION"
         }
 
+        // Build-aware defensive override: tanks and magic builds should not AGGRO
+        // against burst enemies in early turns — shield/heal first
+        if (currentTurn <= 4 && (__playerBuildType == BUILD_TANK_SCI || __playerBuildType == BUILD_MAGIC)) {
+            var enemyProfile = getEnemyProfile(this._target._id)
+            if (enemyProfile != null && enemyProfile['isBurstBuild']) {
+                return "SUSTAIN"
+            }
+        }
+
         var earlyGame = (currentTurn >= 1 && currentTurn <= 4)
         var buffsExpired = this.checkCriticalBuffsExpired()
 

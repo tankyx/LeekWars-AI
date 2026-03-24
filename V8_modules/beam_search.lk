@@ -307,6 +307,23 @@ function beamGetMoveCells(simPos, targetPos, simMP, arsenalObj, partial) {
     if (bestWeaponCell != -1 && bestWeaponCell != bestApproachCell) push(cells, bestWeaponCell)
     if (bestKiteCell != -1 && bestKiteCell != bestApproachCell && bestKiteCell != bestWeaponCell) push(cells, bestKiteCell)
 
+    // Threat-gate: filter out suicidal cells for defensive builds
+    if (__playerBuildType == BUILD_MAGIC || __playerBuildType == BUILD_TANK_SCI) {
+        if (__adversarialThreatCacheBuilt && count(cells) > 1) {
+            var playerHP = getLife()
+            var safeCells = []
+            for (var c in cells) {
+                var threat = getAdversarialThreat(c)
+                if (threat < playerHP * 0.50) {
+                    push(safeCells, c)
+                }
+            }
+            if (count(safeCells) > 0) {
+                cells = safeCells
+            }
+        }
+    }
+
     return cells
 }
 

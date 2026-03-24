@@ -256,6 +256,30 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         }
     }
 
+    // Mirror doctrine: break symmetry when facing same build type
+    if (primaryProfile != null) {
+        var enemyBuildType = primaryProfile['buildType']
+        if (enemyBuildType == __playerBuildType && enemyCount <= 1) {
+            var entityId = getEntity()
+            if (entityId % 2 == 0) {
+                // First-mover: compound advantage with defense
+                adapted['shieldValue'] = floor(adapted['shieldValue'] * 1.25)
+                adapted['healValue'] = floor(adapted['healValue'] * 1.20)
+                adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.20)
+                if (mapContainsKey(adapted, 'kiteDistance')) {
+                    adapted['kiteDistance'] = floor(adapted['kiteDistance'] * 1.30)
+                }
+            } else {
+                // Second-mover: compensate with aggression
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
+                adapted['distanceToTarget'] = floor(adapted['distanceToTarget'] * 1.3)
+                if (mapContainsKey(adapted, 'kiteDistance')) {
+                    adapted['kiteDistance'] = floor(adapted['kiteDistance'] * 0.7)
+                }
+            }
+        }
+    }
+
     return adapted
 }
 

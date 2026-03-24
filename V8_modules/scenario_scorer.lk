@@ -879,8 +879,19 @@ class ScenarioScorer {
         }
 
         var unspentTP = this._player._currTp - simResult.tpSpent
-        if (unspentTP > 5) {
-            value -= (unspentTP - 5) * 30
+        if (__playerBuildType == BUILD_TANK_SCI) {
+            // Tanks: allow banking up to 10 TP without penalty
+            if (unspentTP > 10) {
+                value -= (unspentTP - 10) * 15
+            }
+            // Bonus: banking TP when shield is down (enables next-turn combo)
+            if (unspentTP >= 6 && !this._player.hasEffect(EFFECT_RELATIVE_SHIELD)) {
+                value += 100
+            }
+        } else {
+            if (unspentTP > 5) {
+                value -= (unspentTP - 5) * 30
+            }
         }
 
         return value * 0.35
