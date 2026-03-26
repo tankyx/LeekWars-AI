@@ -62,6 +62,7 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
 
             for (var actionInfo in legalActions) {
                 var value = beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fieldMapObj)
+                if (value < 0) continue
                 var newCandidate = beamExtendCandidate(partial, actionInfo, value, targetObj, arsenalObj)
                 push(allCandidates, newCandidate)
             }

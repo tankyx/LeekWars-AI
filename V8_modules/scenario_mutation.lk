@@ -163,10 +163,12 @@ class ScenarioMutator {
         }
 
         var candidates = []
+        var hpFull = (this._player._currHealth >= this._player._maxHealth)
         var equippedChips = mapKeys(this._arsenal.playerEquippedChips)
         for (var chipId in equippedChips) {
             if (mapContainsKey(usedChips, chipId)) continue
             if (getCooldown(chipId, this._player._id) != 0) continue
+            if (hpFull && isHealingChip(chipId)) continue
             push(candidates, chipId)
         }
 
