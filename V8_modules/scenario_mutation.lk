@@ -169,6 +169,7 @@ class ScenarioMutator {
             if (mapContainsKey(usedChips, chipId)) continue
             if (getCooldown(chipId, this._player._id) != 0) continue
             if (hpFull && isHealingChip(chipId)) continue
+            if (isUtilityChip(chipId)) continue
             push(candidates, chipId)
         }
 

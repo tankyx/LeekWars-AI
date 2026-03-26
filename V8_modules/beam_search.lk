@@ -457,7 +457,10 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             }
         }
         else if (isUtilityChip(chipId)) {
-            if (chipId == CHIP_GRAPPLE) {
+            if (chipId == CHIP_ANTIDOTE) {
+                if (playerObj.hasEffect(EFFECT_POISON)) value += 300
+                else return -1
+            } else if (chipId == CHIP_GRAPPLE) {
                 value += 200
                 var shortRangeCount = 0
                 for (var cid in mapKeys(arsenalObj.playerEquippedChips)) {
