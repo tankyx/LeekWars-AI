@@ -10,7 +10,7 @@ python3 tools/upload_v8.py
 python3 tools/local_test.py 40 smart_tank --leek EdsgerDijkstra --parallel 2
 
 # Server test (real matchmaking)
-python3 tools/lw_test_script.py 10 456711 domingo --leek EdsgerDijkstra
+python3 tools/lw_test_script.py 10 459440 domingo --leek EdsgerDijkstra
 
 # Debug a specific fight
 python3 tools/fight_analyzer.py smart_tank --leek EdsgerDijkstra --seed 1
@@ -93,17 +93,17 @@ python3 tools/local_test.py 20 smart_str --leek AdaLovelace --parallel 2
 |---|---|---|
 | EdsgerDijkstra vs smart_str | ~100% | Strong matchup |
 | EdsgerDijkstra vs smart_agi | ~100% | Strong matchup |
-| EdsgerDijkstra vs smart_tank | ~40% W / 60% D | Draw-prone, tank has 8000 HP |
+| EdsgerDijkstra vs smart_tank | ~57% W / 43% D | Draw-prone, tank has 8000 HP |
 | AdaLovelace vs smart_str | ~100% | Strong matchup |
-| KurtGodel vs smart_tank | ~35% W / 65% D | Nova attrition vs tank |
-| MargaretHamilton vs smart_mag | ~12.5% W | Structurally unfavorable (0 STR/RES) |
+| KurtGodel vs smart_tank | ~47% W / 53% D | Nova attrition vs tank |
+| MargaretHamilton vs smart_mag | ~32.5% W | Structurally unfavorable (0 STR/RES) |
 
 ### Server Testing
 
 ```bash
-python3 tools/lw_test_script.py <num_tests> 456711 <opponent> [--leek <name>]
+python3 tools/lw_test_script.py <num_tests> 459440 <opponent> [--leek <name>]
 ```
-Script ID **456711** is the V8 AI `main.lk`. Do NOT use 447461 (old, broken).
+Script ID **459440** is the V8 AI `main.lk`. Do NOT use 447461 (old, broken).
 
 ### Fight Analysis
 
