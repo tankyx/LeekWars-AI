@@ -131,6 +131,20 @@ class ScenarioScorer {
             score += lifestealScore
         }
 
+        if (simResult.selfDamageHP > 0) {
+            var selfDmgPenalty = simResult.selfDamageHP * 3.0
+            if (killProbability >= 0.95) {
+                selfDmgPenalty = 0
+            } else if (killProbability >= 0.70) {
+                selfDmgPenalty *= 0.5
+            }
+            var hpAfterSelf = this._player._currHealth - simResult.selfDamageHP + simResult.lifestealHealing
+            if (hpAfterSelf < this._player._maxHealth * 0.30) {
+                selfDmgPenalty += 3000
+            }
+            score -= selfDmgPenalty
+        }
+
         var bulbKillBonus = 0
         if (targetIsBulb && killProbability >= 0.70) {
             if (bulbType == BULB_TYPE_HEALER) {
@@ -287,6 +301,21 @@ class ScenarioScorer {
             var denialValue = denialRatio * enemyBestDPT * 3.0
             if (denialRatio > 0.5) denialValue *= 1.5
             score += denialValue
+        }
+
+        if (simResult.strShackled > 0) {
+            var enemyStr = max(1, this._target._strength)
+            var reductionRatio = min(1.0, simResult.strShackled / enemyStr)
+            var enemyDPT = enemyStr * 1.5
+            var statReduceValue = reductionRatio * enemyDPT * 2.0
+            score += statReduceValue
+        }
+        if (simResult.magShackled > 0) {
+            var enemyMag = max(1, this._target._magic)
+            var reductionRatio = min(1.0, simResult.magShackled / enemyMag)
+            var enemyMagDPT = enemyMag * 1.5
+            var statReduceValue = reductionRatio * enemyMagDPT * 2.0
+            score += statReduceValue
         }
 
         if (simResult.vulnerabilityApplied > 0) {
@@ -686,6 +715,8 @@ class ScenarioScorer {
             if (buffChip == CHIP_ELEVATION) value += 120
             if (buffChip == CHIP_PRISM) value += 180
             if (buffChip == CHIP_ADRENALINE) value += 100
+            if (buffChip == CHIP_RAGE) value += 300
+            if (buffChip == CHIP_SEVEN_LEAGUE_BOOTS) value += 200
 
             if (isAbsoluteShieldChip(buffChip)) {
                 value += 80
@@ -845,6 +876,8 @@ class ScenarioScorer {
                 if (futureThreat > 0) value += 250
             }
             else if (buff == CHIP_KNOWLEDGE) value += 200
+            else if (buff == CHIP_RAGE) value += 300
+            else if (buff == CHIP_SEVEN_LEAGUE_BOOTS) value += 200
         }
 
         if (simResult.dotDamageQueued > 0) {
@@ -1005,7 +1038,8 @@ class ScenarioScorer {
         }
 
         for (var buff in simResult.buffsApplied) {
-            if (buff == CHIP_STEROID || buff == CHIP_WIZARDRY || buff == CHIP_PRISM || buff == CHIP_WARM_UP) {
+            if (buff == CHIP_STEROID || buff == CHIP_WIZARDRY || buff == CHIP_PRISM || buff == CHIP_WARM_UP ||
+                buff == CHIP_RAGE || buff == CHIP_SEVEN_LEAGUE_BOOTS) {
                 value += 150
             }
         }

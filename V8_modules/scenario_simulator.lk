@@ -29,8 +29,12 @@ class SimulationResult {
     poisonTurnsQueued = 0
 
     denialApplied = 0
+    strShackled = 0
+    magShackled = 0
 
     erosionDamage = 0
+
+    selfDamageHP = 0
 
     crystalAxisReduction = 0
     crystalSolved = false
@@ -67,6 +71,8 @@ class ScenarioSimulator {
         var simScience = this._player._science
         var simAgility = this._player._agility
         var simWeaponUses = [:]
+
+        var simPlayerHP = this._player._currHealth
 
         var expectedCritMult = 1.0 + min(0.5, simAgility / 2000.0) * 0.3
 
@@ -121,6 +127,32 @@ class ScenarioSimulator {
                         continue
                     }
 
+                    if (action.chip == CHIP_PUNISHMENT) {
+                        var pCost = getChipCost(action.chip)
+                        var punishDmg = simPlayerHP * 0.25
+                        var punishNet = punishDmg * (1 - simEnemyRelShield) - simEnemyAbsShield
+                        if (punishNet < 0) punishNet = 0
+                        result.damageDealt += punishNet
+                        result.erosionDamage += punishNet * 0.05
+                        simEnemyCurrHP -= punishNet
+                        if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
+                        var selfCost = simPlayerHP * 0.75
+                        result.selfDamageHP += selfCost
+                        simPlayerHP -= selfCost
+                        var pLifesteal = (punishNet * simWisdom) / 1000
+                        result.lifestealHealing += pLifesteal
+                        simPlayerHP += pLifesteal
+                        if (targetIsBulb) {
+                            result.bulbDamage += punishNet
+                        } else {
+                            result.leekDamage += punishNet
+                        }
+                        result.tpSpent += pCost
+                        simTP -= pCost
+                        result.actionsExecuted++
+                        continue
+                    }
+
                     var chipCost = getChipCost(action.chip)
                     var chipDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target) : 0
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
@@ -135,6 +167,7 @@ class ScenarioSimulator {
 
                     var lifesteal = (directDmg * simWisdom) / 1000
                     result.lifestealHealing += lifesteal
+                    simPlayerHP += lifesteal
 
                     if (targetIsBulb) {
                         result.bulbDamage += directDmg
@@ -174,10 +207,25 @@ class ScenarioSimulator {
                         push(result.debuffsApplied, action.chip)
                     }
 
-                    if (action.chip == CHIP_SOPORIFIC) {
-                        result.denialApplied += 0.45 * (1 + simMagic / 100.0)
-                    } else if (action.chip == CHIP_BALL_AND_CHAIN) {
-                        result.denialApplied += 0.45 * (1 + simMagic / 100.0)
+                    var chipItemObj = null
+                    if (mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
+                        chipItemObj = this._arsenal.playerEquippedChips[action.chip]
+                    } else if (mapContainsKey(this._arsenal.chipsList, action.chip)) {
+                        chipItemObj = this._arsenal.chipsList[action.chip]
+                    }
+                    if (chipItemObj != null) {
+                        for (var eff in mapKeys(chipItemObj._effects)) {
+                            var effInfo = chipItemObj._effects[eff]
+                            var effAvg = (effInfo._minEffectAmount + effInfo._maxEffectAmount) / 2
+                            var effScaled = effAvg * (1 + simMagic / 100.0) * effInfo._effectDuration
+                            if (eff == EFFECT_SHACKLE_TP || eff == EFFECT_SHACKLE_MP) {
+                                result.denialApplied += effScaled
+                            } else if (eff == EFFECT_SHACKLE_STRENGTH) {
+                                result.strShackled += effScaled
+                            } else if (eff == EFFECT_SHACKLE_MAGIC) {
+                                result.magShackled += effScaled
+                            }
+                        }
                     }
 
                     result.actionsExecuted++
@@ -212,6 +260,7 @@ class ScenarioSimulator {
 
                         var lifesteal = (directDmg * simWisdom) / 1000
                         result.lifestealHealing += lifesteal
+                        simPlayerHP += lifesteal
 
                         if (action.weaponId == WEAPON_ENHANCED_LIGHTNINGER) {
                             result.lifestealHealing += 100
@@ -265,6 +314,19 @@ class ScenarioSimulator {
                             simEnemyRelShield -= 0.60
                         }
 
+                        for (var wEff in mapKeys(weaponObj._effects)) {
+                            var wEffInfo = weaponObj._effects[wEff]
+                            var wEffAvg = (wEffInfo._minEffectAmount + wEffInfo._maxEffectAmount) / 2
+                            var wEffScaled = wEffAvg * (1 + simMagic / 100.0) * wEffInfo._effectDuration
+                            if (wEff == EFFECT_SHACKLE_TP || wEff == EFFECT_SHACKLE_MP) {
+                                result.denialApplied += wEffScaled
+                            } else if (wEff == EFFECT_SHACKLE_STRENGTH) {
+                                result.strShackled += wEffScaled
+                            } else if (wEff == EFFECT_SHACKLE_MAGIC) {
+                                result.magShackled += wEffScaled
+                            }
+                        }
+
                         result.actionsExecuted++
                     }
                 }
@@ -286,6 +348,12 @@ class ScenarioSimulator {
                     result.relativeShieldGained += this.estimateRelativeShield(action.chip)
                 } else if (action.chip == CHIP_LEATHER_BOOTS) {
                     simMP += 2
+                } else if (action.chip == CHIP_SEVEN_LEAGUE_BOOTS) {
+                    var mpBuff = floor(0.45 * (1 + simScience / 100))
+                    simMP += mpBuff
+                } else if (action.chip == CHIP_RAGE) {
+                    var tpBuff = floor(0.55 * (1 + simScience / 100))
+                    simTP += tpBuff
                 } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
                 } else if (action.chip == CHIP_STEROID || action.chip == CHIP_DOPING) {

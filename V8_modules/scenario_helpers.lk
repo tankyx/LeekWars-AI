@@ -255,7 +255,8 @@ class ScenarioHelpers {
         }
 
         var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
-                           CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID]
+                           CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
+                           CHIP_PUNISHMENT]
         for (var chipId in damageChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
             var chip = this._arsenal.playerEquippedChips[chipId]
@@ -321,7 +322,7 @@ class ScenarioHelpers {
 
             var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
                                CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
-                               CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+                               CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_PUNISHMENT]
             var bestChipImmediate = 0
             var bestChipTotal = 0
             for (var chipId in damageChips) {
@@ -1151,7 +1152,7 @@ class ScenarioHelpers {
         var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
                            CHIP_FIRE_BALL, CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE, CHIP_ARSENIC,
                            CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
-                           CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+                           CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_PUNISHMENT]
 
         for (var chipId in damageChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue

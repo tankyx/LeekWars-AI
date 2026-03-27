@@ -190,7 +190,7 @@ class Arsenal {
 
     computeEffectsBaseDamage(effectsMap, str, mag, sci, aoeModifier = 1.0, isChip = false) {
         var total = 0
-        var directStat = isChip ? mag : str
+        var directStat = str
         for (var e in mapKeys(effectsMap)) {
             var info = effectsMap[e]
             if (e == EFFECT_DAMAGE) {
@@ -224,13 +224,15 @@ class Arsenal {
             aoeModifier = this.computeAoEModifier(centerCell, targetCell, item._aoeType)
         }
 
-        var directStat = isChip ? mag : str
+        var directStat = str
 
         var direct = 0
         var dot = 0
         var nova = 0
         var minDmg = 0
         var maxDmg = 0
+        var denial = 0
+        var statReduce = 0
 
         for (var e in mapKeys(item._effects)) {
             var info = item._effects[e]
@@ -258,9 +260,26 @@ class Arsenal {
                 var maxNova = info._maxEffectAmount * (1 + (sci / 100)) * aoeModifier
                 minDmg += minNova
                 maxDmg += maxNova
+            } else if (e == EFFECT_SHACKLE_TP || e == EFFECT_SHACKLE_MP) {
+                var avg3 = (info._minEffectAmount + info._maxEffectAmount) / 2
+                denial += avg3 * (1 + (mag / 100)) * info._effectDuration
+            } else if (e == EFFECT_SHACKLE_STRENGTH || e == EFFECT_SHACKLE_MAGIC) {
+                var avg4 = (info._minEffectAmount + info._maxEffectAmount) / 2
+                statReduce += avg4 * (1 + (mag / 100)) * info._effectDuration
+            } else if (e == EFFECT_LIFE_DAMAGE) {
+                var avgPct = (info._minEffectAmount + info._maxEffectAmount) / 2
+                var currentHP = getLife()
+                var lifeDmg = (avgPct / 100) * currentHP
+                direct += lifeDmg * aoeModifier
+                minDmg += (info._minEffectAmount / 100) * currentHP * aoeModifier
+                maxDmg += (info._maxEffectAmount / 100) * currentHP * aoeModifier
             }
         }
-        return ['direct': direct, 'dot': dot, 'nova': nova, 'total': direct + dot + nova, 'min': minDmg, 'max': maxDmg]
+        var selfDamage = 0
+        if (itemID == CHIP_PUNISHMENT) {
+            selfDamage = getLife() * 0.75
+        }
+        return ['direct': direct, 'dot': dot, 'nova': nova, 'total': direct + dot + nova, 'min': minDmg, 'max': maxDmg, 'denial': denial, 'statReduce': statReduce, 'selfDamage': selfDamage]
     }
 
     getPoisonChipsSorted(str, mag, wis, sci) {
@@ -447,6 +466,15 @@ class Arsenal {
                     push(hitEnemies, e)
                     mapPut(breakdown, e._id, netDmg)
                 }
+            }
+        }
+
+        if (itemId == CHIP_PLASMA && count(hitEnemies) > 1) {
+            var multiplier = count(hitEnemies)
+            totalDamage = 0
+            for (var eid in mapKeys(breakdown)) {
+                breakdown[eid] = breakdown[eid] * multiplier
+                totalDamage += breakdown[eid]
             }
         }
 

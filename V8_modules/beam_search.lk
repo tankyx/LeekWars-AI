@@ -349,6 +349,14 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 value += bd['nova'] * 1.5
             }
 
+            if (chipId == CHIP_PUNISHMENT) {
+                var selfCost = playerObj._currHealth * 0.75
+                value -= selfCost * 2.0
+                if (enemyHP > 0 && (cumDamage + dmg) / enemyHP > 0.95) {
+                    value += selfCost * 3.0
+                }
+            }
+
             if (enemyHP > 0 && (cumDamage + dmg) / enemyHP > 0.7) {
                 value *= 3.0
             }
@@ -448,7 +456,10 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             } else if (chipId == CHIP_LIBERATION) {
                 value += 120
             } else {
-                value += 80
+                var cBd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
+                if (cBd['statReduce'] > 0) value += 150 * (1 + simMag / 500)
+                else if (cBd['denial'] > 0) value += 150 * (1 + simMag / 500)
+                else value += 80
             }
         }
         else if (isResourceChip(chipId)) {
@@ -499,6 +510,9 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
         if (enemyHP > 0 && (cumDamage + directDmg + dotDmg + novaDmg) / enemyHP > 0.7) {
             value *= 3.0
         }
+
+        if (bd['statReduce'] > 0) value += 100
+        if (bd['denial'] > 0) value += 80
 
         if (actionInfo['needsSwap']) {
             value -= 50
