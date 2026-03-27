@@ -371,8 +371,8 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             }
 
             if (chipId == CHIP_PUNISHMENT) {
-                // Hard-block: only allow as kill-finisher
-                if (enemyHP <= 0 || (cumDamage + dmg) < enemyHP) {
+                // Hard-block: only allow as fight-finisher on last enemy leek
+                if (isBulb(targetObj) || enemyHP <= 0 || (cumDamage + dmg) < enemyHP) {
                     return -999999
                 }
             }
