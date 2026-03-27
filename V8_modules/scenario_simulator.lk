@@ -158,6 +158,24 @@ class ScenarioSimulator {
                     var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
                     var rawDirect = breakdown['direct'] * expectedCritMult
+
+                    // PLASMA: multiply by enemies in PLUS_2 AoE
+                    if (action.chip == CHIP_PLASMA && this._fieldMap != null) {
+                        var plasmaAimCell = (action.targetCell != null && action.targetCell != -1) ? action.targetCell : this._target._cellPos
+                        var plasmaHits = 1
+                        var enemies = this._fieldMap.getEnemySubMap()
+                        for (var eid in mapKeys(enemies)) {
+                            if (eid == this._target._id) continue
+                            if (isDead(eid)) continue
+                            var eCell = enemies[eid]._cellPos
+                            if (eCell != null) {
+                                var eDist = getCellDistance(plasmaAimCell, eCell)
+                                if (eDist != null && eDist <= 2) plasmaHits++
+                            }
+                        }
+                        if (plasmaHits > 1) rawDirect *= plasmaHits
+                    }
+
                     var directDmg = rawDirect * (1 - simEnemyRelShield) - simEnemyAbsShield
                     if (directDmg < 0) directDmg = 0
                     result.damageDealt += directDmg

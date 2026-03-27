@@ -132,15 +132,20 @@ class ScenarioScorer {
         }
 
         if (simResult.selfDamageHP > 0) {
+            var hpAfterSelf = this._player._currHealth - simResult.selfDamageHP + simResult.lifestealHealing
             var selfDmgPenalty = simResult.selfDamageHP * 3.0
             if (killProbability >= 0.95) {
                 selfDmgPenalty = 0
-            } else if (killProbability >= 0.70) {
-                selfDmgPenalty *= 0.5
+            } else if (killProbability >= 0.85) {
+                selfDmgPenalty *= 0.3
+            } else {
+                // Not a kill-finisher: massive penalty to prevent suicidal Punishment
+                selfDmgPenalty = simResult.selfDamageHP * 10.0
             }
-            var hpAfterSelf = this._player._currHealth - simResult.selfDamageHP + simResult.lifestealHealing
-            if (hpAfterSelf < this._player._maxHealth * 0.30) {
-                selfDmgPenalty += 3000
+            if (hpAfterSelf <= 0) {
+                selfDmgPenalty += 50000
+            } else if (hpAfterSelf < this._player._maxHealth * 0.30) {
+                selfDmgPenalty += 5000
             }
             score -= selfDmgPenalty
         }

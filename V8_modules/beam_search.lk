@@ -345,15 +345,36 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             var dmg = bd['direct'] + bd['nova']
             value += dmg * 2.0
 
+            // PLASMA: multiply by number of enemies in AoE (PLUS_2 pattern)
+            if (chipId == CHIP_PLASMA && fieldMapObj != null) {
+                var plasmaTargetCell = actionInfo['targetCell']
+                var plasmaHitCount = 1
+                var enemies = fieldMapObj.getEnemySubMap()
+                for (var eid in mapKeys(enemies)) {
+                    if (eid == targetObj._id) continue
+                    if (isDead(eid)) continue
+                    var eCell = enemies[eid]._cellPos
+                    if (eCell != null && eCell != plasmaTargetCell) {
+                        var eDist = getCellDistance(plasmaTargetCell, eCell)
+                        if (eDist != null && eDist <= 2) {
+                            plasmaHitCount++
+                        }
+                    }
+                }
+                if (plasmaHitCount > 1) {
+                    value *= plasmaHitCount
+                }
+            }
+
             if (bd['nova'] > 0) {
                 value += bd['nova'] * 1.5
             }
 
             if (chipId == CHIP_PUNISHMENT) {
                 var selfCost = playerObj._currHealth * 0.75
-                value -= selfCost * 2.0
-                if (enemyHP > 0 && (cumDamage + dmg) / enemyHP > 0.95) {
-                    value += selfCost * 3.0
+                value -= selfCost * 5.0
+                if (enemyHP > 0 && (cumDamage + dmg) / enemyHP > 0.90) {
+                    value += selfCost * 7.0
                 }
             }
 
