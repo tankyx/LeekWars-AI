@@ -372,6 +372,7 @@ function recoverRemainingTP(target) {
         var bestValue = -1
 
         for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
+            if (chipId == CHIP_PUNISHMENT) continue
             var chipObj = arsenal.playerEquippedChips[chipId]
             if (chipObj._cost > getTP()) continue
             if (getCooldown(chipId, getEntity()) > 0) continue
