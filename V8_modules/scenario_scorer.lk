@@ -952,7 +952,7 @@ class ScenarioScorer {
             if (action.chip == CHIP_GRAPPLE) hasGrapple = true
             if (action.chip == CHIP_WIZARDRY) hasWizardry = true
             if (action.chip == CHIP_STEROID) hasSteroid = true
-            if (action.chip == CHIP_TELEPORTATION) hasTeleport = true
+            if (action.chip == CHIP_TELEPORTATION || action.chip == CHIP_JUMP) hasTeleport = true
             if (action.chip == CHIP_PRISM) hasPrism = true
             if (action.chip == CHIP_FORTRESS || action.chip == CHIP_WALL) hasShield = true
             if (action.chip == CHIP_SOPORIFIC || action.chip == CHIP_BALL_AND_CHAIN) hasDenial = true
@@ -963,6 +963,12 @@ class ScenarioScorer {
             if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
             if (action.type == Action.ACTION_DOT) hasPoison = true
         }
+
+        var hasJump = false
+        for (var action in scenario) {
+            if (action.chip == CHIP_JUMP) { hasJump = true; break }
+        }
+        if (hasJump) bonus += 150
 
         if (hasGrapple && hasMelee) bonus += 300
 

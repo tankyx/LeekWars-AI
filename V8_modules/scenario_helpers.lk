@@ -17,6 +17,26 @@ class ScenarioParams {
     }
 }
 
+function getAvailableTeleportChip(arsenal, playerId) {
+    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) && getCooldown(CHIP_TELEPORTATION, playerId) == 0) {
+        return CHIP_TELEPORTATION
+    }
+    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP) && getCooldown(CHIP_JUMP, playerId) == 0) {
+        return CHIP_JUMP
+    }
+    return null
+}
+
+function hasAnyTeleportChip(arsenal) {
+    return mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) || mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP)
+}
+
+function getTeleportMaxRange(chipId) {
+    if (chipId == CHIP_TELEPORTATION) return 12
+    if (chipId == CHIP_JUMP) return 3
+    return 0
+}
+
 class ScenarioHelpers {
     _arsenal = null
     _player = null

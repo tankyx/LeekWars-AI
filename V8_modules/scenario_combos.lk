@@ -190,20 +190,20 @@ class ScenarioCombos extends ScenarioHelpers {
 
             var distToTarget = getCellDistance(this._player._cellPos, this._target._cellPos)
             var maxWeaponRange = 12
-            var tpTeleportOTKO = getCachedChipCost(CHIP_TELEPORTATION)
+            var soTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
 
-            if (distToTarget > maxWeaponRange &&
-                mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
-                getCooldown(CHIP_TELEPORTATION, this._player._id) == 0 &&
-                tpBudget >= tpTeleportOTKO) {
-
-                var bestCell = this._fieldMap.getBestWeaponOrChipCell()
-                if (bestCell != null && bestCell != -1) {
-                    var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
-                    if (teleportDist >= 1 && teleportDist <= 12) {
-                        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
-                        tpBudget -= tpTeleportOTKO
-                        simPos = bestCell._id
+            if (distToTarget > maxWeaponRange && soTeleChip != null) {
+                var tpTeleportOTKO = getCachedChipCost(soTeleChip)
+                if (tpBudget >= tpTeleportOTKO) {
+                    var bestCell = this._fieldMap.getBestWeaponOrChipCell()
+                    if (bestCell != null && bestCell != -1) {
+                        var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
+                        var maxTeleRange = getTeleportMaxRange(soTeleChip)
+                        if (teleportDist >= 1 && teleportDist <= maxTeleRange) {
+                            push(actions, new Action(Action.ACTION_TELEPORT, -1, soTeleChip, bestCell._id, this._target))
+                            tpBudget -= tpTeleportOTKO
+                            simPos = bestCell._id
+                        }
                     }
                 }
             }
@@ -294,10 +294,12 @@ class ScenarioCombos extends ScenarioHelpers {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
-        var tpTeleportOTKO = getCachedChipCost(CHIP_TELEPORTATION)
+        var otkoTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+        if (otkoTeleChip == null) otkoTeleChip = CHIP_TELEPORTATION
+        var tpTeleportOTKO = getCachedChipCost(otkoTeleChip)
 
         if (tpBudget >= tpTeleportOTKO) {
-            push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, otkoCell, this._target))
+            push(actions, new Action(Action.ACTION_TELEPORT, -1, otkoTeleChip, otkoCell, this._target))
             tpBudget -= tpTeleportOTKO
         }
 
@@ -313,7 +315,10 @@ class ScenarioCombos extends ScenarioHelpers {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
-        var tpTeleportEscape = getCachedChipCost(CHIP_TELEPORTATION)
+        var escapeTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+        if (escapeTeleChip == null) return null
+        var tpTeleportEscape = getCachedChipCost(escapeTeleChip)
+        var escapeMaxRange = getTeleportMaxRange(escapeTeleChip)
 
         if (tpBudget < tpTeleportEscape) {
             return null
@@ -328,7 +333,7 @@ class ScenarioCombos extends ScenarioHelpers {
         var reachableCells = getReachableCells()
         for (var cellId in reachableCells) {
             var dist = getCellDistance(playerPos, cellId)
-            if (dist >= 1 && dist <= 12) {
+            if (dist >= 1 && dist <= escapeMaxRange) {
                 var threat = this._fieldMap.getThreatAtCell(cellId)
                 var distFromEnemy = getCellDistance(cellId, enemyPos)
 
@@ -349,7 +354,7 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, safestCell, this._target))
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, escapeTeleChip, safestCell, this._target))
         tpBudget -= tpTeleportEscape
 
         var escapeAntidote = this.getAntidoteAction(tpBudget)
@@ -402,7 +407,10 @@ class ScenarioCombos extends ScenarioHelpers {
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
-        var tpTeleportApproach = getCachedChipCost(CHIP_TELEPORTATION)
+        var approachTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+        if (approachTeleChip == null) return null
+        var tpTeleportApproach = getCachedChipCost(approachTeleChip)
+        var approachMaxRange = getTeleportMaxRange(approachTeleChip)
 
         if (tpBudget < tpTeleportApproach) {
             return null
@@ -421,7 +429,7 @@ class ScenarioCombos extends ScenarioHelpers {
             var cellData = this._fieldMap.damageMap[cellId]
             var dist = getCellDistance(playerPos, cellId)
 
-            if (dist >= 2 && dist <= 12) {
+            if (dist >= 2 && dist <= approachMaxRange) {
                 var damageScore = cellData._totalDamage
                 var threat = this._fieldMap.getThreatAtCell(cellId)
                 var distToEnemy = getCellDistance(cellId, this._target._cellPos)
@@ -439,7 +447,7 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell, this._target))
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, approachTeleChip, bestCell, this._target))
         tpBudget -= tpTeleportApproach
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, bestCell)
@@ -557,25 +565,57 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
+        var didJump = false
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
+            getCooldown(CHIP_JUMP, this._player._id) == 0 &&
+            tpBudget >= getCachedChipCost(CHIP_JUMP) &&
+            this._player._agility >= 300 &&
+            !this._player.hasEffect(EFFECT_BUFF_AGILITY)) {
+            var jumpCostP = getCachedChipCost(CHIP_JUMP)
+            var jumpTarget = -1
+            var targetPos = this._target._cellPos
+            var neighbors = GLOBAL_NEIGHBORS[simPos]
+            var bestDistJump = getCellDistance(simPos, targetPos)
+            for (var n in neighbors) {
+                if (isObstacle(n) || isEntity(n)) continue
+                var d = getCellDistance(n, targetPos)
+                if (d != null && d < bestDistJump) {
+                    jumpTarget = n
+                    bestDistJump = d
+                }
+            }
+            if (jumpTarget == -1) {
+                for (var n in neighbors) {
+                    if (!isObstacle(n) && !isEntity(n)) { jumpTarget = n; break }
+                }
+            }
+            if (jumpTarget != -1) {
+                push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, jumpTarget, this._target))
+                tpBudget -= jumpCostP
+                simPos = jumpTarget
+                didJump = true
+            }
+        }
+
         var didTeleport = false
-        if (params.repositioning == "otko" && this.checkOTKOOpportunity()) {
+        if (!didJump && params.repositioning == "otko" && this.checkOTKOOpportunity()) {
             var distToTarget = getCellDistance(this._player._cellPos, this._target._cellPos)
             var maxWeaponRange = 12
-            var tpTeleportRepo = getCachedChipCost(CHIP_TELEPORTATION)
+            var repoTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
 
-            if (distToTarget > maxWeaponRange &&
-                mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
-                getCooldown(CHIP_TELEPORTATION, this._player._id) == 0 &&
-                tpBudget >= tpTeleportRepo) {
-
-                var bestCell = this._fieldMap.getBestWeaponOrChipCell()
-                if (bestCell != null && bestCell != -1) {
-                    var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
-                    if (teleportDist >= 1 && teleportDist <= 12) {
-                        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestCell._id, this._target))
-                        tpBudget -= tpTeleportRepo
-                        simPos = bestCell._id
-                        didTeleport = true
+            if (distToTarget > maxWeaponRange && repoTeleChip != null) {
+                var tpTeleportRepo = getCachedChipCost(repoTeleChip)
+                if (tpBudget >= tpTeleportRepo) {
+                    var bestCell = this._fieldMap.getBestWeaponOrChipCell()
+                    if (bestCell != null && bestCell != -1) {
+                        var teleportDist = getCellDistance(this._player._cellPos, bestCell._id)
+                        var repoMaxRange = getTeleportMaxRange(repoTeleChip)
+                        if (teleportDist >= 1 && teleportDist <= repoMaxRange) {
+                            push(actions, new Action(Action.ACTION_TELEPORT, -1, repoTeleChip, bestCell._id, this._target))
+                            tpBudget -= tpTeleportRepo
+                            simPos = bestCell._id
+                            didTeleport = true
+                        }
                     }
                 }
             }
@@ -769,14 +809,13 @@ class ScenarioCombos extends ScenarioHelpers {
         if (getCooldown(CHIP_STEROID, this._player._id) > 0) {
             return null
         }
-        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
-            return null
-        }
-        if (getCooldown(CHIP_TELEPORTATION, this._player._id) > 0) {
+        var steroidTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+        if (steroidTeleChip == null) {
             return null
         }
 
-        var tpTeleportSteroid = getCachedChipCost(CHIP_TELEPORTATION)
+        var tpTeleportSteroid = getCachedChipCost(steroidTeleChip)
+        var steroidMaxRange = getTeleportMaxRange(steroidTeleChip)
         var tpSteroidCost = getCachedChipCost(CHIP_STEROID)
         if (tpBudget < tpSteroidCost + tpTeleportSteroid) {
             return null
@@ -795,11 +834,11 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         var teleportDist = getCellDistance(this._player._cellPos, bestOTKO._id)
-        if (teleportDist == null || teleportDist < 1 || teleportDist > 12) {
+        if (teleportDist == null || teleportDist < 1 || teleportDist > steroidMaxRange) {
             return null
         }
 
-        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, this._target))
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, steroidTeleChip, bestOTKO._id, this._target))
         tpBudget -= tpTeleportSteroid
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, bestOTKO._id)
@@ -874,6 +913,90 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (count(actions) < 3) return null
+
+        return actions
+    }
+
+    createJumpAttackScenario(availableTP, availableMP) {
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP)) return null
+        if (getCooldown(CHIP_JUMP, this._player._id) > 0) return null
+
+        var jumpCost = getCachedChipCost(CHIP_JUMP)
+        if (availableTP < jumpCost + 4) return null
+
+        var playerPos = this._player._cellPos
+        var targetPos = this._target._cellPos
+
+        var maxWeaponRange = 0
+        for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wObj = this._arsenal.playerEquippedWeapons[wid]
+            if (wObj != null && wObj._maxRange > maxWeaponRange) maxWeaponRange = wObj._maxRange
+        }
+        if (maxWeaponRange == 0) return null
+
+        var bestAttackCell = -1
+        var bestLaunchCell = -1
+        var bestDamage = 0
+        var reachable = getReachableCells()
+
+        for (var candidate = 0; candidate < 613; candidate++) {
+            if (getOperations() > 12000000) break
+            if (isObstacle(candidate)) continue
+            if (isEntity(candidate)) continue
+
+            var distToTarget = getCellDistance(candidate, targetPos)
+            if (distToTarget == null || distToTarget > maxWeaponRange) continue
+
+            if (isGraphReachableCell(candidate)) continue
+
+            var launchCell = -1
+            var launchMP = 999
+            for (var rCell in reachable) {
+                var jumpDist = getCellDistance(rCell, candidate)
+                if (jumpDist != null && jumpDist >= 1 && jumpDist <= 3) {
+                    var mp = getGraphMPCost(rCell)
+                    if (mp < launchMP && mp <= availableMP) {
+                        launchMP = mp
+                        launchCell = rCell
+                    }
+                }
+            }
+
+            if (launchCell == -1) continue
+
+            var tpBudget = availableTP - jumpCost
+            var cellDamage = 0
+            for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var wObj = this._arsenal.playerEquippedWeapons[wid]
+                if (wObj == null) continue
+                if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                if (!lineOfSight(candidate, targetPos)) continue
+                var dmg = this._arsenal.getNetDamageAgainstTarget(
+                    this._player._strength, this._player._magic,
+                    this._player._wisdom, this._player._science,
+                    wid, this._target)
+                var swapCost = (getWeapon() != wid) ? 1 : 0
+                var uses = min(wObj._maxUse, floor((tpBudget - swapCost) / wObj._cost))
+                if (uses > 0) cellDamage += dmg * uses
+            }
+
+            if (cellDamage > bestDamage) {
+                bestDamage = cellDamage
+                bestAttackCell = candidate
+                bestLaunchCell = launchCell
+            }
+        }
+
+        if (bestAttackCell == -1) return null
+
+        var actions = []
+        if (bestLaunchCell != playerPos) {
+            push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestLaunchCell, this._target))
+        }
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, bestAttackCell, this._target))
+        var tpAfterJump = availableTP - jumpCost
+        var attackActions = this.getAttackActions(tpAfterJump, 1.0, bestAttackCell)
+        for (var atk in attackActions) push(actions, atk)
 
         return actions
     }
@@ -1596,14 +1719,13 @@ class ScenarioCombos extends ScenarioHelpers {
         if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) {
             return null
         }
-        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
-            return null
-        }
-        if (getCooldown(CHIP_TELEPORTATION, this._player._id) > 0) {
+        var neutrinoTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+        if (neutrinoTeleChip == null) {
             return null
         }
 
-        var tpTeleportNeutrino = getCachedChipCost(CHIP_TELEPORTATION)
+        var tpTeleportNeutrino = getCachedChipCost(neutrinoTeleChip)
+        var neutrinoTeleMaxRange = getTeleportMaxRange(neutrinoTeleChip)
         if (tpBudget < 12 + tpTeleportNeutrino) {
             return null
         }
@@ -1650,11 +1772,11 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         var teleportDist = getCellDistance(simPos, bestOTKO._id)
-        if (teleportDist == null || teleportDist < 1 || teleportDist > 12) {
+        if (teleportDist == null || teleportDist < 1 || teleportDist > neutrinoTeleMaxRange) {
             return null
         }
 
-        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, this._target))
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, neutrinoTeleChip, bestOTKO._id, this._target))
         tpBudget -= tpTeleportNeutrino
 
         var attackActions = this.getAttackActions(tpBudget, 1.0, bestOTKO._id)

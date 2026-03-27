@@ -82,7 +82,8 @@ class ScenarioQuickScorer {
             }
             else if (action.type == Action.ACTION_TELEPORT) {
                 hasTeleport = true
-                tpEstimate += getCachedChipCost(CHIP_TELEPORTATION)
+                var qsTeleChip = action.chip != null && action.chip != -1 ? action.chip : CHIP_TELEPORTATION
+                tpEstimate += getCachedChipCost(qsTeleChip)
                 finalPosition = action.targetCell
             }
             else if (action.type == Action.MOVEMENT_OFFENSIVE || action.type == Action.MOVEMENT_OTKO ||

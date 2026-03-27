@@ -416,9 +416,11 @@ class ScenarioSimulator {
                 result.actionsExecuted++
             }
             else if (action.type == Action.ACTION_TELEPORT) {
-                var tpCost = getChipCost(CHIP_TELEPORTATION)
+                var teleChip = action.chip != null && action.chip != -1 ? action.chip : CHIP_TELEPORTATION
+                var tpCost = getChipCost(teleChip)
+                var maxRange = getTeleportMaxRange(teleChip)
                 var dist = getCellDistance(simPos, action.targetCell)
-                if (dist != null && dist >= 1 && dist <= 12 && simTP >= tpCost) {
+                if (dist != null && dist >= 1 && dist <= maxRange && simTP >= tpCost) {
                     result.tpSpent += tpCost
                     simTP -= tpCost
                     simPos = action.targetCell
@@ -550,7 +552,8 @@ class ScenarioSimulator {
             return simTP >= summonCost
         }
         else if (action.type == Action.ACTION_TELEPORT) {
-            var tpCost = getChipCost(CHIP_TELEPORTATION)
+            var teleChip = action.chip != null && action.chip != -1 ? action.chip : CHIP_TELEPORTATION
+            var tpCost = getChipCost(teleChip)
             return simTP >= tpCost
         }
 

@@ -201,19 +201,19 @@ function calculateTPReservation(player, enemies) {
     }
 
     if (hpPercent < 30) {
-        var hasTP = false
+        var emergencyTeleChip = null
         for (var chip in player._chips) {
-            if (chip == CHIP_TELEPORTATION) {
-                hasTP = true
+            if (chip == CHIP_TELEPORTATION || chip == CHIP_JUMP) {
+                emergencyTeleChip = chip
                 break
             }
         }
 
-        if (hasTP) {
-            var tpCost = getChipCost(CHIP_TELEPORTATION)
+        if (emergencyTeleChip != null) {
+            var tpCost = getChipCost(emergencyTeleChip)
             reservation['reserved'] = tpCost
             reservation['reason'] = "emergency_teleport"
-            reservation['action'] = CHIP_TELEPORTATION
+            reservation['action'] = emergencyTeleChip
             return reservation
         }
     }

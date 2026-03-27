@@ -1133,15 +1133,15 @@ class Strategy {
                     }
                 }
 
-                var tpTeleportApproach = getCachedChipCost(CHIP_TELEPORTATION)
-                if (reachableCell == null &&
-                    mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
-                    getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-                    playerTP >= tpTeleportApproach &&
+                var bsApproachTele = getAvailableTeleportChip(arsenal, player._id)
+                if (reachableCell == null && bsApproachTele != null &&
+                    playerTP >= getCachedChipCost(bsApproachTele) &&
                     bestWeaponCell != -1 && bestWeaponCell != null) {
 
+                    var tpTeleportApproach = getCachedChipCost(bsApproachTele)
+                    var approachMaxRange = getTeleportMaxRange(bsApproachTele)
                     var teleportDist = getCellDistance(playerPos, bestWeaponCell._id)
-                    if (teleportDist != null && teleportDist >= 1 && teleportDist <= 10) {
+                    if (teleportDist != null && teleportDist >= 1 && teleportDist <= approachMaxRange) {
 
                         var tpAfterTeleport = playerTP - tpTeleportApproach
                         var primaryWeapon = bestWeaponCell._highestDamageWeapon
@@ -1151,7 +1151,7 @@ class Strategy {
                         if (!canAffordPrimary && !hasBackupAttacks) {
                         } else {
 
-                            var teleportResult = useChipOnCell(CHIP_TELEPORTATION, bestWeaponCell._id)
+                            var teleportResult = useChipOnCell(bsApproachTele, bestWeaponCell._id)
                             playerTP -= tpTeleportApproach
 
                             if (teleportResult == USE_SUCCESS || teleportResult == USE_CRITICAL) {
@@ -1798,11 +1798,11 @@ class Strategy {
 
         var isCritical = (hpPercent < 10 || currentThreat >= playerHP)
 
-        var tpTeleportFlee = getCachedChipCost(CHIP_TELEPORTATION)
-        if (isCritical &&
-            mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
-            getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            playerTP >= tpTeleportFlee) {
+        var fleeTeleChip = getAvailableTeleportChip(arsenal, player._id)
+        if (isCritical && fleeTeleChip != null) {
+            var tpTeleportFlee = getCachedChipCost(fleeTeleChip)
+            var fleeMaxRange = getTeleportMaxRange(fleeTeleChip)
+            if (playerTP >= tpTeleportFlee) {
 
             var bestSafeCell = -1
             var bestSafeCellDist = -1
@@ -1812,7 +1812,7 @@ class Strategy {
                 if (isObstacle(candidateCell) || isEntity(candidateCell)) continue
 
                 var distToCell = getCellDistance(player._cellPos, candidateCell)
-                if (distToCell == null || distToCell < 1 || distToCell > 12) continue
+                if (distToCell == null || distToCell < 1 || distToCell > fleeMaxRange) continue
 
                 var cellThreat = fieldMap.getThreatAtCell(candidateCell)
                 if (cellThreat > 0) continue
@@ -1835,7 +1835,7 @@ class Strategy {
 
             if (bestSafeCell != -1) {
 
-                var teleportAction = new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestSafeCell, target)
+                var teleportAction = new Action(Action.ACTION_TELEPORT, -1, fleeTeleChip, bestSafeCell, target)
                 push(this._actions, teleportAction)
                 playerTP -= tpTeleportFlee
 
@@ -1870,6 +1870,7 @@ class Strategy {
                 return
             }
 
+        }
         }
 
         this.createDefensiveScenario(target, targetHitCell)
@@ -1920,18 +1921,18 @@ class Strategy {
             return true
         }
 
-        var tpTeleportOTKO = getCachedChipCost(CHIP_TELEPORTATION)
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
-            getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            playerTP >= tpTeleportOTKO + 6) {
+        var otkoTeleChip = getAvailableTeleportChip(arsenal, player._id)
+        if (otkoTeleChip != null) {
+            var tpTeleportOTKO = getCachedChipCost(otkoTeleChip)
+            if (playerTP >= tpTeleportOTKO + 6) {
+                var teleportInfo = fieldMap.findOptimalTeleportCell(target)
+                if (teleportInfo != null) {
+                    var projectedDamage = teleportInfo['damage']
+                    var killProbTeleport = projectedDamage / enemyHP
 
-            var teleportInfo = fieldMap.findOptimalTeleportCell(target)
-            if (teleportInfo != null) {
-                var projectedDamage = teleportInfo['damage']
-                var killProbTeleport = projectedDamage / enemyHP
-
-                if (killProbTeleport >= 0.85) {
-                    return true
+                    if (killProbTeleport >= 0.85) {
+                        return true
+                    }
                 }
             }
         }
@@ -1947,8 +1948,9 @@ class Strategy {
         var wis = player._wisdom
         var sci = player._science
 
-        if (fromPosition != player._cellPos && mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)) {
-            tpBudget -= getCachedChipCost(CHIP_TELEPORTATION)
+        if (fromPosition != player._cellPos && hasAnyTeleportChip(arsenal)) {
+            var calcTeleChip = getAvailableTeleportChip(arsenal, player._id)
+            if (calcTeleChip != null) tpBudget -= getCachedChipCost(calcTeleChip)
         }
 
         for (var weaponId in mapKeys(arsenal.playerEquippedWeapons)) {
@@ -2315,18 +2317,19 @@ class Strategy {
                 }
             }
             else if (a.type == Action.ACTION_TELEPORT) {
-                if (a.chip == CHIP_TELEPORTATION) {
+                if (a.chip == CHIP_TELEPORTATION || a.chip == CHIP_JUMP) {
                     var cooldown = getCooldown(a.chip, getEntity())
                     var tpCost = getChipCost(a.chip)
                     var currentPos = getCell()
                     var dist = getCellDistance(currentPos, a.targetCell)
+                    var maxRange = getTeleportMaxRange(a.chip)
 
                     var isObst = isObstacle(a.targetCell)
                     var isEnt = isEntity(a.targetCell)
 
                     if (cooldown == 0 && getTP() >= tpCost) {
                         if (isObst || isEnt) {
-                        } else if (dist == null || dist < 1 || dist > 12) {
+                        } else if (dist == null || dist < 1 || dist > maxRange) {
                         } else {
 
                             var result = useChipOnCell(a.chip, a.targetCell)
@@ -2485,18 +2488,19 @@ class Strategy {
 
     generateOTKOBurstContinuation(target, availableTP) {
         var actions = []
-        var tpTeleportBurst = getCachedChipCost(CHIP_TELEPORTATION)
+        var burstTeleChip = getAvailableTeleportChip(arsenal, player._id)
 
-        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
-            getCooldown(CHIP_TELEPORTATION, player._id) == 0 &&
-            availableTP >= tpTeleportBurst + 3) {
-
-            var bestOTKO = fieldMap.getBestOTKOCell()
-            if (bestOTKO != null) {
-                var dist = getCellDistance(getCell(), bestOTKO._id)
-                if (dist != null && dist >= 1 && dist <= 12) {
-                    push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_TELEPORTATION, bestOTKO._id, target))
-                    availableTP -= tpTeleportBurst
+        if (burstTeleChip != null) {
+            var tpTeleportBurst = getCachedChipCost(burstTeleChip)
+            var burstTeleMaxRange = getTeleportMaxRange(burstTeleChip)
+            if (availableTP >= tpTeleportBurst + 3) {
+                var bestOTKO = fieldMap.getBestOTKOCell()
+                if (bestOTKO != null) {
+                    var dist = getCellDistance(getCell(), bestOTKO._id)
+                    if (dist != null && dist >= 1 && dist <= burstTeleMaxRange) {
+                        push(actions, new Action(Action.ACTION_TELEPORT, -1, burstTeleChip, bestOTKO._id, target))
+                        availableTP -= tpTeleportBurst
+                    }
                 }
             }
         }
@@ -2730,8 +2734,9 @@ class Strategy {
             }
 
             if (action.type == Action.ACTION_TELEPORT) {
+                var teleMaxR = getTeleportMaxRange(action.chip)
                 var distTele = getCellDistance(simulatedPos, action.targetCell)
-                if (distTele != null && distTele >= 1 && distTele <= 12 && !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
+                if (distTele != null && distTele >= 1 && distTele <= teleMaxR && !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
                     push(validActions, action)
                     simulatedPos = action.targetCell
                 }

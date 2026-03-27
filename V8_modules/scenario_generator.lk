@@ -117,15 +117,22 @@ class ScenarioGenerator extends ScenarioCombos {
         }
 
         var bestOTKO = this._fieldMap.getBestOTKOCell()
-        var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
-        var teleportReady = hasTeleport && getCooldown(CHIP_TELEPORTATION, player._id) == 0
+        var killTeleChip = getAvailableTeleportChip(arsenal, player._id)
 
-        var teleportCost = getCachedChipCost(CHIP_TELEPORTATION)
-        if (bestOTKO != null && teleportReady && availableTP >= teleportCost + 10) {
-            var distToOTKO = getCellDistance(player._cellPos, bestOTKO._id)
-            if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= 12) {
-                push(scenarios, this.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
+        if (bestOTKO != null && killTeleChip != null) {
+            var teleportCost = getCachedChipCost(killTeleChip)
+            if (availableTP >= teleportCost + 10) {
+                var distToOTKO = getCellDistance(player._cellPos, bestOTKO._id)
+                var maxRange = getTeleportMaxRange(killTeleChip)
+                if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= maxRange) {
+                    push(scenarios, this.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
+                }
             }
+        }
+
+        var jumpAttackKill = this.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackKill != null) {
+            push(scenarios, jumpAttackKill)
         }
 
         push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "otko"), availableTP, availableMP))
@@ -197,12 +204,16 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, grappleCovid)
         }
 
-        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_TELEPORTATION) &&
-            getCooldown(CHIP_TELEPORTATION, this._player._id) == 0) {
+        if (getAvailableTeleportChip(this._arsenal, this._player._id) != null) {
             var emergencyApproach = this.createEmergencyApproachScenario(availableTP, availableMP)
             if (emergencyApproach != null) {
                 push(scenarios, emergencyApproach)
             }
+        }
+
+        var jumpAttackAggro = this.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackAggro != null) {
+            push(scenarios, jumpAttackAggro)
         }
 
         var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
@@ -405,10 +416,9 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, damageReturnCycling)
         }
 
-        var hasTeleport = mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION)
-        var teleportReady = hasTeleport && getCooldown(CHIP_TELEPORTATION, player._id) == 0
+        var fleeTeleChip = getAvailableTeleportChip(arsenal, player._id)
 
-        if (teleportReady) {
+        if (fleeTeleChip != null) {
             var currentThreat = this._fieldMap.getThreatAtCell(player._cellPos)
             if (currentThreat > 200) {
                 var escapeScenario = this.createTeleportEscapeScenario(availableTP, availableMP)
@@ -416,6 +426,11 @@ class ScenarioGenerator extends ScenarioCombos {
                     push(scenarios, escapeScenario)
                 }
             }
+        }
+
+        var jumpAttackAttr = this.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackAttr != null) {
+            push(scenarios, jumpAttackAttr)
         }
 
         var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)

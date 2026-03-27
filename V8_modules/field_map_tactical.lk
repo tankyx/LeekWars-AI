@@ -254,7 +254,7 @@ class FieldMap extends FieldMapPatterns {
                 for (var cid in mapKeys(arsenal.playerEquippedChips)) {
                     var chipObj = arsenal.playerEquippedChips[cid]
                     if (chipObj == null) continue
-                    if (cid == CHIP_TELEPORTATION) continue
+                    if (cid == CHIP_TELEPORTATION || cid == CHIP_JUMP) continue
 
                     if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
 
@@ -308,7 +308,7 @@ class FieldMap extends FieldMapPatterns {
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
             var chipObj = arsenal.playerEquippedChips[cid]
             if (chipObj == null) continue
-            if (cid == CHIP_TELEPORTATION) continue
+            if (cid == CHIP_TELEPORTATION || cid == CHIP_JUMP) continue
             if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
 
             var distChip = getCellDistance(bestCell, target._cellPos)
