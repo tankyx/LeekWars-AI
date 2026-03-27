@@ -371,10 +371,9 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             }
 
             if (chipId == CHIP_PUNISHMENT) {
-                var selfCost = playerObj._currHealth * 0.75
-                value -= selfCost * 5.0
-                if (enemyHP > 0 && (cumDamage + dmg) / enemyHP > 0.90) {
-                    value += selfCost * 7.0
+                // Hard-block: only allow as kill-finisher
+                if (enemyHP <= 0 || (cumDamage + dmg) < enemyHP) {
+                    return -999999
                 }
             }
 

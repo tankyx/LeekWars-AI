@@ -132,6 +132,10 @@ class ScenarioSimulator {
                         var punishDmg = simPlayerHP * 0.25
                         var punishNet = punishDmg * (1 - simEnemyRelShield) - simEnemyAbsShield
                         if (punishNet < 0) punishNet = 0
+                        // Hard-block: only allow if it kills the target
+                        if (simEnemyCurrHP > 0 && punishNet < simEnemyCurrHP) {
+                            continue
+                        }
                         result.damageDealt += punishNet
                         result.erosionDamage += punishNet * 0.05
                         simEnemyCurrHP -= punishNet
