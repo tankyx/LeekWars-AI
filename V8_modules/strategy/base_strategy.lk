@@ -2084,7 +2084,7 @@ class Strategy {
             }
         }
 
-        if (count(scenarioResults) >= 1 && getOperations() < 10000000) {
+        if (count(scenarioResults) >= 1 && getOperations() < _ops71) {
             arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })

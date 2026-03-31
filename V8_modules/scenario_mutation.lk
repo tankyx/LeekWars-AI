@@ -356,6 +356,8 @@ class HybridMutationPlanner {
     MAX_SEEDS = 6
 
     constructor(arsenal, player, target, fieldMap, scorer) {
+        this.MAX_MUTATIONS_PER_SEED = _mutationMaxPerSeed
+        this.MAX_SEEDS = _mutationMaxSeeds
         this._arsenal = arsenal
         this._player = player
         this._target = target
@@ -395,14 +397,14 @@ class HybridMutationPlanner {
                 bestScenario = seed
             }
 
-            if (getOperations() > 12000000) break
+            if (getOperations() > _ops86) break
 
             var descriptors = this._mutator.generateMutationDescriptors(seed)
 
             var mutationLimit = min(count(descriptors), this.MAX_MUTATIONS_PER_SEED)
 
             for (var i = 0; i < mutationLimit; i++) {
-                if (getOperations() > 12000000) {
+                if (getOperations() > _ops86) {
                     break
                 }
 

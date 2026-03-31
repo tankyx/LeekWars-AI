@@ -616,7 +616,7 @@ class FieldMap extends FieldMapPatterns {
             var damage = this.estimateEnemyWeaponDamage(weaponId, enemy)
 
             for (var cellId in reachableCells) {
-                if (getOperations() > 12000000) {
+                if (getOperations() > _ops86) {
                     return
                 }
 

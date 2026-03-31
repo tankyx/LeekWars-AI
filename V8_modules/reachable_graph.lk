@@ -43,7 +43,7 @@ function buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj)
     mpCost[startCell] = 0
 
     while (head < count(queue)) {
-        if (getOperations() > 12000000) {
+        if (getOperations() > _ops86) {
             break
         }
 

@@ -235,7 +235,7 @@ function enhanceScenariosWithLookahead(scenarios, topK, fieldMap, arsenal, playe
     var enhancedCount = min(topK, count(scenarios))
 
     for (var i = 0; i < enhancedCount; i++) {
-        if (getOperations() > 12000000) {
+        if (getOperations() > _ops86) {
             break
         }
 

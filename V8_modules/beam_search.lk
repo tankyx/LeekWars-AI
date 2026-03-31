@@ -6,8 +6,8 @@ include('reachable_graph.lk')
 function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
     if (targetObj == null) return []
 
-    var beamWidth = 20
-    var maxDepth = 10
+    var beamWidth = _beamWidth
+    var maxDepth = _beamMaxDepth
 
     var playerPos = playerObj._cellPos
     var targetPos = targetObj._cellPos
@@ -76,7 +76,7 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
 
         beam = []
         var selected = [:]
-        var limit = min(14, count(allCandidates))
+        var limit = min(max(4, _beamWidth - 6), count(allCandidates))
         for (var i = 0; i < limit; i++) {
             push(beam, allCandidates[i])
             selected[i] = true
@@ -102,7 +102,7 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
             }
         }
 
-        if (getOperations() > 11500000) break
+        if (getOperations() > _ops82) break
     }
 
     var scenarios = []

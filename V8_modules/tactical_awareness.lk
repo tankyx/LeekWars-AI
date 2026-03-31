@@ -172,7 +172,7 @@ function buildAdversarialThreatCache(playerObj, enemies, arsenalObj) {
         }
 
         for (var i = 0; i < count(cellsToEvaluate); i++) {
-            if (getOperations() > 10000000) break
+            if (getOperations() > _ops71) break
             var evalCell = cellsToEvaluate[i]
             var totalThreat = 0
             for (var enemy in aliveEnemies) {

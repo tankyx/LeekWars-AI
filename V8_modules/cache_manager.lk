@@ -37,7 +37,7 @@ function buildReachableCellsCache(fromCell, mp) {
     mapPut(reachable, fromCell, 0)
 
     while (queueIndex < count(queue)) {
-        if (getOperations() > 12000000) {
+        if (getOperations() > _ops86) {
             break
         }
 

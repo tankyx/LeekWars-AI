@@ -69,7 +69,7 @@ class ScenarioGenerator extends ScenarioCombos {
             this.buildFleeScenarios(scenarios, availableTP, availableMP)
         }
 
-        if (state != "PUZZLE" && state != "FLEE" && getOperations() < 11000000) {
+        if (state != "PUZZLE" && state != "FLEE" && getOperations() < _ops79) {
             var beamScenarios = beamSearchScenarios(this._player, this._target, this._arsenal, this._fieldMap)
             for (var bs in beamScenarios) {
                 push(scenarios, bs)

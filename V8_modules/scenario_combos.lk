@@ -940,7 +940,7 @@ class ScenarioCombos extends ScenarioHelpers {
         var reachable = getReachableCells()
 
         for (var candidate = 0; candidate < 613; candidate++) {
-            if (getOperations() > 12000000) break
+            if (getOperations() > _ops86) break
             if (isObstacle(candidate)) continue
             if (isEntity(candidate)) continue
 
