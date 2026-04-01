@@ -976,10 +976,13 @@ function executeBufferPuzzleTurn() {
         if (r == 1) say("PZ BUFF boots -> " + _puzzleSolverID)
     }
 
-    // Move toward solver to stay in range
+    // Cast adrenaline on solver if off cooldown and in range
     solverCell = getCell(_puzzleSolverID)
-    if (getCellDistance(getCell(), solverCell) > 5) {
-        moveTowardCell(solverCell)
+    distToSolver = getCellDistance(getCell(), solverCell)
+    var adrenCd = getCooldown(CHIP_ADRENALINE, myID)
+    if (adrenCd != null && adrenCd == 0 && getTP() >= 1 && distToSolver <= 3) {
+        var r = useChip(CHIP_ADRENALINE, _puzzleSolverID)
+        if (r == 1) say("PZ BUFF adren -> " + _puzzleSolverID)
     }
 
     return true
@@ -1004,28 +1007,13 @@ function executeSupportPuzzleTurn() {
         if (r == 1) say("PZ SUPP boots -> " + _puzzleSolverID)
     }
 
-    // Check if blocking an unsolved crystal — move away if so
-    myCell = getCell()
-    var blockingCrystalCell = -1
-    for (var eid in mapKeys(_crystalMap)) {
-        var cData = _crystalMap[eid]
-        if (isCrystalSolved(cData)) continue
-        var crCell = getCell(eid)
-        if (crCell != null && crCell >= 0 && getCellDistance(myCell, crCell) <= 2) {
-            blockingCrystalCell = crCell
-            break
-        }
-    }
-
-    if (blockingCrystalCell != -1) {
-        // Move away from crystal to clear push paths
-        moveAwayFromCell(blockingCrystalCell)
-    } else {
-        // Move toward solver to stay in range
-        solverCell = getCell(_puzzleSolverID)
-        if (getCellDistance(getCell(), solverCell) > 5) {
-            moveTowardCell(solverCell)
-        }
+    // Cast adrenaline on solver if off cooldown and in range
+    solverCell = getCell(_puzzleSolverID)
+    distToSolver = getCellDistance(getCell(), solverCell)
+    var adrenCd = getCooldown(CHIP_ADRENALINE, myID)
+    if (adrenCd != null && adrenCd == 0 && getTP() >= 1 && distToSolver <= 3) {
+        var r = useChip(CHIP_ADRENALINE, _puzzleSolverID)
+        if (r == 1) say("PZ SUPP adren -> " + _puzzleSolverID)
     }
 
     return true
@@ -1104,8 +1092,14 @@ function executeSolverPuzzleTurn() {
 
     // Self leather_boots for extra MP
     var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
-    if (bootsCd != null && bootsCd == 0 && getTP() >= 6) {
+    if (bootsCd != null && bootsCd == 0 && getTP() >= 4) {
         useChip(CHIP_LEATHER_BOOTS, myID)
+    }
+
+    // Self adrenaline for extra TP
+    var adrenCd = getCooldown(CHIP_ADRENALINE, myID)
+    if (adrenCd != null && adrenCd == 0 && getTP() >= 1) {
+        useChip(CHIP_ADRENALINE, myID)
     }
 
     // Multi-crystal solving loop
