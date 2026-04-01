@@ -87,21 +87,7 @@ function updateBossContext() {
     }
 
     if (_graalEntity != null) {
-        // Check if all crystals are already solved → switch to COMBAT
-        var _allCrystalsSolved = true
-        var _crystalCount = 0
-        for (var eid in mapKeys(_crystalMap)) {
-            _crystalCount++
-            if (!isCrystalSolved(_crystalMap[eid])) {
-                _allCrystalsSolved = false
-                break
-            }
-        }
-        if (_allCrystalsSolved && _crystalCount == 4) {
-            _bossPhase = "COMBAT"
-        } else {
-            _bossPhase = "PUZZLE"
-        }
+        _bossPhase = "PUZZLE"
     } else {
         _bossPhase = "COMBAT"
     }
@@ -602,6 +588,7 @@ function selectCombatTarget(fieldMapObj) {
 function isCrystalEntity(eid) {
     return mapContainsKey(_crystalMap, eid)
 }
+
 
 function bossDiag(myCell) {
     say("B1 PH=" + _bossPhase + " R=" + _puzzleRole + " SID=" + _puzzleSolverID + " EID=" + _bossTargetEID + " me=" + myCell)
