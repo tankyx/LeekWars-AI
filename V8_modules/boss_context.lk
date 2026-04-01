@@ -6,6 +6,8 @@ global _myAssignedCrystal = null
 global _bossTargetEID = null
 global _usedInversion = false
 global _isBossFight = false
+global _puzzleRole = null
+global _puzzleSolverID = -1
 
 global _graalCell = -1
 global _graalX = 0
@@ -85,12 +87,41 @@ function updateBossContext() {
     }
 
     if (_graalEntity != null) {
-        _bossPhase = "PUZZLE"
+        // Check if all crystals are already solved → switch to COMBAT
+        var _allCrystalsSolved = true
+        var _crystalCount = 0
+        for (var eid in mapKeys(_crystalMap)) {
+            _crystalCount++
+            if (!isCrystalSolved(_crystalMap[eid])) {
+                _allCrystalsSolved = false
+                break
+            }
+        }
+        if (_allCrystalsSolved && _crystalCount == 4) {
+            _bossPhase = "COMBAT"
+        } else {
+            _bossPhase = "PUZZLE"
+        }
     } else {
         _bossPhase = "COMBAT"
     }
 
-    assignCrystalByProximity()
+    if (_bossPhase == "PUZZLE") {
+        assignPuzzleRoles()
+        if (_puzzleRole == "SOLVER") {
+            assignSolverCrystal()
+        } else {
+            _myAssignedCrystal = null
+            _bossTargetEID = null
+            clearCrystalScalars()
+        }
+    } else {
+        _puzzleRole = null
+        _puzzleSolverID = -1
+        _myAssignedCrystal = null
+        _bossTargetEID = null
+        clearCrystalScalars()
+    }
 }
 
 function getBossPhase() {
@@ -179,6 +210,105 @@ function assignCrystalByProximity() {
     } else {
         clearCrystalScalars()
     }
+}
+
+function assignPuzzleRoles() {
+    if (_bossPhase != "PUZZLE") {
+        _puzzleRole = null
+        _puzzleSolverID = -1
+        return
+    }
+
+    var myID = getEntity()
+    var allAllies = [myID]
+    var allies = getAliveAllies()
+    for (var aid in allies) push(allAllies, aid)
+
+    if (count(allAllies) <= 1) {
+        _puzzleRole = "SOLVER"
+        _puzzleSolverID = myID
+        return
+    }
+
+    var myChips = getChips()
+    var hasRage = false
+    var hasSLB = false
+    for (var c in myChips) {
+        if (c == CHIP_RAGE) hasRage = true
+        if (c == CHIP_SEVEN_LEAGUE_BOOTS) hasSLB = true
+    }
+
+    // Sort allies by entity ID — use lowest ID as solver
+    sort(allAllies)
+
+    if (hasRage && hasSLB) {
+        _puzzleRole = "BUFFER"
+        // Solver = lowest ID that isn't me
+        if (allAllies[0] == myID) {
+            _puzzleSolverID = allAllies[1]
+        } else {
+            _puzzleSolverID = allAllies[0]
+        }
+        return
+    }
+
+    // I'm not the buffer. Solver = lowest entity ID.
+    _puzzleSolverID = allAllies[0]
+    if (allAllies[0] == myID) {
+        _puzzleRole = "SOLVER"
+    } else {
+        _puzzleRole = "SUPPORT"
+    }
+}
+
+function assignSolverCrystal() {
+    var myCell = getCell()
+    var bestDist = 999
+    var bestEID = null
+
+    for (var eid in mapKeys(_crystalMap)) {
+        var cData = _crystalMap[eid]
+        if (isCrystalSolved(cData)) continue
+        var d = getCellDistance(myCell, cData['cell'])
+        if (d < bestDist) {
+            bestDist = d
+            bestEID = eid
+        }
+    }
+
+    if (bestEID != null) {
+        _myAssignedCrystal = _crystalMap[bestEID]
+        _bossTargetEID = bestEID
+        syncCrystalScalars(_crystalMap[bestEID])
+    } else {
+        _myAssignedCrystal = null
+        _bossTargetEID = null
+        clearCrystalScalars()
+    }
+}
+
+function pickNearestUnsolvedCrystal(myCell) {
+    var bestDist = 999
+    var bestEID = null
+    for (var eid in mapKeys(_crystalMap)) {
+        var cData = _crystalMap[eid]
+        var cCell = cData['cell']
+        var cx = getCellX(cCell)
+        var cy = getCellY(cCell)
+        var axis = cData['goalAxis']
+        var onAxis = false
+        if (axis == "north") onAxis = (cx == _graalX && cy < _graalY)
+        else if (axis == "south") onAxis = (cx == _graalX && cy > _graalY)
+        else if (axis == "east") onAxis = (cy == _graalY && cx > _graalX)
+        else if (axis == "west") onAxis = (cy == _graalY && cx < _graalX)
+        if (onAxis && lineOfSight(cCell, _graalCell)) continue
+        var d = getCellDistance(myCell, cCell)
+        if (d < bestDist) {
+            bestDist = d
+            bestEID = eid
+        }
+    }
+    return bestEID
 }
 
 function getGoalAxis(color) {
@@ -474,7 +604,7 @@ function isCrystalEntity(eid) {
 }
 
 function bossDiag(myCell) {
-    say("B1 PH=" + _bossPhase + " CC=" + _myCrystalCell + " EID=" + _bossTargetEID + " me=" + myCell + " cr=" + count(mapKeys(_crystalMap)))
+    say("B1 PH=" + _bossPhase + " R=" + _puzzleRole + " SID=" + _puzzleSolverID + " EID=" + _bossTargetEID + " me=" + myCell)
 }
 
 function hasEntityBlockingLine(fromCell, toCell) {
@@ -665,6 +795,77 @@ function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, exc
     return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore, 'step': bestStep]
 }
 
+function hasImprovingPath(fromCell, finalDest, excludeStep) {
+    var fromX = getCellX(fromCell)
+    var fromY = getCellY(fromCell)
+    var fx = getCellX(finalDest)
+    var fy = getCellY(finalDest)
+    var curManhattan = abs(fx - fromX) + abs(fy - fromY)
+    var steps = [18, -18, 17, -17]
+    var sdxs = [1, -1, 0, 0]
+    var sdys = [0, 0, 1, -1]
+    for (var si = 0; si < 4; si++) {
+        var step = steps[si]
+        if (excludeStep != 0 && step == excludeStep) continue
+        var next = diagNext(fromCell, step)
+        if (next == -1) continue
+        if (isObstacle(next)) continue
+        if (next == _graalCell) continue
+        // Skip ally entity check — allies can move out of the way
+        // Only block on permanent obstacles (checked above) and graal
+        var newManhattan = abs(fx - fromX - sdxs[si]) + abs(fy - fromY - sdys[si])
+        if (newManhattan < curManhattan) return true
+    }
+    return false
+}
+
+function findDetourMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, excludeStep) {
+    var steps = [18, -18, 17, -17]
+    var bestStand = -1
+    var bestChip = null
+    var bestTarget = -1
+    var bestNavDist = 999
+    var bestStep = 0
+    for (var si = 0; si < 4; si++) {
+        var step = steps[si]
+        if (excludeStep != 0 && step == excludeStep) continue
+        var next = diagNext(crystalCell, step)
+        if (next == -1) continue
+        if (isObstacle(next)) continue
+        if (next == _graalCell) continue
+        if (isEntity(next)) continue
+        if (!hasImprovingPath(next, finalDest, -step)) continue
+        if (boxUsed < 4) {
+            var boxStand = findBoxStand(crystalCell, step, myCell)
+            if (boxStand != -1) {
+                var dBox = getCellDistance(myCell, boxStand)
+                if (bestStand == -1 || dBox < bestNavDist) {
+                    bestStand = boxStand
+                    bestChip = CHIP_BOXING_GLOVE
+                    bestTarget = next
+                    bestNavDist = dBox
+                    bestStep = step
+                }
+            }
+        }
+        if (grapUsed < 4) {
+            var grapStand = findGrapStand(next, step, 1, myCell)
+            if (grapStand != -1) {
+                var dGrap = getCellDistance(myCell, grapStand)
+                if (bestStand == -1 || dGrap < bestNavDist) {
+                    bestStand = grapStand
+                    bestChip = CHIP_GRAPPLE
+                    bestTarget = next
+                    bestNavDist = dGrap
+                    bestStep = step
+                }
+            }
+        }
+    }
+    if (bestStand == -1) return null
+    return ['stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': 0, 'step': bestStep]
+}
+
 function getEnclaveCells() {
     var visited = [:]
     var queue = [_graalCell]
@@ -747,6 +948,103 @@ function logMapLayout() {
 }
 
 function executePuzzleTurn() {
+    if (_puzzleRole == "SOLVER") return executeSolverPuzzleTurn()
+    if (_puzzleRole == "BUFFER") return executeBufferPuzzleTurn()
+    if (_puzzleRole == "SUPPORT") return executeSupportPuzzleTurn()
+    return false
+}
+
+function executeBufferPuzzleTurn() {
+    var myID = getEntity()
+    var myCell = getCell()
+
+    if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
+        say("PZ BUFFER: no solver")
+        return true
+    }
+
+    var solverCell = getCell(_puzzleSolverID)
+    var distToSolver = getCellDistance(myCell, solverCell)
+
+    // Cast rage on solver if off cooldown and in range
+    var rageCd = getCooldown(CHIP_RAGE, myID)
+    if (rageCd != null && rageCd == 0 && getTP() >= 4 && distToSolver <= 8) {
+        var r = useChip(CHIP_RAGE, _puzzleSolverID)
+        if (r == 1) say("PZ BUFF rage -> " + _puzzleSolverID)
+    }
+
+    // Cast seven_league_boots on solver if off cooldown and in range
+    var slbCd = getCooldown(CHIP_SEVEN_LEAGUE_BOOTS, myID)
+    if (slbCd != null && slbCd == 0 && getTP() >= 4 && distToSolver <= 8) {
+        var r = useChip(CHIP_SEVEN_LEAGUE_BOOTS, _puzzleSolverID)
+        if (r == 1) say("PZ BUFF slb -> " + _puzzleSolverID)
+    }
+
+    // Cast leather_boots on solver if off cooldown and in range
+    solverCell = getCell(_puzzleSolverID)
+    distToSolver = getCellDistance(getCell(), solverCell)
+    var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
+    if (bootsCd != null && bootsCd == 0 && getTP() >= 3 && distToSolver <= 5) {
+        var r = useChip(CHIP_LEATHER_BOOTS, _puzzleSolverID)
+        if (r == 1) say("PZ BUFF boots -> " + _puzzleSolverID)
+    }
+
+    // Move toward solver to stay in range
+    solverCell = getCell(_puzzleSolverID)
+    if (getCellDistance(getCell(), solverCell) > 5) {
+        moveTowardCell(solverCell)
+    }
+
+    return true
+}
+
+function executeSupportPuzzleTurn() {
+    var myID = getEntity()
+    var myCell = getCell()
+
+    if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
+        say("PZ SUPPORT: no solver")
+        return true
+    }
+
+    var solverCell = getCell(_puzzleSolverID)
+    var distToSolver = getCellDistance(myCell, solverCell)
+
+    // Cast leather_boots on solver if off cooldown and in range
+    var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
+    if (bootsCd != null && bootsCd == 0 && getTP() >= 3 && distToSolver <= 5) {
+        var r = useChip(CHIP_LEATHER_BOOTS, _puzzleSolverID)
+        if (r == 1) say("PZ SUPP boots -> " + _puzzleSolverID)
+    }
+
+    // Check if blocking an unsolved crystal — move away if so
+    myCell = getCell()
+    var blockingCrystalCell = -1
+    for (var eid in mapKeys(_crystalMap)) {
+        var cData = _crystalMap[eid]
+        if (isCrystalSolved(cData)) continue
+        var crCell = getCell(eid)
+        if (crCell != null && crCell >= 0 && getCellDistance(myCell, crCell) <= 2) {
+            blockingCrystalCell = crCell
+            break
+        }
+    }
+
+    if (blockingCrystalCell != -1) {
+        // Move away from crystal to clear push paths
+        moveAwayFromCell(blockingCrystalCell)
+    } else {
+        // Move toward solver to stay in range
+        solverCell = getCell(_puzzleSolverID)
+        if (getCellDistance(getCell(), solverCell) > 5) {
+            moveTowardCell(solverCell)
+        }
+    }
+
+    return true
+}
+
+function executeSolverPuzzleTurn() {
     if (getTurn() == 1) {
         var allA = []
         push(allA, getEntity())
@@ -756,32 +1054,28 @@ function executePuzzleTurn() {
         if (allA[0] == getEntity()) logMapLayout()
     }
 
-    if (_myCrystalCell == -1 || _bossTargetEID == null) {
-        say("PZ: no crystal")
-        return false
-    }
-
-    var finalDest = computeCrystalFinalDest()
-    if (finalDest == null) {
-        say("PZ: no dest")
-        moveTowardCell(_myCrystalCell)
-        return true
-    }
-    if (isCrystalOnAxis() && lineOfSight(_myCrystalCell, _graalCell)) {
-        say("PZ DONE c=" + _bossTargetEID)
-        _bossTargetEID = null
-        return true
-    }
-
     var myCell = getCell()
     var myID = getEntity()
 
-    var crystalCell0 = getCell(_bossTargetEID)
+    // Pick first crystal target for teleportation
+    var firstEID = pickNearestUnsolvedCrystal(myCell)
+    if (firstEID == null) {
+        say("PZ SOLVER: all done")
+        return true
+    }
+
+    // Sync globals for teleportation target
+    _bossTargetEID = firstEID
+    syncCrystalScalars(_crystalMap[firstEID])
+    var firstDest = computeCrystalFinalDest()
+
+    // Teleportation to get near first crystal
+    var crystalCell0 = getCell(firstEID)
     if (crystalCell0 != null && crystalCell0 >= 0) {
         var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
-        if (tpCd != null && tpCd == 0 && getTP() >= 12) {
+        if (tpCd != null && tpCd == 0 && getTP() >= 12 && firstDest != null) {
             var tpDone = false
-            var preMove = findBestChipMove(crystalCell0, finalDest, myCell, 0, 0, 0)
+            var preMove = findBestChipMove(crystalCell0, firstDest, myCell, 0, 0, 0)
             if (preMove != null) {
                 var preStand = preMove['stand']
                 var dToStand = getCellDistance(myCell, preStand)
@@ -817,94 +1111,133 @@ function executePuzzleTurn() {
             }
         } else if (tpCd != null && tpCd > 0) {
             var dToCrystal = getCellDistance(myCell, crystalCell0)
-            if (dToCrystal > 10) { return true; }
+            if (dToCrystal > 10) { return true }
         }
     }
 
+    // Self leather_boots for extra MP
     var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
     if (bootsCd != null && bootsCd == 0 && getTP() >= 6) {
         useChip(CHIP_LEATHER_BOOTS, myID)
     }
 
-    var grapUsed = 0
-    var boxUsed = 0
-    var chipsFired = 0
-    var lockedStep = 0
+    // Multi-crystal solving loop
+    var totalChipsFired = 0
+    var crystalsSolved = 0
 
-    while (chipsFired < 8) {
-        var crystalCell = getCell(_bossTargetEID)
-        if (crystalCell == null || crystalCell < 0) break
-
-        var crX = getCellX(crystalCell)
-        var crY = getCellY(crystalCell)
-        var onAx = false
-        var ax = _myCrystalGoalAxis
-        if (ax == "north") onAx = (crX == _graalX && crY < _graalY)
-        else if (ax == "south") onAx = (crX == _graalX && crY > _graalY)
-        else if (ax == "east") onAx = (crY == _graalY && crX > _graalX)
-        else if (ax == "west") onAx = (crY == _graalY && crX < _graalX)
-        if (onAx && lineOfSight(crystalCell, _graalCell)) break
-
-        if (getTP() < 3) break
-
+    while (getTP() >= 3) {
         myCell = getCell()
+        var nextEID = pickNearestUnsolvedCrystal(myCell)
+        if (nextEID == null) {
+            say("PZ SOLVER: ALL DONE (" + crystalsSolved + " this turn)")
+            break
+        }
 
-        var move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
-        if (move == null) break
+        // Sync globals for this crystal
+        _bossTargetEID = nextEID
+        _myAssignedCrystal = _crystalMap[nextEID]
+        syncCrystalScalars(_crystalMap[nextEID])
 
-        var stand = move['stand']
-        var chip = move['chip']
-        var target = move['target']
+        var finalDest = computeCrystalFinalDest()
+        if (finalDest == null) {
+            say("PZ: no dest for " + nextEID)
+            moveTowardCell(_crystalMap[nextEID]['cell'])
+            return true
+        }
 
-        if (myCell != stand) {
-            if (getMP() == 0) break
-            var prevCell = myCell
-            moveTowardCell(stand)
+        // Solve this crystal
+        var grapUsed = 0
+        var boxUsed = 0
+        var chipsFired = 0
+        var lockedStep = 0
+        var detourCount = 0
+
+        while (chipsFired < 8) {
+            var crystalCell = getCell(_bossTargetEID)
+            if (crystalCell == null || crystalCell < 0) break
+
+            var crX = getCellX(crystalCell)
+            var crY = getCellY(crystalCell)
+            var onAx = false
+            var ax = _myCrystalGoalAxis
+            if (ax == "north") onAx = (crX == _graalX && crY < _graalY)
+            else if (ax == "south") onAx = (crX == _graalX && crY > _graalY)
+            else if (ax == "east") onAx = (crY == _graalY && crX > _graalX)
+            else if (ax == "west") onAx = (crY == _graalY && crX < _graalX)
+            if (onAx && lineOfSight(crystalCell, _graalCell)) break
+
+            if (getTP() < 3) break
+
             myCell = getCell()
-            if (myCell == prevCell) break
-            if (myCell != stand) continue
+
+            var move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
+            if (move == null) {
+                if (detourCount < 4) {
+                    move = findDetourMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
+                    if (move != null) detourCount++
+                }
+            }
+            if (move == null) break
+
+            var stand = move['stand']
+            var chip = move['chip']
+            var target = move['target']
+
+            if (myCell != stand) {
+                if (getMP() == 0) break
+                var prevCell = myCell
+                moveTowardCell(stand)
+                myCell = getCell()
+                if (myCell == prevCell) break
+                if (myCell != stand) continue
+            }
+
+            var r = useChipOnCell(chip, target)
+            if (r != 1) break
+
+            chipsFired++
+            totalChipsFired++
+            if (chip == CHIP_GRAPPLE) grapUsed++
+            else boxUsed++
+
+            if (lockedStep == 0 && move['score'] > 0) {
+                var firedStep = move['step']
+                lockedStep = -firedStep
+            }
         }
 
-        var r = useChipOnCell(chip, target)
-        if (r != 1) break
-
-        chipsFired++
-        if (chip == CHIP_GRAPPLE) grapUsed++
-        else boxUsed++
-
-        if (lockedStep == 0) {
-            var firedStep = move['step']
-            lockedStep = -firedStep
+        // Check if this crystal is solved
+        var crCell = getCell(_bossTargetEID)
+        var solved = false
+        if (crCell != null && crCell >= 0) {
+            var scX = getCellX(crCell)
+            var scY = getCellY(crCell)
+            var scAx = _myCrystalGoalAxis
+            if (scAx == "north") solved = (scX == _graalX && scY < _graalY)
+            else if (scAx == "south") solved = (scX == _graalX && scY > _graalY)
+            else if (scAx == "east") solved = (scY == _graalY && scX > _graalX)
+            else if (scAx == "west") solved = (scY == _graalY && scX < _graalX)
+            if (solved) solved = lineOfSight(crCell, _graalCell)
         }
-    }
 
-    var crCell = getCell(_bossTargetEID)
-    var solved = false
-    if (crCell != null && crCell >= 0) {
-        var scX = getCellX(crCell)
-        var scY = getCellY(crCell)
-        var scAx = _myCrystalGoalAxis
-        if (scAx == "north") solved = (scX == _graalX && scY < _graalY)
-        else if (scAx == "south") solved = (scX == _graalX && scY > _graalY)
-        else if (scAx == "east") solved = (scY == _graalY && scX > _graalX)
-        else if (scAx == "west") solved = (scY == _graalY && scX < _graalX)
-        if (solved) solved = lineOfSight(crCell, _graalCell)
-    }
-    if (solved) {
-        say("PZ DONE c=" + _bossTargetEID + " f=" + chipsFired)
-        _bossTargetEID = null
-    } else {
-        say("PZ f=" + chipsFired + " cr=" + crCell + " dst=" + finalDest)
-    }
-
-    if (chipsFired > 0 && crCell != null && crCell >= 0) {
-        moveTowardCell(crCell)
-    } else if (chipsFired == 0) {
-        var crystalNow = getCell(_bossTargetEID)
-        if (crystalNow != null && crystalNow >= 0 && getCellDistance(myCell, crystalNow) <= 1) {
-            moveTowardCell(finalDest)
+        if (solved) {
+            crystalsSolved++
+            say("PZ DONE c=" + _bossTargetEID + " f=" + chipsFired + " total=" + crystalsSolved)
+            continue
         } else {
-            moveTowardCell(_myCrystalCell)
+            say("PZ f=" + chipsFired + " cr=" + crCell + " dst=" + finalDest)
+            // Move toward crystal for next turn
+            if (chipsFired > 0 && crCell != null && crCell >= 0) {
+                moveTowardCell(crCell)
+            } else if (chipsFired == 0) {
+                var crystalNow = getCell(_bossTargetEID)
+                if (crystalNow != null && crystalNow >= 0 && getCellDistance(getCell(), crystalNow) <= 1) {
+                    moveTowardCell(finalDest)
+                } else if (crystalNow != null && crystalNow >= 0) {
+                    moveTowardCell(crystalNow)
+                }
+            }
+            break
         }
     }
 
