@@ -888,22 +888,11 @@ function puzzleGatherMove(gathererID, targetSolverCell) {
     }
 }
 
-function castAllBuffsOnSolver(myID) {
+function castBuffsOnSolver(myID, buffList) {
     var solverCell = getCell(_puzzleSolverID)
-    var myCell = getCell()
-    var dist = getCellDistance(myCell, solverCell)
+    var dist = getCellDistance(getCell(), solverCell)
 
-    // Buff list: [chip, range, tpCost, label]
-    var buffs = [
-        [CHIP_ELEVATION, 5, 6, "elev"],
-        [CHIP_ARMORING, 3, 5, "armor"],
-        [CHIP_RAGE, 8, 4, "rage"],
-        [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"],
-        [CHIP_LEATHER_BOOTS, 5, 3, "boots"],
-        [CHIP_ADRENALINE, 3, 1, "adren"]
-    ]
-
-    for (var buff in buffs) {
+    for (var buff in buffList) {
         var chip = buff[0]
         var range = buff[1]
         var cost = buff[2]
@@ -916,9 +905,12 @@ function castAllBuffsOnSolver(myID) {
     }
 }
 
-function solverSpendLeftoverTP(slMyID) {
-    // Self-buff with leftover TP to prepare for next turn
+function solverSelfBuff(slMyID) {
+    // Self-buff: HP buffs first (turn 1), then recurring TP/MP buffs
     var selfBuffs = [
+        [CHIP_KNOWLEDGE, 5],
+        [CHIP_ELEVATION, 6],
+        [CHIP_ARMORING, 5],
         [CHIP_LEATHER_BOOTS, 3],
         [CHIP_ADRENALINE, 1]
     ]
@@ -933,32 +925,53 @@ function solverSpendLeftoverTP(slMyID) {
     }
 }
 
-function executeHelperPuzzleTurn() {
+function executeBufferPuzzleTurn() {
     var myID = getEntity()
 
     if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
-        say("PZ " + _puzzleRole + ": no solver")
+        say("PZ BUFFER: no solver")
+        return true
+    }
+
+    // Buffer (KurtGodel) stays put — RAGE/SLB have range 8, cast when solver is in range
+    // Don't move into the enclave or the solver's path
+    var buffs = [
+        [CHIP_ELEVATION, 5, 6, "elev"],
+        [CHIP_ARMORING, 3, 5, "armor"],
+        [CHIP_RAGE, 8, 4, "rage"],
+        [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"],
+        [CHIP_LEATHER_BOOTS, 5, 3, "boots"],
+        [CHIP_ADRENALINE, 3, 1, "adren"]
+    ]
+    castBuffsOnSolver(myID, buffs)
+    return true
+}
+
+function executeSupportPuzzleTurn() {
+    var myID = getEntity()
+
+    if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
+        say("PZ SUPPORT: no solver")
         return true
     }
 
     var solverCell = getCell(_puzzleSolverID)
     var dist = getCellDistance(getCell(), solverCell)
 
-    // Gather phase: move toward solver if out of closest buff range (ARMORING=3)
-    if (getTurn() <= 2 || dist > 3) {
+    // Support needs range 3 for ARMORING — move close on early turns, then stay put
+    if (getTurn() <= 2 && dist > 3) {
         puzzleGatherMove(myID, solverCell)
     }
 
-    castAllBuffsOnSolver(myID)
+    // Support casts ELEVATION and ARMORING only (no RAGE/SLB)
+    var buffs = [
+        [CHIP_ELEVATION, 5, 6, "elev"],
+        [CHIP_ARMORING, 3, 5, "armor"],
+        [CHIP_LEATHER_BOOTS, 5, 3, "boots"],
+        [CHIP_ADRENALINE, 3, 1, "adren"]
+    ]
+    castBuffsOnSolver(myID, buffs)
     return true
-}
-
-function executeBufferPuzzleTurn() {
-    return executeHelperPuzzleTurn()
-}
-
-function executeSupportPuzzleTurn() {
-    return executeHelperPuzzleTurn()
 }
 
 function executeSolverPuzzleTurn() {
@@ -978,7 +991,7 @@ function executeSolverPuzzleTurn() {
     // Self-buff with leftover TP while waiting
     if (getTurn() <= 2) {
         say("PZ SOLVER: waiting for allies (turn " + getTurn() + ")")
-        solverSpendLeftoverTP(myID)
+        solverSelfBuff(myID)
         return true
     }
 
@@ -986,7 +999,7 @@ function executeSolverPuzzleTurn() {
     var firstEID = pickNearestUnsolvedCrystal(myCell)
     if (firstEID == null) {
         say("PZ SOLVER: all done")
-        solverSpendLeftoverTP(myID)
+        solverSelfBuff(myID)
         return true
     }
 
@@ -1033,13 +1046,13 @@ function executeSolverPuzzleTurn() {
                         }
                     }
                 }
-                solverSpendLeftoverTP(myID)
+                solverSelfBuff(myID)
                 return true
             }
         } else if (tpCd != null && tpCd > 0) {
             var dToCrystal = getCellDistance(myCell, crystalCell0)
             if (dToCrystal > 10) {
-                solverSpendLeftoverTP(myID)
+                solverSelfBuff(myID)
                 return true
             }
         }
@@ -1081,7 +1094,55 @@ function executeSolverPuzzleTurn() {
             return true
         }
 
-        // Solve this crystal
+        // Try INVERSION: move to an on-axis cell that's on the same line as the crystal
+        // Swapping puts crystal on-axis (where Ada stands) → instant solve
+        var invCd = getCooldown(CHIP_INVERSION, myID)
+        if (invCd != null && invCd == 0 && getTP() >= 4) {
+            var crystalCell = getCell(_bossTargetEID)
+            if (crystalCell != null && crystalCell >= 0) {
+                // Search axis cells near graal for one on the same line as crystal
+                var bestInvCell = -1
+                var bestInvDist = 999
+                var axis = _myCrystalGoalAxis
+                for (var d = 1; d <= 8; d++) {
+                    var ax = _graalX
+                    var ay = _graalY
+                    if (axis == "south") ay = _graalY + d
+                    else if (axis == "north") ay = _graalY - d
+                    else if (axis == "east") ax = _graalX + d
+                    else if (axis == "west") ax = _graalX - d
+                    var axCell = getCellFromXY(ax, ay)
+                    if (axCell == null || isObstacle(axCell)) continue
+                    if (!lineOfSight(axCell, _graalCell)) continue
+                    if (!isOnSameLine(axCell, crystalCell)) continue
+                    var invDist = getCellDistance(axCell, crystalCell)
+                    if (invDist == null || invDist < 1 || invDist > 14) continue
+                    var dFromMe = getCellDistance(myCell, axCell)
+                    if (dFromMe < bestInvDist) {
+                        bestInvDist = dFromMe
+                        bestInvCell = axCell
+                    }
+                }
+                if (bestInvCell != -1) {
+                    if (myCell != bestInvCell) {
+                        moveTowardCell(bestInvCell)
+                        myCell = getCell()
+                    }
+                    if (myCell == bestInvCell) {
+                        var invR = useChip(CHIP_INVERSION, _bossTargetEID)
+                        if (invR == 1) {
+                            myCell = getCell()
+                            crystalsSolved++
+                            totalChipsFired++
+                            say("PZ INV c=" + _bossTargetEID + " total=" + crystalsSolved)
+                            continue
+                        }
+                    }
+                }
+            }
+        }
+
+        // Solve with GRAPPLE/BOXING_GLOVE push/pull
         var grapUsed = 0
         var boxUsed = 0
         var chipsFired = 0
@@ -1159,7 +1220,7 @@ function executeSolverPuzzleTurn() {
         }
     }
 
-    solverSpendLeftoverTP(myID)
+    solverSelfBuff(myID)
     return true
 }
 
