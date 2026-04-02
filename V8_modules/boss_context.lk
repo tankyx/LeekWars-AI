@@ -155,7 +155,6 @@ function assignPuzzleRoles() {
     var allAllies = [myID]
     var allies = getAliveAllies()
     for (var aid in allies) push(allAllies, aid)
-    sort(allAllies)
 
     if (count(allAllies) <= 1) {
         _puzzleRole = "SOLVER"
@@ -163,33 +162,23 @@ function assignPuzzleRoles() {
         return
     }
 
-    // Find buffer: first ally with RAGE + SLB
+    // Identify roles by name — getCooldown is unreliable for cross-entity chip detection
+    var solverID = -1
     var bufferID = -1
     for (var aid in allAllies) {
-        if (allyHasChip(aid, CHIP_RAGE) && allyHasChip(aid, CHIP_SEVEN_LEAGUE_BOOTS)) {
-            bufferID = aid
-            break
-        }
+        var name = getName(aid)
+        if (name == "AdaLovelace") solverID = aid
+        else if (name == "KurtGodel") bufferID = aid
     }
 
-    // Find solver: first non-buffer ally with GRAPPLE + BOXING_GLOVE
-    _puzzleSolverID = -1
-    for (var aid in allAllies) {
-        if (aid == bufferID) continue
-        if (allyHasChip(aid, CHIP_GRAPPLE) && allyHasChip(aid, CHIP_BOXING_GLOVE)) {
-            _puzzleSolverID = aid
-            break
-        }
-    }
-    if (_puzzleSolverID == -1) {
-        for (var aid in allAllies) {
-            if (aid != bufferID) { _puzzleSolverID = aid; break }
-        }
-    }
+    // Fallback if named leeks not found
+    if (solverID == -1) solverID = allAllies[0]
+
+    _puzzleSolverID = solverID
 
     if (myID == bufferID) {
         _puzzleRole = "BUFFER"
-    } else if (myID == _puzzleSolverID) {
+    } else if (myID == solverID) {
         _puzzleRole = "SOLVER"
     } else {
         _puzzleRole = "SUPPORT"
