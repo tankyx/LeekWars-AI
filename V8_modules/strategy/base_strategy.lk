@@ -825,22 +825,10 @@ class Strategy {
 
     turnOneBuffs() {
         if (_isBossFight && _bossPhase == "PUZZLE") {
-            var hpTarget = (_puzzleSolverID != -1) ? _puzzleSolverID : player._id
+            // Boss PUZZLE: only self-cast KNOWLEDGE on turn 1
+            // HP buffs (ELEVATION, ARMORING) are handled in the gather phase
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
                 useChip(CHIP_KNOWLEDGE, player._id)
-            }
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
-                // Move toward solver if out of Elevation range (5)
-                if (hpTarget != player._id) {
-                    var solverCell = getCell(hpTarget)
-                    if (solverCell != null && getCellDistance(getCell(), solverCell) > 5) {
-                        moveTowardCell(solverCell)
-                    }
-                }
-                useChip(CHIP_ELEVATION, hpTarget)
-            }
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
-                useChip(CHIP_ARMORING, hpTarget)
             }
             if (getWeapon() == null) {
                 setWeapon(arsenal.getHighestDamageWeapon())
