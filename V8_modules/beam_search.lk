@@ -770,10 +770,10 @@ function beamCountAttacksFromPos(fromPos, targetPos, arsenalObj, partial) {
 }
 
 function beamEstimateHeal(chipId, wisdom) {
-    if (chipId == CHIP_REGENERATION) return 500
-    if (chipId == CHIP_REMISSION) return 71 * (1 + wisdom / 100)
-    if (chipId == CHIP_CURE) return 200 * (1 + wisdom / 100)
-    if (chipId == CHIP_DRIP) return 100 * (1 + wisdom / 100)
+    if (chipId == CHIP_REGENERATION) return 500 * (1 + wisdom / 100)
+    if (chipId == CHIP_REMISSION) return 71.5 * (1 + wisdom / 100)
+    if (chipId == CHIP_CURE) return 100 * (1 + wisdom / 100)
+    if (chipId == CHIP_DRIP) return 200 * (1 + wisdom / 100)
     return 50 * (1 + wisdom / 100)
 }
 

@@ -314,6 +314,8 @@ class UnifiedStrategy extends Strategy {
             push(this._actions, action)
         }
 
+        if (target == null) return;
+
         var weaponIds = mapKeys(arsenal.playerEquippedWeapons)
 
         var bestWeaponId = null

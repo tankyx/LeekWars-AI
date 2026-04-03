@@ -836,9 +836,6 @@ class Strategy {
             return;
         }
 
-        for (var c in mapKeys(arsenal.playerEquippedChips)) {
-        }
-
         var isMagicBuild = player._magic > player._strength + 100 && player._magic > player._agility + 100
         if (!isMagicBuild) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
