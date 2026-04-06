@@ -681,7 +681,7 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-        if (!lineOfSight(simPos, this._target._cellPos)) {
+        if (!getCachedLineOfSight(simPos, this._target._cellPos)) {
             return null
         }
 
@@ -970,7 +970,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 var wObj = this._arsenal.playerEquippedWeapons[wid]
                 if (wObj == null) continue
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
-                if (!lineOfSight(candidate, targetPos)) continue
+                if (!getCachedLineOfSight(candidate, targetPos)) continue
                 var dmg = this._arsenal.getNetDamageAgainstTarget(
                     this._player._strength, this._player._magic,
                     this._player._wisdom, this._player._science,
@@ -1180,7 +1180,7 @@ class ScenarioCombos extends ScenarioHelpers {
         var grappleCell = simPos
         var moveCost = 0
 
-        if (onAxis && dist != null && dist >= 3 && dist <= 8 && lineOfSight(simPos, enemyPos)) {
+        if (onAxis && dist != null && dist >= 3 && dist <= 8 && getCachedLineOfSight(simPos, enemyPos)) {
             grappleCell = simPos
         } else {
             var reachableCells = getReachableCells()
@@ -1201,7 +1201,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 var cellDist = getCellDistance(cellId, enemyPos)
                 if (cellDist == null || cellDist < 3 || cellDist > 8) continue
 
-                if (!lineOfSight(cellId, enemyPos)) continue
+                if (!getCachedLineOfSight(cellId, enemyPos)) continue
 
                 var score = 1000 - pathCost * 50
                 if (cellDist >= 4 && cellDist <= 6) score += 200
@@ -1354,7 +1354,7 @@ class ScenarioCombos extends ScenarioHelpers {
 
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
-            if (!lineOfSight(simPos, this._target._cellPos)) continue
+            if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
 
             if (poisonChip._aoeType != AREA_POINT) {
                 if (fieldMap.wouldAoEHitCell(this._target._cellPos, poisonChip._aoeType, simPos, simPos)) continue
@@ -1374,7 +1374,7 @@ class ScenarioCombos extends ScenarioHelpers {
             var dObj = this._arsenal.playerEquippedChips[dChip]
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < dObj._minRange || dist > dObj._maxRange) continue
-            if (!lineOfSight(simPos, this._target._cellPos)) continue
+            if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
 
             if (dObj._aoeType != AREA_POINT) {
                 if (fieldMap.wouldAoEHitCell(this._target._cellPos, dObj._aoeType, simPos, simPos)) continue
@@ -1637,13 +1637,13 @@ class ScenarioCombos extends ScenarioHelpers {
                              getCooldown(CHIP_ARSENIC, this._player._id) == 0
             if (hasArsenic && simDist >= 3 && simDist <= 4) {
                 var tpArsenic = getCachedChipCost(CHIP_ARSENIC)
-                if (tpBudget >= tpGrapple + tpCovid + tpArsenic && lineOfSight(simPos, this._target._cellPos)) {
+                if (tpBudget >= tpGrapple + tpCovid + tpArsenic && getCachedLineOfSight(simPos, this._target._cellPos)) {
                     push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, this._target._cellPos, this._target))
                     tpBudget -= tpArsenic
                 }
             }
 
-            if (simDist >= 1 && simDist <= 8 && lineOfSight(simPos, this._target._cellPos)) {
+            if (simDist >= 1 && simDist <= 8 && getCachedLineOfSight(simPos, this._target._cellPos)) {
                 push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, this._target._cellPos, this._target))
                 tpBudget -= tpGrapple
                 grapplePulled = true
@@ -1678,7 +1678,7 @@ class ScenarioCombos extends ScenarioHelpers {
             if (grapplePulled) dist = simDist
             if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
 
-            if (!lineOfSight(simPos, this._target._cellPos)) continue
+            if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
 
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
             tpBudget -= chipCost
@@ -1746,7 +1746,7 @@ class ScenarioCombos extends ScenarioHelpers {
             return null
         }
 
-        if (!lineOfSight(simPos, this._target._cellPos)) {
+        if (!getCachedLineOfSight(simPos, this._target._cellPos)) {
             return null
         }
 
@@ -2002,7 +2002,7 @@ class ScenarioCombos extends ScenarioHelpers {
 
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
-            if (!lineOfSight(simPos, this._target._cellPos)) continue
+            if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
 
             if (tpBudget >= weapon._cost) {
                 push(actions, new Action(Action.ACTION_DIRECT, weaponId, -1, this._target._cellPos, this._target))
@@ -2333,7 +2333,7 @@ class ScenarioCombos extends ScenarioHelpers {
         var playerCell = this._player._cellPos
         var dist = getCellDistance(playerCell, _myCrystalCell)
 
-        if (dist != null && dist >= 1 && dist <= 14 && lineOfSight(playerCell, _myCrystalCell)) {
+        if (dist != null && dist >= 1 && dist <= 14 && getCachedLineOfSight(playerCell, _myCrystalCell)) {
             push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_INVERSION, _myCrystalCell, this._target))
             return actions
         }
@@ -2347,7 +2347,7 @@ class ScenarioCombos extends ScenarioHelpers {
         for (var cellId in reachableCells) {
             var d = getCellDistance(cellId, _myCrystalCell)
             if (d == null || d < 1 || d > 14) continue
-            if (!lineOfSight(cellId, _myCrystalCell)) continue
+            if (!getCachedLineOfSight(cellId, _myCrystalCell)) continue
             var pathCost = getGraphMPCost(cellId)
             if (pathCost >= 999 || pathCost > mp) continue
             if (d < bestDist) {

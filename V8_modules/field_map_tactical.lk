@@ -186,7 +186,7 @@ class FieldMap extends FieldMapPatterns {
         for (var ea = 0; ea < count(enemyAccess); ea++) {
             var cellsArr = enemyAccess[ea]['cells']
             for (var ec = 0; ec < count(cellsArr); ec++) {
-                if (lineOfSight(cellsArr[ec], cellId)) { danger += 1 }
+                if (getCachedLineOfSight(cellsArr[ec], cellId)) { danger += 1 }
             }
         }
         return danger
@@ -223,17 +223,19 @@ class FieldMap extends FieldMapPatterns {
             if (distFromPlayer == null || distFromPlayer < 1 || distFromPlayer > 12) continue
 
             var totalDamage = 0
-            var playerTP = player._currTp - 9  
-            var tpSpent = 0  
+            var playerTP = player._currTp - 9
+            var tpSpent = 0
+
+            var distToTarget = getCellDistance(cellId, target._cellPos)
+            if (distToTarget == null) continue
+            var hasLosToTarget = getCachedLineOfSight(cellId, target._cellPos)
 
             for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
                 var wObj = arsenal.playerEquippedWeapons[wid]
                 if (wObj == null) continue
 
-                var distToTarget = getCellDistance(cellId, target._cellPos)
-                if (distToTarget == null) continue
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
-                if (!lineOfSight(cellId, target._cellPos)) continue
+                if (!hasLosToTarget) continue
 
                 if (wObj._aoeType == AREA_LASER_LINE) {
                     if (!this.isOnSameLine(cellId, target._cellPos)) continue
@@ -258,10 +260,8 @@ class FieldMap extends FieldMapPatterns {
 
                     if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
 
-                    var distChip = getCellDistance(cellId, target._cellPos)
-                    if (distChip == null) continue
-                    if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
-                    if (!lineOfSight(cellId, target._cellPos)) continue
+                    if (distToTarget < chipObj._minRange || distToTarget > chipObj._maxRange) continue
+                    if (!hasLosToTarget) continue
 
                     var chipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, cid, target)
                     var tpBudgetChip = playerTP - tpSpent
@@ -282,16 +282,18 @@ class FieldMap extends FieldMapPatterns {
         if (bestCell == -1) return null
 
         var bestCellItems = []
-        var tpForItems = player._currTp - 9  
+        var tpForItems = player._currTp - 9
+
+        var bestDistToTarget = getCellDistance(bestCell, target._cellPos)
+        var bestHasLos = bestDistToTarget != null ? getCachedLineOfSight(bestCell, target._cellPos) : false
 
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
             var wObj = arsenal.playerEquippedWeapons[wid]
             if (wObj == null) continue
 
-            var distToTarget = getCellDistance(bestCell, target._cellPos)
-            if (distToTarget == null) continue
-            if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
-            if (!lineOfSight(bestCell, target._cellPos)) continue
+            if (bestDistToTarget == null) continue
+            if (bestDistToTarget < wObj._minRange || bestDistToTarget > wObj._maxRange) continue
+            if (!bestHasLos) continue
 
             if (wObj._aoeType == AREA_LASER_LINE) {
                 if (!this.isOnSameLine(bestCell, target._cellPos)) continue
@@ -311,10 +313,9 @@ class FieldMap extends FieldMapPatterns {
             if (cid == CHIP_TELEPORTATION || cid == CHIP_JUMP) continue
             if (!mapContainsKey(chipObj._effects, EFFECT_DAMAGE) && !mapContainsKey(chipObj._effects, EFFECT_POISON)) continue
 
-            var distChip = getCellDistance(bestCell, target._cellPos)
-            if (distChip == null) continue
-            if (distChip < chipObj._minRange || distChip > chipObj._maxRange) continue
-            if (!lineOfSight(bestCell, target._cellPos)) continue
+            if (bestDistToTarget == null) continue
+            if (bestDistToTarget < chipObj._minRange || bestDistToTarget > chipObj._maxRange) continue
+            if (!bestHasLos) continue
 
             var usesChip = min(chipObj._maxUse, floor(tpForItems / chipObj._cost))
             for (var uc = 0; uc < usesChip; uc++) {
@@ -359,7 +360,7 @@ class FieldMap extends FieldMapPatterns {
             var maxRange = getWeaponMaxRange(weapon._id)
 
             if (distToTarget >= minRange && distToTarget <= maxRange) {
-                if (!lineOfSight(cellId, target._cellPos)) continue
+                if (!getCachedLineOfSight(cellId, target._cellPos)) continue
 
                 var area = getWeaponArea(weapon._id)
                 if (area == AREA_LASER_LINE) {
@@ -388,7 +389,7 @@ class FieldMap extends FieldMapPatterns {
             var minRange = getWeaponMinRange(weapon._id)
             var maxRange = getWeaponMaxRange(weapon._id)
             if (distToTarget >= minRange && distToTarget <= maxRange) {
-                if (!lineOfSight(cellId, target._cellPos)) continue
+                if (!getCachedLineOfSight(cellId, target._cellPos)) continue
 
                 var area = getWeaponArea(weapon._id)
                 if (area == AREA_LASER_LINE) {
@@ -686,7 +687,7 @@ class FieldMap extends FieldMapPatterns {
                 if (dist == null || dist < minRange || dist > maxRange) continue
 
                 if (area == AREA_LASER_LINE) {
-                    if (!lineOfSight(fromCell, cellId)) continue
+                    if (!getCachedLineOfSight(fromCell, cellId)) continue
                 }
 
                 push(cells, cellId)
@@ -858,7 +859,7 @@ class FieldMap extends FieldMapPatterns {
             var enemy = enemies[eid]
             if (enemy == null || isDead(eid)) continue
 
-            if (!lineOfSight(cellId, enemy._cellPos)) continue
+            if (!getCachedLineOfSight(cellId, enemy._cellPos)) continue
 
             if (isBulb(enemy)) {
                 hasLoSToBulb = true

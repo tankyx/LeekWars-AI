@@ -147,8 +147,13 @@ class ScenarioQuickScorer {
             }
         }
 
-        var actionDensity = actionCount * 20
+        var actionDensity = min(actionCount, 5) * 20
         score += actionDensity
+
+        // Boost damage scenarios under time pressure
+        if (__timePressure && damageEstimate > 0) {
+            score += damageEstimate * 0.5
+        }
 
         return score
     }

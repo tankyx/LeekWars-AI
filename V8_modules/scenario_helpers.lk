@@ -126,8 +126,12 @@ class ScenarioHelpers {
         var dmgEstimate = this.estimateMaxDamageThisTurn(availableTP)
         var estimatedDamage = dmgEstimate['immediate']
 
+        // Include existing poison ticks in kill estimation
+        var existingPoisonDmg = this._target.getEffectValue(EFFECT_POISON)
+        var poisonKillDmg = estimatedDamage + existingPoisonDmg
+
         var killSuppressed = false
-        if (estimatedDamage > 0 && estimatedDamage >= enemyHP * 0.95) {
+        if (poisonKillDmg > 0 && poisonKillDmg >= enemyHP * 0.95) {
             var inWeaponRange = this.isInAnyWeaponRange()
             if (inWeaponRange) {
                 return "KILL"

@@ -21,7 +21,7 @@ Available opponents:
     dummy_agi    600 AGI, 300 WIS (simple AI)
     smart_str    600 STR, 300 WIS (buffs, heals, weapon swaps)
     smart_mag    600 MAG, 300 WIS (poison, denial, kiting)
-    smart_tank   8000 HP, 200 STR, 400 RES, 400 WIS (shields, heals, cleanses)
+    smart_tank   4500 HP, 200 STR, 400 RES, 400 WIS (shields, heals, cleanses)
     smart_agi    600 AGI, 300 WIS (kiting, long-range attacks)
     mirror       AI fights a copy of itself
     boss_fennel  Fennel King boss fight (4 leeks vs graal + crystals)

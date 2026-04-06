@@ -8,9 +8,20 @@ global __damageCache = [:]
 global __chipCostCache = [:]
 global __weaponCostCache = [:]
 global __pathLengthCache = [:]
+global __losCache = [:]
 
 function hashTwoCells(cell1, cell2) {
     return cell1 * 1024 + cell2
+}
+
+function getCachedLineOfSight(cell1, cell2) {
+    var hash = hashTwoCells(cell1, cell2)
+    if (mapContainsKey(__losCache, hash)) {
+        return __losCache[hash]
+    }
+    var result = lineOfSight(cell1, cell2)
+    __losCache[hash] = result
+    return result
 }
 
 function clearCaches() {
@@ -19,6 +30,7 @@ function clearCaches() {
     __chipCostCache = [:]
     __weaponCostCache = [:]
     __pathLengthCache = [:]
+    __losCache = [:]
     __adversarialThreatCache = [:]
     __adversarialThreatCacheBuilt = false
     clearPerformanceInfra()

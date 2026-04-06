@@ -153,7 +153,7 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
         if (!isSelfTarget && chipTargetCell != -1) {
             var chipDist = getCellDistance(simPos, chipTargetCell)
             if (chipDist == null || chipDist < chipObj._minRange || chipDist > chipObj._maxRange) continue
-            if (!lineOfSight(simPos, chipTargetCell)) continue
+            if (!getCachedLineOfSight(simPos, chipTargetCell)) continue
         }
 
         var actionType = Action.ACTION_BUFF
@@ -189,7 +189,7 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
             var maxUse = mapContainsKey(wMaxUses, simWeapon) ? wMaxUses[simWeapon] : 1
             if (currentUses < maxUse) {
                 if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange &&
-                    lineOfSight(simPos, targetPos)) {
+                    getCachedLineOfSight(simPos, targetPos)) {
                     push(actions, [
                         'type': 'weapon',
                         'actionType': Action.ACTION_DIRECT,
@@ -214,7 +214,7 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
         var maxUse = mapContainsKey(wMaxUses, wid) ? wMaxUses[wid] : 1
         if (currentUses >= maxUse) continue
         if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange &&
-            lineOfSight(simPos, targetPos)) {
+            getCachedLineOfSight(simPos, targetPos)) {
             push(actions, [
                 'type': 'weapon',
                 'actionType': Action.ACTION_DIRECT,
@@ -563,8 +563,8 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                     if (!isDead(eid)) {
                         var eCell = enemies[eid]._cellPos
                         if (eCell != null) {
-                            if (lineOfSight(moveTargetPos, eCell)) exposureNew++
-                            if (lineOfSight(partial['simPos'], eCell)) exposureOld++
+                            if (getCachedLineOfSight(moveTargetPos, eCell)) exposureNew++
+                            if (getCachedLineOfSight(partial['simPos'], eCell)) exposureOld++
                         }
                     }
                 }

@@ -37,7 +37,7 @@ class FieldMapPatterns extends FieldMapCore {
                 var actualDist = getCellDistance(cell, curCell)
                 if (actualDist == null || actualDist < minR || actualDist > maxR) continue
 
-                var _hasLOS = lineOfSight(cell, curCell)
+                var _hasLOS = getCachedLineOfSight(cell, curCell)
                 if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
 
                     this.updateHitCells(hitCells, curCell, weapon, chip, cell)
@@ -64,7 +64,7 @@ class FieldMapPatterns extends FieldMapCore {
                 var actualDist = getCellDistance(cell, curCell)
                 if (actualDist == null || actualDist < minR || actualDist > maxR) continue
 
-                var _hasLOS = lineOfSight(cell, curCell)
+                var _hasLOS = getCachedLineOfSight(cell, curCell)
                 if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
 
                     this.updateHitCells(hitCells, curCell, weapon, chip, cell)
@@ -89,7 +89,7 @@ class FieldMapPatterns extends FieldMapCore {
                 var dist = abs(dx) + abs(dy)
                 if (dist >= minR && dist <= maxR) {
                     var curCell = cell + FieldMapPatterns.x_offset * dx + FieldMapPatterns.y_offset * dy
-                    var _hasLOS = lineOfSight(cell, curCell)
+                    var _hasLOS = getCachedLineOfSight(cell, curCell)
                     if (_hasLOS && curCell >= 0 && curCell < FieldMapPatterns.board_cell_count) {
 
                         this.updateHitCells(hitCells, curCell, weapon, chip, cell)
@@ -197,7 +197,7 @@ class FieldMapPatterns extends FieldMapCore {
 
             var dist = getCellDistance(shooterCell, aimCell)
             if (dist == null || dist < item._minRange || dist > item._maxRange) continue
-            if (!lineOfSight(shooterCell, aimCell)) continue
+            if (!getCachedLineOfSight(shooterCell, aimCell)) continue
 
             var result = arsenal.calculateMultiEnemyDamage(
                 shooterCell, aimCell, itemId, enemiesArray

@@ -491,16 +491,23 @@ class ScenarioScorer {
         var enemyId = this._target._id
         var tracker = new CooldownTracker(this._target)
         var antidoteCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
+        var cureCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_CURE_ID)
+        var remissionCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_REMISSION_ID)
 
-        if (antidoteCd == 0) {
+        // Use the shortest cooldown among all cleanse chips
+        var bestCleanseCd = antidoteCd
+        if (cureCd >= 0 && (bestCleanseCd < 0 || cureCd < bestCleanseCd)) bestCleanseCd = cureCd
+        if (remissionCd >= 0 && (bestCleanseCd < 0 || remissionCd < bestCleanseCd)) bestCleanseCd = remissionCd
+
+        if (bestCleanseCd == 0) {
             if (POISON_PHASE == "BAIT") return 0.6
             return 0.2
-        } else if (antidoteCd == 1) {
+        } else if (bestCleanseCd == 1) {
             return 1.7
-        } else if (antidoteCd == 2) {
+        } else if (bestCleanseCd == 2) {
             return 1.9
-        } else if (antidoteCd >= 3) {
-            return 2.1 + (antidoteCd * 0.2)
+        } else if (bestCleanseCd >= 3) {
+            return 2.1 + (bestCleanseCd * 0.2)
         }
 
         return 1.0
@@ -560,9 +567,9 @@ class ScenarioScorer {
 
         var fightLengthEstimate = targetHP / max(1, this._player._strength + this._player._magic)
 
-        if (fightLengthEstimate > 3) return 0.3  
-        else if (fightLengthEstimate > 1.5) return 0.15  
-        return 0.05  
+        if (fightLengthEstimate > 3) return 0.3
+        else if (fightLengthEstimate > 1.5) return 0.15
+        return 0.05
     }
 
     calculateBuffWeight() {
@@ -619,7 +626,7 @@ class ScenarioScorer {
         for (var eid in mapKeys(enemies)) {
             if (!isDead(eid)) {
                 var enemyCell = enemies[eid]._cellPos
-                if (enemyCell != null && lineOfSight(finalPos, enemyCell)) {
+                if (enemyCell != null && getCachedLineOfSight(finalPos, enemyCell)) {
                     exposureCount++
                 }
             }

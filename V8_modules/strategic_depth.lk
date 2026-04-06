@@ -233,7 +233,10 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         if (primaryProfile['hasReflect'] && primaryEnemy != null) {
             var reflectActive = primaryEnemy.hasDamageReturn()
             if (reflectActive) {
-                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_reflect_on_burst'] / 100)
+                var reflectRemaining = primaryEnemy.getDamageReturnRemaining()
+                // Less cautious if reflect expires soon
+                var reflectMult = (reflectRemaining <= 1) ? 85 : COUNTER_MULTS['vs_reflect_on_burst']
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * reflectMult / 100)
                 adapted['shieldValue'] = floor(adapted['shieldValue'] * COUNTER_MULTS['vs_reflect_on_shield'] / 100)
                 adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_reflect_on_heal'] / 100)
             } else {
