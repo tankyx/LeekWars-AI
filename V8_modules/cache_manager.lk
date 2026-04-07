@@ -9,6 +9,13 @@ global __chipCostCache = [:]
 global __weaponCostCache = [:]
 global __pathLengthCache = [:]
 global __losCache = [:]
+// Per-turn cache: count of enemy access cells with LoS to a candidate cell.
+// Used by FieldMapTactical.computeDangerForCell. enemyAccess is fixed per turn,
+// so we key by candidate cellId only.
+global __dangerCellCache = [:]
+// Streak counter: incremented each turn we deal zero damage, reset on damage.
+// Used by no-damage penalty in scenario_scorer.lk.
+global __zeroDamageStreak = 0
 
 function hashTwoCells(cell1, cell2) {
     return cell1 * 1024 + cell2
@@ -31,8 +38,11 @@ function clearCaches() {
     __weaponCostCache = [:]
     __pathLengthCache = [:]
     __losCache = [:]
+    __dangerCellCache = [:]
     __adversarialThreatCache = [:]
     __adversarialThreatCacheBuilt = false
+    // Note: __zeroDamageStreak is NOT cleared here; it persists across turns
+    // so it can detect multi-turn no-damage streaks.
     clearPerformanceInfra()
 }
 

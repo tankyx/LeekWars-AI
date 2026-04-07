@@ -184,8 +184,18 @@ class ScenarioScorer {
                     noDamagePenalty = noDamagePenalty / 4
                 }
             } else if (currentTurn >= 5) {
-                var turnScale = min(7, 3 + floor((currentTurn - 5) / 2))
+                // Quadratic ramp (was linear plateau at 7 by turn 15).
+                // turn 5 → 1.4, turn 15 → 3.4, turn 25 → 5.6, turn 40 → 9.4, capped 12.
+                var t = currentTurn - 5
+                var turnScale = 1.0 + (t / 8.0) * 1.5
+                if (turnScale > 12.0) turnScale = 12.0
                 noDamagePenalty = noDamagePenalty * turnScale
+            }
+
+            // Streak detector: 3+ consecutive zero-damage turns means we're stuck.
+            // Add an extra flat penalty so the scorer aggressively shuffles toward damage.
+            if (__zeroDamageStreak >= 2) {
+                noDamagePenalty -= 5000
             }
 
             score += noDamagePenalty
@@ -222,9 +232,13 @@ class ScenarioScorer {
             if (__timePressure) {
                 erosionWeight = 4.0
             }
+            // Erosion is the primary anti-tank tool — permanent HP reduction
+            // is the only counter to high-HP/heal opponents. Make it dominant
+            // when the target is actually a tank, regardless of time pressure.
             var targetProfile = getEnemyProfile(this._target._id)
             if (targetProfile != null && targetProfile['isTank']) {
-                erosionWeight *= 2.0
+                erosionWeight = 5.0
+                if (__timePressure) erosionWeight = 7.0
             }
             score += simResult.erosionDamage * erosionWeight
         }
@@ -432,13 +446,21 @@ class ScenarioScorer {
             var turnsRemaining = 64 - currentTurn
             var urgencyFactor = 1.0
 
+            // Steeper urgency curve — old curve plateaued at 1.8 by turn 30,
+            // which barely budged scoring vs slow tanky opponents.
+            // turn 5-15: 1.0 → 1.8 (0.08/turn)
+            // turn 15-30: 1.8 → 3.3 (0.10/turn)
+            // turn 30-50: 3.3 → 6.3 (0.15/turn)
+            // turn 50+: keep ramp, cap 7.5
             if (currentTurn > 50) {
-                urgencyFactor = 3.0 + (currentTurn - 50) * 0.32
+                urgencyFactor = 6.3 + (currentTurn - 50) * 0.15
                 if (urgencyFactor > 7.5) urgencyFactor = 7.5
             } else if (currentTurn > 30) {
-                urgencyFactor = 1.8 + (currentTurn - 30) * 0.06
-            } else if (currentTurn > 10) {
-                urgencyFactor = 1.0 + (currentTurn - 10) * 0.04
+                urgencyFactor = 3.3 + (currentTurn - 30) * 0.15
+            } else if (currentTurn > 15) {
+                urgencyFactor = 1.8 + (currentTurn - 15) * 0.10
+            } else if (currentTurn > 5) {
+                urgencyFactor = 1.0 + (currentTurn - 5) * 0.08
             }
 
             var dotDmgTP = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
@@ -499,9 +521,13 @@ class ScenarioScorer {
         if (cureCd >= 0 && (bestCleanseCd < 0 || cureCd < bestCleanseCd)) bestCleanseCd = cureCd
         if (remissionCd >= 0 && (bestCleanseCd < 0 || remissionCd < bestCleanseCd)) bestCleanseCd = remissionCd
 
+        // Smooth the cliff at cd=0: 0.2 was too punishing — caused magic builds
+        // to avoid poison entirely vs antidote-cycling enemies, leading to
+        // infinite stalemate. Bumped to 0.5 (BAIT 0.7) so we still apply poison
+        // and force the cleanse rotation.
         if (bestCleanseCd == 0) {
-            if (POISON_PHASE == "BAIT") return 0.6
-            return 0.2
+            if (POISON_PHASE == "BAIT") return 0.7
+            return 0.5
         } else if (bestCleanseCd == 1) {
             return 1.7
         } else if (bestCleanseCd == 2) {
@@ -567,9 +593,11 @@ class ScenarioScorer {
 
         var fightLengthEstimate = targetHP / max(1, this._player._strength + this._player._magic)
 
-        if (fightLengthEstimate > 3) return 0.3
-        else if (fightLengthEstimate > 1.5) return 0.15
-        return 0.05
+        // Raised floor (was 0.05-0.3) — TP efficiency matters more vs tanky
+        // long-fight opponents where every wasted TP compounds.
+        if (fightLengthEstimate > 3) return 0.6
+        else if (fightLengthEstimate > 1.5) return 0.3
+        return 0.15
     }
 
     calculateBuffWeight() {
@@ -951,17 +979,23 @@ class ScenarioScorer {
 
         var unspentTP = this._player._currTp - simResult.tpSpent
         if (__playerBuildType == BUILD_TANK_SCI) {
-            // Tanks: allow banking up to 10 TP without penalty
-            if (unspentTP > 10) {
-                value -= (unspentTP - 10) * 15
+            // Tanks: allow banking up to 7 TP without penalty (was 10).
+            // Quadratic curve so wasting 9+ TP is felt strongly.
+            if (unspentTP > 7) {
+                var excessT = unspentTP - 6
+                value -= excessT * (excessT - 1) * 4
             }
             // Bonus: banking TP when shield is down (enables next-turn combo)
             if (unspentTP >= 6 && !this._player.hasEffect(EFFECT_RELATIVE_SHIELD)) {
                 value += 100
             }
         } else {
-            if (unspentTP > 5) {
-                value -= (unspentTP - 5) * 30
+            // Non-tanks: quadratic penalty grows fast — 5 leftover ≈ -240,
+            // 7 leftover ≈ -640, 9 leftover ≈ -1200. Strong enough to override
+            // marginal "buff and stall" scenarios.
+            if (unspentTP > 3) {
+                var excessN = unspentTP - 2
+                value -= excessN * (excessN - 1) * 8
             }
         }
 
@@ -1072,13 +1106,33 @@ class ScenarioScorer {
             }
         }
 
+        // Phase 4b: enemy will likely heal/shield on their turn — discount our
+        // projected next-turn damage by an estimate of their sustain.
+        var enemyProfileP = getEnemyProfile(this._target._id)
+        var enemyHealEstimate = 0
+        if (enemyProfileP != null) {
+            if (enemyProfileP['isTank']) enemyHealEstimate = 400
+            else if (enemyProfileP['isHealer']) enemyHealEstimate = 300
+            else enemyHealEstimate = 200
+        }
+        nextTurnDmg = max(0, nextTurnDmg - enemyHealEstimate)
+
+        // Cap projection bonus when we're under heavy threat — overly
+        // optimistic plans get punished by reality.
+        if (incomingDmg > 500 && nextTurnDmg > 0) {
+            nextTurnDmg = floor(nextTurnDmg * 0.3)
+        }
+
         value += nextTurnDmg
 
         if (simResult.dotDamageQueued > 0 && simResult.poisonTurnsQueued > 0) {
             var avgDuration = simResult.poisonTurnsQueued / max(1, simResult.poisonSourcesUsed)
             var remainingTicks = max(0, avgDuration - 1)
             var perTurnPoison = simResult.dotDamageQueued / max(1, simResult.poisonTurnsQueued)
-            value += perTurnPoison * remainingTicks
+            // Phase 4b: weight remaining poison ticks more (was *1, now *1.3) —
+            // existing poison is guaranteed future damage that should survive
+            // any antidote that already cleansed this turn.
+            value += perTurnPoison * remainingTicks * 1.3
         }
 
         for (var buff in simResult.buffsApplied) {

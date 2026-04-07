@@ -103,6 +103,12 @@ class ScenarioHelpers {
         if (currentTurn > 3 && __lastEnemyHP > 0) {
             var netDamageThisTurn = __lastEnemyHP - enemyHP
             __avgDamageRate = __avgDamageRate * 0.7 + netDamageThisTurn * 0.3
+            // Track consecutive zero-damage turns for streak penalty.
+            if (netDamageThisTurn > 0) {
+                __zeroDamageStreak = 0
+            } else {
+                __zeroDamageStreak += 1
+            }
         }
         __lastEnemyHP = enemyHP
 
@@ -143,7 +149,14 @@ class ScenarioHelpers {
             return "ATTRITION"
         }
 
-        if (__timePressure && currentTurn > 45 && enemyHPPercent > 50) {
+        // Fix 3a-A: trigger AGGRO much earlier under time pressure (was turn>45/HP>50%).
+        if (__timePressure && currentTurn > 25 && enemyHPPercent > 40) {
+            return "AGGRO"
+        }
+
+        // Fix 3a-B: mid-game stalemate detector — both sides healthy past turn 20
+        // means we're getting outlasted; force aggression to avoid the draw.
+        if (currentTurn > 20 && enemyHPPercent > 70 && playerHPPercent > 50) {
             return "AGGRO"
         }
 
@@ -151,7 +164,9 @@ class ScenarioHelpers {
             return "FLEE"
         }
 
-        if (playerHPPercent >= 40 && playerHPPercent <= 60 && enemyHPPercent > 40 && !__timePressure) {
+        // Fix 3a-C: widen SUSTAIN band (35-70% player HP) and drop !timePressure
+        // requirement so we still consolidate when slow-burn vs tank.
+        if (playerHPPercent >= 35 && playerHPPercent <= 70 && enemyHPPercent > 40) {
             return "SUSTAIN"
         }
 

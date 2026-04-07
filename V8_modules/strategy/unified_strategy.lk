@@ -360,7 +360,7 @@ class UnifiedStrategy extends Strategy {
 }
 
 function recoverRemainingTP(target) {
-    var maxAttempts = 5
+    var maxAttempts = 10
     var attempts = 0
     var weaponUsesThisTurn = 0
     var currentWeapon = getWeapon()
@@ -370,7 +370,7 @@ function recoverRemainingTP(target) {
         if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
     }
 
-    while (getTP() >= 3 && attempts < maxAttempts) {
+    while (getTP() >= 2 && attempts < maxAttempts) {
         attempts++
         var tpBefore = getTP()
         var bestAction = null
@@ -446,7 +446,7 @@ function recoverRemainingTP(target) {
             }
         }
 
-        if (bestAction == null || bestValue < 30) break
+        if (bestAction == null || bestValue < 15) break
 
         if (bestAction['type'] == 'chip') {
             useChipOnCell(bestAction['id'], bestAction['cell'])

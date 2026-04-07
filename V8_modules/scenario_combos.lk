@@ -12,6 +12,10 @@ class ScenarioCombos extends ScenarioHelpers {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
+        // Reserve TP for follow-up attacks: never let buffs starve the kill phase.
+        // Floor of 4 TP guarantees at least one minimum-cost weapon use.
+        var minAttackTP = max(4, floor(availableTP * 0.5))
+
         var antidoteAction = this.getAntidoteAction(tpBudget)
         if (antidoteAction != null) {
             push(actions, antidoteAction)
@@ -27,20 +31,26 @@ class ScenarioCombos extends ScenarioHelpers {
 
         var buffAction = this.getOffensiveBuff()
         if (buffAction != null) {
-            push(actions, buffAction)
-            tpBudget -= getCachedChipCost(buffAction.chip)
+            var buffCostA = getCachedChipCost(buffAction.chip)
+            if (tpBudget - buffCostA >= minAttackTP) {
+                push(actions, buffAction)
+                tpBudget -= buffCostA
+            }
         }
 
         var damageReturnAction = this.getDamageReturnBuff()
-        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
-            push(actions, damageReturnAction)
-            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        if (damageReturnAction != null) {
+            var drCost = getCachedChipCost(damageReturnAction.chip)
+            if (tpBudget - drCost >= minAttackTP) {
+                push(actions, damageReturnAction)
+                tpBudget -= drCost
+            }
         }
 
         var debuffAction = this.getDebuffAction()
         if (debuffAction != null && debuffAction.chip != -1) {
             var debuffCost = getCachedChipCost(debuffAction.chip)
-            if (tpBudget >= debuffCost) {
+            if (tpBudget - debuffCost >= minAttackTP) {
                 push(actions, debuffAction)
                 tpBudget -= debuffCost
             }
@@ -81,6 +91,9 @@ class ScenarioCombos extends ScenarioHelpers {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
+        // Reserve TP for follow-up attacks (matches aggressive scenario pattern).
+        var minAttackTP = max(4, floor(availableTP * 0.5))
+
         var conservativeAntidote = this.getAntidoteAction(tpBudget)
         if (conservativeAntidote != null) {
             push(actions, conservativeAntidote)
@@ -96,20 +109,29 @@ class ScenarioCombos extends ScenarioHelpers {
 
         var buffAction = this.getOffensiveBuff()
         if (buffAction != null) {
-            push(actions, buffAction)
-            tpBudget -= getCachedChipCost(buffAction.chip)
+            var buffCostC = getCachedChipCost(buffAction.chip)
+            if (tpBudget - buffCostC >= minAttackTP) {
+                push(actions, buffAction)
+                tpBudget -= buffCostC
+            }
         }
 
         var damageReturnAction = this.getDamageReturnBuff()
-        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
-            push(actions, damageReturnAction)
-            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        if (damageReturnAction != null) {
+            var drCostC = getCachedChipCost(damageReturnAction.chip)
+            if (tpBudget - drCostC >= minAttackTP) {
+                push(actions, damageReturnAction)
+                tpBudget -= drCostC
+            }
         }
 
         var defensiveBuff = this.getDefensiveBuff()
-        if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
-            push(actions, defensiveBuff)
-            tpBudget -= getCachedChipCost(defensiveBuff.chip)
+        if (defensiveBuff != null) {
+            var defCostC = getCachedChipCost(defensiveBuff.chip)
+            if (tpBudget - defCostC >= minAttackTP) {
+                push(actions, defensiveBuff)
+                tpBudget -= defCostC
+            }
         }
 
         var healAction = this.getHealingAction(tpBudget, 0.7)
@@ -498,36 +520,50 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget += 2
         }
 
+        // Parametric scenario respects the same minAttackTP reservation.
+        // OTKO/stand variants used by KILL state pass through buildKillScenarios
+        // and the reservation is naturally relaxed (high TP, kill margin already verified).
+        var minAttackTPp = max(4, floor(availableTP * 0.5))
+
         if (params.buffStrategy == 1 || params.buffStrategy == 3) {
 
             var offensiveBuff = this.getOffensiveBuff()
-            if (offensiveBuff != null && tpBudget >= getCachedChipCost(offensiveBuff.chip)) {
-                push(actions, offensiveBuff)
-                tpBudget -= getCachedChipCost(offensiveBuff.chip)
+            if (offensiveBuff != null) {
+                var offCostP = getCachedChipCost(offensiveBuff.chip)
+                if (tpBudget - offCostP >= minAttackTPp) {
+                    push(actions, offensiveBuff)
+                    tpBudget -= offCostP
+                }
             }
         }
 
         if (params.buffStrategy == 2 || params.buffStrategy == 3) {
 
             var defensiveBuff = this.getDefensiveBuff()
-            if (defensiveBuff != null && tpBudget >= getCachedChipCost(defensiveBuff.chip)) {
-                push(actions, defensiveBuff)
-                tpBudget -= getCachedChipCost(defensiveBuff.chip)
+            if (defensiveBuff != null) {
+                var defCostP = getCachedChipCost(defensiveBuff.chip)
+                if (tpBudget - defCostP >= minAttackTPp) {
+                    push(actions, defensiveBuff)
+                    tpBudget -= defCostP
+                }
             }
         }
 
         if (params.buffStrategy == 4) {
 
             var damageReturnBuff = this.getDamageReturnBuff()
-            if (damageReturnBuff != null && tpBudget >= getCachedChipCost(damageReturnBuff.chip)) {
-                push(actions, damageReturnBuff)
-                tpBudget -= getCachedChipCost(damageReturnBuff.chip)
+            if (damageReturnBuff != null) {
+                var drCostP = getCachedChipCost(damageReturnBuff.chip)
+                if (tpBudget - drCostP >= minAttackTPp) {
+                    push(actions, damageReturnBuff)
+                    tpBudget -= drCostP
+                }
             }
 
             var debuffAction = this.getDebuffAction()
             if (debuffAction != null && debuffAction.chip != -1) {
                 var debuffCostParam = getCachedChipCost(debuffAction.chip)
-                if (tpBudget >= debuffCostParam) {
+                if (tpBudget - debuffCostParam >= minAttackTPp) {
                     push(actions, debuffAction)
                     tpBudget -= debuffCostParam
                 }
@@ -583,10 +619,12 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        if (appliedLeatherBoots) {
-            var adrenalineBuff = this.getAdrenalineBuff()
+        // Adrenaline +5 TP is a combo enabler — try as long as it's available,
+        // not gated on Leather Boots being applied first.
+        var adrenalineBuff = this.getAdrenalineBuff()
+        if (adrenalineBuff != null) {
             var tpAdrenaline = getCachedChipCost(CHIP_ADRENALINE)
-            if (adrenalineBuff != null && tpBudget >= tpAdrenaline) {
+            if (tpBudget >= tpAdrenaline) {
                 push(actions, adrenalineBuff)
                 tpBudget -= tpAdrenaline
                 tpBudget += 5

@@ -91,10 +91,20 @@ class FieldMap extends FieldMapPatterns {
 
         var bestCell = -1
         var bestDanger = 99999
-        var bestDist = isApproachMode ? 99999 : -1  
+        var bestDist = isApproachMode ? 99999 : -1
         var bestCanAttack = false
-        var bestCover = -1  
+        var bestCover = -1
         var playerPos = player._cellPos
+
+        // Pre-extract enemy positions once (defensive mode iterates them per candidate)
+        var enemyPositions = []
+        if (!isApproachMode) {
+            for (var ea = 0; ea < count(enemyAccess); ea++) {
+                var enemyRef = enemyAccess[ea]['enemy']
+                if (enemyRef != null) push(enemyPositions, enemyRef._cellPos)
+            }
+        }
+        var enemyPositionsCount = count(enemyPositions)
 
         for (var i = 0; i < count(playerAccessible); i++) {
             var cand = playerAccessible[i]
@@ -106,10 +116,8 @@ class FieldMap extends FieldMapPatterns {
             } else {
 
                 var closestEnemyDist = 999
-                for (var ea = 0; ea < count(enemyAccess); ea++) {
-                    var enemyRef = enemyAccess[ea]['enemy']
-                    if (enemyRef == null) continue
-                    var eOrigDist = getCellDistance(cand, enemyRef._cellPos)
+                for (var ep = 0; ep < enemyPositionsCount; ep++) {
+                    var eOrigDist = getCellDistance(cand, enemyPositions[ep])
                     if (eOrigDist != null && eOrigDist < closestEnemyDist) closestEnemyDist = eOrigDist
                 }
                 distMetric = (closestEnemyDist == 999) ? 0 : closestEnemyDist
@@ -182,6 +190,10 @@ class FieldMap extends FieldMapPatterns {
     }
 
     private computeDangerForCell(cellId, enemyAccess) {
+        // enemyAccess is fixed per turn, so we can cache by candidate cellId alone.
+        if (mapContainsKey(__dangerCellCache, cellId)) {
+            return __dangerCellCache[cellId]
+        }
         var danger = 0
         for (var ea = 0; ea < count(enemyAccess); ea++) {
             var cellsArr = enemyAccess[ea]['cells']
@@ -189,6 +201,7 @@ class FieldMap extends FieldMapPatterns {
                 if (getCachedLineOfSight(cellsArr[ec], cellId)) { danger += 1 }
             }
         }
+        __dangerCellCache[cellId] = danger
         return danger
     }
 
@@ -278,6 +291,9 @@ class FieldMap extends FieldMapPatterns {
                 bestDamage = totalDamage
                 bestCell = cellId
                 bestDistFromPlayer = distFromPlayer
+                // Early exit if we already have an overkill teleport: no need
+                // to scan the rest of the board.
+                if (bestDamage >= targetHP * 1.5) break
             }
         }
 
@@ -610,6 +626,14 @@ class FieldMap extends FieldMapPatterns {
             return
         }
 
+        // Precompute distances from enemy to every reachable cell once,
+        // shared across all weapons in the inner loop. ~300-500K ops/turn saved
+        // when reachableCells is large.
+        var distFromEnemy = [:]
+        for (var rc in reachableCells) {
+            distFromEnemy[rc] = getCellDistance(enemyPos, rc)
+        }
+
         for (var j = 0; j < count(enemyWeapons); j++) {
             var weaponId = enemyWeapons[j]
             var minRange = getWeaponMinRange(weaponId)
@@ -623,7 +647,7 @@ class FieldMap extends FieldMapPatterns {
                     return
                 }
 
-                var dist = getCellDistance(enemyPos, cellId)
+                var dist = distFromEnemy[cellId]
                 if (dist == null || dist > maxRange) continue
 
                 if (dist < minRange && dist < enemyMP) continue
@@ -835,7 +859,10 @@ class FieldMap extends FieldMapPatterns {
             // damage/threat, prefer the one closer to the player so we
             // conserve MP. 0.5/MP is small enough not to override real
             // damage/threat differences.
-            var score = ourDamage - (threat * threatWeight) + multiTargetBonus - pathLen * 0.5
+            // MP-saving cost: 2.0/MP. Strong enough that walking 2 extra cells
+            // requires +4 damage to be worth it, but won't override real
+            // damage/threat differences. Matches findSafeWaypointToward style.
+            var score = ourDamage - (threat * threatWeight) + multiTargetBonus - pathLen * 2.0
 
             if (score > bestScore) {
                 bestScore = score

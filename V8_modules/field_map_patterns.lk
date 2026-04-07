@@ -109,10 +109,11 @@ class FieldMapPatterns extends FieldMapCore {
             return candidates
         }
 
+        var enemiesArray = fieldMap.getEnemyArray()
+
         if (aoeType == AREA_LASER_LINE) {
             push(candidates, targetCell)
-            var enemies = this.getEnemySubMap()
-            for (var e in mapValues(enemies)) {
+            for (var e in enemiesArray) {
                 if (e._cellPos != targetCell && !isDead(e._id)) {
                     push(candidates, e._cellPos)
                 }
@@ -120,10 +121,10 @@ class FieldMapPatterns extends FieldMapCore {
             return candidates
         }
 
-        var enemies = this.getEnemySubMap()
         var processedCells = [:]
 
-        for (var e in mapValues(enemies)) {
+        // Always include enemy cells themselves first
+        for (var e in enemiesArray) {
             if (!isDead(e._id) && !mapContainsKey(processedCells, e._cellPos)) {
                 push(candidates, e._cellPos)
                 processedCells[e._cellPos] = true
@@ -138,12 +139,19 @@ class FieldMapPatterns extends FieldMapCore {
             aoeRadius = 2
         }
 
-        for (var e in mapValues(enemies)) {
+        // Cap candidate count to keep findOptimalAimPoint cheap. Enemy cells
+        // already included, so the cap mostly limits offset cells.
+        var maxCandidates = 15
+
+        for (var e in enemiesArray) {
+            if (count(candidates) >= maxCandidates) break
             if (isDead(e._id)) continue
             var enemyCell = e._cellPos
 
             for (var dx = -aoeRadius; dx <= aoeRadius; dx++) {
+                if (count(candidates) >= maxCandidates) break
                 for (var dy = -aoeRadius; dy <= aoeRadius; dy++) {
+                    if (count(candidates) >= maxCandidates) break
                     if (dx == 0 && dy == 0) continue
                     var dist = abs(dx) + abs(dy)
                     if (dist > aoeRadius) continue
@@ -165,33 +173,34 @@ class FieldMapPatterns extends FieldMapCore {
 
     findOptimalAimPoint(shooterCell, item, isWeapon, primaryTarget) {
 
+        var enemiesArray = fieldMap.getEnemyArray()
+        var primaryCell = primaryTarget._cellPos
+
         if (item._aoeType == AREA_POINT) {
 
-            var enemies = this.getEnemySubMap()
-            var enemiesArray = mapValues(enemies)
-            var result = arsenal.calculateMultiEnemyDamage(shooterCell, primaryTarget._cellPos, item._id, enemiesArray)
+            var result = arsenal.calculateMultiEnemyDamage(shooterCell, primaryCell, item._id, enemiesArray)
             var totalDamage = result['total']
             if (isWeapon) {
                 totalDamage *= item._maxUse
             }
             return [
-                'aimCell': primaryTarget._cellPos,
+                'aimCell': primaryCell,
                 'damage': totalDamage,
                 'enemies': result['enemies'],
                 'hitCount': count(result['enemies'])
             ]
         }
 
-        var enemies = this.getEnemySubMap()
-        var enemiesArray = mapValues(enemies)
         var itemId = item._id
 
         var aimCandidates = this.getAimCandidates(primaryTarget, item._aoeType, item._maxRange)
 
-        var bestAimCell = primaryTarget._cellPos
+        var bestAimCell = primaryCell
         var bestDamage = 0
         var bestEnemies = []
         var bestHitCount = 0
+        // Track best aim distance to primary target so we don't recompute it each iteration
+        var bestDistToTarget = 0
 
         for (var aimCell in aimCandidates) {
 
@@ -212,14 +221,14 @@ class FieldMapPatterns extends FieldMapCore {
             }
 
             var isBetter = false
+            var distToTarget = -1
             if (totalDamage > bestDamage) {
                 isBetter = true
             } else if (totalDamage == bestDamage && hitCount > bestHitCount) {
                 isBetter = true
             } else if (totalDamage == bestDamage && hitCount == bestHitCount) {
-                var distToTarget = getCellDistance(aimCell, primaryTarget._cellPos)
-                var bestDistToTarget = getCellDistance(bestAimCell, primaryTarget._cellPos)
-                if (distToTarget != null && bestDistToTarget != null && distToTarget < bestDistToTarget) {
+                distToTarget = getCellDistance(aimCell, primaryCell)
+                if (distToTarget != null && distToTarget < bestDistToTarget) {
                     isBetter = true
                 }
             }
@@ -229,6 +238,12 @@ class FieldMapPatterns extends FieldMapCore {
                 bestAimCell = aimCell
                 bestEnemies = hitEnemies
                 bestHitCount = hitCount
+                if (distToTarget == -1) {
+                    var d = getCellDistance(aimCell, primaryCell)
+                    bestDistToTarget = (d == null) ? 9999 : d
+                } else {
+                    bestDistToTarget = distToTarget
+                }
             }
         }
 
@@ -344,8 +359,8 @@ class FieldMapPatterns extends FieldMapCore {
         }
 
         var target = null
-        var enemies = fieldMap.getEnemySubMap()
-        for (var e in mapValues(enemies)) {
+        var enemiesArray = fieldMap.getEnemyArray()
+        for (var e in enemiesArray) {
             if (e._cellPos == oppCell) {
                 target = e
                 break
@@ -540,14 +555,14 @@ class FieldMapPatterns extends FieldMapCore {
         var itemId = item._id
 
         var target = null
-        var enemies = fieldMap.getEnemySubMap()
-        for (var e in mapValues(enemies)) {
+        var enemiesArray = fieldMap.getEnemyArray()
+        for (var e in enemiesArray) {
             if (e._cellPos == targetCell) {
                 target = e
                 break
             }
         }
-        if (target == null) target = mapValues(enemies)[0]  
+        if (target == null && count(enemiesArray) > 0) target = enemiesArray[0]
 
         var optimalAim = this.findOptimalAimPoint(curCell, item, weapon != null, target)
         var optimalAimCell = optimalAim['aimCell']

@@ -50,6 +50,25 @@ class ScenarioGenerator extends ScenarioCombos {
 
         var state = this.determineStrategicState()
 
+        // Phase 4a: dynamic beam/mutation scaling.
+        // Reset to baselines first (in case we boosted last turn).
+        _beamMaxDepth = _beamMaxDepthBase
+        _mutationMaxSeeds = _mutationMaxSeedsBase
+        _mutationMaxPerSeed = _mutationMaxPerSeedBase
+        // Boost search when we're losing the damage race in early/mid game and
+        // ops budget has headroom (Phase 1 freed ~1M ops). Skip in PUZZLE/FLEE
+        // and during boss combat where weights/templates already drive behavior.
+        var curT = getTurn()
+        if (state != "PUZZLE" && state != "FLEE" && !_isBossFight) {
+            var weakDamageRate = (curT > 5 && __avgDamageRate > 0 && __avgDamageRate < 100)
+            var earlyStalemate = (curT < 25 && __timePressure)
+            if ((weakDamageRate || earlyStalemate) && getOperations() < _ops64) {
+                _beamMaxDepth = min(12, _beamMaxDepthBase + 2)
+                _mutationMaxSeeds = min(10, _mutationMaxSeedsBase + 4)
+                _mutationMaxPerSeed = min(120, _mutationMaxPerSeedBase + 40)
+            }
+        }
+
         if (state == "PUZZLE") {
             this.buildPuzzleScenarios(scenarios, availableTP, availableMP)
         }

@@ -22,6 +22,12 @@ global _beamWidth = 20
 global _beamMaxDepth = 10
 global _mutationMaxSeeds = 6
 global _mutationMaxPerSeed = 80
+// Baseline values stashed at init() — used by per-turn dynamic scaling
+// in scenario_generator. The runtime values above are mutated each turn.
+global _beamMaxDepthBase = 10
+global _mutationMaxSeedsBase = 6
+global _mutationMaxPerSeedBase = 80
+global _beamWidthBase = 20
 
 include('game_entity.lk')
 include('field_map_tactical.lk')
@@ -90,6 +96,11 @@ function init() {
         _mutationMaxSeeds = 4
         _mutationMaxPerSeed = 60
     }
+
+    _beamWidthBase = _beamWidth
+    _beamMaxDepthBase = _beamMaxDepth
+    _mutationMaxSeedsBase = _mutationMaxSeeds
+    _mutationMaxPerSeedBase = _mutationMaxPerSeed
 
     arsenal = new Arsenal();
     fieldMap = new FieldMap();
