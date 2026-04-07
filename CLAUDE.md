@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # LeekWars AI V8 — Reference Guide
 
 ## Quick Start
@@ -14,6 +18,13 @@ python3 tools/lw_test_script.py 10 459440 domingo --leek EdsgerDijkstra
 
 # Debug a specific fight
 python3 tools/fight_analyzer.py smart_tank --leek EdsgerDijkstra --seed 1
+```
+
+### Credentials
+
+API tools (upload, server tests) require `~/.config/leekwars/config.json`:
+```json
+{"username":"YOUR_EMAIL","password":"YOUR_PASSWORD"}
 ```
 
 ---

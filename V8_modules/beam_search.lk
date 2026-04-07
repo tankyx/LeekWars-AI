@@ -491,6 +491,13 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             if (chipId == CHIP_ANTIDOTE) {
                 if (playerObj.hasEffect(EFFECT_POISON)) value += 300
                 else return -1
+            } else if (chipId == CHIP_MANUMISSION) {
+                var shackled = playerObj.hasEffect(EFFECT_SHACKLE_TP)
+                    || playerObj.hasEffect(EFFECT_SHACKLE_MP)
+                    || playerObj.hasEffect(EFFECT_SHACKLE_STRENGTH)
+                    || playerObj.hasEffect(EFFECT_SHACKLE_MAGIC)
+                if (shackled) value += 350
+                else return -1
             } else if (chipId == CHIP_GRAPPLE) {
                 value += 200
                 var shortRangeCount = 0

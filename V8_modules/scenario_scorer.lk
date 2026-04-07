@@ -773,6 +773,32 @@ class ScenarioScorer {
                 value += preventedValue
             }
 
+            if (buffChip == CHIP_MANUMISSION) {
+                var manumissionValue = 40  // baseline for the +2 TP
+                var shackleTPVal = this._player.getEffectValue(EFFECT_SHACKLE_TP)
+                var shackleTPTurns = this._player.getEffectRemaining(EFFECT_SHACKLE_TP)
+                if (shackleTPVal != null && shackleTPTurns != null && shackleTPVal > 0) {
+                    // Each lost TP costs us future damage; price ~60/TP per turn cleansed
+                    manumissionValue += shackleTPVal * shackleTPTurns * 60
+                }
+                var shackleMPVal = this._player.getEffectValue(EFFECT_SHACKLE_MP)
+                var shackleMPTurns = this._player.getEffectRemaining(EFFECT_SHACKLE_MP)
+                if (shackleMPVal != null && shackleMPTurns != null && shackleMPVal > 0) {
+                    manumissionValue += shackleMPVal * shackleMPTurns * 40
+                }
+                var shackleStrVal = this._player.getEffectValue(EFFECT_SHACKLE_STRENGTH)
+                var shackleStrTurns = this._player.getEffectRemaining(EFFECT_SHACKLE_STRENGTH)
+                if (shackleStrVal != null && shackleStrTurns != null && shackleStrVal > 0) {
+                    manumissionValue += shackleStrVal * shackleStrTurns * 2
+                }
+                var shackleMagVal = this._player.getEffectValue(EFFECT_SHACKLE_MAGIC)
+                var shackleMagTurns = this._player.getEffectRemaining(EFFECT_SHACKLE_MAGIC)
+                if (shackleMagVal != null && shackleMagTurns != null && shackleMagVal > 0) {
+                    manumissionValue += shackleMagVal * shackleMagTurns * 2
+                }
+                value += manumissionValue
+            }
+
             if (buffChip == CHIP_MIRROR) {
                 var agility = effectiveAgi
                 var returnPercent = 5.5 * (1 + agility / 100.0)

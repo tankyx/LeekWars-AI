@@ -213,6 +213,7 @@ class FieldMap extends FieldMapPatterns {
         var playerPos = player._cellPos
         var bestCell = -1
         var bestDamage = -1
+        var bestDistFromPlayer = 9999
         var targetHP = target._currHealth
 
         for (var cellId = 0; cellId < FieldMap.board_cell_count; cellId++) {
@@ -273,9 +274,10 @@ class FieldMap extends FieldMapPatterns {
                 }
             }
 
-            if (totalDamage > bestDamage) {
+            if (totalDamage > bestDamage || (totalDamage == bestDamage && distFromPlayer < bestDistFromPlayer)) {
                 bestDamage = totalDamage
                 bestCell = cellId
+                bestDistFromPlayer = distFromPlayer
             }
         }
 
@@ -829,7 +831,11 @@ class FieldMap extends FieldMapPatterns {
 
             var multiTargetBonus = this.calculateMultiTargetBonus(cell._id)
 
-            var score = ourDamage - (threat * threatWeight) + multiTargetBonus
+            // Tiny MP-saving tie-breaker: when two cells score the same
+            // damage/threat, prefer the one closer to the player so we
+            // conserve MP. 0.5/MP is small enough not to override real
+            // damage/threat differences.
+            var score = ourDamage - (threat * threatWeight) + multiTargetBonus - pathLen * 0.5
 
             if (score > bestScore) {
                 bestScore = score

@@ -18,6 +18,13 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
         }
 
+        var manumissionAction = this.getManumissionAction(tpBudget)
+        if (manumissionAction != null) {
+            push(actions, manumissionAction)
+            tpBudget -= getCachedChipCost(CHIP_MANUMISSION)
+            tpBudget += 2  // +2 TP buff effect
+        }
+
         var buffAction = this.getOffensiveBuff()
         if (buffAction != null) {
             push(actions, buffAction)
@@ -78,6 +85,13 @@ class ScenarioCombos extends ScenarioHelpers {
         if (conservativeAntidote != null) {
             push(actions, conservativeAntidote)
             tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
+        }
+
+        var conservativeManumission = this.getManumissionAction(tpBudget)
+        if (conservativeManumission != null) {
+            push(actions, conservativeManumission)
+            tpBudget -= getCachedChipCost(CHIP_MANUMISSION)
+            tpBudget += 2
         }
 
         var buffAction = this.getOffensiveBuff()
@@ -143,6 +157,13 @@ class ScenarioCombos extends ScenarioHelpers {
         if (defensiveAntidote != null) {
             push(actions, defensiveAntidote)
             tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
+        }
+
+        var defensiveManumission = this.getManumissionAction(tpBudget)
+        if (defensiveManumission != null) {
+            push(actions, defensiveManumission)
+            tpBudget -= getCachedChipCost(CHIP_MANUMISSION)
+            tpBudget += 2
         }
 
         var healAction = this.getHealingAction(tpBudget, 0.7)
@@ -468,6 +489,13 @@ class ScenarioCombos extends ScenarioHelpers {
         if (antidoteAction != null) {
             push(actions, antidoteAction)
             tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
+        }
+
+        var paramManumission = this.getManumissionAction(tpBudget)
+        if (paramManumission != null) {
+            push(actions, paramManumission)
+            tpBudget -= getCachedChipCost(CHIP_MANUMISSION)
+            tpBudget += 2
         }
 
         if (params.buffStrategy == 1 || params.buffStrategy == 3) {

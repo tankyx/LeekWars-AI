@@ -928,6 +928,31 @@ class ScenarioHelpers {
         return null
     }
 
+    getManumissionAction(tpBudget) {
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MANUMISSION)) return null
+        if (getCooldown(CHIP_MANUMISSION, this._player._id) != 0) return null
+        var mCost = getCachedChipCost(CHIP_MANUMISSION)
+        if (tpBudget < mCost) return null
+
+        var hasShackle = this._player.hasEffect(EFFECT_SHACKLE_TP)
+            || this._player.hasEffect(EFFECT_SHACKLE_MP)
+            || this._player.hasEffect(EFFECT_SHACKLE_STRENGTH)
+            || this._player.hasEffect(EFFECT_SHACKLE_MAGIC)
+
+        // Always cleanse shackles when present
+        if (hasShackle) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_MANUMISSION, this._player._cellPos, this._player)
+        }
+
+        // Otherwise use solely for the +2 TP boost when we are TP-starved and the
+        // extra action it unlocks is clearly worth the 6 TP investment.
+        // Net gain: -6 TP now, +2 TP this turn (stackable). Only profitable if
+        // it lets us land a high-TP chip we couldn't otherwise afford.
+        // Conservative gating: only when we already have plenty of TP available
+        // and an offensive build that scales with chip uses.
+        return null
+    }
+
     getDebuffAction() {
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LIBERATION)) return null
         if (getCooldown(CHIP_LIBERATION, this._player._id) != 0) return null

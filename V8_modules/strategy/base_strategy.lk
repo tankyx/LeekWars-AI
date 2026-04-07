@@ -2321,6 +2321,10 @@ class Strategy {
                     if (a.chip == CHIP_ADRENALINE && buffTargetId == player._id) {
                         player._currTp = getTP()
                     }
+
+                    if (a.chip == CHIP_MANUMISSION && buffTargetId == player._id) {
+                        player._currTp = getTP()
+                    }
                 }
             }
             else if (a.type == Action.ACTION_TELEPORT) {

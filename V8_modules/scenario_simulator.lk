@@ -403,6 +403,8 @@ class ScenarioSimulator {
                 } else if (action.chip == CHIP_ANTIDOTE) {
                     var antidoteHeal = 30 * (1 + simWisdom / 500.0)
                     result.hpGained += antidoteHeal
+                } else if (action.chip == CHIP_MANUMISSION) {
+                    simTP += 2
                 }
 
                 result.actionsExecuted++
