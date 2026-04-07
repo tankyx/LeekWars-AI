@@ -67,9 +67,10 @@ class FieldMapCore {
     cColors = [:]
 
     // Per-turn cache: enemy submap + materialized array.
-    // Invalidated in updateMapEntities() each turn.
-    _cachedEnemySubMap = null
-    _cachedEnemyArray = null
+    // Invalidated in updateMapEntities() each turn via _cachedEnemyValid flag.
+    _cachedEnemySubMap = [:]
+    _cachedEnemyArray = []
+    _cachedEnemyValid = false
 
     static x_offset = 18
     static y_offset = 17
@@ -135,8 +136,7 @@ class FieldMapCore {
     updateMapEntities() {
 
         // Invalidate per-turn enemy caches (entities may have died)
-        this._cachedEnemySubMap = null
-        this._cachedEnemyArray = null
+        this._cachedEnemyValid = false
 
         var aliveEnemies = getAliveEnemies()
         for (var enemyId in aliveEnemies) {
@@ -180,18 +180,19 @@ class FieldMapCore {
     }
 
     getEnemySubMap() {
-        if (this._cachedEnemySubMap == null) {
+        if (!this._cachedEnemyValid) {
             this._cachedEnemySubMap = mapFilter(this.entities, function(value, key, entities) {
                 return (value instanceof Enemy)
             })
             this._cachedEnemyArray = mapValues(this._cachedEnemySubMap)
+            this._cachedEnemyValid = true
         }
         return this._cachedEnemySubMap
     }
 
     // Returns the materialized enemy array (avoids repeated mapValues() calls)
     getEnemyArray() {
-        if (this._cachedEnemyArray == null) {
+        if (!this._cachedEnemyValid) {
             this.getEnemySubMap()
         }
         return this._cachedEnemyArray
