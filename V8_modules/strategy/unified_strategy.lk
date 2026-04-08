@@ -197,7 +197,15 @@ class UnifiedStrategy extends Strategy {
             scenariosWithQuickScore = []
             push(scenariosWithQuickScore, ['scenario': bestMutatedScenario, 'quickScore': 9999])
 
-            var origLimit = min(3, seedLimit)
+            // Keep more competitive seeds on bigger budgets so the post-
+            // mutation scorer has a meaningful comparison set instead of just
+            // [winner + 3 seeds]. KG: 12, others: 3.
+            var origLimit = 3
+            if (_opsBudget >= 18000000) {
+                origLimit = min(12, seedLimit)
+            } else {
+                origLimit = min(3, seedLimit)
+            }
             for (var i = 0; i < origLimit; i++) {
                 push(scenariosWithQuickScore, ['scenario': mutationSeeds[i], 'quickScore': 8000 - i * 100])
             }
