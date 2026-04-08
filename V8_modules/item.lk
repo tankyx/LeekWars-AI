@@ -69,6 +69,32 @@ class Arsenal {
     playerEquippedChips = [:]
 
     convertEffectsMapToArray(effectsMap) {
+        // KNOWN BUG (do not naively "fix"):
+        //   item_database.lk stores effects as raw [value1, value2, turns]
+        //   (matching the chips.json/weapons.json format), but the LW API
+        //   runtime getWeaponEffects() returns [value1, value1+value2, turns,
+        //   targets, modifiers] — see EntityAI.getFeatureArray() in the
+        //   generator. parseAllEffects() then reads e[1] as _min and e[2]
+        //   as _max, so DB-loaded items effectively get _max = value2 (the
+        //   increment) instead of _max = value1 + value2 (the real max).
+        //
+        //   Concretely: Axe MP shackle [0.7, 0.1, 1] is stored as
+        //   _min=0.7, _max=0.1 (avg 0.4) when the true value is _min=0.7,
+        //   _max=0.8 (avg 0.75). Same shape for Destroyer STR shackle
+        //   [17, 0, 2] → avg 8.5 vs true 17. Every DB-loaded weapon damage,
+        //   poison tick, and shackle effect is ~40-50% below its real value.
+        //
+        //   The whole V8 scoring/balance has been calibrated against these
+        //   buggy values. Tested fixes:
+        //     1. Pre-add value1 here (effectData[0]+effectData[1]) →
+        //        MargaretHamilton vs smart_mag drops 70% → 17%.
+        //     2. Local correction in findBestAvailableAttack to recompute
+        //        the true denial only for the selector → MH drops to 3%
+        //        because Axe becomes overwhelmingly attractive and MH walks
+        //        into melee range against Domingo's Rhino/Katana.
+        //
+        //   Fixing this properly requires retuning every weight profile and
+        //   scenario score together. Until then: leave as-is.
         var effectsArray = []
         for (var effectType in mapKeys(effectsMap)) {
             var effectData = effectsMap[effectType]
