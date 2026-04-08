@@ -123,7 +123,7 @@ class EnemyPredictor {
         return enemyPos
     }
 
-    simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP) {
+    simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP, shieldAbs = 0, shieldRel = 0) {
         var enemyTP = min(12, this._enemy._currTp + 6)
         var enemyMP = this._enemy._currMp
 
@@ -162,6 +162,17 @@ class EnemyPredictor {
             }
         }
 
+        // Phase C: apply shields the player accumulated this turn (both
+        // existing shields and ones the candidate scenario just put up).
+        // Relative shield is a 0..100 percent; absolute is HP soaked first.
+        var totalRel = (this._player._relShield + shieldRel) / 100.0
+        if (totalRel > 0.95) totalRel = 0.95
+        var totalAbs = this._player._absShield + shieldAbs
+        var afterRel = totalDamage * (1.0 - totalRel)
+        var afterAbs = afterRel - totalAbs
+        if (afterAbs < 0) afterAbs = 0
+        totalDamage = afterAbs
+
         return [
             'damage': floor(totalDamage),
             'tpUsed': tpUsed,
@@ -174,8 +185,12 @@ class EnemyPredictor {
         var playerEndHP = scenarioResult['endHP']
         var playerEndTP = scenarioResult['endTP']
         var currentTurnValue = scenarioResult['score']
+        // Phase C: feed the predictor any shields the candidate scenario put up
+        // so the enemy's projected damage is reduced by them.
+        var shieldAbs = mapContainsKey(scenarioResult, 'shieldAbs') ? scenarioResult['shieldAbs'] : 0
+        var shieldRel = mapContainsKey(scenarioResult, 'shieldRel') ? scenarioResult['shieldRel'] : 0
 
-        var enemyResponse = this.simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP)
+        var enemyResponse = this.simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP, shieldAbs, shieldRel)
         var enemyDamage = enemyResponse['damage']
         var enemyEndPos = enemyResponse['enemyEndPos']
 

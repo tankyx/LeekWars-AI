@@ -280,7 +280,9 @@ class UnifiedStrategy extends Strategy {
                     'endPosition': simResult.finalPosition,
                     'endHP': player._currHealth + simResult.hpGained,
                     'endTP': player._currTp - simResult.tpSpent,
-                    'score': scenarioData['score']
+                    'score': scenarioData['score'],
+                    'shieldAbs': simResult.shieldsGained,
+                    'shieldRel': simResult.relativeShieldGained
                 ]
 
                 var lookahead = predictor.evaluateScenarioWithLookahead(endState, 0.7)
