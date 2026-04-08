@@ -22,6 +22,8 @@ global _beamWidth = 20
 global _beamMaxDepth = 10
 global _mutationMaxSeeds = 6
 global _mutationMaxPerSeed = 80
+global _twoplyTopK = 5
+global _enemyLookaheadTopK = 3
 // Baseline values stashed at init() — used by per-turn dynamic scaling
 // in scenario_generator. The runtime values above are mutated each turn.
 global _beamMaxDepthBase = 10
@@ -95,6 +97,14 @@ function init() {
         _beamMaxDepth = 8
         _mutationMaxSeeds = 4
         _mutationMaxPerSeed = 60
+    } else if (_opsBudget >= 18000000) {
+        // Phase D: KurtGodel's 20M budget — use the headroom for deeper search.
+        _beamWidth = 28
+        _beamMaxDepth = 12
+        _mutationMaxSeeds = 10
+        _mutationMaxPerSeed = 120
+        _twoplyTopK = 8
+        _enemyLookaheadTopK = 5
     }
 
     _beamWidthBase = _beamWidth

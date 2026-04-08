@@ -228,7 +228,7 @@ class UnifiedStrategy extends Strategy {
                 return b['score'] - a['score']
             })
 
-            var twoplyCount = min(5, count(scenarioResults))
+            var twoplyCount = min(_twoplyTopK, count(scenarioResults))
             for (var i = 0; i < twoplyCount; i++) {
                 var sd = scenarioResults[i]
                 var twoplyBonus = scorer.project2ndTurnValue(sd['simResult'])
@@ -247,7 +247,7 @@ class UnifiedStrategy extends Strategy {
             })
 
             var predictor = new EnemyPredictor(this._fieldMap, arsenal, player, target)
-            var lookaheadCount = min(3, count(scenarioResults))
+            var lookaheadCount = min(_enemyLookaheadTopK, count(scenarioResults))
 
             for (var i = 0; i < lookaheadCount; i++) {
                 var scenarioData = scenarioResults[i]
