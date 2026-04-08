@@ -224,11 +224,14 @@ class FieldMapCore {
         return closestEnemy
     }
 
-    selectOptimalTarget(criteria = null) {
+    selectOptimalTarget(criteria = null, excludeId = -1) {
         var enemyMap = this.getEnemySubMap()
         var enemies = mapValues(enemyMap)
         if (count(enemies) == 0) return null
-        if (count(enemies) == 1) return enemies[0]
+        if (count(enemies) == 1) {
+            if (excludeId != -1 && enemies[0]._id == excludeId) return null
+            return enemies[0]
+        }
 
         var priorityMode = criteria != null && mapContainsKey(criteria, 'prioritizeLowest') ? criteria['prioritizeLowest'] : "hp"
         var penalizeBuffed = criteria != null && mapContainsKey(criteria, 'penalizeBuffed') ? criteria['penalizeBuffed'] : false
@@ -242,6 +245,7 @@ class FieldMapCore {
 
         for (var e in enemies) {
             if (isDead(e._id)) continue
+            if (excludeId != -1 && e._id == excludeId) continue
 
             var score = 0
             var dist = getCellDistance(playerPos, e._cellPos)

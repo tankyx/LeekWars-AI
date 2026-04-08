@@ -10,6 +10,7 @@ global __lastEnemyHP = -1
 global __timePressure = false
 
 global _opsBudget = 14000000
+global _ops50 = 7000000
 global _ops64 = 9000000
 global _ops71 = 10000000
 global _ops79 = 11000000
@@ -73,6 +74,7 @@ function init() {
     player = Player(getCell())
 
     _opsBudget = player._cores * 1000000
+    _ops50 = floor(_opsBudget * 0.50)
     _ops64 = floor(_opsBudget * 0.64)
     _ops71 = floor(_opsBudget * 0.71)
     _ops79 = floor(_opsBudget * 0.79)

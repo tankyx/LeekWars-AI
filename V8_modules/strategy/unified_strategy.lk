@@ -9,6 +9,9 @@ class UnifiedStrategy extends Strategy {
     _target = null
     _arsenal = null
     _turnContext = null
+    _bestScore = -999999
+    _bestScenario = null
+    _bestSimResult = null
 
     constructor(weights, playerEntity, targetEntity, arsenalObj, fieldMapObj) {
         super()
@@ -45,6 +48,26 @@ class UnifiedStrategy extends Strategy {
         this.checkSelfAntidote()
 
         this.generateAndEvaluateBestScenario(target, targetHitCell)
+
+        // Phase B: alt-target counterfactual. If target lockin missed a better
+        // option (e.g. low-HP summoner that's 1-shot, or a debuffable kiter),
+        // run a lighter pipeline pass on the second-best target and swap if
+        // it scores meaningfully higher. Status-quo bias: alt must beat
+        // primary by at least 200 score to flip.
+        if (this._bestScenario != null && target != null && getOperations() < _ops50) {
+            var altTarget = this._fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true], target._id)
+            if (altTarget != null && !isDead(altTarget._id)) {
+                var altResult = this.runScoringPipelineLight(altTarget)
+                if (altResult != null && altResult['score'] > this._bestScore + 200) {
+                    target = altTarget
+                    this._target = altTarget
+                    this._actions = altResult['scenario']
+                    this._bestScenario = altResult['scenario']
+                    this._bestSimResult = altResult['simResult']
+                    this._bestScore = altResult['score']
+                }
+            }
+        }
 
         var targetDied = this.executeScenario()
 
@@ -294,6 +317,56 @@ class UnifiedStrategy extends Strategy {
         } else {
             this.createFallbackScenario(target, targetHitCell)
         }
+
+        // Phase B: expose best results so createAndExecuteScenario can compare
+        // against an alt-target pass.
+        this._bestScore = bestScore
+        this._bestScenario = bestScenario
+        this._bestSimResult = bestSimResult
+    }
+
+    // Phase B: lighter scoring pipeline used for alt-target evaluation. Skips
+    // mutation, 2-ply, and enemy lookahead to keep cost bounded (~3M ops).
+    runScoringPipelineLight(altTarget) {
+        var generator = new ScenarioGenerator(arsenal, player, altTarget, this._fieldMap, this)
+        var scenarios = generator.generateScenarios()
+        if (count(scenarios) == 0) return null
+
+        var quickScorer = new ScenarioQuickScorer(player, altTarget, this._fieldMap, arsenal)
+        var scored = []
+        for (var scenario in scenarios) {
+            var qScore = quickScorer.quickScore(scenario)
+            push(scored, ['scenario': scenario, 'quickScore': qScore])
+        }
+        arraySort(scored, function(a, b) {
+            return b['quickScore'] - a['quickScore']
+        })
+
+        var enemies = this._fieldMap.getEnemySubMap()
+        var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
+        var simulator = new ScenarioSimulator(arsenal, player, altTarget, this._fieldMap)
+        var scorer = new ScenarioScorer(player, altTarget, this._fieldMap, adaptedWeights)
+
+        // Cap evaluation at the smaller of 25 scenarios or whatever the ops
+        // budget allows; alt-target is best-effort, not exhaustive.
+        var evalCount = min(25, count(scored))
+        var bestScore = -999999
+        var bestScenario = null
+        var bestSimResult = null
+        for (var i = 0; i < evalCount; i++) {
+            if (getOperations() > _ops89) break
+            var scenario = scored[i]['scenario']
+            var simResult = simulator.simulate(scenario)
+            var score = scorer.score(simResult, scenario)
+            if (score > bestScore) {
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            }
+        }
+
+        if (bestScenario == null) return null
+        return ['score': bestScore, 'scenario': bestScenario, 'simResult': bestSimResult]
     }
 
     createFallbackScenario(target, targetHitCell) {
