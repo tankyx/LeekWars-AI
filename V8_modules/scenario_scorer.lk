@@ -317,7 +317,9 @@ class ScenarioScorer {
             var enemyTP = max(1, this._target._currTp)
             var denialRatio = min(1.0, simResult.denialApplied / enemyTP)
             var enemyBestDPT = max(1, this._target._strength + this._target._magic) * 1.5
-            var denialValue = denialRatio * enemyBestDPT * 3.0
+            // Multiplier halved (3.0 → 1.63) to compensate for parser fix that
+            // raised denialApplied magnitude ~1.84× across DB-loaded shackles.
+            var denialValue = denialRatio * enemyBestDPT * 1.63
             if (denialRatio > 0.5) denialValue *= 1.5
             // Magic/hybrid builds with shackle chips equipped earn a larger
             // multiplier — denial is a primary tool for them, not a side bonus.
@@ -330,14 +332,16 @@ class ScenarioScorer {
             var enemyStr = max(1, this._target._strength)
             var reductionRatio = min(1.0, simResult.strShackled / enemyStr)
             var enemyDPT = enemyStr * 1.5
-            var statReduceValue = reductionRatio * enemyDPT * 2.0
+            // Halved (2.0 → 1.09) to compensate for parser fix.
+            var statReduceValue = reductionRatio * enemyDPT * 1.09
             score += statReduceValue
         }
         if (simResult.magShackled > 0) {
             var enemyMag = max(1, this._target._magic)
             var reductionRatio = min(1.0, simResult.magShackled / enemyMag)
             var enemyMagDPT = enemyMag * 1.5
-            var statReduceValue = reductionRatio * enemyMagDPT * 2.0
+            // Halved (2.0 → 1.09) to compensate for parser fix.
+            var statReduceValue = reductionRatio * enemyMagDPT * 1.09
             score += statReduceValue
         }
 

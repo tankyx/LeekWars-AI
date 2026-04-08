@@ -1286,23 +1286,20 @@ class ScenarioHelpers {
             var rawDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
             var damage = isPoisonWeapon(weaponId) ? rawDamage : rawDamage * weaponDamageMultiplier
             // Credit weapon-borne denial AND stat-reduction (Axe MP shackle,
-            // Destroyer STR shackle — both scale with magic). Without this,
-            // these weapons score only their tiny direct damage and lose to
-            // high-burst weapons even though their shackle is the main value.
+            // Destroyer STR shackle — both scale with magic). Multipliers
+            // halved (3.0 → 1.63) to compensate for the item parser fix that
+            // raised effect magnitudes ~1.84× across DB-loaded items.
             var weaponBd = this._arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
             if (weaponBd != null) {
                 var enemyTP = max(1, this._target._currTp)
                 var dpt = max(1, this._target._strength + this._target._magic) * 1.5
                 if (weaponBd['denial'] > 0) {
-                    var weaponDenialBonus = min(1.0, weaponBd['denial'] / enemyTP) * dpt * 3.0
+                    var weaponDenialBonus = min(1.0, weaponBd['denial'] / enemyTP) * dpt * 1.63
                     damage += weaponDenialBonus
                 }
                 if (weaponBd['statReduce'] > 0) {
-                    // Mirror the scorer's strShackled formula:
-                    //   reductionRatio = strShackled / enemyStr
-                    //   value          = reductionRatio * enemyStr * 1.5 * 2.0
                     var enemyStr = max(1, this._target._strength)
-                    var srBonus = min(1.0, weaponBd['statReduce'] / enemyStr) * enemyStr * 3.0
+                    var srBonus = min(1.0, weaponBd['statReduce'] / enemyStr) * enemyStr * 1.63
                     damage += srBonus
                 }
             }

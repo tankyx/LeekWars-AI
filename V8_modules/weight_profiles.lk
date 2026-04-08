@@ -10,7 +10,7 @@ global BUILD_BRUISER_REFLECT = 7
 global __playerBuildType = 0
 
 global STRENGTH_WEIGHTS = [
-    'burstDamage': 300,
+    'burstDamage': 163,
     'weaponUses': 100,
     'tpEfficiency': 50,
     'dotEffects': -50,
@@ -31,14 +31,14 @@ global STRENGTH_WEIGHTS = [
 ]
 
 global MAGIC_WEIGHTS = [
-    'burstDamage': 100,
+    'burstDamage': 54,
     'weaponUses': 0,
     'tpEfficiency': 50,
-    'dotEffects': 500,
+    'dotEffects': 272,
     'kiteDistance': 200,
     'damageReturn': 0,
-    'poisonStacks': 400,
-    'denialValue': 350,
+    'poisonStacks': 217,
+    'denialValue': 190,
     'shieldValue': 100,
     'healValue': 80,
     'distanceToTarget': 30,
@@ -53,7 +53,7 @@ global MAGIC_WEIGHTS = [
 ]
 
 global AGILITY_WEIGHTS = [
-    'burstDamage': 250,
+    'burstDamage': 136,
     'weaponUses': 100,
     'tpEfficiency': 50,
     'dotEffects': 0,
@@ -74,7 +74,7 @@ global AGILITY_WEIGHTS = [
 ]
 
 global STRENGTH_SCIENCE_WEIGHTS = [
-    'burstDamage': 250,
+    'burstDamage': 136,
     'weaponUses': 80,
     'tpEfficiency': 50,
     'dotEffects': 0,
@@ -87,7 +87,7 @@ global STRENGTH_SCIENCE_WEIGHTS = [
     'threatReduction': 40,
     'otkoBonus': 5000,
     'checkpointBonus': 2500,
-    'novaEffects': 600,
+    'novaEffects': 326,
     'bulbDamageMultiplier': 1.2,
     'bulbKillBonusHealer': 2500,
     'bulbKillBonusBuffer': 1500,
@@ -96,7 +96,7 @@ global STRENGTH_SCIENCE_WEIGHTS = [
 ]
 
 global TANK_SCI_WEIGHTS = [
-    'burstDamage': 150,
+    'burstDamage': 82,
     'weaponUses': 60,
     'tpEfficiency': 50,
     'dotEffects': 0,
@@ -109,7 +109,7 @@ global TANK_SCI_WEIGHTS = [
     'threatReduction': 300,
     'otkoBonus': 3000,
     'checkpointBonus': 2500,
-    'novaEffects': 600,
+    'novaEffects': 326,
     'bulbDamageMultiplier': 1.2,
     'bulbKillBonusHealer': 3000,
     'bulbKillBonusBuffer': 1500,
@@ -118,14 +118,14 @@ global TANK_SCI_WEIGHTS = [
 ]
 
 global HYBRID_WEIGHTS = [
-    'burstDamage': 200,
+    'burstDamage': 109,
     'weaponUses': 60,
     'tpEfficiency': 50,
-    'dotEffects': 250,
+    'dotEffects': 136,
     'kiteDistance': 50,
     'damageReturn': 0,
-    'poisonStacks': 200,
-    'denialValue': 250,
+    'poisonStacks': 109,
+    'denialValue': 136,
     'shieldValue': 100,
     'healValue': 70,
     'distanceToTarget': 0,
@@ -140,7 +140,7 @@ global HYBRID_WEIGHTS = [
 ]
 
 global BRUISER_REFLECT_WEIGHTS = [
-    'burstDamage': 250,
+    'burstDamage': 136,
     'weaponUses': 100,
     'tpEfficiency': 50,
     'dotEffects': 0,
@@ -183,18 +183,18 @@ global BOSS_PUZZLE_WEIGHTS = [
 ]
 
 global BOSS_COMBAT_WEIGHTS = [
-    'burstDamage': 300,
+    'burstDamage': 163,
     'weaponUses': 100,
     'tpEfficiency': 50,
-    'dotEffects': 200,
+    'dotEffects': 109,
     'kiteDistance': 0,
     'damageReturn': 0,
-    'poisonStacks': 100,
+    'poisonStacks': 54,
     'shieldValue': 200,
     'healValue': 150,
     'distanceToTarget': -20,
     'threatReduction': 100,
-    'novaEffects': 200,
+    'novaEffects': 109,
     'otkoBonus': 5000,
     'checkpointBonus': 2500,
     'noDamagePenalty': -2000,
