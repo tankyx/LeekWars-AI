@@ -1039,7 +1039,10 @@ class ScenarioHelpers {
     getDenialActions(tpBudget, simPos) {
         var actions = []
         var tpUsed = 0
-        if (this._player._magic <= this._player._strength + 100) return actions
+        // Denial chips scale with magic — require at least some MAG so the
+        // shackle duration is meaningful. The previous gate (mag > str + 100)
+        // excluded hybrids like MargaretHamilton (mag 500 / str 400) entirely.
+        if (this._player._magic < 150) return actions
         var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
         for (var dChip in denialChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
