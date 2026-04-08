@@ -194,6 +194,19 @@ class UnifiedStrategy extends Strategy {
             var mutationPlanner = new HybridMutationPlanner(arsenal, player, target, this._fieldMap, scorer)
             var bestMutatedScenario = mutationPlanner.planWithMutations(mutationSeeds)
 
+            // Multi-pass mutation refinement: on bigger budgets (KG), re-feed
+            // the winner back into the planner as the only seed and run a 2nd
+            // mutation pass. This iterates the trusted optimizer instead of
+            // widening the post-mutation picker pool, which previously caused
+            // late-game passive regressions.
+            if (_opsBudget >= 18000000 && getOperations() < _ops79 && bestMutatedScenario != null) {
+                var refineSeeds = [bestMutatedScenario]
+                var refinedWinner = mutationPlanner.planWithMutations(refineSeeds)
+                if (refinedWinner != null) {
+                    bestMutatedScenario = refinedWinner
+                }
+            }
+
             scenariosWithQuickScore = []
             push(scenariosWithQuickScore, ['scenario': bestMutatedScenario, 'quickScore': 9999])
 
