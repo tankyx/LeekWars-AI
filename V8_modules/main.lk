@@ -117,6 +117,10 @@ function init() {
         weights = BOSS_PUZZLE_WEIGHTS
     }
 
+    // Day-1 archetype detection: profile enemies BEFORE turnOneBuffs so the
+    // opener can read getEnemyProfile() and skip buff stacking vs burst opps.
+    profileAllEnemies(fieldMap)
+
     strategy = new UnifiedStrategy(weights, player, null, arsenal, fieldMap)
     strategy.resetTurnContext()
     strategy.turnOneBuffs()

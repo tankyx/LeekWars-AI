@@ -183,6 +183,48 @@ class ScenarioHelpers {
             }
         }
 
+        // Burst-aware state branch: when enemy is a confirmed burst build AND
+        // their projected burst over 2 turns can roughly delete us, skip the
+        // buff prelude and go straight to ATTRITION. Gated on isBurstBuild so
+        // it doesn't fire vs tanks (whose maxBurstDamage can still look high
+        // from weapon raw damage with low STR multiplier).
+        var burstProfile = getEnemyProfile(this._target._id)
+        if (burstProfile != null && burstProfile['isBurstBuild'] && currentTurn <= 6) {
+            var enemyMaxBurst = burstProfile['maxBurstDamage']
+            if (enemyMaxBurst != null && enemyMaxBurst > 0) {
+                var pAbs = this._player._absShield
+                var pRel = this._player._relShield
+                if (pAbs == null) pAbs = 0
+                if (pRel == null) pRel = 0
+                var myEffectiveHP = floor(playerHP * (100 - pRel) / 100) + pAbs
+                if (enemyMaxBurst * 2 >= myEffectiveHP) {
+                    return "ATTRITION"
+                }
+            }
+        }
+
+        // Anti-poison aggression: if we're carrying ≥3 poison stacks from a
+        // magic enemy that can keep refreshing them, kiting is a slow death.
+        // Force AGGRO to close distance and burn the mage down. Only applies
+        // to non-magic players (mages naturally carry poison and should stay
+        // at range to keep applying it).
+        if (burstProfile != null && this._target._magic > 400 &&
+            __playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
+            var ownPoisonEffect = this._player.getEffect(EFFECT_POISON)
+            if (ownPoisonEffect != null) {
+                var poisonStacks = 0
+                var allEffects = getEffects(this._player._id)
+                if (allEffects != null) {
+                    for (var ef in allEffects) {
+                        if (ef[0] == EFFECT_POISON) poisonStacks++
+                    }
+                }
+                if (poisonStacks >= 3) {
+                    return "AGGRO"
+                }
+            }
+        }
+
         var earlyGame = (currentTurn >= 1 && currentTurn <= 4)
         var buffsExpired = this.checkCriticalBuffsExpired()
 

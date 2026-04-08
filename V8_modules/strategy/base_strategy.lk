@@ -836,16 +836,33 @@ class Strategy {
             return;
         }
 
+        // Day-1 archetype-aware opener: detect a nearby burst opponent and skip
+        // the offensive HP/shield buffs (ELEVATION/ARMORING) so we keep TP for
+        // the actual scenario engine to spend on shield+attack on the same turn.
+        // KNOWLEDGE is free wisdom and stays for everyone.
+        var nearbyBurst = false
+        var closestForBuff = fieldMap.getClosestEnemy()
+        if (closestForBuff != null) {
+            var burstProfile = getEnemyProfile(closestForBuff._id)
+            var burstDist = getCellDistance(player._cellPos, closestForBuff._cellPos)
+            if (burstDist == null) burstDist = 99999
+            if (burstProfile != null && burstProfile['isBurstBuild'] && burstDist <= 8) {
+                nearbyBurst = true
+            }
+        }
+
         var isMagicBuild = player._magic > player._strength + 100 && player._magic > player._agility + 100
         if (!isMagicBuild) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
                 useChip(CHIP_KNOWLEDGE, player._id)
             }
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
-                useChip(CHIP_ELEVATION, player._id)
-            }
-            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
-                useChip(CHIP_ARMORING, player._id)
+            if (!nearbyBurst) {
+                if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)) {
+                    useChip(CHIP_ELEVATION, player._id)
+                }
+                if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING)) {
+                    useChip(CHIP_ARMORING, player._id)
+                }
             }
         }
 

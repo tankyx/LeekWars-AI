@@ -283,6 +283,24 @@ class FieldMapCore {
                 }
             }
 
+            // Deprioritize "diamond chest"-style indestructible opponents:
+            // extreme RES + reflect makes them un-killable and they reflect
+            // most of our damage back. Only target if no alternative exists.
+            if (e._resistance != null && e._resistance >= 800) {
+                score -= 500
+            }
+            // Reflect/return-damage carriers also discounted (compounded with
+            // reflect counter weights downstream).
+            var effChk = getEffects(e._id)
+            if (effChk != null) {
+                for (var effR in effChk) {
+                    if (effR[0] == EFFECT_DAMAGE_RETURN) {
+                        score -= 200
+                        break
+                    }
+                }
+            }
+
             if (bonusForDebuffed) {
                 var effects = getEffects(e._id)
                 if (effects != null) {

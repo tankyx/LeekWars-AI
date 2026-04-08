@@ -230,6 +230,25 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             }
         }
 
+        // Anti-mage close-distance: vs high-magic opponents (poison mages) we
+        // can't outheal sustained ticks, so push to close range and burn down
+        // the source. Loss-log evidence: 5/24 KurtGodel kills came from poison
+        // ticks while kiting at long range. ONLY applies to non-magic players —
+        // magic builds (MargaretHamilton) win mirror matches by kiting.
+        if (primaryEnemy != null && primaryEnemy._magic > 400 &&
+            __playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
+            if (mapContainsKey(adapted, 'kiteDistance')) {
+                // Invert kite preference (negative value rewards closing).
+                adapted['kiteDistance'] = floor(adapted['kiteDistance'] - 200)
+            }
+            if (mapContainsKey(adapted, 'distanceToTarget')) {
+                adapted['distanceToTarget'] = floor(adapted['distanceToTarget'] - 30)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.25)
+            // Heals can't outpace ticks; don't waste TP on them.
+            adapted['healValue'] = floor(adapted['healValue'] * 0.75)
+        }
+
         if (primaryProfile['hasReflect'] && primaryEnemy != null) {
             var reflectActive = primaryEnemy.hasDamageReturn()
             if (reflectActive) {

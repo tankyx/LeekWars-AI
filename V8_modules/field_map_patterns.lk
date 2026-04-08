@@ -202,6 +202,21 @@ class FieldMapPatterns extends FieldMapCore {
         // Track best aim distance to primary target so we don't recompute it each iteration
         var bestDistToTarget = 0
 
+        var aoeType = item._aoeType
+
+        // Pre-compute item's max self-splash potential (avg direct+nova, ignoring
+        // dot since we're not poisoning ourselves) so we can subtract a soft
+        // penalty when shooter is inside the AoE. This replaces the earlier
+        // hard filter that rejected legitimate Nova trades vs tanks.
+        var itemSelfBaseMax = 0
+        if (aoeType != AREA_POINT && aoeType != AREA_LASER_LINE) {
+            var sbd = arsenal.getDamageBreakdown(player._strength, player._magic,
+                                                  player._wisdom, player._science, itemId)
+            if (sbd != null) {
+                itemSelfBaseMax = sbd['direct'] + sbd['nova']
+            }
+        }
+
         for (var aimCell in aimCandidates) {
 
             var dist = getCellDistance(shooterCell, aimCell)
@@ -218,6 +233,25 @@ class FieldMapPatterns extends FieldMapCore {
 
             if (isWeapon) {
                 totalDamage *= item._maxUse
+            }
+
+            // Self-splash soft penalty: if our shooter cell sits inside the
+            // AoE pattern, subtract our own projected self-damage (after our
+            // own resistances) ×2 from the score so close-range Nova/AoE
+            // trades only get picked when the trade is clearly positive.
+            // Loss-log evidence: 17/24 KurtGodel kills had ~5k self-splash dmg.
+            if (itemSelfBaseMax > 0 &&
+                fieldMap.wouldAoEHitCell(aimCell, aoeType, shooterCell, shooterCell)) {
+                var selfMod = arsenal.computeAoEModifier(aimCell, shooterCell, aoeType)
+                if (selfMod > 0) {
+                    var selfRel = (player._relShield != null) ? player._relShield : 0
+                    var selfAbs = (player._absShield != null) ? player._absShield : 0
+                    var rawSelf = itemSelfBaseMax * selfMod
+                    var netSelf = rawSelf * (100 - selfRel) / 100 - selfAbs
+                    if (netSelf < 0) netSelf = 0
+                    if (isWeapon) netSelf *= item._maxUse
+                    totalDamage -= netSelf * 2
+                }
             }
 
             var isBetter = false
