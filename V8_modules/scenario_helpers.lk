@@ -1036,6 +1036,58 @@ class ScenarioHelpers {
         return null
     }
 
+    // Returns a (cell, chip) pair: a teleport destination from which we can
+    // hit the target with a shackle, OR null if no such cell exists. Used by
+    // BAIT/DUMP scenarios to break out of "kiter at distance 8+" stalemates
+    // where shackles are out of range from the optimal damage cell.
+    findDenialTeleportCell() {
+        if (this._player._magic < 150) return null
+        var teleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+        if (teleChip == null) return null
+        var teleCost = getCachedChipCost(teleChip)
+        // Need TP for teleport + at least one shackle
+        if (getTP() < teleCost + 5) return null
+        // Only worth doing if at least one shackle is off cooldown
+        var anyShackleReady = false
+        var shackleIds = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+        for (var sId in shackleIds) {
+            if (mapContainsKey(this._arsenal.playerEquippedChips, sId) &&
+                getCooldown(sId, this._player._id) == 0) {
+                anyShackleReady = true
+                break
+            }
+        }
+        if (!anyShackleReady) return null
+
+        var targetCell = this._target._cellPos
+        var currentDist = getCellDistance(this._player._cellPos, targetCell)
+        // If we're already in shackle range no need to teleport
+        if (currentDist != null && currentDist <= 6) return null
+
+        var teleMaxRange = getTeleportMaxRange(teleChip)
+        var bestCell = -1
+        var bestDistToTarget = 999
+        var reachable = getReachableCells()
+        if (reachable == null) return null
+        for (var cellId in reachable) {
+            // Teleport range constraint (from current pos)
+            var teleDist = getCellDistance(this._player._cellPos, cellId)
+            if (teleDist == null || teleDist < 1 || teleDist > teleMaxRange) continue
+            if (isObstacle(cellId) || isEntity(cellId)) continue
+            // Must end up in shackle range AND with LoS
+            var distFromTele = getCellDistance(cellId, targetCell)
+            if (distFromTele == null || distFromTele < 1 || distFromTele > 6) continue
+            if (!getCachedLineOfSight(cellId, targetCell)) continue
+            // Pick the cell that's closest to the target (for follow-up attacks)
+            if (distFromTele < bestDistToTarget) {
+                bestDistToTarget = distFromTele
+                bestCell = cellId
+            }
+        }
+        if (bestCell == -1) return null
+        return ['cell': bestCell, 'chip': teleChip, 'cost': teleCost]
+    }
+
     getDenialActions(tpBudget, simPos) {
         var actions = []
         var tpUsed = 0
@@ -1233,6 +1285,27 @@ class ScenarioHelpers {
 
             var rawDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
             var damage = isPoisonWeapon(weaponId) ? rawDamage : rawDamage * weaponDamageMultiplier
+            // Credit weapon-borne denial AND stat-reduction (Axe MP shackle,
+            // Destroyer STR shackle — both scale with magic). Without this,
+            // these weapons score only their tiny direct damage and lose to
+            // high-burst weapons even though their shackle is the main value.
+            var weaponBd = this._arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
+            if (weaponBd != null) {
+                var enemyTP = max(1, this._target._currTp)
+                var dpt = max(1, this._target._strength + this._target._magic) * 1.5
+                if (weaponBd['denial'] > 0) {
+                    var weaponDenialBonus = min(1.0, weaponBd['denial'] / enemyTP) * dpt * 3.0
+                    damage += weaponDenialBonus
+                }
+                if (weaponBd['statReduce'] > 0) {
+                    // Mirror the scorer's strShackled formula:
+                    //   reductionRatio = strShackled / enemyStr
+                    //   value          = reductionRatio * enemyStr * 1.5 * 2.0
+                    var enemyStr = max(1, this._target._strength)
+                    var srBonus = min(1.0, weaponBd['statReduce'] / enemyStr) * enemyStr * 3.0
+                    damage += srBonus
+                }
+            }
             if (damage > bestDamage) {
                 var isSafe = true
                 var needsReposition = false

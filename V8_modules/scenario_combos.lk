@@ -1365,7 +1365,19 @@ class ScenarioCombos extends ScenarioHelpers {
             mpBudget += 2
         }
 
+        // Denial-teleport branch: if the target is out of shackle range and
+        // teleport + at least one shackle is ready, jump into shackle range
+        // instead of walking. Solves the kite-and-shoot pattern that wastes
+        // 4-5 turns of poison ticks while we close.
         var distToEnemy = getCellDistance(simPos, this._target._cellPos)
+        var denialTele = (distToEnemy != null && distToEnemy > 6) ? this.findDenialTeleportCell() : null
+        if (denialTele != null && tpBudget >= denialTele['cost']) {
+            push(actions, new Action(Action.ACTION_TELEPORT, -1, denialTele['chip'], denialTele['cell'], this._target))
+            tpBudget -= denialTele['cost']
+            simPos = denialTele['cell']
+            distToEnemy = getCellDistance(simPos, this._target._cellPos)
+        }
+
         var moveAction = null
         if (distToEnemy != null && distToEnemy > 6) {
             moveAction = new Action(Action.MOVEMENT_APPROACH, -1, -1, this._target._cellPos, this._target)
@@ -1674,6 +1686,15 @@ class ScenarioCombos extends ScenarioHelpers {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
                 tpBudget -= tpRemissionDump
             }
+        }
+
+        // Denial-teleport in DUMP too: same kiter-counter logic.
+        var dumpDistToEnemy = getCellDistance(simPos, this._target._cellPos)
+        var dumpDenialTele = (dumpDistToEnemy != null && dumpDistToEnemy > 6) ? this.findDenialTeleportCell() : null
+        if (dumpDenialTele != null && tpBudget >= dumpDenialTele['cost']) {
+            push(actions, new Action(Action.ACTION_TELEPORT, -1, dumpDenialTele['chip'], dumpDenialTele['cell'], this._target))
+            tpBudget -= dumpDenialTele['cost']
+            simPos = dumpDenialTele['cell']
         }
 
         var moveAction = this.getMoveToOptimalCell(mpBudget)
