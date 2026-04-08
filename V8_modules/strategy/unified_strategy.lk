@@ -281,7 +281,7 @@ class UnifiedStrategy extends Strategy {
             var twoplyCount = min(_twoplyTopK, count(scenarioResults))
             for (var i = 0; i < twoplyCount; i++) {
                 var sd = scenarioResults[i]
-                var twoplyBonus = scorer.project2ndTurnValue(sd['simResult'])
+                var twoplyBonus = scorer.project2ndTurnValue(sd['simResult'], sd['scenario'])
                 sd['score'] = sd['score'] + twoplyBonus
                 if (sd['score'] > bestScore) {
                     bestScore = sd['score']

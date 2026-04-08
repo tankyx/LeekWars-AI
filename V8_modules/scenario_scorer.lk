@@ -1139,7 +1139,7 @@ class ScenarioScorer {
         return bonus
     }
 
-    project2ndTurnValue(simResult) {
+    project2ndTurnValue(simResult, scenario = null) {
         if (this._target == null) return 0
 
         var value = 0
@@ -1161,21 +1161,83 @@ class ScenarioScorer {
         var nextTurnTP = max(0, this._player._currTp - simResult.tpSpent) + 10
         if (nextTurnTP > 25) nextTurnTP = 25
 
+        // Phase G: project enemy state forward for a more accurate
+        // second-turn estimate. Enemy HP after this turn's damage matters
+        // for kill detection (if they're at 100 HP next turn, we don't need
+        // a 600-damage scenario). Enemy position is predicted via the
+        // existing enemy_predictor logic.
+        var enemyProjectedHP = this._target._currHealth - simResult.damageDealt - simResult.dotDamageQueued - simResult.novaDamageQueued
+        if (enemyProjectedHP < 0) enemyProjectedHP = 0
+        var enemyProjectedPos = this._target._cellPos
+        // Approximate enemy movement: if we're out of their melee range, they
+        // close ~half the gap toward our final position.
+        var enemyToUs = getCellDistance(this._target._cellPos, finalPos)
+        if (enemyToUs != null && enemyToUs > 4) {
+            // Use existing enemyMP estimate
+            var enemyMP = this._target._currMp != null ? this._target._currMp : 4
+            var closeBy = min(enemyMP, floor(enemyToUs / 2))
+            // Don't compute exact path; just use current pos as approximation
+            // (the threat cache already accounts for actual reach via the
+            // adversarial cache earlier)
+        }
+
+        // Phase G: collect chips used this turn so we can exclude them from
+        // next-turn damage estimation (cooldown awareness).
+        var chipsUsedThisTurn = [:]
+        if (scenario != null) {
+            for (var act in scenario) {
+                if (act.chip != null && act.chip != -1) {
+                    chipsUsedThisTurn[act.chip] = true
+                }
+            }
+        }
+
+        // Phase G: vulnerability stacking from this turn carries to next turn
+        // as a damage multiplier on our outputs.
+        var vulnMult = 1.0 + (simResult.vulnerabilityApplied / 100.0)
+
         var nextTurnDmg = 0
-        var dist = getCellDistance(finalPos, this._target._cellPos)
+        var dist = getCellDistance(finalPos, enemyProjectedPos)
         if (dist != null) {
-            for (var wid in mapKeys(this._fieldMap.damageMap != null ? arsenal.playerEquippedWeapons : [:])) {
-                if (!mapContainsKey(arsenal.playerEquippedWeapons, wid)) continue
+            // Best weapon at projected distance
+            var bestWeaponDmg = 0
+            for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
                 var wObj = arsenal.playerEquippedWeapons[wid]
                 if (dist >= wObj._minRange && dist <= wObj._maxRange && wObj._cost <= nextTurnTP) {
                     var bd = arsenal.getDamageBreakdown(
                         this._player._strength, this._player._magic,
                         this._player._wisdom, this._player._science, wid)
                     var uses = min(wObj._maxUse, floor(nextTurnTP / wObj._cost))
-                    nextTurnDmg += bd['total'] * uses
-                    break
+                    var wDmg = bd['total'] * uses
+                    if (wDmg > bestWeaponDmg) bestWeaponDmg = wDmg
                 }
             }
+            nextTurnDmg += bestWeaponDmg
+
+            // Phase G: also count damage chips that aren't on cooldown next
+            // turn. Chips used this turn are excluded.
+            var remainingTPforChips = max(0, nextTurnTP - 7)  // assume some weapon use
+            for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+                if (mapContainsKey(chipsUsedThisTurn, cid)) continue  // would be on cooldown
+                if (isHealingChip(cid) || isOffensiveBuff(cid) || isShieldChip(cid) ||
+                    isDamageReturnChip(cid) || isResourceChip(cid)) continue
+                var cObj = arsenal.playerEquippedChips[cid]
+                if (dist >= cObj._minRange && dist <= cObj._maxRange && cObj._cost <= remainingTPforChips) {
+                    var cbd = arsenal.getDamageBreakdown(
+                        this._player._strength, this._player._magic,
+                        this._player._wisdom, this._player._science, cid)
+                    nextTurnDmg += cbd['total'] * 0.7  // probability we get to use it
+                    break  // take the best chip only
+                }
+            }
+
+            // Phase G: vulnerability multiplier on next-turn damage
+            nextTurnDmg = nextTurnDmg * vulnMult
+        }
+
+        // Phase G: cap next-turn damage to enemy projected HP (no overkill bonus)
+        if (enemyProjectedHP > 0 && nextTurnDmg > enemyProjectedHP) {
+            nextTurnDmg = enemyProjectedHP + (nextTurnDmg - enemyProjectedHP) * 0.1
         }
 
         // Phase 4b: enemy will likely heal/shield on their turn — discount our
