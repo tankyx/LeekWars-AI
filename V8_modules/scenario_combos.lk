@@ -1409,6 +1409,29 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget += 5
         }
 
+        // Denial first — shackles are the highest-value action in BAIT (deny
+        // enemy TP/MP for 2-3 turns AND bait their Antidote/Liberation). Queue
+        // them before poisons so they don't get starved when TP runs low.
+        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+        for (var dChip in denialChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
+            if (getCooldown(dChip, this._player._id) > 0) continue
+            var dCost = getCachedChipCost(dChip)
+            if (tpBudget < dCost) continue
+
+            var dObj = this._arsenal.playerEquippedChips[dChip]
+            var dist = getCellDistance(simPos, this._target._cellPos)
+            if (dist == null || dist < dObj._minRange || dist > dObj._maxRange) continue
+            if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
+
+            if (dObj._aoeType != AREA_POINT) {
+                if (fieldMap.wouldAoEHitCell(this._target._cellPos, dObj._aoeType, simPos, simPos)) continue
+            }
+
+            push(actions, new Action(Action.ACTION_DEBUFF, -1, dChip, this._target._cellPos, this._target))
+            tpBudget -= dCost
+        }
+
         var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)
         for (var poisonChip in poisonChips) {
             var chipId = poisonChip._id
@@ -1428,26 +1451,6 @@ class ScenarioCombos extends ScenarioHelpers {
 
             push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, this._target._cellPos, this._target))
             tpBudget -= chipCost
-        }
-
-        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
-        for (var dChip in denialChips) {
-            if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
-            if (getCooldown(dChip, this._player._id) > 0) continue
-            var dCost = getCachedChipCost(dChip)
-            if (tpBudget < dCost) continue
-
-            var dObj = this._arsenal.playerEquippedChips[dChip]
-            var dist = getCellDistance(simPos, this._target._cellPos)
-            if (dist == null || dist < dObj._minRange || dist > dObj._maxRange) continue
-            if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
-
-            if (dObj._aoeType != AREA_POINT) {
-                if (fieldMap.wouldAoEHitCell(this._target._cellPos, dObj._aoeType, simPos, simPos)) continue
-            }
-
-            push(actions, new Action(Action.ACTION_DEBUFF, -1, dChip, this._target._cellPos, this._target))
-            tpBudget -= dCost
         }
 
         if (tpBudget >= 4) {
@@ -1726,6 +1729,25 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget >= tpWizardryDump) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player))
             tpBudget -= tpWizardryDump
+        }
+
+        // Queue shackles in DUMP phase too — denial stacks with poison and
+        // doesn't depend on the BAIT/DUMP state to be effective.
+        var dumpDenialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+        for (var dDChip in dumpDenialChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, dDChip)) continue
+            if (getCooldown(dDChip, this._player._id) > 0) continue
+            var dDCost = getCachedChipCost(dDChip)
+            if (tpBudget < dDCost) continue
+            var dDObj = this._arsenal.playerEquippedChips[dDChip]
+            var dDDist = getCellDistance(simPos, this._target._cellPos)
+            if (grapplePulled) dDDist = simDist
+            if (dDDist == null || dDDist < dDObj._minRange || dDDist > dDObj._maxRange) continue
+            if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
+            if (dDObj._aoeType != AREA_POINT &&
+                fieldMap.wouldAoEHitCell(this._target._cellPos, dDObj._aoeType, simPos, simPos)) continue
+            push(actions, new Action(Action.ACTION_DEBUFF, -1, dDChip, this._target._cellPos, this._target))
+            tpBudget -= dDCost
         }
 
         var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)

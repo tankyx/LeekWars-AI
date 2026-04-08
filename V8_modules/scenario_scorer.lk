@@ -319,6 +319,10 @@ class ScenarioScorer {
             var enemyBestDPT = max(1, this._target._strength + this._target._magic) * 1.5
             var denialValue = denialRatio * enemyBestDPT * 3.0
             if (denialRatio > 0.5) denialValue *= 1.5
+            // Magic/hybrid builds with shackle chips equipped earn a larger
+            // multiplier — denial is a primary tool for them, not a side bonus.
+            var denialWeight = this.getWeight('denialValue', 100)
+            denialValue *= (denialWeight / 100.0)
             score += denialValue
         }
 
