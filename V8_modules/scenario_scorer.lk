@@ -32,7 +32,41 @@ class ScenarioScorer {
         var dotDmg = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
         var novaDmg = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
         var totalDamage = simResult.damageDealt + dotDmg + novaDmg
-        var killProbability = totalDamage / enemyHP
+        var meanRatio = totalDamage / enemyHP
+
+        // Probabilistic kill probability (Phase A): use the *direct + nova* min/max
+        // range (NOT poison — poison is future damage and should not influence
+        // this-turn kill recognition) as a normal approximation. mean = (min+max)/2,
+        // stddev ≈ (max-min)/4. Only applied when meanRatio is already in near-kill
+        // territory (≥ 0.65) so wide variance can't fabricate kills on bait turns.
+        var killProbability = meanRatio
+        if (meanRatio >= 0.65) {
+            var burstMin = simResult.damageDealtMin + simResult.novaDamageMin
+            var burstMax = simResult.damageDealtMax + simResult.novaDamageMax
+            // Re-add the dot floor: poison already locked in counts as guaranteed,
+            // so we add it as a point value to both min and max.
+            burstMin += dotDmg
+            burstMax += dotDmg
+            if (burstMax > burstMin && burstMax > 0) {
+                var dmgMean = (burstMin + burstMax) / 2.0
+                var dmgStd = (burstMax - burstMin) / 4.0
+                if (dmgStd > 0.001) {
+                    var z = (enemyHP - dmgMean) / dmgStd
+                    var pKill = 0.5
+                    if (z <= -2.0)       { pKill = 0.98 }
+                    else if (z <= -1.28) { pKill = 0.90 }
+                    else if (z <= -0.84) { pKill = 0.80 }
+                    else if (z <= -0.52) { pKill = 0.72 }
+                    else if (z <= -0.25) { pKill = 0.60 }
+                    else if (z <= 0.0)   { pKill = 0.50 }
+                    else if (z <= 0.25)  { pKill = 0.40 }
+                    else if (z <= 0.52)  { pKill = 0.30 }
+                    else if (z <= 0.84)  { pKill = 0.20 }
+                    else                 { pKill = 0.10 }
+                    if (pKill > killProbability) killProbability = pKill
+                }
+            }
+        }
 
         var targetIsBulb = isBulb(this._target)
         var bulbType = targetIsBulb ? getBulbType(this._target) : BULB_TYPE_UNKNOWN

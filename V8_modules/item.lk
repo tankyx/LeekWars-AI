@@ -221,7 +221,7 @@ class Arsenal {
         var chipInFull = mapContainsKey(this.chipsList, itemID)
         var chipInEquipped = mapContainsKey(this.playerEquippedChips, itemID)
         var isChip = !isWeapon && (chipInFull || chipInEquipped)
-        if (!isWeapon && !isChip) return ['direct': 0, 'dot': 0, 'nova': 0, 'total': 0, 'min': 0, 'max': 0]
+        if (!isWeapon && !isChip) return ['direct': 0, 'dot': 0, 'nova': 0, 'total': 0, 'directMin': 0, 'directMax': 0, 'dotMin': 0, 'dotMax': 0, 'novaMin': 0, 'novaMax': 0]
         var item = isWeapon ? this.playerEquippedWeapons[itemID] : (chipInFull ? this.chipsList[itemID] : this.playerEquippedChips[itemID])
 
         var aoeModifier = 1.0
@@ -234,8 +234,12 @@ class Arsenal {
         var direct = 0
         var dot = 0
         var nova = 0
-        var minDmg = 0
-        var maxDmg = 0
+        var directMin = 0
+        var directMax = 0
+        var dotMin = 0
+        var dotMax = 0
+        var novaMin = 0
+        var novaMax = 0
         var denial = 0
         var statReduce = 0
 
@@ -243,28 +247,23 @@ class Arsenal {
             var info = item._effects[e]
             if (e == EFFECT_DAMAGE) {
                 var avg = (info._minEffectAmount + info._maxEffectAmount) / 2
-                direct += avg * (1 + (directStat / 100)) * aoeModifier
-
-                minDmg += info._minEffectAmount * (1 + (directStat / 100)) * aoeModifier
-                maxDmg += info._maxEffectAmount * (1 + (directStat / 100)) * aoeModifier
+                var dirScale = (1 + (directStat / 100)) * aoeModifier
+                direct += avg * dirScale
+                directMin += info._minEffectAmount * dirScale
+                directMax += info._maxEffectAmount * dirScale
             } else if (e == EFFECT_POISON) {
                 var avg2 = (info._minEffectAmount + info._maxEffectAmount) / 2
                 var totalOverTime = avg2 * info._effectDuration
-                dot += totalOverTime * (1 + (mag / 100)) * aoeModifier
-
-                var minPoison = info._minEffectAmount * info._effectDuration * (1 + (mag / 100)) * aoeModifier
-                var maxPoison = info._maxEffectAmount * info._effectDuration * (1 + (mag / 100)) * aoeModifier
-                minDmg += minPoison
-                maxDmg += maxPoison
+                var poisonScale = (1 + (mag / 100)) * aoeModifier
+                dot += totalOverTime * poisonScale
+                dotMin += info._minEffectAmount * info._effectDuration * poisonScale
+                dotMax += info._maxEffectAmount * info._effectDuration * poisonScale
             } else if (e == EFFECT_NOVA_DAMAGE) {
-
                 var avgNova = (info._minEffectAmount + info._maxEffectAmount) / 2
-                nova += avgNova * (1 + (sci / 100)) * aoeModifier
-
-                var minNova = info._minEffectAmount * (1 + (sci / 100)) * aoeModifier
-                var maxNova = info._maxEffectAmount * (1 + (sci / 100)) * aoeModifier
-                minDmg += minNova
-                maxDmg += maxNova
+                var novaScale = (1 + (sci / 100)) * aoeModifier
+                nova += avgNova * novaScale
+                novaMin += info._minEffectAmount * novaScale
+                novaMax += info._maxEffectAmount * novaScale
             } else if (e == EFFECT_SHACKLE_TP || e == EFFECT_SHACKLE_MP) {
                 var avg3 = (info._minEffectAmount + info._maxEffectAmount) / 2
                 denial += avg3 * (1 + (mag / 100)) * info._effectDuration
@@ -276,15 +275,15 @@ class Arsenal {
                 var currentHP = getLife()
                 var lifeDmg = (avgPct / 100) * currentHP
                 direct += lifeDmg * aoeModifier
-                minDmg += (info._minEffectAmount / 100) * currentHP * aoeModifier
-                maxDmg += (info._maxEffectAmount / 100) * currentHP * aoeModifier
+                directMin += (info._minEffectAmount / 100) * currentHP * aoeModifier
+                directMax += (info._maxEffectAmount / 100) * currentHP * aoeModifier
             }
         }
         var selfDamage = 0
         if (itemID == CHIP_PUNISHMENT) {
             selfDamage = getLife() * 0.75
         }
-        return ['direct': direct, 'dot': dot, 'nova': nova, 'total': direct + dot + nova, 'min': minDmg, 'max': maxDmg, 'denial': denial, 'statReduce': statReduce, 'selfDamage': selfDamage]
+        return ['direct': direct, 'dot': dot, 'nova': nova, 'total': direct + dot + nova, 'directMin': directMin, 'directMax': directMax, 'dotMin': dotMin, 'dotMax': dotMax, 'novaMin': novaMin, 'novaMax': novaMax, 'denial': denial, 'statReduce': statReduce, 'selfDamage': selfDamage]
     }
 
     getPoisonChipsSorted(str, mag, wis, sci) {
