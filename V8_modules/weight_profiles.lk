@@ -249,7 +249,12 @@ function detectBuildType(player) {
         return BUILD_STRENGTH_SCIENCE
     }
 
-    if (magStat > strStat + 100) {
+    // Phase H: relaxed mag-str gap from strict > to >= so leeks like MH
+    // (str=400, mag=500, diff exactly 100) qualify as HYBRID instead of
+    // MAGIC. Their substantial STR makes direct-damage weapons (Unbridled
+    // Gazor, Heavy Sword) viable, and MAGIC's low burstDamage weight (54)
+    // would otherwise force them into pure poison plays.
+    if (magStat >= strStat + 100) {
         if (strStat >= 200) {
             return BUILD_HYBRID
         }

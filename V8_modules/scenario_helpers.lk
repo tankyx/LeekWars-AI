@@ -48,6 +48,11 @@ class ScenarioHelpers {
     _hideCache = null
     _kiteCache = null
 
+    // Phase H: when set, findBestAvailableAttack discounts weapon dot — used
+    // by createPoisonDumpScenario / createPoisonBaitScenario after they queue
+    // chip poisons to prevent over-counting redundant weapon dot.
+    _dotDiscountReason = null
+
     static USE_STATE_BASED_SCENARIOS = true
 
     constructor(arsenal, player, target, fieldMap, strategy) {
@@ -1230,6 +1235,26 @@ class ScenarioHelpers {
             weaponDamageMultiplier = 0.3
         }
 
+        // Phase H: dot discount logic. When chip-poisons have already been
+        // queued in the current scenario (set via _dotDiscountReason ==
+        // "poisons_queued"), weapon-borne dot is redundant and weighted 0.
+        // When the enemy carries Antidote and isn't currently on cooldown
+        // for it, weapon dot is weighted 0.4 (will likely be cleansed).
+        var dotWeight = 1.0
+        if (this._dotDiscountReason == "poisons_queued") {
+            dotWeight = 0.0
+        } else {
+            var enemyProfileH = getEnemyProfile(this._target._id)
+            if (enemyProfileH != null && mapContainsKey(enemyProfileH, 'hasAntidote') && enemyProfileH['hasAntidote']) {
+                var antidoteTrackerH = new CooldownTracker(this._target)
+                var antidoteCDH = antidoteTrackerH.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                if (antidoteCDH <= 0) {
+                    // Antidote ready (or never observed) — likely cleanse
+                    dotWeight = 0.4
+                }
+            }
+        }
+
         for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
             var weapon = this._arsenal.playerEquippedWeapons[weaponId]
 
@@ -1284,12 +1309,20 @@ class ScenarioHelpers {
             }
 
             var rawDamage = this._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, this._target)
-            var damage = isPoisonWeapon(weaponId) ? rawDamage : rawDamage * weaponDamageMultiplier
+            // Phase H: split direct vs dot for weapon damage so we can apply
+            // the dot discount. getDamageBreakdown returns 'dot' separately;
+            // subtract it from rawDamage to get the direct portion (post-shield
+            // adjustment is already baked in by getNetDamageAgainstTarget).
+            var weaponBd = this._arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
+            var rawDot = weaponBd != null ? weaponBd['dot'] : 0
+            var rawDirect = rawDamage - rawDot
+            if (rawDirect < 0) rawDirect = 0
+            var adjustedRaw = rawDirect + rawDot * dotWeight
+            var damage = isPoisonWeapon(weaponId) ? adjustedRaw : adjustedRaw * weaponDamageMultiplier
             // Credit weapon-borne denial AND stat-reduction (Axe MP shackle,
             // Destroyer STR shackle — both scale with magic). Multipliers
             // halved (3.0 → 1.63) to compensate for the item parser fix that
             // raised effect magnitudes ~1.84× across DB-loaded items.
-            var weaponBd = this._arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
             if (weaponBd != null) {
                 var enemyTP = max(1, this._target._currTp)
                 var dpt = max(1, this._target._strength + this._target._magic) * 1.5

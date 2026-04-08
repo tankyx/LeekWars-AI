@@ -1466,7 +1466,10 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (tpBudget >= 4) {
+            // Phase H: chip poisons queued — direct-damage weapons take priority.
+            this._dotDiscountReason = "poisons_queued"
             var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            this._dotDiscountReason = null
             for (var atk in attackActions) {
                 push(actions, atk)
             }
@@ -1794,7 +1797,12 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (tpBudget >= 4) {
+            // Phase H: chip poisons are now queued — direct-damage weapons
+            // (e.g. Unbridled Gazor) should beat poison weapons (Flame Thrower)
+            // because the weapon dot would be redundant.
+            this._dotDiscountReason = "poisons_queued"
             var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
+            this._dotDiscountReason = null
             for (var atk in attackActions) {
                 push(actions, atk)
             }
