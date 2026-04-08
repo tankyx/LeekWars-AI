@@ -152,6 +152,36 @@ class ScenarioScorer {
         var damageScore = effectiveDamage * damageWeight * bulbDamageMultiplier
         score += damageScore
 
+        // Phase F: risk-aware variance penalty. Two scenarios with identical
+        // expected damage but different variance score the same today; in
+        // close fights the high-variance one is often wrong (one bad roll
+        // loses the turn). Penalize variance proportional to current HP risk:
+        //   HP > 70%: no penalty (we can absorb a bad roll)
+        //   HP 40-70%: small penalty (riskCoeff 0.05)
+        //   HP < 40%: meaningful penalty (riskCoeff 0.15)
+        // Penalty scales with damageWeight × mean × (variance/mean), so
+        // it's proportional to relative unpredictability, not absolute
+        // damage size. Excludes dot (future damage, independent rolls).
+        var burstMin = simResult.damageDealtMin + simResult.novaDamageMin
+        var burstMax = simResult.damageDealtMax + simResult.novaDamageMax
+        if (burstMax > burstMin && burstMax > 0) {
+            var hpPctRisk = (this._player._currHealth * 100) / this._player._maxHealth
+            var riskCoeff = 0.0
+            if (hpPctRisk < 40) {
+                riskCoeff = 0.15
+            } else if (hpPctRisk < 70) {
+                riskCoeff = 0.05
+            }
+            if (riskCoeff > 0) {
+                var burstMean = (burstMin + burstMax) / 2.0
+                if (burstMean > 0) {
+                    var varianceFrac = (burstMax - burstMin) / burstMean
+                    var variancePenalty = damageWeight * burstMean * varianceFrac * riskCoeff
+                    score -= variancePenalty
+                }
+            }
+        }
+
         var lifestealHealing = simResult.lifestealHealing
         if (lifestealHealing > 0) {
             var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
