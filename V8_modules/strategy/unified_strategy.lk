@@ -229,13 +229,27 @@ class UnifiedStrategy extends Strategy {
         var bestSimResult = null
         var scenarioResults = []
 
+        // Phase E: per-loop transposition cache. Many scenarios produce
+        // identical post-simulation states (action reorderings that commute,
+        // mutations that converge, AoE aim variants hitting the same enemies).
+        // Cache scorer.score() output by simResult hash so the expensive 23-dim
+        // scoring runs once per unique outcome.
+        var stateScoreCache = [:]
+
         for (var i = 0; i < evaluateCount; i++) {
             var scenarioData = scenariosWithQuickScore[i]
             var scenario = scenarioData['scenario']
             var qScore = scenarioData['quickScore']
 
             var simResult = simulator.simulate(scenario)
-            var score = scorer.score(simResult, scenario)
+            var stateHash = simResult.getStateHash()
+            var score
+            if (mapContainsKey(stateScoreCache, stateHash)) {
+                score = stateScoreCache[stateHash]
+            } else {
+                score = scorer.score(simResult, scenario)
+                stateScoreCache[stateHash] = score
+            }
 
             push(scenarioResults, [
                 'scenario': scenario,
@@ -368,11 +382,19 @@ class UnifiedStrategy extends Strategy {
         var bestScore = -999999
         var bestScenario = null
         var bestSimResult = null
+        var altScoreCache = [:]  // Phase E: per-loop transposition cache
         for (var i = 0; i < evalCount; i++) {
             if (getOperations() > _ops89) break
             var scenario = scored[i]['scenario']
             var simResult = simulator.simulate(scenario)
-            var score = scorer.score(simResult, scenario)
+            var stateHash = simResult.getStateHash()
+            var score
+            if (mapContainsKey(altScoreCache, stateHash)) {
+                score = altScoreCache[stateHash]
+            } else {
+                score = scorer.score(simResult, scenario)
+                altScoreCache[stateHash] = score
+            }
             if (score > bestScore) {
                 bestScore = score
                 bestScenario = scenario

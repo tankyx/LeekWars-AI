@@ -388,9 +388,20 @@ class HybridMutationPlanner {
         var bestScore = -999999
         var mutationsEvaluated = 0
 
+        // Phase E: per-call transposition cache. Mutation tries hundreds of
+        // small variants per seed, many of which converge to the same end state.
+        var mutationScoreCache = [:]
+
         for (var seed in topSeeds) {
             var originalSimResult = this._simulator.simulate(seed)
-            var originalScore = this._scorer.score(originalSimResult, seed)
+            var originalHash = originalSimResult.getStateHash()
+            var originalScore
+            if (mapContainsKey(mutationScoreCache, originalHash)) {
+                originalScore = mutationScoreCache[originalHash]
+            } else {
+                originalScore = this._scorer.score(originalSimResult, seed)
+                mutationScoreCache[originalHash] = originalScore
+            }
 
             if (originalScore > bestScore) {
                 bestScore = originalScore
@@ -420,7 +431,14 @@ class HybridMutationPlanner {
                     continue
                 }
 
-                var score = this._scorer.score(simResult, seed)
+                var mutHash = simResult.getStateHash()
+                var score
+                if (mapContainsKey(mutationScoreCache, mutHash)) {
+                    score = mutationScoreCache[mutHash]
+                } else {
+                    score = this._scorer.score(simResult, seed)
+                    mutationScoreCache[mutHash] = score
+                }
 
                 if (score > bestScore) {
                     bestScore = score

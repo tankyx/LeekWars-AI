@@ -49,6 +49,52 @@ class SimulationResult {
         this.buffsApplied = []
         this.debuffsApplied = []
     }
+
+    // Phase E: state hash for scenario deduplication. Two simResults with the
+    // same hash produce identical scorer.score() output, so we can cache the
+    // score and skip the expensive evaluation. The hash includes every field
+    // that scorer.score() reads (verified by grep). Order-sensitive plays are
+    // preserved because the simulator bakes ordering into damageDealt /
+    // dotDamageQueued etc. — different orderings produce different hashes.
+    getStateHash() {
+        var bSig = ""
+        for (var b in this.buffsApplied) bSig += b + ","
+        var dSig = ""
+        for (var d in this.debuffsApplied) dSig += d + ","
+        return floor(this.damageDealt) + "|" +
+               floor(this.damageDealtMin) + "|" +
+               floor(this.damageDealtMax) + "|" +
+               floor(this.dotDamageQueued) + "|" +
+               floor(this.dotDamageMin) + "|" +
+               floor(this.dotDamageMax) + "|" +
+               floor(this.novaDamageQueued) + "|" +
+               floor(this.novaDamageMin) + "|" +
+               floor(this.novaDamageMax) + "|" +
+               floor(this.hpGained) + "|" +
+               floor(this.lifestealHealing) + "|" +
+               floor(this.shieldsGained) + "|" +
+               floor(this.relativeShieldGained * 100) + "|" +
+               this.tpSpent + "|" +
+               this.mpSpent + "|" +
+               this.finalPosition + "|" +
+               bSig + "|" +
+               dSig + "|" +
+               floor(this.totalLobbyDamage) + "|" +
+               this.enemiesHit + "|" +
+               this.killsSecured + "|" +
+               floor(this.bulbDamage) + "|" +
+               floor(this.leekDamage) + "|" +
+               this.bulbsHit + "|" +
+               this.bulbKillsSecured + "|" +
+               this.poisonSourcesUsed + "|" +
+               this.poisonTurnsQueued + "|" +
+               floor(this.denialApplied) + "|" +
+               floor(this.strShackled) + "|" +
+               floor(this.magShackled) + "|" +
+               floor(this.erosionDamage) + "|" +
+               floor(this.selfDamageHP) + "|" +
+               this.vulnerabilityApplied
+    }
 }
 
 class ScenarioSimulator {
