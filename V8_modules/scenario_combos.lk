@@ -582,7 +582,8 @@ class ScenarioCombos extends ScenarioHelpers {
                     var remissionAction = this.getRemissionAction()
                     if (remissionAction != null) {
                         var tpRemission = getCachedChipCost(CHIP_REMISSION)
-                        if (tpBudget >= tpRemission) {
+                        // Phase I: gate by minAttackTPp so heals don't starve attacks
+                        if (tpBudget - tpRemission >= minAttackTPp) {
                             push(actions, remissionAction)
                             tpBudget -= tpRemission
                         }
@@ -591,7 +592,7 @@ class ScenarioCombos extends ScenarioHelpers {
                     var regenAction = this.getRegenerationAction()
                     if (regenAction != null) {
                         var tpRegen = getCachedChipCost(CHIP_REGENERATION)
-                        if (tpBudget >= tpRegen) {
+                        if (tpBudget - tpRegen >= minAttackTPp) {
                             push(actions, regenAction)
                             tpBudget -= tpRegen
                         }
@@ -601,8 +602,12 @@ class ScenarioCombos extends ScenarioHelpers {
 
                 var healAction = this.getHealingAction(tpBudget, params.healThreshold)
                 if (healAction != null) {
-                    push(actions, healAction)
-                    tpBudget -= getCachedChipCost(healAction.chip)
+                    var healCost = getCachedChipCost(healAction.chip)
+                    // Phase I: same gate
+                    if (tpBudget - healCost >= minAttackTPp) {
+                        push(actions, healAction)
+                        tpBudget -= healCost
+                    }
                 }
             }
         }
@@ -700,10 +705,27 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
+        // Phase I: Verify target is in weapon range; if so, reserve enough TP
+        // for at least one weapon attack BEFORE applying denial chips. This
+        // prevents the SUSTAIN/ATTRITION paralysis where chips eat all TP.
+        var paramInRange = false
+        for (var paramWid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var paramW = this._arsenal.playerEquippedWeapons[paramWid]
+            var paramDist = getCellDistance(simPos, this._target._cellPos)
+            if (paramDist != null && paramDist >= paramW._minRange && paramDist <= paramW._maxRange) {
+                paramInRange = true
+                break
+            }
+        }
+        var paramReservedAttackTP = paramInRange ? 8 : 0
+
         var denialActionsP = this.getDenialActions(tpBudget, simPos)
         for (var da in denialActionsP) {
+            var daCost = getCachedChipCost(da.chip)
+            // Phase I: only apply denial if it doesn't starve the reserved attack
+            if (tpBudget - daCost < paramReservedAttackTP) break
             push(actions, da)
-            tpBudget -= getCachedChipCost(da.chip)
+            tpBudget -= daCost
         }
 
         if (tpBudget >= 4) {
@@ -1668,26 +1690,44 @@ class ScenarioCombos extends ScenarioHelpers {
         var hpPercent = this._player._currHealth * 100 / this._player._maxHealth
         if (hpPercent < 50) {
 
+            // Phase I: reserve TP for at least 1 weapon attack BEFORE
+            // applying defensive buffs, when target is in weapon range.
+            // Prevents pure-defense turns when offense is feasible.
+            var dumpInWeaponRange = false
+            for (var dumpWid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var dumpW = this._arsenal.playerEquippedWeapons[dumpWid]
+                var dumpDist = getCellDistance(simPos, this._target._cellPos)
+                if (dumpDist != null && dumpDist >= dumpW._minRange && dumpDist <= dumpW._maxRange) {
+                    dumpInWeaponRange = true
+                    break
+                }
+            }
+            var dumpReservedAttackTP = dumpInWeaponRange ? 8 : 0
+            var dumpDefBudget = tpBudget - dumpReservedAttackTP
+
             var tpFortress = getCachedChipCost(CHIP_FORTRESS)
             var tpWall = getCachedChipCost(CHIP_WALL)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_FORTRESS) &&
                 getCooldown(CHIP_FORTRESS, this._player._id) == 0 &&
-                tpBudget >= tpFortress) {
+                dumpDefBudget >= tpFortress) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_FORTRESS, -1, this._player))
                 tpBudget -= tpFortress
+                dumpDefBudget -= tpFortress
             } else if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WALL) &&
                 getCooldown(CHIP_WALL, this._player._id) == 0 &&
-                tpBudget >= tpWall) {
+                dumpDefBudget >= tpWall) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_WALL, -1, this._player))
                 tpBudget -= tpWall
+                dumpDefBudget -= tpWall
             }
 
             var tpRemissionDump = getCachedChipCost(CHIP_REMISSION)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REMISSION) &&
                 getCooldown(CHIP_REMISSION, this._player._id) == 0 &&
-                tpBudget >= tpRemissionDump) {
+                dumpDefBudget >= tpRemissionDump) {
                 push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_REMISSION, -1, this._player))
                 tpBudget -= tpRemissionDump
+                dumpDefBudget -= tpRemissionDump
             }
         }
 

@@ -1122,15 +1122,27 @@ class ScenarioHelpers {
         var weaponUses = [:]
         var chipCooldowns = [:]
 
+        // Phase I: track current weapon across iterations so findBestAvailableAttack
+        // can apply the swap penalty. Initialize from the actual game state.
+        var currentWeaponId = getWeapon()
+
         while (tpToUse >= 4) {
-            var bestAttack = this.findBestAvailableAttack(simPos, weaponUses, chipCooldowns)
+            var bestAttack = this.findBestAvailableAttack(simPos, weaponUses, chipCooldowns, currentWeaponId)
             if (bestAttack == null) break
 
             var attackCost = bestAttack['cost']
-            if (tpToUse < attackCost) break
-
             var attackType = bestAttack['type']
             var attackId = bestAttack['id']
+
+            // Phase I: deduct swap cost from TP if this weapon needs a swap.
+            // This prevents the loop from over-budgeting attacks across swaps.
+            var swapCost = 0
+            if (attackType == 'weapon' && currentWeaponId != null && attackId != currentWeaponId) {
+                swapCost = 1
+            }
+
+            if (tpToUse < attackCost + swapCost) break
+
             var attackTargetCell = bestAttack['targetCell']
             if (attackTargetCell == null) attackTargetCell = this._target._cellPos
 
@@ -1147,6 +1159,8 @@ class ScenarioHelpers {
                 var currentUses = weaponUses[attackId]
                 if (currentUses == null) currentUses = 0
                 weaponUses[attackId] = currentUses + 1
+                // Phase I: update tracked current weapon after firing
+                currentWeaponId = attackId
             } else {
                 var chipAction = new Action(Action.ACTION_DIRECT, -1, attackId, attackTargetCell, this._target)
                 chipAction.isSplash = bestAttack['isSplash']
@@ -1154,7 +1168,7 @@ class ScenarioHelpers {
                 chipCooldowns[attackId] = true
             }
 
-            tpToUse -= attackCost
+            tpToUse -= (attackCost + swapCost)
         }
 
         return actions
@@ -1222,13 +1236,22 @@ class ScenarioHelpers {
         return bestCell
     }
 
-    findBestAvailableAttack(simPos, weaponUses, chipCooldowns) {
+    findBestAvailableAttack(simPos, weaponUses, chipCooldowns, currentWeaponId = null) {
         var str = this._player._strength
         var mag = this._player._magic
         var wis = this._player._wisdom
         var sci = this._player._science
         var bestAttack = null
         var bestDamage = 0
+
+        // Phase I: swap-cost penalty. Picking a weapon different from the
+        // currently equipped one costs 1 TP for the swap. To prevent the
+        // weapon-swap thrash bug, subtract a damage penalty equivalent to
+        // ~30 DPT × 1 TP from the comparison score for any weapon that
+        // would require a swap. Small enough that a clearly-better weapon
+        // still wins, large enough that a marginally-better weapon doesn't
+        // cause oscillation.
+        var SWAP_PENALTY_DAMAGE = 30
 
         var weaponDamageMultiplier = 1.0
         if (mag > str + 100) {
@@ -1336,7 +1359,14 @@ class ScenarioHelpers {
                     damage += srBonus
                 }
             }
-            if (damage > bestDamage) {
+
+            // Phase I: apply swap penalty if this weapon isn't already equipped.
+            // Effective damage = raw damage - swap cost (if swap needed).
+            var effectiveDamage = damage
+            if (currentWeaponId != null && weaponId != currentWeaponId) {
+                effectiveDamage = damage - SWAP_PENALTY_DAMAGE
+            }
+            if (effectiveDamage > bestDamage) {
                 var isSafe = true
                 var needsReposition = false
                 var repositionCell = -1
@@ -1355,7 +1385,11 @@ class ScenarioHelpers {
                 }
 
                 if (isSafe) {
-                    bestDamage = damage
+                    // Phase I: bestDamage tracks the EFFECTIVE damage (after
+                    // swap penalty) so consistent comparisons across weapons.
+                    // The 'damage' field stored on bestAttack is still the raw
+                    // damage for downstream consumers.
+                    bestDamage = effectiveDamage
                     bestAttack = ["type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage, "targetCell": targetCell, "isSplash": isSplashAttack, "repositionCell": repositionCell]
                 }
             }
