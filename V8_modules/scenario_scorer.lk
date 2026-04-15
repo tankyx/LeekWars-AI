@@ -588,6 +588,12 @@ class ScenarioScorer {
         var cureCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_CURE_ID)
         var remissionCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_REMISSION_ID)
 
+        // Fallback: if tracker hasn't observed usage, query live API
+        if (antidoteCd < 0) {
+            var liveCd = getCooldown(CHIP_ANTIDOTE, enemyId)
+            if (liveCd != null && liveCd >= 0) antidoteCd = liveCd
+        }
+
         // Use the shortest cooldown among all cleanse chips
         var bestCleanseCd = antidoteCd
         if (cureCd >= 0 && (bestCleanseCd < 0 || cureCd < bestCleanseCd)) bestCleanseCd = cureCd
@@ -1238,14 +1244,11 @@ class ScenarioScorer {
             nextTurnDmg = enemyProjectedHP + (nextTurnDmg - enemyProjectedHP) * 0.1
         }
 
-        // Phase 4b: enemy will likely heal/shield on their turn — discount our
-        // projected next-turn damage by an estimate of their sustain.
+        // Enemy sustain estimate from profiled heal/shield chips
         var enemyProfileP = getEnemyProfile(this._target._id)
-        var enemyHealEstimate = 0
+        var enemyHealEstimate = 200
         if (enemyProfileP != null) {
-            if (enemyProfileP['isTank']) enemyHealEstimate = 400
-            else if (enemyProfileP['isHealer']) enemyHealEstimate = 300
-            else enemyHealEstimate = 200
+            enemyHealEstimate = enemyProfileP['healPerTurn'] + enemyProfileP['shieldPerTurn']
         }
         nextTurnDmg = max(0, nextTurnDmg - enemyHealEstimate)
 
@@ -1274,7 +1277,32 @@ class ScenarioScorer {
             }
         }
 
-        return value * 0.4
+        // Selective 3-ply: vulnerability lasts 2 turns, so project a 3rd turn
+        // of amplified damage when we applied vuln this turn.
+        if (simResult.vulnerabilityApplied > 0 && enemyProjectedHP > 0) {
+            var turn3HP = max(0, enemyProjectedHP - nextTurnDmg - enemyHealEstimate)
+            if (turn3HP > 0) {
+                var turn3Dmg = nextTurnDmg  // similar damage output expected
+                turn3Dmg = min(turn3Dmg, turn3HP + (turn3Dmg - turn3HP) * 0.1)
+                turn3Dmg = max(0, turn3Dmg - enemyHealEstimate)
+                // Deeper discount (0.25) since 2 turns out is less certain
+                value += turn3Dmg * 0.25
+            }
+        }
+
+        // Dynamic discount based on enemy capabilities
+        var discount = 0.5
+        if (enemyProfileP != null) {
+            if (enemyProfileP['hasLiberation']) discount -= 0.05
+            if (enemyProfileP['hasTeleport'] || enemyProfileP['mobilityMP'] >= 6) discount -= 0.05
+            if (enemyProfileP['hasAntidote']) {
+                var antidoteCD = getCooldown(CHIP_ANTIDOTE, this._target._id)
+                if (antidoteCD == 0) discount -= 0.05
+            }
+            if (!enemyProfileP['hasHeal'] && !enemyProfileP['hasShield']) discount += 0.1
+        }
+        discount = max(0.25, min(0.6, discount))
+        return value * discount
     }
 
     scorePuzzle(simResult, scenario) {

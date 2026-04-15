@@ -84,6 +84,54 @@ function profileEnemy(enemy) {
     profile['isBurstBuild'] = (str >= 400 && !profile['isTank'])
     profile['isKiter'] = (profile['buildType'] == BUILD_AGILITY || agi >= 400)
 
+    // Calculated sustain: amortized heal and shield per turn
+    var healPerTurn = 0
+    var shieldPerTurn = 0
+    var hasLiberation = false
+    var hasTeleport = false
+    var wisScale = 1 + wis / 100
+    for (var cid in chips) {
+        // Heal estimation
+        if (mapContainsKey(ROLE_HEALING, cid)) {
+            var effs = getChipEffects(cid)
+            if (effs != null) {
+                for (var eff in effs) {
+                    if (eff[0] == EFFECT_HEAL) {
+                        var avgHeal = (eff[1] + eff[2]) / 2 * wisScale
+                        // HoT: multiply by duration
+                        if (eff[3] != null && eff[3] > 0) avgHeal *= eff[3]
+                        var cd = getChipCooldown(cid)
+                        if (cd == null || cd <= 0) cd = 5  // once-per-fight → amortize over 5
+                        healPerTurn += avgHeal / cd
+                    }
+                }
+            }
+        }
+        // Shield estimation
+        if (mapContainsKey(ROLE_SHIELD_ABSOLUTE, cid) || mapContainsKey(ROLE_SHIELD_RELATIVE, cid)) {
+            var effs = getChipEffects(cid)
+            if (effs != null) {
+                for (var eff in effs) {
+                    if (eff[0] == EFFECT_ABSOLUTE_SHIELD || eff[0] == EFFECT_RELATIVE_SHIELD) {
+                        var avgShield = (eff[1] + eff[2]) / 2
+                        if (eff[0] == EFFECT_RELATIVE_SHIELD) avgShield *= 30
+                        if (eff[3] != null && eff[3] > 0) avgShield *= eff[3]
+                        var cd = getChipCooldown(cid)
+                        if (cd == null || cd <= 0) cd = 5
+                        shieldPerTurn += avgShield / cd
+                    }
+                }
+            }
+        }
+        if (cid == CHIP_LIBERATION) hasLiberation = true
+        if (cid == CHIP_TELEPORTATION || cid == CHIP_JUMP || cid == CHIP_INVERSION) hasTeleport = true
+    }
+    profile['healPerTurn'] = floor(healPerTurn)
+    profile['shieldPerTurn'] = floor(shieldPerTurn)
+    profile['hasLiberation'] = hasLiberation
+    profile['hasTeleport'] = hasTeleport
+    profile['mobilityMP'] = enemy._currMp != null ? enemy._currMp : 3
+
     __enemyProfile[eid] = profile
 
 }

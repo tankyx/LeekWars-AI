@@ -590,6 +590,8 @@ class Arsenal {
             return 100 * (1 + wisdom / 100)
         } else if (chip == CHIP_DRIP) {
             return 200 * (1 + wisdom / 100)
+        } else if (chip == CHIP_VACCINE) {
+            return 114 * (1 + wisdom / 100)
         }
         return 0
     }
