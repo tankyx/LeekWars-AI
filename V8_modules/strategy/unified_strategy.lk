@@ -560,7 +560,7 @@ function recoverRemainingTP(target) {
 
         if (bestAction['type'] == 'chip') {
             useChipOnCell(bestAction['id'], bestAction['cell'])
-            if (getTP() >= tpBefore) break
+            if (getTP() >= tpBefore && bestValue <= 0) break
         } else if (bestAction['type'] == 'weaponSwap') {
             setWeapon(bestAction['id'])
             currentWeapon = bestAction['id']
@@ -568,11 +568,11 @@ function recoverRemainingTP(target) {
             if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
             weaponUsesThisTurn = 0
             useWeaponOnCell(bestAction['cell'])
-            if (getTP() >= tpBefore) break
+            if (getTP() >= tpBefore && bestValue <= 0) break
             weaponUsesThisTurn++
         } else {
             useWeaponOnCell(bestAction['cell'])
-            if (getTP() >= tpBefore) break
+            if (getTP() >= tpBefore && bestValue <= 0) break
             weaponUsesThisTurn++
         }
 

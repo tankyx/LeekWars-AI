@@ -48,7 +48,7 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
         var allCandidates = []
 
         for (var partial in beam) {
-            if (partial['simTP'] < 3 && partial['simMP'] < 1) {
+            if (partial['simTP'] < 2 && partial['simMP'] < 1) {
                 push(allCandidates, partial)
                 continue
             }

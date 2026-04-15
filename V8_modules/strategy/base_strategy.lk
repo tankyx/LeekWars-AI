@@ -851,6 +851,26 @@ class Strategy {
             }
         }
 
+        // Phase 3.2: Proactive shield ordering vs burst — apply shields BEFORE
+        // offensive buffs so we absorb first-turn burst damage.
+        if (nearbyBurst) {
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_FORTRESS)) {
+                if (getCooldown(CHIP_FORTRESS, player._id) == 0) {
+                    useChip(CHIP_FORTRESS, player._id)
+                }
+            }
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_WALL)) {
+                if (getCooldown(CHIP_WALL, player._id) == 0) {
+                    useChip(CHIP_WALL, player._id)
+                }
+            }
+            if (mapContainsKey(arsenal.playerEquippedChips, CHIP_RAMPART)) {
+                if (getCooldown(CHIP_RAMPART, player._id) == 0) {
+                    useChip(CHIP_RAMPART, player._id)
+                }
+            }
+        }
+
         var isMagicBuild = player._magic > player._strength + 100 && player._magic > player._agility + 100
         if (!isMagicBuild) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
@@ -892,7 +912,7 @@ class Strategy {
         if (distToEnemy > 10) {
 
             if (player._strength >= player._agility && player._strength >= player._magic) {
-                if (this.isChipAvailable(CHIP_FORTRESS, 12)) {  
+                if (this.isChipAvailable(CHIP_FORTRESS, 12)) {
                     useChip(CHIP_FORTRESS, player._id)
                 }
             }

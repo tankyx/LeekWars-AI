@@ -11,10 +11,10 @@ global COUNTER_MULTS = [
     'vs_burst_heal': 120,
     'vs_burst_threat': 120,
     'vs_burst_burst': 120,
-    'vs_tank_nova': 164,
+    'vs_tank_nova': 190,
     'vs_tank_denial': 130,
     'vs_tank_dot': 120,
-    'vs_reflect_on_burst': 47,
+    'vs_reflect_on_burst': 65,
     'vs_reflect_on_shield': 130,
     'vs_reflect_on_heal': 168,
     'vs_reflect_off_burst': 130,
@@ -348,7 +348,7 @@ function estimateEnemyThreat(enemy) {
 }
 
 function getAdaptedWeights(buildType, player, enemies, fieldMap) {
-    var baseWeights = getWeightsForBuild(buildType)
+    var baseWeights = getWeightsForBuild(buildType, player)
     var adapted = adaptWeightsToSituation(baseWeights, player, enemies, fieldMap)
     return adapted
 }

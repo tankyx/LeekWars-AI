@@ -40,7 +40,7 @@ class ScenarioScorer {
         // stddev ≈ (max-min)/4. Only applied when meanRatio is already in near-kill
         // territory (≥ 0.65) so wide variance can't fabricate kills on bait turns.
         var killProbability = meanRatio
-        if (meanRatio >= 0.65) {
+        if (meanRatio >= 0.55) {
             var burstMin = simResult.damageDealtMin + simResult.novaDamageMin
             var burstMax = simResult.damageDealtMax + simResult.novaDamageMax
             // Re-add the dot floor: poison already locked in counts as guaranteed,
@@ -532,7 +532,7 @@ class ScenarioScorer {
             } else if (currentTurn > 15) {
                 urgencyFactor = 1.8 + (currentTurn - 15) * 0.10
             } else if (currentTurn > 5) {
-                urgencyFactor = 1.0 + (currentTurn - 5) * 0.08
+                urgencyFactor = 1.0 + (currentTurn - 5) * 0.12
             }
 
             var dotDmgTP = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
@@ -599,7 +599,7 @@ class ScenarioScorer {
         // and force the cleanse rotation.
         if (bestCleanseCd == 0) {
             if (POISON_PHASE == "BAIT") return 0.7
-            return 0.5
+            return 0.4
         } else if (bestCleanseCd == 1) {
             return 1.7
         } else if (bestCleanseCd == 2) {
@@ -665,11 +665,9 @@ class ScenarioScorer {
 
         var fightLengthEstimate = targetHP / max(1, this._player._strength + this._player._magic)
 
-        // Raised floor (was 0.05-0.3) — TP efficiency matters more vs tanky
-        // long-fight opponents where every wasted TP compounds.
-        if (fightLengthEstimate > 3) return 0.6
-        else if (fightLengthEstimate > 1.5) return 0.3
-        return 0.15
+        // Continuous scaling — TP efficiency matters more in longer fights.
+        // 0.15 for instant kills, ~0.36 for 3-turn, ~0.85 for 10-turn, cap 1.2
+        return min(1.2, 0.15 + fightLengthEstimate * 0.07)
     }
 
     calculateBuffWeight() {

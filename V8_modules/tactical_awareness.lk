@@ -144,6 +144,38 @@ function predictTotalThreatAtCell(targetCell, enemies, player, arsenal) {
     return ['total': totalThreat, 'predictions': predictions]
 }
 
+function precomputeEnemyReachablePositions(enemy) {
+    var positions = [enemy._cellPos]
+    var enemyMP = enemy._currMp
+    if (enemyMP > 0) {
+        var searchRadius = min(enemyMP, 5)
+        for (var dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (var dy = -searchRadius; dy <= searchRadius; dy++) {
+                var dist = abs(dx) + abs(dy)
+                if (dist == 0 || dist > searchRadius) continue
+                var testCell = enemy._cellPos + 18 * dx + 17 * dy
+                if (testCell < 0 || testCell >= 613) continue
+                if (isObstacle(testCell)) continue
+                var pathLen = getCachedPathLength(enemy._cellPos, testCell)
+                if (pathLen == null || pathLen > enemyMP) continue
+                push(positions, testCell)
+            }
+        }
+    }
+    return positions
+}
+
+function predictEnemyThreatAtCellFast(targetCell, enemy, reachablePositions, enemyWeapons, enemyChips, enemyTP) {
+    var maxDamage = 0
+    for (var pos in reachablePositions) {
+        var dmg = calculateBestAttackDamage(pos, targetCell, enemy, enemyWeapons, enemyChips, enemyTP)
+        if (dmg > maxDamage) maxDamage = dmg
+    }
+    var enemyCritChance = min(0.5, enemy._agility / 2000.0)
+    var enemyCritMult = 1.0 + enemyCritChance * 0.3
+    return maxDamage * enemyCritMult
+}
+
 function buildAdversarialThreatCache(playerObj, enemies, arsenalObj) {
     __adversarialThreatCache = [:]
     __adversarialThreatCacheBuilt = false
@@ -171,13 +203,27 @@ function buildAdversarialThreatCache(playerObj, enemies, arsenalObj) {
             aliveEnemies = [aliveEnemies[0], aliveEnemies[1]]
         }
 
+        // Pre-compute reachable positions and equipment per enemy (Phase 3.1)
+        var enemyData = []
+        for (var enemy in aliveEnemies) {
+            push(enemyData, [
+                'enemy': enemy,
+                'positions': precomputeEnemyReachablePositions(enemy),
+                'weapons': getWeapons(enemy._id),
+                'chips': getChips(enemy._id),
+                'tp': enemy._currTp
+            ])
+        }
+
         for (var i = 0; i < count(cellsToEvaluate); i++) {
             if (getOperations() > _ops71) break
             var evalCell = cellsToEvaluate[i]
             var totalThreat = 0
-            for (var enemy in aliveEnemies) {
-                var pred = predictEnemyThreatAtCell(evalCell, enemy, playerObj, arsenalObj)
-                totalThreat += pred.maxDamage
+            for (var ed in enemyData) {
+                totalThreat += predictEnemyThreatAtCellFast(
+                    evalCell, ed['enemy'], ed['positions'],
+                    ed['weapons'], ed['chips'], ed['tp']
+                )
             }
             __adversarialThreatCache[evalCell] = totalThreat
         }

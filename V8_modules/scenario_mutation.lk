@@ -45,15 +45,12 @@ class ScenarioMutator {
     }
 
     generateMutationDescriptors(scenario) {
+        // Phase 3.3: Prioritize high-value mutation types first.
+        // Insertion (new chips) > Substitution (better chips) > Swap (reorder) > Aim shift
         var descriptors = []
 
-        var aimDescriptors = this.generateAimCellDescriptors(scenario)
-        for (var desc in aimDescriptors) {
-            push(descriptors, desc)
-        }
-
-        var swapDescriptors = this.generateSwapDescriptors(scenario)
-        for (var desc in swapDescriptors) {
+        var insDescriptors = this.generateInsertionDescriptors(scenario)
+        for (var desc in insDescriptors) {
             push(descriptors, desc)
         }
 
@@ -62,8 +59,13 @@ class ScenarioMutator {
             push(descriptors, desc)
         }
 
-        var insDescriptors = this.generateInsertionDescriptors(scenario)
-        for (var desc in insDescriptors) {
+        var swapDescriptors = this.generateSwapDescriptors(scenario)
+        for (var desc in swapDescriptors) {
+            push(descriptors, desc)
+        }
+
+        var aimDescriptors = this.generateAimCellDescriptors(scenario)
+        for (var desc in aimDescriptors) {
             push(descriptors, desc)
         }
 

@@ -38,7 +38,7 @@ global MAGIC_WEIGHTS = [
     'kiteDistance': 200,
     'damageReturn': 0,
     'poisonStacks': 217,
-    'denialValue': 190,
+    'denialValue': 230,
     'shieldValue': 100,
     'healValue': 80,
     'distanceToTarget': 30,
@@ -66,6 +66,7 @@ global AGILITY_WEIGHTS = [
     'threatReduction': 50,
     'otkoBonus': 4500,
     'checkpointBonus': 2500,
+    'novaEffects': 200,
     'bulbDamageMultiplier': 1.2,
     'bulbKillBonusHealer': 2700,
     'bulbKillBonusBuffer': 1600,
@@ -107,7 +108,7 @@ global TANK_SCI_WEIGHTS = [
     'healValue': 200,
     'distanceToTarget': -10,
     'threatReduction': 300,
-    'otkoBonus': 3000,
+    'otkoBonus': 3500,
     'checkpointBonus': 2500,
     'novaEffects': 326,
     'bulbDamageMultiplier': 1.2,
@@ -132,6 +133,7 @@ global HYBRID_WEIGHTS = [
     'threatReduction': 60,
     'otkoBonus': 4000,
     'checkpointBonus': 2500,
+    'novaEffects': 109,
     'bulbDamageMultiplier': 1.2,
     'bulbKillBonusHealer': 2800,
     'bulbKillBonusBuffer': 1600,
@@ -202,7 +204,7 @@ global BOSS_COMBAT_WEIGHTS = [
     'multiTargetBonus': 300
 ]
 
-function getWeightsForBuild(buildType) {
+function getWeightsForBuild(buildType, player) {
     if (buildType == BUILD_STRENGTH) {
         return STRENGTH_WEIGHTS
     }
@@ -210,6 +212,10 @@ function getWeightsForBuild(buildType) {
         return MAGIC_WEIGHTS
     }
     if (buildType == BUILD_AGILITY) {
+        // AGI/SCI hybrid: blend agility positioning with nova damage
+        if (player != null && player._science >= 200) {
+            return blendWeights(AGILITY_WEIGHTS, STRENGTH_SCIENCE_WEIGHTS, 0.6)
+        }
         return AGILITY_WEIGHTS
     }
     if (buildType == BUILD_STRENGTH_SCIENCE) {

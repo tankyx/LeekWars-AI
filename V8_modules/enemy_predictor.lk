@@ -257,7 +257,7 @@ function enhanceScenariosWithLookahead(scenarios, topK, fieldMap, arsenal, playe
         var scenario = scenarios[i]
         var scenarioResult = scenario
 
-        var lookahead = predictor.evaluateScenarioWithLookahead(scenarioResult, 0.7)
+        var lookahead = predictor.evaluateScenarioWithLookahead(scenarioResult, 0.85)
 
         scenario['lookaheadScore'] = lookahead['finalScore']
         scenario['enemyDamagePrediction'] = lookahead['enemyDamage']

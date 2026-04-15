@@ -1123,8 +1123,9 @@ class ScenarioHelpers {
         var chipCooldowns = [:]
 
         // Phase I: track current weapon across iterations so findBestAvailableAttack
-        // can apply the swap penalty. Initialize from the actual game state.
-        var currentWeaponId = getWeapon()
+        // can apply the swap penalty. Use last turn's final weapon choice (persisted
+        // in __lastTurnWeaponId) so the penalty also discourages cross-turn thrash.
+        var currentWeaponId = (__lastTurnWeaponId != null) ? __lastTurnWeaponId : getWeapon()
 
         while (tpToUse >= 4) {
             var bestAttack = this.findBestAvailableAttack(simPos, weaponUses, chipCooldowns, currentWeaponId)

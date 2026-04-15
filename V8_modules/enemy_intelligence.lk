@@ -170,7 +170,45 @@ function observeEnemyBehavior(fieldMap) {
         }
 
         __enemyObservations[eid] = obs
+
+        // Phase 3.4: Update enemy profile every 5 turns based on observed behavior
+        if (obs['turnsObserved'] % 5 == 0 && mapContainsKey(__enemyProfile, eid)) {
+            updateEnemyProfile(eid, obs, enemy)
+        }
     }
+}
+
+function updateEnemyProfile(eid, obs, enemy) {
+    var profile = __enemyProfile[eid]
+    var turnsObs = obs['turnsObserved']
+
+    // If enemy shields frequently but wasn't flagged as tank, update
+    if (obs['timesShielded'] >= 3 && !profile['isTank']) {
+        if (obs['timesShielded'] * 1.0 / turnsObs > 0.4) {
+            profile['isTank'] = true
+            profile['isBurstBuild'] = false
+        }
+    }
+
+    // If enemy HP trend is consistently positive, they have strong healing
+    if (obs['hpTrend'] > 20 && turnsObs >= 5) {
+        profile['hasHeal'] = true
+    }
+
+    // Update max burst estimate from observed HP drops we dealt
+    // (negative hpTrend on our side means enemy is doing damage)
+    // Track if enemy does more damage than initially estimated
+    var currentHP = enemy._currHealth
+    var maxHP = enemy._maxHealth
+    if (maxHP != null && maxHP > 0 && currentHP != null) {
+        var hpPercent = currentHP * 100 / maxHP
+        // If enemy is at high HP after many turns, they're sustaining well
+        if (turnsObs >= 10 && hpPercent > 70) {
+            profile['isTank'] = true
+        }
+    }
+
+    __enemyProfile[eid] = profile
 }
 
 function getEnemyObservation(enemyId) {
