@@ -475,6 +475,7 @@ function recoverRemainingTP(target) {
     var weaponUsesThisTurn = 0
     var currentWeapon = getWeapon()
     var weaponMaxUses = 0
+    var failedWeapons = [:]
     if (currentWeapon != null && currentWeapon != -1) {
         weaponMaxUses = getWeaponMaxUses(currentWeapon)
         if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
@@ -519,12 +520,15 @@ function recoverRemainingTP(target) {
 
         if (currentWeapon != null && currentWeapon != -1 &&
             weaponUsesThisTurn < weaponMaxUses &&
+            !mapContainsKey(failedWeapons, currentWeapon) &&
             mapContainsKey(arsenal.playerEquippedWeapons, currentWeapon)) {
             var weaponObj = arsenal.playerEquippedWeapons[currentWeapon]
             if (weaponObj._cost <= getTP()) {
                 var dist = getCellDistance(getCell(), target._cellPos)
                 if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange) {
-                    if (lineOfSight(getCell(), target._cellPos)) {
+                    if (weaponObj._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(getCell(), target._cellPos)) {
+                        // Line weapon not aligned — skip
+                    } else if (lineOfSight(getCell(), target._cellPos)) {
                         if (weaponObj._aoeType == AREA_POINT || !fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell())) {
                             var value = quickRecoveryWeaponValue(currentWeapon)
                             if (value > bestValue) {
@@ -543,10 +547,12 @@ function recoverRemainingTP(target) {
         if (hasLos && distToTarget != null) {
             for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
                 if (wid == currentWeapon) continue
+                if (mapContainsKey(failedWeapons, wid)) continue
                 var wObj = arsenal.playerEquippedWeapons[wid]
                 var totalCost = 1 + wObj._cost
                 if (totalCost > getTP()) continue
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                if (wObj._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(myPos, target._cellPos)) continue
                 if (wObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)) continue
                 var wValue = quickRecoveryWeaponValue(wid)
                 if (wValue > bestValue) {
@@ -567,11 +573,22 @@ function recoverRemainingTP(target) {
             weaponMaxUses = getWeaponMaxUses(currentWeapon)
             if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
             weaponUsesThisTurn = 0
+            var tpAfterSwap = getTP()
             useWeaponOnCell(bestAction['cell'])
+            if (getTP() == tpAfterSwap) {
+                // Attack failed after swap — mark weapon as failed
+                failedWeapons[bestAction['id']] = true
+                continue
+            }
             if (getTP() >= tpBefore && bestValue <= 0) break
             weaponUsesThisTurn++
         } else {
+            var tpBeforeAtk = getTP()
             useWeaponOnCell(bestAction['cell'])
+            if (getTP() == tpBeforeAtk) {
+                failedWeapons[currentWeapon] = true
+                continue
+            }
             if (getTP() >= tpBefore && bestValue <= 0) break
             weaponUsesThisTurn++
         }
