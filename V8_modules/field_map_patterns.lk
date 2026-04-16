@@ -362,7 +362,7 @@ class FieldMapPatterns extends FieldMapCore {
 
         var enemyId = getEntityOnCell(oppCell)
         if (enemyId == null) enemyId = -1
-        var cacheKey = enemyId + "_" + oppCell
+        var cacheKey = enemyId + "_" + oppCell + "_" + getCell() + "_" + getMP()
 
         if (this._lastCacheKey == cacheKey && this._lastCacheKey != "") {
             this.damageMap = this._damageMapCache
