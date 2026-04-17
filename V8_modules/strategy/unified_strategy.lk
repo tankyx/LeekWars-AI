@@ -565,7 +565,10 @@ function recoverRemainingTP(target) {
         if (bestAction == null || bestValue < 15) break
 
         if (bestAction['type'] == 'chip') {
+            // Block Doping recast in TP recovery
+            if (bestAction['id'] == CHIP_DOPING && __dopingUsed) continue
             useChipOnCell(bestAction['id'], bestAction['cell'])
+            if (bestAction['id'] == CHIP_DOPING) __dopingUsed = true
             if (getTP() >= tpBefore && bestValue <= 0) break
         } else if (bestAction['type'] == 'weaponSwap') {
             setWeapon(bestAction['id'])
