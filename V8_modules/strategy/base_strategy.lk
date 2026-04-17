@@ -872,7 +872,14 @@ class Strategy {
         }
 
         var isMagicBuild = player._magic > player._strength + 100 && player._magic > player._agility + 100
-        if (!isMagicBuild) {
+        var isBruiserReflect = __playerBuildType == BUILD_BRUISER_REFLECT
+
+        // BRUISER_REFLECT: skip turnOneBuffs entirely — let the scenario
+        // engine handle the full AGI-buff → reflect → shield sequence
+        // with proper TP budgeting. Hardcoded buffs here would conflict.
+        if (isBruiserReflect) {
+            // Just equip weapon, scenario engine does the rest
+        } else if (!isMagicBuild) {
             if (mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE)) {
                 useChip(CHIP_KNOWLEDGE, player._id)
             }

@@ -818,7 +818,17 @@ class ScenarioScorer {
         var effectiveAgi = this._player._agility
         for (var bc in buffsApplied) {
             if (bc == CHIP_WARM_UP) effectiveAgi += 180
+            if (bc == CHIP_STRETCHING) effectiveAgi += 90
             if (bc == CHIP_PRISM) effectiveAgi += 60
+        }
+
+        // BRUISER_REFLECT: when threat is 0 (enemy far away), use a projected
+        // threat estimate so reflects aren't valued at 0. They need to be cast
+        // BEFORE the enemy arrives, not after. Estimate based on enemy STR.
+        var reflectExpectedDamage = expectedDamage
+        if (__playerBuildType == BUILD_BRUISER_REFLECT && reflectExpectedDamage < 300) {
+            var enemyStr = this._target._strength
+            reflectExpectedDamage = max(300, enemyStr * 2)
         }
 
         for (var buffChip in buffsApplied) {
@@ -907,7 +917,7 @@ class ScenarioScorer {
                 var agility = effectiveAgi
                 var returnPercent = 5.5 * (1 + agility / 100.0)
                 var duration = 3
-                var returnDamage = (expectedDamage * duration) * (returnPercent / 100.0)
+                var returnDamage = (reflectExpectedDamage * duration) * (returnPercent / 100.0)
                 var mirrorValue = returnDamage * 0.8
                 if (mirrorValue < 100) mirrorValue = 100
                 value += mirrorValue
@@ -917,8 +927,9 @@ class ScenarioScorer {
                 var agility = effectiveAgi
                 var returnPercent = 3.5 * (1 + agility / 100.0)
                 var duration = 2
-                var returnDamage = (expectedDamage * duration) * (returnPercent / 100.0)
+                var returnDamage = (reflectExpectedDamage * duration) * (returnPercent / 100.0)
                 var thornValue = returnDamage * 0.8
+                if (thornValue < 80) thornValue = 80
                 value += thornValue
             }
 
@@ -926,12 +937,12 @@ class ScenarioScorer {
                 var agility = effectiveAgi
                 var returnPercent = 25.0 * (1 + agility / 100.0)
                 var duration = 1
-                var returnDamage = expectedDamage * (returnPercent / 100.0)
+                var returnDamage = reflectExpectedDamage * (returnPercent / 100.0)
 
                 var brambleValue = 0
-                if (expectedDamage > 300) {
+                if (reflectExpectedDamage > 300) {
                     brambleValue = returnDamage * 1.5
-                } else if (expectedDamage > 0) {
+                } else if (reflectExpectedDamage > 0) {
                     brambleValue = returnDamage * 0.5
                 }
 

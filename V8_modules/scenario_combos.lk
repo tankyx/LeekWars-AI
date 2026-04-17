@@ -1602,8 +1602,6 @@ class ScenarioCombos extends ScenarioHelpers {
         var thornCd = hasThorn ? getCooldown(CHIP_THORN, this._player._id) : 999
         var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, this._player._id) : 999
 
-        var buffApplied = false
-
         var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
         if (distToEnemy == null) distToEnemy = 99
         var inCloseCombat = distToEnemy <= 8
@@ -1616,17 +1614,35 @@ class ScenarioCombos extends ScenarioHelpers {
         var enemyCanAttack1 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 1)
         var enemyCanAttack2 = predictEnemyCanAttackWithin(this._player._cellPos, this._target, 2)
 
+        // Check if any reflect needs applying
+        var needsReflect = returnRemaining <= 2
+        var anyReady = (mirrorCd == 0 && hasMirror) || (thornCd == 0 && hasThorn) || (brambleCd == 0 && hasBramble)
+        if (!needsReflect || !anyReady) {
+            return null
+        }
+
+        // AGI buffs BEFORE reflects for higher damage return values
+        var agiBufs = this.getAgiBuff()
+        for (var ab in agiBufs) {
+            if (tpBudget >= getCachedChipCost(ab.chip) + 8) {
+                push(actions, ab)
+                tpBudget -= getCachedChipCost(ab.chip)
+            }
+        }
+
+        // Apply reflects
+        var buffApplied = false
         if (hasBramble && returnRemaining <= 1 && brambleCd == 0 && tpBudget >= tpBrambleCost + 8 && inCloseCombat && expectedThreat > 300 && enemyCanAttack1) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player))
             tpBudget -= tpBrambleCost
             buffApplied = true
         }
-        else if (hasMirror && returnRemaining <= 2 && mirrorCd == 0 && tpBudget >= tpMirrorCost + 4) {
+        if (hasMirror && returnRemaining <= 2 && mirrorCd == 0 && tpBudget >= tpMirrorCost + 4) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player))
             tpBudget -= tpMirrorCost
             buffApplied = true
         }
-        else if (hasThorn && returnRemaining <= 2 && thornCd == 0 && tpBudget >= tpThornCost + 4 && enemyCanAttack2) {
+        if (hasThorn && returnRemaining <= 2 && thornCd == 0 && tpBudget >= tpThornCost + 4 && enemyCanAttack2) {
             push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player))
             tpBudget -= tpThornCost
             buffApplied = true
@@ -2200,17 +2216,40 @@ class ScenarioCombos extends ScenarioHelpers {
 
         if (tpBudget < 10) return null
 
-        var damageReturnAction = this.getDamageReturnBuff()
-        if (damageReturnAction != null && tpBudget >= getCachedChipCost(damageReturnAction.chip)) {
-            push(actions, damageReturnAction)
-            tpBudget -= getCachedChipCost(damageReturnAction.chip)
+        // Adrenaline first to unlock TP for the full buff+reflect sequence
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ADRENALINE) &&
+            getCooldown(CHIP_ADRENALINE, this._player._id) == 0 &&
+            tpBudget >= getCachedChipCost(CHIP_ADRENALINE)) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_ADRENALINE, -1, this._player))
+            tpBudget -= getCachedChipCost(CHIP_ADRENALINE)
+            tpBudget += 5  // Adrenaline grants +5 TP
         }
 
-        var buffAction = this.getOffensiveBuff()
-        if (buffAction != null && tpBudget >= getCachedChipCost(buffAction.chip) &&
-            getCooldown(buffAction.chip, this._player._id) == 0) {
-            push(actions, buffAction)
-            tpBudget -= getCachedChipCost(buffAction.chip)
+        // AGI buffs BEFORE reflects: reflect damage scales with caster's AGI
+        // at cast time, so Warm up/Stretching must precede Mirror/Thorn/Bramble.
+        var agiBufActions = this.getAgiBuff()
+        for (var ab in agiBufActions) {
+            if (tpBudget >= getCachedChipCost(ab.chip)) {
+                push(actions, ab)
+                tpBudget -= getCachedChipCost(ab.chip)
+            }
+        }
+
+        // Now apply reflects with boosted AGI — this is the core of the build
+        var damageReturnActions = this.getAllDamageReturnBuffs()
+        for (var dr in damageReturnActions) {
+            if (tpBudget >= getCachedChipCost(dr.chip)) {
+                push(actions, dr)
+                tpBudget -= getCachedChipCost(dr.chip)
+            }
+        }
+
+        // STR buff only if TP remains after reflects
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
+            getCooldown(CHIP_STEROID, this._player._id) == 0 &&
+            tpBudget >= getCachedChipCost(CHIP_STEROID)) {
+            push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player))
+            tpBudget -= getCachedChipCost(CHIP_STEROID)
         }
 
         var hpPercent = this._player._currHealth * 100 / this._player._maxHealth

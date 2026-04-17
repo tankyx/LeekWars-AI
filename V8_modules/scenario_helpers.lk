@@ -504,14 +504,16 @@ class ScenarioHelpers {
         var mag = this._player._magic
         var agi = this._player._agility
 
+        // BRUISER_REFLECT: prioritize Warm up (AGI) over Steroid (STR)
+        // because AGI scales damage return from Mirror/Thorn/Bramble.
         if (str > 400 && agi > 400 &&
             mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
             mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP)) {
-            if (getCooldown(CHIP_STEROID, this._player._id) == 0) {
-                return new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player)
-            }
             if (getCooldown(CHIP_WARM_UP, this._player._id) == 0) {
                 return new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player)
+            }
+            if (getCooldown(CHIP_STEROID, this._player._id) == 0) {
+                return new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player)
             }
         }
 
@@ -697,6 +699,67 @@ class ScenarioHelpers {
         }
 
         return null
+    }
+
+    // Returns array of AGI buff actions (Warm up, Stretching) that are ready.
+    // Cast these BEFORE reflect chips so reflects scale with boosted AGI.
+    getAgiBuff() {
+        var buffs = []
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
+            getCooldown(CHIP_WARM_UP, this._player._id) == 0) {
+            push(buffs, new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player))
+        }
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STRETCHING) &&
+            getCooldown(CHIP_STRETCHING, this._player._id) == 0) {
+            push(buffs, new Action(Action.ACTION_BUFF, -1, CHIP_STRETCHING, -1, this._player))
+        }
+        return buffs
+    }
+
+    // Returns array of ALL ready reflect buffs instead of just one.
+    // After Liberation strips all reflects, we want to re-apply multiple.
+    getAllDamageReturnBuffs() {
+        var agi = this._player._agility
+        var buffs = []
+
+        var hasMirror = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR)
+        var hasThorn = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN)
+        var hasBramble = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+
+        if (agi < 300 || (!hasMirror && !hasThorn && !hasBramble)) {
+            return buffs
+        }
+
+        var hasReturn = this._player.hasDamageReturn()
+        var returnRemaining = hasReturn ? this._player.getDamageReturnRemaining() : 0
+
+        // If reflects are still active with turns remaining, don't re-apply
+        if (hasReturn && returnRemaining > 2) {
+            return buffs
+        }
+
+        var mirrorCd = hasMirror ? getCooldown(CHIP_MIRROR, this._player._id) : 999
+        var thornCd = hasThorn ? getCooldown(CHIP_THORN, this._player._id) : 999
+        var brambleCd = hasBramble ? getCooldown(CHIP_BRAMBLE, this._player._id) : 999
+
+        // Mirror: best duration (3 turns)
+        if (mirrorCd == 0 && hasMirror) {
+            push(buffs, new Action(Action.ACTION_BUFF, -1, CHIP_MIRROR, -1, this._player))
+        }
+        // Thorn: 2 turns
+        if (thornCd == 0 && hasThorn) {
+            push(buffs, new Action(Action.ACTION_BUFF, -1, CHIP_THORN, -1, this._player))
+        }
+        // Bramble: 1 turn burst, only when enemy is close and threatening
+        if (brambleCd == 0 && hasBramble) {
+            var distToEnemy = getCellDistance(this._player._cellPos, this._target._cellPos)
+            if (distToEnemy == null) distToEnemy = 99
+            if (distToEnemy <= 10) {
+                push(buffs, new Action(Action.ACTION_BUFF, -1, CHIP_BRAMBLE, -1, this._player))
+            }
+        }
+
+        return buffs
     }
 
     getHealingAction(tpBudget, hpThreshold = 0.7) {
