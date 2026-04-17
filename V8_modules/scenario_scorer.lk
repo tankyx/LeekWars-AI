@@ -835,19 +835,20 @@ class ScenarioScorer {
 
             if (buffChip == CHIP_STEROID) value += 200
             if (buffChip == CHIP_DOPING) {
-                // Doping aftereffect scales with SCI: ~(32 * (1+SCI/100)) per tick × 3 turns.
-                // At SCI 400 that's ~160/tick × 3 = ~480 total self-damage. Very dangerous.
-                // Only allow ONCE per fight via global __dopingUsed flag.
-                if (!__dopingUsed) {
-                    var sci = this._player._science
-                    var dopingSelfDmg = 32 * (1 + sci / 100.0) * 3
-                    if (this._player._currHealth > dopingSelfDmg + this._player._maxHealth * 0.3) {
-                        value += 100
+                // Both STR buff AND aftereffect scale with SCI.
+                // Only cast when in weapon range and once per fight.
+                var dopDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+                if (dopDist == null) dopDist = 99
+                if (!__dopingUsed && dopDist <= 12) {
+                    var dopSci = this._player._science
+                    var dopSelfDmg = 32 * (1 + dopSci / 100.0) * 3
+                    if (this._player._currHealth > dopSelfDmg + this._player._maxHealth * 0.3) {
+                        value += 150
                     } else {
-                        value -= 500
+                        value -= 300
                     }
                 } else {
-                    value -= 500  // hard block recasting
+                    value -= 500
                 }
             }
             if (buffChip == CHIP_WARM_UP) value += 200

@@ -415,8 +415,10 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 var unusedWeapons = beamCountUnusedWeapons(partial, arsenalObj)
                 if (unusedWeapons > 0) value += 250
             } else if (chipId == CHIP_DOPING) {
-                // Only cast once per fight via global __dopingUsed flag.
-                if (!__dopingUsed && playerObj._currHealth > playerObj._maxHealth * 0.5) {
+                // Only cast once per fight, when enemy is close enough to attack.
+                var bsDopDist = getCellDistance(playerObj._cellPos, targetObj._cellPos)
+                if (bsDopDist == null) bsDopDist = 99
+                if (!__dopingUsed && bsDopDist <= 10 && playerObj._currHealth > playerObj._maxHealth * 0.5) {
                     value += 100
                     var unusedWeapons2 = beamCountUnusedWeapons(partial, arsenalObj)
                     if (unusedWeapons2 > 0) value += 150
