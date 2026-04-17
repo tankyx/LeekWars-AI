@@ -645,7 +645,13 @@ function quickRecoveryChipValue(chipId, mode) {
                 else if (chipId == CHIP_WARM_UP) value += 300
                 else if (chipId == CHIP_PRISM) value += 300
                 else if (chipId == CHIP_WIZARDRY) value += 250
-                else if (chipId == CHIP_DOPING) value += 200
+                else if (chipId == CHIP_DOPING) {
+                    if (!__dopingUsed && player._currHealth > player._maxHealth * 0.5) {
+                        value += 100
+                    } else {
+                        value -= 300
+                    }
+                }
                 else value += 120
             } else {
                 value += 50

@@ -462,9 +462,13 @@ class ScenarioSimulator {
                     simTP += tpBuff
                 } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
-                } else if (action.chip == CHIP_STEROID || action.chip == CHIP_DOPING) {
-
+                } else if (action.chip == CHIP_STEROID) {
                     simStrength += this.estimateStrengthBuff(action.chip)
+                } else if (action.chip == CHIP_DOPING) {
+                    simStrength += this.estimateStrengthBuff(action.chip)
+                    // Account for aftereffect self-damage (scales with SCI)
+                    var dopingSelfDmg = 32 * (1 + simScience / 100.0) * 3
+                    result.hpGained -= dopingSelfDmg
                 } else if (action.chip == CHIP_PRISM) {
                     simStrength += 60
                     simMagic += 60

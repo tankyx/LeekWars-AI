@@ -410,10 +410,19 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 if (beamHasUnusedNovaWeapon(partial, arsenalObj)) value += 300
                 var unusedShields = beamCountUnusedShieldChips(partial, arsenalObj)
                 if (unusedShields > 0) value += 150
-            } else if (chipId == CHIP_STEROID || chipId == CHIP_DOPING) {
+            } else if (chipId == CHIP_STEROID) {
                 value += 200
                 var unusedWeapons = beamCountUnusedWeapons(partial, arsenalObj)
                 if (unusedWeapons > 0) value += 250
+            } else if (chipId == CHIP_DOPING) {
+                // Only cast once per fight via global __dopingUsed flag.
+                if (!__dopingUsed && playerObj._currHealth > playerObj._maxHealth * 0.5) {
+                    value += 100
+                    var unusedWeapons2 = beamCountUnusedWeapons(partial, arsenalObj)
+                    if (unusedWeapons2 > 0) value += 150
+                } else {
+                    value -= 300
+                }
             } else if (chipId == CHIP_KNOWLEDGE) {
                 value += 150
                 var unusedHeals = beamCountUnusedHealChips(partial, arsenalObj)
