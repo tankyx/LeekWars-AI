@@ -12,9 +12,16 @@ class ScenarioCombos extends ScenarioHelpers {
         var mpBudget = availableMP
         var simPos = this._player._cellPos
 
-        // Reserve TP for follow-up attacks: never let buffs starve the kill phase.
-        // Floor of 4 TP guarantees at least one minimum-cost weapon use.
-        var minAttackTP = max(4, floor(availableTP * 0.5))
+        // Reserve TP for follow-up attacks: never let buffs starve the kill
+        // phase. Use the cheapest equipped weapon/chip cost as the floor so a
+        // 4 TP minimum doesn't approve buffs when the real weapon costs 6+.
+        var cheapestAtkCost = 4
+        for (var wIdMin in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wObjMin = this._arsenal.playerEquippedWeapons[wIdMin]
+            if (wObjMin != null && wObjMin._cost < cheapestAtkCost) cheapestAtkCost = wObjMin._cost
+        }
+        if (cheapestAtkCost < 3) cheapestAtkCost = 3
+        var minAttackTP = max(cheapestAtkCost + 1, floor(availableTP * 0.5))
 
         var antidoteAction = this.getAntidoteAction(tpBudget)
         if (antidoteAction != null) {
@@ -92,7 +99,13 @@ class ScenarioCombos extends ScenarioHelpers {
         var simPos = this._player._cellPos
 
         // Reserve TP for follow-up attacks (matches aggressive scenario pattern).
-        var minAttackTP = max(4, floor(availableTP * 0.5))
+        var cheapestAtkCostC = 4
+        for (var wIdMinC in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wObjMinC = this._arsenal.playerEquippedWeapons[wIdMinC]
+            if (wObjMinC != null && wObjMinC._cost < cheapestAtkCostC) cheapestAtkCostC = wObjMinC._cost
+        }
+        if (cheapestAtkCostC < 3) cheapestAtkCostC = 3
+        var minAttackTP = max(cheapestAtkCostC + 1, floor(availableTP * 0.5))
 
         var conservativeAntidote = this.getAntidoteAction(tpBudget)
         if (conservativeAntidote != null) {

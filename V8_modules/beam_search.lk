@@ -418,7 +418,7 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 // Only cast once per fight, when enemy is close enough to attack.
                 var bsDopDist = getCellDistance(playerObj._cellPos, targetObj._cellPos)
                 if (bsDopDist == null) bsDopDist = 99
-                if (!__dopingUsed && bsDopDist <= 10 && playerObj._currHealth > playerObj._maxHealth * 0.5) {
+                if (!__dopingUsed && bsDopDist <= 8 && playerObj._currHealth > playerObj._maxHealth * 0.5) {
                     value += 100
                     var unusedWeapons2 = beamCountUnusedWeapons(partial, arsenalObj)
                     if (unusedWeapons2 > 0) value += 150

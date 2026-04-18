@@ -142,7 +142,10 @@ class ScenarioHelpers {
         var poisonKillDmg = estimatedDamage + existingPoisonDmg
 
         var killSuppressed = false
-        if (poisonKillDmg > 0 && poisonKillDmg >= enemyHP * 0.95) {
+        // Lowered from 0.95 → 0.90 — leaves room for damage variance so we
+        // actually trigger KILL on borderline finishing turns instead of
+        // slipping into ATTRITION and wasting the window.
+        if (poisonKillDmg > 0 && poisonKillDmg >= enemyHP * 0.90) {
             var inWeaponRange = this.isInAnyWeaponRange()
             if (inWeaponRange) {
                 return "KILL"
@@ -154,14 +157,20 @@ class ScenarioHelpers {
             return "ATTRITION"
         }
 
-        // Fix 3a-A: trigger AGGRO much earlier under time pressure (was turn>45/HP>50%).
-        if (__timePressure && currentTurn > 25 && enemyHPPercent > 40) {
-            return "AGGRO"
+        // AGGRO guard-rail: old thresholds (turn>25) caused aggressive over-
+        // commitment on strong matchups. Raise to turn>35 under time pressure,
+        // and suppress AGGRO entirely when we’re significantly behind on HP
+        // (would trade into a loss). If we’re healthier than enemy, a push is
+        // still correct. Same logic applies to the stalemate detector below.
+        if (__timePressure && currentTurn > 35 && enemyHPPercent > 40) {
+            if (!(playerHPPercent < 60 && enemyHPPercent > 60)) {
+                return "AGGRO"
+            }
         }
 
-        // Fix 3a-B: mid-game stalemate detector — both sides healthy past turn 20
-        // means we're getting outlasted; force aggression to avoid the draw.
-        if (currentTurn > 20 && enemyHPPercent > 70 && playerHPPercent > 50) {
+        // Mid-game stalemate detector: raised to turn>25 (was 20) so we don't
+        // thrash off a transient early-game HP spike.
+        if (currentTurn > 25 && enemyHPPercent > 70 && playerHPPercent > 50) {
             return "AGGRO"
         }
 
@@ -172,6 +181,15 @@ class ScenarioHelpers {
         // Fix 3a-C: widen SUSTAIN band (35-70% player HP) and drop !timePressure
         // requirement so we still consolidate when slow-burn vs tank.
         if (playerHPPercent >= 35 && playerHPPercent <= 70 && enemyHPPercent > 40) {
+            // Don't over-sustain when the enemy is already on the ropes: if
+            // they're under 40% HP and we can close in ≤2 turns at a non-
+            // trivial damage rate (>150/turn), switch to ATTRITION. Tighter
+            // gates than earlier version to avoid committing tank builds
+            // into bad trades when their damage rate is naturally low.
+            if (__avgDamageRate != null && __avgDamageRate > 150 && enemyHPPercent < 40) {
+                var turnsToFinish = enemyHP / __avgDamageRate
+                if (turnsToFinish < 2) return "ATTRITION"
+            }
             return "SUSTAIN"
         }
 
@@ -202,7 +220,12 @@ class ScenarioHelpers {
                 if (pAbs == null) pAbs = 0
                 if (pRel == null) pRel = 0
                 var myEffectiveHP = floor(playerHP * (100 - pRel) / 100) + pAbs
-                if (enemyMaxBurst * 2 >= myEffectiveHP) {
+                // Shield-aware threshold: if we already have meaningful shields
+                // stacked (>=20% of HP buffer), 1.5× burst is enough warning.
+                // Unshielded keeps the safer 2× threshold.
+                var shieldBuffer = pAbs + floor(playerHP * pRel / 100)
+                var burstMult = (shieldBuffer >= playerHP * 0.2) ? 1.5 : 2.0
+                if (enemyMaxBurst * burstMult >= myEffectiveHP) {
                     return "ATTRITION"
                 }
             }

@@ -230,11 +230,21 @@ function updateEnemyProfile(eid, obs, enemy) {
     var profile = __enemyProfile[eid]
     var turnsObs = obs['turnsObserved']
 
-    // If enemy shields frequently but wasn't flagged as tank, update
-    if (obs['timesShielded'] >= 3 && !profile['isTank']) {
-        if (obs['timesShielded'] * 1.0 / turnsObs > 0.4) {
+    // If enemy shields frequently but wasn't flagged as tank, update.
+    // Frequency threshold lowered from 0.4 → 0.33 so a tank shielding on
+    // turns 2,5,8 (33%) is caught earlier; also triggers on just 2 shields
+    // if resistance/sci stats are high (hard-evidence tank profile).
+    if (!profile['isTank']) {
+        if (obs['timesShielded'] >= 3 && obs['timesShielded'] * 1.0 / turnsObs > 0.33) {
             profile['isTank'] = true
             profile['isBurstBuild'] = false
+        } else if (obs['timesShielded'] >= 2 && enemy != null) {
+            var eResistance = enemy._resistance != null ? enemy._resistance : 0
+            var eScience = enemy._science != null ? enemy._science : 0
+            if (eResistance >= 300 && eScience >= 200) {
+                profile['isTank'] = true
+                profile['isBurstBuild'] = false
+            }
         }
     }
 

@@ -257,7 +257,16 @@ function enhanceScenariosWithLookahead(scenarios, topK, fieldMap, arsenal, playe
         var scenario = scenarios[i]
         var scenarioResult = scenario
 
-        var lookahead = predictor.evaluateScenarioWithLookahead(scenarioResult, 0.85)
+        // Context-aware discount: vs burst enemies we value defensive choices
+        // more (they can delete us if we overextend). Leave tanks at baseline
+        // — boosting their lookahead to 0.9 destabilized Kurt's tank-vs-tank
+        // decisions during testing.
+        var lookaheadDiscount = 0.85
+        var lpProfile = (enemy != null) ? getEnemyProfile(enemy._id) : null
+        if (lpProfile != null && lpProfile['isBurstBuild']) {
+            lookaheadDiscount = 0.75
+        }
+        var lookahead = predictor.evaluateScenarioWithLookahead(scenarioResult, lookaheadDiscount)
 
         scenario['lookaheadScore'] = lookahead['finalScore']
         scenario['enemyDamagePrediction'] = lookahead['enemyDamage']

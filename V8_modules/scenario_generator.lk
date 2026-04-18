@@ -39,8 +39,21 @@ class ScenarioGenerator extends ScenarioCombos {
                 }
             }
 
-            if (POISON_PHASE == "BAIT" && (currentTurn - BAIT_START_TURN) >= 5) {
-                POISON_PHASE = "DUMP"
+            // Transition BAIT→DUMP adaptively. Old logic was fixed 5 turns;
+            // but enemy antidote CD is only 2-3, so a 5-turn BAIT let them
+            // cleanse every stack before DUMP. New rule:
+            //  • DUMP early (after ≥2 stacks applied) if antidote is on CD
+            //    for 2+ turns — exploit the real cleanse gap.
+            //  • Extend BAIT to 8 turns otherwise (from 5) so we actually
+            //    force Antidote uses instead of timing out mid-rotation.
+            if (POISON_PHASE == "BAIT") {
+                var baitAntidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                var elapsed = currentTurn - BAIT_START_TURN
+                if (baitAntidoteCD >= 2 && elapsed >= 2) {
+                    POISON_PHASE = "DUMP"
+                } else if (elapsed >= 8) {
+                    POISON_PHASE = "DUMP"
+                }
             }
         }
 

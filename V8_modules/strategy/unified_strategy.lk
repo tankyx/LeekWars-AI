@@ -498,6 +498,11 @@ function recoverRemainingTP(target) {
 
             if (isHealingChip(chipId) || isOffensiveBuff(chipId) || isShieldChip(chipId) ||
                 isDamageReturnChip(chipId) || isResourceChip(chipId)) {
+                // Doping range-gate: only value when close enough to attack
+                if (chipId == CHIP_DOPING) {
+                    var dopRecDist = getCellDistance(getCell(), target._cellPos)
+                    if (dopRecDist == null || dopRecDist > 8) continue
+                }
                 targetCell = getCell()
                 value = quickRecoveryChipValue(chipId, 'self')
             } else if (isUtilityChip(chipId)) {
@@ -562,7 +567,14 @@ function recoverRemainingTP(target) {
             }
         }
 
-        if (bestAction == null || bestValue < 15) break
+        // Dynamic threshold: scale minimum-value gate by remaining TP so we
+        // spend marginal actions when the pool is large (a fixed 15 leaves
+        // 20+ TP unspent on full-HP late-game turns) but don't chase scraps
+        // when nearly spent.
+        var tpLeft = getTP()
+        var dynMin = max(8, floor(tpLeft * 0.6))
+        if (dynMin > 18) dynMin = 18
+        if (bestAction == null || bestValue < dynMin) break
 
         if (bestAction['type'] == 'chip') {
             // Block Doping recast in TP recovery
@@ -617,28 +629,26 @@ function quickRecoveryChipValue(chipId, mode) {
             var hpMissing = player._maxHealth - player._currHealth
             if (hpMissing > 0) {
                 var healEst = min(hpMissing, beamEstimateHeal(chipId, player._wisdom))
-                // Late-game heal recycling: after turn 20, when we're getting
-                // out-attritioned, weight healing more aggressively so the
-                // recovery loop picks heals over marginal weapon swaps.
+                // HP-driven heal urgency (state-aware). Old code gated boost on
+                // turn > 20, so a wounded player early-game (e.g. after burst)
+                // under-valued heals in TP recovery. Scale by HP percentage:
+                // mirrors the SUSTAIN/FLEE state thresholds from scenario_helpers.
+                var hpPct = (player._currHealth * 100) / player._maxHealth
                 var lateGameMult = 1.5
-                if (getTurn() > 20) {
-                    var hpPct = (player._currHealth * 100) / player._maxHealth
-                    // Only nudge heal weight when actually wounded — don't
-                    // make late-game KG/Edsger heal-spam from full HP.
-                    if (hpPct < 60) lateGameMult = 2.0
-                    if (hpPct < 40) lateGameMult = 3.0
-                }
+                if (hpPct < 40) lateGameMult = 3.0      // FLEE territory
+                else if (hpPct < 60) lateGameMult = 2.0 // SUSTAIN territory
+                // Additional late-game nudge (avoids draws by healing into damage race)
+                if (getTurn() > 30 && hpPct < 80) lateGameMult += 0.5
                 value += healEst * lateGameMult
             } else {
                 return -1
             }
         } else if (isShieldChip(chipId)) {
             value += 100
-            // Late-game shield recycling when actually under threat.
-            if (getTurn() > 20) {
-                var hpPct2 = (player._currHealth * 100) / player._maxHealth
-                if (hpPct2 < 60) value += 100
-            }
+            // Shield urgency mirrors heal — HP-driven, not turn-gated.
+            var hpPct2 = (player._currHealth * 100) / player._maxHealth
+            if (hpPct2 < 40) value += 200
+            else if (hpPct2 < 60) value += 100
         } else if (isDamageReturnChip(chipId)) {
             value += 150
         } else if (isOffensiveBuff(chipId)) {

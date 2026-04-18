@@ -213,7 +213,8 @@ class ScenarioSimulator {
 
                     var chipCost = getChipCost(action.chip)
                     var chipDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, this._target) : 0
-                    var breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
+                    var breakdown = getCachedDamageBreakdown(action.chip)
+                    if (breakdown == null) breakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
 
                     var rawDirect = breakdown['direct'] * expectedCritMult
                     var rawDirectMin = breakdown['directMin'] * expectedCritMult
@@ -341,7 +342,8 @@ class ScenarioSimulator {
                         var swapCost = (simWeapon != action.weaponId) ? 1 : 0
                         var weaponCost = weaponObj._cost
                         var weaponDmg = (this._target != null) ? this._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.weaponId, this._target) : 0
-                        var weaponBreakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
+                        var weaponBreakdown = getCachedDamageBreakdown(action.weaponId)
+                        if (weaponBreakdown == null) weaponBreakdown = this._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
 
                         var rawDirect = weaponBreakdown['direct'] * expectedCritMult
                         var rawDirectMin = weaponBreakdown['directMin'] * expectedCritMult

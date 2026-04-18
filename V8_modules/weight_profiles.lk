@@ -226,6 +226,12 @@ function getWeightsForBuild(buildType, player) {
         return TANK_SCI_WEIGHTS
     }
     if (buildType == BUILD_HYBRID) {
+        // Magic-leaning hybrid: if magic stat justifies it, shift weights
+        // toward MAGIC_WEIGHTS (poison stacking, denial, kiting). Static
+        // HYBRID weights otherwise under-utilize magic output.
+        if (player != null && player._magic >= 500 && player._magic > player._strength) {
+            return blendWeights(HYBRID_WEIGHTS, MAGIC_WEIGHTS, 0.6)
+        }
         return HYBRID_WEIGHTS
     }
     if (buildType == BUILD_BRUISER_REFLECT) {

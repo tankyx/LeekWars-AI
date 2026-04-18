@@ -299,6 +299,22 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
                     adapted['kiteDistance'] = floor(adapted['kiteDistance'] * 0.7)
                 }
             }
+
+            // Magic-vs-magic: both sides want to kite and out-tick — classic
+            // draw fuel. Force decisive pushes: halve kite preference, boost
+            // OTKO recognition and denial (the main way to break a mage loop
+            // is to strip their TP so they can't apply/heal).
+            if (__playerBuildType == BUILD_MAGIC) {
+                if (mapContainsKey(adapted, 'kiteDistance')) {
+                    adapted['kiteDistance'] = floor(adapted['kiteDistance'] * 0.5)
+                }
+                if (mapContainsKey(adapted, 'otkoBonus')) {
+                    adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 1.4)
+                }
+                if (mapContainsKey(adapted, 'denialValue')) {
+                    adapted['denialValue'] = floor(adapted['denialValue'] * 1.2)
+                }
+            }
         }
     }
 

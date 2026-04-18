@@ -6,12 +6,30 @@ class ScenarioScorer {
     _target = null
     _fieldMap = null
     _weights = null
+    _enemyProfile = null
+    _aliveEnemyIds = null
+    _aliveEnemyCount = 0
+    _cdTracker = null
 
     constructor(player, target, fieldMap, weights) {
         this._player = player
         this._target = target
         this._fieldMap = fieldMap
         this._weights = weights != null ? weights : [:]
+        // Cache enemy profile once — used in multiple score dimensions (erosion,
+        // vulnerability, 2-ply discount). getEnemyProfile does a map lookup every
+        // call, so caching saves 2-3 calls × ~60 scenarios per turn.
+        this._enemyProfile = (target != null) ? getEnemyProfile(target._id) : null
+        // Cache the alive-enemy id list once per scorer. evaluatePosition and
+        // bulb-race code both iterate it multiple times per score() call.
+        this._aliveEnemyIds = []
+        if (fieldMap != null) {
+            var eMap = fieldMap.getEnemySubMap()
+            for (var eid in mapKeys(eMap)) {
+                if (!isDead(eid)) push(this._aliveEnemyIds, eid)
+            }
+        }
+        this._aliveEnemyCount = count(this._aliveEnemyIds)
     }
 
     getWeight(key, defaultValue) {
@@ -286,23 +304,27 @@ class ScenarioScorer {
             score += stackBonus
         }
 
+        // Use profile-defined novaEffects weight when set (STR_SCI profile sets
+        // 326, magic sets 0). The fallback average is only for profiles that
+        // don't override. Previously the average replaced the profile value
+        // for any non-zero weight, which flattened the STR/SCI advantage.
         var novaWeight = this.getWeight('novaEffects', (dotWeight + damageWeight) / 2.0)
         var novaDamageQueued = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
         var novaScore = novaDamageQueued * novaWeight
         score += novaScore
 
         if (simResult.erosionDamage > 0) {
-            var erosionWeight = 2.0
-            if (__timePressure) {
-                erosionWeight = 4.0
-            }
-            // Erosion is the primary anti-tank tool — permanent HP reduction
-            // is the only counter to high-HP/heal opponents. Make it dominant
-            // when the target is actually a tank, regardless of time pressure.
-            var targetProfile = getEnemyProfile(this._target._id)
+            // Base weight ramps linearly from turn 5 (was gated on timePressure).
+            // Erosion matters every mid/late turn; the old gating delayed it
+            // ~10 turns vs tanks even when they were clearly out-sustaining us.
+            var currentTurnE = getTurn()
+            var erosionWeight = 2.0 + max(0, (currentTurnE - 5) * 0.3)
+            if (erosionWeight > 5.0) erosionWeight = 5.0
+            if (__timePressure) erosionWeight *= 1.5
+            // Tank multiplier stacks on top (was: fixed 5.0/7.0 replacing base).
+            var targetProfile = this._enemyProfile
             if (targetProfile != null && targetProfile['isTank']) {
-                erosionWeight = 5.0
-                if (__timePressure) erosionWeight = 7.0
+                erosionWeight *= 1.4
             }
             score += simResult.erosionDamage * erosionWeight
         }
@@ -414,7 +436,7 @@ class ScenarioScorer {
             var remainingTP = max(0, getTP() - simResult.tpSpent)
             var estimatedFutureDamage = remainingTP * 100
             var vulnValue = estimatedFutureDamage * vulnPercent * 2.0
-            var targetProfile2 = getEnemyProfile(this._target._id)
+            var targetProfile2 = this._enemyProfile
             if (targetProfile2 != null && targetProfile2['isTank']) {
                 vulnValue *= 2.0
             }
@@ -540,7 +562,11 @@ class ScenarioScorer {
             var totalDmgTP = simResult.damageDealt + dotDmgTP + novaDmgTP
             score += totalDmgTP * (urgencyFactor - 1.0) * damageWeight
 
-            if (turnsRemaining < 30) {
+            // Nova boost fires when either time-pressure is active past turn 20
+            // (nova is permanent HP reduction — the primary draw-breaker) OR
+            // when fewer than 30 turns remain in the match. Previous condition
+            // only fired late in the fight, wasting mid-game nova urgency.
+            if (currentTurn > 20 || turnsRemaining < 30) {
                 if (novaDmgTP > 0) score += novaDmgTP * 5.0
                 if (simResult.denialApplied > 0) score += 500
             }
@@ -583,7 +609,9 @@ class ScenarioScorer {
 
     calculateAntidoteMultiplier() {
         var enemyId = this._target._id
-        var tracker = new CooldownTracker(this._target)
+        // Reuse cached tracker instance — avoid repeat allocation per scenario.
+        if (this._cdTracker == null) this._cdTracker = new CooldownTracker(this._target)
+        var tracker = this._cdTracker
         var antidoteCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
         var cureCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_CURE_ID)
         var remissionCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_REMISSION_ID)
@@ -604,7 +632,12 @@ class ScenarioScorer {
         // infinite stalemate. Bumped to 0.5 (BAIT 0.7) so we still apply poison
         // and force the cleanse rotation.
         if (bestCleanseCd == 0) {
+            // Context-aware cliff. In DUMP we’re explicitly timing a cleanse-gap
+            // dump — poison should still register real value even if the enemy
+            // antidote is technically ready (they may not burn it on small
+            // stacks). 0.55 preserves DUMP commitment.
             if (POISON_PHASE == "BAIT") return 0.7
+            if (POISON_PHASE == "DUMP") return 0.55
             return 0.4
         } else if (bestCleanseCd == 1) {
             return 1.7
@@ -727,16 +760,17 @@ class ScenarioScorer {
         var coverBonus = 0
         var enemies = this._fieldMap.getEnemySubMap()
         var exposureCount = 0
-        for (var eid in mapKeys(enemies)) {
-            if (!isDead(eid)) {
-                var enemyCell = enemies[eid]._cellPos
-                if (enemyCell != null && getCachedLineOfSight(finalPos, enemyCell)) {
-                    exposureCount++
-                }
+        // Use cached alive-enemy list (built once in constructor) — saves
+        // mapKeys() call + per-enemy isDead() check across every scored scenario.
+        var aliveIds = this._aliveEnemyIds
+        var totalEnemies = this._aliveEnemyCount
+        for (var eiIdx = 0; eiIdx < totalEnemies; eiIdx++) {
+            var eid = aliveIds[eiIdx]
+            var enemyCell = enemies[eid]._cellPos
+            if (enemyCell != null && getCachedLineOfSight(finalPos, enemyCell)) {
+                exposureCount++
             }
         }
-
-        var totalEnemies = count(mapKeys(enemies))
         if (totalEnemies > 0 && exposureCount < totalEnemies) {
             var coverRatio = 1.0 - (exposureCount / totalEnemies)
             var W1
@@ -836,10 +870,10 @@ class ScenarioScorer {
             if (buffChip == CHIP_STEROID) value += 200
             if (buffChip == CHIP_DOPING) {
                 // Both STR buff AND aftereffect scale with SCI.
-                // Only cast when in weapon range and once per fight.
+                // Only cast when in weapon range, scenario includes attacks, once per fight.
                 var dopDist = getCellDistance(this._player._cellPos, this._target._cellPos)
                 if (dopDist == null) dopDist = 99
-                if (!__dopingUsed && dopDist <= 12) {
+                if (!__dopingUsed && dopDist <= 8 && simResult.damageDealt > 0) {
                     var dopSci = this._player._science
                     var dopSelfDmg = 32 * (1 + dopSci / 100.0) * 3
                     if (this._player._currHealth > dopSelfDmg + this._player._maxHealth * 0.3) {
