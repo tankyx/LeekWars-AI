@@ -30,7 +30,9 @@ function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
     var bestPosition = enemy._cellPos
 
     if (enemyMP > 0) {
-        var searchRadius = min(enemyMP, 5)
+        // Matches precomputeEnemyReachablePositions cap of 8 — previous cap
+        // of 5 missed attack vectors for MP 6+ enemies.
+        var searchRadius = min(enemyMP, 8)
 
         for (var dx = -searchRadius; dx <= searchRadius; dx++) {
             for (var dy = -searchRadius; dy <= searchRadius; dy++) {
@@ -148,7 +150,13 @@ function precomputeEnemyReachablePositions(enemy) {
     var positions = [enemy._cellPos]
     var enemyMP = enemy._currMp
     if (enemyMP > 0) {
-        var searchRadius = min(enemyMP, 5)
+        // Prior bug: searchRadius was capped at 5, so MP 6+ enemies (Vorberg
+        // with MP 8, most L300 bots with MP 6-7) had their reach-and-hit
+        // cells missed by the threat cache — KG's scorer undercounted
+        // incoming damage and picked positions where the enemy could land a
+        // 900+ shot next turn. Cap at 8 (covers base 6 + 2 from Leather
+        // Boots/Seven League Boots). Outer caller guards ops budget.
+        var searchRadius = min(enemyMP, 8)
         for (var dx = -searchRadius; dx <= searchRadius; dx++) {
             for (var dy = -searchRadius; dy <= searchRadius; dy++) {
                 var dist = abs(dx) + abs(dy)

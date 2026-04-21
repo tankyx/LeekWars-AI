@@ -460,53 +460,83 @@ class ScenarioCombos extends ScenarioHelpers {
     }
 
     createEmergencyApproachScenario(availableTP, availableMP) {
-        var actions = []
-        var tpBudget = availableTP
-        var mpBudget = availableMP
+        // Teleport-to-attack when enemy is out of MP range and we'd otherwise
+        // do zero damage this turn. Previously scoped to turn <= 5 and to
+        // damageMap cells only (which were all MP-reachable — so teleport
+        // never actually reached beyond walking distance). Rewritten to scan
+        // all cells within teleport range, filter by weapon-range-to-target +
+        // LoS, and pick the cell with highest expected damage.
         var approachTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
         if (approachTeleChip == null) return null
         var tpTeleportApproach = getCachedChipCost(approachTeleChip)
         var approachMaxRange = getTeleportMaxRange(approachTeleChip)
 
-        if (tpBudget < tpTeleportApproach) {
+        if (availableTP < tpTeleportApproach + 4) {
             return null
         }
 
-        var currentTurn = getTurn()
-        if (currentTurn > 5) {
-            return null
-        }
-
-        var bestCell = -1
-        var bestScore = -99999
         var playerPos = this._player._cellPos
+        var targetPos = this._target._cellPos
 
-        for (var cellId in mapKeys(this._fieldMap.damageMap)) {
-            var cellData = this._fieldMap.damageMap[cellId]
-            var dist = getCellDistance(playerPos, cellId)
+        var distNow = getCellDistance(playerPos, targetPos)
+        if (distNow == null) return null
 
-            if (dist >= 2 && dist <= approachMaxRange) {
-                var damageScore = cellData._totalDamage
-                var threat = this._fieldMap.getThreatAtCell(cellId)
-                var distToEnemy = getCellDistance(cellId, this._target._cellPos)
+        // Find widest weapon range to know whether current position can shoot
+        var maxWeaponRange = 0
+        for (var wIdRng in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wObjRng = this._arsenal.playerEquippedWeapons[wIdRng]
+            if (wObjRng != null && wObjRng._maxRange > maxWeaponRange) maxWeaponRange = wObjRng._maxRange
+        }
+        if (maxWeaponRange == 0) return null
 
-                var score = damageScore - (threat * 0.5) - (distToEnemy * 10)
+        // Only run when current position can't reach enemy with any weapon.
+        // Otherwise the regular move+attack scenarios already cover it.
+        if (distNow <= maxWeaponRange && getCachedLineOfSight(playerPos, targetPos)) {
+            return null
+        }
 
-                if (score > bestScore) {
-                    bestScore = score
-                    bestCell = cellId
-                }
+        var tpBudgetAfterTele = availableTP - tpTeleportApproach
+        var bestCell = -1
+        var bestDamage = 0
+
+        for (var candidate = 0; candidate < 613; candidate++) {
+            if (getOperations() > _ops86) break
+            if (isObstacle(candidate)) continue
+            if (isEntity(candidate)) continue
+
+            var teleDist = getCellDistance(playerPos, candidate)
+            if (teleDist == null || teleDist < 1 || teleDist > approachMaxRange) continue
+
+            var distToTarget = getCellDistance(candidate, targetPos)
+            if (distToTarget == null || distToTarget > maxWeaponRange) continue
+            if (!getCachedLineOfSight(candidate, targetPos)) continue
+
+            var cellDamage = 0
+            for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var wObj = this._arsenal.playerEquippedWeapons[wid]
+                if (wObj == null) continue
+                if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                var dmg = this._arsenal.getNetDamageAgainstTarget(
+                    this._player._strength, this._player._magic,
+                    this._player._wisdom, this._player._science,
+                    wid, this._target)
+                var swapCost = (getWeapon() != wid) ? 1 : 0
+                var uses = min(wObj._maxUse, floor((tpBudgetAfterTele - swapCost) / wObj._cost))
+                if (uses > 0) cellDamage += dmg * uses
+            }
+
+            if (cellDamage > bestDamage) {
+                bestDamage = cellDamage
+                bestCell = candidate
             }
         }
 
-        if (bestCell == -1) {
-            return null
-        }
+        if (bestCell == -1 || bestDamage <= 0) return null
 
+        var actions = []
         push(actions, new Action(Action.ACTION_TELEPORT, -1, approachTeleChip, bestCell, this._target))
-        tpBudget -= tpTeleportApproach
 
-        var attackActions = this.getAttackActions(tpBudget, 1.0, bestCell)
+        var attackActions = this.getAttackActions(tpBudgetAfterTele, 1.0, bestCell)
         for (var aa in attackActions) {
             push(actions, aa)
         }

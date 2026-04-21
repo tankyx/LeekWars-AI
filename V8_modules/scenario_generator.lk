@@ -351,6 +351,16 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, buffApproach)
         }
 
+        // Teleport-to-attack against kiters: in ATTRITION, if enemy has moved
+        // beyond our MP range, standard move+attack yields 0 damage. Emergency
+        // approach uses Teleportation (range 12) to land in a weapon-range cell.
+        if (getAvailableTeleportChip(this._arsenal, this._player._id) != null) {
+            var emergencyApproachAttr = this.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproachAttr != null) {
+                push(scenarios, emergencyApproachAttr)
+            }
+        }
+
         push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 0.8, 0.8, "hide"), availableTP, availableMP))
         push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.8, 0.8, "hide"), availableTP, availableMP))
         push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
@@ -411,6 +421,15 @@ class ScenarioGenerator extends ScenarioCombos {
         var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
         if (buffApproach != null) {
             push(scenarios, buffApproach)
+        }
+
+        // Teleport-close in SUSTAIN too — kiters that out-heal us need pressure
+        // even when we're not actively attriting HP.
+        if (getAvailableTeleportChip(this._arsenal, this._player._id) != null) {
+            var emergencyApproachSus = this.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproachSus != null) {
+                push(scenarios, emergencyApproachSus)
+            }
         }
 
         push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.6, 0.6, "hide"), availableTP, availableMP))
