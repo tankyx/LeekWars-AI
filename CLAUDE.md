@@ -6,17 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Start
 
+**IMPORTANT for Claude:** For any server-side LeekWars operation (uploading V8, running
+fights, listing/saving AIs, fetching farmer/leek/fight data), **use the `mcp__leekwars__*`
+MCP tools** rather than the Python CLI wrappers. The MCP server is the supported path and
+stays in sync with LeekWars API changes. Fall back to the Python scripts only when the
+MCP is unavailable or for local-only workflows (local_test.py, fight_analyzer.py).
+
+Common MCP tools:
+- `mcp__leekwars__leekwars_upload_v8` — upload V8 modules (replaces `tools/upload_v8.py`)
+- `mcp__leekwars__leekwars_team_fights` / `leekwars_farmer_fights` / `leekwars_solo_fight`
+- `mcp__leekwars__leekwars_get_farmer` / `leekwars_get_leek` / `leekwars_get_fight`
+- `mcp__leekwars__leekwars_list_ais` / `leekwars_get_ai` / `leekwars_save_ai`
+
 ```bash
-# Upload to LeekWars server
+# Upload to LeekWars server (prefer MCP: mcp__leekwars__leekwars_upload_v8)
 python3 tools/upload_v8.py
 
-# Local test (fast, deterministic)
+# Local test (fast, deterministic) — Python only, no MCP equivalent
 python3 tools/local_test.py 40 smart_tank --leek EdsgerDijkstra --parallel 2
 
-# Server test (real matchmaking)
+# Server test (real matchmaking) — prefer MCP leekwars_test_fight / leekwars_solo_fight
 python3 tools/lw_test_script.py 10 459440 domingo --leek EdsgerDijkstra
 
-# Debug a specific fight
+# Debug a specific fight — Python only, no MCP equivalent
 python3 tools/fight_analyzer.py smart_tank --leek EdsgerDijkstra --seed 1
 ```
 
@@ -26,6 +38,7 @@ API tools (upload, server tests) require `~/.config/leekwars/config.json`:
 ```json
 {"username":"YOUR_EMAIL","password":"YOUR_PASSWORD"}
 ```
+The MCP server reads the same config file, so no additional setup is needed.
 
 ---
 

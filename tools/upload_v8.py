@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
 V8 upload script - Creates structure and uploads V8 modules
-Adapted from V7 uploader for the modular V8 architecture
+
+Uses the path-based /ai/write API. The legacy /ai/get-farmer-ais,
+/ai/save, /ai/new-name, and /ai-folder/new-name endpoints were removed
+by LeekWars; inventory now lives under farmer.ai_tree and writes go
+through /ai/write keyed by server-relative path.
 
 Usage:
     python3 upload_v8.py              # Upload to main account
@@ -10,13 +14,16 @@ Usage:
 
 import os
 import sys
-import json
 import time
 import requests
 import argparse
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Set
 from config_loader import load_credentials
+
+
+SERVER_ROOT = "8.0/V8"  # paths under ai_tree for the V8 build
+
 
 class V8Uploader:
     def __init__(self):
@@ -24,17 +31,16 @@ class V8Uploader:
         self.session = requests.Session()
         self.token = None
         self.farmer = None
-        self.folder_ids = {}
+        self.existing_paths: Set[str] = set()
 
     def login(self, email: str, password: str) -> bool:
-        """Login to LeekWars"""
+        """Login to LeekWars."""
         print("🔐 Logging in...")
 
-        login_url = f"{self.base_url}/farmer/login-token"
-        response = self.session.post(login_url, data={
-            "login": email,
-            "password": password
-        })
+        response = self.session.post(
+            f"{self.base_url}/farmer/login-token",
+            data={"login": email, "password": password},
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -47,376 +53,172 @@ class V8Uploader:
         print("❌ Login failed")
         return False
 
-    def get_existing_folders(self) -> Dict:
-        """Get all existing folders"""
-        response = self.session.get(f"{self.base_url}/ai/get-farmer-ais")
-        if response.status_code == 200:
-            return response.json()
-        return {"folders": [], "ais": []}
+    def load_ai_tree(self) -> bool:
+        """Populate existing_paths from farmer.ai_tree (new path-based API)."""
+        response = self.session.get(f"{self.base_url}/farmer/get-from-token")
+        if response.status_code != 200:
+            print(f"❌ Failed to fetch ai_tree: HTTP {response.status_code}")
+            return False
+        data = response.json()
+        tree = (data.get("farmer") or {}).get("ai_tree") or {}
+        self.existing_paths = {f.get("path") for f in tree.get("files", []) if f.get("path")}
+        return True
 
-    def find_folder(self, name: str, parent_id: int, folders: list) -> Optional[int]:
-        """Find a folder by name in parent"""
-        for folder in folders:
-            if folder["name"] == name and folder["folder"] == parent_id:
-                return folder["id"]
-        return None
+    def upload_file(self, relative_path: str, code: str) -> bool:
+        """Upload a single file under SERVER_ROOT/relative_path using /ai/write.
 
-    def find_ai(self, name: str, folder_id: int, ais: list) -> Optional[int]:
-        """Find an AI by name in folder"""
-        for ai in ais:
-            if ai["name"] == name and ai["folder"] == folder_id:
-                return ai["id"]
-        return None
-
-    def create_or_get_folder(self, name: str, parent_id: int = 0, existing_folders: list = None) -> Optional[int]:
-        """Create a folder or return existing one"""
-        # Check if folder already exists
-        if existing_folders:
-            folder_id = self.find_folder(name, parent_id, existing_folders)
-            if folder_id:
-                print(f"   📁 Using existing folder: {name} (ID: {folder_id})")
-                return folder_id
-
-        # Create new folder
-        print(f"   📁 Creating folder: {name}")
-        response = self.session.post(
-            f"{self.base_url}/ai-folder/new-name",
-            data={"folder_id": parent_id, "name": name}
-        )
-
-        if response.status_code == 200:
-            data = response.json()
-            folder_id = data.get("id")
-            if folder_id:
-                print(f"      ✅ Created with ID: {folder_id}")
-                return folder_id
-
-        print(f"      ❌ Failed to create")
-        return None
-
-    def create_or_update_ai_script(self, name: str, code: str, folder_id: int, existing_ais: list = None) -> Optional[int]:
-        """Create an AI script and save its code with retry logic"""
-        # Check if AI already exists
-        if existing_ais:
-            ai_id = self.find_ai(name, folder_id, existing_ais)
-            if ai_id:
-                print(f"   📄 Updating existing: {name}.lk (ID: {ai_id})")
-                # Update existing AI
-                save_response = self.session.post(
-                    f"{self.base_url}/ai/save",
-                    data={
-                        "ai_id": str(ai_id),
-                        "code": code
-                    }
-                )
-                if save_response.status_code == 200:
-                    print(f"      ✅ Updated")
-                    return ai_id
-                else:
-                    print(f"      ❌ Failed to update")
-                    return None
-
-        print(f"   📄 Creating: {name}.lk")
+        /ai/write creates or updates in place; folders implied by the path must
+        already exist (SERVER_ROOT is pre-created on both accounts).
+        """
+        server_path = f"{SERVER_ROOT}/{relative_path}"
+        action = "Updating" if server_path in self.existing_paths else "Creating"
+        print(f"   📄 {action}: {server_path}")
 
         max_retries = 3
-        retry_delay = 2  # seconds
-
+        retry_delay = 2
         for attempt in range(max_retries):
-            # Create AI with name
             response = self.session.post(
-                f"{self.base_url}/ai/new-name",
-                data={
-                    "folder_id": folder_id,
-                    "version": 4,
-                    "name": name
-                }
+                f"{self.base_url}/ai/write",
+                data={"path": server_path, "code": code},
             )
-
-            if response.status_code == 429:  # Rate limited
+            if response.status_code == 429:
                 if attempt < max_retries - 1:
                     print(f"      ⏳ Rate limited, waiting {retry_delay}s...")
                     time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
+                    retry_delay *= 2
                     continue
-                else:
-                    print(f"      ❌ API error: 429 (rate limited after {max_retries} attempts)")
-                    return None
+                print(f"      ❌ Rate limited after {max_retries} attempts")
+                return False
 
             if response.status_code == 200:
                 data = response.json()
-                ai_data = data.get("ai", {})
-                ai_id = ai_data.get("id")
+                if data.get("modified"):
+                    self.existing_paths.add(server_path)
+                    print(f"      ✅ {action.rstrip('ing')}ed (modified: {data.get('modified')})")
+                    return True
+                print(f"      ❌ Write refused: {data}")
+                return False
 
-                if ai_id:
-                    # Save the code
-                    save_response = self.session.post(
-                        f"{self.base_url}/ai/save",
-                        data={
-                            "ai_id": str(ai_id),
-                            "code": code
-                        }
-                    )
+            print(f"      ❌ API error: {response.status_code}")
+            return False
 
-                    if save_response.status_code == 200:
-                        print(f"      ✅ Uploaded (ID: {ai_id})")
-                        return ai_id
-                    else:
-                        print(f"      ⚠️  Created but failed to save code")
-                else:
-                    print(f"      ❌ Failed to create")
-            else:
-                print(f"      ❌ API error: {response.status_code}")
+        return False
 
-            break  # Only retry on 429, not other errors
-
-        return None
-
-    def create_v8_structure(self, v8_dir: Path):
-        """Create complete V8 structure with all modules"""
+    def create_v8_structure(self, v8_dir: Path) -> bool:
+        """Upload complete V8 module tree."""
         print("\n📤 CREATING/UPDATING V8 MODULAR STRUCTURE")
-        print("="*60)
+        print("=" * 60)
 
-        # Get existing structure first
-        print("\n0️⃣ Checking existing structure...")
-        existing_data = self.get_existing_folders()
-        existing_folders = existing_data.get("folders", [])
-        existing_ais = existing_data.get("ais", [])
-
-        # Step 1: Create or get 8.0 folder
-        print("\n1️⃣ Setting up root 8.0 folder...")
-        folder_8_0 = self.create_or_get_folder("8.0", 0, existing_folders)
-        if not folder_8_0:
-            print("❌ Failed to setup 8.0 folder")
+        print("\n0️⃣ Loading existing ai_tree...")
+        if not self.load_ai_tree():
             return False
-        self.folder_ids["8.0"] = folder_8_0
-
-        # Step 2: Create or get V8 folder inside 8.0
-        print("\n2️⃣ Setting up V8 folder...")
-        folder_v8 = self.create_or_get_folder("V8", folder_8_0, existing_folders)
-        if not folder_v8:
-            print("❌ Failed to setup V8 folder")
-            return False
-        self.folder_ids["V8"] = folder_v8
+        print(f"   Found {len(self.existing_paths)} existing files under tracked roots")
 
         stats = {"total": 0, "success": 0, "failed": 0}
 
-        # Step 3: Upload root-level V8 modules
-        print("\n3️⃣ Uploading root-level modules...")
         root_modules = [
-            "main",
-            "game_entity",
-            "item",
-            "item_database",
-            "item_roles",
-            "field_map",
-            "field_map_core",
-            "field_map_patterns",
-            "field_map_tactical",
-            "kill_planning",
-            "cooldown_tracker",
-            "enemy_predictor",
-            "enemy_intelligence",
-            "performance_infra",
-            "cache_manager",
-            "tactical_awareness",
-            "strategic_depth",
-            "reachable_graph",
-            "scenario_simulator",
-            "scenario_scorer",
-            "scenario_helpers",
-            "scenario_combos",
-            "scenario_generator",
-            "scenario_quick_scorer",
-            "scenario_mutation",
-            "weight_profiles",
-            "game_context",
-            "bulb_ai",
-            "boss_context",
-            "beam_search",
+            "main", "game_entity", "item", "item_database", "item_roles",
+            "field_map", "field_map_core", "field_map_patterns", "field_map_tactical",
+            "kill_planning", "cooldown_tracker", "enemy_predictor", "enemy_intelligence",
+            "performance_infra", "cache_manager", "tactical_awareness",
+            "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
+            "scenario_helpers", "scenario_combos", "scenario_generator",
+            "scenario_quick_scorer", "scenario_mutation", "weight_profiles",
+            "game_context", "bulb_ai", "boss_context", "beam_search",
         ]
 
+        # Root-level modules
+        print("\n1️⃣ Uploading root-level modules...")
         for module_name in root_modules:
             module_file = v8_dir / f"{module_name}.lk"
-            if module_file.exists():
-                stats["total"] += 1
-                with open(module_file, 'r', encoding='utf-8') as f:
-                    code = f.read()
-                # Include .lk extension in the uploaded name
-                ai_id = self.create_or_update_ai_script(f"{module_name}.lk", code, folder_v8, existing_ais)
-                if ai_id:
-                    stats["success"] += 1
-                else:
-                    stats["failed"] += 1
-                time.sleep(1.0)
-            else:
+            if not module_file.exists():
                 print(f"   ⚠️  Missing: {module_name}.lk")
+                continue
+            stats["total"] += 1
+            with open(module_file, "r", encoding="utf-8") as f:
+                code = f.read()
+            ok = self.upload_file(f"{module_name}.lk", code)
+            stats["success" if ok else "failed"] += 1
+            time.sleep(0.5)
 
-        # Step 4: Create strategy folder and upload strategy modules
-        print("\n4️⃣ Uploading strategy modules...")
-        strategy_folder = self.create_or_get_folder("strategy", folder_v8, existing_folders)
-        if not strategy_folder:
-            print("   ⚠️  Failed to create strategy folder")
-        else:
-            self.folder_ids["strategy"] = strategy_folder
-
-            # Upload strategy modules (excluding OLD_BACKUP files)
-            strategy_path = v8_dir / "strategy"
-            if strategy_path.exists():
-                strategy_files = sorted(strategy_path.glob("*.lk"))
-                # Filter out backup files
-                strategy_files = [f for f in strategy_files if "OLD_BACKUP" not in f.name and "BACKUP" not in f.name]
-
-                print(f"   Found {len(strategy_files)} strategy modules to upload")
-
-                for module_file in strategy_files:
-                    # Keep full filename including .lk extension
-                    module_name = module_file.name
-                    stats["total"] += 1
-
-                    with open(module_file, 'r', encoding='utf-8') as f:
-                        code = f.read()
-
-                    ai_id = self.create_or_update_ai_script(module_name, code, strategy_folder, existing_ais)
-
-                    if ai_id:
-                        stats["success"] += 1
-                    else:
-                        stats["failed"] += 1
-
-                    time.sleep(1.0)
-            else:
-                print("   ⚠️  No strategy directory found")
-
-        # Step 5: Create math folder and upload math modules
-        print("\n5️⃣ Uploading math modules...")
-        math_folder = self.create_or_get_folder("math", folder_v8, existing_folders)
-        if not math_folder:
-            print("   ⚠️  Failed to create math folder")
-        else:
-            self.folder_ids["math"] = math_folder
-
-            # Upload math modules (excluding README/markdown files)
-            math_path = v8_dir / "math"
-            if math_path.exists():
-                math_files = sorted(math_path.glob("*.lk"))
-
-                print(f"   Found {len(math_files)} math modules to upload")
-
-                for module_file in math_files:
-                    # Keep full filename including .lk extension
-                    module_name = module_file.name
-                    stats["total"] += 1
-
-                    with open(module_file, 'r', encoding='utf-8') as f:
-                        code = f.read()
-
-                    ai_id = self.create_or_update_ai_script(module_name, code, math_folder, existing_ais)
-
-                    if ai_id:
-                        stats["success"] += 1
-                    else:
-                        stats["failed"] += 1
-
-                    time.sleep(1.0)
-            else:
-                print("   ⚠️  No math directory found")
-
-        # Step 6: Re-save main.lk to force recompilation with updated includes
-        # Append a version comment to guarantee the code differs from cached version
-        print("\n6️⃣ Re-saving main.lk to recompile with updated includes...")
-        main_file = v8_dir / "main.lk"
-        if main_file.exists():
-            with open(main_file, 'r', encoding='utf-8') as f:
-                main_code = f.read()
-            # Add timestamp comment to force server recompilation
-            import datetime
-            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            resave_code = main_code.rstrip() + f"\n// build: {ts}\n"
-            main_ai_id = self.find_ai("main.lk", folder_v8, existing_ais)
-            if main_ai_id:
-                save_response = self.session.post(
-                    f"{self.base_url}/ai/save",
-                    data={"ai_id": str(main_ai_id), "code": resave_code}
-                )
-                if save_response.status_code == 200:
-                    print(f"   ✅ main.lk recompiled (ID: {main_ai_id}, build: {ts})")
-                else:
-                    print(f"   ❌ Failed to recompile main.lk")
-            time.sleep(1.0)
-
-        # Summary
-        print("\n" + "="*60)
-        print("📊 UPLOAD COMPLETE")
-        print("="*60)
-        print(f"✅ Successfully uploaded: {stats['success']}/{stats['total']} modules")
-        if stats['failed'] > 0:
-            print(f"❌ Failed: {stats['failed']} modules")
-
-        print("\n📁 V8 structure in LeekWars:")
-        print("   8.0/")
-        print("   └── V8/")
-        print("       ├── main.lk")
-        print("       ├── game_entity.lk")
-        print("       ├── item.lk")
-        print("       ├── field_map.lk")
-        print("       ├── field_map_core.lk")
-        print("       ├── field_map_patterns.lk")
-        print("       ├── field_map_tactical.lk")
-        print("       ├── scenario_simulator.lk")
-        print("       ├── scenario_scorer.lk")
-        print("       ├── scenario_generator.lk")
-        print("       ├── strategy/")
-
+        # strategy/ subfolder
+        print("\n2️⃣ Uploading strategy modules...")
         strategy_path = v8_dir / "strategy"
         if strategy_path.exists():
-            modules = [f for f in sorted(strategy_path.glob("*.lk")) if "OLD_BACKUP" not in f.name]
-            if modules:
-                print(f"       │   ({len(modules)} modules)")
-                for m in modules:
-                    print(f"       │   ├── {m.name}")
+            strategy_files = sorted(strategy_path.glob("*.lk"))
+            strategy_files = [
+                f for f in strategy_files
+                if "OLD_BACKUP" not in f.name and "BACKUP" not in f.name
+            ]
+            print(f"   Found {len(strategy_files)} strategy modules")
+            for module_file in strategy_files:
+                stats["total"] += 1
+                with open(module_file, "r", encoding="utf-8") as f:
+                    code = f.read()
+                ok = self.upload_file(f"strategy/{module_file.name}", code)
+                stats["success" if ok else "failed"] += 1
+                time.sleep(0.5)
+        else:
+            print("   ⚠️  No strategy directory found")
 
-        print("       └── math/")
+        # math/ subfolder
+        print("\n3️⃣ Uploading math modules...")
         math_path = v8_dir / "math"
         if math_path.exists():
-            math_modules = sorted(math_path.glob("*.lk"))
-            if math_modules:
-                print(f"           ({len(math_modules)} modules)")
-                for m in math_modules:
-                    print(f"           ├── {m.name}")
+            math_files = sorted(math_path.glob("*.lk"))
+            print(f"   Found {len(math_files)} math modules")
+            for module_file in math_files:
+                stats["total"] += 1
+                with open(module_file, "r", encoding="utf-8") as f:
+                    code = f.read()
+                ok = self.upload_file(f"math/{module_file.name}", code)
+                stats["success" if ok else "failed"] += 1
+                time.sleep(0.5)
+        else:
+            print("   ⚠️  No math directory found")
 
-        print("\n✨ V8 MODULAR AI SYSTEM IS COMPLETE!")
-        print("\n🚀 V8 KEY FEATURES:")
-        print("   🎯 Action queue pattern (planning + execution phases)")
-        print("   🧠 Beam Search planning (emergent strategy discovery)")
-        print("   ⚔️  Build-specific strategies (Strength, Agility, Magic, Boss)")
-        print("   🤖 Shared combat logic in base_strategy.lk")
-        print("   💊 Magic antidote baiting + GRAPPLE-COVID combo")
-        print("   🛡️  AoE self-damage prevention")
-        print("   🏃 Fighting retreat (attack while fleeing)")
-        print("   📍 Smart positioning (HNS, reachable cells)")
-        print("   📊 Probability-based OTKO with kill probability calculation")
-        print("   🔍 Phase 3 & 4: Monte Carlo + Enemy Prediction")
+        # Re-save main.lk with build timestamp to force recompile
+        # (generator caches compiled .lk and only checks the root file's mtime,
+        #  so appending a comment guarantees the code differs)
+        print("\n4️⃣ Re-saving main.lk to recompile with updated includes...")
+        main_file = v8_dir / "main.lk"
+        if main_file.exists():
+            with open(main_file, "r", encoding="utf-8") as f:
+                main_code = f.read()
+            import datetime
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            stamped = main_code.rstrip() + f"\n// build: {ts}\n"
+            if self.upload_file("main.lk", stamped):
+                print(f"   ✅ main.lk recompiled (build: {ts})")
+            else:
+                print("   ❌ Failed to recompile main.lk")
+            time.sleep(0.5)
 
-        print("\n📖 Usage:")
-        print("   main.lk - Entry point with build detection")
-        print("   include() statements: include('game_entity'), include('strategy/base_strategy')")
+        # Summary
+        print("\n" + "=" * 60)
+        print("📊 UPLOAD COMPLETE")
+        print("=" * 60)
+        print(f"✅ Successfully uploaded: {stats['success']}/{stats['total']} modules")
+        if stats["failed"] > 0:
+            print(f"❌ Failed: {stats['failed']} modules")
 
-        return stats['success'] > 0
+        return stats["success"] > 0
 
     def disconnect(self):
-        """Disconnect from LeekWars"""
+        """Disconnect from LeekWars."""
         if self.token:
             self.session.post(f"{self.base_url}/farmer/disconnect/{self.token}")
             print("\n👋 Disconnected")
 
+
 def main():
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Upload V8 modules to LeekWars')
-    parser.add_argument('--account', default='main', choices=['main', 'cure'],
-                        help='Account to use (main or cure, default: main)')
+    parser = argparse.ArgumentParser(description="Upload V8 modules to LeekWars")
+    parser.add_argument(
+        "--account", default="main", choices=["main", "cure"],
+        help="Account to use (main or cure, default: main)",
+    )
     args = parser.parse_args()
 
-    # Get V8_modules path relative to script location
     script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
     v8_dir = script_dir.parent / "V8_modules"
 
@@ -424,48 +226,23 @@ def main():
         print("❌ V8_modules directory not found")
         sys.exit(1)
 
-    # Count total modules
-    total_modules = 0
-    root_modules = ["main", "game_entity", "item", "field_map", "field_map_core",
-                    "field_map_patterns", "field_map_tactical",
-                    "kill_planning", "cooldown_tracker",
-                    "enemy_predictor", "enemy_intelligence", "performance_infra", "cache_manager", "tactical_awareness",
-                    "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
-                    "scenario_generator", "scenario_quick_scorer", "scenario_mutation", "weight_profiles",
-                    "boss_context", "game_context", "bulb_ai", "item_roles", "item_database",
-                    "scenario_helpers", "scenario_combos", "beam_search"]
-    for module in root_modules:
-        if (v8_dir / f"{module}.lk").exists():
-            total_modules += 1
-
-    strategy_path = v8_dir / "strategy"
-    if strategy_path.exists():
-        strategy_files = [f for f in strategy_path.glob("*.lk") if "OLD_BACKUP" not in f.name]
-        total_modules += len(strategy_files)
-
-    print("="*60)
+    print("=" * 60)
     print("V8 MODULAR AI UPLOADER")
-    print("="*60)
+    print("=" * 60)
     print(f"📁 Source: {v8_dir}")
-    print(f"📦 Total modules to upload: {total_modules}")
-    print(f"🏗️  Architecture: Action queue pattern + build-specific strategies")
     print(f"👤 Account: {args.account}")
 
     uploader = V8Uploader()
 
-    # Login with credentials from config
     email, password = load_credentials(account=args.account)
     if not uploader.login(email, password):
         sys.exit(1)
 
     try:
-        # Create structure and upload all modules
         success = uploader.create_v8_structure(v8_dir)
-
         if not success:
             print("\n⚠️  Some issues occurred during upload")
             sys.exit(1)
-
     except KeyboardInterrupt:
         print("\n⚠️ Interrupted by user")
         sys.exit(1)
@@ -477,5 +254,6 @@ def main():
     finally:
         uploader.disconnect()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
