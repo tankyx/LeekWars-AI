@@ -58,13 +58,27 @@ class UnifiedStrategy extends Strategy {
             var altTarget = this._fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true], target._id)
             if (altTarget != null && !isDead(altTarget._id)) {
                 var altResult = this.runScoringPipelineLight(altTarget)
-                if (altResult != null && altResult['score'] > this._bestScore + 200) {
-                    target = altTarget
-                    this._target = altTarget
-                    this._actions = altResult['scenario']
-                    this._bestScenario = altResult['scenario']
-                    this._bestSimResult = altResult['simResult']
-                    this._bestScore = altResult['score']
+                if (altResult != null) {
+                    // Phase 1.3: percentage threshold + kill-flag override.
+                    // Fixed +200 over-restricted early (scores ~500, refuses
+                    // 30% better alts) and was noise late (scores ~50k).
+                    // Kill-flag override: a confirmed kill on the secondary
+                    // wins even if its raw score is slightly lower — ending
+                    // the fight is worth ≥ any +200 of position.
+                    var threshold = max(200, floor(this._bestScore * 0.15))
+                    var altKillProb = estimateKillProbFromSim(altResult['simResult'], altTarget)
+                    var primaryKillProb = (this._bestSimResult != null) ? estimateKillProbFromSim(this._bestSimResult, this._target) : 0
+                    var altIsKill = altKillProb >= 0.70
+                    var primaryIsKill = primaryKillProb >= 0.70
+                    var killOverride = altIsKill && !primaryIsKill && altResult['score'] > this._bestScore - 1000
+                    if (altResult['score'] > this._bestScore + threshold || killOverride) {
+                        target = altTarget
+                        this._target = altTarget
+                        this._actions = altResult['scenario']
+                        this._bestScenario = altResult['scenario']
+                        this._bestSimResult = altResult['simResult']
+                        this._bestScore = altResult['score']
+                    }
                 }
             }
         }
@@ -188,6 +202,49 @@ class UnifiedStrategy extends Strategy {
         scenariosWithQuickScore = []
         for (var d in diverseList) push(scenariosWithQuickScore, d)
         for (var o in overflow) push(scenariosWithQuickScore, o)
+
+        // Phase 2.1: state-dependent diversity floor. Family-diversity-reorder
+        // is purely quick-score-ranked; in FLEE/SUSTAIN that leaves the head of
+        // the list dominated by offensive scenarios when we actually need to
+        // survive. Inject a floor of defensive entries (pulled from overflow
+        // or original list) so the scorer pipeline sees them.
+        if (target != null && !_isBossFight) {
+            var sds_state = generator.determineStrategicState()
+            var defensiveFloor = 0
+            if (sds_state == "FLEE") defensiveFloor = 5
+            else if (sds_state == "SUSTAIN") defensiveFloor = 4
+            if (defensiveFloor > 0) {
+                var sds_defCount = 0
+                var sds_headLimit = min(defensiveFloor + 4, count(scenariosWithQuickScore))
+                for (var sds_i = 0; sds_i < sds_headLimit; sds_i++) {
+                    if (scenariosWithQuickScore[sds_i]['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                        sds_defCount += 1
+                    }
+                }
+                if (sds_defCount < defensiveFloor) {
+                    // Walk the tail for defensive entries and pull them up.
+                    var sds_promoted = []
+                    var sds_rest = []
+                    var sds_need = defensiveFloor - sds_defCount
+                    for (var sds_j = sds_headLimit; sds_j < count(scenariosWithQuickScore); sds_j++) {
+                        var sds_entry = scenariosWithQuickScore[sds_j]
+                        if (sds_need > 0 && sds_entry['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                            push(sds_promoted, sds_entry)
+                            sds_need -= 1
+                        } else {
+                            push(sds_rest, sds_entry)
+                        }
+                    }
+                    if (count(sds_promoted) > 0) {
+                        var sds_new = []
+                        for (var sds_k = 0; sds_k < sds_headLimit; sds_k++) push(sds_new, scenariosWithQuickScore[sds_k])
+                        for (var sds_p in sds_promoted) push(sds_new, sds_p)
+                        for (var sds_r in sds_rest) push(sds_new, sds_r)
+                        scenariosWithQuickScore = sds_new
+                    }
+                }
+            }
+        }
 
         var aliveEnemies = count(getAliveEnemies())
         var topK
@@ -1322,4 +1379,21 @@ function quickRecoveryWeaponValue(weaponId) {
     var bd = getCachedDamageBreakdown(weaponId)
     if (bd == null) return 0
     return bd['direct'] * 2.0 + bd['dot'] * 1.5 + bd['nova'] * 2.5
+}
+
+// Phase 1.3: lightweight kill-probability estimate from a simResult. Mirrors
+// the (mean / hp) lower bound that scorer.score() computes — sufficient for
+// the alt-target kill-flag gate without re-running the full scorer.
+function estimateKillProbFromSim(simResult, t) {
+    if (simResult == null || t == null) return 0
+    var hp = t._currHealth
+    if (hp == null || hp <= 0) return 1.0
+    var direct = simResult.damageDealt != null ? simResult.damageDealt : 0
+    var dot = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
+    var nova = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
+    var total = direct + dot + nova
+    var ratio = total * 1.0 / hp
+    if (ratio >= 1.0) return 1.0
+    if (ratio < 0) return 0
+    return ratio
 }

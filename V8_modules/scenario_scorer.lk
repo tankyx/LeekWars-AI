@@ -149,11 +149,16 @@ class ScenarioScorer {
             }
         }
 
-        if (killProbability >= 0.70) {
-            damageWeight *= 5.0
-        } else if (killProbability >= 0.50) {
-            damageWeight *= 2.5
-        }
+        // Phase 3.2: smooth kill-probability curve. The old hard cliffs at 70%
+        // (×5) and 50% (×2.5) encouraged optimizing for the *cliff* rather than
+        // genuine win probability — a 69%-kill got 1.0× while 70% got 5×.
+        // Replaced with a quadratic curve (1 + 4*p²) that asymptotes to 5× at
+        // p=1.0 but eases the cliff:
+        //   0.50 → 2.00× (was 2.5)
+        //   0.70 → 2.96× (was 5.0)
+        //   0.85 → 3.89×
+        //   1.00 → 5.00× (matches old ceiling)
+        damageWeight *= (1.0 + 4.0 * killProbability * killProbability)
 
         // Survival imperative: when we're in FLEE territory AND the kill is
         // not reachable this turn, suppress burst-damage scoring so heal+flee

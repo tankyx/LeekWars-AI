@@ -6,6 +6,10 @@ global ANTIDOTE_USED_THIS_FIGHT = false
 global LAST_POISON_DUMP_TURN = -999
 global PREV_ENEMY_POISON = 0
 global BAIT_START_TURN = 1
+// Phase 1.2: per-enemy antidote use counter. Persists across turns and
+// across CooldownTracker reconstructions. >=2 uses flags a double-carrier
+// (chip + bulb antidote, or two cleanse sources).
+global ANTIDOTE_USE_COUNT = [:]
 
 class CooldownTracker {
     _target = null
@@ -122,6 +126,7 @@ class CooldownTracker {
 
         if (prevPoison > 1 && currPoison == 0) {
             this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
+            this.bumpAntidoteUseCount(enemyId)
 
             ANTIDOTE_USED_THIS_FIGHT = true
             POISON_PHASE = "DUMP"
@@ -131,10 +136,29 @@ class CooldownTracker {
 
         if (prevPoison > currPoison + 1) {
             this.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
+            this.bumpAntidoteUseCount(enemyId)
             return true
         }
 
         return false
+    }
+
+    bumpAntidoteUseCount(enemyId) {
+        if (!mapContainsKey(ANTIDOTE_USE_COUNT, enemyId)) {
+            ANTIDOTE_USE_COUNT[enemyId] = 0
+        }
+        ANTIDOTE_USE_COUNT[enemyId] = ANTIDOTE_USE_COUNT[enemyId] + 1
+        // Flag the enemy profile as a double-carrier once we've observed
+        // two cleanses. Carrier flag is consumed by scenario generator to
+        // suppress DUMP and pivot poison weight.
+        if (ANTIDOTE_USE_COUNT[enemyId] >= 2 && mapContainsKey(__enemyProfile, enemyId)) {
+            __enemyProfile[enemyId]['doubleAntidoteCarrier'] = true
+        }
+    }
+
+    getAntidoteUseCount(enemyId) {
+        if (!mapContainsKey(ANTIDOTE_USE_COUNT, enemyId)) return 0
+        return ANTIDOTE_USE_COUNT[enemyId]
     }
 
     isAntidoteAvailable(enemyId) {

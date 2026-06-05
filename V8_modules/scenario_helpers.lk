@@ -170,6 +170,18 @@ class ScenarioHelpers {
             return "ATTRITION"
         }
 
+        // Phase 3.1: CLEANUP state — winning position, finish efficiently.
+        // We're > 70% HP, enemy < 25% HP, not under time pressure, and our
+        // damage estimate covers ≥ 70% of remaining enemy HP. Routes to
+        // buildKillScenarios for tight, low-buff finishing pressure (avoids
+        // the ATTRITION trap of stack-buffing when the fight is 1-2 turns
+        // from over).
+        if (!_isBossFight && !__timePressure
+            && playerHPPercent > 70 && enemyHPPercent < 25
+            && poisonKillDmg > 0 && poisonKillDmg >= enemyHP * 0.70) {
+            return "CLEANUP"
+        }
+
         // AGGRO guard-rail: old thresholds (turn>25) caused aggressive over-
         // commitment on strong matchups. Raise to turn>35 under time pressure,
         // and suppress AGGRO entirely when we’re significantly behind on HP

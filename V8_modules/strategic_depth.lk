@@ -287,6 +287,60 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             }
         }
 
+        // Phase 2.2: static counter signals (T1-applicable, no observation gate).
+        // The existing observation-based adaptations at lines 167-186 require 5
+        // turns of data. But the enemy profile already encodes verifiable static
+        // signals on T1 — apply them immediately with conservative magnitudes
+        // (smaller than dynamic adaptations to avoid over-tuning on misclassification).
+        // Static signal A: enemy has reflect chip (active or not). Reduce burst
+        // preemptively so we don't slam a full-TP burst into reflect on the turn
+        // they activate. The existing reflect block (below) only fires when
+        // reflectActive == true; T1 with reflect on cooldown was missed.
+        if (primaryProfile['hasReflect']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 0.85)
+        }
+        // Static signal B: enemy carries antidote — boost poison weight while
+        // we're in BAIT so the BAIT pressure is meaningful. Skip when we've
+        // already learned they're a double-carrier (Phase 1.2 already pivoted).
+        // GATED: magic builds are already double-aggressive vs poison-mirrors
+        // (denial × 1.2, otko × 1.4 in MAG-vs-MAG block below). Doubling the
+        // poison weight here breaks the burst-pivot the mirror block tries to
+        // force, so skip for our magic players. Tested via Phase 2 matrix:
+        // MH/smart_mag dropped 97.5% → 87.5% when this signal was unconditional.
+        if (primaryProfile['hasAntidote'] && POISON_PHASE == "BAIT"
+            && __playerBuildType != BUILD_MAGIC) {
+            if (!mapContainsKey(primaryProfile, 'doubleAntidoteCarrier') || !primaryProfile['doubleAntidoteCarrier']) {
+                if (mapContainsKey(adapted, 'dotEffects')) {
+                    adapted['dotEffects'] = floor(adapted['dotEffects'] * 1.15)
+                }
+                if (mapContainsKey(adapted, 'denialValue')) {
+                    adapted['denialValue'] = floor(adapted['denialValue'] * 1.15)
+                }
+            }
+        }
+        // Static signal C: enemy has NO shield chips at all — burst unmitigated.
+        // The existing vs_burst block only applies this when isBurstBuild is true.
+        if (!primaryProfile['hasShield']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.1)
+        }
+
+        // Phase 1.2: double-antidote carrier — enemy has cleansed ≥2 times,
+        // proving they pack two antidote sources (chip + bulb, or a teammate
+        // cleanse, etc). Stop investing in poison; pivot toward burst/denial.
+        if (primaryProfile != null && mapContainsKey(primaryProfile, 'doubleAntidoteCarrier')
+            && primaryProfile['doubleAntidoteCarrier']) {
+            if (mapContainsKey(adapted, 'dotEffects')) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * 0.6)
+            }
+            if (mapContainsKey(adapted, 'poisonStacks')) {
+                adapted['poisonStacks'] = floor(adapted['poisonStacks'] * 0.6)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.15)
+            }
+        }
+
         if (primaryProfile['hasReflect'] && primaryEnemy != null) {
             var reflectActive = primaryEnemy.hasDamageReturn()
             if (reflectActive) {

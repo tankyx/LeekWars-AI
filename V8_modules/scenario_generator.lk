@@ -48,10 +48,18 @@ class ScenarioGenerator extends ScenarioCombos {
             //    for 2+ turns — exploit the real cleanse gap.
             //  • Extend BAIT to 8 turns otherwise (from 5) so we actually
             //    force Antidote uses instead of timing out mid-rotation.
+            //  • Phase 1.2: if enemy has used antidote ≥2× within 12 turns,
+            //    treat them as a DOUBLE_ANTIDOTE_CARRIER — stay in BAIT
+            //    indefinitely (cap stacks, never commit the DUMP we can't
+            //    win). Poison weight pivot handled downstream in scorer.
             if (POISON_PHASE == "BAIT") {
                 var baitAntidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
                 var elapsed = currentTurn - BAIT_START_TURN
-                if (baitAntidoteCD >= 2 && elapsed >= 2) {
+                var antidoteUses = tracker.getAntidoteUseCount(this._target._id)
+                var isDoubleCarrier = (antidoteUses >= 2 && (currentTurn - BAIT_START_TURN) < 12)
+                if (isDoubleCarrier) {
+                    // Hold BAIT — refuse DUMP transition. Light pressure only.
+                } else if (baitAntidoteCD >= 2 && elapsed >= 2) {
                     POISON_PHASE = "DUMP"
                 } else if (elapsed >= 8) {
                     POISON_PHASE = "DUMP"
@@ -89,6 +97,12 @@ class ScenarioGenerator extends ScenarioCombos {
             this.buildPuzzleScenarios(scenarios, availableTP, availableMP)
         }
         else if (state == "KILL") {
+            this.buildKillScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "CLEANUP") {
+            // Phase 3.1: CLEANUP routes to kill scenarios — already focuses on
+            // direct damage / OTKO / finishing combos and avoids the heavy
+            // buff-stacking that ATTRITION does. Cheap and reuses tested code.
             this.buildKillScenarios(scenarios, availableTP, availableMP)
         }
         else if (state == "AGGRO") {

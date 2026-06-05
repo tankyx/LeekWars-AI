@@ -251,6 +251,32 @@ function main() {
     if (getOperations() > _ops93) {
         debugW("FALLBACK_T" + getTurn())
         if (target != null) {
+            // Phase 1.1: defensive floor — when ops budget is exhausted AND HP
+            // is critical, try firing one heal/shield/damage-return chip before
+            // the standard move+fire pass. Closes the corner case where the
+            // fallback walks a low-HP leek into a burst opponent's range while
+            // unused recovery chips sit on hand.
+            var fbHpPct = (player._currHealth * 100) / player._maxHealth
+            if (fbHpPct < 50) {
+                var bestRecoveryChipId = -1
+                var bestRecoveryVal = 0
+                for (var rcid in mapKeys(arsenal.playerEquippedChips)) {
+                    var rchip = arsenal.playerEquippedChips[rcid]
+                    if (!isHealingChip(rcid) && !isShieldChip(rcid) && !isDamageReturnChip(rcid)) continue
+                    if (getCooldown(rcid, player._id) > 0) continue
+                    if (getTP() < rchip._cost) continue
+                    var rval = quickRecoveryChipValue(rcid, 'self')
+                    if (rval > bestRecoveryVal) {
+                        bestRecoveryVal = rval
+                        bestRecoveryChipId = rcid
+                    }
+                }
+                if (bestRecoveryChipId != -1) {
+                    useChip(bestRecoveryChipId, player._id)
+                    debugW("FALLBACK_DEF_T" + getTurn() + "_chip" + bestRecoveryChipId + "_val" + bestRecoveryVal)
+                }
+            }
+
             var fbStart = getCell()
             var fbTargetCell = target._cellPos
 
