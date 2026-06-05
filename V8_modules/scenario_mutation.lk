@@ -134,8 +134,14 @@ class ScenarioMutator {
         for (var i = 0; i < count(scenario); i++) {
             var action = scenario[i]
             if (action.chip == -1) continue
+            // FIX: only substitute within slots whose semantics are defined by
+            // the chip's role (BUFF / DOT / DEBUFF / DIRECT). ACTION_TELEPORT
+            // semantics depend on the chip being a teleport chip — substituting
+            // a same-family utility (CHIP_JUMP <-> CHIP_ANTIDOTE, both in
+            // ROLE_UTILITY) breaks the executor which reads getTeleportMaxRange
+            // off action.chip. Same risk for ACTION_MOVEMENT / ACTION_CHECKPOINT.
+            if (!this.isChipOrWeaponAction(action)) continue
 
-            var actionType = action.type
             var equippedChips = mapKeys(this._arsenal.playerEquippedChips)
             for (var altChip in equippedChips) {
                 if (altChip == action.chip) continue
