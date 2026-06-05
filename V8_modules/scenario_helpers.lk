@@ -1668,62 +1668,52 @@ class ScenarioHelpers {
             var targetCell = this._target._cellPos
             var isSplashAttack = false
 
+            // Hitmap is a fast-path hint: if simPos is in the pre-baked shooter
+            // list, we can skip the explicit range/launch checks. On a miss
+            // (which includes empty lists from buildSingleItemHitMap filtering
+            // by ReachableGraph), fall through to the direct geometry check —
+            // simPos may be a cell reached via in-scenario chip/teleport that
+            // wasn't in the original reachable graph. Previously the hitmap
+            // branch unconditionally skipped the weapon on miss, and because
+            // every equipped weapon got a (possibly empty) hitmap entry at
+            // field_map_patterns.lk:576, the else-fallback was dead code. That
+            // caused FIRETURN=0 turns to emit no damage scenarios.
+            var inHitmap = false
             if (mapContainsKey(this._fieldMap.weaponHitmap, weaponId)) {
                 var shooterCells = this._fieldMap.weaponHitmap[weaponId]
-                var canShootFromHere = false
                 for (var cell in shooterCells) {
                     if (cell == simPos) {
-                        canShootFromHere = true
+                        inHitmap = true
                         break
                     }
                 }
-                if (!canShootFromHere) continue
+            }
 
-                if (!lineOfSight(simPos, this._target._cellPos)) {
-                    if (this._strategy != null) {
-                        var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
-                        if (splashResult != null) {
-                            targetCell = splashResult['cell']
-                            isSplashAttack = true
-                        } else {
-                            continue
-                        }
-                    } else {
-                        continue
-                    }
-                }
-            } else {
+            if (!inHitmap) {
                 var dist = getCellDistance(simPos, this._target._cellPos)
                 if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
 
-                // Launch-type geometry — mirror the chip-block fix
-                // (scenario_helpers.lk:~1735). The weaponHitmap branch above is
-                // launch-type-aware (hitmap is built per shooter cell with
-                // geometry baked in); this fallback branch is taken when the
-                // weapon is not in the hitmap (e.g. simPos differs from the
-                // hitmap's seed cell during multi-step scenario simulation)
-                // and previously only checked range + LoS. LINE/DIAGONAL/STAR
-                // weapons (m_laser, rifle, etc.) would then be picked at cells
-                // off-axis from the target, and the runtime useWeapon call
-                // returned -4 (USE_INVALID_POSITION) — observed at T10 of
-                // koe2 fight 52574382 with w40 at d=7 (KILL turn wasted).
+                // Launch-type geometry — LINE/DIAGONAL/STAR weapons fail
+                // useWeapon with -4 (USE_INVALID_POSITION) off-axis.
                 if (weapon._launchType != null && weapon._launchType > 0 &&
                     !isSimLaunchValid(weapon._launchType, simPos, this._target._cellPos)) {
                     continue
                 }
+            }
 
-                if (!lineOfSight(simPos, this._target._cellPos)) {
-                    if (this._strategy != null) {
-                        var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
-                        if (splashResult != null) {
-                            targetCell = splashResult['cell']
-                            isSplashAttack = true
-                        } else {
-                            continue
-                        }
+            // LoS / splash check is unconditional — applies whether the
+            // hitmap hit or the direct branch passed.
+            if (!lineOfSight(simPos, this._target._cellPos)) {
+                if (this._strategy != null) {
+                    var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
+                    if (splashResult != null) {
+                        targetCell = splashResult['cell']
+                        isSplashAttack = true
                     } else {
                         continue
                     }
+                } else {
+                    continue
                 }
             }
 
