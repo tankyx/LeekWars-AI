@@ -30,8 +30,10 @@ class ScenarioQuickScorer {
         var actionCount = 0
         var hasOffensiveBuff = false
         var hasDefensiveBuff = false
+        var hasMotivation = false
         var hasHeal = false
         var hasTeleport = false
+        var buffActionCount = 0
         var hasCheckpoint = false
         var finalPosition = -1
         var weaponActions = 0
@@ -51,6 +53,7 @@ class ScenarioQuickScorer {
 
                         if (action.weaponId == WEAPON_NEUTRINO) push(comboSignature, "NEUTRINO")
                         if (action.weaponId == WEAPON_HEAVY_SWORD) push(comboSignature, "HEAVY_SWORD")
+                        if (action.weaponId == WEAPON_AXE) push(comboSignature, "AXE")
                     }
                 } else if (action.chip != -1) {
                     chipDamageActions++
@@ -67,6 +70,7 @@ class ScenarioQuickScorer {
             else if (action.type == Action.ACTION_BUFF) {
                 var chipCost = getCachedChipCost(action.chip)
                 tpEstimate += chipCost
+                buffActionCount++
 
                 if (action.chip == CHIP_STEROID || action.chip == CHIP_WARM_UP || action.chip == CHIP_DOPING || action.chip == CHIP_PRISM || action.chip == CHIP_WIZARDRY || action.chip == CHIP_KNOWLEDGE || action.chip == CHIP_ELEVATION) {
                     hasOffensiveBuff = true
@@ -78,6 +82,9 @@ class ScenarioQuickScorer {
                 }
                 if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION || action.chip == CHIP_CURE) {
                     hasHeal = true
+                }
+                if (action.chip == CHIP_MOTIVATION) {
+                    hasMotivation = true
                 }
             }
             else if (action.type == Action.ACTION_TELEPORT) {
@@ -109,11 +116,39 @@ class ScenarioQuickScorer {
         }
         score += damageEstimate * 0.3
 
-        if (hasOffensiveBuff) score += 300
+        // Distance-gated buff stacking penalty: at d > MP + maxWR + 3 we can't
+        // possibly fire this turn, so stacking 2+ buffs burns 3+ turns of
+        // pre-combat duration before contact. Cap combined buff bonus to a
+        // single-buff value (LeekRain T2: BUFF c14 + BUFF c110 + TELE at d20
+        // burned 12 TP for 0 future damage benefit).
+        var qsBuffMult = 1.0
+        if (buffActionCount >= 2 && weaponActions + chipDamageActions == 0) {
+            var qsMaxWR = 1
+            for (var qsWid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var qsW = this._arsenal.playerEquippedWeapons[qsWid]
+                if (qsW._maxRange > qsMaxWR) qsMaxWR = qsW._maxRange
+            }
+            var qsDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+            if (qsDist != null && qsDist > this._player._currMp + qsMaxWR + 3) {
+                qsBuffMult = 0.5
+            }
+        }
+        if (hasOffensiveBuff) score += 300 * qsBuffMult
+        // MOTIVATION is an economy chip, not in the offensive-buff list above
+        // (would falsely chain STEROID combo bonuses). It returns 6 TP across
+        // 3 turns at cost 4: net +2 TP, but more importantly enables 16-TP
+        // combo windows. Worth ~2 weapon shots downstream. Add chained-attack
+        // bonus when this scenario already plans to attack (setup synergy).
+        // MOTIVATION exempt from distance penalty — its value pays off over
+        // 3 turns regardless of current engagement range.
+        if (hasMotivation) {
+            score += 600
+            if (weaponActions + chipDamageActions > 0) score += 200
+        }
         if (hasDefensiveBuff) {
             var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
-            if (hpPercent < 50) score += 400
-            else score += 150
+            if (hpPercent < 50) score += 400 * qsBuffMult
+            else score += 150 * qsBuffMult
         }
         if (hasHeal) {
             var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
@@ -126,7 +161,19 @@ class ScenarioQuickScorer {
         score += comboBonus
 
         if (hasCheckpoint) {
-            score += 1500
+            // Checkpoint bonus reflects "this scenario passed a strategic
+            // milestone" — but defensive checkpoints with no attack and HP
+            // not critical were dominating offensive options at HP 50-70%
+            // (LeekRain T6: defensive checkpoint scored +1500 over a viable
+            // press at HP 55%/d10/mp3). Full bonus for attack-bearing or
+            // critical-HP checkpoints, half for stand-alone defensive prep.
+            var hasAttack = (weaponActions + chipDamageActions > 0)
+            var qsHpPct = (this._player._currHealth * 100) / this._player._maxHealth
+            if (hasAttack || qsHpPct < 40) {
+                score += 1500
+            } else {
+                score += 500
+            }
         }
 
         if (finalPosition != -1 && mapContainsKey(this._fieldMap.damageMap, finalPosition)) {
@@ -134,7 +181,22 @@ class ScenarioQuickScorer {
             if (cellObj._isOTKOCell) {
                 score += 3000
             } else {
-                score += cellObj._totalDamage * 0.5
+                // B2: Buff-only scenarios were getting credited the full
+                // _totalDamage * 0.5 finalPosition bonus despite not actually
+                // firing those weapons. Combined with active MP-burn from
+                // poison kiters (koe2), this trapped the bot in buff-loops:
+                // it kept picking "land on a damage cell" plans that never
+                // fired because the next turn MP-burn re-pinned us.
+                //   - No attack actions:        50% of bonus
+                //   - No attack + MP-burned:    10% of bonus (effectively 0)
+                //   - Has attack:               full bonus
+                var positionBonus = cellObj._totalDamage * 0.5
+                var hasAttackAction = (weaponActions + chipDamageActions) > 0
+                if (!hasAttackAction) {
+                    var mpBurned = (this._player._currMp < this._player._maxMp)
+                    positionBonus *= (mpBurned ? 0.1 : 0.5)
+                }
+                score += positionBonus
             }
         }
 
@@ -183,6 +245,13 @@ class ScenarioQuickScorer {
         }
 
         if (this.contains(sigStr, "GRAPPLE") && this.contains(sigStr, "HEAVY_SWORD")) {
+            return 1500
+        }
+
+        // Grapple + Axe: classic close-and-burst combo. Grapple pulls the
+        // enemy adjacent, then Axe×2 dumps the full TP burst at melee. Same
+        // template as the Heavy Sword combo, just a different finisher.
+        if (this.contains(sigStr, "GRAPPLE") && this.contains(sigStr, "AXE")) {
             return 1500
         }
 

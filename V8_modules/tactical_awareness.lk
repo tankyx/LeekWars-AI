@@ -10,6 +10,79 @@ class ThreatPrediction {
     confidence = 1.0
 }
 
+// Returns the enemy's effective MP next turn, accounting for movement-buff
+// chips they could cast (Leather Boots +2, Seven League Boots +3) given
+// current TP and cooldown. Threat cache was previously using raw _currMp,
+// so a 6-MP enemy with Leather Boots ready was modeled as reaching 6 cells
+// when they actually reach 8 — letting us walk into "safe" cells they tap.
+function getEffectiveEnemyMP(enemy) {
+    var mp = enemy._currMp
+    var tp = enemy._currTp
+    var chips = getChips(enemy._id)
+    var bonus = 0
+    // Prefer Seven League Boots (+3) when both available.
+    if (inArray(chips, CHIP_SEVEN_LEAGUE_BOOTS) &&
+        getCooldown(CHIP_SEVEN_LEAGUE_BOOTS, enemy._id) == 0) {
+        var slbCost = getChipCost(CHIP_SEVEN_LEAGUE_BOOTS)
+        if (slbCost != null && tp >= slbCost) bonus = 3
+    }
+    if (bonus < 2 && inArray(chips, CHIP_LEATHER_BOOTS) &&
+        getCooldown(CHIP_LEATHER_BOOTS, enemy._id) == 0) {
+        var lbCost = getChipCost(CHIP_LEATHER_BOOTS)
+        if (lbCost != null && tp >= lbCost) {
+            if (bonus < 2) bonus = 2
+        }
+    }
+    return mp + bonus
+}
+
+// Returns the set of cells an entity can teleport/jump to on their next turn,
+// given current TP and cooldowns. These are "blink" landing cells that bypass
+// MP-walking entirely. Used for enemy threat reach AND for the player cover
+// heatmap (to mark cells we could land on via JUMP/TELEPORTATION).
+function getEntityBlinkCells(enemy) {
+    var blinkCells = []
+    var tp = enemy._currTp
+    var chips = getChips(enemy._id)
+    var origin = enemy._cellPos
+
+    var ranges = []
+    if (inArray(chips, CHIP_TELEPORTATION) &&
+        getCooldown(CHIP_TELEPORTATION, enemy._id) == 0) {
+        var tCost = getChipCost(CHIP_TELEPORTATION)
+        if (tCost != null && tp >= tCost) {
+            push(ranges, ['min': getChipMinRange(CHIP_TELEPORTATION),
+                          'max': getChipMaxRange(CHIP_TELEPORTATION)])
+        }
+    }
+    if (inArray(chips, CHIP_JUMP) &&
+        getCooldown(CHIP_JUMP, enemy._id) == 0) {
+        var jCost = getChipCost(CHIP_JUMP)
+        if (jCost != null && tp >= jCost) {
+            push(ranges, ['min': getChipMinRange(CHIP_JUMP),
+                          'max': getChipMaxRange(CHIP_JUMP)])
+        }
+    }
+    if (count(ranges) == 0) return blinkCells
+
+    // Iterate the board once; cheaper than two passes when both chips are up.
+    for (var c = 0; c < 613; c++) {
+        if (isObstacle(c)) continue
+        if (isEntity(c)) continue
+        if (c == origin) continue
+        var d = getCellDistance(origin, c)
+        if (d == null) continue
+        var inRange = false
+        for (var r = 0; r < count(ranges); r++) {
+            if (d >= ranges[r]['min'] && d <= ranges[r]['max']) { inRange = true; break }
+        }
+        if (!inRange) continue
+        if (!getCachedLineOfSight(origin, c)) continue
+        push(blinkCells, c)
+    }
+    return blinkCells
+}
+
 function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
 
     var prediction = new ThreatPrediction()
@@ -19,7 +92,8 @@ function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
 
     var enemyWeapons = getWeapons(enemy._id)
     var enemyChips = getChips(enemy._id)
-    var enemyMP = enemy._currMp
+    // Effective MP accounts for boots they could cast this turn (+2/+3).
+    var enemyMP = getEffectiveEnemyMP(enemy)
     var enemyTP = enemy._currTp
 
     var currentPosDamage = calculateBestAttackDamage(
@@ -30,9 +104,7 @@ function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
     var bestPosition = enemy._cellPos
 
     if (enemyMP > 0) {
-        // Matches precomputeEnemyReachablePositions cap of 8 — previous cap
-        // of 5 missed attack vectors for MP 6+ enemies.
-        var searchRadius = min(enemyMP, 8)
+        var searchRadius = min(enemyMP, 11)
 
         for (var dx = -searchRadius; dx <= searchRadius; dx++) {
             for (var dy = -searchRadius; dy <= searchRadius; dy++) {
@@ -55,6 +127,18 @@ function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
                     bestPosition = testCell
                 }
             }
+        }
+    }
+
+    // Blink cells (teleport/jump): bypass MP. Bound separately since they're
+    // typically a small set and LoS-validated already.
+    var blinkCells = getEntityBlinkCells(enemy)
+    for (var bi = 0; bi < count(blinkCells); bi++) {
+        var bCell = blinkCells[bi]
+        var bDmg = calculateBestAttackDamage(bCell, targetCell, enemy, enemyWeapons, enemyChips, enemyTP)
+        if (bDmg > maxDamageAfterMovement) {
+            maxDamageAfterMovement = bDmg
+            bestPosition = bCell
         }
     }
 
@@ -148,15 +232,13 @@ function predictTotalThreatAtCell(targetCell, enemies, player, arsenal) {
 
 function precomputeEnemyReachablePositions(enemy) {
     var positions = [enemy._cellPos]
-    var enemyMP = enemy._currMp
+    // Effective MP factors in Leather Boots (+2) / Seven League Boots (+3)
+    // they could cast on their incoming turn given current TP and cooldown.
+    var enemyMP = getEffectiveEnemyMP(enemy)
     if (enemyMP > 0) {
-        // Prior bug: searchRadius was capped at 5, so MP 6+ enemies (Vorberg
-        // with MP 8, most L300 bots with MP 6-7) had their reach-and-hit
-        // cells missed by the threat cache — KG's scorer undercounted
-        // incoming damage and picked positions where the enemy could land a
-        // 900+ shot next turn. Cap at 8 (covers base 6 + 2 from Leather
-        // Boots/Seven League Boots). Outer caller guards ops budget.
-        var searchRadius = min(enemyMP, 8)
+        // Cap at 11 to cover base 6 + SLB 3 + Leather 2 in the most extreme
+        // case; the pathLen check then gates per actual board topology.
+        var searchRadius = min(enemyMP, 11)
         for (var dx = -searchRadius; dx <= searchRadius; dx++) {
             for (var dy = -searchRadius; dy <= searchRadius; dy++) {
                 var dist = abs(dx) + abs(dy)
@@ -169,6 +251,13 @@ function precomputeEnemyReachablePositions(enemy) {
                 push(positions, testCell)
             }
         }
+    }
+    // Merge teleport/jump landing cells — these bypass MP entirely and were
+    // previously unmodeled, so a Teleportation-equipped enemy could land in
+    // any LoS cell at range 12 while we scored the target as safe.
+    var blink = getEntityBlinkCells(enemy)
+    for (var b = 0; b < count(blink); b++) {
+        push(positions, blink[b])
     }
     return positions
 }
@@ -429,4 +518,96 @@ function isPredictedSurvivable(cell, enemies, player, arsenal) {
 
     var safetyMargin = 1.2
     return (predictedThreat * safetyMargin) < player._currHealth
+}
+
+// Phase O: estimate how many turns until the player can land a shot on the
+// target. Returns:
+//   0 — current cell has a clean shot (range+LoS+positive dmg)
+//   1 — after-move (MP) or JUMP this turn produces a shot
+//   2 — 2-ply reach (an MP-reachable cell can next-turn-MP into a shot)
+//   3 — further away than 2 turns (treat as "stuck/far")
+// Used by the scorer to:
+//   (a) decay offensive-buff value when buffs would expire before any shot
+//   (b) reward closing moves when we need to traverse multiple turns
+// Skips GL splash optimization for simplicity — Phase L already handles
+// fine-grained fire-cell discovery; this is a coarse classifier.
+function _canShootAtTargetFrom(cell, target, weaponIds, damageChipIds, arsenalObj) {
+    var d = getCellDistance(cell, target._cellPos)
+    if (d == null) return false
+
+    for (var wid in weaponIds) {
+        var w = arsenalObj.playerEquippedWeapons[wid]
+        if (d < w._minRange || d > w._maxRange) continue
+        if (w._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(cell, target._cellPos)) continue
+        if (!lineOfSight(cell, target._cellPos)) continue
+        return true
+    }
+
+    for (var cid in damageChipIds) {
+        var c = arsenalObj.playerEquippedChips[cid]
+        if (d < c._minRange || d > c._maxRange) continue
+        if (!lineOfSight(cell, target._cellPos)) continue
+        return true
+    }
+
+    return false
+}
+
+function estimateNearestFireTurn(playerObj, targetObj, arsenalObj) {
+    if (targetObj == null) return 3
+
+    var weaponIds = mapKeys(arsenalObj.playerEquippedWeapons)
+
+    var damageChipIds = []
+    for (var cid in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (isPoisonChip(cid) || isDebuffChip(cid)) continue
+        var cobj = arsenalObj.playerEquippedChips[cid]
+        if (cobj == null) continue
+        var bd = getCachedDamageBreakdown(cid)
+        if (bd != null && (bd['direct'] > 0 || bd['nova'] > 0)) push(damageChipIds, cid)
+    }
+
+    if (_canShootAtTargetFrom(playerObj._cellPos, targetObj, weaponIds, damageChipIds, arsenalObj)) return 0
+
+    var mpCells = fieldMap.getReachableCellsWithinMP(playerObj._cellPos, playerObj._currMp)
+    for (var c in mpCells) {
+        if (_canShootAtTargetFrom(c, targetObj, weaponIds, damageChipIds, arsenalObj)) return 1
+    }
+
+    var hasJump = mapContainsKey(arsenalObj.playerEquippedChips, CHIP_JUMP) &&
+                  getCooldown(CHIP_JUMP, playerObj._id) == 0
+    if (hasJump) {
+        var pX = getCellX(playerObj._cellPos)
+        var pY = getCellY(playerObj._cellPos)
+        for (var jdx = -3; jdx <= 3; jdx++) {
+            for (var jdy = -3; jdy <= 3; jdy++) {
+                if (jdx == 0 && jdy == 0) continue
+                if (abs(jdx) + abs(jdy) > 3) continue
+                var jc = getCellFromXY(pX + jdx, pY + jdy)
+                if (jc == null || jc < 0) continue
+                if (isObstacle(jc) || isEntity(jc)) continue
+                if (_canShootAtTargetFrom(jc, targetObj, weaponIds, damageChipIds, arsenalObj)) return 1
+            }
+        }
+    }
+
+    // 2-ply coarse scan: any cell within currentMP + nextTurnMP that has a shot
+    // means we can reach a fire position in 2 turns of plain movement.
+    if (getOperations() < _ops79) {
+        var farRadius = min(playerObj._currMp + getMP(), 8)
+        var pX2 = getCellX(playerObj._cellPos)
+        var pY2 = getCellY(playerObj._cellPos)
+        for (var dx2 = -farRadius; dx2 <= farRadius; dx2++) {
+            for (var dy2 = -farRadius; dy2 <= farRadius; dy2++) {
+                if (abs(dx2) + abs(dy2) > farRadius) continue
+                if (abs(dx2) + abs(dy2) <= playerObj._currMp) continue  // already covered by MP scan
+                var fc = getCellFromXY(pX2 + dx2, pY2 + dy2)
+                if (fc == null || fc < 0) continue
+                if (isObstacle(fc)) continue
+                if (_canShootAtTargetFrom(fc, targetObj, weaponIds, damageChipIds, arsenalObj)) return 2
+            }
+        }
+    }
+
+    return 3
 }

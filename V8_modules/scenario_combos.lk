@@ -466,6 +466,37 @@ class ScenarioCombos extends ScenarioHelpers {
         // never actually reached beyond walking distance). Rewritten to scan
         // all cells within teleport range, filter by weapon-range-to-target +
         // LoS, and pick the cell with highest expected damage.
+
+        // Suppress vs magic-poison kiters ONLY during the early commitment
+        // window (turns 1-5). Original gate also blocked HP >= 60% for the
+        // entire fight to keep BAIT_ANCHOR primary, but the cost was: when
+        // BAIT_ANCHOR returned NO_SHOT (no viable anchor cell can fire),
+        // no offensive template emitted at all and the scorer fell back to
+        // pure-buff scenarios. koe2 fight 52574192 T4-T7 reproduced this:
+        // 4 turns of buff-only while poison drained 100+ HP/turn.
+        //
+        // Past T5, let Emergency Approach emit and let the natural
+        // `bestDamage <= 0` cutoff at line 551 below filter out cells with
+        // no viable shot. The scorer compares both templates and picks the
+        // better one — BAIT_ANCHOR still wins when its anchor is a real
+        // shooter, but Emergency Approach is at least *there* as a damage
+        // option when BAIT_ANCHOR cannot fire.
+        // Original gate was turn <= 5 to "let BAIT_ANCHOR play primary" vs
+        // poison kiters. But when BAIT_ANCHOR returns NO_SHOT and Emergency
+        // Approach is suppressed too, NO offensive template fires and the
+        // bot wastes its TP on buffs (LeekRain T3 d15: 14 TP burned with
+        // FLR_CD_SAT). Tighten to turn <= 2 only — past T2 we're committed
+        // to closing distance regardless of profile.
+        if (this._target != null && getTurn() <= 2) {
+            var emaProfile = getEnemyProfile(this._target._id)
+            if (emaProfile != null
+                && emaProfile['kiterFlavor'] == 'magic_poison'
+                && this._player._maxHealth > 0
+                && this._player._currHealth * 100 / this._player._maxHealth >= 60) {
+                return null
+            }
+        }
+
         var approachTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
         if (approachTeleChip == null) return null
         var tpTeleportApproach = getCachedChipCost(approachTeleChip)
@@ -489,11 +520,28 @@ class ScenarioCombos extends ScenarioHelpers {
         }
         if (maxWeaponRange == 0) return null
 
-        // Only run when current position can't reach enemy with any weapon.
-        // Otherwise the regular move+attack scenarios already cover it.
-        if (distNow <= maxWeaponRange && getCachedLineOfSight(playerPos, targetPos)) {
-            return null
+        // Only run when current position can't FIRE any weapon at the enemy.
+        // Previously this gated on `distNow <= maxWeaponRange && LoS`, but
+        // "in range" doesn't mean "can fire" — LINE/DIAGONAL/STAR weapons
+        // still need launch-type axis alignment. Observed at koe2 fight
+        // 52574382 T5-T7: LeekRain stuck at c=291 with d=9 vs target c=450
+        // (within Magnum range 10) but no LINE weapon's launch geometry
+        // matched, ROCKFALL was out of range (max 7), so no offensive
+        // scenario emitted and the bot sat buffing for 3 turns while MP-burn
+        // kept it pinned. New gate: only return null if at least one weapon
+        // would actually fire from playerPos (range + LoS + launch geometry).
+        var canFireFromHere = false
+        for (var wIdFire in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wObjFire = this._arsenal.playerEquippedWeapons[wIdFire]
+            if (wObjFire == null) continue
+            if (distNow < wObjFire._minRange || distNow > wObjFire._maxRange) continue
+            if (!getCachedLineOfSight(playerPos, targetPos)) continue
+            if (wObjFire._launchType != null && wObjFire._launchType > 0 &&
+                !isSimLaunchValid(wObjFire._launchType, playerPos, targetPos)) continue
+            canFireFromHere = true
+            break
         }
+        if (canFireFromHere) return null
 
         var tpBudgetAfterTele = availableTP - tpTeleportApproach
         var bestCell = -1
@@ -516,6 +564,12 @@ class ScenarioCombos extends ScenarioHelpers {
                 var wObj = this._arsenal.playerEquippedWeapons[wid]
                 if (wObj == null) continue
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                // Launch-type validation — mirror the gate fix above. Without
+                // this, Emergency Approach could pick a tele cell where the
+                // best weapon is "in range" but off-axis, and useWeapon would
+                // return -4 at runtime (same class of failure as T10 w40).
+                if (wObj._launchType != null && wObj._launchType > 0 &&
+                    !isSimLaunchValid(wObj._launchType, candidate, targetPos)) continue
                 var dmg = this._arsenal.getNetDamageAgainstTarget(
                     this._player._strength, this._player._magic,
                     this._player._wisdom, this._player._science,
@@ -539,6 +593,288 @@ class ScenarioCombos extends ScenarioHelpers {
         var attackActions = this.getAttackActions(tpBudgetAfterTele, 1.0, bestCell)
         for (var aa in attackActions) {
             push(actions, aa)
+        }
+
+        return actions
+    }
+
+    // Part C: BAIT_ANCHOR — used vs kiters we cannot attack reach this turn.
+    // Instead of walking blindly into their poison range (where they keep
+    // backing off and the game loops 50+ turns), we move to a cell that:
+    //   • breaks LoS to the enemy (cover) so their next-turn shots whiff, AND
+    //   • forces them to step into OUR weapon arc if they want to fire back.
+    // We then prebuff (shield or heal) to make sure the scenario clears the
+    // override gate and ends with a CHECKPOINT(BAIT_ANCHOR) so the scorer
+    // gives it enough weight to beat the no-op-fallback path.
+    createBaitAnchorScenario(availableTP, availableMP) {
+        // Entry marker so we can confirm dispatch reached this function at T3.
+        if (getTurn() <= 20) debugW("BANCHOR_ENTRY_T" + getTurn())
+
+        if (this._target == null) {
+            if (getTurn() <= 20) debugW("BANCHOR_EXIT_T" + getTurn() + "_NO_TARGET")
+            return null
+        }
+        if (_isBossFight && _bossPhase == "PUZZLE") {
+            if (getTurn() <= 20) debugW("BANCHOR_EXIT_T" + getTurn() + "_BOSS_PUZZLE")
+            return null
+        }
+
+        var enemyProfile = getEnemyProfile(this._target._id)
+        if (enemyProfile == null) {
+            if (getTurn() <= 20) debugW("BANCHOR_EXIT_T" + getTurn() + "_NO_PROFILE")
+            return null
+        }
+        if (!enemyProfile['isKiter']) {
+            if (getTurn() <= 20) debugW("BANCHOR_EXIT_T" + getTurn() + "_NOT_KITER_flavor" + enemyProfile['kiterFlavor'])
+            return null
+        }
+
+        var playerPos = this._player._cellPos
+        var targetPos = this._target._cellPos
+        var distNow = getCellDistance(playerPos, targetPos)
+        if (distNow == null) {
+            if (getTurn() <= 20) debugW("BANCHOR_EXIT_T" + getTurn() + "_NULL_DIST")
+            return null
+        }
+
+        // Bail in FLEE — at low HP, retreat scenarios already handle this.
+        if (this._player._maxHealth > 0
+            && this._player._currHealth * 100 / this._player._maxHealth < 35) {
+            if (getTurn() <= 20) debugW("BANCHOR_EXIT_T" + getTurn() + "_LOW_HP")
+            return null
+        }
+
+        // Find our weapon envelope (min/max range) for the "advance trap" term.
+        var minWR = 99
+        var maxWR = 0
+        for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var w = this._arsenal.playerEquippedWeapons[wid]
+            if (w == null) continue
+            if (w._minRange < minWR) minWR = w._minRange
+            if (w._maxRange > maxWR) maxWR = w._maxRange
+        }
+        if (maxWR == 0) {
+            if (getTurn() <= 20) debugW("BANCHOR_EXIT_T" + getTurn() + "_NO_WEAPON_RANGE")
+            return null
+        }
+
+        // Note: we do NOT gate on "in weapon range from current cell" anymore.
+        // The previous gate `distNow <= maxWR && LoS` was excluding T3 cases
+        // where Magnum (max range 10) technically reached the enemy but our
+        // primary weapon (range 7) didn't and no template produced a viable
+        // shot. Let BAIT_ANCHOR always run; the scorer will favor a real
+        // attack over the +6000 checkpoint bonus when one exists.
+
+        // Enemy mobility — how far they can step toward us in one turn.
+        var enemyMP = enemyProfile['mobilityMP']
+        if (enemyMP == null || enemyMP <= 0) enemyMP = 3
+
+        var bestCell = -1
+        var bestScore = -999999
+        var anchorScanned = 0
+        var reach = getReachableCells()
+        var reachCount = count(reach)
+
+        // Engagement-band targets: we want anchor cells where
+        //   distToEnemy in [maxWR, maxWR + enemyMP + 2]
+        // i.e. enemy's 1-turn advance puts them inside our weapon envelope.
+        // Cells closer let them shoot us; cells farther let them poison from
+        // a distance we cannot reach. Compute the envelope upper bound.
+        var bandLo = maxWR
+        var bandHi = maxWR + enemyMP + 2
+        // Don't allow retreat: anchor distance must not exceed current distance
+        // by more than 1 (some sidestep into cover is fine; full backpedalling
+        // is what the previous fight degenerated into).
+        var retreatCap = distNow + 1
+
+        for (var ri = 0; ri < reachCount; ri++) {
+            // Budget scan over VALID candidates only — previously the 50-cell
+            // cap exhausted on cells behind us that got rejected by retreatCap,
+            // leaving no anchor at all (T3 c202 reproduced this).
+            if (anchorScanned >= 80) break
+            if (getOperations() > _ops79) break
+
+            var cand = reach[ri]
+            if (cand == playerPos) continue
+            if (isObstacle(cand)) continue
+            if (isEntity(cand) && cand != playerPos) continue
+
+            var mpCost = getGraphMPCost(cand)
+            if (mpCost >= 999 || mpCost > availableMP) continue
+
+            var candDistToEnemy = getCellDistance(cand, targetPos)
+            if (candDistToEnemy == null) continue
+
+            // Hard gate: no further-than-now anchors. We bait, we don't flee.
+            if (candDistToEnemy > retreatCap) continue
+
+            anchorScanned++
+
+            // (1) Shooter term — does this cell let US fire on the enemy right
+            // now? Previous "cover" term (+400 if NO LoS) created a trap: we
+            // kept hiding even when the kiter was already in our weapon arc,
+            // never converting position into damage. Invert: reward cells with
+            // LoS+range, so BAIT_ANCHOR doubles as a firing platform when the
+            // bait has actually been taken.
+            var shooterScore = 0
+            if (candDistToEnemy >= minWR && candDistToEnemy <= maxWR
+                && getCachedLineOfSight(cand, targetPos)) {
+                shooterScore = 400
+            }
+
+            // (2) Advance-trap — for each cell the enemy can step to in their
+            // next MP-radius advance, would that cell be inside OUR weapon arc
+            // with LoS? Each match = enemy commits to a step that lets us fire.
+            // Sample enemyMP ring around target (not just 1-ring) so a 4-MP
+            // kiter who advances 2 cells is also accounted for.
+            var advanceTrap = 0
+            var enemyAdv = GLOBAL_NEIGHBORS[targetPos]
+            if (enemyAdv != null) {
+                var ringSamples = 0
+                for (var advCell in enemyAdv) {
+                    if (ringSamples >= 8) break
+                    ringSamples++
+                    if (isObstacle(advCell)) continue
+                    var advDist = getCellDistance(advCell, cand)
+                    if (advDist == null) continue
+                    if (advDist < minWR || advDist > maxWR) continue
+                    if (!getCachedLineOfSight(advCell, cand)) continue
+                    advanceTrap += 120
+                }
+            }
+
+            // (3) Threat term — penalise cells the enemy can pummel from now.
+            var threatHere = this._fieldMap.getThreatAtCell(cand)
+            if (threatHere == null) threatHere = 0
+
+            // (4) Engagement-band term — reward cells inside the band, penalize
+            //     cells outside. Replaces the old "distance bonus" that was
+            //     causing infinite retreat (cells farther = always more bonus).
+            // Exception: when target is already inside our weapon envelope, a
+            // "too-close" penalty actively hurts — we get a viable Magnum shot
+            // at dist 7 yet the band pushes us to retreat to dist 10. koe2
+            // T7-T13 reproduced this: bot stalled in buff-only loops while a
+            // dist-7 shooter cell existed but scored -50 (below 100 threshold).
+            // Skip the too-close penalty entirely when the cell CAN already
+            // fire (shooterScore > 0) — let the shooter+advance terms decide.
+            var bandTerm = 0
+            if (candDistToEnemy >= bandLo && candDistToEnemy <= bandHi) {
+                bandTerm = 200
+            } else if (candDistToEnemy < bandLo) {
+                // Inside enemy poison reach without our weapons reaching back.
+                // If we CAN fire from here, the cell is a shooter, not a bait
+                // anchor — don't penalize it for being inside the band.
+                if (shooterScore > 0) {
+                    bandTerm = 0
+                } else {
+                    bandTerm = -150 * (bandLo - candDistToEnemy)
+                }
+            } else {
+                // Beyond bait range — every cell of extra distance penalises.
+                bandTerm = -80 * (candDistToEnemy - bandHi)
+            }
+
+            // (5) Closing bonus — prefer cells that get us CLOSER vs further.
+            //     Direct counter to the previous retreat behavior.
+            var closeBonus = (distNow - candDistToEnemy) * 30
+
+            var score = shooterScore + advanceTrap + bandTerm + closeBonus - threatHere - mpCost * 5
+
+            if (score > bestScore) {
+                bestScore = score
+                bestCell = cand
+            }
+        }
+
+        // Require at least one of cover/trap to fire. Bare relocation is
+        // not worth the override gate / scoring overhead. Threshold relaxed
+        // 200 → 100 so positions where the best anchor has only a small
+        // distance/trap edge still emit (T3 c272 / no obvious cover in MP
+        // range was producing no anchor at 200).
+        if (getTurn() <= 20) {
+            debugW("BANCHOR_DIAG_T" + getTurn() + "_scanned" + anchorScanned + "_bc" + bestCell + "_bs" + bestScore + "_dn" + distNow + "_mr" + maxWR + "_em" + enemyMP + "_rc" + reachCount)
+        }
+        if (bestCell == -1) return null
+        if (bestScore < 100) return null
+
+        var actions = []
+        var tpBudget = availableTP
+
+        // Movement to anchor cell.
+        push(actions, new Action(Action.MOVEMENT_DEFENSIVE, -1, -1, bestCell, this._target))
+
+        // Antidote if heavily poisoned (kiter trademark) — frees the scenario
+        // from being misvalued by stacked DoT.
+        var antidoteAction = this.getAntidoteAction(tpBudget)
+        if (antidoteAction != null) {
+            push(actions, antidoteAction)
+            tpBudget -= getCachedChipCost(CHIP_ANTIDOTE)
+        }
+
+        // Defensive chip — prefer Fortress > Wall > Helmet > Bark, only if
+        // not already shielded.
+        var hasShield = this._player.hasEffect(EFFECT_ABSOLUTE_SHIELD)
+                        || this._player.hasEffect(EFFECT_RELATIVE_SHIELD)
+        if (!hasShield) {
+            var shieldCandidates = [CHIP_FORTRESS, CHIP_WALL, CHIP_HELMET, CHIP_BARK]
+            for (var sChip in shieldCandidates) {
+                if (!mapContainsKey(this._arsenal.playerEquippedChips, sChip)) continue
+                if (getCooldown(sChip, this._player._id) > 0) continue
+                var sCost = getCachedChipCost(sChip)
+                if (tpBudget < sCost) continue
+                push(actions, new Action(Action.ACTION_BUFF, -1, sChip, -1, this._player))
+                tpBudget -= sCost
+                break
+            }
+        }
+
+        // If we have leftover TP and we're under HP pressure, top up with a
+        // heal so the buff still scores as defensive even when shields are CD.
+        var hpRatio = (this._player._maxHealth > 0)
+                      ? (this._player._currHealth * 100 / this._player._maxHealth)
+                      : 100
+        if (hpRatio < 80) {
+            var healCandidates = [CHIP_REMISSION, CHIP_CURE, CHIP_BANDAGE]
+            for (var hChip in healCandidates) {
+                if (!mapContainsKey(this._arsenal.playerEquippedChips, hChip)) continue
+                if (getCooldown(hChip, this._player._id) > 0) continue
+                var hCost = getCachedChipCost(hChip)
+                if (tpBudget < hCost) continue
+                push(actions, new Action(Action.ACTION_BUFF, -1, hChip, -1, this._player))
+                tpBudget -= hCost
+                break
+            }
+        }
+
+        // BAIT_ANCHOR only emits when the anchor cell can actually fire — if
+        // no shooter cell exists, this template silently sat at atk0 and
+        // blocked TELEPORT-COMBO scenarios (which DO work on cover maps via
+        // chip-based repositioning) from winning the scoring race.
+        var bestDistToEnemy = getCellDistance(bestCell, targetPos)
+        var attacksAppended = 0
+        if (bestDistToEnemy != null
+            && bestDistToEnemy >= minWR && bestDistToEnemy <= maxWR
+            && getCachedLineOfSight(bestCell, targetPos)
+            && tpBudget >= 4) {
+            var anchorAttacks = this.getAttackActions(tpBudget, 1.0, bestCell)
+            for (var atkAct in anchorAttacks) {
+                push(actions, atkAct)
+                attacksAppended++
+            }
+        }
+        if (attacksAppended == 0) {
+            if (getTurn() <= 20) {
+                debugW("BANCHOR_SKIP_T" + getTurn() + "_c" + bestCell + "_sc" + bestScore + "_dn" + distNow + "_bd" + bestDistToEnemy + "_NO_SHOT")
+            }
+            return null
+        }
+
+        var checkpoint = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, null)
+        checkpoint.checkpointType = "BAIT_ANCHOR"
+        push(actions, checkpoint)
+
+        if (getTurn() <= 20) {
+            debugW("BANCHOR_T" + getTurn() + "_c" + bestCell + "_sc" + bestScore + "_mp" + getGraphMPCost(bestCell) + "_atk" + attacksAppended)
         }
 
         return actions
@@ -667,6 +1003,18 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
+        // Motivation: +2 TP for 3 turns. Helper gates on shackle/opening only.
+        // Adds tpBudget back this turn (+2) so the combo planner can still spend.
+        var motivBuff = this.getMotivationBuff()
+        if (motivBuff != null) {
+            var tpMotiv = getCachedChipCost(CHIP_MOTIVATION)
+            if (tpBudget >= tpMotiv) {
+                push(actions, motivBuff)
+                tpBudget -= tpMotiv
+                tpBudget += 2
+            }
+        }
+
         // Adrenaline +5 TP is a combo enabler — try as long as it's available,
         // not gated on Leather Boots being applied first.
         var adrenalineBuff = this.getAdrenalineBuff()
@@ -680,29 +1028,77 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         var didJump = false
+        // AGI ≥ 300 gate removed: Jump is a mobility chip whose whole purpose is
+        // closing distance for slow builds — the high-AGI gate was backwards and
+        // killed Jump usage on STR bruisers (LeekRain etc.) facing kiters.
         if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
             getCooldown(CHIP_JUMP, this._player._id) == 0 &&
             tpBudget >= getCachedChipCost(CHIP_JUMP) &&
-            this._player._agility >= 300 &&
             !this._player.hasEffect(EFFECT_BUFF_AGILITY)) {
             var jumpCostP = getCachedChipCost(CHIP_JUMP)
             var jumpTarget = -1
             var targetPos = this._target._cellPos
-            var neighbors = GLOBAL_NEIGHBORS[simPos]
-            var bestDistJump = getCellDistance(simPos, targetPos)
-            for (var n in neighbors) {
-                if (isObstacle(n) || isEntity(n)) continue
-                var d = getCellDistance(n, targetPos)
-                if (d != null && d < bestDistJump) {
-                    jumpTarget = n
-                    bestDistJump = d
+            // Tiered ranking: A=REACH_HIT, B=HIDE (denied/low HP), C=APPROACH, D=ANY.
+            // TP doesn't carry; if any reachable cell exists, commit. Pick best tier.
+            var origDistP = getCellDistance(simPos, targetPos)
+            if (origDistP == null) origDistP = 99
+            var maxWRJP = 0
+            for (var wIdJP in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var wObjJP = this._arsenal.playerEquippedWeapons[wIdJP]
+                if (wObjJP != null && wObjJP._maxRange > maxWRJP) maxWRJP = wObjJP._maxRange
+            }
+            var deniedJP = this._player.hasEffect(EFFECT_SHACKLE_TP)
+                || this._player.hasEffect(EFFECT_SHACKLE_STRENGTH)
+                || this._player.hasEffect(EFFECT_SHACKLE_MAGIC)
+            var lowHPJP = (this._player._currHealth * 100 / max(1, this._player._maxHealth)) < 60
+            // Tier 3 kite-gate: only worth closing if even after enemy uses
+            // their full MP to retreat, we'd still be within weapon range.
+            // Otherwise we burn 4 TP to get one turn of poison-soaking.
+            var enemyMPJP = this._target._currMp
+            if (enemyMPJP == null) enemyMPJP = 5
+            var kiteHorizonJP = maxWRJP + enemyMPJP
+            var bestTierP = 5
+            var bestMetricP = 99999
+            var simX = getCellX(simPos)
+            var simY = getCellY(simPos)
+            for (var jdx = -3; jdx <= 3; jdx++) {
+                for (var jdy = -3; jdy <= 3; jdy++) {
+                    if (jdx == 0 && jdy == 0) continue
+                    if (abs(jdx) + abs(jdy) > 3) continue
+                    var jCand = getCellFromXY(simX + jdx, simY + jdy)
+                    if (jCand == null || jCand < 0) continue
+                    if (isObstacle(jCand) || isEntity(jCand)) continue
+                    var jDist = getCellDistance(simPos, jCand)
+                    if (jDist == null || jDist < 1 || jDist > 3) continue
+                    var d = getCellDistance(jCand, targetPos)
+                    if (d == null) continue
+                    var hasLosJP = lineOfSight(jCand, targetPos)
+                    var tier = 4
+                    var metric = d
+                    if (hasLosJP && d >= 1 && d <= maxWRJP) {
+                        tier = 1
+                    } else if ((deniedJP || lowHPJP) && !hasLosJP) {
+                        tier = 2
+                        metric = abs(d - max(2, maxWRJP - 2))
+                    } else if (origDistP - d >= 2 && d <= kiteHorizonJP) {
+                        // Only APPROACH if jump puts us in next-turn weapon
+                        // reach even if enemy MP-retreats. Otherwise it's a
+                        // careless close into poison spam.
+                        tier = 3
+                        // Threat-aware metric: prefer cells with lower
+                        // predicted incoming damage.
+                        metric = d + getAdversarialThreat(jCand) / 100.0
+                    }
+                    if (tier < bestTierP || (tier == bestTierP && metric < bestMetricP)) {
+                        bestTierP = tier
+                        bestMetricP = metric
+                        jumpTarget = jCand
+                    }
                 }
             }
-            if (jumpTarget == -1) {
-                for (var n in neighbors) {
-                    if (!isObstacle(n) && !isEntity(n)) { jumpTarget = n; break }
-                }
-            }
+            // Suppress Tier 4 (any) — without a real utility tier, JUMP at
+            // long range just feeds us into enemy chip range.
+            if (bestTierP > 3) jumpTarget = -1
             if (jumpTarget != -1) {
                 push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, jumpTarget, this._target))
                 tpBudget -= jumpCostP
@@ -735,7 +1131,13 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
-        if (params.movementFraction > 0 && !didTeleport) {
+        // Suppress getMoveToOptimalCell when a JUMP/TELEPORT already
+        // repositioned simPos. The helper queries fieldMap caches that were
+        // built from the player's ACTUAL pre-jump cell, so it can pick a
+        // "best" cell that walks us back to where we just jumped from.
+        // T8 bug: JUMP closed to fire range, then getMoveToOptimalCell
+        // appended MOVEMENT_OFFENSIVE to the pre-jump optimal cell.
+        if (params.movementFraction > 0 && !didTeleport && !didJump) {
             var mpToUse = floor(mpBudget * params.movementFraction)
             var moveAction = this.getMoveToOptimalCell(mpToUse)
             if (moveAction != null) {
@@ -929,6 +1331,87 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
+    // Mirror of createGrappleHeavySwordScenario but for Axe. Same template
+    // shape: Grapple pulls the kiter adjacent on a line axis, then we dump
+    // Axe×2 at melee. Used by close-range STR builds without Heavy Sword
+    // (e.g. LeekRain post-loadout-swap vs koe2).
+    createGrappleAxeScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_AXE)) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+            return null
+        }
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) {
+            return null
+        }
+
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) {
+            return null
+        }
+
+        var axeCost = getCachedWeaponCost(WEAPON_AXE, this._arsenal)
+        if (axeCost == null) axeCost = 6
+        var grappleCost = getCachedChipCost(CHIP_GRAPPLE)
+        // Need grapple + at least one Axe swing; preferably two.
+        if (tpBudget < grappleCost + axeCost) {
+            return null
+        }
+
+        var playerX = getCellX(simPos)
+        var playerY = getCellY(simPos)
+        var enemyPos = this._target._cellPos
+        var enemyX = getCellX(enemyPos)
+        var enemyY = getCellY(enemyPos)
+
+        var isOnSameLine = (playerY == enemyY) || (playerX == enemyX)
+        if (!isOnSameLine) {
+            return null
+        }
+
+        var grappleCell = -1
+        if (playerY == enemyY) {
+            grappleCell = (enemyX < playerX) ? getCellFromXY(playerX - 1, playerY) : getCellFromXY(playerX + 1, playerY)
+        } else {
+            grappleCell = (enemyY < playerY) ? getCellFromXY(playerX, playerY - 1) : getCellFromXY(playerX, playerY + 1)
+        }
+
+        if (grappleCell == -1 || grappleCell == null) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
+        tpBudget -= grappleCost
+
+        var enemyPulledPosition = grappleCell
+
+        if (getWeapon() != WEAPON_AXE) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_AXE, -1, -1, this._target))
+            tpBudget -= 1
+        }
+
+        push(actions, new Action(Action.ACTION_DIRECT, WEAPON_AXE, -1, enemyPulledPosition, this._target))
+        tpBudget -= axeCost
+
+        if (tpBudget >= axeCost) {
+            push(actions, new Action(Action.ACTION_DIRECT, WEAPON_AXE, -1, enemyPulledPosition, this._target))
+            tpBudget -= axeCost
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
     createSteroidOTKOScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP
@@ -1070,6 +1553,47 @@ class ScenarioCombos extends ScenarioHelpers {
         var bestDamage = 0
         var reachable = getReachableCells()
 
+        // Fix #3: compute baseline damage from the best graph-reachable cell
+        // (no Jump). Used to gate Jump scenarios: only emit Jump if it beats
+        // walk+attack by enough damage to cover the 3 TP Jump cost. Previously
+        // we filtered out all graph-reachable candidates and only considered
+        // cells exclusively reachable via Jump — this missed cases where Jump
+        // lets us reach a *better* attack cell that's also walk-reachable.
+        var baselineDamage = 0
+        var baselineOpsLimit = _ops86 - 300000
+        for (var rCell in reachable) {
+            if (getOperations() > baselineOpsLimit) break
+            var rDist = getCellDistance(rCell, targetPos)
+            if (rDist == null || rDist > maxWeaponRange) continue
+            var rDamage = 0
+            for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var wObj = this._arsenal.playerEquippedWeapons[wid]
+                if (wObj == null) continue
+                if (rDist < wObj._minRange || rDist > wObj._maxRange) continue
+                if (!getCachedLineOfSight(rCell, targetPos)) continue
+                var dmg = this._arsenal.getNetDamageAgainstTarget(
+                    this._player._strength, this._player._magic,
+                    this._player._wisdom, this._player._science,
+                    wid, this._target)
+                var swapCost = (getWeapon() != wid) ? 1 : 0
+                var uses = min(wObj._maxUse, floor((availableTP - swapCost) / wObj._cost))
+                if (uses > 0) rDamage += dmg * uses
+            }
+            if (rDamage > baselineDamage) baselineDamage = rDamage
+        }
+
+        // Magic-poison kiter trap detection: against koe2-class enemies that
+        // hit us with MP debuffs after we close, jumping into a cell with
+        // <=2 walkable neighbors strands us there for 4+ zero-damage turns.
+        // The scorer already penalizes the landing position, but the Jump
+        // scenario still wins overall because no non-Jump damage option
+        // exists at that range. The generator-side filter here eliminates
+        // the candidate so the search proceeds to non-bunker landing cells
+        // (or returns null and lets walk+fire scenarios compete cleanly).
+        var jaEnemyProf = getEnemyProfile(this._target._id)
+        var jaSkipBunker = (jaEnemyProf != null && jaEnemyProf['isKiter']
+                            && jaEnemyProf['kiterFlavor'] == 'magic_poison')
+
         for (var candidate = 0; candidate < 613; candidate++) {
             if (getOperations() > _ops86) break
             if (isObstacle(candidate)) continue
@@ -1078,7 +1602,28 @@ class ScenarioCombos extends ScenarioHelpers {
             var distToTarget = getCellDistance(candidate, targetPos)
             if (distToTarget == null || distToTarget > maxWeaponRange) continue
 
-            if (isGraphReachableCell(candidate)) continue
+            // Bunker filter (magic-poison kiter only). Count walkable
+            // 4-neighbors; reject candidates with <=2 escape routes since
+            // an MP debuff next turn would strand us.
+            if (jaSkipBunker && candidate != playerPos) {
+                var jaCx = getCellX(candidate)
+                var jaCy = getCellY(candidate)
+                var jaWalk = 0
+                var jaN1 = getCellFromXY(jaCx + 1, jaCy)
+                if (jaN1 != null && jaN1 != -1 && getCellContent(jaN1) == CELL_EMPTY) jaWalk++
+                var jaN2 = getCellFromXY(jaCx - 1, jaCy)
+                if (jaN2 != null && jaN2 != -1 && getCellContent(jaN2) == CELL_EMPTY) jaWalk++
+                var jaN3 = getCellFromXY(jaCx, jaCy + 1)
+                if (jaN3 != null && jaN3 != -1 && getCellContent(jaN3) == CELL_EMPTY) jaWalk++
+                var jaN4 = getCellFromXY(jaCx, jaCy - 1)
+                if (jaN4 != null && jaN4 != -1 && getCellContent(jaN4) == CELL_EMPTY) jaWalk++
+                if (jaWalk <= 2) continue
+            }
+
+            // Filter relaxed: previously skipped any graph-reachable candidate
+            // (Jump's purpose was "reach what you can't walk to"). Now we also
+            // consider Jump to walk-reachable cells — but gate the final
+            // scenario emission on damage strictly beating the no-Jump baseline.
 
             var launchCell = -1
             var launchMP = 999
@@ -1120,6 +1665,16 @@ class ScenarioCombos extends ScenarioHelpers {
 
         if (bestAttackCell == -1) return null
 
+        // Damage-gate the Jump scenario against the no-Jump baseline. Require
+        // Jump damage to exceed baseline by at least jumpCost × (avg dmg/TP).
+        // If baseline already matches/exceeds Jump, walk+attack is strictly
+        // better — emit no scenario and let standard movement scenarios handle.
+        if (baselineDamage > 0 && availableTP > 0) {
+            var avgDmgPerTP = baselineDamage / availableTP
+            var requiredImprovement = jumpCost * avgDmgPerTP
+            if (bestDamage <= baselineDamage + requiredImprovement) return null
+        }
+
         var actions = []
         if (bestLaunchCell != playerPos) {
             push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, bestLaunchCell, this._target))
@@ -1128,6 +1683,135 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpAfterJump = availableTP - jumpCost
         var attackActions = this.getAttackActions(tpAfterJump, 1.0, bestAttackCell)
         for (var atk in attackActions) push(actions, atk)
+
+        return actions
+    }
+
+    // Phase P: dedicated JUMP-to-fire template, narrower and stricter than
+    // createJumpAttackScenario. Built specifically for the case where the
+    // player is at d=4-8 from a kiter with no MP-reachable shot, but JUMP
+    // could land a hit. Differences from createJumpAttackScenario:
+    //   - No magic-poison bunker filter (we're already in trouble at this
+    //     point — accepting a bunker is better than not shooting).
+    //   - Doesn't depend on `getReachableCells()` / `getGraphMPCost()`, so it
+    //     still emits a candidate when the player is shackled (negative MP).
+    //   - Always launches from player's current cell (no walk-then-jump).
+    //   - Bounded search (~25 candidate cells max) — cheap to run every turn.
+    // Failure mode this fixes: at T10 in fight 52571411, FIRETURN=1 but no
+    // OFFENSIVE scenario reached the candidate pool because JumpAttack's
+    // launchCell search rejected c450 (mp=0 > availableMP=-2 when shackled).
+    createJumpToFireScenario(availableTP, availableMP) {
+        if (this._target == null) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP)) return null
+        if (getCooldown(CHIP_JUMP, this._player._id) > 0) return null
+
+        var jumpCost = getCachedChipCost(CHIP_JUMP)
+        if (availableTP < jumpCost + 4) return null  // need at least one cheap shot
+
+        var pX = getCellX(this._player._cellPos)
+        var pY = getCellY(this._player._cellPos)
+        var targetPos = this._target._cellPos
+        var tpAfterJump = availableTP - jumpCost
+
+        var bestCell = -1
+        var bestDamage = 0
+
+        // Enumerate JUMP destinations within Manhattan range 3
+        for (var dx = -3; dx <= 3; dx++) {
+            for (var dy = -3; dy <= 3; dy++) {
+                if (dx == 0 && dy == 0) continue
+                if (abs(dx) + abs(dy) > 3) continue
+                var jc = getCellFromXY(pX + dx, pY + dy)
+                if (jc == null || jc < 0) continue
+                if (isObstacle(jc) || isEntity(jc)) continue
+
+                var jd = getCellDistance(jc, targetPos)
+                if (jd == null) continue
+
+                // Lazy LoS check (only computed if a weapon/chip clears the
+                // range gate; cached after first item).
+                var hasLoSCached = -1
+                var cellDamage = 0
+                for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                    var w = this._arsenal.playerEquippedWeapons[wid]
+                    if (w == null) continue
+                    if (jd < w._minRange || jd > w._maxRange) continue
+                    // Launch-type geometry — same fix class as the chip-block
+                    // launch_type validation in scenario_helpers.
+                    if (w._launchType != null && w._launchType > 0 &&
+                        !isSimLaunchValid(w._launchType, jc, targetPos)) continue
+                    if (hasLoSCached == -1) {
+                        hasLoSCached = getCachedLineOfSight(jc, targetPos) ? 1 : 0
+                    }
+                    if (hasLoSCached == 0) break
+                    var swapCost = (getWeapon() != wid) ? 1 : 0
+                    var uses = min(w._maxUse, floor((tpAfterJump - swapCost) / w._cost))
+                    if (uses <= 0) continue
+                    var dmg = this._arsenal.getNetDamageAgainstTarget(
+                        this._player._strength, this._player._magic,
+                        this._player._wisdom, this._player._science,
+                        wid, this._target)
+                    if (dmg <= 0) continue
+                    var totalDmg = dmg * uses
+                    if (totalDmg > cellDamage) cellDamage = totalDmg
+                }
+
+                // Also scan damage chips (ROCKFALL, LIGHTNING, ICEBERG,
+                // METEORITE, PLASMA, ...). Original implementation only
+                // considered weapons, which is why koe2 fight 52575194 T6 had
+                // no offensive scenario: from c=170 d=5 mp=-1 KILL state, no
+                // weapon's launch geometry matched (off-axis LINE weapons)
+                // but ROCKFALL (POINT, range 5-7) would have fired. T7
+                // emitted via a different template by chance; T6 sat
+                // buffing. With chips added here, J2FIRE becomes the reliable
+                // safety net for shackled turns regardless of which damage
+                // type fits the current geometry.
+                if (hasLoSCached == -1) {
+                    hasLoSCached = getCachedLineOfSight(jc, targetPos) ? 1 : 0
+                }
+                if (hasLoSCached == 1) {
+                    var damageChipsJ2F = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE,
+                                          CHIP_ICEBERG, CHIP_ROCKFALL, CHIP_FIRE_BALL,
+                                          CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE]
+                    for (var cid in damageChipsJ2F) {
+                        if (!mapContainsKey(this._arsenal.playerEquippedChips, cid)) continue
+                        if (getCooldown(cid, this._player._id) > 0) continue
+                        var ch = this._arsenal.playerEquippedChips[cid]
+                        if (ch == null) continue
+                        if (jd < ch._minRange || jd > ch._maxRange) continue
+                        if (ch._launchType != null && ch._launchType > 0 &&
+                            !isSimLaunchValid(ch._launchType, jc, targetPos)) continue
+                        var chCost = getCachedChipCost(cid)
+                        if (tpAfterJump < chCost) continue
+                        var chDmg = this._arsenal.getNetDamageAgainstTarget(
+                            this._player._strength, this._player._magic,
+                            this._player._wisdom, this._player._science,
+                            cid, this._target)
+                        if (chDmg == null || chDmg <= 0) continue
+                        if (chDmg > cellDamage) cellDamage = chDmg
+                    }
+                }
+
+                if (cellDamage > bestDamage) {
+                    bestDamage = cellDamage
+                    bestCell = jc
+                }
+            }
+        }
+
+        if (bestCell == -1 || bestDamage == 0) return null
+
+        var actions = []
+        push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, bestCell, this._target))
+        var attackActions = this.getAttackActions(tpAfterJump, 1.0, bestCell)
+        for (var atk in attackActions) push(actions, atk)
+
+        // Require at least the JUMP + one shot
+        if (count(actions) < 2) return null
+
+        if (getTurn() <= 20) {
+            debugW("J2FIRE_T" + getTurn() + "_jc" + bestCell + "_d" + bestDamage + "_tp" + availableTP)
+        }
 
         return actions
     }
@@ -2201,6 +2885,16 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
+        var motivBuffA = this.getMotivationBuff()
+        if (motivBuffA != null) {
+            var motivCostA = getCachedChipCost(CHIP_MOTIVATION)
+            if (tpBudget >= motivCostA) {
+                push(actions, motivBuffA)
+                tpBudget -= motivCostA
+                tpBudget += 2
+            }
+        }
+
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
@@ -2314,6 +3008,16 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
+        var motivBuffR = this.getMotivationBuff()
+        if (motivBuffR != null) {
+            var motivCostR = getCachedChipCost(CHIP_MOTIVATION)
+            if (tpBudget >= motivCostR) {
+                push(actions, motivBuffR)
+                tpBudget -= motivCostR
+                tpBudget += 2
+            }
+        }
+
         var moveAction = this.getMoveToOptimalCell(mpBudget)
         if (moveAction != null) {
             push(actions, moveAction)
@@ -2339,6 +3043,237 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (count(actions) < 2) return null
+        return actions
+    }
+
+    // Phase 2: Dedicated MOTIVATION setup template. MOTIVATION costs 4 TP to
+    // return +2 TP/turn for 3 turns (6 TP gross). Net +2 TP, but the real value
+    // is the 16-TP combo windows it enables on turns N+1/N+2: STEROID(5) +
+    // double DESTROYER attack (14 TP) fits in 16 TP but not 14. This template
+    // pre-commits the setup turn (cast MOTIVATION + approach + light mobility
+    // prep) and marks it with a COMBO_SETUP checkpoint so the scorer treats
+    // it as a multi-turn plan rather than a single-buff scenario.
+    //
+    // Fires only when:
+    // - MOTIVATION equipped and off-CD
+    // - 2-3 turn combat horizon ahead (enemy >40%, our HP >35%, turn <= 30)
+    // - We can't shoot this turn from current cell (no direct attack alt)
+    // - TP surplus to still take a meaningful approach action this turn
+    createMotivationSetupScenario(availableTP, availableMP) {
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MOTIVATION)) return null
+        if (getCooldown(CHIP_MOTIVATION, this._player._id) > 0) return null
+
+        var msMotivCost = getCachedChipCost(CHIP_MOTIVATION)
+        // Threshold: MOTIVATION (4) + LEATHER_BOOTS (3) = 7. Lowered from +6
+        // so T1 with 8 TP (LeekRain log) doesn't reject the setup outright.
+        if (availableTP < msMotivCost + 3) return null
+
+        var msEnemyHPPct = (this._target._currHealth * 100) / max(1, this._target._maxHealth)
+        var msPlayerHPPct = (this._player._currHealth * 100) / max(1, this._player._maxHealth)
+        if (msEnemyHPPct <= 40) return null
+        if (msPlayerHPPct <= 35) return null
+        if (getTurn() > 30) return null
+
+        // Skip if we can already shoot — direct attack templates win this turn.
+        var msDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+        if (msDist == null) return null
+        var msMaxWR = 0
+        for (var msWid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var msW = this._arsenal.playerEquippedWeapons[msWid]
+            if (msW != null && msW._maxRange > msMaxWR) msMaxWR = msW._maxRange
+        }
+        if (msDist <= msMaxWR &&
+            getCachedLineOfSight(this._player._cellPos, this._target._cellPos)) {
+            return null
+        }
+
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+
+        // Cast MOTIVATION first (the setup core).
+        push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_MOTIVATION, -1, this._player))
+        tpBudget -= msMotivCost
+        tpBudget += 2  // immediate +2 TP from the buff (current-turn effect)
+
+        // LEATHER_BOOTS: +2 MP for the approach. Cheap (3 TP) and pays directly
+        // into the closing distance this turn.
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
+            getCooldown(CHIP_LEATHER_BOOTS, this._player._id) == 0) {
+            var msBootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= msBootsCost) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, -1, this._player))
+                tpBudget -= msBootsCost
+                mpBudget += 2
+            }
+        }
+
+        // Approach the enemy with whatever MP we have.
+        var msApproachCell = this.getApproachEnemyCell(mpBudget)
+        if (msApproachCell != null && msApproachCell != -1) {
+            push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, msApproachCell, this._target))
+        }
+
+        // JUMP to close further if available. Pure TP-for-distance trade —
+        // perfect with MOTIVATION's surplus economy. Inline cell pick: scan
+        // 3-cell radius around post-move position, take the cell that reduces
+        // distance to enemy the most (must be empty, non-obstacle).
+        var msJumpCost = getCachedChipCost(CHIP_JUMP)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
+            getCooldown(CHIP_JUMP, this._player._id) == 0 &&
+            tpBudget >= msJumpCost) {
+            var msJumpFrom = (msApproachCell != null && msApproachCell != -1) ? msApproachCell : this._player._cellPos
+            var msFromDist = getCellDistance(msJumpFrom, this._target._cellPos)
+            if (msFromDist == null) msFromDist = 99
+            var msJumpBest = -1
+            var msJumpBestDist = msFromDist
+            var msFromX = getCellX(msJumpFrom)
+            var msFromY = getCellY(msJumpFrom)
+            for (var msDx = -3; msDx <= 3; msDx++) {
+                for (var msDy = -3; msDy <= 3; msDy++) {
+                    if (msDx == 0 && msDy == 0) continue
+                    if (abs(msDx) + abs(msDy) > 3) continue
+                    var msCand = getCellFromXY(msFromX + msDx, msFromY + msDy)
+                    if (msCand == null || msCand < 0) continue
+                    if (isObstacle(msCand) || isEntity(msCand)) continue
+                    var msCandDist = getCellDistance(msJumpFrom, msCand)
+                    if (msCandDist == null || msCandDist < 1 || msCandDist > 3) continue
+                    var msToEnemy = getCellDistance(msCand, this._target._cellPos)
+                    if (msToEnemy == null) continue
+                    if (msToEnemy < msJumpBestDist) {
+                        msJumpBestDist = msToEnemy
+                        msJumpBest = msCand
+                    }
+                }
+            }
+            if (msJumpBest != -1 && msJumpBestDist < msFromDist) {
+                push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, msJumpBest, null))
+                tpBudget -= msJumpCost
+            }
+        }
+
+        // COMBO_SETUP checkpoint: locks this as a multi-turn plan in the scorer.
+        var msCheckpoint = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, null)
+        msCheckpoint.checkpointType = "MOTIVATION_SETUP"
+        push(actions, msCheckpoint)
+
+        // Require at least MOTIVATION + one positioning action.
+        if (count(actions) < 3) return null
+        return actions
+    }
+
+    // Option B: Buff-Stack-Until-Shot. Triggers when no shot lands this turn
+    // but FIRETURN is in [2,3] — stacks offensive buffs whose duration outlasts
+    // FIRETURN, then closes distance with approach + JUMP. Distinct from
+    // MotivationSetup (which requires MOTIVATION and is TP-economy focused).
+    createBuffStageScenario(availableTP, availableMP) {
+        if (this._target == null) return null
+        if (__nearestFireTurn < 2 || __nearestFireTurn > 3) return null
+        if (__timePressure) return null
+        if (getTurn() > 35) return null
+
+        var bsEnemyHPPct = (this._target._currHealth * 100) / max(1, this._target._maxHealth)
+        var bsPlayerHPPct = (this._player._currHealth * 100) / max(1, this._player._maxHealth)
+        if (bsEnemyHPPct <= 35) return null
+        if (bsPlayerHPPct <= 35) return null
+
+        // Skip if MOTIVATION setup is firing — they overlap.
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MOTIVATION) &&
+            getCooldown(CHIP_MOTIVATION, this._player._id) == 0) return null
+
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var buffsCast = 0
+
+        // Candidate buffs by duration. FIRETURN=2 → any 3-dur buff survives.
+        // KNOWLEDGE (2-dur) skipped at FIRETURN=3 (expires on shot turn).
+        var bsCandidates = []
+        if (this._player._strength >= this._player._magic) {
+            push(bsCandidates, CHIP_STEROID)
+            push(bsCandidates, CHIP_WARM_UP)
+            push(bsCandidates, CHIP_RAGE)
+        } else {
+            push(bsCandidates, CHIP_WIZARDRY)
+            push(bsCandidates, CHIP_PRISM)
+        }
+        if (__nearestFireTurn == 2) {
+            push(bsCandidates, CHIP_KNOWLEDGE)
+        }
+
+        for (var bsi = 0; bsi < count(bsCandidates); bsi++) {
+            var bsChip = bsCandidates[bsi]
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, bsChip)) continue
+            if (getCooldown(bsChip, this._player._id) > 0) continue
+            var bsCost = getCachedChipCost(bsChip)
+            if (tpBudget < bsCost + 1) continue
+            push(actions, new Action(Action.ACTION_BUFF, -1, bsChip, -1, this._player))
+            tpBudget -= bsCost
+            buffsCast += 1
+            if (buffsCast >= 2) break
+        }
+
+        if (buffsCast == 0) return null
+
+        // LEATHER_BOOTS: +2 MP closing.
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) &&
+            getCooldown(CHIP_LEATHER_BOOTS, this._player._id) == 0) {
+            var bsBootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= bsBootsCost) {
+                push(actions, new Action(Action.ACTION_BUFF, -1, CHIP_LEATHER_BOOTS, -1, this._player))
+                tpBudget -= bsBootsCost
+                mpBudget += 2
+            }
+        }
+
+        // Approach with available MP.
+        var bsApproachCell = this.getApproachEnemyCell(mpBudget)
+        if (bsApproachCell != null && bsApproachCell != -1) {
+            push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, bsApproachCell, this._target))
+        }
+
+        // JUMP further if available (3-cell radius scan, take the cell that
+        // reduces distance to enemy the most).
+        var bsJumpCost = getCachedChipCost(CHIP_JUMP)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
+            getCooldown(CHIP_JUMP, this._player._id) == 0 &&
+            tpBudget >= bsJumpCost) {
+            var bsJumpFrom = (bsApproachCell != null && bsApproachCell != -1) ? bsApproachCell : this._player._cellPos
+            var bsFromDist = getCellDistance(bsJumpFrom, this._target._cellPos)
+            if (bsFromDist == null) bsFromDist = 99
+            var bsJumpBest = -1
+            var bsJumpBestDist = bsFromDist
+            var bsFromX = getCellX(bsJumpFrom)
+            var bsFromY = getCellY(bsJumpFrom)
+            for (var bsDx = -3; bsDx <= 3; bsDx++) {
+                for (var bsDy = -3; bsDy <= 3; bsDy++) {
+                    if (bsDx == 0 && bsDy == 0) continue
+                    if (abs(bsDx) + abs(bsDy) > 3) continue
+                    var bsCand = getCellFromXY(bsFromX + bsDx, bsFromY + bsDy)
+                    if (bsCand == null || bsCand < 0) continue
+                    if (isObstacle(bsCand) || isEntity(bsCand)) continue
+                    var bsCandDist = getCellDistance(bsJumpFrom, bsCand)
+                    if (bsCandDist == null || bsCandDist < 1 || bsCandDist > 3) continue
+                    var bsToEnemy = getCellDistance(bsCand, this._target._cellPos)
+                    if (bsToEnemy == null) continue
+                    if (bsToEnemy < bsJumpBestDist) {
+                        bsJumpBestDist = bsToEnemy
+                        bsJumpBest = bsCand
+                    }
+                }
+            }
+            if (bsJumpBest != -1 && bsJumpBestDist < bsFromDist) {
+                push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, bsJumpBest, null))
+                tpBudget -= bsJumpCost
+            }
+        }
+
+        // BUFF_STAGE checkpoint flag.
+        var bsCheckpoint = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, null)
+        bsCheckpoint.checkpointType = "BUFF_STAGE"
+        push(actions, bsCheckpoint)
+
+        if (count(actions) < 3) return null
         return actions
     }
 
@@ -2373,7 +3308,23 @@ class ScenarioCombos extends ScenarioHelpers {
         var agi = this._player._agility
         var buffApplied = false
 
-        if (str > 400 && agi > 400 &&
+        // Engagement horizon: how far can we plausibly be from "in attack range"
+        // after this turn's move+jump? If target is farther, offensive buffs
+        // (Steroid 3t, Knowledge 2t, Warm_up 2t) will expire before we fire —
+        // skip them and spend TP on Jump for closing instead.
+        var distNow = getCellDistance(this._player._cellPos, this._target._cellPos)
+        if (distNow == null) distNow = 99
+        var maxWeapRange = 0
+        for (var wRangeId in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wRangeObj = this._arsenal.playerEquippedWeapons[wRangeId]
+            if (wRangeObj != null && wRangeObj._maxRange > maxWeapRange) maxWeapRange = wRangeObj._maxRange
+        }
+        // Will skip offensive buffs if even after move + jump (3) we won't be
+        // within ~2 turns of weapon range. 2-turn horizon ≈ 2*(mp+3) cells.
+        var engagementHorizon = maxWeapRange + 2 * (mpBudget + 3)
+        var skipOffensiveBuffs = (distNow > engagementHorizon)
+
+        if (!skipOffensiveBuffs && str > 400 && agi > 400 &&
             (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MIRROR) ||
              mapContainsKey(this._arsenal.playerEquippedChips, CHIP_THORN) ||
              mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BRAMBLE))) {
@@ -2393,7 +3344,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpWarmBR
                 buffApplied = true
             }
-        } else if (mag > str && mag > agi) {
+        } else if (!skipOffensiveBuffs && mag > str && mag > agi) {
             var tpKnowBA = getCachedChipCost(CHIP_KNOWLEDGE)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_KNOWLEDGE) &&
                 getCooldown(CHIP_KNOWLEDGE, this._player._id) == 0 &&
@@ -2402,7 +3353,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpKnowBA
                 buffApplied = true
             }
-        } else if (str > mag && str > agi) {
+        } else if (!skipOffensiveBuffs && str > mag && str > agi) {
             var tpSterBA = getCachedChipCost(CHIP_STEROID)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
                 getCooldown(CHIP_STEROID, this._player._id) == 0 &&
@@ -2411,7 +3362,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 tpBudget -= tpSterBA
                 buffApplied = true
             }
-        } else if (agi > str && agi > mag) {
+        } else if (!skipOffensiveBuffs && agi > str && agi > mag) {
             var tpWarmBA = getCachedChipCost(CHIP_WARM_UP)
             if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
                 getCooldown(CHIP_WARM_UP, this._player._id) == 0 &&
@@ -2440,8 +3391,75 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         var approachCell = this.getApproachEnemyCell(mpBudget)
+        var postMoveCell = (approachCell != null && approachCell != -1) ? approachCell : this._player._cellPos
         if (approachCell != null && approachCell != -1) {
             push(actions, new Action(Action.MOVEMENT_APPROACH, -1, -1, approachCell, this._target))
+        }
+
+        // Closing-distance Jump: when out of attack range, every cell counts.
+        // Jump (range 1-3 line) lets us close 1-3 cells for TP not MP — pure
+        // gain when MP can't get us into range. Save BuffApproach's TP for this.
+        var jumpCostBA = getCachedChipCost(CHIP_JUMP)
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
+            getCooldown(CHIP_JUMP, this._player._id) == 0 &&
+            tpBudget >= jumpCostBA) {
+            var jumpTargetBA = -1
+            // Tiered ranking (same scheme as parametric scenario): A=REACH_HIT,
+            // B=HIDE (denied/low HP), C=APPROACH, D=ANY. TP doesn't carry — if
+            // any reachable cell exists, commit; pick highest-utility tier.
+            var origDistBA = getCellDistance(postMoveCell, this._target._cellPos)
+            if (origDistBA == null) origDistBA = 99
+            var maxWRBA = 0
+            for (var wIdBA in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var wObjBA = this._arsenal.playerEquippedWeapons[wIdBA]
+                if (wObjBA != null && wObjBA._maxRange > maxWRBA) maxWRBA = wObjBA._maxRange
+            }
+            var deniedBA = this._player.hasEffect(EFFECT_SHACKLE_TP)
+                || this._player.hasEffect(EFFECT_SHACKLE_STRENGTH)
+                || this._player.hasEffect(EFFECT_SHACKLE_MAGIC)
+            var lowHPBA = (this._player._currHealth * 100 / max(1, this._player._maxHealth)) < 60
+            var enemyMPBA = this._target._currMp
+            if (enemyMPBA == null) enemyMPBA = 5
+            var kiteHorizonBA = maxWRBA + enemyMPBA
+            var bestTierBA = 5
+            var bestMetricBA = 99999
+            var pmX = getCellX(postMoveCell)
+            var pmY = getCellY(postMoveCell)
+            for (var jdx = -3; jdx <= 3; jdx++) {
+                for (var jdy = -3; jdy <= 3; jdy++) {
+                    if (jdx == 0 && jdy == 0) continue
+                    if (abs(jdx) + abs(jdy) > 3) continue
+                    var jCand = getCellFromXY(pmX + jdx, pmY + jdy)
+                    if (jCand == null || jCand < 0) continue
+                    if (isObstacle(jCand) || isEntity(jCand)) continue
+                    var jDist = getCellDistance(postMoveCell, jCand)
+                    if (jDist == null || jDist < 1 || jDist > 3) continue
+                    var toEnemy = getCellDistance(jCand, this._target._cellPos)
+                    if (toEnemy == null) continue
+                    var hasLosBA = lineOfSight(jCand, this._target._cellPos)
+                    var tierBA = 4
+                    var metricBA = toEnemy
+                    if (hasLosBA && toEnemy >= 1 && toEnemy <= maxWRBA) {
+                        tierBA = 1
+                    } else if ((deniedBA || lowHPBA) && !hasLosBA) {
+                        tierBA = 2
+                        metricBA = abs(toEnemy - max(2, maxWRBA - 2))
+                    } else if (origDistBA - toEnemy >= 2 && toEnemy <= kiteHorizonBA) {
+                        tierBA = 3
+                        metricBA = toEnemy + getAdversarialThreat(jCand) / 100.0
+                    }
+                    if (tierBA < bestTierBA || (tierBA == bestTierBA && metricBA < bestMetricBA)) {
+                        bestTierBA = tierBA
+                        bestMetricBA = metricBA
+                        jumpTargetBA = jCand
+                    }
+                }
+            }
+            if (bestTierBA > 3) jumpTargetBA = -1
+            if (jumpTargetBA != -1) {
+                push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, jumpTargetBA, this._target))
+                tpBudget -= jumpCostBA
+            }
         }
 
         if (count(actions) > 0) {

@@ -13,7 +13,9 @@ class ScenarioGenerator extends ScenarioCombos {
         }
 
         if (this._target != null && this.hasPoisonCapability()) {
-            var currentPoison = this._target.getEffectRemaining(EFFECT_POISON)
+            // Use stack count (not single-stack remaining) — antidote drops
+            // all stacks to 0, which is the cleanest cleanse signal.
+            var currentPoison = this._target.getPoisonStackCount()
             var tracker = new CooldownTracker(this._target)
             tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
 
@@ -62,6 +64,7 @@ class ScenarioGenerator extends ScenarioCombos {
         var availableMP = getMP()
 
         var state = this.determineStrategicState()
+        if (getTurn() <= 20) debugW("GEN_STATE_T" + getTurn() + "_" + state)
 
         // Phase 4a: dynamic beam/mutation scaling.
         // Reset to baselines first (in case we boosted last turn).
@@ -167,6 +170,24 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, jumpAttackKill)
         }
 
+        // Phase P: dedicated JUMP-to-fire (narrower than JumpAttack, no bunker
+        // filter, survives shackled MP). See createJumpToFireScenario for why.
+        var jumpToFireKill = this.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireKill != null) {
+            push(scenarios, jumpToFireKill)
+        }
+
+        // BAIT_ANCHOR safety net: when estimateMaxDamageThisTurn over-estimates
+        // and trips KILL state without a viable kill path (e.g. dist=10, mr=7,
+        // no actual shot lands), every offensive template scores ~0 and the
+        // override fires into a fallback wander. BAIT_ANCHOR at +6000 checkpoint
+        // catches this collapse. When KILL is genuine (real kill path exists),
+        // a real KILL scenario scores tens of thousands and easily wins.
+        var baitAnchorKill = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorKill != null) {
+            push(scenarios, baitAnchorKill)
+        }
+
         push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "otko"), availableTP, availableMP))
         push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "stand"), availableTP, availableMP))
 
@@ -189,6 +210,11 @@ class ScenarioGenerator extends ScenarioCombos {
         var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
         if (grappleHS != null) {
             push(scenarios, grappleHS)
+        }
+
+        var grappleAxe = this.createGrappleAxeScenario(availableTP, availableMP)
+        if (grappleAxe != null) {
+            push(scenarios, grappleAxe)
         }
 
         var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
@@ -243,14 +269,45 @@ class ScenarioGenerator extends ScenarioCombos {
             }
         }
 
+        // Part C: BAIT_ANCHOR — early-game/AGGRO is where the blind-rush-vs-kiter
+        // problem actually lives (turns 1-4 default into AGGRO before time
+        // pressure kicks in). Without this dispatch the BAIT_ANCHOR template
+        // never runs against koe2 / fennel etc. since the state never escalates
+        // to ATTRITION while we're still healthy.
+        var baitAnchorAggro = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorAggro != null) {
+            push(scenarios, baitAnchorAggro)
+        }
+
         var jumpAttackAggro = this.createJumpAttackScenario(availableTP, availableMP)
         if (jumpAttackAggro != null) {
             push(scenarios, jumpAttackAggro)
         }
 
+        // Phase P: dedicated JUMP-to-fire (narrower than JumpAttack).
+        var jumpToFireAggro = this.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireAggro != null) {
+            push(scenarios, jumpToFireAggro)
+        }
+
         var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
         if (buffApproach != null) {
             push(scenarios, buffApproach)
+        }
+
+        // Phase 2: MOTIVATION setup combo template. Fires when out of attack
+        // range with combat horizon ahead — converts "wasted approach TP"
+        // into a 2-3 turn TP-pump plan.
+        var motivationSetup = this.createMotivationSetupScenario(availableTP, availableMP)
+        if (motivationSetup != null) {
+            push(scenarios, motivationSetup)
+        }
+
+        // Option B: BUFF_STAGE template (no MOTIVATION required). Stacks
+        // duration-matched buffs when FIRETURN in [2,3].
+        var buffStage = this.createBuffStageScenario(availableTP, availableMP)
+        if (buffStage != null) {
+            push(scenarios, buffStage)
         }
 
         push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
@@ -294,6 +351,11 @@ class ScenarioGenerator extends ScenarioCombos {
         var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
         if (grappleHS != null) {
             push(scenarios, grappleHS)
+        }
+
+        var grappleAxe = this.createGrappleAxeScenario(availableTP, availableMP)
+        if (grappleAxe != null) {
+            push(scenarios, grappleAxe)
         }
 
         var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
@@ -351,6 +413,18 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, buffApproach)
         }
 
+        // Phase 2: MOTIVATION setup combo template (ATTRITION variant).
+        var motivationSetupAttr = this.createMotivationSetupScenario(availableTP, availableMP)
+        if (motivationSetupAttr != null) {
+            push(scenarios, motivationSetupAttr)
+        }
+
+        // Option B: BUFF_STAGE template (ATTRITION variant).
+        var buffStageAttr = this.createBuffStageScenario(availableTP, availableMP)
+        if (buffStageAttr != null) {
+            push(scenarios, buffStageAttr)
+        }
+
         // Teleport-to-attack against kiters: in ATTRITION, if enemy has moved
         // beyond our MP range, standard move+attack yields 0 damage. Emergency
         // approach uses Teleportation (range 12) to land in a weapon-range cell.
@@ -359,6 +433,14 @@ class ScenarioGenerator extends ScenarioCombos {
             if (emergencyApproachAttr != null) {
                 push(scenarios, emergencyApproachAttr)
             }
+        }
+
+        // Part C: BAIT_ANCHOR — when teleport is unavailable or doesn't reach,
+        // and the enemy is a confirmed kiter, anchor in cover and force them
+        // to step into our weapon arc.
+        var baitAnchorAttr = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorAttr != null) {
+            push(scenarios, baitAnchorAttr)
         }
 
         push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 0.8, 0.8, "hide"), availableTP, availableMP))
@@ -432,6 +514,14 @@ class ScenarioGenerator extends ScenarioCombos {
             }
         }
 
+        // Part C: BAIT_ANCHOR in SUSTAIN — also relevant when we're outranged
+        // and can't break through. Lets us reset positioning before the next
+        // attack window.
+        var baitAnchorSus = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorSus != null) {
+            push(scenarios, baitAnchorSus)
+        }
+
         push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.6, 0.6, "hide"), availableTP, availableMP))
         push(scenarios, this.createParametricScenario(new ScenarioParams(4, 0.7, 0.6, 0.6, "kite"), availableTP, availableMP))
         push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.6, 0.6, "hide"), availableTP, availableMP))
@@ -482,6 +572,12 @@ class ScenarioGenerator extends ScenarioCombos {
         var jumpAttackAttr = this.createJumpAttackScenario(availableTP, availableMP)
         if (jumpAttackAttr != null) {
             push(scenarios, jumpAttackAttr)
+        }
+
+        // Phase P: dedicated JUMP-to-fire (narrower than JumpAttack).
+        var jumpToFireAttr = this.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireAttr != null) {
+            push(scenarios, jumpToFireAttr)
         }
 
         var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)

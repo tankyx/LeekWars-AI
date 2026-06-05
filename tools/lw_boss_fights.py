@@ -182,8 +182,6 @@ class LeekWarsBossFighter:
             def on_open(ws):
                 print("   ✅ WebSocket connected")
                 self.ws_connected = True
-                # Listen for boss squad updates
-                self.send_websocket_message([self.SocketMessage['GARDEN_BOSS_LISTEN']])
             
             # Create WebSocket connection with cookies
             websocket.enableTrace(False)
@@ -197,7 +195,7 @@ class LeekWarsBossFighter:
             )
             
             # Start WebSocket in a separate thread
-            self.ws_thread = threading.Thread(target=self.ws.run_forever, kwargs={'sslopt': {"cert_reqs": ssl.CERT_NONE}})
+            self.ws_thread = threading.Thread(target=self.ws.run_forever)
             self.ws_thread.daemon = True
             self.ws_thread.start()
             
@@ -210,7 +208,11 @@ class LeekWarsBossFighter:
             if not self.ws_connected:
                 print("   ❌ Failed to connect to WebSocket")
                 return False
-                
+
+            # Give the handshake a moment to fully settle before first send
+            time.sleep(0.5)
+            self.send_websocket_message([self.SocketMessage['GARDEN_BOSS_LISTEN'], 0])
+
             return True
             
         except Exception as e:
@@ -680,6 +682,7 @@ def main():
     parser.add_argument('boss_level', type=int, help='Boss level to fight (1=Easy, 2=Medium, 3=Hard)')
     parser.add_argument('num_fights', type=int, help='Number of fights to run')
     parser.add_argument('--quick', action='store_true', help='Enable quick mode (minimal output)')
+    parser.add_argument('--account', type=str, default='main', help='Account name from config.json (default: main)')
     
     args = parser.parse_args()
     
@@ -712,7 +715,7 @@ def main():
     fighter = LeekWarsBossFighter()
     
     # Get credentials
-    email, password = load_credentials()
+    email, password = load_credentials(account=args.account)
     
     # Login
     if not fighter.login(email, password):

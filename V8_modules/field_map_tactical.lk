@@ -23,7 +23,6 @@ class FieldMap extends FieldMapPatterns {
     getAccessibleCells(entity) {
         var acc = []
         if (entity == null) return acc
-        var mp = entity._currMp
         var origin = entity._cellPos
 
         if (entity._id == getEntity()) {
@@ -34,6 +33,10 @@ class FieldMap extends FieldMapPatterns {
             return acc
         }
 
+        // Enemy reach: factor in boots-extended MP plus teleport/jump blink
+        // cells, so the cover heatmap honestly reflects where they could
+        // attack from next turn (not just where current MP walks them to).
+        var mp = getEffectiveEnemyMP(entity)
         for (var cid = 0; cid < FieldMap.board_cell_count; cid++) {
             if (isObstacle(cid)) continue
             var approx = getCellDistance(origin, cid)
@@ -41,6 +44,10 @@ class FieldMap extends FieldMapPatterns {
             var len = getCachedPathLength(origin, cid)
             if (len == null) continue
             if (len <= mp) push(acc, cid)
+        }
+        var blink = getEntityBlinkCells(entity)
+        for (var bi = 0; bi < count(blink); bi++) {
+            push(acc, blink[bi])
         }
         return acc
     }
@@ -106,6 +113,16 @@ class FieldMap extends FieldMapPatterns {
         }
         var enemyPositionsCount = count(enemyPositions)
 
+        // Flatten enemyAccess cells into a set for O(1) membership tests in
+        // the cover heatmap. Built once per call, reused for every candidate.
+        var enemyAccessSet = [:]
+        for (var ea2 = 0; ea2 < count(enemyAccess); ea2++) {
+            var cellsArr2 = enemyAccess[ea2]['cells']
+            for (var ci = 0; ci < count(cellsArr2); ci++) {
+                enemyAccessSet[cellsArr2[ci]] = true
+            }
+        }
+
         for (var i = 0; i < count(playerAccessible); i++) {
             var cand = playerAccessible[i]
 
@@ -143,7 +160,7 @@ class FieldMap extends FieldMapPatterns {
             }
 
             var danger = this.computeDangerForCell(cand, enemyAccess)
-            var coverScore = this.evaluateCoverScore(cand)
+            var coverScore = this.evaluateCoverScore(cand, enemyAccessSet)
 
             var shouldUpdate = false
             if (bestCell == -1) {
@@ -189,6 +206,55 @@ class FieldMap extends FieldMapPatterns {
         }
     }
 
+    // Paint a yellow→green cover-exposure heatmap over every cell the player
+    // could legally land on next turn (MP-walk + JUMP + TELEPORTATION). Called
+    // each turn so the viz is consistent regardless of which strategy path
+    // executes. Yellow = exposed (no functional cover), green = walls actually
+    // shadow enemy reach.
+    paintCoverHeatmap() {
+        if (!_showCoverHeatmap) return null
+        var enemyAccess = this.getEnemyAccess()
+        if (count(enemyAccess) == 0) return null
+
+        var enemyAccessSet = [:]
+        for (var ea = 0; ea < count(enemyAccess); ea++) {
+            var cellsArr = enemyAccess[ea]['cells']
+            for (var ci = 0; ci < count(cellsArr); ci++) {
+                enemyAccessSet[cellsArr[ci]] = true
+            }
+        }
+
+        // Candidate cells: MP-reach + blink landings (JUMP / TELEPORTATION).
+        var seen = [:]
+        var candidates = []
+        var mpReach = this.getAccessibleCells(player)
+        for (var mr = 0; mr < count(mpReach); mr++) {
+            var mc = mpReach[mr]
+            if (!mapContainsKey(seen, mc)) {
+                push(candidates, mc)
+                seen[mc] = true
+            }
+        }
+        var blink = getEntityBlinkCells(player)
+        for (var bi = 0; bi < count(blink); bi++) {
+            var bc = blink[bi]
+            if (!mapContainsKey(seen, bc)) {
+                push(candidates, bc)
+                seen[bc] = true
+            }
+        }
+
+        for (var i = 0; i < count(candidates); i++) {
+            var cc = candidates[i]
+            var cov = this.evaluateCoverScore(cc, enemyAccessSet)
+            var clamped = cov
+            if (clamped > 4) clamped = 4
+            if (clamped < 0) clamped = 0
+            var rChan = 255 - floor(255 * clamped / 4)
+            mark(cc, getColor(rChan, 255, 0), 1)
+        }
+    }
+
     private computeDangerForCell(cellId, enemyAccess) {
         // enemyAccess is fixed per turn, so we can cache by candidate cellId alone.
         if (mapContainsKey(__dangerCellCache, cellId)) {
@@ -205,19 +271,43 @@ class FieldMap extends FieldMapPatterns {
         return danger
     }
 
-    private evaluateCoverScore(cellId) {
-        var adjacentObstacles = 0
+    private evaluateCoverScore(cellId, enemyAccessSet) {
+        // Honest cover heatmap: only credit an adjacent obstacle if it actually
+        // shadows a cell that an enemy can reach (LoS from far side blocked).
+        // The old version counted any wall neighbor as cover and got caught
+        // by patterns like:
+        //     W .
+        //     . W
+        // where engine lineOfSight() returns true through the diagonal — the
+        // walls look like cover but don't function as it. The new version
+        // verifies each wall actually blocks at least one enemy-reachable LoS.
         var cellX = getCellX(cellId)
         var cellY = getCellY(cellId)
+        var effectiveCover = 0
 
         var offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
         for (var o = 0; o < count(offsets); o++) {
-            var neighborCell = getCellFromXY(cellX + offsets[o][0], cellY + offsets[o][1])
-            if (neighborCell != null && isObstacle(neighborCell)) {
-                adjacentObstacles += 1
+            var dx = offsets[o][0]
+            var dy = offsets[o][1]
+            var neighborCell = getCellFromXY(cellX + dx, cellY + dy)
+            if (neighborCell == null || !isObstacle(neighborCell)) continue
+
+            // Sample two cells along the same vector past the obstacle. If any
+            // of them is enemy-reachable AND has LoS to us blocked, then the
+            // obstacle is functioning as cover against at least one threat lane.
+            var functional = false
+            for (var step = 2; step <= 3; step++) {
+                var sCell = getCellFromXY(cellX + dx * step, cellY + dy * step)
+                if (sCell == null) continue
+                if (!mapContainsKey(enemyAccessSet, sCell)) continue
+                if (!getCachedLineOfSight(sCell, cellId)) {
+                    functional = true
+                    break
+                }
             }
+            if (functional) effectiveCover += 1
         }
-        return adjacentObstacles
+        return effectiveCover
     }
 
     findOptimalTeleportCell(target) {

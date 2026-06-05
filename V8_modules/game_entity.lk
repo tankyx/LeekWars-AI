@@ -124,6 +124,46 @@ class Entity {
         if (count(effect) >= 2) return effect[1]
         return 0
     }
+
+    // Aggregating accessors for stacked poison: getEffect/getEffectValue/
+    // getEffectRemaining return only the FIRST matching effect, but multi-
+    // poison stacks (COVID + Plague + Toxin etc.) appear as separate entries
+    // in _effectsActive. Use these to read the true total.
+    getPoisonStackCount() {
+        if (this._effectsActive == null) return 0
+        var n = 0
+        for (var e in this._effectsActive) {
+            if (e[0] == EFFECT_POISON) n++
+        }
+        return n
+    }
+
+    getTotalPoisonPerTurn() {
+        if (this._effectsActive == null) return 0
+        var total = 0
+        for (var e in this._effectsActive) {
+            if (e[0] == EFFECT_POISON && count(e) >= 2) total += e[1]
+        }
+        return total
+    }
+
+    getMaxPoisonRemaining() {
+        if (this._effectsActive == null) return 0
+        var maxR = 0
+        for (var e in this._effectsActive) {
+            if (e[0] == EFFECT_POISON && count(e) >= 4 && e[3] > maxR) maxR = e[3]
+        }
+        return maxR
+    }
+
+    getTotalPoisonDamage() {
+        if (this._effectsActive == null) return 0
+        var total = 0
+        for (var e in this._effectsActive) {
+            if (e[0] == EFFECT_POISON && count(e) >= 4) total += e[1] * e[3]
+        }
+        return total
+    }
 }
 
 class Player extends Entity {

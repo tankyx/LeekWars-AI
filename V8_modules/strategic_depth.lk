@@ -249,6 +249,44 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             adapted['healValue'] = floor(adapted['healValue'] * 0.75)
         }
 
+        // Poison-overwhelm: 3+ stacked poisons whose total tick > 12% maxHP/turn
+        // means we're losing the attrition race even if we kill the source in
+        // 2-3 turns. Boost shield/heal weights so we survive the queued ticks,
+        // and boost antidote/liberation chip valuations via dotEffects negation.
+        // Loss-log evidence: fight 52562626 vs koe2 had 4 stacked poisons
+        // ticking 350-550/turn while LR closed distance — died from accumulated
+        // queued ticks, not direct damage.
+        var meEntity = getEntity()
+        var poisonStackCount = 0
+        var poisonTotalTick = 0
+        var meEffects = getEffects(meEntity)
+        if (meEffects != null) {
+            for (var meEff in meEffects) {
+                if (meEff[0] == EFFECT_POISON && count(meEff) >= 2) {
+                    poisonStackCount += 1
+                    var pVal = meEff[1]
+                    var pRem = (count(meEff) >= 4) ? meEff[3] : 1
+                    poisonTotalTick += pVal * max(1, pRem)
+                }
+            }
+        }
+        var meMaxHP = getTotalLife(meEntity)
+        if (meMaxHP == null || meMaxHP <= 0) meMaxHP = 1
+        var poisonRatioPct = poisonTotalTick * 100 / meMaxHP
+        if (poisonStackCount >= 3 && poisonRatioPct >= 12) {
+            // Survive long enough to drop the source: boost defensive weights.
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * 1.5)
+            adapted['healValue'] = floor(adapted['healValue'] * 1.3)
+            // Push for one-shot burst: spending all TP on a single big hit
+            // beats spreading damage when each turn we lose 10-15% HP.
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.2)
+            adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 1.3)
+            // De-prioritize buffs (no time for setup turns).
+            if (mapContainsKey(adapted, 'buffValue')) {
+                adapted['buffValue'] = floor(adapted['buffValue'] * 0.7)
+            }
+        }
+
         if (primaryProfile['hasReflect'] && primaryEnemy != null) {
             var reflectActive = primaryEnemy.hasDamageReturn()
             if (reflectActive) {

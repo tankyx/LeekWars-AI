@@ -1,5 +1,34 @@
 include('game_entity.lk')
 
+// Launch-type alignment check. Mirrors LeekWars's source→target validation
+// for weapons and chips, which the bare lineOfSight() doesn't capture.
+// E.g. Rockfall (LAUNCH_TYPE_LINE=1) requires same row or column; Iceberg
+// (LAUNCH_TYPE_STAR=3) requires line OR diagonal. The simulator was over-
+// crediting jump-combo damage because chips "in range with LoS" still fail
+// at runtime when the angle doesn't match the launch type (koe2 T7 c293
+// → c278 case projected 715 dmg but only ~80 was delivered).
+//
+// LAUNCH_TYPE values (from leek-wars-generator/Attack.java):
+//   1=LINE, 2=DIAGONAL, 3=STAR, 4=STAR_INVERTED,
+//   5=DIAGONAL_INVERTED, 6=LINE_INVERTED, 7=CIRCLE
+function isSimLaunchValid(launchType, fromCell, toCell) {
+    if (launchType == LAUNCH_TYPE_CIRCLE) return true  // any angle allowed
+    if (launchType == null || launchType <= 0) return true  // unknown → permissive
+    var fx = getCellX(fromCell)
+    var fy = getCellY(fromCell)
+    var tx = getCellX(toCell)
+    var ty = getCellY(toCell)
+    var sameLine = (fx == tx || fy == ty)
+    var sameDiag = (abs(fx - tx) == abs(fy - ty))
+    if (launchType == LAUNCH_TYPE_LINE) return sameLine
+    if (launchType == LAUNCH_TYPE_DIAGONAL) return sameDiag
+    if (launchType == LAUNCH_TYPE_STAR) return sameLine || sameDiag
+    if (launchType == LAUNCH_TYPE_LINE_INVERTED) return !sameLine
+    if (launchType == LAUNCH_TYPE_DIAGONAL_INVERTED) return !sameDiag
+    if (launchType == LAUNCH_TYPE_STAR_INVERTED) return !(sameLine || sameDiag)
+    return true  // future launch type → fail-open
+}
+
 class SimulationResult {
     damageDealt = 0
     damageDealtMin = 0
@@ -15,11 +44,17 @@ class SimulationResult {
     shieldsGained = 0
     relativeShieldGained = 0
     tpSpent = 0
+    tpRefunded = 0
     mpSpent = 0
     finalPosition = -1
     buffsApplied = []
     debuffsApplied = []
     actionsExecuted = 0
+    // Fix #1C: count of scenario actions the simulator silently dropped
+    // because canExecuteAction returned false (typically TP-shortfall on a
+    // trailing action). Used by the feasibility gate so a 5-action scenario
+    // that only fit 2 actions doesn't pass off as "feasible" via simResult.tpSpent.
+    droppedActions = 0
     vulnerabilityApplied = 0
 
     totalLobbyDamage = 0
@@ -123,6 +158,7 @@ class ScenarioSimulator {
         var simScience = this._player._science
         var simAgility = this._player._agility
         var simWeaponUses = [:]
+        var simChipUses = [:]
 
         var simPlayerHP = this._player._currHealth
 
@@ -146,11 +182,32 @@ class ScenarioSimulator {
         for (var action in actions) {
 
             if (!this.canExecuteAction(action, simPos, simTP, simMP, simWeapon)) {
+                // Fix #1C: track silent drops. CHECKPOINT is metadata-only —
+                // never charge it as a "dropped" planned action.
+                if (action.type != Action.ACTION_CHECKPOINT) {
+                    result.droppedActions++
+                }
                 continue
             }
 
             if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT || action.type == Action.ACTION_DEBUFF) {
                 if (action.chip != -1) {
+
+                    // Per-turn maxUse gate. Mirrors the weapon maxUse check at
+                    // line ~338 — without this, sim credits e.g. Iceberg×N when
+                    // _maxUse=1, inflating projected damage.
+                    var chipForMaxUse = null
+                    if (mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
+                        chipForMaxUse = this._arsenal.playerEquippedChips[action.chip]
+                    }
+                    if (chipForMaxUse != null) {
+                        var chipUseCount = simChipUses[action.chip]
+                        if (chipUseCount == null) chipUseCount = 0
+                        if (chipForMaxUse._maxUse > 0 && chipUseCount >= chipForMaxUse._maxUse) {
+                            continue
+                        }
+                        simChipUses[action.chip] = chipUseCount + 1
+                    }
 
                     if (action.chip == CHIP_INVERSION && !_isBossFight) {
                         var invCost = getChipCost(CHIP_INVERSION)
@@ -441,6 +498,20 @@ class ScenarioSimulator {
             }
             else if (action.type == Action.ACTION_BUFF) {
 
+                // Per-turn maxUse gate for buff chips (same rationale as damage).
+                var buffChipForMaxUse = null
+                if (action.chip != -1 && mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
+                    buffChipForMaxUse = this._arsenal.playerEquippedChips[action.chip]
+                }
+                if (buffChipForMaxUse != null) {
+                    var buffUseCount = simChipUses[action.chip]
+                    if (buffUseCount == null) buffUseCount = 0
+                    if (buffChipForMaxUse._maxUse > 0 && buffUseCount >= buffChipForMaxUse._maxUse) {
+                        continue
+                    }
+                    simChipUses[action.chip] = buffUseCount + 1
+                }
+
                 var buffCost = getChipCost(action.chip)
                 result.tpSpent += buffCost
                 simTP -= buffCost
@@ -462,6 +533,7 @@ class ScenarioSimulator {
                 } else if (action.chip == CHIP_RAGE) {
                     var tpBuff = floor(0.55 * (1 + simScience / 100))
                     simTP += tpBuff
+                    result.tpRefunded += tpBuff
                 } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
                 } else if (action.chip == CHIP_STEROID) {
@@ -490,11 +562,13 @@ class ScenarioSimulator {
                 } else if (action.chip == CHIP_ADRENALINE) {
 
                     simTP += 5
+                    result.tpRefunded += 5
                 } else if (action.chip == CHIP_ANTIDOTE) {
                     var antidoteHeal = 30 * (1 + simWisdom / 500.0)
                     result.hpGained += antidoteHeal
                 } else if (action.chip == CHIP_MANUMISSION) {
                     simTP += 2
+                    result.tpRefunded += 2
                 }
 
                 result.actionsExecuted++
@@ -615,6 +689,23 @@ class ScenarioSimulator {
                         if (dist == null || dist < chipObj._minRange || dist > chipObj._maxRange) {
                             return false
                         }
+                        // Jump-landing LoS + launchType gate: damage/debuff chips
+                        // need LoS from simPos (which may be a post-jump landing
+                        // cell) AND launch-type alignment (LINE/DIAGONAL/STAR/etc.)
+                        // to target. Without this, combos like [JUMP@293-c31@278-
+                        // c32@278] over-credit damage because the chip is "in range
+                        // with LoS" but the LeekWars runtime rejects the launch
+                        // angle. BUFF chips are excluded — self-target skips above.
+                        if (action.type == Action.ACTION_DIRECT
+                            || action.type == Action.ACTION_DOT
+                            || action.type == Action.ACTION_DEBUFF) {
+                            if (!lineOfSight(simPos, tCell)) {
+                                return false
+                            }
+                            if (!isSimLaunchValid(chipObj._launchType, simPos, tCell)) {
+                                return false
+                            }
+                        }
                     }
                 }
                 return true
@@ -638,6 +729,12 @@ class ScenarioSimulator {
                         return false
                     }
                     if (!lineOfSight(simPos, tCell)) {
+                        return false
+                    }
+                    // Launch-type alignment for weapons too (e.g. Rifle=LINE
+                    // requires same row/col; Katana, M-Laser, etc. have their
+                    // own constraints). Bare LoS is insufficient.
+                    if (!isSimLaunchValid(weaponObj._launchType, simPos, tCell)) {
                         return false
                     }
                 }

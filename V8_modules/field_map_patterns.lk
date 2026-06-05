@@ -204,6 +204,18 @@ class FieldMapPatterns extends FieldMapCore {
 
         var aoeType = item._aoeType
 
+        // TEMP DEBUG: diagnose grenade_launcher AoE-aim against kiters
+        var _dbgAoE = (aoeType == AREA_CIRCLE_2)
+        if (_dbgAoE) {
+            debug("AOEAIM t" + getTurn() + " item=" + itemId + " shoot=" + shooterCell +
+                  " primaryCell=" + primaryCell + " primaryId=" + primaryTarget._id +
+                  " range=[" + item._minRange + "-" + item._maxRange + "]" +
+                  " candidates=" + count(aimCandidates))
+        }
+        var _dbgRejRange = 0
+        var _dbgRejLoS = 0
+        var _dbgAccepted = 0
+
         // Pre-compute item's max self-splash potential (avg direct+nova, ignoring
         // dot since we're not poisoning ourselves) so we can subtract a soft
         // penalty when shooter is inside the AoE. This replaces the earlier
@@ -220,8 +232,15 @@ class FieldMapPatterns extends FieldMapCore {
         for (var aimCell in aimCandidates) {
 
             var dist = getCellDistance(shooterCell, aimCell)
-            if (dist == null || dist < item._minRange || dist > item._maxRange) continue
-            if (!getCachedLineOfSight(shooterCell, aimCell)) continue
+            if (dist == null || dist < item._minRange || dist > item._maxRange) {
+                if (_dbgAoE) _dbgRejRange++
+                continue
+            }
+            if (!getCachedLineOfSight(shooterCell, aimCell)) {
+                if (_dbgAoE) _dbgRejLoS++
+                continue
+            }
+            if (_dbgAoE) _dbgAccepted++
 
             var result = arsenal.calculateMultiEnemyDamage(
                 shooterCell, aimCell, itemId, enemiesArray
@@ -233,6 +252,11 @@ class FieldMapPatterns extends FieldMapCore {
 
             if (isWeapon) {
                 totalDamage *= item._maxUse
+            }
+
+            if (_dbgAoE && totalDamage > 0) {
+                debug("  cand=" + aimCell + " dist=" + dist + " raw=" + result['total'] +
+                      " hits=" + hitCount + " total=" + totalDamage)
             }
 
             // Self-splash soft penalty: if our shooter cell sits inside the
@@ -279,6 +303,12 @@ class FieldMapPatterns extends FieldMapCore {
                     bestDistToTarget = distToTarget
                 }
             }
+        }
+
+        if (_dbgAoE) {
+            debug("AOEAIM RESULT bestAim=" + bestAimCell + " bestDmg=" + bestDamage +
+                  " hits=" + bestHitCount + " rejRange=" + _dbgRejRange +
+                  " rejLoS=" + _dbgRejLoS + " accepted=" + _dbgAccepted)
         }
 
         return [
@@ -550,6 +580,11 @@ class FieldMapPatterns extends FieldMapCore {
             var chipObj = arsenal.playerEquippedChips[cid]
 
             if (this.isBuffChip(cid)) continue
+
+            // Skip chips currently on cooldown — otherwise damageMap reports
+            // phantom damage from unusable chips and move-target selection
+            // walks to cells whose chip damage can't actually be fired.
+            if (getCooldown(cid, player._id) > 0) continue
 
             var listCID = []
 

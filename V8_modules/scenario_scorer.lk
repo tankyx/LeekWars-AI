@@ -155,6 +155,35 @@ class ScenarioScorer {
             damageWeight *= 2.5
         }
 
+        // Survival imperative: when we're in FLEE territory AND the kill is
+        // not reachable this turn, suppress burst-damage scoring so heal+flee
+        // can win. Without this the picker races damage even at HP 18% vs a
+        // ~1400 HP enemy (T9 LeekRain vs koe2 — chose Rockfall+Destroyer for
+        // 440 dmg on a 1431 HP target instead of Regeneration+TELE retreat).
+        // Triggers only when kill is far away (≤30% prob) AND we're critical.
+        // Magic/Hybrid excluded: their poison-trade plan needs to press direct
+        // damage even at low HP — MH vs smart_mag regressed 95→80% without
+        // this gate (DoT race opponents are not won by flee+heal).
+        if (__playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
+            var survivalHpPct = (this._player._currHealth * 100) / max(1, this._player._maxHealth)
+            // Finishing-class carve-out: JUMP+double-attack scenarios that put
+            // the enemy on the edge are winnable trades even at low HP — eating
+            // 1-2 DoT ticks is worth it if our burst is real. Only suppress
+            // when burst is small (slow grind we'd lose anyway).
+            // 35% threshold: a 2-turn kill window at sustained DPT, the trade
+            // breakpoint where pressing beats healing.
+            var enemyHPForRatio = max(1, this._target._currHealth)
+            var dmgRatio = effectiveDamage * 100 / enemyHPForRatio
+            var finishingBurst = (dmgRatio >= 35)
+            if (!finishingBurst && survivalHpPct < 30 && killProbability < 0.30) {
+                damageWeight *= 0.3
+            } else if (!finishingBurst && survivalHpPct < 20 && killProbability < 0.50) {
+                // Even tighter at sub-20% HP: any non-finisher damage path is
+                // suspect, suppress more aggressively.
+                damageWeight *= 0.2
+            }
+        }
+
         if (killProbability >= 0.85 && killProbability < 1.1 && scenario != null && count(scenario) > 0) {
             var buffCount = 0
             var attackCount = 0
@@ -280,6 +309,90 @@ class ScenarioScorer {
                 noDamagePenalty -= 5000
             }
 
+            // Skipped-attack amplifier: if any weapon/chip can hit the target
+            // from a reachable cell this turn and this scenario chose to deal
+            // 0 damage anyway, the player is over-buffing instead of firing.
+            // Triple the penalty + flat floor scaled by best available damage.
+            var hadReachableHit = false
+            for (var wid in mapKeys(this._fieldMap.weaponHitmap)) {
+                if (count(this._fieldMap.weaponHitmap[wid]) > 0) { hadReachableHit = true; break }
+            }
+            if (!hadReachableHit) {
+                for (var cid in mapKeys(this._fieldMap.chipHitmap)) {
+                    if (count(this._fieldMap.chipHitmap[cid]) > 0) { hadReachableHit = true; break }
+                }
+            }
+            if (hadReachableHit) {
+                noDamagePenalty *= 3.0
+                var bestHitDamage = 0
+                for (var cellId in mapKeys(this._fieldMap.damageMap)) {
+                    var cellObj = this._fieldMap.damageMap[cellId]
+                    var dmg = cellObj._weaponDamage + cellObj._chipDamage
+                    if (dmg > bestHitDamage) bestHitDamage = dmg
+                }
+                if (bestHitDamage > 500) noDamagePenalty -= 5000
+            }
+
+            // Distance-based no-engage penalty: when the scenario deals zero
+            // damage AND ends with the player still far from enemy AND we had
+            // MP we didn't spend, we're letting buff-stacking win over closing.
+            // The skipped-attack amplifier above is silent in this case because
+            // the hitmap is empty (no reachable hit at any cell), so without
+            // this guard the scorer happily picks pure-buff turns at long range.
+            var finalPosNE = simResult.finalPosition
+            if (finalPosNE == -1) finalPosNE = this._player._cellPos
+            var distEndNE = getCellDistance(finalPosNE, this._target._cellPos)
+            if (distEndNE == null) distEndNE = 99
+            var maxWRNE = 0
+            for (var wIdNE in mapKeys(arsenal.playerEquippedWeapons)) {
+                var wObjNE = arsenal.playerEquippedWeapons[wIdNE]
+                if (wObjNE != null && wObjNE._maxRange > maxWRNE) maxWRNE = wObjNE._maxRange
+            }
+            var mpBudgetNE = getMP()
+            var mpUsedNE = simResult.mpSpent
+            if (distEndNE > maxWRNE + mpBudgetNE && mpUsedNE < mpBudgetNE * 0.6) {
+                // Far + lazy: hard penalty independent of hitmap state.
+                noDamagePenalty -= 5000
+            }
+
+            // Shield-denial relief. damageDealt is NET after enemy shields, so a
+            // scenario that fires a weapon/chip against a shielded enemy lands
+            // here with totalDamage == 0 even though it actively engaged. Treat
+            // a shielded miss differently from a skipped attack: scale the
+            // penalty back when the scenario contains real attack actions
+            // (ACTION_DIRECT or weapon attack). Pure buff turns keep the full
+            // penalty.
+            var hasAttackAction = false
+            if (scenario != null) {
+                for (var aSh in scenario) {
+                    if (aSh.type == Action.ACTION_DIRECT || aSh.type == Action.ACTION_DOT) {
+                        hasAttackAction = true
+                        break
+                    }
+                    if (aSh.weaponId != -1 && aSh.type != Action.ACTION_WEAPON_SWAP) {
+                        hasAttackAction = true
+                        break
+                    }
+                }
+            }
+            if (hasAttackAction) {
+                // 0.25× = aggressive relief vs shield-spamming kiters. Firing
+                // into a shield still applies pressure (shields decay; next
+                // turn's attack lands), so the "0-damage punishment" must be
+                // much smaller than for a pure-buff turn. 0.4× was too mild —
+                // T11 vs koe2 (HP=798, kiter spamming Helmet/Armoring) the
+                // scorer still picked pure-buff over OFFENSIVE because residual
+                // penalty (-7k) plus halved death penalty (-4k) still beat
+                // a buff scenario's no-damage stack (-17.7k) by less than
+                // the difference in buff value + position.
+                noDamagePenalty = floor(noDamagePenalty * 0.25)
+                // Engagement credit: reward firing into a shield over passive
+                // buffing. The +2000 represents "shield decay + next-turn
+                // landing" — empirically calibrated so the BUFF scenario at
+                // T11 (~-29k) loses to a shielded OFFENSIVE.
+                score += 2000
+            }
+
             score += noDamagePenalty
         }
 
@@ -341,6 +454,17 @@ class ScenarioScorer {
         var shieldScore = simResult.shieldsGained * ehpWeight
         var relShieldScore = this.calculateRelativeShieldValue(simResult.relativeShieldGained) * ehpWeight
 
+        // Shields don't block poison/DoT damage — they only mitigate direct
+        // weapon and chip damage. Against magic-poison kiters (koe2-class:
+        // mag-heavy, hasPoison, low str), almost all incoming damage is DoT
+        // that bypasses shields. Applying shield buffs vs them is wasted TP.
+        // Keep a small residual (10%) for the rare non-poison weapon hit.
+        if (this._enemyProfile != null && this._enemyProfile['isKiter']
+            && this._enemyProfile['kiterFlavor'] == 'magic_poison') {
+            shieldScore *= 0.1
+            relShieldScore *= 0.1
+        }
+
         var wisdom = this._player._wisdom
         var wisdomMultiplier = 1.0
         if (wisdom < 200) {
@@ -364,8 +488,38 @@ class ScenarioScorer {
         score += shieldScore + relShieldScore + healScore + healingUrgencyBonus
 
         var positionWeight = this.calculatePositionWeight()
-        var positionScore = this.evaluatePosition(simResult.finalPosition) * positionWeight
+        var positionScore = this.evaluatePosition(simResult.finalPosition, simResult) * positionWeight
         score += positionScore
+
+        // Phase O: closing-reward. When we can't shoot for 2+ turns, the
+        // scorer's existing position evaluation (which weights kiting, cover,
+        // threat) doesn't differentiate "moved closer to target" from
+        // "moved sideways". Add a direct distance-reduction bonus so the
+        // top-scoring scenario on no-shot turns is one that ACTUALLY closes
+        // the gap rather than one that stacks buffs and idles.
+        if (__nearestFireTurn >= 2 && simResult.finalPosition != -1) {
+            var startDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+            var finalDist = getCellDistance(simResult.finalPosition, this._target._cellPos)
+            if (startDist != null && finalDist != null) {
+                var closedCells = startDist - finalDist
+                if (closedCells >= 1) {
+                    var closingBonus = min(600, closedCells * 150)
+                    score += closingBonus
+                }
+            }
+        }
+
+        // Top-level herding bonus (not gated by positionWeight). Pushes the
+        // scorer to pick scenarios whose final position herds a kiter into
+        // open terrain. STR builds have positionWeight=0.2, so positional
+        // signals nested in evaluatePosition get diluted to noise — this
+        // direct addition ensures herding actually shifts rankings.
+        score += this.evaluateHerding(simResult.finalPosition)
+
+        // Hide-denial: penalize positions where enemy has a no-LoS retreat
+        // route within its MP budget (spam-and-hide pattern). Complements
+        // evaluateHerding which only checks the straight-line retreat axis.
+        score += this.evaluateHideDenial(simResult.finalPosition)
 
         var adversarialThreat = 0
         if (__adversarialThreatCacheBuilt) {
@@ -379,8 +533,55 @@ class ScenarioScorer {
             var effectiveEnemyDmg = adversarialThreat * (1.0 - relShieldReduction)
             var survivalAfterEnemy = effectiveHP - effectiveEnemyDmg
 
-            if (survivalAfterEnemy <= 0) score -= 8000
-            else if (survivalAfterEnemy < this._player._maxHealth * 0.25) score -= 3000
+            // Phase J: kiter-desperation discount. When we're already bleeding
+            // active poison DoT and the target is a kiter we can't reach by
+            // attrition, "predicted death" applies to BOTH firing AND hiding
+            // positions — so the -8000 penalty was double-counting inevitable
+            // damage and forcing the AI to never fire. Halve the death and
+            // low-HP penalties when both conditions hold AND this scenario
+            // actually deals damage (don't reward non-damaging risk-taking).
+            var dies = (survivalAfterEnemy <= 0)
+            var dyingSoon = (survivalAfterEnemy < this._player._maxHealth * 0.25)
+            var deathPenalty = 0
+            if (dies) deathPenalty = 8000
+            else if (dyingSoon) deathPenalty = 3000
+
+            // Detect whether the scenario actually engaged (attack action
+             // present). Shielded fire still counts as engagement — the
+             // discount should not vanish just because the enemy popped a
+             // shield this turn. Pure buff/heal scenarios are excluded.
+            var phaseJHasAttack = false
+            if (scenario != null) {
+                for (var aPJ in scenario) {
+                    if (aPJ.type == Action.ACTION_DIRECT || aPJ.type == Action.ACTION_DOT) {
+                        phaseJHasAttack = true
+                        break
+                    }
+                    if (aPJ.weaponId != -1 && aPJ.type != Action.ACTION_WEAPON_SWAP) {
+                        phaseJHasAttack = true
+                        break
+                    }
+                }
+            }
+            if (deathPenalty > 0 && this._enemyProfile != null
+                && this._enemyProfile['isKiter']
+                && (simResult.damageDealt > 0 || simResult.dotDamageQueued > 0 || phaseJHasAttack)) {
+                var pEffsK = getEffects(this._player._id)
+                var pDoTK = 0
+                if (pEffsK != null) {
+                    for (var peK in pEffsK) {
+                        if (peK[0] == EFFECT_POISON && count(peK) >= 2) {
+                            var dvK = peK[1]
+                            var drK = (count(peK) >= 4) ? peK[3] : 1
+                            pDoTK += dvK * max(1, drK)
+                        }
+                    }
+                }
+                if (pDoTK >= this._player._maxHealth * 0.10) {
+                    deathPenalty = floor(deathPenalty * 0.5)
+                }
+            }
+            score -= deathPenalty
 
             var threatWeight = this.getWeight('threatReduction', 40) / 100.0
             score -= adversarialThreat * threatWeight
@@ -465,6 +666,16 @@ class ScenarioScorer {
                         poisonDumpBonus = 10000
                     } else if (action.checkpointType == "POISON_BAIT") {
                         checkpointBonus = 6000
+                    } else if (action.checkpointType == "BAIT_ANCHOR") {
+                        // Part C: anchor-and-threaten vs kiters. Bumped from
+                        // 3500 → 6000 (matches POISON_BAIT tier) — at 3500 the
+                        // emergency-approach scenario (quick-score 1840) was
+                        // out-finishing BAIT_ANCHOR (quick-score 1540) at T1
+                        // because closing-distance bonuses + position score in
+                        // the regular scorer dwarfed the 3500 marker. POISON_BAIT
+                        // is structurally similar ("don't burst yet, set up for
+                        // a bigger play") so 6000 is the correct peer tier.
+                        checkpointBonus = 6000
                     } else {
                         checkpointBonus = this.getWeight('checkpointBonus', 2500)
                     }
@@ -479,6 +690,48 @@ class ScenarioScorer {
 
         var continuationScore = this.evaluateContinuationValue(simResult, scenario)
         score += continuationScore
+
+        // Pre-discount bunker penalty (main scoreScenario path). The 2-ply
+        // bunker check is capped at ~0.6× discount, which is insufficient when
+        // the current-turn damage score is already in the 80k–100k range
+        // (e.g. T7 vs koe2: 268 dmg → ~104k after burst/kill/synergy mults).
+        // Applying the penalty here, before the 2-ply discount, gives it
+        // the same scale as current-turn damage scoring. Gated tightly to
+        // kiter targets so non-kiter matchups remain unaffected.
+        var sFinalPos = simResult.finalPosition
+        if (sFinalPos != -1 && sFinalPos != this._player._cellPos) {
+            var sEnemyProf = getEnemyProfile(this._target._id)
+            if (sEnemyProf != null && sEnemyProf['isKiter']) {
+                var sFx = getCellX(sFinalPos)
+                var sFy = getCellY(sFinalPos)
+                var sWalk = 0
+                var sN1 = getCellFromXY(sFx + 1, sFy)
+                if (sN1 != null && sN1 != -1 && getCellContent(sN1) == CELL_EMPTY) sWalk++
+                var sN2 = getCellFromXY(sFx - 1, sFy)
+                if (sN2 != null && sN2 != -1 && getCellContent(sN2) == CELL_EMPTY) sWalk++
+                var sN3 = getCellFromXY(sFx, sFy + 1)
+                if (sN3 != null && sN3 != -1 && getCellContent(sN3) == CELL_EMPTY) sWalk++
+                var sN4 = getCellFromXY(sFx, sFy - 1)
+                if (sN4 != null && sN4 != -1 && getCellContent(sN4) == CELL_EMPTY) sWalk++
+                var sIsMagicPoison = (sEnemyProf['kiterFlavor'] == 'magic_poison')
+                var sPenalty = 0
+                if (sIsMagicPoison) {
+                    // Bumped walkable=2 from 8000 → 22000 after fight 52570187
+                    // showed c293 (walkable=2) still chosen at score 96,361
+                    // because the only damaging scenario at T7 is the jump-trap.
+                    // 22000 brings c293 to ~74k, comparable to T13's c183 (70k)
+                    // pick — borderline but breakable when alternatives exist.
+                    if (sWalk == 0) sPenalty = 45000
+                    else if (sWalk == 1) sPenalty = 30000
+                    else if (sWalk == 2) sPenalty = 22000
+                } else {
+                    if (sWalk == 0) sPenalty = 12000
+                    else if (sWalk == 1) sPenalty = 6000
+                    else if (sWalk == 2) sPenalty = 2000
+                }
+                score -= sPenalty
+            }
+        }
 
         var destroyerBonus = 0
         if (scenario != null && count(scenario) > 0 && this._target._strength > 150) {
@@ -713,13 +966,33 @@ class ScenarioScorer {
         return 2.0  
     }
 
-    evaluatePosition(finalPos) {
+    evaluatePosition(finalPos, simResult = null) {
         if (finalPos == -1 || finalPos == this._player._cellPos) return 0
 
         var offensiveValue = 0
         if (mapContainsKey(this._fieldMap.damageMap, finalPos)) {
             var cellObj = this._fieldMap.damageMap[finalPos]
             offensiveValue = cellObj._totalDamage
+        }
+
+        // Fix #2: "intent-vs-outcome" guard. damageMap[finalPos]._totalDamage is
+        // *potential* fire from this cell; crediting it when the scenario
+        // didn't actually fire is how we got "moves close to a kiter just to
+        // heal" (T7 Gundamm: scenario planned Axe at 146, simulator dropped it
+        // for TP, but evaluatePosition still credited cell 146 as a great
+        // firing perch — pulling LeekRain into the kiter's pocket for nothing).
+        // If the scenario didn't deal damage AND we moved closer to the enemy,
+        // strip the speculative offensive credit. Closing reward at score()
+        // already handles legitimate close-no-shot setups.
+        if (simResult != null && offensiveValue > 0) {
+            var firedAnything = (simResult.damageDealt > 0 || simResult.dotDamageQueued > 0)
+            if (!firedAnything && this._target != null) {
+                var startD = getCellDistance(this._player._cellPos, this._target._cellPos)
+                var endD = getCellDistance(finalPos, this._target._cellPos)
+                if (startD != null && endD != null && endD < startD) {
+                    offensiveValue = 0
+                }
+            }
         }
 
         var distToTarget = getCellDistance(finalPos, this._target._cellPos)
@@ -796,6 +1069,170 @@ class ScenarioScorer {
         return totalScore
     }
 
+    // Herding bonus added at the top-level score (not gated by positionWeight,
+    // which for STR builds is 0.2 — diluting any positional signal to noise).
+    // Predicts where the enemy retreats from our final position and rewards
+    // approaches that push the kiter into open terrain.
+    evaluateHerding(finalPos) {
+        if (finalPos == -1 || finalPos == this._player._cellPos) return 0
+        if (this._target == null) return 0
+        var enemyMP = this._target._currMp
+        if (enemyMP == null || enemyMP < 3) return 0
+
+        // Suppress when our own poison load is heavy — then we want LoS-break,
+        // not chase.
+        var poisonDoT = 0
+        var pEffs = getEffects(this._player._id)
+        if (pEffs != null) {
+            for (var pe in pEffs) {
+                if (pe[0] == EFFECT_POISON && count(pe) >= 2) {
+                    var dv = pe[1]
+                    var dr = (count(pe) >= 4) ? pe[3] : 1
+                    poisonDoT += dv * max(1, dr)
+                }
+            }
+        }
+        var poisonRatio = poisonDoT * 100 / max(1, this._player._maxHealth)
+        // Phase J: scale the suppression instead of cliff-at-25%. The old
+        // hard cutoff zeroed the entire herding signal once any meaningful
+        // poison landed — but against magic-poison kiters we hit 25% on
+        // turn 1 and never recovered our positional discipline. Linear ramp
+        // from full signal at 0% to no signal at 50%; ≥50% retains the
+        // original "hide-self priority" behavior.
+        var herdScale = 1.0
+        if (poisonRatio >= 50) return 0
+        else if (poisonRatio > 0) herdScale = 1.0 - (poisonRatio / 50.0)
+
+        // Predict retreat: straight-line away from final position.
+        var ax = getCellX(finalPos)
+        var ay = getCellY(finalPos)
+        var ex = getCellX(this._target._cellPos)
+        var ey = getCellY(this._target._cellPos)
+        var dx = ex - ax
+        var dy = ey - ay
+        var mag = max(1, abs(dx) + abs(dy))
+        var rx = ex + (dx * enemyMP) / mag
+        var ry = ey + (dy * enemyMP) / mag
+        var retreatCell = getCellFromXY(rx, ry)
+        if (retreatCell == null || isObstacle(retreatCell)) {
+            // Wall/edge along the retreat axis = forced corner. That IS herding.
+            retreatCell = this._target._cellPos
+        }
+
+        // Openness: count non-obstacle, on-map cells in radius 2 (24 max).
+        var openCount = 0
+        var rcx = getCellX(retreatCell)
+        var rcy = getCellY(retreatCell)
+        for (var ox = -2; ox <= 2; ox++) {
+            for (var oy = -2; oy <= 2; oy++) {
+                if (ox == 0 && oy == 0) continue
+                var c = getCellFromXY(rcx + ox, rcy + oy)
+                if (c == null) continue
+                if (!isObstacle(c)) openCount += 1
+            }
+        }
+        // Baseline 22 = neutral. Each step worth 100 score points → max ±500,
+        // comparable to draw-breaking bonuses and meaningful vs burst scores.
+        var openDelta = openCount - 22
+        if (openDelta > 5) openDelta = 5
+        if (openDelta < -5) openDelta = -5
+        return floor(openDelta * 100 * herdScale)
+    }
+
+    // Hide-denial bonus: penalize finalPos when enemy has a no-LoS cell within
+    // its MP budget — the "spam and hide" pattern (cast denial/poison from a
+    // spam cell with LoS, then walk into cover next turn). evaluateHerding
+    // looks at the straight-line retreat axis only; a kiter retreating
+    // perpendicular to cover slips past it. This samples 8 compass directions
+    // at 3 ranges from the enemy and rewards positions that pin enemy in LoS.
+    evaluateHideDenial(finalPos) {
+        if (finalPos == -1 || finalPos == this._player._cellPos) return 0
+        if (this._target == null) return 0
+        var enemyMP = this._target._currMp
+        if (enemyMP == null || enemyMP < 2) return 0
+
+        // Build-type scaling: closing-pressure builds want to deny enemy hide
+        // routes. Tank/SCI prefers mid-range Nova attrition — pulling it into
+        // close range to deny hides loses to burst. Magic/Agility partially
+        // care (they kite themselves but also need targets visible).
+        var buildScale = 1.0
+        if (__playerBuildType == BUILD_TANK_SCI) buildScale = 0.0
+        else if (__playerBuildType == BUILD_AGILITY) buildScale = 0.3
+        else if (__playerBuildType == BUILD_MAGIC) buildScale = 0.0
+        else if (__playerBuildType == BUILD_HYBRID) buildScale = 0.4
+        if (buildScale <= 0) return 0
+
+        // If we're heavily poisoned, hiding ourselves is the priority — we
+        // don't care if the enemy can hide. Suppress to avoid pulling us
+        // back into LoS when we should be breaking it.
+        var poisonDoT = 0
+        var pEffs = getEffects(this._player._id)
+        if (pEffs != null) {
+            for (var pe in pEffs) {
+                if (pe[0] == EFFECT_POISON && count(pe) >= 2) {
+                    var dv = pe[1]
+                    var dr = (count(pe) >= 4) ? pe[3] : 1
+                    poisonDoT += dv * max(1, dr)
+                }
+            }
+        }
+        var poisonRatio = poisonDoT * 100 / max(1, this._player._maxHealth)
+        // Phase J: linear scale instead of cliff-at-25%. See evaluateHerding
+        // above for rationale — anti-spam-hide signal is most needed against
+        // magic-poison kiters, but those are exactly the fights where we hit
+        // 25% poison ratio early. Damp linearly, kill above 50%.
+        var hideScale = 1.0
+        if (poisonRatio >= 50) return 0
+        else if (poisonRatio > 0) hideScale = 1.0 - (poisonRatio / 50.0)
+
+        var enemyCell = this._target._cellPos
+        var ex = getCellX(enemyCell)
+        var ey = getCellY(enemyCell)
+
+        // 8 compass directions (N, NE, E, SE, S, SW, W, NW).
+        var dirs = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]]
+        // 3 distance samples: close (always 2), mid (MP/2), far (MP).
+        // Skip duplicates when MP is small.
+        var distMid = enemyMP / 2
+        if (distMid < 2) distMid = 2
+        var dists = [2, distMid, enemyMP]
+
+        var hideOptions = 0
+        var samples = 0
+        for (var d in dists) {
+            for (var dir in dirs) {
+                var cx = ex + dir[0] * d
+                var cy = ey + dir[1] * d
+                var c = getCellFromXY(cx, cy)
+                if (c == null) continue
+                if (isObstacle(c)) continue
+                samples += 1
+                if (!lineOfSight(c, finalPos)) hideOptions += 1
+            }
+        }
+        if (samples == 0) return 0
+        var hideRatio = hideOptions * 1.0 / samples
+        // Scale by enemy MP/6 — low-MP enemies can't really spam-then-hide.
+        var mpScale = enemyMP / 6.0
+        if (mpScale > 1.0) mpScale = 1.0
+
+        // Scale by enemy's spam threat: magic-heavy kiters dump 500-700 future
+        // poison + denial damage per spam-then-hide cycle. STR enemies hide-
+        // and-shoot for ~weapon damage. Use enemy MAG + STR/2 as proxy for
+        // projected 3-turn cost when enemy gets to hide unmolested.
+        var enemyMag = this._target._magic
+        var enemyStr = this._target._strength
+        var spamPotential = enemyMag * 3 + enemyStr  // ~900 for koe2-class
+        if (spamPotential < 400) spamPotential = 400  // floor for non-spammers
+        if (spamPotential > 2500) spamPotential = 2500  // cap
+
+        // Final penalty: 0 to -2500 depending on hide route + enemy threat.
+        // Damage scoring is ~30K for a weapon hit, so a -1500 penalty on the
+        // "spam-and-hide enabled" position is enough to flip rankings vs
+        // alternative positions with similar damage but lower hide ratio.
+        return floor(-spamPotential * hideRatio * mpScale * buildScale * hideScale)
+    }
+
     calculateEfficiency(simResult) {
         var tpEfficiency = 0
         var mpEfficiency = 0
@@ -842,7 +1279,13 @@ class ScenarioScorer {
         if (killMargin >= 1.1) {
             buffMultiplier = 0.1
         } else if (killMargin < 0.7 && expectedDamage > 200) {
-            if (this._player._magic > this._player._strength + 100) {
+            // Gate the STR 3.0x amplifier on actually doing damage. With
+            // totalDamage == 0 the killMargin=0 branch trivially fires, and
+            // the 3x boost turns pure-buff scenarios into self-reinforcing
+            // winners against kiters — caller never breaks the no-attack loop.
+            if (totalDamage <= 0) {
+                buffMultiplier = 1.0
+            } else if (this._player._magic > this._player._strength + 100) {
                 buffMultiplier = 1.3
             } else {
                 buffMultiplier = 3.0
@@ -865,9 +1308,29 @@ class ScenarioScorer {
             reflectExpectedDamage = max(300, enemyStr * 2)
         }
 
-        for (var buffChip in buffsApplied) {
+        // Phase O (Option C): decay is now per-buff, gated by buff duration vs
+        // __nearestFireTurn. A 3-turn buff cast at FIRETURN=2 is still active
+        // when the shot lands (cast t1, active t1-t3, shot at t3) — should NOT
+        // decay. Previous flat 0.5/0.1 over-penalized staged combos and broke
+        // multi-turn setup plans. Only buffs whose duration <= FIRETURN actually
+        // expire before contact.
+        var phaseOActive = (__nearestFireTurn >= 2 && simResult.damageDealt == 0 && simResult.dotDamageQueued == 0)
 
-            if (buffChip == CHIP_STEROID) value += 200
+        for (var buffChip in buffsApplied) {
+            // Per-buff decay: dur=3 (STEROID/WARM_UP/WIZARDRY/PRISM),
+            // dur=2 (KNOWLEDGE/ELEVATION), dur=4 (RAGE), dur=3 (ADRENALINE).
+            // Survives if dur > FIRETURN.
+            var bDur = 3
+            if (buffChip == CHIP_KNOWLEDGE || buffChip == CHIP_ELEVATION) bDur = 2
+            if (buffChip == CHIP_RAGE) bDur = 4
+            var phaseODecay = 1.0
+            if (phaseOActive) {
+                if (bDur > __nearestFireTurn) phaseODecay = 1.0
+                else if (bDur == __nearestFireTurn) phaseODecay = 0.5
+                else phaseODecay = 0.1
+            }
+
+            if (buffChip == CHIP_STEROID) value += 200 * phaseODecay
             if (buffChip == CHIP_DOPING) {
                 // Both STR buff AND aftereffect scale with SCI.
                 // Only cast when in weapon range, scenario includes attacks, once per fight.
@@ -885,14 +1348,14 @@ class ScenarioScorer {
                     value -= 500
                 }
             }
-            if (buffChip == CHIP_WARM_UP) value += 200
-            if (buffChip == CHIP_WIZARDRY) value += 200
-            if (buffChip == CHIP_KNOWLEDGE) value += 150
-            if (buffChip == CHIP_ELEVATION) value += 120
-            if (buffChip == CHIP_PRISM) value += 180
-            if (buffChip == CHIP_ADRENALINE) value += 100
-            if (buffChip == CHIP_RAGE) value += 300
-            if (buffChip == CHIP_SEVEN_LEAGUE_BOOTS) value += 200
+            if (buffChip == CHIP_WARM_UP) value += 200 * phaseODecay
+            if (buffChip == CHIP_WIZARDRY) value += 200 * phaseODecay
+            if (buffChip == CHIP_KNOWLEDGE) value += 150 * phaseODecay
+            if (buffChip == CHIP_ELEVATION) value += 120 * phaseODecay
+            if (buffChip == CHIP_PRISM) value += 180 * phaseODecay
+            if (buffChip == CHIP_ADRENALINE) value += 100  // TP boost — useful even when not shooting
+            if (buffChip == CHIP_RAGE) value += 300 * phaseODecay
+            if (buffChip == CHIP_SEVEN_LEAGUE_BOOTS) value += 200  // MP boost — helps close the gap
 
             if (isAbsoluteShieldChip(buffChip)) {
                 value += 80
@@ -920,19 +1383,70 @@ class ScenarioScorer {
 
             if (isRelativeShieldChip(buffChip) && buffChip != CHIP_WALL && buffChip != CHIP_FORTRESS) value += 100
 
-            if (buffChip == CHIP_REGENERATION) value += 80
+            if (buffChip == CHIP_REGENERATION) {
+                // HP-tiered Regen bonus mirrors Antidote pressure tiers.
+                // At critical HP the picker was racing damage on unreachable
+                // kills (T9 LeekRain at 18% HP, enemy 1431 HP) — Regen needs
+                // to outscore the +80 baseline so flee+heal beats kamikaze
+                // burst. Tiers match scenario_helpers state thresholds.
+                // Magic/Hybrid excluded from the critical tier: they win
+                // poison-trades by pressing, not by mass-healing (MH regressed
+                // when the survival imperative kicked in).
+                value += 80
+                var regenHpPct = this._player._currHealth * 100 / max(1, this._player._maxHealth)
+                if (regenHpPct < 50) value += 400      // SUSTAIN
+                if (regenHpPct < 30) value += 1200     // FLEE — mandatory
+                if (regenHpPct < 20 && __playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
+                    value += 2000     // critical (non-poison builds only)
+                }
+            }
             if (buffChip == CHIP_CURE) value += 120
             if (buffChip == CHIP_DRIP) value += 100
             if (buffChip == CHIP_REMISSION) value += 100
 
             if (buffChip == CHIP_ANTIDOTE) {
-                var preventedValue = 50
-                if (this._player.hasEffect(EFFECT_POISON)) {
-                    var poisonDmg = this._player.getEffectValue(EFFECT_POISON)
-                    var poisonTurns = this._player.getEffectRemaining(EFFECT_POISON)
-                    if (poisonDmg != null && poisonTurns != null) {
-                        preventedValue += poisonDmg * poisonTurns * 0.6
+                // Use aggregating accessor so multi-stack poisons are valued
+                // at their true total prevented damage, not just one stack's.
+                // Multiplier matches the recovery floor-pass (×1.5) so the
+                // scorer doesn't pick buff-stacks that recovery later regrets;
+                // T6 LeekRain vs koe2 the picker took 3-buff+TELE (~700-900
+                // value) over Antidote (was ~660 with the old 0.6×) and
+                // recovery couldn't rescue it (TP=3, Antidote=4).
+                var preventedValue = 50 + this._player.getTotalPoisonDamage() * 1.2
+                // Reactive priority: when poison ticks are eating ≥5% of max
+                // HP per turn (the magic-poison kiter signature), the cleanse
+                // must beat offensive buff-stacking. Without this boost the
+                // scorer bundles Antidote into 4-buff combos and the bot
+                // spends a whole turn rescheduling instead of cleansing-and-
+                // attacking. Boost scales with poison/HP pressure.
+                // Reactive priority only for non-poison builds. Magic/Hybrid
+                // builds are in a natural poison-trade and Antidote-stopping
+                // their offensive flow loses the race (regression observed:
+                // MH vs smart_mag dropped from 39/40 → 31/40). STR/AGI/Tank
+                // builds gain nothing from sustained poison, so cleansing
+                // should preempt offensive buff stacking under MP-burn.
+                if (__playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
+                    var perTurnPoison = 0
+                    if (this._player._effectsActive != null) {
+                        for (var pe in this._player._effectsActive) {
+                            if (pe[0] == EFFECT_POISON && count(pe) >= 2) perTurnPoison += pe[1]
+                        }
                     }
+                    if (perTurnPoison > 0 && this._player._maxHealth > 0) {
+                        var pressure = perTurnPoison * 100 / this._player._maxHealth
+                        // Phased escalation: koe2-class dumps push pressure to
+                        // 10-20%/turn — cleanse must dominate stacked buffs.
+                        if (pressure >= 5)  preventedValue += 600
+                        if (pressure >= 10) preventedValue += 800
+                        if (pressure >= 15) preventedValue += 1200
+                    }
+                    // Total-queued mandatory tier: when a single dump has
+                    // loaded ≥20% of our max HP, cleanse is the only sane
+                    // play. T6 LeekRain saw ~354 queued (22%) — this tier
+                    // pushes Antidote scenarios above any buff stack.
+                    var totalQueued = this._player.getTotalPoisonDamage()
+                    var queuedPct = totalQueued * 100 / max(1, this._player._maxHealth)
+                    if (queuedPct >= 20) preventedValue += 1500
                 }
                 value += preventedValue
             }
@@ -1068,18 +1582,29 @@ class ScenarioScorer {
             futureThreat = this._fieldMap.getThreatAtCell(finalPos)
         }
 
+        // Option C: inverse-FIRETURN multiplier for offensive buffs. When a
+        // shot is genuinely landing in the next 1-3 turns and we're casting
+        // offensive buffs now, those buffs will amplify the upcoming shot.
+        // Boost continuation value to make staging beat short-horizon "just
+        // attack" scenarios that yield small immediate damage but no buildup.
+        // FIRETURN=1 -> 1.4x, 2 -> 1.25x, 3 -> 1.1x.
+        var stageMult = 1.0
+        if (__nearestFireTurn >= 1 && __nearestFireTurn <= 3) {
+            stageMult = 1.5 - __nearestFireTurn * 0.15
+        }
+
         for (var buff in simResult.buffsApplied) {
-            if (buff == CHIP_WIZARDRY) value += 300
-            else if (buff == CHIP_STEROID) value += 200
-            else if (buff == CHIP_PRISM) value += 250
+            if (buff == CHIP_WIZARDRY) value += 300 * stageMult
+            else if (buff == CHIP_STEROID) value += 200 * stageMult
+            else if (buff == CHIP_PRISM) value += 250 * stageMult
             else if (buff == CHIP_FORTRESS) value += 200
             else if (buff == CHIP_WALL) value += 100
-            else if (buff == CHIP_WARM_UP) value += 200
+            else if (buff == CHIP_WARM_UP) value += 200 * stageMult
             else if (buff == CHIP_MIRROR || buff == CHIP_THORN || buff == CHIP_BRAMBLE) {
                 if (futureThreat > 0) value += 250
             }
-            else if (buff == CHIP_KNOWLEDGE) value += 200
-            else if (buff == CHIP_RAGE) value += 300
+            else if (buff == CHIP_KNOWLEDGE) value += 200 * stageMult
+            else if (buff == CHIP_RAGE) value += 300 * stageMult
             else if (buff == CHIP_SEVEN_LEAGUE_BOOTS) value += 200
         }
 
@@ -1224,6 +1749,17 @@ class ScenarioScorer {
         if (projectedHP <= 0) return -2000
 
         var nextTurnTP = max(0, this._player._currTp - simResult.tpSpent) + 10
+        // MOTIVATION grants +2 TP/turn for 3 turns. If we cast it this turn,
+        // next turn's TP is +2 higher — enables the 16-TP "double attack +
+        // buff" combo window the picker needs to value as setup.
+        if (simResult.buffsApplied != null) {
+            for (var bId in simResult.buffsApplied) {
+                if (bId == CHIP_MOTIVATION) {
+                    nextTurnTP += 2
+                    break
+                }
+            }
+        }
         if (nextTurnTP > 25) nextTurnTP = 25
 
         // Phase G: project enemy state forward for a more accurate
@@ -1321,6 +1857,31 @@ class ScenarioScorer {
 
         value += nextTurnDmg
 
+        // Zero-firepower trap penalty: if we can't fire at the projected enemy
+        // position next turn AND the enemy is a kiter, we've walked into a
+        // multi-turn deadzone. koe2 case: T7 jump→c293 deals 267 now, but
+        // T8/T9/T11 deal 0 because the kiter retreats out of LoS+alignment
+        // from c293, MP debuff prevents repositioning, and chips on CD.
+        // Total forfeit ≈ 3 turns × typical per-turn damage.
+        //
+        // We model this as a forfeit cost: estimate per-turn damage we WOULD
+        // have done from a maneuverable cell (~current TP * STR-scaled per-TP
+        // damage), multiply by 3 turns of stagnation. Pre-discount magnitude
+        // intentionally large because this is comparable to losing a full
+        // round of offense — order of magnitude similar to current-turn dmg.
+        if (nextTurnDmg == 0 && enemyProjectedHP > 0 && enemyProfileP != null
+            && enemyProfileP['isKiter']) {
+            // Per-turn damage proxy: assume ~14 TP/turn at typical cost-3 chips
+            // dealing ~80 base * STR scaling. This yields a realistic "missed
+            // damage per stagnant turn" for STR builds. Capped to avoid runaway.
+            var strScale = 1 + (this._player._strength / 100.0)
+            var perTurnProxy = min(500, 80 * strScale)
+            // Forfeit 3 turns when fully bunkered. Magic-poison kiters carry
+            // the heaviest MP-debuff threat, so model 4-turn forfeit.
+            var forfeitTurns = (enemyProfileP['kiterFlavor'] == 'magic_poison') ? 4 : 3
+            value -= perTurnProxy * forfeitTurns
+        }
+
         if (simResult.dotDamageQueued > 0 && simResult.poisonTurnsQueued > 0) {
             var avgDuration = simResult.poisonTurnsQueued / max(1, simResult.poisonSourcesUsed)
             var remainingTicks = max(0, avgDuration - 1)
@@ -1349,6 +1910,39 @@ class ScenarioScorer {
                 // Deeper discount (0.25) since 2 turns out is less certain
                 value += turn3Dmg * 0.25
             }
+        }
+
+        // Bunker penalty: penalize landing cells with limited maneuverability
+        // when the enemy can deny our movement next turn. Kiters and magic-
+        // poison builds frequently inflict MP debuffs (e.g. koe2 dropped LR's
+        // MP to -1, stranding us at c293 for 4 zero-damage turns). Corner /
+        // dead-end cells become traps because:
+        //   1. Even at full MP, low walkable-neighbor counts limit firing
+        //      angles to a moving target.
+        //   2. After an MP debuff, those few neighbors become unreachable,
+        //      leaving us with zero offense.
+        // The penalty applies pre-discount, so it ends up ~half-weight after
+        // the 0.5 discount below — calibrated to outweigh the typical 200-
+        // 500 point 2-ply bonus of an over-credited scenario.
+        if (finalPos != -1 && finalPos != this._player._cellPos
+            && enemyProfileP != null && enemyProfileP['isKiter']) {
+            var bunkerFx = getCellX(finalPos)
+            var bunkerFy = getCellY(finalPos)
+            var bunkerWalkable = 0
+            var bunkerNbrE = getCellFromXY(bunkerFx + 1, bunkerFy)
+            if (bunkerNbrE != null && bunkerNbrE != -1 && getCellContent(bunkerNbrE) == CELL_EMPTY) bunkerWalkable++
+            var bunkerNbrW = getCellFromXY(bunkerFx - 1, bunkerFy)
+            if (bunkerNbrW != null && bunkerNbrW != -1 && getCellContent(bunkerNbrW) == CELL_EMPTY) bunkerWalkable++
+            var bunkerNbrN = getCellFromXY(bunkerFx, bunkerFy + 1)
+            if (bunkerNbrN != null && bunkerNbrN != -1 && getCellContent(bunkerNbrN) == CELL_EMPTY) bunkerWalkable++
+            var bunkerNbrS = getCellFromXY(bunkerFx, bunkerFy - 1)
+            if (bunkerNbrS != null && bunkerNbrS != -1 && getCellContent(bunkerNbrS) == CELL_EMPTY) bunkerWalkable++
+            // Magic-poison kiters carry the heaviest debuff threat — apply
+            // a stronger multiplier vs that profile specifically.
+            var bunkerMult = (enemyProfileP['kiterFlavor'] == 'magic_poison') ? 1.5 : 1.0
+            if (bunkerWalkable == 0) value -= 2000 * bunkerMult
+            else if (bunkerWalkable == 1) value -= 700 * bunkerMult
+            else if (bunkerWalkable == 2) value -= 200 * bunkerMult
         }
 
         // Dynamic discount based on enemy capabilities

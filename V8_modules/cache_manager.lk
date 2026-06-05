@@ -37,7 +37,9 @@ function clearCaches() {
     __chipCostCache = [:]
     __weaponCostCache = [:]
     __pathLengthCache = [:]
-    __losCache = [:]
+    // __losCache is NOT cleared — walls are static so LoS results are
+    // permanent. Persisting across turns turns per-turn LoS work into a
+    // one-time amortized cost and feeds the cover-exposure heatmap.
     __dangerCellCache = [:]
     __adversarialThreatCache = [:]
     __adversarialThreatCacheBuilt = false
@@ -206,4 +208,40 @@ function initializeCaches(player, target, arsenal) {
     buildDamageCache(arsenal, player, target)
 
     buildCostCache(arsenal)
+}
+
+// Warm the persistent __losCache by precomputing line-of-sight from a center
+// cell to every walkable cell on the board. Stops if we exceed opsCap. Used
+// for T1 warmup (player start cell) and per-turn extension (enemy positions).
+function warmLosCacheFromCell(centerCell, opsCap) {
+    if (centerCell == null || centerCell < 0 || centerCell >= 613) return 0
+    var warmed = 0
+    for (var c = 0; c < 613; c++) {
+        if (getOperations() >= opsCap) break
+        if (isObstacle(c)) continue
+        if (c == centerCell) continue
+        var hash = hashTwoCells(centerCell, c)
+        if (mapContainsKey(__losCache, hash)) continue
+        var result = lineOfSight(centerCell, c)
+        __losCache[hash] = result
+        // Cache reverse pair too — lineOfSight is symmetric per engine docs.
+        var hashRev = hashTwoCells(c, centerCell)
+        if (!mapContainsKey(__losCache, hashRev)) {
+            __losCache[hashRev] = result
+        }
+        warmed += 1
+    }
+    return warmed
+}
+
+// Extend the persistent __losCache around a set of center cells with a
+// remaining ops budget. Used end-of-turn to amortize LoS work across the fight.
+function extendLosCache(centerCells, opsCap) {
+    if (centerCells == null || count(centerCells) == 0) return 0
+    var extended = 0
+    for (var i = 0; i < count(centerCells); i++) {
+        if (getOperations() >= opsCap) break
+        extended += warmLosCacheFromCell(centerCells[i], opsCap)
+    }
+    return extended
 }

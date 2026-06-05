@@ -145,6 +145,10 @@ class ScenarioMutator {
                 var altType = this.classifyChipActionType(altChip)
                 var curType = this.classifyChipActionType(action.chip)
                 if (altType != curType) continue
+                // FIX B (defensive): type 0 = damage chip / unrecognized. Two
+                // damage chips both classify as 0, so the equality check above
+                // would let a damage chip substitute into a slot. Skip outright.
+                if (curType == 0 || altType == 0) continue
 
                 var desc = new MutationDescriptor(i, "substituteChip", altChip,
                     "Sub chip @" + i + ": " + action.chip + " -> " + altChip)
@@ -165,13 +169,35 @@ class ScenarioMutator {
         }
 
         var candidates = []
-        var hpFull = (this._player._currHealth >= this._player._maxHealth)
+        var curHP = this._player._currHealth
+        var maxHP = this._player._maxHealth
+        var hpRatio = (maxHP > 0) ? (curHP / maxHP) : 1.0
+        // Align with helper gates: only insert healing-chip mutations when
+        // HP is genuinely low. Regeneration (8 TP, 500+wis multi-turn) is
+        // an emergency heal — gate at 40% to match getRegenerationAction /
+        // getHealingAction in scenario_helpers. Other heals use 70% so
+        // routine top-ups still surface via mutation. Observed at T6 vs
+        // koe2: mutation insertion was casting Regen at HP 94% (84 HP
+        // gained for 8 TP wasted).
         var equippedChips = mapKeys(this._arsenal.playerEquippedChips)
         for (var chipId in equippedChips) {
             if (mapContainsKey(usedChips, chipId)) continue
             if (getCooldown(chipId, this._player._id) != 0) continue
-            if (hpFull && isHealingChip(chipId)) continue
+            if (isHealingChip(chipId)) {
+                if (chipId == CHIP_REGENERATION) {
+                    if (hpRatio >= 0.40) continue
+                } else {
+                    if (hpRatio >= 0.70) continue
+                }
+            }
             if (isUtilityChip(chipId)) continue
+            // FIX B: classifyChipActionType returns 0 for damage chips (iceberg,
+            // spark, flame, etc.). applyMutation's insertChip branch then defaults
+            // to ACTION_BUFF + self-target, producing a malformed action that the
+            // simulator scores as a buff but the executor silently skips (chip
+            // can't target self / no LoS). Observed at T3 vs koe2: iceberg
+            // inserted as BUFF stranded 17 TP. Require a recognized buff family.
+            if (this.classifyChipActionType(chipId) == 0) continue
             push(candidates, chipId)
         }
 
@@ -382,7 +408,12 @@ class HybridMutationPlanner {
     planWithMutations(seedScenarios) {
 
         var opsBefore = getOperations()
-        var tpBudget = this._player._currTp + 5 - this._summonTPReserve
+        // Fix #1A: gate by NET TP cost (gross spend − refunds from
+        // Adrenaline/Manumission/Rage). The previous `+ 5` was an unconditional
+        // Adrenaline allowance that let infeasible scenarios slip through (T8
+        // koe2: Liberation(5)+Cure(4)+Destroyer(6)=15 passed at currTp 14
+        // because budget was 14+5=19, then Destroyer got filtered at execute).
+        var tpBudget = this._player._currTp - this._summonTPReserve
 
         var topSeeds = this.selectTopSeeds(seedScenarios)
 
@@ -405,7 +436,10 @@ class HybridMutationPlanner {
                 mutationScoreCache[originalHash] = originalScore
             }
 
-            if (originalScore > bestScore) {
+            // Same NET-TP gate applies to seeds, not just mutations — a
+            // template that itself over-budgets must not win unchallenged.
+            var seedFeasible = (originalSimResult.tpSpent - originalSimResult.tpRefunded <= tpBudget)
+            if (seedFeasible && originalScore > bestScore) {
                 bestScore = originalScore
                 bestScenario = seed
             }
@@ -428,7 +462,7 @@ class HybridMutationPlanner {
                 var simResult = this._simulator.simulate(seed)
                 mutationsEvaluated++
 
-                if (simResult.tpSpent > tpBudget) {
+                if (simResult.tpSpent - simResult.tpRefunded > tpBudget) {
                     this._mutator.revertMutation(seed, desc, originalValue)
                     continue
                 }

@@ -82,7 +82,18 @@ function profileEnemy(enemy) {
     profile['hasAntidote'] = hasAntidote
     profile['isTank'] = (profile['buildType'] == BUILD_TANK_SCI || res >= 300)
     profile['isBurstBuild'] = (str >= 400 && !profile['isTank'])
-    profile['isKiter'] = (profile['buildType'] == BUILD_AGILITY || agi >= 400)
+    // AGI kiters keep existing detection. Magic-poison kiters (e.g. koe2:
+    // mag 500 / str 60 / agi 180, Venom+Toxin+Antidote) are also kiters in
+    // practice — they sit at dist 9-18 spamming poisons without closing.
+    // The old AGI-only check missed them entirely, so vs_kiter_* counter
+    // weights and downstream herding logic never activated. Magic-kiter
+    // signature: meaningful MAG, has poison, low STR (so not a melee threat),
+    // not an explicit HYBRID (mixed-range, doesn't want max distance).
+    var isAgiKiter = (profile['buildType'] == BUILD_AGILITY || agi >= 400)
+    var isMagicKiter = (mag >= 300 && hasPoison && str < 250
+                        && profile['buildType'] != BUILD_HYBRID)
+    profile['isKiter'] = isAgiKiter || isMagicKiter
+    profile['kiterFlavor'] = isMagicKiter ? 'magic_poison' : (isAgiKiter ? 'agi' : 'none')
 
     // Calculated sustain: amortized heal and shield per turn
     var healPerTurn = 0

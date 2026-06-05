@@ -450,6 +450,21 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             if (hpMissing > 0) {
                 var healEstimate = beamEstimateHeal(chipId, simWis)
                 var effectiveHeal = min(hpMissing, healEstimate)
+
+                // Efficiency veto: heals are capped to missing HP so the
+                // overflow is wasted TP. Regeneration (8 TP, 500+wis base)
+                // is treated as an emergency heal — gate at 90% efficiency
+                // so it only fires when we're genuinely low. Other heals
+                // (Remission ~71 base, Cure 100, Drip 200) keep a softer
+                // 60% gate so they remain available for routine top-ups.
+                var healEffFloor = 0.6
+                if (chipId == CHIP_REGENERATION) {
+                    healEffFloor = 0.9
+                }
+                if (effectiveHeal < healEstimate * healEffFloor) {
+                    return -1
+                }
+
                 value += effectiveHeal * 1.5
 
                 var hpRatio = playerObj._currHealth / playerObj._maxHealth

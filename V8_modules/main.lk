@@ -10,6 +10,12 @@ global __lastEnemyHP = -1
 global __timePressure = false
 global __dopingUsed = false
 global __lastTurnWeaponId = null
+// Debug viz: paint a yellow→green gradient over the player's accessible cells
+// based on the cover-exposure heatmap. Only visible to the AI's owner.
+global _showCoverHeatmap = true
+// Phase O: turns-until-shot classifier. 0=current cell, 1=after-move/JUMP,
+// 2=2-ply, 3=far. Used by scorer to decay expiring buffs and reward closing.
+global __nearestFireTurn = 0
 
 global _opsBudget = 14000000
 global _ops50 = 7000000
@@ -151,10 +157,20 @@ function main() {
     if (getTurn() == 1) {
         initializeAdjacency()
 
+        // T1 LoS warmup: precompute LoS from our starting cell to every
+        // walkable cell. The cache persists across turns (walls are static),
+        // so this one-time cost (~30-70k ops) eliminates redundant per-turn
+        // LoS queries and feeds the cover-exposure heatmap.
+        warmLosCacheFromCell(getCell(), _ops89)
     }
 
     player.updateEntity()
     fieldMap.updateMapEntities()
+
+    // OBS: turn-entry snapshot (T<=5). cheap (~1 debugW per turn).
+    if (getTurn() <= 20) {
+        debugW("OBS_ENTER_T" + getTurn() + "_c" + getCell() + "_tp" + getTP() + "_mp" + getMP() + "_hp" + getLife() + "_ops" + getOperations() + "_bud" + _opsBudget)
+    }
 
     profileAllEnemies(fieldMap)
 
@@ -179,6 +195,12 @@ function main() {
     }
     if (target == null) target = fieldMap.getClosestEnemy()
 
+    // OBS: target choice snapshot
+    if (getTurn() <= 20 && target != null) {
+        var _obsTd = getCellDistance(getCell(), target._cellPos)
+        debugW("OBS_TGT_T" + getTurn() + "_id" + target._id + "_c" + target._cellPos + "_hp" + target._currHealth + "_d" + _obsTd)
+    }
+
     updateGameContext(player, target, fieldMap)
 
     if (target != null) {
@@ -202,6 +224,23 @@ function main() {
         buildAdversarialThreatCache(player, fieldMap.getEnemySubMap(), arsenal)
     }
 
+    // Render the cover-exposure heatmap every turn so the visualization is
+    // independent of which strategy path runs. Cheap when _showCoverHeatmap
+    // is off; bounded LoS lookups when on (cache is persistent across turns).
+    fieldMap.paintCoverHeatmap()
+
+    // Phase O: classify how many turns until we can land a shot. Used by the
+    // scorer to decay offensive buffs that would expire before any shot and
+    // to reward closing moves on no-shot turns.
+    if (target != null && getOperations() < _ops71) {
+        __nearestFireTurn = estimateNearestFireTurn(player, target, arsenal)
+    } else {
+        __nearestFireTurn = 0
+    }
+    if (getTurn() <= 20) {
+        debugW("FIRETURN_T" + getTurn() + "_" + __nearestFireTurn)
+    }
+
     var targetHitCell = null
 
     if (target != null && strategy.shouldBuildDamageMap()) {
@@ -210,12 +249,47 @@ function main() {
     }
 
     if (getOperations() > _ops93) {
+        debugW("FALLBACK_T" + getTurn())
         if (target != null) {
-            moveToward(target._id)
-            var bestWeapon = arsenal.getHighestDamageWeapon()
-            if (bestWeapon != null) {
-                setWeapon(bestWeapon)
-                useWeaponOnCell(target._cellPos)
+            var fbStart = getCell()
+            var fbTargetCell = target._cellPos
+
+            // Find our weapon range envelope (cheap; small loop).
+            var fbMaxR = 0
+            var fbMinR = 99
+            for (var fbwid in mapKeys(arsenal.playerEquippedWeapons)) {
+                var fbw = arsenal.playerEquippedWeapons[fbwid]
+                if (fbw._maxRange > fbMaxR) fbMaxR = fbw._maxRange
+                if (fbw._minRange < fbMinR) fbMinR = fbw._minRange
+            }
+
+            // Only close the gap if we lack LoS or are out of weapon range.
+            // Otherwise stay put — closing into a kiter's spam reach with
+            // a no-LoS retreat cell available is the failure mode we keep
+            // hitting in fights vs poison/denial kiters (e.g. koe2).
+            var fbHasLoS = lineOfSight(fbStart, fbTargetCell)
+            var fbDist = getCellDistance(fbStart, fbTargetCell)
+            if (!fbHasLoS || fbDist > fbMaxR || fbDist < fbMinR) {
+                moveToward(target._id)
+            }
+
+            // Greedy fire pass: cycle through equipped weapons, pick those
+            // whose range envelope contains the current distance, fire each
+            // until TP runs below cheapest cost.
+            var firePos = getCell()
+            var fireDist = getCellDistance(firePos, fbTargetCell)
+            if (lineOfSight(firePos, fbTargetCell)) {
+                for (var fbwid2 in mapKeys(arsenal.playerEquippedWeapons)) {
+                    var fbw2 = arsenal.playerEquippedWeapons[fbwid2]
+                    if (fireDist < fbw2._minRange || fireDist > fbw2._maxRange) continue
+                    if (getTP() < fbw2._cost) continue
+                    setWeapon(fbw2._id)
+                    useWeaponOnCell(fbTargetCell)
+                    // Try a second use of the same weapon if max-use allows.
+                    if (fbw2._maxUse >= 2 && getTP() >= fbw2._cost) {
+                        useWeaponOnCell(fbTargetCell)
+                    }
+                }
             }
         }
         return
@@ -226,6 +300,21 @@ function main() {
     }
 
     strategy.createAndExecuteScenario(target, targetHitCell)
+
+    // Background fill: extend the persistent LoS cache around current cell
+    // and the live target with whatever ops budget remains. Each entry costs
+    // ~50-100 ops; this amortizes LoS work that otherwise hits us mid-turn.
+    if (getOperations() < _ops89) {
+        var losCenters = [getCell()]
+        if (target != null) push(losCenters, target._cellPos)
+        extendLosCache(losCenters, _ops93)
+    }
+
+    // OBS: end-of-turn snapshot — paired with OBS_ENTER, lets us see what
+    // ground was given up and how much TP/ops we burned.
+    if (getTurn() <= 20) {
+        debugW("OBS_END_T" + getTurn() + "_c" + getCell() + "_tp" + getTP() + "_mp" + getMP() + "_hp" + getLife() + "_ops" + getOperations())
+    }
 
     // Persist weapon choice for cross-turn swap penalty
     __lastTurnWeaponId = getWeapon()

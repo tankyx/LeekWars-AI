@@ -137,8 +137,10 @@ class ScenarioHelpers {
         var dmgEstimate = this.estimateMaxDamageThisTurn(availableTP)
         var estimatedDamage = dmgEstimate['immediate']
 
-        // Include existing poison ticks in kill estimation
-        var existingPoisonDmg = this._target.getEffectValue(EFFECT_POISON)
+        // Include existing poison ticks in kill estimation. Use total
+        // (per-turn × remaining, summed across stacks) instead of one stack's
+        // per-turn — gives a far more accurate kill window when DoT stacks up.
+        var existingPoisonDmg = this._target.getTotalPoisonDamage()
         var poisonKillDmg = estimatedDamage + existingPoisonDmg
 
         var killSuppressed = false
@@ -148,9 +150,20 @@ class ScenarioHelpers {
         if (poisonKillDmg > 0 && poisonKillDmg >= enemyHP * 0.90) {
             var inWeaponRange = this.isInAnyWeaponRange()
             if (inWeaponRange) {
-                return "KILL"
+                // B1: At low HP, KILL is only safe if the damage estimate is
+                // backed by an actually-usable attack from our current cell
+                // (not inflated by buff projections we'll never get to spend).
+                // Below 40% HP, fall through to FLEE unless an in-cell hit
+                // exists right now. Prevents the T12 pattern: HP=500, KILL
+                // fires on inflated estimate, scenario stack-buffs and dies.
+                if (playerHPPercent < 40 && !this.hasUsableAttackFromCurrentCell()) {
+                    killSuppressed = true
+                } else {
+                    return "KILL"
+                }
+            } else {
+                killSuppressed = true
             }
-            killSuppressed = true
         }
 
         if (killSuppressed) {
@@ -176,6 +189,31 @@ class ScenarioHelpers {
 
         if (playerHPPercent < 40) {
             return "FLEE"
+        }
+
+        // Anti-poison aggression (moved above SUSTAIN gate): if we're carrying
+        // ≥3 poison stacks from a magic enemy that can keep refreshing them,
+        // sustaining is a slow death — every turn we heal, they re-apply more
+        // poison than we cleared. Force AGGRO to close distance and burn the
+        // mage down. Only applies to non-magic players (mages naturally carry
+        // poison and stay at range). Previously this branch lived after the
+        // SUSTAIN gate and was unreachable once HP dropped into 35-70%.
+        var apProfile = getEnemyProfile(this._target._id)
+        if (apProfile != null && this._target._magic > 400 &&
+            __playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
+            var ownPoisonEffect = this._player.getEffect(EFFECT_POISON)
+            if (ownPoisonEffect != null) {
+                var apPoisonStacks = 0
+                var apAllEffects = getEffects(this._player._id)
+                if (apAllEffects != null) {
+                    for (var ef in apAllEffects) {
+                        if (ef[0] == EFFECT_POISON) apPoisonStacks++
+                    }
+                }
+                if (apPoisonStacks >= 3) {
+                    return "AGGRO"
+                }
+            }
         }
 
         // Fix 3a-C: widen SUSTAIN band (35-70% player HP) and drop !timePressure
@@ -227,28 +265,6 @@ class ScenarioHelpers {
                 var burstMult = (shieldBuffer >= playerHP * 0.2) ? 1.5 : 2.0
                 if (enemyMaxBurst * burstMult >= myEffectiveHP) {
                     return "ATTRITION"
-                }
-            }
-        }
-
-        // Anti-poison aggression: if we're carrying ≥3 poison stacks from a
-        // magic enemy that can keep refreshing them, kiting is a slow death.
-        // Force AGGRO to close distance and burn the mage down. Only applies
-        // to non-magic players (mages naturally carry poison and should stay
-        // at range to keep applying it).
-        if (burstProfile != null && this._target._magic > 400 &&
-            __playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
-            var ownPoisonEffect = this._player.getEffect(EFFECT_POISON)
-            if (ownPoisonEffect != null) {
-                var poisonStacks = 0
-                var allEffects = getEffects(this._player._id)
-                if (allEffects != null) {
-                    for (var ef in allEffects) {
-                        if (ef[0] == EFFECT_POISON) poisonStacks++
-                    }
-                }
-                if (poisonStacks >= 3) {
-                    return "AGGRO"
                 }
             }
         }
@@ -364,6 +380,7 @@ class ScenarioHelpers {
         }
 
         var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
+                           CHIP_ROCKFALL, CHIP_STALACTITE,
                            CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
                            CHIP_PUNISHMENT]
         for (var chipId in damageChips) {
@@ -372,6 +389,48 @@ class ScenarioHelpers {
             if (dist >= chip._minRange && dist <= chip._maxRange) {
                 return true
             }
+        }
+
+        return false
+    }
+
+    // Strict version of isInAnyWeaponRange: requires an attack that can
+    // actually fire from the player's current cell THIS turn (range + LoS +
+    // launch geometry + cooldown + TP). Used to gate KILL state at low HP so
+    // we don't commit to a phantom finish that buff-stacks instead.
+    hasUsableAttackFromCurrentCell() {
+        var fromCell = this._player._cellPos
+        var toCell = this._target._cellPos
+        var dist = getCellDistance(fromCell, toCell)
+        if (dist == null) return false
+        var availableTP = this._player._currTp
+
+        for (var weaponId in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var w = this._arsenal.playerEquippedWeapons[weaponId]
+            if (w == null) continue
+            if (dist < w._minRange || dist > w._maxRange) continue
+            if (availableTP < w._cost) continue
+            if (!getCachedLineOfSight(fromCell, toCell)) continue
+            if (w._launchType != null && w._launchType > 0 &&
+                !isSimLaunchValid(w._launchType, fromCell, toCell)) continue
+            return true
+        }
+
+        var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
+                           CHIP_ROCKFALL, CHIP_STALACTITE,
+                           CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
+                           CHIP_PUNISHMENT]
+        for (var chipId in damageChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue
+            var c = this._arsenal.playerEquippedChips[chipId]
+            if (c == null) continue
+            if (dist < c._minRange || dist > c._maxRange) continue
+            if (getCooldown(chipId, this._player._id) > 0) continue
+            if (availableTP < c._cost) continue
+            if (!getCachedLineOfSight(fromCell, toCell)) continue
+            if (c._launchType != null && c._launchType > 0 &&
+                !isSimLaunchValid(c._launchType, fromCell, toCell)) continue
+            return true
         }
 
         return false
@@ -430,6 +489,7 @@ class ScenarioHelpers {
             }
 
             var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
+                               CHIP_ROCKFALL, CHIP_STALACTITE,
                                CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
                                CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_PUNISHMENT]
             var bestChipImmediate = 0
@@ -541,7 +601,13 @@ class ScenarioHelpers {
         }
 
         if (str > mag && str > agi) {
-            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID)) {
+            // FIX C: STR branch was missing CD guard — emitted BUFF(STEROID)
+            // unconditionally. At T3 vs koe2, steroid was cast T1 (CD locked),
+            // but the scenario still included it; simulator scored it as a
+            // buff, executor silently skipped the CD-locked chip, 17 TP
+            // stranded. Honor CD here so we fall through to PRISM (or null).
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_STEROID) &&
+                getCooldown(CHIP_STEROID, this._player._id) == 0) {
                 return new Action(Action.ACTION_BUFF, -1, CHIP_STEROID, -1, this._player)
             }
         } else if (mag > str && mag > agi) {
@@ -550,7 +616,9 @@ class ScenarioHelpers {
                 return new Action(Action.ACTION_BUFF, -1, CHIP_WIZARDRY, -1, this._player)
             }
         } else if (agi > str && agi > mag) {
-            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP)) {
+            // FIX C: AGI branch had the same missing CD guard as STR above.
+            if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_WARM_UP) &&
+                getCooldown(CHIP_WARM_UP, this._player._id) == 0) {
                 return new Action(Action.ACTION_BUFF, -1, CHIP_WARM_UP, -1, this._player)
             }
         }
@@ -616,8 +684,11 @@ class ScenarioHelpers {
 
         var hasMPBuff = this._player.hasEffect(EFFECT_BUFF_MP)
         var buffRemaining = hasMPBuff ? this._player.getEffectRemaining(EFFECT_BUFF_MP) : 0
+        var mpShackled = this._player.hasEffect(EFFECT_SHACKLE_MP)
 
-        if (hasMPBuff && buffRemaining > 1) {
+        // Under MP shackle the existing MP buff is being net-negated; recast even
+        // if duration > 1 so we don't get stuck at reduced MP for the shackle window.
+        if (hasMPBuff && buffRemaining > 1 && !mpShackled) {
             return null
         }
 
@@ -627,6 +698,52 @@ class ScenarioHelpers {
         }
 
         return null
+    }
+
+    // Motivation: +2 TP for 3 turns. Conservative gating — only fires when there's
+    // a clear payoff: under any TP/MP shackle (recoups denied resources), or in the
+    // very early opening when we have surplus TP and want a multi-turn TP buffer.
+    // Synergizes with Jump: the +2 TP per turn pays for 1.5x Jump uses across the
+    // buff, letting us bypass MP shackles via teleport movement.
+    getMotivationBuff() {
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_MOTIVATION)) {
+            return null
+        }
+        if (getCooldown(CHIP_MOTIVATION, this._player._id) > 0) {
+            return null
+        }
+
+        var motivCost = getCachedChipCost(CHIP_MOTIVATION)
+        var currentTP = getTP()
+        if (currentTP < motivCost) {
+            return null
+        }
+
+        var shackled = this._player.hasEffect(EFFECT_SHACKLE_TP)
+            || this._player.hasEffect(EFFECT_SHACKLE_MP)
+
+        // Opening-turn pre-buff: ramp TP economy before engagement.
+        // Requires real surplus so we don't starve our own first burst.
+        var openingTurn = (getTurn() <= 2 && currentTP >= motivCost + 8)
+
+        // Combat-horizon gate: MOTIVATION pays for itself after 2 of 3 effect
+        // turns (cost 4 TP, returns 6 TP over 3 turns). Fire when there's
+        // runway and we're not in KILL/FLEE territory. The old gating only
+        // allowed T<=2 or shackled, which left MOTIVATION dead from T3+ in
+        // long fights — LeekRain vs healing-magic was burning 14 TP per
+        // approach turn instead of banking it as a combo enabler.
+        var enemyHPPct = (this._target._currHealth * 100) / max(1, this._target._maxHealth)
+        var playerHPPct = (this._player._currHealth * 100) / max(1, this._player._maxHealth)
+        var combatHorizon = (getTurn() <= 30
+            && enemyHPPct > 40
+            && playerHPPct > 35
+            && currentTP >= motivCost + 6)
+
+        if (!shackled && !openingTurn && !combatHorizon) {
+            return null
+        }
+
+        return new Action(Action.ACTION_BUFF, -1, CHIP_MOTIVATION, -1, this._player)
     }
 
     getAdrenalineBuff() {
@@ -795,9 +912,13 @@ class ScenarioHelpers {
             mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION) &&
             tpBudget >= 8) {
 
-            var expectedHeal = this._arsenal.getExpectedHeal(CHIP_REGENERATION, this._player._wisdom)
-            var healCap = min(expectedHeal, maxHP * 0.5)
-            if (missingHP >= healCap * 0.40) {
+            // Regeneration = emergency heal. Fire when HP drops below 40%
+            // of max — the heal caps to missingHP so overflow can happen at
+            // higher HP ratios, but the chip's CD=8 means it's the only big
+            // heal we get per fight and we'd rather use it once we're truly
+            // in danger than gate on "would 90% of capacity land" (which at
+            // 200 WIS / 1500 max HP basically never triggers).
+            if (hpRatio < 0.40) {
                 return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
             }
         }
@@ -852,10 +973,10 @@ class ScenarioHelpers {
 
             var currentHP = this._player._currHealth
             var maxHP = this._player._maxHealth
-            var missingHP = maxHP - currentHP
-            var expectedHeal = this._arsenal.getExpectedHeal(CHIP_REGENERATION, this._player._wisdom)
+            var hpRatio = (maxHP > 0) ? (currentHP / maxHP) : 1.0
 
-            if (missingHP >= expectedHeal * 0.85) {
+            // Emergency-heal gate: fire when below 40% max HP (see getHealingAction).
+            if (hpRatio < 0.40) {
                 return new Action(Action.ACTION_BUFF, -1, CHIP_REGENERATION, -1, this._player)
             }
         }
@@ -959,6 +1080,59 @@ class ScenarioHelpers {
         return this._kiteCache
     }
 
+    // Cell-openness: count of non-obstacle, on-map cells in a square radius.
+    // Higher = fewer walls around → harder for a kiter to hide behind cover.
+    // Off-map cells count as closed (treats map edges as walls — pushing a
+    // kiter against the edge denies retreat just like a wall does).
+    cellOpenness(cellId, radius) {
+        var openCount = 0
+        var cx = getCellX(cellId)
+        var cy = getCellY(cellId)
+        for (var ox = -radius; ox <= radius; ox++) {
+            for (var oy = -radius; oy <= radius; oy++) {
+                if (ox == 0 && oy == 0) continue
+                var c = getCellFromXY(cx + ox, cy + oy)
+                if (c == null) continue
+                if (!isObstacle(c)) openCount += 1
+            }
+        }
+        return openCount
+    }
+
+    // Predict where the enemy will retreat to if we approach from approachCell.
+    // Kiter intent: move away from us along the (enemy - approach) axis, up to
+    // its MP budget. Returns null if no walkable retreat cell found.
+    predictEnemyRetreatCell(approachCell, enemyCell, enemyMP) {
+        if (enemyMP <= 0) return enemyCell
+        var ax = getCellX(approachCell)
+        var ay = getCellY(approachCell)
+        var ex = getCellX(enemyCell)
+        var ey = getCellY(enemyCell)
+        var dx = ex - ax
+        var dy = ey - ay
+        var mag = max(1, abs(dx) + abs(dy))
+        // Primary candidate: straight-line away from us, capped at enemyMP.
+        var rx = ex + (dx * enemyMP) / mag
+        var ry = ey + (dy * enemyMP) / mag
+        var primary = getCellFromXY(rx, ry)
+        if (primary != null && !isObstacle(primary)) return primary
+        // Fallback: try a few perpendicular jitters at decreasing MP, so a
+        // wall directly along the away-axis doesn't make us think the enemy
+        // is stuck (it'll just shuffle sideways).
+        var perpDx = -dy
+        var perpDy = dx
+        for (var jit = 1; jit <= 2; jit++) {
+            for (var sign = -1; sign <= 1; sign += 2) {
+                var jx = rx + (perpDx * jit) / max(1, abs(perpDx) + abs(perpDy))
+                var jy = ry + (perpDy * jit) / max(1, abs(perpDx) + abs(perpDy))
+                var jc = getCellFromXY(jx * sign, jy * sign)
+                if (jc != null && !isObstacle(jc)) return jc
+            }
+        }
+        // Last resort: enemy stays put (forced cornering).
+        return enemyCell
+    }
+
     getApproachEnemyCell(mpBudget) {
         if (mpBudget <= 0) return null
 
@@ -969,19 +1143,92 @@ class ScenarioHelpers {
         var currentDist = getCellDistance(this._player._cellPos, enemyPos)
         if (currentDist == null) return null
 
+        // Score = cellDist + threat-penalty - hide-bonus. Threat comes from the
+        // adversarial cache which already accounts for enemy MP reach next turn.
+        // Without this, getApproachEnemyCell happily walks into kiter range.
         var bestCell = null
-        var bestDist = currentDist
+        var bestScore = currentDist + 1000  // require strict improvement
+        var maxWRApr = 0
+        for (var wIdAp in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wObjAp = this._arsenal.playerEquippedWeapons[wIdAp]
+            if (wObjAp != null && wObjAp._maxRange > maxWRApr) maxWRApr = wObjAp._maxRange
+        }
+
+        // Pre-compute poison pressure: if active DoT >25% max HP per turn, hiding
+        // beats closing for an unreachable enemy (every turn out of LoS prevents
+        // fresh stacks). Scale hide bonus by remaining poison damage projection.
+        var poisonDoTAp = 0
+        var pEffsAp = getEffects(this._player._id)
+        if (pEffsAp != null) {
+            for (var peAp in pEffsAp) {
+                if (peAp[0] == EFFECT_POISON && count(peAp) >= 2) {
+                    var dotV = peAp[1]
+                    var dotR = (count(peAp) >= 4) ? peAp[3] : 1
+                    poisonDoTAp += dotV * max(1, dotR)
+                }
+            }
+        }
+        var poisonRatioAp = poisonDoTAp * 100 / max(1, this._player._maxHealth)
+        // Scale hide bonus by poison pressure: 25% = 2 cells worth, 50% = 5, 75% = 10.
+        var poisonHideBonus = 0
+        if (poisonRatioAp >= 25) poisonHideBonus = 2.0
+        if (poisonRatioAp >= 50) poisonHideBonus = 5.0
+        if (poisonRatioAp >= 75) poisonHideBonus = 10.0
+
+        // Herding: predict where the enemy retreats from each candidate
+        // approach, reward approaches that push the kiter into open terrain
+        // (no walls = no LoS-break next turn). Only active when enemy has
+        // meaningful MP to kite with — sub-3 MP enemies can't really hide.
+        var enemyMPHerd = this._target._currMp
+        var herdingEnabled = (enemyMPHerd >= 3)
+        var openBaseline = 22  // ~50% of radius-2 grid (24 cells max); neutral
+        var maxHerdBonus = 6.0
 
         for (var cellId in reachableCells) {
             var cellDist = getCellDistance(cellId, enemyPos)
             if (cellDist == null) continue
 
-            if (cellDist < bestDist) {
-                var pathCost = getGraphMPCost(cellId)
-                if (pathCost < 999 && pathCost <= mpBudget) {
-                    bestDist = cellDist
-                    bestCell = cellId
+            var pathCost = getGraphMPCost(cellId)
+            if (pathCost >= 999 || pathCost > mpBudget) continue
+            // Allow same-distance cells when hiding matters (poison/threat);
+            // strict-closer only applies when we don't need to hide.
+            if (cellDist >= currentDist && poisonHideBonus == 0) continue
+
+            var threat = getAdversarialThreat(cellId)
+            // 50 incoming damage ≈ 1 cell-equivalent penalty. Only penalize cells
+            // where we can't shoot back (within our weapon range = exposing for
+            // nothing). If we can fire from here, the trade is acceptable.
+            var canHitBack = (cellDist >= 1 && cellDist <= maxWRApr && lineOfSight(cellId, enemyPos))
+            var threatPenalty = canHitBack ? threat / 200.0 : threat / 50.0
+
+            // Hide bonus: stack poison-driven bonus + small static bonus for
+            // out-of-range LoS-break cells.
+            var hideBonus = 0
+            var hidesLoS = !lineOfSight(cellId, enemyPos)
+            if (hidesLoS) {
+                if (cellDist > maxWRApr) hideBonus += 1.0
+                hideBonus += poisonHideBonus
+            }
+
+            // Herding bonus: open retreat = harder to hide. Skip when we're
+            // already prioritizing hide-from-poison (poisonHideBonus > 0) —
+            // there we want LoS-break, not chase.
+            var herdingBonus = 0
+            if (herdingEnabled && poisonHideBonus == 0) {
+                var retreatCell = this.predictEnemyRetreatCell(cellId, enemyPos, enemyMPHerd)
+                if (retreatCell != null) {
+                    var openness = this.cellOpenness(retreatCell, 2)
+                    var herd = (openness - openBaseline) / 4.0
+                    if (herd > maxHerdBonus) herd = maxHerdBonus
+                    if (herd < -maxHerdBonus) herd = -maxHerdBonus
+                    herdingBonus = herd
                 }
+            }
+
+            var score = cellDist + threatPenalty - hideBonus - herdingBonus
+            if (score < bestScore) {
+                bestScore = score
+                bestCell = cellId
             }
         }
 
@@ -989,6 +1236,7 @@ class ScenarioHelpers {
             return bestCell
         }
 
+        // Fallback: closest reachable, no threat awareness (better than nothing)
         var fallbackCell = null
         var fallbackDist = 999
         for (var cellId in reachableCells) {
@@ -1045,17 +1293,24 @@ class ScenarioHelpers {
         if (getCooldown(CHIP_ANTIDOTE, this._player._id) != 0) return null
         if (tpBudget < 3) return null
 
-        var poisonRemaining = this._player.getEffectRemaining(EFFECT_POISON)
-        if (poisonRemaining < 2) return null
+        // Aggregate across stacked poisons — getEffectValue/Remaining only see
+        // the first stack, which under-counts when multiple sources are layered.
+        var poisonStacks = this._player.getPoisonStackCount()
+        var poisonRemaining = this._player.getMaxPoisonRemaining()
+        if (poisonRemaining < 1) return null
 
-        var poisonDamagePerTurn = this._player.getEffectValue(EFFECT_POISON)
-        if (poisonDamagePerTurn == null) poisonDamagePerTurn = 0
-
-        var totalPoisonDamage = poisonDamagePerTurn * poisonRemaining
+        var poisonDamagePerTurn = this._player.getTotalPoisonPerTurn()
+        var totalPoisonDamage = this._player.getTotalPoisonDamage()
 
         var currentHP = this._player._currHealth
         var maxHP = this._player._maxHealth
         var hpRatio = currentHP / maxHP
+
+        // Multi-source stacking is itself a strong cleanse signal: even short-
+        // duration applications add up, and antidote wipes them all in one cast.
+        if (poisonStacks >= 3) {
+            return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
+        }
 
         if (totalPoisonDamage > 60) {
             return new Action(Action.ACTION_BUFF, -1, CHIP_ANTIDOTE, -1, this._player)
@@ -1104,6 +1359,44 @@ class ScenarioHelpers {
     getDebuffAction() {
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LIBERATION)) return null
         if (getCooldown(CHIP_LIBERATION, this._player._id) != 0) return null
+
+        // Self-cast Liberation: 40% removal across all our active effects.
+        // Trades buff strength for poison/shackle mitigation. Only fire when
+        // Antidote isn't available (cheaper, fuller cleanse) and the poison
+        // pressure is high enough to be worth the buff hit. CD on Liberation
+        // is 5 so don't burn it casually.
+        var antidoteEquipped = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ANTIDOTE)
+        var antidoteAvailable = antidoteEquipped && getCooldown(CHIP_ANTIDOTE, this._player._id) == 0
+
+        var ownPoisonStacks = this._player.getPoisonStackCount()
+        var ownPoisonDPT = this._player.getTotalPoisonPerTurn()
+        var hp = this._player._currHealth
+        var maxHp = this._player._maxHealth
+        var hpPct = (maxHp > 0) ? (hp * 100) / maxHp : 100
+
+        var hasShackleMP = this._player.hasEffect(EFFECT_SHACKLE_MP)
+        var hasShackleTP = this._player.hasEffect(EFFECT_SHACKLE_TP)
+        var hasShackleStr = this._player.hasEffect(EFFECT_SHACKLE_STRENGTH)
+        var underShackle = hasShackleMP || hasShackleTP || hasShackleStr
+
+        // Two trigger paths for self-cast:
+        // 1) Poison pressure: ≥2 stacks and DoT > 15% HP/turn, no Antidote
+        // 2) Multi-effect denial: shackled AND carrying ≥1 poison (Manumission
+        //    clears shackle but not poison; Liberation reduces both at once)
+        var poisonPressure = (!antidoteAvailable && ownPoisonStacks >= 2 &&
+                              ownPoisonDPT * 100 > hp * 15)
+        var multiDenial = underShackle && ownPoisonStacks >= 1
+
+        if (poisonPressure || multiDenial) {
+            // Buff-loss guardrail: skip self-cast in the opening when fresh
+            // critical buffs (Steroid duration ≥2) are doing more work than
+            // the 40% poison cut would save — unless HP is already critical.
+            var freshSteroid = this._player.hasEffect(EFFECT_BUFF_STRENGTH) &&
+                               this._player.getEffectRemaining(EFFECT_BUFF_STRENGTH) >= 2
+            if (!freshSteroid || hpPct < 35) {
+                return new Action(Action.ACTION_DEBUFF, -1, CHIP_LIBERATION, this._player._cellPos, this._player)
+            }
+        }
 
         var dist = getCellDistance(this._player._cellPos, this._target._cellPos)
         if (dist == null || dist > 6) return null
@@ -1403,6 +1696,22 @@ class ScenarioHelpers {
                 var dist = getCellDistance(simPos, this._target._cellPos)
                 if (dist == null || dist < weapon._minRange || dist > weapon._maxRange) continue
 
+                // Launch-type geometry — mirror the chip-block fix
+                // (scenario_helpers.lk:~1735). The weaponHitmap branch above is
+                // launch-type-aware (hitmap is built per shooter cell with
+                // geometry baked in); this fallback branch is taken when the
+                // weapon is not in the hitmap (e.g. simPos differs from the
+                // hitmap's seed cell during multi-step scenario simulation)
+                // and previously only checked range + LoS. LINE/DIAGONAL/STAR
+                // weapons (m_laser, rifle, etc.) would then be picked at cells
+                // off-axis from the target, and the runtime useWeapon call
+                // returned -4 (USE_INVALID_POSITION) — observed at T10 of
+                // koe2 fight 52574382 with w40 at d=7 (KILL turn wasted).
+                if (weapon._launchType != null && weapon._launchType > 0 &&
+                    !isSimLaunchValid(weapon._launchType, simPos, this._target._cellPos)) {
+                    continue
+                }
+
                 if (!lineOfSight(simPos, this._target._cellPos)) {
                     if (this._strategy != null) {
                         var splashResult = this._strategy.findAoEWeaponSplashCell(weaponId, this._target._cellPos, simPos)
@@ -1483,6 +1792,7 @@ class ScenarioHelpers {
         }
 
         var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
+                           CHIP_ROCKFALL,
                            CHIP_FIRE_BALL, CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE, CHIP_ARSENIC,
                            CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
                            CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_PUNISHMENT]
@@ -1495,6 +1805,19 @@ class ScenarioHelpers {
             var chip = this._arsenal.playerEquippedChips[chipId]
             var dist = getCellDistance(simPos, this._target._cellPos)
             if (dist == null || dist < chip._minRange || dist > chip._maxRange) continue
+
+            // Launch-type geometry. ICEBERG/LIGHTNING/etc. are LAUNCH_TYPE_LINE
+            // (caster + target on same row OR column), others are STAR (line OR
+            // diagonal), DIAGONAL only, or POINT/any. Without this gate the
+            // builder happily picks ICEBERG at a 5-tile range that fails
+            // launch geometry → useChipOnCell returns -4 (USE_INVALID_POSITION)
+            // and TP/turn is wasted (observed T10/T13 vs koe2). The weapon
+            // path is covered by weaponHitmap (which is launch-type-aware);
+            // chip path here bypasses the hitmap so we need an explicit check.
+            if (chip._launchType != null && chip._launchType > 0 &&
+                !isSimLaunchValid(chip._launchType, simPos, this._target._cellPos)) {
+                continue
+            }
 
             var chipTargetCell = this._target._cellPos
             var isChipSplash = false

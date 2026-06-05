@@ -2246,12 +2246,20 @@ class Strategy {
                         }
                         if (chipItem != null && chipItem._aoeType != AREA_POINT) {
                             if (fieldMap.wouldAoEHitCell(targetPos, chipItem._aoeType, currentPos, currentPos)) {
+                                if (getTurn() <= 20) {
+                                    debugW("EXEC_T" + getTurn() + "_CHIPc" + a.chip + "_AOE_SELF_SKIP_fc" + currentPos + "_tc" + targetPos)
+                                }
                                 continue
                             }
                         }
                     }
 
-                    useChipOnCell(a.chip, a.targetCell)
+                    var _chipCdBefore = getCooldown(a.chip, getEntity())
+                    var _chipTpBefore = getTP()
+                    var _chipResult = useChipOnCell(a.chip, a.targetCell)
+                    if (getTurn() <= 20) {
+                        debugW("EXEC_T" + getTurn() + "_CHIPc" + a.chip + "_t" + a.type + "_r" + _chipResult + "_cd" + _chipCdBefore + "_tp" + _chipTpBefore + ">" + getTP() + "_fc" + currentPos + "_tc" + a.targetCell + "_d" + dist)
+                    }
 
                     if (a.chip == CHIP_INVERSION && _isBossFight) {
                         _usedInversion = true
@@ -2286,12 +2294,14 @@ class Strategy {
 
                     var minRange = 0
                     var maxRange = 0
+                    var launchType = 0
                     var weaponFound = false
 
                     if (mapContainsKey(arsenal.playerEquippedWeapons, a.weaponId)) {
                         var weaponObj = arsenal.playerEquippedWeapons[a.weaponId]
                         minRange = weaponObj._minRange
                         maxRange = weaponObj._maxRange
+                        launchType = weaponObj._launchType
                         weaponFound = true
                     }
 
@@ -2299,7 +2309,47 @@ class Strategy {
                         continue
                     }
 
+                    // Live-target retarget: a.targetCell is the planner's
+                    // *predicted* enemy cell, often the result of a chained
+                    // Grapple/Boxing Glove/Inversion that may have been
+                    // filtered or whose actual pull landed the enemy on a
+                    // different cell. If the live enemy isn't on
+                    // a.targetCell, retarget to wherever they actually are
+                    // (when in range + LoS + launch geometry), otherwise
+                    // skip the fire rather than burn TP shooting an empty
+                    // square. Fight 52577608 T8 case: Grapple was filtered
+                    // (Out of range/LOS), enemy stayed at c233, but two
+                    // Axe@318 fires still executed (r1, d=1 to c318) and
+                    // burned 12 TP without touching the enemy.
+                    if (a.targetEntity != null && !isDead(a.targetEntity._id)) {
+                        var liveTargetPos = getCell(a.targetEntity._id)
+                        if (liveTargetPos != null && liveTargetPos != targetPos) {
+                            var liveDist = getCellDistance(currentPos, liveTargetPos)
+                            var liveValid = (liveDist != null
+                                && liveDist >= minRange
+                                && liveDist <= maxRange
+                                && lineOfSight(currentPos, liveTargetPos)
+                                && isSimLaunchValid(launchType, currentPos, liveTargetPos))
+                            if (liveValid) {
+                                if (getTurn() <= 20) {
+                                    debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_RETARGET_tc" + targetPos + ">" + liveTargetPos + "_d" + dist + ">" + liveDist + "_fc" + currentPos)
+                                }
+                                targetPos = liveTargetPos
+                                a.targetCell = liveTargetPos
+                                dist = liveDist
+                            } else {
+                                if (getTurn() <= 20) {
+                                    debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_STALE_TARGET_SKIP_tc" + targetPos + "_live" + liveTargetPos + "_liveD" + liveDist + "_r" + minRange + "-" + maxRange + "_fc" + currentPos)
+                                }
+                                continue
+                            }
+                        }
+                    }
+
                     if (dist < minRange || dist > maxRange) {
+                        if (getTurn() <= 20) {
+                            debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_RANGE_FAIL_d" + dist + "_r" + minRange + "-" + maxRange + "_fc" + currentPos + "_tc" + targetPos)
+                        }
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
                             weaponsDisabled = true
@@ -2309,6 +2359,9 @@ class Strategy {
                     }
 
                     if (!lineOfSight(currentPos, targetPos)) {
+                        if (getTurn() <= 20) {
+                            debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_LOS_FAIL_d" + dist + "_fc" + currentPos + "_tc" + targetPos)
+                        }
                         consecutiveFailures++
                         if (consecutiveFailures >= maxConsecutiveFailures) {
                             weaponsDisabled = true
@@ -2320,6 +2373,9 @@ class Strategy {
                     var weaponItem = arsenal.playerEquippedWeapons[a.weaponId]
                     if (weaponItem != null && weaponItem._aoeType != AREA_POINT) {
                         if (fieldMap.wouldAoEHitCell(targetPos, weaponItem._aoeType, currentPos, currentPos)) {
+                            if (getTurn() <= 20) {
+                                debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_AOE_SELF_HIT_fc" + currentPos + "_tc" + targetPos)
+                            }
                             weaponsDisabled = true
                             continue
                         }
@@ -2335,6 +2391,10 @@ class Strategy {
                     var result = useWeaponOnCell(a.targetCell)
 
                     var tpAfter = getTP()
+
+                    if (getTurn() <= 20) {
+                        debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_FIRE_r" + result + "_d" + dist + "_tp" + tpBefore + ">" + tpAfter + "_fc" + currentPos + "_tc" + targetPos)
+                    }
 
                     if (result == USE_INVALID_TARGET || tpBefore == tpAfter) {
                         consecutiveFailures++
@@ -2361,7 +2421,32 @@ class Strategy {
                     }
 
                     var buffTargetId = (a.targetEntity != null && a.targetEntity != -1) ? a.targetEntity._id : getEntity()
+
+                    // Runtime shackle guard for Manumission. The build-time
+                    // gate (scenario_helpers.getManumissionAction) only fires
+                    // the action when a shackle is active at scenario
+                    // construction. But the queue can carry the action into
+                    // a state where the shackle has expired (turn-end decay)
+                    // or an earlier action in the queue already cleansed it.
+                    // In either case the cast is pure 6-TP waste — skip it.
+                    if (a.chip == CHIP_MANUMISSION && buffTargetId == player._id) {
+                        if (!player.hasEffect(EFFECT_SHACKLE_TP) &&
+                            !player.hasEffect(EFFECT_SHACKLE_MP) &&
+                            !player.hasEffect(EFFECT_SHACKLE_STRENGTH) &&
+                            !player.hasEffect(EFFECT_SHACKLE_MAGIC)) {
+                            if (getTurn() <= 20) {
+                                debugW("EXEC_T" + getTurn() + "_MANU_SKIP_NO_SHACKLE_tp" + getTP())
+                            }
+                            continue
+                        }
+                    }
+
+                    var _execCdBefore = getCooldown(a.chip, getEntity())
+                    var _execTpBefore = getTP()
                     useChip(a.chip, buffTargetId)
+                    if (getTurn() <= 20) {
+                        debugW("EXEC_T" + getTurn() + "_BUFFc" + a.chip + "_cd" + _execCdBefore + "_tp" + _execTpBefore + ">" + getTP())
+                    }
 
                     if (a.chip == CHIP_DOPING) {
                         __dopingUsed = true
@@ -2393,11 +2478,22 @@ class Strategy {
 
                     if (cooldown == 0 && getTP() >= tpCost) {
                         if (isObst || isEnt) {
+                            if (getTurn() <= 20) {
+                                debugE("EXEC_T" + getTurn() + "_TELEc" + a.chip + "_BLOCKED_obst" + isObst + "_ent" + isEnt + "_fc" + currentPos + "_tc" + a.targetCell)
+                            }
                         } else if (dist == null || dist < 1 || dist > maxRange) {
+                            if (getTurn() <= 20) {
+                                debugE("EXEC_T" + getTurn() + "_TELEc" + a.chip + "_RANGE_FAIL_d" + dist + "_r1-" + maxRange + "_fc" + currentPos + "_tc" + a.targetCell)
+                            }
                         } else {
-
+                            var _teleTpBefore = getTP()
                             var result = useChipOnCell(a.chip, a.targetCell)
+                            if (getTurn() <= 20) {
+                                debugW("EXEC_T" + getTurn() + "_TELEc" + a.chip + "_r" + result + "_d" + dist + "_tp" + _teleTpBefore + ">" + getTP() + "_fc" + currentPos + ">" + getCell() + "_tc" + a.targetCell)
+                            }
                         }
+                    } else if (getTurn() <= 20) {
+                        debugE("EXEC_T" + getTurn() + "_TELEc" + a.chip + "_GATE_FAIL_cd" + cooldown + "_tp" + getTP() + "_need" + tpCost)
                     }
                 }
             }
@@ -2800,9 +2896,26 @@ class Strategy {
             if (action.type == Action.ACTION_TELEPORT) {
                 var teleMaxR = getTeleportMaxRange(action.chip)
                 var distTele = getCellDistance(simulatedPos, action.targetCell)
-                if (distTele != null && distTele >= 1 && distTele <= teleMaxR && !isObstacle(action.targetCell) && !isEntity(action.targetCell)) {
+                var teleTpCost = (action.chip != -1) ? getChipCost(action.chip) : 0
+                // Fix #1D: TP/cooldown gate. Without this, a planned TELE
+                // whose TP didn't survive earlier filtering crashes the
+                // executor at base_strategy.lk:2496 with GATE_FAIL (T5 koe2:
+                // [Buff8+Vaccin6+Cure4+Tele4+w40-7]=29TP at 14TP available —
+                // Cure/w40 were FLT-dropped, Tele wasn't, executor crashed).
+                var teleCdOk = (action.chip == -1 || getCooldown(action.chip, player._id) == 0)
+                if (distTele != null && distTele >= 1 && distTele <= teleMaxR
+                    && !isObstacle(action.targetCell) && !isEntity(action.targetCell)
+                    && simulatedTP >= teleTpCost && teleCdOk) {
                     push(validActions, action)
                     simulatedPos = action.targetCell
+                    simulatedTP -= teleTpCost
+                } else if (getTurn() <= 20) {
+                    var _teleWhy = "TELE filtered"
+                    if (simulatedTP < teleTpCost) _teleWhy = "Insufficient TP for teleport: need " + teleTpCost + ", have " + simulatedTP
+                    else if (!teleCdOk) _teleWhy = "Teleport on cooldown"
+                    else if (distTele == null || distTele < 1 || distTele > teleMaxR) _teleWhy = "Teleport range: d" + distTele + " not in 1-" + teleMaxR
+                    else _teleWhy = "Teleport target blocked"
+                    debugW("FLT_T" + getTurn() + "_t" + action.type + "_w-1_c" + action.chip + "_fc" + simulatedPos + "_tc" + action.targetCell + "_d" + distTele + "_tp" + simulatedTP + "_why[" + _teleWhy + "]")
                 }
                 continue
             }
@@ -2901,6 +3014,15 @@ class Strategy {
                 }
             }
 
+            if (!isValid && getTurn() <= 20 &&
+                (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT ||
+                 action.type == Action.ACTION_DEBUFF || action.type == Action.ACTION_BUFF ||
+                 action.type == Action.ACTION_WEAPON_SWAP)) {
+                var _flD = -1
+                if (action.targetCell != -1) _flD = getCellDistance(simulatedPos, action.targetCell)
+                debugW("FLT_T" + getTurn() + "_t" + action.type + "_w" + action.weaponId + "_c" + action.chip + "_fc" + simulatedPos + "_tc" + action.targetCell + "_d" + _flD + "_tp" + simulatedTP + "_why[" + reason + "]")
+            }
+
             if (isValid) {
                 push(validActions, action)
 
@@ -2934,6 +3056,39 @@ class Strategy {
         }
 
         var removedCount = initialActionCount - count(validActions)
+
+        // Fix #3a: drop setup-only debuff chips whose payoff got filtered.
+        // Liberation on the enemy is a shield-strip setup — pure TP waste if no
+        // damage payload survives. T8 koe2 case: Lib(5)+Cure(4)+Destroyer(6)=15
+        // overran 14 TP; Destroyer filtered, Liberation fired anyway, the bot
+        // looked like it healed and fled after debuffing the enemy.
+        // Self-cast Liberation (poison-strip) still has standalone value — only
+        // prune the enemy-targeted variant.
+        var prunedActions = []
+        for (var pi = 0; pi < count(validActions); pi++) {
+            var pAct = validActions[pi]
+            var isEnemyLib = (pAct.type == Action.ACTION_DEBUFF &&
+                              pAct.chip == CHIP_LIBERATION &&
+                              pAct.targetEntity != null &&
+                              pAct.targetEntity._id != player._id)
+            if (isEnemyLib) {
+                var hasPayload = false
+                for (var pj = pi + 1; pj < count(validActions); pj++) {
+                    if (validActions[pj].type == Action.ACTION_DIRECT) {
+                        hasPayload = true
+                        break
+                    }
+                }
+                if (!hasPayload) {
+                    if (getTurn() <= 20) {
+                        debugW("PAIR_DROP_T" + getTurn() + "_LIB_no_payload")
+                    }
+                    continue
+                }
+            }
+            push(prunedActions, pAct)
+        }
+        validActions = prunedActions
 
         var hasDamageActions = false
         for (var action in validActions) {
