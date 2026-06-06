@@ -143,34 +143,11 @@ class ScenarioHelpers {
         var existingPoisonDmg = this._target.getTotalPoisonDamage()
         var poisonKillDmg = estimatedDamage + existingPoisonDmg
 
-        // Fix 2: deep-low-HP defensive floor. At HP < 28%, FLEE always wins
-        // over a kill projection — kill estimates can be wrong (enemy heal/
-        // shield not subtracted from margin), and dying mid-burst is worse
-        // than retreating to heal. Prevents the Pomdeter pattern: HP 26%,
-        // KILL fires on inflated estimate, scenario commits burst, dies.
-        if (playerHPPercent < 28 && !_isBossFight) {
-            return "FLEE"
-        }
-
-        // Fix 3: healing-aware kill margin. If the target has known sustain
-        // (vaccine HoT, lifesteal weapons, motivation, regen), the kill
-        // window must be wide enough to cover their projected heal. Without
-        // this, V8 commits to burst at low HP expecting to finish, target
-        // heals 200-300, we die next turn.
-        var killEnemyHP = enemyHP
-        var killProfile = getEnemyProfile(this._target._id)
-        if (killProfile != null && killProfile['healPerTurn'] != null) {
-            var killHealRate = killProfile['healPerTurn']
-            if (killHealRate > 0) {
-                killEnemyHP = enemyHP + killHealRate
-            }
-        }
-
         var killSuppressed = false
         // Lowered from 0.95 → 0.90 — leaves room for damage variance so we
         // actually trigger KILL on borderline finishing turns instead of
         // slipping into ATTRITION and wasting the window.
-        if (poisonKillDmg > 0 && poisonKillDmg >= killEnemyHP * 0.90) {
+        if (poisonKillDmg > 0 && poisonKillDmg >= enemyHP * 0.90) {
             var inWeaponRange = this.isInAnyWeaponRange()
             if (inWeaponRange) {
                 // B1: At low HP, KILL is only safe if the damage estimate is
@@ -190,13 +167,6 @@ class ScenarioHelpers {
         }
 
         if (killSuppressed) {
-            // Fix 2b: when kill is suppressed and HP is moderate-low, prefer
-            // FLEE over ATTRITION. The kill estimate was high enough to gate
-            // but blocked (out of range / no in-cell hit) — at HP < 35% that
-            // means we're bleeding from the wrong position. Heal first.
-            if (playerHPPercent < 35 && !_isBossFight) {
-                return "FLEE"
-            }
             return "ATTRITION"
         }
 
