@@ -278,7 +278,24 @@ class FieldMapCore {
             }
 
             if (entityType == ENTITY_BULB) {
-                if (dist <= 6) {
+                // Reachability gate: only reward bulb targeting when the bulb
+                // is actually killable within one move+fire. Observed in
+                // F52582781 vs Nexayn2: a 177-HP bulb at d=17-22 (out of
+                // weapon range entire fight) still won target selection over
+                // Nexayn2 (d=14-28) because of the +30 distance-tier bonus.
+                // LR chased the unreachable bulb for 5 turns while Nex2
+                // stockpiled TP and alpha-struck on turn 7.
+                var maxWeaponRange = 0
+                for (var wObjMR in arsenal.playerEquippedWeapons) {
+                    if (wObjMR._maxRange > maxWeaponRange) maxWeaponRange = wObjMR._maxRange
+                }
+                var bulbReach = getMP() + maxWeaponRange
+
+                if (dist > bulbReach) {
+                    // Unreachable this turn — chasing wastes tempo. Penalize
+                    // so summoner becomes the default target.
+                    score -= 100
+                } else if (dist <= 6) {
                     score += 200
                 } else if (dist <= 10) {
                     score += 100

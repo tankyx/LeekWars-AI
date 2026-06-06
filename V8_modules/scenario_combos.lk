@@ -951,6 +951,13 @@ class ScenarioCombos extends ScenarioHelpers {
 
         if (params.healThreshold >= 0) {
 
+            // Fix 5: emergency mode lifts the minAttackTP reservation. At deep
+            // low HP (<25%), survival beats burst — refusing to add REGEN
+            // because it would leave <7 TP for an attack is how LR loses to
+            // sustain hybrids (vaccine/lifesteal opponents).
+            var pmHpPct = (this._player._currHealth * 100) / this._player._maxHealth
+            var healReserve = (pmHpPct < 25) ? 0 : minAttackTPp
+
             if (params.healThreshold >= 0.99) {
                 var currentHP = this._player._currHealth
                 var maxHP = this._player._maxHealth
@@ -962,7 +969,7 @@ class ScenarioCombos extends ScenarioHelpers {
                     if (remissionAction != null) {
                         var tpRemission = getCachedChipCost(CHIP_REMISSION)
                         // Phase I: gate by minAttackTPp so heals don't starve attacks
-                        if (tpBudget - tpRemission >= minAttackTPp) {
+                        if (tpBudget - tpRemission >= healReserve) {
                             push(actions, remissionAction)
                             tpBudget -= tpRemission
                         }
@@ -971,7 +978,7 @@ class ScenarioCombos extends ScenarioHelpers {
                     var regenAction = this.getRegenerationAction()
                     if (regenAction != null) {
                         var tpRegen = getCachedChipCost(CHIP_REGENERATION)
-                        if (tpBudget - tpRegen >= minAttackTPp) {
+                        if (tpBudget - tpRegen >= healReserve) {
                             push(actions, regenAction)
                             tpBudget -= tpRegen
                         }
@@ -983,7 +990,7 @@ class ScenarioCombos extends ScenarioHelpers {
                 if (healAction != null) {
                     var healCost = getCachedChipCost(healAction.chip)
                     // Phase I: same gate
-                    if (tpBudget - healCost >= minAttackTPp) {
+                    if (tpBudget - healCost >= healReserve) {
                         push(actions, healAction)
                         tpBudget -= healCost
                     }

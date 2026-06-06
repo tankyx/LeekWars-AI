@@ -280,6 +280,19 @@ class ScenarioQuickScorer {
     static FAMILY_UTILITY = "UTILITY"
     static FAMILY_BULB = "BULB"
 
+    // True only when the scenario fires a chip that restores HP. Used by
+    // the MAG-opponent defensive-floor injection in unified_strategy to
+    // prefer real heals over cleanse/buff entries also classified DEFENSIVE.
+    scenarioHasHealAction(scenario) {
+        for (var action in scenario) {
+            if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION ||
+                action.chip == CHIP_CURE || action.chip == CHIP_VACCINE) {
+                return true
+            }
+        }
+        return false
+    }
+
     classifyFamily(scenario) {
         var hasAttack = false
         var hasBuff = false
@@ -298,7 +311,13 @@ class ScenarioQuickScorer {
             if (action.type == Action.MOVEMENT_HNS) hasHide = true
             if (action.type == Action.MOVEMENT_FLEE) hasFlee = true
             if (action.chip == CHIP_GRAPPLE) hasGrapple = true
-            if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION) hasHeal = true
+            // Heal = chips that actually restore HP. Antidote is cleanse-only
+            // (removes poison) and does NOT belong here — classified as
+            // DEFENSIVE via hasBuff path instead. Conflating them in the
+            // MAG-opponent injection floor caused F52582973 T5 to promote
+            // antidote+manumission over cure when both were available.
+            if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION ||
+                action.chip == CHIP_CURE || action.chip == CHIP_VACCINE) hasHeal = true
             if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
         }
 

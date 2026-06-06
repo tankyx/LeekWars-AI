@@ -336,6 +336,22 @@ class ScenarioScorer {
                     if (dmg > bestHitDamage) bestHitDamage = dmg
                 }
                 if (bestHitDamage > 500) noDamagePenalty -= 5000
+
+                // Fix B: poison-race amplification. When facing a MAG-poison
+                // opponent and we have a viable hit cell, no-damage turns
+                // accelerate our death (~300 HP/turn poison). Push the
+                // penalty hard so the scorer can't pick steroid+cleanse
+                // over motivation+cleanse+fire when both score similarly
+                // on raw buff/continuation grounds. Evidence: LR vs P2S
+                // F52583184 T3 chose steroid+antidote (0 dmg) over the
+                // available motivation+antidote+FIRE scenario.
+                if (this._target != null && getTurn() >= 3) {
+                    var prTgtMag = this._target._magic
+                    var prTgtStr = this._target._strength
+                    if (prTgtMag != null && prTgtStr != null && prTgtMag >= 300 && prTgtStr < 150 && player._magic < 100) {
+                        noDamagePenalty -= 4000
+                    }
+                }
             }
 
             // Distance-based no-engage penalty: when the scenario deals zero
@@ -1321,6 +1337,19 @@ class ScenarioScorer {
         // expire before contact.
         var phaseOActive = (__nearestFireTurn >= 2 && simResult.damageDealt == 0 && simResult.dotDamageQueued == 0)
 
+        // Poison-race discount on offensive-buff direct value (mirrors the
+        // continuation-value discount in evaluateContinuationValue). Same
+        // gate: MAG>=300 target with no STR, our MAG=0, past T2. Halves the
+        // immediate-buff bonus so motivation+fire beats steroid+cleanse.
+        var bvPoisonRaceMult = 1.0
+        if (this._target != null && getTurn() >= 3) {
+            var bvTgtMag = this._target._magic
+            var bvTgtStr = this._target._strength
+            if (bvTgtMag != null && bvTgtStr != null && bvTgtMag >= 300 && bvTgtStr < 150 && player._magic < 100) {
+                bvPoisonRaceMult = 0.5
+            }
+        }
+
         for (var buffChip in buffsApplied) {
             // Per-buff decay: dur=3 (STEROID/WARM_UP/WIZARDRY/PRISM),
             // dur=2 (KNOWLEDGE/ELEVATION), dur=4 (RAGE), dur=3 (ADRENALINE).
@@ -1335,7 +1364,7 @@ class ScenarioScorer {
                 else phaseODecay = 0.1
             }
 
-            if (buffChip == CHIP_STEROID) value += 200 * phaseODecay
+            if (buffChip == CHIP_STEROID) value += 200 * phaseODecay * bvPoisonRaceMult
             if (buffChip == CHIP_DOPING) {
                 // Both STR buff AND aftereffect scale with SCI.
                 // Only cast when in weapon range, scenario includes attacks, once per fight.
@@ -1354,12 +1383,12 @@ class ScenarioScorer {
                 }
             }
             if (buffChip == CHIP_WARM_UP) value += 200 * phaseODecay
-            if (buffChip == CHIP_WIZARDRY) value += 200 * phaseODecay
+            if (buffChip == CHIP_WIZARDRY) value += 200 * phaseODecay * bvPoisonRaceMult
             if (buffChip == CHIP_KNOWLEDGE) value += 150 * phaseODecay
             if (buffChip == CHIP_ELEVATION) value += 120 * phaseODecay
-            if (buffChip == CHIP_PRISM) value += 180 * phaseODecay
+            if (buffChip == CHIP_PRISM) value += 180 * phaseODecay * bvPoisonRaceMult
             if (buffChip == CHIP_ADRENALINE) value += 100  // TP boost — useful even when not shooting
-            if (buffChip == CHIP_RAGE) value += 300 * phaseODecay
+            if (buffChip == CHIP_RAGE) value += 300 * phaseODecay * bvPoisonRaceMult
             if (buffChip == CHIP_SEVEN_LEAGUE_BOOTS) value += 200  // MP boost — helps close the gap
 
             if (isAbsoluteShieldChip(buffChip)) {
@@ -1598,10 +1627,27 @@ class ScenarioScorer {
             stageMult = 1.5 - __nearestFireTurn * 0.15
         }
 
+        // Poison-race discount on offensive buffs. When facing a MAG-poison
+        // opponent we lack tools to outpace (no MAG ourselves, no big shield),
+        // each turn skipped for buff-stacking costs ~200-400 HP in poison.
+        // Discount STEROID/RAGE/WIZARDRY/PRISM continuation value so the scorer
+        // prefers FIRE-now over BUFF-now-FIRE-later. Evidence: LR vs P2S
+        // F52582973 / F52583184 — both T3 picked steroid+antidote over
+        // motivation+antidote+fire because steroid's continuation value was
+        // ranked above the actually-cast weapon shot.
+        var poisonRaceMult = 1.0
+        if (this._target != null && getTurn() >= 3) {
+            var tgtMag = this._target._magic
+            var tgtStr = this._target._strength
+            if (tgtMag != null && tgtStr != null && tgtMag >= 300 && tgtStr < 150 && player._magic < 100) {
+                poisonRaceMult = 0.5
+            }
+        }
+
         for (var buff in simResult.buffsApplied) {
-            if (buff == CHIP_WIZARDRY) value += 300 * stageMult
-            else if (buff == CHIP_STEROID) value += 200 * stageMult
-            else if (buff == CHIP_PRISM) value += 250 * stageMult
+            if (buff == CHIP_WIZARDRY) value += 300 * stageMult * poisonRaceMult
+            else if (buff == CHIP_STEROID) value += 200 * stageMult * poisonRaceMult
+            else if (buff == CHIP_PRISM) value += 250 * stageMult * poisonRaceMult
             else if (buff == CHIP_FORTRESS) value += 200
             else if (buff == CHIP_WALL) value += 100
             else if (buff == CHIP_WARM_UP) value += 200 * stageMult
@@ -1609,7 +1655,7 @@ class ScenarioScorer {
                 if (futureThreat > 0) value += 250
             }
             else if (buff == CHIP_KNOWLEDGE) value += 200 * stageMult
-            else if (buff == CHIP_RAGE) value += 300 * stageMult
+            else if (buff == CHIP_RAGE) value += 300 * stageMult * poisonRaceMult
             else if (buff == CHIP_SEVEN_LEAGUE_BOOTS) value += 200
         }
 

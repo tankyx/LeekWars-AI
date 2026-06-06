@@ -534,7 +534,7 @@ class ScenarioSimulator {
                     var tpBuff = floor(0.55 * (1 + simScience / 100))
                     simTP += tpBuff
                     result.tpRefunded += tpBuff
-                } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP) {
+                } else if (action.chip == CHIP_REGENERATION || action.chip == CHIP_REMISSION || action.chip == CHIP_CURE || action.chip == CHIP_DRIP || action.chip == CHIP_VACCINE) {
                     result.hpGained += this.estimateHealing(action.chip, simWisdom)
                 } else if (action.chip == CHIP_STEROID) {
                     simStrength += this.estimateStrengthBuff(action.chip)

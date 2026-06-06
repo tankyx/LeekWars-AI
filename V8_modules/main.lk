@@ -243,7 +243,25 @@ function main() {
 
     var targetHitCell = null
 
-    if (target != null && strategy.shouldBuildDamageMap()) {
+    // Gate at _ops89: buildHitMap can burn millions of ops integrating chip AoE
+    // patterns; if we're already at 89% we'd risk crossing _ops93 mid-loop and
+    // crashing inside u_buildHitMap (observed in F52581885 T3). Letting the
+    // _ops93 fallback below take over is cheaper than a partial map.
+    //
+    // Bulb skip (F52582973 T3): when summons split _opsBudget below 14M AND
+    // the target is a bulb at distance, buildHitMap walks reachable cells
+    // trying to find shoot positions for low-value HP. The ops cost
+    // dwarfs the value. Skip the hit-map build in this case; strategy still
+    // targets the bulb but the heavy mapping is reserved for the primary
+    // enemy on later turns.
+    var skipHitMap = false
+    if (target != null && _opsBudget < 14000000 && isBulb(target)) {
+        var bulbDist = getCellDistance(getCell(), target._cellPos)
+        if (bulbDist > 7 || target._currHealth > 200) {
+            skipHitMap = true
+        }
+    }
+    if (target != null && !skipHitMap && getOperations() < _ops89 && strategy.shouldBuildDamageMap()) {
         fieldMap.buildHitMap(target._cellPos)
         targetHitCell = fieldMap.getBestWeaponOrChipCell();
     }

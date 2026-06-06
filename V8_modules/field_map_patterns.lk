@@ -450,6 +450,11 @@ class FieldMapPatterns extends FieldMapCore {
             var maxOTKOCells = 5  
 
             for (var idx = 0; idx < cellsLimit && idx < count(candidateCells); idx++) {
+                // calculateBurstDamageFromCell is heavy (sim-style projection
+                // per cell). On a reduced budget the OTKO pass alone can
+                // tip us over _ops93. Bail before that.
+                if (getOperations() > _ops89) break
+
                 var cell = candidateCells[idx]
                 cellsChecked++
 
@@ -547,6 +552,14 @@ class FieldMapPatterns extends FieldMapCore {
         var useGraph = count(reachableCells) > 0
 
         for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            // Same rationale as the chip-loop gate below: each
+            // buildSingleItemHitMap walks reachable cells × AoE pattern. On a
+            // reduced budget (multi-entity fights split _opsBudget) a single
+            // weapon iteration can push us past _ops89. Bail before that.
+            // Observed in F52582973 T3: bulb-summon shrank budget to 8M and
+            // buildHitMap on a d=11 bulb burned through to _ops93.
+            if (getOperations() > _ops86) break
+
             var wObj = arsenal.playerEquippedWeapons[wid]
             var listIDs = []
 
@@ -577,6 +590,15 @@ class FieldMapPatterns extends FieldMapCore {
         }
 
         for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            // Ops floor: each chip iteration runs buildSingleItemHitMap +
+            // updateHitCells (which calls findOptimalAimPoint per reachable
+            // cell). For AoE-circle chips like rockfall/iceberg this can burn
+            // 1-3M ops per chip. Tightened from _ops89 to _ops86 after
+            // F52582973 T3: even with _ops89 gate, a single chip iteration
+            // crossed _ops93 mid-pattern on the reduced 8M budget. _ops86
+            // leaves room for one final chip plus the OTKO pass below.
+            if (getOperations() > _ops86) break
+
             var chipObj = arsenal.playerEquippedChips[cid]
 
             if (this.isBuffChip(cid)) continue

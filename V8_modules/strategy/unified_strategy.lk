@@ -156,7 +156,8 @@ class UnifiedStrategy extends Strategy {
         for (var scenario in scenarios) {
             var qScore = quickScorer.quickScore(scenario)
             var family = quickScorer.classifyFamily(scenario)
-            push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore, 'family': family])
+            var hasHeal = quickScorer.scenarioHasHealAction(scenario)
+            push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore, 'family': family, 'hasHeal': hasHeal])
         }
 
         arraySort(scenariosWithQuickScore, function(a, b) {
@@ -242,6 +243,70 @@ class UnifiedStrategy extends Strategy {
                         for (var sds_r in sds_rest) push(sds_new, sds_r)
                         scenariosWithQuickScore = sds_new
                     }
+                }
+            }
+        }
+
+        // Phase 2.1b: MAG opponent defensive injection. When facing a high-MAG
+        // target (>= 300), poison stacks faster than we can close the distance.
+        // Evidence: LR vs AuroraRicochet, 0-1 heal plays in losses vs 4 in win
+        // (F52582894: HP 163 -> 1103 in one turn). Inject a small defensive
+        // floor (2) so heal scenarios reach the scorer even when their raw
+        // quick-score loses to offensive picks.
+        //
+        // Two-pass promotion: first pass pulls hasHeal=true entries (real HP
+        // restorers), second pass pulls any defensive entry. Otherwise (per
+        // F52582973 T5) the floor is satisfied by antidote+manumission combos
+        // that don't actually restore HP.
+        if (target != null && !_isBossFight && target._magic != null && target._magic >= 300) {
+            var magFloor = 2
+            var magHealFloor = 1
+            var magDefCount = 0
+            var magHealCount = 0
+            var magHeadLimit = min(magFloor + 6, count(scenariosWithQuickScore))
+            for (var mag_i = 0; mag_i < magHeadLimit; mag_i++) {
+                if (scenariosWithQuickScore[mag_i]['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                    magDefCount += 1
+                }
+                if (scenariosWithQuickScore[mag_i]['hasHeal'] == true) {
+                    magHealCount += 1
+                }
+            }
+            if (magDefCount < magFloor || magHealCount < magHealFloor) {
+                var mag_promoted = []
+                var mag_rest = []
+                var mag_defNeed = magFloor - magDefCount
+                var mag_healNeed = magHealFloor - magHealCount
+                // Pass 1: pull heal-bearing entries first.
+                for (var mag_j1 = magHeadLimit; mag_j1 < count(scenariosWithQuickScore); mag_j1++) {
+                    var mag_entry1 = scenariosWithQuickScore[mag_j1]
+                    if (mag_healNeed > 0 && mag_entry1['hasHeal'] == true) {
+                        push(mag_promoted, mag_entry1)
+                        mag_healNeed -= 1
+                        if (mag_entry1['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                            mag_defNeed -= 1
+                        }
+                    } else {
+                        push(mag_rest, mag_entry1)
+                    }
+                }
+                // Pass 2: fill remaining defensive floor from the leftover tail.
+                var mag_rest2 = []
+                for (var mag_j2 = 0; mag_j2 < count(mag_rest); mag_j2++) {
+                    var mag_entry2 = mag_rest[mag_j2]
+                    if (mag_defNeed > 0 && mag_entry2['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                        push(mag_promoted, mag_entry2)
+                        mag_defNeed -= 1
+                    } else {
+                        push(mag_rest2, mag_entry2)
+                    }
+                }
+                if (count(mag_promoted) > 0) {
+                    var mag_new = []
+                    for (var mag_k = 0; mag_k < magHeadLimit; mag_k++) push(mag_new, scenariosWithQuickScore[mag_k])
+                    for (var mag_p in mag_promoted) push(mag_new, mag_p)
+                    for (var mag_r in mag_rest2) push(mag_new, mag_r)
+                    scenariosWithQuickScore = mag_new
                 }
             }
         }
