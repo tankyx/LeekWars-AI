@@ -155,9 +155,21 @@ function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
 
 function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, availableTP) {
 
-    var maxDamage = 0
     var dist = getCellDistance(fromCell, targetCell)
     if (dist == null) return 0
+
+    // Collect all viable attack options. Previously this returned max() over a
+    // single weapon OR single chip — which under-counted multi-chip burst
+    // enemies (Nexayn2 iceberg+stalactite+rockfall pattern: each chip ~567/432/
+    // 380, max=567, actual stackable = 1379). LR moved into a "max threat 567"
+    // cell thinking it was survivable; died to the combined burst.
+    //
+    // New model: greedy-fill within enemy TP budget. Sort attacks by damage
+    // descending, take each in order until TP runs out. Slight over-estimate
+    // vs ideal MILP (ignores swap costs between weapons, and assumes all
+    // chips off CD), but right-direction conservative for threat assessment.
+    var hasLos = lineOfSight(fromCell, targetCell)
+    var attacks = []
 
     for (var weaponId in weapons) {
         var minRange = getWeaponMinRange(weaponId)
@@ -166,7 +178,8 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
         var maxUses = getWeaponMaxUses(weaponId)
 
         if (dist < minRange || dist > maxRange) continue
-        if (!lineOfSight(fromCell, targetCell)) continue
+        if (!hasLos) continue
+        if (weaponCost <= 0) continue
 
         var effects = getWeaponEffects(weaponId)
         var baseDmg = 0
@@ -176,15 +189,10 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
                 break
             }
         }
+        if (baseDmg <= 0) continue
 
         var scaledDmg = baseDmg * (1 + enemy._strength / 100)
-
-        var possibleUses = min(maxUses, floor(availableTP / weaponCost))
-        var totalDmg = scaledDmg * possibleUses
-
-        if (totalDmg > maxDamage) {
-            maxDamage = totalDmg
-        }
+        push(attacks, [scaledDmg, weaponCost, true, maxUses])
     }
 
     for (var chipId in chips) {
@@ -194,6 +202,7 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
 
         if (dist < minRange || dist > maxRange) continue
         if (chipCost > availableTP) continue
+        if (chipCost <= 0) continue
 
         var effects = getChipEffects(chipId)
         var baseDmg = 0
@@ -203,15 +212,35 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
                 break
             }
         }
+        if (baseDmg <= 0) continue
 
         var scaledDmg = baseDmg * (1 + max(enemy._strength, enemy._magic) / 100)
-
-        if (scaledDmg > maxDamage) {
-            maxDamage = scaledDmg
-        }
+        push(attacks, [scaledDmg, chipCost, false, 1])
     }
 
-    return maxDamage
+    if (count(attacks) == 0) return 0
+
+    arraySort(attacks, function(a, b) {
+        if (a[0] > b[0]) return -1
+        if (a[0] < b[0]) return 1
+        return 0
+    })
+
+    var totalDamage = 0
+    var remainingTP = availableTP
+    for (var atk in attacks) {
+        if (remainingTP <= 0) break
+        var aDmg = atk[0]
+        var aCost = atk[1]
+        var aIsWeapon = atk[2]
+        var aUses = atk[3]
+        var uses = aIsWeapon ? min(aUses, floor(remainingTP / aCost)) : (remainingTP >= aCost ? 1 : 0)
+        if (uses <= 0) continue
+        totalDamage += aDmg * uses
+        remainingTP -= aCost * uses
+    }
+
+    return totalDamage
 }
 
 function predictTotalThreatAtCell(targetCell, enemies, player, arsenal) {
