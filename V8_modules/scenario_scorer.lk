@@ -293,13 +293,14 @@ class ScenarioScorer {
             var currentTurn = getTurn()
             var noDamagePenalty = this.getWeight('noDamagePenalty', -2000)
 
-            if (currentTurn <= 3) {
-                if (this._player._magic >= 200) {
-                    noDamagePenalty = noDamagePenalty
-                } else {
-                    noDamagePenalty = noDamagePenalty / 4
-                }
-            } else if (currentTurn >= 5) {
+            // Defer the T<=3 STR-build carve-out: it used to divide by 4
+            // unconditionally, which let LR's T1 buff stack (armoring +
+            // leather_boots + protein, 14 TP, 0 dmg) survive even when an
+            // attack was reachable. Now applied AFTER the hadReachableHit
+            // branch only when no hit was reachable (genuinely far approach).
+            var earlyTurnSTRRelief = (currentTurn <= 3 && this._player._magic < 200)
+
+            if (currentTurn >= 5) {
                 // Quadratic ramp (was linear plateau at 7 by turn 15).
                 // turn 5 → 1.4, turn 15 → 3.4, turn 25 → 5.6, turn 40 → 9.4, capped 12.
                 var t = currentTurn - 5
@@ -352,6 +353,11 @@ class ScenarioScorer {
                         noDamagePenalty -= 4000
                     }
                 }
+            } else if (earlyTurnSTRRelief) {
+                // No hit was reachable AND we're an early-turn STR build:
+                // soften the penalty for genuine approach turns where
+                // weapon/chip ranges can't yet touch the enemy.
+                noDamagePenalty = noDamagePenalty / 4
             }
 
             // Distance-based no-engage penalty: when the scenario deals zero
@@ -412,6 +418,33 @@ class ScenarioScorer {
                 // landing" — empirically calibrated so the BUFF scenario at
                 // T11 (~-29k) loses to a shielded OFFENSIVE.
                 score += 2000
+            }
+
+            // Fix A — T1 over-buff cap. 6/6 LR server losses showed an
+            // identical T1: armoring + leather_boots + protein (14 TP, 0 dmg)
+            // when a high-burst enemy was within weapon_range+MP. Opponent
+            // landed 337-563 dmg by T2, LR never recovered. When T1 burns
+            // >8 TP on buffs with zero damage AND an enemy is in engagement
+            // range, apply a hard penalty so a partial-buff + attack scenario
+            // can outscore the full triple-buff stack.
+            if (currentTurn == 1 && this._target != null && simResult.buffsApplied != null) {
+                var buffTpT1 = 0
+                for (var bcT1 in simResult.buffsApplied) {
+                    buffTpT1 += getCachedChipCost(bcT1)
+                }
+                if (buffTpT1 > 8) {
+                    var distT1 = getCellDistance(this._player._cellPos, this._target._cellPos)
+                    if (distT1 == null) distT1 = 99
+                    var maxWRT1 = 0
+                    for (var wIdT1 in mapKeys(arsenal.playerEquippedWeapons)) {
+                        var wObjT1 = arsenal.playerEquippedWeapons[wIdT1]
+                        if (wObjT1 != null && wObjT1._maxRange > maxWRT1) maxWRT1 = wObjT1._maxRange
+                    }
+                    var engageRangeT1 = maxWRT1 + this._player._currMp + 2
+                    if (distT1 <= engageRangeT1) {
+                        noDamagePenalty -= 4000
+                    }
+                }
             }
 
             score += noDamagePenalty
