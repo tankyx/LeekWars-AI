@@ -95,6 +95,23 @@ function profileEnemy(enemy) {
     profile['isKiter'] = isAgiKiter || isMagicKiter
     profile['kiterFlavor'] = isMagicKiter ? 'magic_poison' : (isAgiKiter ? 'agi' : 'none')
 
+    // Lifesteal threat: AGI build (or AGI >= 300) carrying a close-range
+    // weapon with non-trivial WIS. AGI's crit + WIS lifesteal at point-blank
+    // is devastating — enemy heals 80-110/shot while dealing 300-500. F52593779
+    // LR vs cLEEKici (str 390, agi 390, wis ~250, unstable_destroyer range 7):
+    // T2 LR closed to dist 5, ate 1025 dmg + enemy healed 331, died T3. The
+    // counter is range discipline — stay at max weapon range and use LR's
+    // 7-MP mobility advantage to kite. Detection thresholds chosen so a
+    // typical AGI-poison kiter (low WIS) doesn't trigger this (those need
+    // antidote logic, not range), while AGI bruisers with sustain do.
+    var hasLifestealThreat = false
+    if (wis >= 80 && bestRange > 0 && bestRange <= 8) {
+        if (profile['buildType'] == BUILD_AGILITY || profile['buildType'] == BUILD_BRUISER_REFLECT || agi >= 300) {
+            hasLifestealThreat = true
+        }
+    }
+    profile['hasLifestealThreat'] = hasLifestealThreat
+
     // Calculated sustain: amortized heal and shield per turn
     var healPerTurn = 0
     var shieldPerTurn = 0

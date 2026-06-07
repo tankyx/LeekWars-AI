@@ -1080,6 +1080,21 @@ class ScenarioScorer {
                 }
             } else if (this._player._magic > this._player._strength) {
                 kitingValue = distToTarget * 10
+            } else if (this._enemyProfile != null && this._enemyProfile['hasLifestealThreat']) {
+                // AGI-lifesteal range discipline: at point-blank (dist 1-3)
+                // enemy's AGI crit + WIS lifesteal turns trade-shots into a
+                // healing loop they win. LR has 7 MP vs their typical 4 — use
+                // the mobility advantage to stay at max weapon range (6-9)
+                // where we can still fire Magnum/Destroyer/GL but they need
+                // to spend MP closing, exposing themselves. Inverts the normal
+                // STR-build "reward close" formula for this matchup.
+                if (distToTarget >= 6 && distToTarget <= 9) {
+                    kitingValue = distToTarget * 35
+                } else if (distToTarget >= 4) {
+                    kitingValue = distToTarget * 15
+                } else {
+                    kitingValue = -200 * (4 - distToTarget)
+                }
             } else {
                 kitingValue = max(0, (10 - distToTarget)) * 10
             }
