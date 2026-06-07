@@ -1419,6 +1419,96 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
+    // Mirror of createGrappleAxeScenario but for ranged STR builds (LR class:
+    // Magnum/Destroyer/Grenade Launcher, no axe/heavy_sword). Pull the kiter
+    // adjacent, then dump Magnum or Destroyer at point-blank. Magnum range 1-8
+    // and Destroyer range 1-7 both work at range 1. Activates specifically
+    // when an enemy is on axis at 2-8 distance with LoS — the same shape that
+    // gets exploited by MAG-poison kiters (Prof2science class) staying out of
+    // Magnum's effective AoE while flame_thrower'ing at range.
+    createGrappleRangedScenario(availableTP, availableMP) {
+        var actions = []
+        var tpBudget = availableTP
+        var mpBudget = availableMP
+        var simPos = this._player._cellPos
+
+        var hasMagnum = mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_MAGNUM)
+        var hasDestroyer = mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_DESTROYER)
+        if (!hasMagnum && !hasDestroyer) {
+            return null
+        }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) {
+            return null
+        }
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) {
+            return null
+        }
+
+        var dist = getCellDistance(simPos, this._target._cellPos)
+        if (dist == null) return null
+        // Range gate: too close (already at melee, just fire) or too far
+        // (grapple can't reach — covers ~8 cells on axis).
+        if (dist < 2 || dist > 8) return null
+
+        // Prefer Magnum for raw burst, fall back to Destroyer.
+        var weaponId = hasMagnum ? WEAPON_MAGNUM : WEAPON_DESTROYER
+        var weaponCost = getCachedWeaponCost(weaponId, this._arsenal)
+        if (weaponCost == null) weaponCost = 8
+        var grappleCost = getCachedChipCost(CHIP_GRAPPLE)
+        // Need grapple + at least one shot.
+        if (tpBudget < grappleCost + weaponCost) {
+            return null
+        }
+
+        var playerX = getCellX(simPos)
+        var playerY = getCellY(simPos)
+        var enemyPos = this._target._cellPos
+        var enemyX = getCellX(enemyPos)
+        var enemyY = getCellY(enemyPos)
+
+        var isOnSameLine = (playerY == enemyY) || (playerX == enemyX)
+        if (!isOnSameLine) {
+            return null
+        }
+
+        var grappleCell = -1
+        if (playerY == enemyY) {
+            grappleCell = (enemyX < playerX) ? getCellFromXY(playerX - 1, playerY) : getCellFromXY(playerX + 1, playerY)
+        } else {
+            grappleCell = (enemyY < playerY) ? getCellFromXY(playerX, playerY - 1) : getCellFromXY(playerX, playerY + 1)
+        }
+
+        if (grappleCell == -1 || grappleCell == null) {
+            return null
+        }
+
+        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
+        tpBudget -= grappleCost
+
+        var enemyPulledPosition = grappleCell
+
+        if (getWeapon() != weaponId) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, weaponId, -1, -1, this._target))
+            tpBudget -= 1
+        }
+
+        push(actions, new Action(Action.ACTION_DIRECT, weaponId, -1, enemyPulledPosition, this._target))
+        tpBudget -= weaponCost
+
+        // Pile on as many additional shots as TP allows.
+        while (tpBudget >= weaponCost) {
+            push(actions, new Action(Action.ACTION_DIRECT, weaponId, -1, enemyPulledPosition, this._target))
+            tpBudget -= weaponCost
+        }
+
+        var hideAction = this.getHideAndSeekAction(mpBudget)
+        if (hideAction != null) {
+            push(actions, hideAction)
+        }
+
+        return actions
+    }
+
     createSteroidOTKOScenario(availableTP, availableMP) {
         var actions = []
         var tpBudget = availableTP

@@ -231,6 +231,11 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, grappleAxe)
         }
 
+        var grappleRanged = this.createGrappleRangedScenario(availableTP, availableMP)
+        if (grappleRanged != null) {
+            push(scenarios, grappleRanged)
+        }
+
         var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
         if (neutrinoStack != null) {
             push(scenarios, neutrinoStack)
@@ -370,6 +375,11 @@ class ScenarioGenerator extends ScenarioCombos {
         var grappleAxe = this.createGrappleAxeScenario(availableTP, availableMP)
         if (grappleAxe != null) {
             push(scenarios, grappleAxe)
+        }
+
+        var grappleRanged = this.createGrappleRangedScenario(availableTP, availableMP)
+        if (grappleRanged != null) {
+            push(scenarios, grappleRanged)
         }
 
         var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)

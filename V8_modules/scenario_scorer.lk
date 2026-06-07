@@ -1790,6 +1790,20 @@ class ScenarioScorer {
 
         if (hasGrapple && hasMelee) bonus += 300
 
+        // Grapple + Magnum/Destroyer point-blank synergy: same template
+        // shape as Grapple+HeavySword, but for ranged STR builds (LR) that
+        // can fire Magnum (range 1-8) or Destroyer (range 1-7) at range 1
+        // after pulling. Essential vs MAG-poison kiters who otherwise stay
+        // out of reach.
+        var hasRangedClose = false
+        for (var actRC in scenario) {
+            if (actRC.weaponId == WEAPON_MAGNUM || actRC.weaponId == WEAPON_DESTROYER) {
+                hasRangedClose = true
+                break
+            }
+        }
+        if (hasGrapple && hasRangedClose) bonus += 300
+
         if (hasWizardry && hasPoison) bonus += 400
 
         if (hasWizardry && hasDenial) bonus += 350
