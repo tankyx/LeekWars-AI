@@ -379,6 +379,32 @@ class ScenarioScorer {
                 }
             }
 
+            // Fix B: T1-T2 over-buff hard cap vs close-MP threats. The Fix A v2
+            // gate only removes *relief* — the scorer can still pick a heavy
+            // buff stack when alternatives also score poorly (every approach
+            // scenario eats the penalty equally). Result: F52594592 LR vs
+            // DannyD T1 stacked armoring+leather_boots (13 TP buffs), gave
+            // up first-strike potential, ate 802 dmg axe T3. Push a hard
+            // negative on big buff stacks T1-T2 when the enemy can close to
+            // weapon range within 2 turns — forces the scorer to leave TP
+            // for early pressure rather than full self-investment.
+            if (currentTurn <= 2 && simResult.buffsApplied != null
+                && this._target != null && this._player._magic < 200) {
+                // STR-build only: MAG builds (MH-style) legitimately T1-stack
+                // poisons + protection because their damage comes from chips,
+                // not weapons. Local matrix regressed MH vs smart_mag 95→80%
+                // when this fired on magic builds.
+                var buffTpFixB = 0
+                for (var bcFB in simResult.buffsApplied) {
+                    buffTpFixB += getCachedChipCost(bcFB)
+                }
+                if (buffTpFixB >= 12) {
+                    if (predictEnemyCanAttackWithin(this._player._cellPos, this._target, 2)) {
+                        noDamagePenalty -= 4000
+                    }
+                }
+            }
+
             // Distance-based no-engage penalty: when the scenario deals zero
             // damage AND ends with the player still far from enemy AND we had
             // MP we didn't spend, we're letting buff-stacking win over closing.

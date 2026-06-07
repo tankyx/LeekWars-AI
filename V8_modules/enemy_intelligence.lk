@@ -104,11 +104,23 @@ function profileEnemy(enemy) {
     // 7-MP mobility advantage to kite. Detection thresholds chosen so a
     // typical AGI-poison kiter (low WIS) doesn't trigger this (those need
     // antidote logic, not range), while AGI bruisers with sustain do.
+    //
+    // Second trigger added: STR-melee bruiser with WIS lifesteal.
+    // F52594592 LR vs DannyD (str 437, agi 60, wis ~240, axe range 1-3):
+    // DannyD healed 95/118/160/60/41 across T3-T6 while dealing 400/turn,
+    // out-sustaining LR's heals. AGI=60 fails the AGI-flavored gate, but
+    // the kit signature is the same problem (point-blank weapon + WIS
+    // lifesteal). Lifesteal formula damage*wis/1000 → 240 WIS on 400 dmg
+    // = 96 healed/shot, matching observed numbers. Range gate <=4 covers
+    // axes/katanas/swords without catching ranged STR builds.
     var hasLifestealThreat = false
     if (wis >= 80 && bestRange > 0 && bestRange <= 8) {
         if (profile['buildType'] == BUILD_AGILITY || profile['buildType'] == BUILD_BRUISER_REFLECT || agi >= 300) {
             hasLifestealThreat = true
         }
+    }
+    if (!hasLifestealThreat && str >= 350 && wis >= 200 && bestRange > 0 && bestRange <= 4) {
+        hasLifestealThreat = true
     }
     profile['hasLifestealThreat'] = hasLifestealThreat
 
