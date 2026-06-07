@@ -357,7 +357,26 @@ class ScenarioScorer {
                 // No hit was reachable AND we're an early-turn STR build:
                 // soften the penalty for genuine approach turns where
                 // weapon/chip ranges can't yet touch the enemy.
-                noDamagePenalty = noDamagePenalty / 4
+                //
+                // Fix A v2: gate relief on actual approach behavior. The
+                // relief was meant for "move forward + small buff", but in
+                // practice T1 buff-stacks of 14-16 TP (armoring + leather_boots
+                // + motivation + protein) trigger this branch unchanged because
+                // the enemy starts beyond weapon range. Empirically: 3/3
+                // collateral losses (52592838 Pomdeter, 52592840 Artchitode,
+                // 52592841 cLEEKici) all show the same 4-buff T1 stack landing
+                // here. When the scenario burns >8 TP on buffs, it's no longer
+                // an approach — it's over-investment regardless of distance,
+                // so the relief shouldn't apply.
+                var buffTpRelief = 0
+                if (simResult.buffsApplied != null) {
+                    for (var bcR in simResult.buffsApplied) {
+                        buffTpRelief += getCachedChipCost(bcR)
+                    }
+                }
+                if (buffTpRelief <= 8) {
+                    noDamagePenalty = noDamagePenalty / 4
+                }
             }
 
             // Distance-based no-engage penalty: when the scenario deals zero
