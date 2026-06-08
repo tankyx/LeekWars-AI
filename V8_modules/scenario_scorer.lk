@@ -398,9 +398,33 @@ class ScenarioScorer {
                 for (var bcFB in simResult.buffsApplied) {
                     buffTpFixB += getCachedChipCost(bcFB)
                 }
-                if (buffTpFixB >= 12) {
-                    if (predictEnemyCanAttackWithin(this._player._cellPos, this._target, 2)) {
-                        noDamagePenalty -= 4000
+                // Scaled penalty: prior flat -4000 produced no behavior change
+                // because every 0-damage T1 candidate ate the same shift. By
+                // scaling on buffTp we create a real *relative* gap between
+                // a heavy buff stack (e.g. 14 TP → -21000) and a closing scenario
+                // with a small buff (3 TP → -4500), so the move-and-light-buff
+                // option can out-score the over-buff stack. K=1500 tuned up
+                // from K=800 which produced only a 15-dmg local shift; need
+                // a stronger spread to overcome buff-value scoring on T1.
+                if (buffTpFixB >= 6) {
+                    // Check threat against final position, not starting cell.
+                    // Server fight F52600253 T1: LR starts at cell 38 (dist 28
+                    // to DannyD) — predict-from-start returns false because
+                    // DannyD can't reach laser range in 2 turns from there.
+                    // But the scenario MOVES LR to cell 94 (advancing 12),
+                    // and from cell 94 DannyD CAN attack. Use final cell.
+                    // Additional gate: only penalize when the scenario actually
+                    // advanced toward the enemy (final dist < start dist). KG/
+                    // MH buff-in-place T1 scenarios shouldn't fire — only
+                    // "march into range while burning all TP on buffs" should.
+                    var fixBCheckCell = simResult.finalPosition
+                    if (fixBCheckCell == -1) fixBCheckCell = this._player._cellPos
+                    var fixBStartDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+                    var fixBFinalDist = getCellDistance(fixBCheckCell, this._target._cellPos)
+                    var fixBAdvanced = (fixBStartDist != null && fixBFinalDist != null
+                                        && fixBFinalDist < fixBStartDist)
+                    if (fixBAdvanced && predictEnemyCanAttackWithin(fixBCheckCell, this._target, 2)) {
+                        noDamagePenalty -= 1500 * buffTpFixB
                     }
                 }
             }
