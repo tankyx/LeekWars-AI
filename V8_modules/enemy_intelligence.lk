@@ -2,6 +2,15 @@
 global __enemyProfile = [:]
 global __enemyObservations = [:]
 
+// Plan E: cross-turn engagement plans. Once an enemy is classified (e.g. a
+// lifesteal-threat bruiser), we lock in a range zone to defend against. The
+// position scorer applies a large bonus to plan-consistent cells AND softens
+// the no-damage penalty when we're correctly holding the line — turning
+// per-turn greedy scoring into a multi-turn engagement commitment.
+//
+// Schema: __engagementPlan[enemyId] = ['minDist', 'maxDist', 'mode', 'lockTurn']
+global __engagementPlan = [:]
+
 function profileEnemy(enemy) {
     if (enemy == null) return null
     var eid = enemy._id
@@ -123,6 +132,20 @@ function profileEnemy(enemy) {
         hasLifestealThreat = true
     }
     profile['hasLifestealThreat'] = hasLifestealThreat
+
+    // Plan E: install an engagement plan when a lifesteal-bruiser is detected.
+    // The plan tells the position scorer "we are committed to the 6-9 range
+    // band for this whole fight" — a strategic pre-commit that survives the
+    // per-turn greedy re-evaluation that previously kept letting LR drift to
+    // melee on individual high-`offensiveValue` cells.
+    if (hasLifestealThreat && !mapContainsKey(__engagementPlan, eid)) {
+        __engagementPlan[eid] = [
+            'minDist': 6,
+            'maxDist': 9,
+            'mode': 'kite_bruiser',
+            'lockTurn': getTurn()
+        ]
+    }
 
     // Calculated sustain: amortized heal and shield per turn
     var healPerTurn = 0

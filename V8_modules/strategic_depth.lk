@@ -323,6 +323,16 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         if (!primaryProfile['hasShield']) {
             adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.1)
         }
+        // Static signal D: enemy has NO antidote chip — poison sticks
+        // permanently and burst combos compound without cleanse-undo risk.
+        // Skip BAIT cycling and favor commit-to-kill rotations. DannyD case
+        // (fight 52607388, LR 1W-13L matchup): LR spent 6 turns baiting/
+        // cycling poison vs an enemy who couldn't cleanse anyway, while
+        // DannyD's lifesteal m_laser out-paced the ticks faster than antidote
+        // would have. Boost burst so big-hit windows win over poison drip.
+        if (!primaryProfile['hasAntidote']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
+        }
 
         // Phase 1.2: double-antidote carrier — enemy has cleansed ≥2 times,
         // proving they pack two antidote sources (chip + bulb, or a teammate

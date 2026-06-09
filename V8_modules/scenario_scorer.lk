@@ -99,9 +99,11 @@ class ScenarioScorer {
         if (targetIsBulb) {
             var enemies = this._fieldMap.getEnemySubMap()
             var summonerHP = 0
+            var summonerEntity = null
             for (var eid in mapKeys(enemies)) {
                 if (!isDead(eid) && !isBulb(enemies[eid])) {
                     summonerHP = enemies[eid]._currHealth
+                    summonerEntity = enemies[eid]
                     break
                 }
             }
@@ -117,6 +119,20 @@ class ScenarioScorer {
 
                 if (turnsToKill < turnsTodie) {
                     bulbRaceState = "RACE"
+                }
+
+                // DannyD case (fight 52607388): bulbs deal 30-50/turn,
+                // summoner deals 350-400/turn — killing bulbs doesn't reduce
+                // incoming damage materially. Old rule only triggered RACE
+                // when summonerHP/DPS < turnsTodie, which failed for a tanky
+                // summoner. New gate: if summoner's own DPT (str+mag heuristic
+                // matching line 843) accounts for more than half of the
+                // incoming threat, target summoner first regardless of HP.
+                if (bulbRaceState != "RACE" && summonerEntity != null) {
+                    var summonerDPT = (summonerEntity._strength + summonerEntity._magic) * 1.5
+                    if (summonerDPT > enemyDPS * 0.5) {
+                        bulbRaceState = "RACE"
+                    }
                 }
             }
         }
@@ -242,6 +258,18 @@ class ScenarioScorer {
                 lifestealMultiplier = 2.0
             } else if (hpPercent < 70) {
                 lifestealMultiplier = 1.5
+            }
+            // Plan A2: when we're dipping into melee against a lifesteal
+            // threat (e.g. DannyD axe-spam), don't double-reward the heal-back
+            // — the dive itself is the trap. Cap multiplier to 1.0.
+            if (this._enemyProfile != null && this._enemyProfile['hasLifestealThreat']
+                && this._target != null && hpPercent < 70) {
+                var lsFinalPos = simResult.finalPosition
+                if (lsFinalPos == -1) lsFinalPos = this._player._cellPos
+                var lsDist = getCellDistance(lsFinalPos, this._target._cellPos)
+                if (lsDist != null && lsDist <= 3) {
+                    lifestealMultiplier = 1.0
+                }
             }
             var lifestealScore = lifestealHealing * lifestealMultiplier * 2.0
             score += lifestealScore
@@ -516,7 +544,109 @@ class ScenarioScorer {
                 }
             }
 
+            // Plan E: when an engagement plan is active and our final position
+            // holds the plan range, fleeing/positioning IS the play — don't
+            // punish 0 damage as failure. Soften by 60% so the picker prefers
+            // a plan-consistent flee+heal over a desperate close-and-fire.
+            if (this._target != null
+                && mapContainsKey(__engagementPlan, this._target._id)) {
+                var ePlanND = __engagementPlan[this._target._id]
+                var ePndFinal = simResult.finalPosition
+                if (ePndFinal == -1) ePndFinal = this._player._cellPos
+                var ePndDist = getCellDistance(ePndFinal, this._target._cellPos)
+                if (ePndDist != null && ePndDist >= ePlanND['minDist']) {
+                    noDamagePenalty = floor(noDamagePenalty * 0.4)
+                }
+            }
+
             score += noDamagePenalty
+        }
+
+        // Fix B T3+: HP-pressure over-buff outside the zero-damage gate.
+        // The T1-T2 Fix B above only fires when totalDamage == 0. Server
+        // losses (LR vs DannyD F52600944 T3) show a different failure mode:
+        // LR fires GL once (~350 dmg) but burns 8 TP on TP-boost chips
+        // (manumission+motivation) while DannyD lands 600+ axe damage.
+        // Because damageDealt > 0, the outer noDamagePenalty block is
+        // skipped entirely and the heavy buff stack rides through scoring
+        // unchallenged. Apply a narrow penalty: T3-T5 only, STR build only,
+        // HP already pressured, buff TP >= 6, final position is reachable
+        // by the enemy next turn, and we didn't retreat (advance or hold).
+        // K=500 — smaller than Fix B T1-T2 (1500) because real damage in
+        // these scenarios partially justifies the buff investment.
+        if (totalDamage > 0
+            && this._target != null
+            && simResult.buffsApplied != null
+            && this._player._magic < 200
+            && playerHPPercent < 80) {
+            var fixBLTurn = getTurn()
+            if (fixBLTurn >= 3 && fixBLTurn <= 5) {
+                var buffTpFixBL = 0
+                for (var bcFBL in simResult.buffsApplied) {
+                    buffTpFixBL += getCachedChipCost(bcFBL)
+                }
+                if (buffTpFixBL >= 6) {
+                    var fixBLCheckCell = simResult.finalPosition
+                    if (fixBLCheckCell == -1) fixBLCheckCell = this._player._cellPos
+                    var fixBLStartDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+                    var fixBLFinalDist = getCellDistance(fixBLCheckCell, this._target._cellPos)
+                    var fixBLHeld = (fixBLStartDist != null && fixBLFinalDist != null
+                                     && fixBLFinalDist <= fixBLStartDist)
+                    if (fixBLHeld && predictEnemyCanAttackWithin(fixBLCheckCell, this._target, 1)) {
+                        score -= 500 * buffTpFixBL
+                    }
+                }
+            }
+        }
+
+        // Plan E + Fix B T1-T2 (damage-agnostic). With an engagement plan
+        // installed (kite-bruiser), T1-T2 buff over-investment loses the race
+        // by ~1 turn of tempo — F52604671 LR T1 stacked armoring+leather_boots
+        // +jump (~14 TP on chips, 1 weapon shot, 0 dmg to DannyD). DannyD then
+        // dealt 689 dmg T3, 752 dmg T4. LR's total damage over 5 turns was
+        // ~1670 vs DannyD's 1488 HP — would have killed next turn but died
+        // first. The existing Fix B only fires when totalDamage==0; this
+        // catches the "fired one shot for partial damage but burned 10+ TP
+        // on buffs" pattern. Penalty scales on TP over a 4-TP floor (one
+        // shield is fine, beyond is wasted tempo). STR-build only (MAG builds
+        // legitimately T1-stack poisons).
+        var planETurn = getTurn()
+        if (planETurn <= 2
+            && this._target != null
+            && simResult.buffsApplied != null
+            && mapContainsKey(__engagementPlan, this._target._id)
+            && this._player._magic < 200) {
+            var buffTpPlanE = 0
+            for (var bcPE in simResult.buffsApplied) {
+                buffTpPlanE += getCachedChipCost(bcPE)
+            }
+            if (buffTpPlanE >= 6) {
+                var extraBuffTp = buffTpPlanE - 4
+                score -= 1500 * extraBuffTp
+            }
+        }
+
+        // Plan E + T3+ TP-defer penalty. With engagement plan active vs a
+        // lifesteal bruiser, T3+ scenarios that spend TP on TP-boost utility
+        // chips (motivation/manumission/liberation) instead of firing weapons
+        // lose the race — DannyD F52606008 T3 picked manumission+motivation+1
+        // GL fire (430 dmg) over the double-fire pattern (1193 dmg) that won
+        // F52606012. Future TP is worth less than current weapon shots when
+        // racing lifesteal sustain. NOT stretching (damage mult, not pure
+        // defer) and NOT adrenaline (instant +5 TP enables same-turn kill).
+        if (planETurn >= 3
+            && this._target != null
+            && simResult.buffsApplied != null
+            && mapContainsKey(__engagementPlan, this._target._id)
+            && this._player._magic < 200) {
+            var tpDeferPenalty = 0
+            for (var bcDF in simResult.buffsApplied) {
+                if (bcDF == 15 || bcDF == 174 || bcDF == 34) {
+                    tpDeferPenalty += 800
+                }
+            }
+            if (tpDeferPenalty > 1600) tpDeferPenalty = 1600
+            score -= tpDeferPenalty
         }
 
         var dotWeight = this.getWeight('dotEffects', this.calculateDotWeight())
@@ -1118,6 +1248,18 @@ class ScenarioScorer {
             }
         }
 
+        // Plan B2: at melee distance vs a lifesteal-threat bruiser, the raw
+        // cell damage potential (`offensiveValue`) overweights the cell —
+        // it ignores that the enemy will hit us back AND heal off our hits.
+        // Discount by 40% so the kite bonus below can win in evaluation.
+        if (offensiveValue > 0 && this._enemyProfile != null
+            && this._enemyProfile['hasLifestealThreat'] && this._target != null) {
+            var offDist = getCellDistance(finalPos, this._target._cellPos)
+            if (offDist != null && offDist <= 3) {
+                offensiveValue = offensiveValue * 0.6
+            }
+        }
+
         var distToTarget = getCellDistance(finalPos, this._target._cellPos)
         var kitingValue = 0
         if (distToTarget != null) {
@@ -1138,15 +1280,65 @@ class ScenarioScorer {
                 // where we can still fire Magnum/Destroyer/GL but they need
                 // to spend MP closing, exposing themselves. Inverts the normal
                 // STR-build "reward close" formula for this matchup.
+                //
+                // Plan B1: scale the bonus by the bruiser's STR+WIS magnitude
+                // — vs a 600 STR + 300 WIS axe-bruiser the previous dist*35
+                // (max ~315) was dwarfed by the raw `offensiveValue` of melee
+                // cells. Scale gives ≈ 1.5× vs DannyD (STR 437 + WIS 306).
+                var bruiserMag = 1.0
+                if (this._target != null) {
+                    var brSum = this._target._strength + this._target._wisdom
+                    bruiserMag = max(1.0, min(2.5, brSum / 500.0))
+                }
                 if (distToTarget >= 6 && distToTarget <= 9) {
-                    kitingValue = distToTarget * 35
+                    kitingValue = distToTarget * 60 * bruiserMag
                 } else if (distToTarget >= 4) {
-                    kitingValue = distToTarget * 15
+                    kitingValue = distToTarget * 25 * bruiserMag
                 } else {
-                    kitingValue = -200 * (4 - distToTarget)
+                    kitingValue = -300 * bruiserMag * (4 - distToTarget)
                 }
             } else {
                 kitingValue = max(0, (10 - distToTarget)) * 10
+            }
+        }
+
+        // Plan E: cross-turn engagement plan. If we locked in a range zone for
+        // this enemy at profile time (e.g. kite-bruiser 6-9), inject a large
+        // bonus on plan-consistent cells and a stiff penalty for crossing into
+        // the danger zone. Pre-commit strategy overrides per-turn greedy
+        // evaluation that previously let high-`offensiveValue` melee cells
+        // outscore the kite line on individual turns.
+        //
+        // Approach bonus (added after F52605948 4-turn win vs F52605946 6-turn
+        // loss showed LR sitting still when start dist > maxDist — there was
+        // no incentive to advance from dist 12 toward the 6-9 band). Reward
+        // cells that close the gap toward the band proportional to cells
+        // moved closer, scaled smaller than the in-band bonus so we don't
+        // overshoot into melee.
+        if (this._target != null && distToTarget != null
+            && mapContainsKey(__engagementPlan, this._target._id)) {
+            var ePlan = __engagementPlan[this._target._id]
+            var ePMinD = ePlan['minDist']
+            var ePMaxD = ePlan['maxDist']
+            if (distToTarget >= ePMinD && distToTarget <= ePMaxD) {
+                kitingValue += 2500
+            } else if (distToTarget < ePMinD) {
+                var gap = ePMinD - distToTarget
+                kitingValue -= 1500 * gap
+            } else {
+                // distToTarget > ePMaxD: reward closing the gap.
+                var ePStartDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+                if (ePStartDist != null && ePStartDist > ePMaxD) {
+                    var ePStartGap = ePStartDist - ePMaxD
+                    var ePFinalGap = distToTarget - ePMaxD
+                    if (ePFinalGap < ePStartGap) {
+                        var ePGapClosed = ePStartGap - ePFinalGap
+                        // Cap at +1800 so a 4-cell advance bonus stays below
+                        // the in-band 2500 (overshoot should still be worse).
+                        var ePApproachBonus = min(1800, 500 * ePGapClosed)
+                        kitingValue += ePApproachBonus
+                    }
+                }
             }
         }
 
@@ -1165,6 +1357,19 @@ class ScenarioScorer {
             var hasDamageReturn = this._player.hasDamageReturn()
             if (hasDamageReturn && this._player._agility > 400) {
                 threatPenalty *= 0.3
+            }
+
+            // Plan C: against a lifesteal-threat bruiser, a cell that's
+            // threatened this turn AND still close enough that the enemy
+            // will threaten us again next turn is doubly bad. Single-turn
+            // `threatAtPos` undersells the trap. Multiply by 1.6× to model
+            // ~two turns of sustained pressure (60% second-turn weight).
+            if (this._enemyProfile != null && this._enemyProfile['hasLifestealThreat']
+                && this._target != null) {
+                var sustDist = getCellDistance(finalPos, this._target._cellPos)
+                if (sustDist != null && sustDist <= 4) {
+                    threatPenalty *= 1.6
+                }
             }
         }
 
@@ -1467,6 +1672,22 @@ class ScenarioScorer {
             }
         }
 
+        // Change 3a: shield-aware buff devaluation. STR/MAG amp buffs (steroid,
+        // wizardry, rage, prism) add damage per hit, but shields absorb a flat
+        // (abs) or % (rel) chunk of each hit. Against a heavily shielded enemy,
+        // the amped damage gets partially absorbed → buff is worth less.
+        // Liberation is only 40% strip so 60% of shield persists; the
+        // devaluation is real even after stripping.
+        var bvShieldMult = 1.0
+        if (this._target != null) {
+            var tgtAbsShield = this._target._absShield
+            var tgtRelShield = this._target._relShield
+            if ((tgtAbsShield != null && tgtAbsShield >= 120) ||
+                (tgtRelShield != null && tgtRelShield >= 35)) {
+                bvShieldMult = 0.75
+            }
+        }
+
         for (var buffChip in buffsApplied) {
             // Per-buff decay: dur=3 (STEROID/WARM_UP/WIZARDRY/PRISM),
             // dur=2 (KNOWLEDGE/ELEVATION), dur=4 (RAGE), dur=3 (ADRENALINE).
@@ -1481,7 +1702,7 @@ class ScenarioScorer {
                 else phaseODecay = 0.1
             }
 
-            if (buffChip == CHIP_STEROID) value += 200 * phaseODecay * bvPoisonRaceMult
+            if (buffChip == CHIP_STEROID) value += 200 * phaseODecay * bvPoisonRaceMult * bvShieldMult
             if (buffChip == CHIP_DOPING) {
                 // Both STR buff AND aftereffect scale with SCI.
                 // Only cast when in weapon range, scenario includes attacks, once per fight.
@@ -1500,16 +1721,31 @@ class ScenarioScorer {
                 }
             }
             if (buffChip == CHIP_WARM_UP) value += 200 * phaseODecay
-            if (buffChip == CHIP_WIZARDRY) value += 200 * phaseODecay * bvPoisonRaceMult
+            if (buffChip == CHIP_WIZARDRY) value += 200 * phaseODecay * bvPoisonRaceMult * bvShieldMult
             if (buffChip == CHIP_KNOWLEDGE) value += 150 * phaseODecay
             if (buffChip == CHIP_ELEVATION) value += 120 * phaseODecay
-            if (buffChip == CHIP_PRISM) value += 180 * phaseODecay * bvPoisonRaceMult
+            if (buffChip == CHIP_PRISM) value += 180 * phaseODecay * bvPoisonRaceMult * bvShieldMult
             if (buffChip == CHIP_ADRENALINE) value += 100  // TP boost — useful even when not shooting
-            if (buffChip == CHIP_RAGE) value += 300 * phaseODecay * bvPoisonRaceMult
+            if (buffChip == CHIP_RAGE) value += 300 * phaseODecay * bvPoisonRaceMult * bvShieldMult
             if (buffChip == CHIP_SEVEN_LEAGUE_BOOTS) value += 200  // MP boost — helps close the gap
 
+            // Magic-poison shield suppression: vs koe2-class (mag>=300, has
+            // poison, low str), incoming damage is overwhelmingly DoT that
+            // bypasses physical shields. The existing shieldScore at
+            // scenario_scorer.lk:699 suppresses simResult.shieldsGained ×0.1
+            // but the per-chip valuations below (abs +80, wall/fortress as
+            // effHP, rel +100) were untouched — so the bot still picks
+            // armoring/wall in T1 vs koe2 because they each score +80-+150
+            // before the per-chip aggregate is applied. Suppress them here.
+            // Keep 10% residual for the rare non-poison shot.
+            var bvMagicPoisonShieldMult = 1.0
+            if (this._enemyProfile != null && this._enemyProfile['isKiter']
+                && this._enemyProfile['kiterFlavor'] == 'magic_poison') {
+                bvMagicPoisonShieldMult = 0.1
+            }
+
             if (isAbsoluteShieldChip(buffChip)) {
-                value += 80
+                value += 80 * bvMagicPoisonShieldMult
             }
 
             if (buffChip == CHIP_WALL) {
@@ -1519,7 +1755,7 @@ class ScenarioScorer {
                 var effectiveHP = (expectedDamage * duration) * (reductionPercent / 100.0)
                 var wallValue = effectiveHP * 0.5
                 if (wallValue < 80) wallValue = 80
-                value += wallValue
+                value += wallValue * bvMagicPoisonShieldMult
             }
 
             if (buffChip == CHIP_FORTRESS) {
@@ -1529,10 +1765,10 @@ class ScenarioScorer {
                 var effectiveHP = (expectedDamage * duration) * (reductionPercent / 100.0)
                 var fortressValue = effectiveHP * 0.5
                 if (fortressValue < 150) fortressValue = 150
-                value += fortressValue
+                value += fortressValue * bvMagicPoisonShieldMult
             }
 
-            if (isRelativeShieldChip(buffChip) && buffChip != CHIP_WALL && buffChip != CHIP_FORTRESS) value += 100
+            if (isRelativeShieldChip(buffChip) && buffChip != CHIP_WALL && buffChip != CHIP_FORTRESS) value += 100 * bvMagicPoisonShieldMult
 
             if (buffChip == CHIP_REGENERATION) {
                 // HP-tiered Regen bonus mirrors Antidote pressure tiers.
@@ -1680,15 +1916,35 @@ class ScenarioScorer {
             if (debuffChip == CHIP_SLOW_DOWN || debuffChip == CHIP_BALL_AND_CHAIN) value += 80
 
             if (debuffChip == CHIP_LIBERATION) {
+                // Liberation strips 40% of ALL active effects on the target
+                // (positive AND negative). Score the net value: enemy
+                // defenses/buffs we strip (positive) minus our DoTs we'd
+                // lose (negative). Falls below 0 → don't fire.
                 var strippedValue = 0
                 if (this._target != null) {
                     strippedValue += this._target._absShield * 0.4 * 2.0
                     strippedValue += this._target._relShield * 0.4 * 5.0
                     if (this._target.hasEffect(EFFECT_DAMAGE_RETURN)) strippedValue += 300
-                    if (this._target.hasEffect(EFFECT_BUFF_STRENGTH)) strippedValue += 200
+                    if (this._target.hasEffect(EFFECT_BUFF_STRENGTH)) {
+                        // Scale by enemy's actual threat to us — stripping
+                        // protein on a heavy hitter saves much more than 200.
+                        var libThreat = 0
+                        if (this._fieldMap != null) {
+                            libThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
+                        }
+                        if (libThreat == null) libThreat = 0
+                        var strScaled = max(200, libThreat * 0.15)
+                        strippedValue += strScaled
+                    }
                     if (this._target.hasEffect(EFFECT_BUFF_RESISTANCE)) strippedValue += 200
+                    // Negative: 40% of our DoTs on the enemy get stripped.
+                    // Cost = 40% × remaining poison DPT × ~3-turn avg horizon.
+                    var enemyPoisonDPT = this._target.getTotalPoisonPerTurn()
+                    if (enemyPoisonDPT != null && enemyPoisonDPT > 0) {
+                        strippedValue -= enemyPoisonDPT * 0.4 * 3.0
+                    }
                 }
-                if (strippedValue < 120) strippedValue = 120
+                if (strippedValue < 0) strippedValue = 0
                 value += strippedValue
             }
 
@@ -1761,10 +2017,22 @@ class ScenarioScorer {
             }
         }
 
+        // Shield-aware mult: same logic as evaluateBuffs bvShieldMult. STR/MAG
+        // amp buffs lose value when target is heavily shielded (60% persists
+        // even after liberation strip).
+        var cvShieldMult = 1.0
+        if (this._target != null) {
+            var cvTgtAbs = this._target._absShield
+            var cvTgtRel = this._target._relShield
+            if ((cvTgtAbs != null && cvTgtAbs >= 120) || (cvTgtRel != null && cvTgtRel >= 35)) {
+                cvShieldMult = 0.75
+            }
+        }
+
         for (var buff in simResult.buffsApplied) {
-            if (buff == CHIP_WIZARDRY) value += 300 * stageMult * poisonRaceMult
-            else if (buff == CHIP_STEROID) value += 200 * stageMult * poisonRaceMult
-            else if (buff == CHIP_PRISM) value += 250 * stageMult * poisonRaceMult
+            if (buff == CHIP_WIZARDRY) value += 300 * stageMult * poisonRaceMult * cvShieldMult
+            else if (buff == CHIP_STEROID) value += 200 * stageMult * poisonRaceMult * cvShieldMult
+            else if (buff == CHIP_PRISM) value += 250 * stageMult * poisonRaceMult * cvShieldMult
             else if (buff == CHIP_FORTRESS) value += 200
             else if (buff == CHIP_WALL) value += 100
             else if (buff == CHIP_WARM_UP) value += 200 * stageMult
@@ -1772,7 +2040,7 @@ class ScenarioScorer {
                 if (futureThreat > 0) value += 250
             }
             else if (buff == CHIP_KNOWLEDGE) value += 200 * stageMult
-            else if (buff == CHIP_RAGE) value += 300 * stageMult * poisonRaceMult
+            else if (buff == CHIP_RAGE) value += 300 * stageMult * poisonRaceMult * cvShieldMult
             else if (buff == CHIP_SEVEN_LEAGUE_BOOTS) value += 200
         }
 
@@ -2028,6 +2296,15 @@ class ScenarioScorer {
         var enemyHealEstimate = 200
         if (enemyProfileP != null) {
             enemyHealEstimate = enemyProfileP['healPerTurn'] + enemyProfileP['shieldPerTurn']
+        }
+        // Plan A1: enemy lifesteal recovery. Every non-poison hit the enemy
+        // lands on us heals them for damage * wisdom / 1000. DannyD WIS 306
+        // recovers ~31% of his damage. Project this as extra "heal" the enemy
+        // will gain next turn so we don't over-credit kill plans that walk
+        // into their melee axe-spam.
+        if (incomingDmg > 0 && this._target._wisdom > 0) {
+            var enemyLifesteal = (incomingDmg * this._target._wisdom) / 1000
+            enemyHealEstimate += enemyLifesteal
         }
         nextTurnDmg = max(0, nextTurnDmg - enemyHealEstimate)
 

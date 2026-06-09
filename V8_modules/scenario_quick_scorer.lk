@@ -38,6 +38,7 @@ class ScenarioQuickScorer {
         var finalPosition = -1
         var weaponActions = 0
         var chipDamageActions = 0
+        var novaChipActions = 0
 
         var comboSignature = []
 
@@ -64,6 +65,16 @@ class ScenarioQuickScorer {
                     if (action.chip == CHIP_INVERSION && !_isBossFight) {
                         chipDamageActions++
                         score += 600
+                    }
+                    // Nova chips (ALTERATION, MUTATION) reduce enemy maxHP,
+                    // SCI-scaled. They have no role classification path
+                    // elsewhere and a plain MAG-based chipDmgEstimate
+                    // undervalues them (their value scales with SCI, not MAG).
+                    // Without explicit handling, beam-search-produced nova
+                    // scenarios get pruned before reaching the full scorer
+                    // that would credit them properly.
+                    if (isNovaChip(action.chip)) {
+                        novaChipActions++
                     }
                 }
             }
@@ -107,9 +118,34 @@ class ScenarioQuickScorer {
 
         var str = this._player._strength
         var mag = this._player._magic
+        var sci = this._player._science
         var weaponDmgEstimate = 400 * (1 + str / 200.0)
         var chipDmgEstimate = 300 * (1 + mag / 200.0)
         var damageEstimate = weaponActions * weaponDmgEstimate + chipDamageActions * chipDmgEstimate
+
+        // Nova damage estimate (SCI-scaled). ALTERATION base ~19, MUTATION
+        // base ~17; both scale roughly +1 per 5 SCI. Cap at hpDeficit
+        // (maxHP - currHP) — nova cannot reduce maxHP below currHP, so at
+        // full enemy HP a nova chip contributes 0. Mirrors the simulator
+        // cap at scenario_simulator.lk:339-352. Treat each nova action as
+        // SCI-scaled, capped per-action by hpDeficit / max(1, novaChipActions)
+        // to avoid double-counting when multiple nova chips chain.
+        if (novaChipActions > 0) {
+            var novaBase = 19 * (1 + sci / 100.0)
+            var hpDeficit = this._target._maxHealth - this._target._currHealth
+            var perChipCap = hpDeficit / novaChipActions
+            var perChipNova = novaBase
+            if (perChipNova > perChipCap) perChipNova = perChipCap
+            if (perChipNova < 0) perChipNova = 0
+            var novaEstimate = perChipNova * novaChipActions
+            // Full scorer weighs novaEffects heavily (Tank/SCI: 400, STR/SCI:
+            // 326). Quick scorer just needs to keep nova-bearing scenarios
+            // alive through pruning, so credit at ~3x damageEstimate
+            // contribution to ensure they survive top-K selection when
+            // hpDeficit is non-trivial.
+            damageEstimate += novaEstimate * 2.5
+        }
+
         if (tpEstimate > 0) {
             var efficiency = damageEstimate / tpEstimate
             score += efficiency * 50

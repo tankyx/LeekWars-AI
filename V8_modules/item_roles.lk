@@ -9,6 +9,7 @@ global ROLE_DEBUFF = [:]
 global ROLE_UTILITY = [:]
 global ROLE_RESOURCE = [:]
 global ROLE_POISON_WEAPON = [:]
+global ROLE_NOVA_CHIP = [:]
 
 function initializeItemRoles() {
     ROLE_HEALING[CHIP_REGENERATION] = true
@@ -71,6 +72,9 @@ function initializeItemRoles() {
 
     ROLE_RESOURCE[CHIP_ADRENALINE] = true
     ROLE_RESOURCE[CHIP_LEATHER_BOOTS] = true
+
+    ROLE_NOVA_CHIP[CHIP_ALTERATION] = true
+    ROLE_NOVA_CHIP[CHIP_MUTATION] = true
 }
 
 function isHealingChip(chipId) {
@@ -115,6 +119,10 @@ function isUtilityChip(chipId) {
 
 function isResourceChip(chipId) {
     return mapContainsKey(ROLE_RESOURCE, chipId)
+}
+
+function isNovaChip(chipId) {
+    return mapContainsKey(ROLE_NOVA_CHIP, chipId)
 }
 
 function isBuffChipRole(chipId) {

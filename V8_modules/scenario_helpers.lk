@@ -738,6 +738,24 @@ class ScenarioHelpers {
         // Requires real surplus so we don't starve our own first burst.
         var openingTurn = (getTurn() <= 2 && currentTP >= motivCost + 8)
 
+        // Imminent-contact gate (fight 52607388 — DannyD T1 buff opener cost
+        // LR the fight): MOTIVATION needs 3 turns to break even. If enemy is
+        // already within MP+weaponRange+2 cells of us, contact is this turn
+        // or next, and the 3-turn payoff window is wasted on a corpse. Skip
+        // MOTIVATION at T1 in that situation — the TP is better spent on the
+        // first attack rotation.
+        if (openingTurn) {
+            var motivMaxWR = 1
+            for (var motivWid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var motivW = this._arsenal.playerEquippedWeapons[motivWid]
+                if (motivW._maxRange > motivMaxWR) motivMaxWR = motivW._maxRange
+            }
+            var motivDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+            if (motivDist != null && motivDist <= getTotalMP() + motivMaxWR + 2) {
+                openingTurn = false
+            }
+        }
+
         // Combat-horizon gate: MOTIVATION pays for itself after 2 of 3 effect
         // turns (cost 4 TP, returns 6 TP over 3 turns). Fire when there's
         // runway and we're not in KILL/FLEE territory. The old gating only
