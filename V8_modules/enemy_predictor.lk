@@ -173,8 +173,17 @@ class EnemyPredictor {
         if (afterAbs < 0) afterAbs = 0
         totalDamage = afterAbs
 
+        // Two-turn threat: if enemy has enough TP leftover after attacking,
+        // they could buff next turn and burst harder. Add a conservative
+        // fraction of the current damage as a "setup" warning.
+        var twoTurnSetup = 0
+        if (remainingTP >= 6) {
+            twoTurnSetup = floor(totalDamage * 0.3)
+        }
+
         return [
             'damage': floor(totalDamage),
+            'twoTurnSetup': twoTurnSetup,
             'tpUsed': tpUsed,
             'enemyEndPos': enemyEndPos
         ]
@@ -203,6 +212,20 @@ class EnemyPredictor {
             survivalPenalty = -2000
         } else if (hpAfterEnemy < playerEndHP * 0.5) {
             survivalPenalty = -1000
+        }
+
+        // Two-turn setup: enemy has TP left after attacking → may buff next turn
+        var twoTurnSetup = mapContainsKey(enemyResponse, 'twoTurnSetup') ? enemyResponse['twoTurnSetup'] : 0
+        if (twoTurnSetup > 0 && hpAfterEnemy > 0) {
+            survivalPenalty -= twoTurnSetup * 2
+        }
+
+        // Trap anticipation: penalize positions in high-threat cells
+        if (this._fieldMap != null && playerEndPos != -1) {
+            var trapThreat = this._fieldMap.getThreatAtCell(playerEndPos)
+            if (trapThreat > 300) {
+                survivalPenalty -= floor(trapThreat * 0.5)
+            }
         }
 
         var offenseBonus = 0

@@ -37,9 +37,11 @@ function clearCaches() {
     __chipCostCache = [:]
     __weaponCostCache = [:]
     __pathLengthCache = [:]
-    // __losCache is NOT cleared — walls are static so LoS results are
-    // permanent. Persisting across turns turns per-turn LoS work into a
-    // one-time amortized cost and feeds the cover-exposure heatmap.
+    // __losCache: flushed every turn. Entities move so LoS through
+    // occupied cells changes each turn. Within-turn caching still saves
+    // substantial ops during scenario generation/simulation/scoring
+    // where the same cell pairs are queried repeatedly.
+    __losCache = [:]
     __dangerCellCache = [:]
     __adversarialThreatCache = [:]
     __adversarialThreatCacheBuilt = false

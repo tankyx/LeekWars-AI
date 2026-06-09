@@ -169,7 +169,7 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         var obs = getEnemyObservation(eid3)
         if (obs == null) continue
         var turnsObs = obs['turnsObserved']
-        if (turnsObs < 5) continue
+        if (turnsObs < 3) continue  // was 5 — faster adaptation
 
         if (obs['hpTrend'] > 20) {
             adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.3)

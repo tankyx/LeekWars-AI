@@ -7,8 +7,7 @@ class ScenarioGenerator extends ScenarioCombos {
     }
 
     generateScenarios() {
-        if (this._target == null) {
-        } else {
+        if (this._target != null) {
             this._target.updateEntity()
         }
 
@@ -166,12 +165,12 @@ class ScenarioGenerator extends ScenarioCombos {
         }
 
         var bestOTKO = this._fieldMap.getBestOTKOCell()
-        var killTeleChip = getAvailableTeleportChip(arsenal, player._id)
+        var killTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
 
         if (bestOTKO != null && killTeleChip != null) {
             var teleportCost = getCachedChipCost(killTeleChip)
             if (availableTP >= teleportCost + 10) {
-                var distToOTKO = getCellDistance(player._cellPos, bestOTKO._id)
+                var distToOTKO = getCellDistance(this._player._cellPos, bestOTKO._id)
                 var maxRange = getTeleportMaxRange(killTeleChip)
                 if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= maxRange) {
                     push(scenarios, this.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
@@ -581,10 +580,10 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, damageReturnCycling)
         }
 
-        var fleeTeleChip = getAvailableTeleportChip(arsenal, player._id)
+        var fleeTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
 
         if (fleeTeleChip != null) {
-            var currentThreat = this._fieldMap.getThreatAtCell(player._cellPos)
+            var currentThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
             if (currentThreat > 200) {
                 var escapeScenario = this.createTeleportEscapeScenario(availableTP, availableMP)
                 if (escapeScenario != null) {
@@ -614,8 +613,8 @@ class ScenarioGenerator extends ScenarioCombos {
             push(scenarios, buffApproach)
         }
 
-        var hasRegen = mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION)
-        var regenAvailable = hasRegen && getCooldown(CHIP_REGENERATION, player._id) == 0
+        var hasRegen = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION)
+        var regenAvailable = hasRegen && getCooldown(CHIP_REGENERATION, this._player._id) == 0
 
         if (regenAvailable) {
             push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))

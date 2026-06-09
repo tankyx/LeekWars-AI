@@ -147,7 +147,7 @@ class ScenarioQuickScorer {
         }
 
         if (tpEstimate > 0) {
-            var efficiency = damageEstimate / tpEstimate
+            var efficiency = damageEstimate / max(1, tpEstimate)
             score += efficiency * 50
         }
         score += damageEstimate * 0.3

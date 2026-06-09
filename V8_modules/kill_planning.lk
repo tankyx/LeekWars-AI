@@ -1,5 +1,6 @@
 
 
+global KILL_PLAN_TARGET_ID = -1
 global KILL_PLAN_STATE = null
 
 class KillPlanner {
@@ -164,6 +165,7 @@ class KillPlanner {
 
     updateGlobalKillPlan() {
         var plan = this.detect2TurnKill()
+        KILL_PLAN_TARGET_ID = (this._target != null) ? this._target._id : -1
 
         KILL_PLAN_STATE = [
             'active': plan['canKill2Turn'] && !plan['canKill1Turn'],
@@ -183,6 +185,8 @@ function isKillReserveActive() {
 }
 
 function getReservedTP() {
+    if (KILL_PLAN_TARGET_ID == -1) return 0
+    if (isDead(KILL_PLAN_TARGET_ID)) return 0
     if (KILL_PLAN_STATE == null) return 0
     if (!KILL_PLAN_STATE['active']) return 0
     return KILL_PLAN_STATE['tpReserve']

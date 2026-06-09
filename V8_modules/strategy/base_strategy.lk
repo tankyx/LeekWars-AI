@@ -2548,7 +2548,7 @@ class Strategy {
         }
         if (poisonTrackTarget != null) {
             poisonTrackTarget.updateEntity()
-            PREV_ENEMY_POISON = poisonTrackTarget.getEffectRemaining(EFFECT_POISON)
+            PREV_ENEMY_POISON = poisonTrackTarget.getPoisonStackCount()
         }
 
         return targetDied

@@ -158,9 +158,9 @@ function main() {
         initializeAdjacency()
 
         // T1 LoS warmup: precompute LoS from our starting cell to every
-        // walkable cell. The cache persists across turns (walls are static),
-        // so this one-time cost (~30-70k ops) eliminates redundant per-turn
-        // LoS queries and feeds the cover-exposure heatmap.
+        // walkable cell. __losCache is flushed each turn (entities move),
+        // so this only benefits T1's heavy scenario pipeline. Still saves
+        // ~30-70k ops on the first turn where LoS queries are densest.
         warmLosCacheFromCell(getCell(), _ops89)
     }
 
