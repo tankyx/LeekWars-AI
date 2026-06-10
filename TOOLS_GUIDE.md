@@ -1,15 +1,28 @@
 # Tools Guide (V8)
 
+> **Prefer the LeekWars MCP** (`mcp__leekwars__*`) for any server-side
+> operation — upload, fights, AI list/save, farmer/leek/fight fetches.
+> The Python wrappers below stay around as local-only fallbacks and for
+> workflows that have no MCP equivalent (`local_test.py`,
+> `fight_analyzer.py`, GA tooling).
+>
+> The current V8 entry-point script ID is **`459440`**. Do **not** use
+> `447461` — it is the old broken AI.
+
 ## Upload & Deployment
-- Upload V8: `python3 tools/upload_v8.py`
+- Upload V8 (preferred): `mcp__leekwars__leekwars_upload_v8`
+- Upload V8 (fallback): `python3 tools/upload_v8.py`
 - Update a single script: `python3 tools/lw_update_script.py V8_modules/main.lk <script_id>`
-  - Example: `python3 tools/lw_update_script.py V8_modules/main.lk 447461`
+  - Example: `python3 tools/lw_update_script.py V8_modules/main.lk 459440`
 - Retrieve a script: `python3 tools/lw_retrieve_script.py <script_id>`
 
 ## Testing & Combat
-- Bot tests (by script ID):
-  - `python3 tools/lw_test_script.py <script_id> <num_tests> <opponent>`
-  - Example: `python3 tools/lw_test_script.py 447461 20 rex`
+- Local deterministic fights (no server, fastest iteration):
+  - `python3 tools/local_test.py <num_fights> <opponent> --leek <name> [--parallel N]`
+  - Example: `python3 tools/local_test.py 40 smart_tank --leek EdsgerDijkstra --parallel 2`
+- Bot tests on server (by script ID; arg order is `<num_tests> <script_id> <opponent>`):
+  - `python3 tools/lw_test_script.py <num_tests> <script_id> <opponent>`
+  - Example: `python3 tools/lw_test_script.py 20 459440 rex`
 - Ranked solo fights:
   - `python3 tools/lw_solo_fights_flexible.py <leek_id> <count> [--quick]`
 - Team fights (all compositions):

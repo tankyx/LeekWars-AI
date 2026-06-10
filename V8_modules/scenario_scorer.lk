@@ -1647,6 +1647,8 @@ class ScenarioScorer {
         // BRUISER_REFLECT: when threat is 0 (enemy far away), use a projected
         // threat estimate so reflects aren't valued at 0. They need to be cast
         // BEFORE the enemy arrives, not after. Estimate based on enemy STR.
+        // reflectExpectedDamage is weapon direct damage only (threat map excludes
+        // poison/chip DoT — only normal damage can be returned).
         var reflectExpectedDamage = expectedDamage
         if (__playerBuildType == BUILD_BRUISER_REFLECT && reflectExpectedDamage < 300) {
             var enemyStr = this._target._strength
@@ -1689,6 +1691,11 @@ class ScenarioScorer {
                 bvShieldMult = 0.75
             }
         }
+
+        // Damage return profile weight — scales Mirror/Thorn/Bramble valuation.
+        // Default 100 = 1.0x; BRUISER_REFLECT (500) = 5.0x; AGILITY (300) = 3.0x.
+        var damageReturnWeight = this.getWeight('damageReturn', 100)
+        var drScale = damageReturnWeight / 100.0
 
         for (var buffChip in buffsApplied) {
             // Per-buff decay: dur=3 (STEROID/WARM_UP/WIZARDRY/PRISM),
@@ -1873,7 +1880,7 @@ class ScenarioScorer {
                 var returnDamage = (reflectExpectedDamage * duration) * (returnPercent / 100.0)
                 var mirrorValue = returnDamage * 0.8
                 if (mirrorValue < 100) mirrorValue = 100
-                value += mirrorValue
+                value += mirrorValue * drScale
             }
 
             if (buffChip == CHIP_THORN) {
@@ -1883,7 +1890,7 @@ class ScenarioScorer {
                 var returnDamage = (reflectExpectedDamage * duration) * (returnPercent / 100.0)
                 var thornValue = returnDamage * 0.8
                 if (thornValue < 80) thornValue = 80
-                value += thornValue
+                value += thornValue * drScale
             }
 
             if (buffChip == CHIP_BRAMBLE) {
@@ -1899,7 +1906,7 @@ class ScenarioScorer {
                     brambleValue = returnDamage * 0.5
                 }
 
-                value += brambleValue
+                value += brambleValue * drScale
             }
         }
 

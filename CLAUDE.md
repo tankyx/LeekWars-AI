@@ -87,7 +87,7 @@ python3 tools/local_test.py <num_fights> <opponent> --leek <name> [--parallel N]
 
 **Opponents**: `smart_str`, `smart_mag`, `smart_tank`, `smart_agi`, `dummy_str`, `dummy_mag`, `dummy_tank`, `dummy_agi`, `mirror`
 
-**Leeks**: `EdsgerDijkstra` (STR/burst), `KurtGodel` (Tank/SCI), `MargaretHamilton` (Magic/Poison), `AdaLovelace` (STR/burst), `AlanTuring` (AGI/reflect)
+**Leeks**: `EdsgerDijkstra` (STR/burst), `KurtGodel` (Tank/SCI), `MargaretHamilton` (Magic/Poison), `AdaLovelace` (STR/burst), `AlanTuring` (AGI/reflect), `LeekRain` (Magic/SCI hybrid — MAG 440 / SCI 160 / WIS 300, classifies as `BUILD_MAGIC` but runs nova chips via `ROLE_NOVA_CHIP`)
 
 **CRITICAL**: After editing ANY `.lk` file, clear the compilation cache before testing:
 ```bash
@@ -121,6 +121,7 @@ python3 tools/local_test.py 20 smart_str --leek AdaLovelace --parallel 2
 | AdaLovelace vs smart_str | ~100% | Strong matchup |
 | KurtGodel vs smart_tank | ~60% W | Nova attrition vs tank, no more draws |
 | MargaretHamilton vs smart_mag | ~95% W | Was structurally unfavorable; poison/denial scoring improvements |
+| LeekRain vs smart_dannyd | 100% (40/40, ~6.2 turns) | Validated after the bulb-race + no-antidote + motivation-gate fixes |
 
 ### Server Testing
 
@@ -196,13 +197,14 @@ Detection priority: Tank/SCI > Bruiser/Reflect > STR/SCI > Magic > Hybrid > Agil
 
 ---
 
-## Strategic States (6)
+## Strategic States (7)
 
 Determined per turn by `determineStrategicState()`:
 
 | State | Condition | Behavior |
 |-------|-----------|----------|
 | **KILL** | Estimated damage >= 95% enemy HP, in weapon range | All-in damage, skip buffs |
+| **CLEANUP** | Our HP > 70%, enemy HP < 25%, `quickKillEstimate >= 0.7`, not boss / time-pressure | Light KILL variant: low-TP finishers, no buffs unless they enable the kill this turn, no defensive over-investment |
 | **AGGRO** | Early game, buffs expired, or late time-pressure | Buff → approach → attack |
 | **ATTRITION** | Default combat, or kill suppressed (need approach) | Shield → heal → move → attack |
 | **SUSTAIN** | HP 40-60%, enemy >40% HP, no time pressure | Conservative: heal + position |
@@ -322,7 +324,29 @@ Applied to top 6 seed scenarios:
 - Classification: HEALER, BUFFER, ATTACKER
 - Kill bonuses: Healer +2500, Buffer +1500, Attacker +800
 - Bulb race clock: if summoner killable faster → ignore bulbs (0.3x damage)
+- **Summoner-DPT override**: if the summoner's expected DPT (`(STR+MAG)*1.5`) is > 50% of the total incoming threat, force RACE state and target the summoner regardless of HP. Prevents bulb pile-on losses where bulbs (30-50 dmg/turn) get prioritized over the real threat (350-400 dmg/turn).
 - Summoning: Metallic (tank) when HP < 50%, Savant (support) otherwise
+
+### 13. Static Counter Signals (T1-ready)
+
+Counter-strategy weight adaptations have two paths:
+- **Static (no observation gate)** — applied from T1 using equipped chips/weapons:
+  - Enemy has reflect chip → burst × 0.7
+  - Enemy has antidote → poison + denial × 1.15 in BAIT
+  - Enemy has no shield chips → burst × 1.1
+  - Enemy has **no** antidote → burst × 1.15 (poison sticks; combos compound)
+- **Dynamic (5-turn observation gate)** — HP trend, shield use rate, antidote use count.
+
+Static magnitudes are intentionally smaller than dynamic ones to limit
+mis-classification cost.
+
+### 14. Nova Chip Role (`ROLE_NOVA_CHIP`)
+
+`ALTERATION` and `MUTATION` are tagged in `item_roles.lk` as nova chips so
+`scenario_quick_scorer.lk` can apply a SCI-scaled, hpDeficit-capped nova
+estimate before pruning. Without this, MAG/SCI scenarios were quick-scored
+below the prune threshold and never reached full simulation — `LeekRain`
+relies on this path.
 
 ---
 

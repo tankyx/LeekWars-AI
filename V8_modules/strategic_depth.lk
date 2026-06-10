@@ -247,6 +247,23 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.25)
             // Heals can't outpace ticks; don't waste TP on them.
             adapted['healValue'] = floor(adapted['healValue'] * 0.75)
+
+            // Poison-race commit: when the enemy has Antidote + poison chips + high
+            // RES (e.g. MangeMonAsperge: MAG=590, RES=350, Plague+Arsenic+Toxin),
+            // we're in an unwinnable attrition race. Reflect chips are worthless
+            // (poison bypasses physical reflect), shields don't stop ticks, and
+            // sustain just delays the inevitable. Hard-commit to burst blitz.
+            // Loss-log: EdsgerDijkstra vs MangeMonAsperge — 2W-5L, wins only at
+            // 4-turn KO, losses at 4-9 turns once poison stacks.
+            var enemyRes = primaryEnemy._resistance
+            if (primaryProfile['hasPoison'] && primaryProfile['hasAntidote'] && enemyRes >= 300) {
+                if (mapContainsKey(adapted, 'damageReturn')) {
+                    adapted['damageReturn'] = floor(adapted['damageReturn'] * 0.25)
+                }
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.35)
+                adapted['shieldValue'] = floor(adapted['shieldValue'] * 0.4)
+                adapted['healValue'] = floor(adapted['healValue'] * 0.6)
+            }
         }
 
         // Poison-overwhelm: 3+ stacked poisons whose total tick > 12% maxHP/turn
@@ -365,6 +382,18 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             }
         }
 
+        // Static signal E: enemy carries Liberation — strips our reflect buffs
+        // (including Mirror/Thorn/Bramble). Reflect chips are wasted TP against
+        // Liberation carriers (Ulg, STR=700, reset our reflect every cycle).
+        // Suppress damageReturn valuation and pivot to direct burst.
+        if (primaryProfile['hasLiberation']) {
+            if (mapContainsKey(adapted, 'damageReturn')) {
+                adapted['damageReturn'] = floor(adapted['damageReturn'] * 0.35)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.25)
+            adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 1.15)
+        }
+
         if (primaryEnemy != null) {
             var enemyId = primaryEnemy._id
             if (primaryProfile['hasShield'] && !isEnemyShieldAvailable(enemyId)) {
@@ -417,6 +446,26 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
                     adapted['denialValue'] = floor(adapted['denialValue'] * 1.2)
                 }
             }
+        }
+    }
+
+    // Sustain-war detection: when the fight drags past turn 20 with the enemy
+    // still above 50% HP, we're losing a sustain/attrition war. Reflect chips
+    // and defensive weights won't help — the enemy out-heals our chip damage.
+    // Boost nova (permanent maxHP reduction) and denial (break the heal cycle)
+    // to force a decisive outcome. Loss-log: EdsgerDijkstra vs Lightning
+    // (24-31 turn losses, enemy hovering at 50-60% HP while out-sustaining).
+    if (currentTurn > 20 && primaryEnemy != null) {
+        var swEnemyHp = primaryEnemy._currHealth
+        var swEnemyMaxHp = primaryEnemy._maxHealth
+        if (swEnemyHp != null && swEnemyMaxHp != null && swEnemyHp > swEnemyMaxHp * 0.5) {
+            if (mapContainsKey(adapted, 'novaEffects')) {
+                adapted['novaEffects'] = floor(adapted['novaEffects'] * 1.5)
+            }
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.5)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
         }
     }
 

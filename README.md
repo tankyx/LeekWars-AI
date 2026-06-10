@@ -58,8 +58,8 @@ python3 tools/upload_v8.py
 python3 tools/local_test.py 40 smart_tank --leek EdsgerDijkstra --parallel 2
 ```
 
-Opponents: `smart_str`, `smart_mag`, `smart_tank`, `smart_agi`, `dummy_*`, `mirror`.
-Leeks: `EdsgerDijkstra`, `KurtGodel`, `MargaretHamilton`, `AdaLovelace`, `AlanTuring`.
+Opponents: `smart_str`, `smart_mag`, `smart_tank`, `smart_agi`, `smart_dannyd`, `dummy_*`, `mirror`.
+Leeks: `EdsgerDijkstra` (STR/burst), `KurtGodel` (Tank/SCI), `MargaretHamilton` (Magic/poison), `AdaLovelace` (STR/burst), `AlanTuring` (AGI/reflect), `LeekRain` (Magic/SCI hybrid).
 
 **Important:** after editing any `.lk` file, clear the generator's compile cache before testing — it only checks the root file's timestamp:
 ```bash
@@ -68,7 +68,7 @@ rm -f /home/ubuntu/leek-wars-generator/ai/*.class /home/ubuntu/leek-wars-generat
 
 ### Server fights (real matchmaking)
 
-Script ID `459440` is the V8 entry point. Do not use `447461` (old, broken).
+Prefer the MCP tools (`mcp__leekwars__leekwars_test_fight`, `leekwars_solo_fight`, `leekwars_team_fights`, `leekwars_farmer_fights`). Python fallback — script ID `459440` is the V8 entry point, do not use `447461` (old, broken):
 ```bash
 python3 tools/lw_test_script.py 10 459440 domingo --leek EdsgerDijkstra
 ```
@@ -90,6 +90,7 @@ Writes `debug_fight_<id>.json`.
 | AdaLovelace vs smart_str | ~100% |
 | KurtGodel vs smart_tank | ~60–97% |
 | MargaretHamilton vs smart_mag | ~90–95% |
+| LeekRain vs smart_dannyd | 100% (40/40, ~6.2 turns) |
 
 ## Development Notes
 

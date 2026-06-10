@@ -95,7 +95,7 @@ at line 123). This is where the 23-dimension scoring lives.
 flowchart TD
     G[generator.generateScenarios<br/>state-based templates<br/>+ beam search] --> Z{≥1 scenario?}
     Z -->|no| FB[createFallbackScenario]
-    Z -->|yes| QS[ScenarioQuickScorer<br/>fast pruning heuristic<br/>family classification]
+    Z -->|yes| QS[ScenarioQuickScorer<br/>fast pruning heuristic<br/>family classification<br/>nova-aware via ROLE_NOVA_CHIP]
     QS --> SORT[Sort by quickScore<br/>pin top 3 raw scores]
     SORT --> DIV[Family-diversity reorder<br/>14 best + 3 defensive + 3 utility]
     DIV --> SDF[State-dependent floor<br/>FLEE: promote ≥5 defensive<br/>SUSTAIN: promote ≥4 defensive]
@@ -215,6 +215,7 @@ profile after observation accumulates.
 | **Reflect (active)** | burst ×0.47, +shields, +healing | T1 |
 | **Reflect carrier** (chip equipped, not active) | burst ×0.85 (preemptive) | T1 |
 | **Carries antidote** | dotEffects ×1.15, denial ×1.15 in BAIT (skipped if MAG) | T1 |
+| **No antidote chip** | burst ×1.15 (poison sticks, combos compound without cleanse-undo) | T1 |
 | **No shield chips** | burst ×1.1 | T1 |
 | **Double-antidote carrier** (cleansed ≥2×) | dotEffects ×0.6, poisonStacks ×0.6, burst ×1.15 | Reactive |
 | **HP trending up** | burst ×1.3, denial ×1.5 | ≥5 obs |
@@ -229,7 +230,36 @@ to exploit the window.
 
 ---
 
-## 7. Boss Fight Branch (Fennel King)
+## 7. Bulb Targeting (multi-entity fights)
+
+`scenario_scorer.lk` evaluates each enemy as a potential target. When
+summons (bulbs) are on the field, target selection has its own decision
+tree.
+
+```mermaid
+flowchart TD
+    BT[Multiple enemies on field<br/>summoner + bulbs] --> CL[Classify each bulb<br/>HEALER / BUFFER / ATTACKER]
+    CL --> KB[Kill bonuses:<br/>HEALER +2500<br/>BUFFER +1500<br/>ATTACKER +800]
+    KB --> RACE{Bulb race clock:<br/>summoner killable faster<br/>than bulb stack?}
+    RACE -->|yes| IGN[Ignore bulbs<br/>damage to bulbs × 0.3<br/>focus summoner]
+    RACE -->|no| DPT{Summoner DPT > 50%<br/>of total incoming threat?<br/>STR+MAG × 1.5}
+    DPT -->|yes - force RACE| IGN
+    DPT -->|no| NORM[Normal targeting<br/>weighted by HP/threat/kill bonus]
+    IGN --> EX[Target = summoner]
+    NORM --> EX2[Target = highest score]
+```
+
+**Summoner-DPT override** addresses bulb pile-on losses where many low-DPT
+bulbs (30-50 dmg/turn) drew fire away from the real threat (350-400
+dmg/turn from the summoner). If `(summoner.STR + summoner.MAG) × 1.5 >
+0.5 × incoming threat`, RACE is forced regardless of HP gap.
+
+Our own summoning (when AI controls bulbs): Metallic (tank) when HP < 50%,
+Savant (support) otherwise.
+
+---
+
+## 8. Boss Fight Branch (Fennel King)
 
 Only active when `_isBossFight` is true (`main.lk:129-131, 179-192,
 298-300`).
@@ -247,7 +277,7 @@ flowchart TD
 
 ---
 
-## 8. Fallback Path
+## 9. Fallback Path
 
 Triggered when ops > `_ops93` (≥93% of budget consumed before scenario
 pipeline) — `main.lk:251-296`.
@@ -269,7 +299,7 @@ flowchart TD
 
 ---
 
-## 9. Module Dependency Order (include chain)
+## 10. Module Dependency Order (include chain)
 
 Order matters in `main.lk`. Anything earlier in this list can be used by
 anything later, not the other way around.
@@ -305,7 +335,7 @@ flowchart LR
 
 ---
 
-## 10. Where to look when
+## 11. Where to look when
 
 Quick navigation when debugging a specific behavior:
 
@@ -319,3 +349,6 @@ Quick navigation when debugging a specific behavior:
 | "Wrong weapon at wrong range?" | `field_map_tactical.lk` buildHitMap, `scenario_simulator.lk` |
 | "Boss puzzle stuck?" | `boss_context.lk` (1071 lines) |
 | "Burned ops budget?" | check `_ops*` gates above + `performance_infra.lk` |
+| "Why targeted a bulb over the summoner?" | `scenario_scorer.lk` bulb-race + summoner-DPT override |
+| "ALTERATION / MUTATION never fires?" | `item_roles.lk` (ROLE_NOVA_CHIP) + `scenario_quick_scorer.lk` nova estimate |
+| "T1 motivation wasted vs close enemy?" | `scenario_helpers.lk:720-759` getMotivationBuff distance gate |
