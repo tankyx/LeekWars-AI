@@ -2522,7 +2522,17 @@ class Strategy {
             }
         }
 
-        if (getTP() >= 16) {
+        // Gate was a flat >= 16 (savant/metallic cost) — low-tier attack
+        // bulbs cost 6-12 TP and were unreachable for 12-TP leeks. Gate on
+        // the cheapest cost among the bulb chips actually equipped.
+        var _summonGateTP = 16
+        var _summonBulbSet = [CHIP_PUNY_BULB, CHIP_ROCKY_BULB, CHIP_ICED_BULB, CHIP_METALLIC_BULB, CHIP_SAVANT_BULB]
+        for (var _sgB in _summonBulbSet) {
+            if (!mapContainsKey(arsenal.playerEquippedChips, _sgB)) { continue }
+            var _sgCost = getChipCost(_sgB)
+            if (_sgCost != null && _sgCost < _summonGateTP) { _summonGateTP = _sgCost }
+        }
+        if (getTP() >= _summonGateTP) {
             player.updateEntity()
             var _summonHelper = new ScenarioHelpers(arsenal, player, player, this._fieldMap, this)
             var summonAction = _summonHelper.createSummonAction()

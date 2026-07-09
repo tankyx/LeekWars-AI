@@ -132,3 +132,51 @@ function metallicBulbAI() {
         }
     }
 }
+
+// Generic attacker-bulb driver (rocky / iced / puny — the low-tier bulbs a
+// level-150 leek can equip). Bulbs carry their own fixed combat chips; this
+// walks toward the nearest enemy and fires everything that's off cooldown
+// and in range. Kept dumb on purpose: a bulb's job is free damage + body.
+function attackerBulbAI() {
+    var abMe = getEntity()
+    var abCell = getCell()
+    var abEnemies = getAliveEnemies()
+    if (abEnemies == null || count(abEnemies) == 0) { return }
+    var abBest = null
+    var abBestDist = 999
+    for (var abEid in abEnemies) {
+        if (isDead(abEid)) { continue }
+        var abD = getCellDistance(abCell, getCell(abEid))
+        if (abD != null && abD < abBestDist) {
+            abBestDist = abD
+            abBest = abEid
+        }
+    }
+    if (abBest == null) { return }
+    moveToward(abBest)
+    abCell = getCell()
+    var abChips = getChips(abMe)
+    if (abChips == null) { return }
+    for (var abC in abChips) {
+        if (getCooldown(abC, abMe) > 0) { continue }
+        // Damage chips only: bulbs carry utility chips too (puny has
+        // BANDAGE — casting it at the "target" healed the enemy).
+        var abEffs = getChipEffects(abC)
+        if (abEffs == null) { continue }
+        var abIsDamage = false
+        for (var abE in abEffs) {
+            if (abE[0] == EFFECT_DAMAGE || abE[0] == EFFECT_POISON) {
+                abIsDamage = true
+                break
+            }
+        }
+        if (!abIsDamage) { continue }
+        var abCost = getChipCost(abC)
+        if (abCost == null || getTP() < abCost) { continue }
+        var abTgtCell = getCell(abBest)
+        var abD2 = getCellDistance(abCell, abTgtCell)
+        if (abD2 == null || abD2 < getChipMinRange(abC) || abD2 > getChipMaxRange(abC)) { continue }
+        if (!lineOfSight(abCell, abTgtCell)) { continue }
+        useChip(abC, abBest)
+    }
+}

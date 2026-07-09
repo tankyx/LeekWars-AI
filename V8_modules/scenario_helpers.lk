@@ -1987,8 +1987,6 @@ class ScenarioHelpers {
         var hasMetallic = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
         var metallicReady = hasMetallic && getCooldown(CHIP_METALLIC_BULB, this._player._id) == 0
 
-        if (!savantReady && !metallicReady) return null
-
         var chosenChip = -1
         var chosenAI = null
         var summonRange = 1
@@ -2006,8 +2004,39 @@ class ScenarioHelpers {
             chosenAI = metallicBulbAI
             summonRange = 1
         } else {
-            return null
+            // Low-tier attack bulbs (equippable from level 48-130), driven
+            // by the generic attackerBulbAI. TEAM FIGHTS ONLY: solo, every
+            // TP diverted from sustain flips a 12-TP support's unlosable
+            // matchups into losses (dannyd 0L -> 9-13L) and deepens mirror
+            // stalemates (20/20 draws) — measured, not theorized. With leek
+            // allies alive, focus is shared and an extra body earns its cost.
+            var ltHasLeekAlly = false
+            var ltAllies = getAliveAllies()
+            if (ltAllies != null) {
+                for (var ltA in ltAllies) {
+                    if (ltA == this._player._id) { continue }
+                    if (isDead(ltA)) { continue }
+                    if (getType(ltA) == ENTITY_LEEK) {
+                        ltHasLeekAlly = true
+                        break
+                    }
+                }
+            }
+            if (ltHasLeekAlly) {
+                var lowTierBulbs = [CHIP_ROCKY_BULB, CHIP_ICED_BULB, CHIP_PUNY_BULB]
+                for (var ltb in lowTierBulbs) {
+                    if (!mapContainsKey(this._arsenal.playerEquippedChips, ltb)) { continue }
+                    if (getCooldown(ltb, this._player._id) > 0) { continue }
+                    if (this._player._currTp < getCachedChipCost(ltb)) { continue }
+                    chosenChip = ltb
+                    chosenAI = attackerBulbAI
+                    summonRange = 2
+                    break
+                }
+            }
         }
+
+        if (chosenChip == -1) return null
 
         var summonCell = this.findBulbSummonCell(this._player._cellPos, summonRange)
         if (summonCell == -1) return null

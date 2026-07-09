@@ -427,6 +427,12 @@ class UnifiedStrategy extends Strategy {
         // the trailing weapon attack, leaving an empty heal-and-walk turn.
         // Summon reserve mirrors the mutation planner's bulb logic.
         var summonReserveTP = 0
+        // Reserve applies to the big bulbs only (savant/metallic, 301-tuned:
+        // their value justifies pre-cutting the scenario budget). Low-tier
+        // attack bulbs are OPPORTUNISTIC: summoned by the executor tail from
+        // genuinely-leftover TP — reserving for them starved a 12-TP
+        // support's sustain and flipped its unlosable matchups into losses
+        // (DuskHope vs dannyd 0L -> 10-13L with reserve, local matrix).
         var _hasSavant = mapContainsKey(arsenal.playerEquippedChips, CHIP_SAVANT_BULB)
         var _hasMetallic = mapContainsKey(arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
         if (_hasSavant || _hasMetallic) {
