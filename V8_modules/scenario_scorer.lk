@@ -1,5 +1,6 @@
 include('game_entity.lk')
 include('cooldown_tracker.lk')
+include('ga_tunables.lk')
 global __inSurvivalMode = false
 global __lastSurvivalHP = 0
 
@@ -233,7 +234,7 @@ class ScenarioScorer {
         //   0.70 → 2.96× (was 5.0)
         //   0.85 → 3.89×
         //   1.00 → 5.00× (matches old ceiling)
-        damageWeight *= (1.0 + 4.0 * killProbability * killProbability)
+        damageWeight *= (1.0 + GA_TUNE['killProbCoef'] * killProbability * killProbability)
 
         // Survival imperative: when we're in FLEE territory AND the kill is
         // not reachable this turn, suppress burst-damage scoring so heal+flee
@@ -899,8 +900,8 @@ class ScenarioScorer {
             var dies = (survivalAfterEnemy <= 0)
             var dyingSoon = (survivalAfterEnemy < this._player._maxHealth * 0.25)
             var deathPenalty = 0
-            if (dies) deathPenalty = 8000
-            else if (dyingSoon) deathPenalty = 3000
+            if (dies) deathPenalty = GA_TUNE['deathPenalty']
+            else if (dyingSoon) deathPenalty = GA_TUNE['dyingSoonPenalty']
 
             // Detect whether the scenario actually engaged (attack action
              // present). Shielded fire still counts as engagement — the
@@ -969,7 +970,7 @@ class ScenarioScorer {
                 }
             }
             if (b5ChipHolds > 0) {
-                score -= b5ChipHolds * 350 * (this._strikeWindowMitigation / 100.0)
+                score -= b5ChipHolds * GA_TUNE['b5HoldPenalty'] * (this._strikeWindowMitigation / 100.0)
             }
         }
 
@@ -1176,11 +1177,11 @@ class ScenarioScorer {
 
             if (hpRatio < 0.45 && (threatAtPos > 800 || !hasShield)) {
                 if (hpRatio < 0.30) {
-                    survivalMultiplier = 50.0
+                    survivalMultiplier = GA_TUNE['survivalMultLow']
                 } else if (hpRatio < 0.40) {
-                    survivalMultiplier = 25.0
+                    survivalMultiplier = GA_TUNE['survivalMultMid']
                 } else {
-                    survivalMultiplier = 10.0
+                    survivalMultiplier = GA_TUNE['survivalMultHigh']
                 }
             }
         }
@@ -1200,7 +1201,7 @@ class ScenarioScorer {
             // turn 50+: keep ramp, cap 7.5
             if (currentTurn > 50) {
                 urgencyFactor = 6.3 + (currentTurn - 50) * 0.15
-                if (urgencyFactor > 7.5) urgencyFactor = 7.5
+                if (urgencyFactor > GA_TUNE['urgencyCap']) urgencyFactor = GA_TUNE['urgencyCap']
             } else if (currentTurn > 30) {
                 urgencyFactor = 3.3 + (currentTurn - 30) * 0.15
             } else if (currentTurn > 15) {

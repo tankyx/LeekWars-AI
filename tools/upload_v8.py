@@ -117,6 +117,7 @@ class V8Uploader:
         stats = {"total": 0, "success": 0, "failed": 0}
 
         root_modules = [
+    "ga_tunables.lk",
             "main", "game_entity", "item", "item_database", "item_roles",
             "field_map", "field_map_core", "field_map_patterns", "field_map_tactical",
             "kill_planning", "cooldown_tracker", "enemy_predictor", "enemy_intelligence",

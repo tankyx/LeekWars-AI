@@ -227,6 +227,185 @@ class CounterGenome(WeightGenome):
         return cls(dict(data["weights"]))
 
 
+GA_TUNABLES_PATH = PROJECT_DIR / "V8_modules" / "ga_tunables.lk"
+
+TUNABLE_BOUNDS = {
+    "killProbCoef":     (1.0, 8.0),
+    "deathPenalty":     (2000, 30000),
+    "dyingSoonPenalty": (500, 10000),
+    "survivalMultLow":  (5.0, 80.0),
+    "survivalMultMid":  (3.0, 50.0),
+    "survivalMultHigh": (2.0, 25.0),
+    "urgencyCap":       (3.0, 12.0),
+    "b5HoldPenalty":    (0, 2000),
+}
+
+
+class TunablesGenome:
+    """Evolvable scorer-landscape constants (GA_TUNE map in ga_tunables.lk).
+
+    This is the empirical route into the score-landscape rebalance the
+    audit deferred: instead of hand-guessing spike magnitudes, search them
+    with fights as the judge."""
+
+    def __init__(self, weights=None):
+        self.build_type = "TUNABLES"
+        self.weights = weights or {}
+
+    @classmethod
+    def from_baseline(cls, build_type=None, profiles_path=None):
+        text = GA_TUNABLES_PATH.read_text()
+        weights = {}
+        for key in TUNABLE_BOUNDS:
+            m = re.search(rf"'{key}':\s*(-?[\d.]+)", text)
+            if not m:
+                raise ValueError(f"tunable '{key}' not found in ga_tunables.lk")
+            raw = m.group(1)
+            weights[key] = float(raw) if "." in raw else int(raw)
+        return cls(weights)
+
+    def get_bounds(self):
+        return dict(TUNABLE_BOUNDS)
+
+    def get_evolvable_keys(self):
+        return list(TUNABLE_BOUNDS.keys())
+
+    def mutate(self, rate=0.15, strength=0.2):
+        for k in self.get_evolvable_keys():
+            if random.random() < rate:
+                lo, hi = TUNABLE_BOUNDS[k]
+                span = (hi - lo) * strength
+                v = self.weights[k] + random.uniform(-span, span)
+                if isinstance(self.weights[k], float) or isinstance(lo, float):
+                    self.weights[k] = max(lo, min(hi, round(v, 2)))
+                else:
+                    self.weights[k] = int(max(lo, min(hi, round(v))))
+
+    @staticmethod
+    def crossover(parent1, parent2):
+        child = TunablesGenome(copy.deepcopy(parent1.weights))
+        for k in child.get_evolvable_keys():
+            if random.random() < 0.5:
+                child.weights[k] = parent2.weights[k]
+        return child
+
+    def to_dict(self):
+        return {"build_type": "TUNABLES", "weights": self.weights}
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(data["weights"])
+
+
+class TunablesInjector:
+    """Rewrite GA_TUNE values in ga_tunables.lk."""
+
+    def __init__(self):
+        self.path = GA_TUNABLES_PATH
+        self.backup_path = Path(str(GA_TUNABLES_PATH) + ".ga_backup")
+
+    def inject(self, weights):
+        text = self.path.read_text()
+        for k, v in weights.items():
+            if isinstance(v, float):
+                rep = f"'{k}': {v}"
+            else:
+                rep = f"'{k}': {int(v)}"
+            text, n = re.subn(rf"'{k}':\s*-?[\d.]+", rep, text)
+            if n != 1:
+                raise ValueError(f"tunable '{k}' inject failed (n={n})")
+        self.path.write_text(text)
+
+    def backup(self):
+        shutil.copy2(self.path, self.backup_path)
+        print(f"Backup saved: {self.backup_path}")
+
+    def restore(self):
+        if self.backup_path.exists():
+            shutil.copy2(self.backup_path, self.path)
+            print(f"Restored from backup: {self.backup_path}")
+
+    @staticmethod
+    def invalidate_cache():
+        return WeightProfileInjector.invalidate_cache()
+
+
+class JointGenome:
+    """Weights + counter multipliers evolved together (interaction effects
+    between the two layers are real — audited stacking up to x1.40)."""
+
+    def __init__(self, build_type, wgenome=None, cgenome=None):
+        self.build_type = build_type
+        self.w = wgenome or WeightGenome.from_baseline(build_type)
+        self.c = cgenome or CounterGenome.from_baseline()
+        self.weights = {"_joint": True}  # marker for checkpoint code paths
+
+    @classmethod
+    def from_baseline(cls, build_type, profiles_path=None):
+        return cls(build_type)
+
+    def get_bounds(self):
+        b = {f"w:{k}": v for k, v in self.w.get_bounds().items()}
+        b.update({f"c:{k}": v for k, v in self.c.get_bounds().items()})
+        return b
+
+    def get_evolvable_keys(self):
+        return ([f"w:{k}" for k in self.w.get_evolvable_keys()]
+                + [f"c:{k}" for k in self.c.get_evolvable_keys()])
+
+    def mutate(self, rate=0.15, strength=0.2):
+        self.w.mutate(rate, strength)
+        self.c.mutate(rate, strength)
+
+    @staticmethod
+    def crossover(parent1, parent2):
+        child = JointGenome(parent1.build_type)
+        child.w = WeightGenome.crossover(parent1.w, parent2.w)
+        child.c = CounterGenome.crossover(parent1.c, parent2.c)
+        return child
+
+    def to_dict(self):
+        return {"build_type": self.build_type, "joint": True,
+                "weights": self.w.to_dict(), "counter": self.c.to_dict()}
+
+    @classmethod
+    def from_dict(cls, data):
+        g = cls(data["build_type"])
+        g.w = WeightGenome.from_dict(data["weights"])
+        g.c = CounterGenome.from_dict(data["counter"])
+        return g
+
+
+class JointInjector:
+    """Apply a JointGenome: weights into weight_profiles.lk AND counter
+    multipliers into strategic_depth.lk."""
+
+    def __init__(self):
+        self.wi = WeightProfileInjector()
+        self.ci = CounterWeightInjector()
+
+    def inject(self, build_type, genome_weights, genome=None):
+        # called as inject(build_type, genome.weights) from _inject_genome;
+        # the joint path passes the genome itself via inject_joint.
+        raise RuntimeError("use inject_joint for joint mode")
+
+    def inject_joint(self, genome):
+        self.wi.inject(genome.build_type, genome.w.weights)
+        self.ci.inject(genome.c.weights)
+
+    def backup(self):
+        self.wi.backup()
+        self.ci.backup()
+
+    def restore(self):
+        self.wi.restore()
+        self.ci.restore()
+
+    @staticmethod
+    def invalidate_cache():
+        return WeightProfileInjector.invalidate_cache()
+
+
 class WeightProfileInjector:
     """Read/write weight blocks in weight_profiles.lk."""
 
@@ -626,11 +805,13 @@ class LocalFightRunner:
     """Run fights using local_test.py infrastructure."""
 
     def __init__(self, leek_name, opponents, parallel_workers=12,
-                 fights_per_opponent=10):
+                 fights_per_opponent=10, seed_block=None, fights_override=None):
         self.leek_name = leek_name
         self.opponents = opponents
         self.parallel_workers = parallel_workers
         self.fights_per_opponent = fights_per_opponent
+        self.seed_block = seed_block          # {(opp_name, i): seed} for CRN
+        self.fights_override = fights_override  # per-call n (screen vs full)
 
         # Load configs once
         self.configs = load_configs()
@@ -663,8 +844,15 @@ class LocalFightRunner:
 
         for opp_name in self.opponents:
             opp_cfg = self.configs["opponents"][opp_name]
-            for i in range(self.fights_per_opponent):
-                seed = random.randint(1, 2**31 - 1)
+            n = self.fights_override if self.fights_override is not None else self.fights_per_opponent
+            for i in range(n):
+                # CRN: with a seed_block, every genome in a generation fights
+                # the exact same battles — comparisons become paired, roughly
+                # halving effective fitness noise at zero fight cost.
+                if self.seed_block is not None:
+                    seed = self.seed_block[(opp_name, i)]
+                else:
+                    seed = random.randint(1, 2**31 - 1)
                 scenario = build_scenario(self.leek_cfg, opp_cfg, seed=seed)
                 fight_idx = len(all_scenarios)
                 all_scenarios.append((scenario, fight_idx, False))
@@ -699,6 +887,7 @@ class LocalFightRunner:
         total_errors = 0
         total_crashes = 0
         per_opponent = {}
+        win_turns = []
 
         for i, result in enumerate(results):
             opp_name = scenario_opponents[i]
@@ -728,6 +917,7 @@ class LocalFightRunner:
             if r == "WIN":
                 total_wins += 1
                 per_opponent[opp_name]["wins"] += 1
+                win_turns.append(result.get("total_turns") or 64)
             elif r == "LOSS":
                 total_losses += 1
                 per_opponent[opp_name]["losses"] += 1
@@ -738,6 +928,14 @@ class LocalFightRunner:
         total = len(results)
         win_rate = total_wins / total if total > 0 else 0.0
 
+        # Margin shaping input: mean speed of wins (0..1, faster = higher).
+        # Gives flat win-rate regions a gradient; scaled tiny by the caller
+        # so it can only ever tie-break, never outvote a real win.
+        if win_turns:
+            win_speed = sum(max(0.0, (64.0 - t) / 64.0) for t in win_turns) / len(win_turns)
+        else:
+            win_speed = 0.0
+
         return {
             "win_rate": win_rate,
             "wins": total_wins,
@@ -747,6 +945,7 @@ class LocalFightRunner:
             "crashes": total_crashes,
             "total": total,
             "per_opponent": per_opponent,
+            "win_speed": win_speed,
         }
 
 
@@ -757,8 +956,18 @@ class LocalGeneticOptimizer:
                  population_size=20, fights_per_opponent=10, generations=30,
                  mutation_rate=0.15, mutation_strength=0.2, elitism=3,
                  tournament_size=4, parallel_workers=12,
-                 mode="weights", leek_names=None):
-        self.mode = mode  # "weights" or "counter"
+                 mode="weights", leek_names=None,
+                 guard_opponents=None, guard_fights=4, guard_floor=0.75,
+                 optimizer="ga"):
+        self.mode = mode  # "weights" | "counter" | "tunables" | "joint"
+        # Guards: matchups that must not regress. They are NOT part of the
+        # fitness gradient (saturated matchups contribute zero selection
+        # signal while eating fights); instead any genome whose guard
+        # win-rate drops below guard_floor takes a hard fitness penalty.
+        self.guard_opponents = guard_opponents or []
+        self.guard_fights = guard_fights
+        self.guard_floor = guard_floor
+        self.optimizer = optimizer  # "ga" | "cma"
         self.build_type = build_type
         self.leek_name = leek_name
         self.leek_names = leek_names or ([leek_name] if leek_name else [])
@@ -775,6 +984,10 @@ class LocalGeneticOptimizer:
 
         if mode == "counter":
             self.injector = CounterWeightInjector()
+        elif mode == "tunables":
+            self.injector = TunablesInjector()
+        elif mode == "joint":
+            self.injector = JointInjector()
         else:
             self.injector = WeightProfileInjector()
         self.population = []  # List of {genome: WeightGenome, fitness: float|None}
@@ -793,8 +1006,11 @@ class LocalGeneticOptimizer:
         """Create a baseline genome for the current mode."""
         if self.mode == "counter":
             return CounterGenome.from_baseline()
-        else:
-            return WeightGenome.from_baseline(self.build_type)
+        if self.mode == "tunables":
+            return TunablesGenome.from_baseline()
+        if self.mode == "joint":
+            return JointGenome.from_baseline(self.build_type)
+        return WeightGenome.from_baseline(self.build_type)
 
     def _genome_from_dict(self, data):
         """Deserialize a genome dict for the current mode."""
@@ -819,82 +1035,175 @@ class LocalGeneticOptimizer:
 
         print(f"Population initialized. {len(baseline.get_evolvable_keys())} evolvable keys.")
 
-    def evaluate_genome(self, genome_idx, genome_entry):
-        """Evaluate a single genome's fitness via local fights."""
-        genome = genome_entry["genome"]
-
-        # Inject weights
+    def _inject_genome(self, genome):
+        """Route genome injection by mode."""
         if self.mode == "counter":
             self.injector.inject(genome.weights)
+        elif self.mode == "tunables":
+            self.injector.inject(genome.weights)
+        elif self.mode == "joint":
+            self.injector.inject_joint(genome)
         else:
             self.injector.inject(self.build_type, genome.weights)
-
-        # Clear compilation cache
         self.injector.invalidate_cache()
 
-        # Run fights (multi-leek for counter mode, single-leek for weights mode)
-        if self.mode == "counter" and len(self.leek_names) > 1:
-            runner = MultiLeekFightRunner(
+    def _make_runner(self, opponents, seed_block=None, fights_override=None):
+        if self.mode in ("counter", "joint") and len(self.leek_names) > 1:
+            return MultiLeekFightRunner(
                 leek_names=self.leek_names,
-                opponents=self.train_opponents,
+                opponents=opponents,
                 parallel_workers=self.parallel_workers,
                 fights_per_opponent=self.fights_per_opponent,
             )
-        else:
-            runner = LocalFightRunner(
-                leek_name=self.leek_names[0] if self.leek_names else self.leek_name,
-                opponents=self.train_opponents,
-                parallel_workers=self.parallel_workers,
-                fights_per_opponent=self.fights_per_opponent,
-            )
+        return LocalFightRunner(
+            leek_name=self.leek_names[0] if self.leek_names else self.leek_name,
+            opponents=opponents,
+            parallel_workers=self.parallel_workers,
+            fights_per_opponent=self.fights_per_opponent,
+            seed_block=seed_block,
+            fights_override=fights_override,
+        )
+
+    def evaluate_genome(self, genome_idx, genome_entry, seed_block=None,
+                        guard_seed_block=None, screen_only=False,
+                        screen_fights=None):
+        """Evaluate one genome. Fitness = target win-rate + tiny win-speed
+        shaping - hard guard penalty. Appends a sample to fitness_samples
+        (mean of samples = fitness) so re-evaluated elites average out luck."""
+        genome = genome_entry["genome"]
+        self._inject_genome(genome)
+
+        fights_n = screen_fights if screen_only else None
+        runner = self._make_runner(self.train_opponents, seed_block=seed_block,
+                                   fights_override=fights_n)
         results = runner.evaluate()
 
-        fitness = results["win_rate"]
-        genome_entry["fitness"] = fitness
+        fitness = results["win_rate"] + 0.01 * results.get("win_speed", 0.0)
+
+        guard_detail = ""
+        if self.guard_opponents and not screen_only:
+            grunner = self._make_runner(self.guard_opponents,
+                                        seed_block=guard_seed_block,
+                                        fights_override=self.guard_fights)
+            gresults = grunner.evaluate()
+            worst = 1.0
+            for opp, d in gresults["per_opponent"].items():
+                wr = d["wins"] / max(1, d["total"])
+                if wr < worst:
+                    worst = wr
+            if worst < self.guard_floor:
+                fitness -= 0.5  # hard constraint: guard regressions never win
+                guard_detail = f"  GUARD-FAIL(worst={worst:.2f})"
+            else:
+                guard_detail = f"  guards-ok({worst:.2f})"
+            genome_entry["guard_results"] = gresults
+
+        if screen_only:
+            genome_entry["screen_fitness"] = fitness
+        else:
+            genome_entry.pop("screen_only", None)
+            samples = genome_entry.setdefault("fitness_samples", [])
+            samples.append(fitness)
+            genome_entry["fitness"] = sum(samples) / len(samples)
         genome_entry["results"] = results
 
-        # Progress indicator
         opp_detail = "  ".join(
             f"{opp}:{d['wins']}/{d['total']}"
             for opp, d in results["per_opponent"].items()
         )
         crashes = results["crashes"]
         crash_str = f" [{crashes} crashes]" if crashes else ""
-        print(f"  [{genome_idx+1:2d}/{self.population_size}] "
-              f"fitness={fitness:.3f} ({results['wins']}W/{results['losses']}L"
-              f"/{results['draws']}D{crash_str})  {opp_detail}")
+        stage = "screen" if screen_only else "full"
+        shown = genome_entry.get("screen_fitness") if screen_only else genome_entry["fitness"]
+        print(f"  [{genome_idx+1:2d}/{self.population_size}] {stage} "
+              f"fitness={shown:.3f} ({results['wins']}W/{results['losses']}L"
+              f"/{results['draws']}D{crash_str})  {opp_detail}{guard_detail}")
 
         return fitness
 
+    def _make_seed_block(self, opponents, n):
+        return {(opp, i): random.randint(1, 2**31 - 1)
+                for opp in opponents for i in range(n)}
+
     def evaluate_population(self):
-        """Evaluate all unevaluated genomes."""
+        """Evaluate the generation with CRN + successive halving.
+
+        Flow: fresh seed blocks per generation (identical across genomes —
+        paired comparisons). New genomes get a cheap SCREEN pass on the
+        target opponents; the top half graduate to FULL evaluation (full
+        fight count + guard checks). Elites are RE-evaluated every
+        generation on the new block and their fitness is the running mean
+        of samples — a lucky spike can't squat on the throne.
+        """
         print(f"\n{'='*60}")
         print(f"GENERATION {self.generation + 1} - EVALUATION")
         print(f"{'='*60}")
         print(f"Train: {', '.join(self.train_opponents)} "
-              f"({self.fights_per_opponent} fights/opponent)")
+              f"({self.fights_per_opponent} fights/opponent)"
+              + (f"  Guards: {', '.join(self.guard_opponents)}"
+                 f" (n={self.guard_fights}, floor={self.guard_floor})"
+                 if self.guard_opponents else ""))
 
         t0 = time.time()
-        for i, entry in enumerate(self.population):
-            if entry["fitness"] is None:
-                self.evaluate_genome(i, entry)
+        screen_n = max(2, self.fights_per_opponent // 3)
+        seeds_screen = self._make_seed_block(self.train_opponents, screen_n)
+        seeds_full = self._make_seed_block(self.train_opponents,
+                                           self.fights_per_opponent)
+        seeds_guard = (self._make_seed_block(self.guard_opponents,
+                                             self.guard_fights)
+                       if self.guard_opponents else None)
+
+        fresh = [(i, e) for i, e in enumerate(self.population)
+                 if e["fitness"] is None]
+        elites = [(i, e) for i, e in enumerate(self.population)
+                  if e["fitness"] is not None]
+
+        # Screen the fresh genomes cheaply on the shared block.
+        if len(fresh) > 3:
+            for i, entry in fresh:
+                self.evaluate_genome(i, entry, seed_block=seeds_screen,
+                                     screen_only=True, screen_fights=screen_n)
+            fresh.sort(key=lambda t: t[1].get("screen_fitness", 0.0),
+                       reverse=True)
+            survivors = fresh[:max(2, len(fresh) // 2)]
+            culled = fresh[len(survivors):]
+            # Culled genomes keep their screen score as fitness (still
+            # selectable, just measured cheaply — halving, not execution).
+            for i, entry in culled:
+                entry["fitness"] = entry.get("screen_fitness", 0.0)
+                entry.setdefault("fitness_samples", []).append(entry["fitness"])
+                entry["screen_only"] = True
+        else:
+            survivors = fresh
+
+        # Full evaluation: screen survivors + elite re-evaluation.
+        for i, entry in survivors:
+            self.evaluate_genome(i, entry, seed_block=seeds_full,
+                                 guard_seed_block=seeds_guard)
+        for i, entry in elites:
+            self.evaluate_genome(i, entry, seed_block=seeds_full,
+                                 guard_seed_block=seeds_guard)
 
         elapsed = time.time() - t0
 
-        # Sort by fitness descending
         self.population.sort(
             key=lambda x: x["fitness"] if x["fitness"] is not None else 0.0,
             reverse=True,
         )
 
-        # Update best
-        top = self.population[0]
-        if top["fitness"] > self.best_fitness:
-            self.best_fitness = top["fitness"]
-            self.best_genome = copy.deepcopy(top["genome"])
-            print(f"\n*** NEW BEST: fitness={self.best_fitness:.3f} ***")
+        # Global best: FULL-evaluated genomes only. A lucky screen score
+        # (small n, no guard check) must never crown a champion.
+        full_entries = [e for e in self.population
+                        if e["fitness"] is not None
+                        and not e.get("screen_only")]
+        if full_entries:
+            top = max(full_entries, key=lambda e: e["fitness"])
+            if top["fitness"] > self.best_fitness:
+                self.best_fitness = top["fitness"]
+                self.best_genome = copy.deepcopy(top["genome"])
+                print(f"\n*** NEW BEST: fitness={self.best_fitness:.3f} "
+                      f"(mean of {len(top.get('fitness_samples', [1]))} samples) ***")
 
-        # Stats
         fitnesses = [e["fitness"] for e in self.population if e["fitness"] is not None]
         avg = sum(fitnesses) / len(fitnesses) if fitnesses else 0
         print(f"\nGen {self.generation + 1} summary: "
@@ -910,12 +1219,8 @@ class LocalGeneticOptimizer:
 
         print(f"\nValidating best genome on: {', '.join(self.val_opponents)}")
 
-        # Inject best weights
-        if self.mode == "counter":
-            self.injector.inject(self.best_genome.weights)
-        else:
-            self.injector.inject(self.build_type, self.best_genome.weights)
-        self.injector.invalidate_cache()
+        # Inject best weights (mode-routed)
+        self._inject_genome(self.best_genome)
 
         if self.mode == "counter" and len(self.leek_names) > 1:
             runner = MultiLeekFightRunner(
@@ -951,6 +1256,80 @@ class LocalGeneticOptimizer:
         self.best_val_fitness = val_fitness
         return val_fitness
 
+    def _cma_init(self):
+        """Initialize diagonal-ES state from the baseline genome."""
+        baseline = self._create_baseline()
+        bounds = baseline.get_bounds()
+        self.cma_mean = dict(baseline.weights)
+        self.cma_sigma = {}
+        for k in baseline.get_evolvable_keys():
+            lo, hi = bounds[k]
+            self.cma_sigma[k] = 0.15 * (hi - lo)
+        self.cma_mu = max(2, self.population_size // 4)
+        self._cma_stagnation = 0
+
+    def _cma_sample(self):
+        """Sample one genome ~ N(mean, sigma) clamped to bounds."""
+        g = self._create_baseline()
+        bounds = g.get_bounds()
+        for k in g.get_evolvable_keys():
+            lo, hi = bounds[k]
+            v = random.gauss(self.cma_mean.get(k, g.weights[k]),
+                             self.cma_sigma[k])
+            if isinstance(g.weights[k], float) or isinstance(lo, float):
+                g.weights[k] = max(lo, min(hi, v))
+            else:
+                g.weights[k] = int(max(lo, min(hi, round(v))))
+        return g
+
+    def evolve_cma(self):
+        """(mu, lambda)-ES update: recombine top-mu into a new mean,
+        adapt step size by stagnation, resample the population. The
+        global best genome is retained as one elite (and re-evaluated
+        each generation like any elite)."""
+        ranked = [e for e in self.population if e["fitness"] is not None]
+        ranked.sort(key=lambda x: x["fitness"], reverse=True)
+        top = ranked[:self.cma_mu]
+
+        # Log-rank recombination weights
+        import math
+        ws = [math.log(self.cma_mu + 0.5) - math.log(i + 1)
+              for i in range(len(top))]
+        wsum = sum(ws)
+        ws = [w / wsum for w in ws]
+
+        keys = top[0]["genome"].get_evolvable_keys()
+        new_mean = {}
+        for k in keys:
+            new_mean[k] = sum(w * e["genome"].weights[k]
+                              for w, e in zip(ws, top))
+        # Step-size: shrink on stagnation, gently grow on progress.
+        improved = ranked[0]["fitness"] >= self.best_fitness - 1e-9
+        if improved:
+            self._cma_stagnation = 0
+            factor = 1.05
+        else:
+            self._cma_stagnation += 1
+            factor = 0.85 if self._cma_stagnation >= 2 else 0.95
+        baseline = self._create_baseline()
+        bounds = baseline.get_bounds()
+        for k in keys:
+            lo, hi = bounds[k]
+            min_sig = 0.01 * (hi - lo)
+            self.cma_sigma[k] = max(min_sig, self.cma_sigma[k] * factor)
+        self.cma_mean = new_mean
+
+        new_pop = []
+        if self.best_genome is not None:
+            elite = {"genome": copy.deepcopy(self.best_genome),
+                     "fitness": self.best_fitness,
+                     "fitness_samples": [self.best_fitness]}
+            new_pop.append(elite)
+        while len(new_pop) < self.population_size:
+            new_pop.append({"genome": self._cma_sample(), "fitness": None})
+        self.population = new_pop
+        self.generation += 1
+
     def tournament_selection(self):
         """Select a parent via tournament selection."""
         tournament = random.sample(self.population, min(self.tournament_size, len(self.population)))
@@ -958,7 +1337,11 @@ class LocalGeneticOptimizer:
         return tournament[0]["genome"]
 
     def evolve(self):
-        """Create next generation: elitism + tournament + crossover + mutation."""
+        """Create next generation (GA path or CMA path per --optimizer)."""
+        if self.optimizer == "cma":
+            if not hasattr(self, "cma_mean"):
+                self._cma_init()
+            return self.evolve_cma()
         new_pop = []
 
         # Elitism: preserve top N
@@ -968,7 +1351,10 @@ class LocalGeneticOptimizer:
             new_pop.append(elite)
 
         # Fill rest via crossover + mutation
-        crossover_fn = CounterGenome.crossover if self.mode == "counter" else WeightGenome.crossover
+        crossover_map = {"counter": CounterGenome.crossover,
+                         "tunables": TunablesGenome.crossover,
+                         "joint": JointGenome.crossover}
+        crossover_fn = crossover_map.get(self.mode, WeightGenome.crossover)
         while len(new_pop) < self.population_size:
             p1 = self.tournament_selection()
             p2 = self.tournament_selection()
@@ -1215,15 +1601,32 @@ def apply_weights(weights_path):
         data = json.load(f)
 
     build_type = data["build_type"]
+
+    # Joint genomes: apply both halves recursively.
+    if data.get("joint"):
+        print("Applying JOINT genome (weights + counter)")
+        wi = WeightProfileInjector(); wi.backup()
+        wi.inject(data["weights"]["build_type"], data["weights"]["weights"])
+        ci = CounterWeightInjector(); ci.backup()
+        ci.inject(data["counter"]["weights"])
+        WeightProfileInjector.invalidate_cache()
+        print("Joint genome applied.")
+        return
+
     weights = data["weights"]
 
-    is_counter = (build_type == "COUNTER")
-
-    if is_counter:
+    if build_type == "COUNTER":
         injector = CounterWeightInjector()
         injector.backup()
         current = injector.parse_baseline()
         target_path = STRATEGIC_DEPTH_PATH
+    elif build_type == "TUNABLES":
+        injector = TunablesInjector()
+        injector.backup()
+        injector.inject(weights)
+        TunablesInjector.invalidate_cache()
+        print(f"Applied TUNABLES: {weights}")
+        return
     else:
         injector = WeightProfileInjector()
         injector.backup()
@@ -1262,10 +1665,13 @@ def main():
     )
 
     # Mode selection
-    parser.add_argument("--mode", type=str, choices=["weights", "counter"],
+    parser.add_argument("--mode", type=str,
+                        choices=["weights", "counter", "tunables", "joint"],
                         default="weights",
-                        help="Optimization mode: 'weights' (base profiles) or "
-                             "'counter' (counter-strategy multipliers)")
+                        help="Optimization mode: 'weights' (base profiles), "
+                             "'counter' (counter multipliers), 'tunables' "
+                             "(scorer landscape constants), 'joint' "
+                             "(weights+counter together)")
     parser.add_argument("--apply", type=str, metavar="WEIGHTS_JSON",
                         help="Apply best weights JSON to weight_profiles.lk or strategic_depth.lk")
     parser.add_argument("--resume", type=str, metavar="CHECKPOINT_JSON",
@@ -1297,6 +1703,18 @@ def main():
     parser.add_argument("--elitism", type=int, default=3)
     parser.add_argument("--tournament-size", type=int, default=4)
     parser.add_argument("--parallel", type=int, default=12)
+    parser.add_argument("--optimizer", type=str, choices=["ga", "cma"],
+                        default="ga",
+                        help="Search algorithm: tournament GA or diagonal "
+                             "(mu,lambda)-ES ('cma')")
+    parser.add_argument("--guard-opponents", type=str, nargs="*", default=None,
+                        help="Matchups excluded from the fitness gradient but "
+                             "enforced as hard constraints (fitness -0.5 if "
+                             "any drops below --guard-floor)")
+    parser.add_argument("--guard-fights", type=int, default=4,
+                        help="Fights per guard opponent (default 4)")
+    parser.add_argument("--guard-floor", type=float, default=0.75,
+                        help="Minimum win rate per guard opponent (default 0.75)")
 
     args = parser.parse_args()
 
@@ -1341,13 +1759,45 @@ def main():
             parallel_workers=args.parallel,
             mode="counter",
             leek_names=leek_names,
+            guard_opponents=args.guard_opponents,
+            guard_fights=args.guard_fights,
+            guard_floor=args.guard_floor,
+            optimizer=args.optimizer,
         )
         optimizer.run()
         return 0
 
-    # Mode: weights (new run)
+    # Mode: tunables (scorer landscape constants; leek+opponents still drive fitness)
+    if args.mode == "tunables":
+        leek_names = args.leeks or ([args.leek] if args.leek else None)
+        if not leek_names:
+            parser.error("--leek (or --leeks) required for tunables mode")
+        optimizer = LocalGeneticOptimizer(
+            build_type="TUNABLES",
+            leek_name=leek_names[0],
+            train_opponents=args.train_opponents,
+            val_opponents=args.val_opponents or [],
+            population_size=args.population,
+            fights_per_opponent=args.fights_per_opponent,
+            generations=args.generations,
+            mutation_rate=args.mutation_rate,
+            mutation_strength=args.mutation_strength,
+            elitism=args.elitism,
+            tournament_size=args.tournament_size,
+            parallel_workers=args.parallel,
+            mode="tunables",
+            leek_names=leek_names,
+            guard_opponents=args.guard_opponents,
+            guard_fights=args.guard_fights,
+            guard_floor=args.guard_floor,
+            optimizer=args.optimizer,
+        )
+        optimizer.run()
+        return 0
+
+    # Mode: weights or joint (new run)
     if not args.build or not args.leek:
-        parser.error("--build and --leek are required for a new weights run")
+        parser.error("--build and --leek are required for a new weights/joint run")
 
     optimizer = LocalGeneticOptimizer(
         build_type=args.build,
@@ -1362,6 +1812,11 @@ def main():
         elitism=args.elitism,
         tournament_size=args.tournament_size,
         parallel_workers=args.parallel,
+        mode=args.mode,
+        guard_opponents=args.guard_opponents,
+        guard_fights=args.guard_fights,
+        guard_floor=args.guard_floor,
+        optimizer=args.optimizer,
     )
     optimizer.run()
     return 0

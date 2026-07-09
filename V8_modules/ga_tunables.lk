@@ -1,0 +1,24 @@
+// GA-evolvable scorer constants. These were hard-coded literals inside
+// scenario_scorer.lk — the multiplicative landscape they define is exactly
+// what the strategic audit flagged as untunable-by-hand (spikes outbidding
+// whole dimensions, interaction effects nobody can predict). Hoisting them
+// into one global map lets the genetic optimizer (--mode tunables) search
+// the LANDSCAPE itself, with the usual independent-matrix validation before
+// any result is committed.
+//
+// Defaults must exactly reproduce the historical literals.
+global GA_TUNE = [
+    // Kill-probability damage multiplier: damageWeight *= 1 + coef * p^2
+    'killProbCoef': 4.0,
+    // Predicted-death penalties (adversarial threat at final position)
+    'deathPenalty': 8000,
+    'dyingSoonPenalty': 3000,
+    // Survival-urgency whole-score multiplier tiers (hp<30 / <40 / <45)
+    'survivalMultLow': 50.0,
+    'survivalMultMid': 25.0,
+    'survivalMultHigh': 10.0,
+    // Time-pressure urgency cap
+    'urgencyCap': 7.5,
+    // B5 strike-window per-chip hold penalty
+    'b5HoldPenalty': 350
+]
