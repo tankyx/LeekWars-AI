@@ -26,6 +26,23 @@ global COUNTER_MULTS = [
 global __enemyChipUsage = [:]
 global __currentTurn = -1
 
+// Audit item 6: per-key bounds on adapted-weight drift relative to the base
+// profile. [lo, hi] multipliers — the final clamp in adaptWeightsToSituation
+// enforces these regardless of how many adaptation systems stacked.
+global WEIGHT_DRIFT_BOUNDS = [
+    'burstDamage': [0.5, 1.7],
+    'shieldValue': [0.3, 1.7],
+    'healValue': [0.4, 1.6],
+    'dotEffects': [0.5, 1.8],
+    'poisonStacks': [0.5, 1.8],
+    'denialValue': [0.5, 1.9],
+    'kiteDistance': [0.35, 1.8],
+    'threatReduction': [0.5, 1.7],
+    'novaEffects': [0.6, 1.9],
+    'damageReturn': [0.0, 1.6],
+    'otkoBonus': [0.6, 1.6]
+]
+
 class ChipCooldownInfo {
     chipId = -1
     lastUsedTurn = -1
@@ -185,14 +202,32 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         break
     }
 
+    // Audit item 4: primary enemy for weight adaptation was first-alive in
+    // map iteration order — near-arbitrary in team fights (adaptations tuned
+    // against whoever the map happened to list first). Rank by proximity-
+    // discounted threat: the enemy most able to hurt us soon is the one the
+    // counter-weights should be tuned against.
     var primaryEnemy = null
     var primaryProfile = null
+    var primaryRank = -1
     var enemies4 = mapKeys(enemies)
     for (var eid in enemies4) {
-        if (!isDead(eid)) {
-            primaryProfile = getEnemyProfile(eid)
-            primaryEnemy = enemies[eid]
-            break
+        if (isDead(eid)) { continue }
+        var candEnemy = enemies[eid]
+        if (candEnemy == null) { continue }
+        var candProfile = getEnemyProfile(eid)
+        var candThreat = 500
+        if (candProfile != null && candProfile['maxBurstDamage'] != null
+            && candProfile['maxBurstDamage'] > 0) {
+            candThreat = candProfile['maxBurstDamage']
+        }
+        var candDist = getCellDistance(player._cellPos, candEnemy._cellPos)
+        if (candDist == null) candDist = 20
+        var candRank = candThreat / (1.0 + candDist / 6.0)
+        if (candRank > primaryRank) {
+            primaryRank = candRank
+            primaryEnemy = candEnemy
+            primaryProfile = candProfile
         }
     }
 
@@ -498,6 +533,41 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             }
             adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
         }
+    }
+
+    // Audit item 5 follow-up: WIS-stacked sustain bruisers. MH's ladder loss
+    // audit (7/8 recent losses): STR 500-600 + WIS 400-590 heal engines that
+    // out-sustain a plain DoT race while bursting 6-8k. They dodge every
+    // other counter (RES>=300 → not isBurstBuild; ranged → no lifesteal
+    // plan). The profile's amortized healPerTurn names them directly — for
+    // magic players, shift value into denial (soporific's TP-shackle cuts
+    // heal casts) and poison uptime. Static, T1, conservative magnitude.
+    if (primaryProfile != null && __playerBuildType == BUILD_MAGIC
+        && mapContainsKey(primaryProfile, 'healPerTurn')
+        && primaryProfile['healPerTurn'] >= 150) {
+        if (mapContainsKey(adapted, 'denialValue')) {
+            adapted['denialValue'] = floor(adapted['denialValue'] * 1.25)
+        }
+        if (mapContainsKey(adapted, 'dotEffects')) {
+            adapted['dotEffects'] = floor(adapted['dotEffects'] * 1.15)
+        }
+    }
+
+    // Audit item 6: bounded multiplier drift. The adaptations above stack
+    // from independent systems (counter-mults, engagement plans, static
+    // signals, observations, sustain-war, mirror doctrine) and nothing
+    // guarantees the PRODUCT stays sane — audited worst cases hit x1.40 on
+    // paths meant to reduce, and x0.56 on paths meant to boost. Clamp each
+    // key's final drift relative to its base profile value so no stacking
+    // path can zero out or explode a dimension.
+    for (var wdbKey in mapKeys(WEIGHT_DRIFT_BOUNDS)) {
+        if (!mapContainsKey(adapted, wdbKey) || !mapContainsKey(baseWeights, wdbKey)) { continue }
+        var wdbBase = baseWeights[wdbKey]
+        if (wdbBase == null || wdbBase <= 0) { continue }
+        var wdbLo = floor(wdbBase * WEIGHT_DRIFT_BOUNDS[wdbKey][0])
+        var wdbHi = floor(wdbBase * WEIGHT_DRIFT_BOUNDS[wdbKey][1])
+        if (adapted[wdbKey] < wdbLo) adapted[wdbKey] = wdbLo
+        if (adapted[wdbKey] > wdbHi) adapted[wdbKey] = wdbHi
     }
 
     return adapted

@@ -277,6 +277,18 @@ class FieldMapCore {
                 score += (100 - hpPercent)
             }
 
+            // Audit item 4: kill-proximity on ABSOLUTE HP. Percent-based
+            // scoring prefers a big damaged tank (4000 HP at 50% = 2000 left)
+            // over a small nearly-full attacker (1200 HP at 90% = 1080 left)
+            // even though the attacker dies two turns sooner. Credit targets
+            // whose remaining pool is within ~1-2 turns of our rough DPT.
+            var ktEstDPT = (player._strength + player._magic) * 1.5 + 100
+            if (enemyHP <= ktEstDPT) {
+                score += 150
+            } else if (enemyHP <= ktEstDPT * 2) {
+                score += 75
+            }
+
             if (entityType == ENTITY_BULB) {
                 // Reachability gate: only reward bulb targeting when the bulb
                 // is actually killable within one move+fire. Observed in

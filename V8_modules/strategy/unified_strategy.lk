@@ -331,7 +331,11 @@ class UnifiedStrategy extends Strategy {
             topK = 55
         }
         if (_opsBudget < 14000000) {
-            topK = max(8, floor(topK * _opsBudget / 14000000))
+            // Audit item 3: floor raised 8 → 14. Low-core leeks were left
+            // simulating a single-digit scenario pool; the quick-scorer's
+            // ordering is too noisy for a top-8 cut to reliably contain the
+            // best play. Ops safety comes from the in-loop gates, not the cap.
+            topK = max(14, floor(topK * _opsBudget / 14000000))
         }
         if (getOperations() > _ops79) {
             topK = max(8, floor(topK * 0.5))
@@ -480,7 +484,16 @@ class UnifiedStrategy extends Strategy {
                 bestSimResult = simResult
             }
 
-            if (i >= 10 && (bestScore - score) > 2000) {
+            // Audit item 3: only break early when ops are actually under
+            // pressure — with plentiful ops remaining, cutting the pool at
+            // i=10 on a 2000-point gap discards candidates the quick-scorer
+            // mis-ranked (its damage estimate ignores most scoring dimensions).
+            // Audit item 3 (refined): at full 14M budget the aggressive
+            // early-break is part of the tuned behavior — keep it. Only
+            // low-budget leeks (whose scaled topK is small and quick-order
+            // noise proportionally larger) get the ops-pressure condition.
+            if (i >= 10 && (bestScore - score) > 2000
+                && (_opsBudget >= 14000000 || getOperations() > _ops50)) {
                 break
             }
 
@@ -1564,6 +1577,40 @@ function supportAlliesPass() {
     }
     if (supWeakId == -1) { return }
 
+    // 0. Cleanse first (support v2): a poisoned ally bleeding >12% maxHP per
+    // turn gains more from one Antidote than from any heal we can cast —
+    // heals race the ticks, cleanse removes them. Scan all allies, cleanse
+    // the worst-poisoned one in range.
+    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ANTIDOTE)
+        && getCooldown(CHIP_ANTIDOTE, supMyId) == 0
+        && getTP() >= getCachedChipCost(CHIP_ANTIDOTE)) {
+        var supPoisonId = -1
+        var supPoisonWorst = 0
+        for (var supPa in supAllies) {
+            if (supPa == supMyId) { continue }
+            if (isDead(supPa)) { continue }
+            var supPaEffs = getEffects(supPa)
+            if (supPaEffs == null) { continue }
+            var supPaDot = 0
+            for (var supPe in supPaEffs) {
+                if (supPe[0] == EFFECT_POISON) supPaDot += supPe[1]
+            }
+            var supPaMax = getTotalLife(supPa)
+            if (supPaMax == null || supPaMax <= 0) { continue }
+            if (supPaDot > supPaMax * 0.12 && supPaDot > supPoisonWorst) {
+                var supPaDist = getCellDistance(supMyCell, getCell(supPa))
+                if (supPaDist != null && supPaDist <= getChipMaxRange(CHIP_ANTIDOTE)) {
+                    supPoisonWorst = supPaDot
+                    supPoisonId = supPa
+                }
+            }
+        }
+        if (supPoisonId != -1) {
+            var supPr = useChip(CHIP_ANTIDOTE, supPoisonId)
+            if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_cleanse_ally" + supPoisonId + "_dot" + floor(supPoisonWorst) + "_ret" + supPr)
+        }
+    }
+
     // 1. Heal the weakest ally when meaningfully wounded.
     if (supWeakRatio < 0.85) {
         var supHealChips = [CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
@@ -1579,8 +1626,23 @@ function supportAlliesPass() {
         }
     }
 
-    // 2. Shield the weakest ally.
+    // 2. Shield the weakest ally — but only if some enemy can actually
+    // attack them this turn (support v2): shielding an unreachable ally
+    // burns TP on mitigation that expires before it can matter.
+    var supShieldWorth = false
+    var supWeakCell = getCell(supWeakId)
+    if (supWeakCell != null && fieldMap != null) {
+        var supEnemyMap = fieldMap.getEnemySubMap()
+        for (var supEid in mapKeys(supEnemyMap)) {
+            if (isDead(supEid)) { continue }
+            if (predictEnemyCanAttackWithin(supWeakCell, supEnemyMap[supEid], 1)) {
+                supShieldWorth = true
+                break
+            }
+        }
+    }
     var supShieldChips = [CHIP_SHIELD, CHIP_HELMET, CHIP_WALL, CHIP_FORTRESS, CHIP_ARMOR, CHIP_SOLIDIFICATION]
+    if (!supShieldWorth) { supShieldChips = [] }
     for (var supSc in supShieldChips) {
         if (!mapContainsKey(arsenal.playerEquippedChips, supSc)) continue
         if (getCooldown(supSc, supMyId) > 0) continue

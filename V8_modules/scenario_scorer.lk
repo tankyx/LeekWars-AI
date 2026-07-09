@@ -370,8 +370,14 @@ class ScenarioScorer {
             score += lobbySizeBonus
         }
 
-        if (isBattleRoyale && simResult.enemiesHit >= 2) {
-            var aoeBonus = (simResult.enemiesHit - 1) * 1000
+        if (simResult.enemiesHit >= 2) {
+            // Audit item 1: AoE multi-hit value was battle-royale-only — in
+            // team fights a Plasma hitting 3 enemies scored the same as a
+            // single-target shot of equal net damage. Credit per extra enemy
+            // hit using the build's multiTargetBonus weight (300-550), keep
+            // the historical 1000 in battle royale (kill-the-lobby math).
+            var aoePerHit = isBattleRoyale ? 1000 : this.getWeight('multiTargetBonus', 400)
+            var aoeBonus = (simResult.enemiesHit - 1) * aoePerHit
             score += aoeBonus
         }
 
