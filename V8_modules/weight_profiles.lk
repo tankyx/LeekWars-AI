@@ -6,6 +6,7 @@ global BUILD_STRENGTH_SCIENCE = 4
 global BUILD_TANK_SCI = 5
 global BUILD_HYBRID = 6
 global BUILD_BRUISER_REFLECT = 7
+global BUILD_SUPPORT = 8
 
 global __playerBuildType = 0
 
@@ -206,6 +207,33 @@ global BOSS_COMBAT_WEIGHTS = [
     'multiTargetBonus': 300
 ]
 
+// Team-support profile (e.g. DuskHope: STR 200 / WIS 300 / RES 300, TP 12).
+// Solo it plays a durable skirmisher (it can't out-damage anyone — that's the
+// build, not the AI); with allies alive the allySupport dimension takes over:
+// heals/shields/buffs on teammates outscore its own anemic weapon damage.
+global SUPPORT_WEIGHTS = [
+    'burstDamage': 100,
+    'weaponUses': 80,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 60,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 280,
+    'healValue': 240,
+    'distanceToTarget': 0,
+    'threatReduction': 180,
+    'otkoBonus': 3000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 400,
+    'noDamagePenalty': -1500,
+    'allySupport': 350
+]
+
 function getWeightsForBuild(buildType, player) {
     if (buildType == BUILD_STRENGTH) {
         return STRENGTH_WEIGHTS
@@ -238,6 +266,9 @@ function getWeightsForBuild(buildType, player) {
     if (buildType == BUILD_BRUISER_REFLECT) {
         return BRUISER_REFLECT_WEIGHTS
     }
+    if (buildType == BUILD_SUPPORT) {
+        return SUPPORT_WEIGHTS
+    }
     return STRENGTH_WEIGHTS
 }
 
@@ -247,9 +278,20 @@ function detectBuildType(player) {
     var agiStat = player._agility
     var sciStat = player._science
     var resStat = player._resistance
+    var wisStat = player._wisdom
 
     if (resStat >= 300 && sciStat >= 300) {
         return BUILD_TANK_SCI
+    }
+
+    // Support: durable WIS/RES chassis with no meaningful offense stat.
+    // Previously fell through every branch to the BUILD_STRENGTH default —
+    // DuskHope (STR 200/WIS 300/RES 300) played as a damage dealer, producing
+    // heal-race draws solo and zero team contribution. Offense-stat ceilings
+    // keep real attackers out (ProdigalSon STR 480, DawnFall MAG 440).
+    if (resStat >= 250 && wisStat >= 250
+        && strStat < 300 && magStat < 300 && sciStat < 300 && agiStat < 300) {
+        return BUILD_SUPPORT
     }
 
     if (strStat > 400 && agiStat > 400 &&

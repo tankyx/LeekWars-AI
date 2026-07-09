@@ -89,6 +89,16 @@ class UnifiedStrategy extends Strategy {
         // skipping it leaves 5-10 TP unspent on tight-budget leeks (8M ops).
         // Trace whether the recovery gate fires so we can diagnose unspent-TP
         // turns from the server fight log.
+        // Support post-pass (BUILD_SUPPORT only), BEFORE TP recovery so ally
+        // casts take priority over self-filler. Deterministic like the boss
+        // BUFFER role (direct useChip on ally) — the scenario competition's
+        // 1v1 score landscape (100k+ multiplicative spikes) reliably outbids
+        // any additive ally dimension, so support cannot live inside it.
+        if (__playerBuildType == BUILD_SUPPORT && getTP() >= 2
+            && getOperations() < _opsBudget - 400000) {
+            supportAlliesPass()
+        }
+
         var tpBeforeRec = getTP()
         var opsBeforeRec = getOperations()
         if (!targetDied && target != null && !isDead(target._id) &&
@@ -1186,6 +1196,19 @@ function recoverRemainingTP(target) {
                 if (!lineOfSight(getCell(), targetCell)) continue
                 if (chipObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())) continue
                 value = quickRecoveryChipValue(chipId, 'enemy')
+                // B5: don't burn a cooldown damage chip as end-of-turn filler
+                // into a shield stack that expires this turn — the chip would
+                // sit on CD through next turn's strike window while >=25% of
+                // its damage evaporates now. Weapons (no CD) are unaffected.
+                var b5RecCd = getChipCooldown(chipId)
+                if (b5RecCd != null && b5RecCd >= 2) {
+                    var b5RecRel = getRelativeShield(target._id)
+                    if (b5RecRel != null && b5RecRel >= 25
+                        && target.getEffectRemaining(EFFECT_RELATIVE_SHIELD) <= 1
+                        && target.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD) <= 1) {
+                        value = floor(value * 0.3)
+                    }
+                }
             }
 
             if (value > bestValue) {
@@ -1504,4 +1527,83 @@ function estimateKillProbFromSim(simResult, t) {
     if (ratio >= 1.0) return 1.0
     if (ratio < 0) return 0
     return ratio
+}
+
+// Support post-pass (BUILD_SUPPORT builds). Runs after the main scenario
+// executes and BEFORE recoverRemainingTP, so ally casts outrank self-filler.
+// Deterministic direct-cast pattern (same as the boss BUFFER role) — the
+// 1v1 scenario score landscape reliably outbids additive ally dimensions,
+// so team support cannot live inside the scenario competition.
+function supportAlliesPass() {
+    var supAllies = getAliveAllies()
+    if (supAllies == null || count(supAllies) == 0) { return }
+    var supMyId = getEntity()
+    var supMyCell = getCell(supMyId)
+
+    // Weakest ally (heal/shield target) and strongest attacker (buff target).
+    var supWeakId = -1
+    var supWeakRatio = 1.1
+    var supStrongId = -1
+    var supStrongOff = -1
+    for (var supAid in supAllies) {
+        if (supAid == supMyId) continue
+        if (isDead(supAid)) continue
+        var supLife = getLife(supAid)
+        var supMax = getTotalLife(supAid)
+        if (supLife == null || supMax == null || supMax <= 0) continue
+        var supRatio = supLife / supMax
+        if (supRatio < supWeakRatio) {
+            supWeakRatio = supRatio
+            supWeakId = supAid
+        }
+        var supOff = getStrength(supAid) + getMagic(supAid)
+        if (supOff != null && supOff > supStrongOff) {
+            supStrongOff = supOff
+            supStrongId = supAid
+        }
+    }
+    if (supWeakId == -1) { return }
+
+    // 1. Heal the weakest ally when meaningfully wounded.
+    if (supWeakRatio < 0.85) {
+        var supHealChips = [CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
+        for (var supHc in supHealChips) {
+            if (!mapContainsKey(arsenal.playerEquippedChips, supHc)) continue
+            if (getCooldown(supHc, supMyId) > 0) continue
+            if (getTP() < getCachedChipCost(supHc)) continue
+            var supHd = getCellDistance(supMyCell, getCell(supWeakId))
+            if (supHd == null || supHd > getChipMaxRange(supHc)) continue
+            var supHr = useChip(supHc, supWeakId)
+            if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_heal" + supHc + "_ally" + supWeakId + "_ret" + supHr)
+            break
+        }
+    }
+
+    // 2. Shield the weakest ally.
+    var supShieldChips = [CHIP_SHIELD, CHIP_HELMET, CHIP_WALL, CHIP_FORTRESS, CHIP_ARMOR, CHIP_SOLIDIFICATION]
+    for (var supSc in supShieldChips) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, supSc)) continue
+        if (getCooldown(supSc, supMyId) > 0) continue
+        if (getTP() < getCachedChipCost(supSc)) continue
+        var supSd = getCellDistance(supMyCell, getCell(supWeakId))
+        if (supSd == null || supSd > getChipMaxRange(supSc)) continue
+        var supSr = useChip(supSc, supWeakId)
+        if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_shield" + supSc + "_ally" + supWeakId + "_ret" + supSr)
+        break
+    }
+
+    // 3. Offensive buff on the strongest attacker.
+    if (supStrongId != -1) {
+        var supBuffChips = [CHIP_MOTIVATION, CHIP_PROTEIN, CHIP_PRISM, CHIP_STEROID]
+        for (var supBc in supBuffChips) {
+            if (!mapContainsKey(arsenal.playerEquippedChips, supBc)) continue
+            if (getCooldown(supBc, supMyId) > 0) continue
+            if (getTP() < getCachedChipCost(supBc)) continue
+            var supBd = getCellDistance(supMyCell, getCell(supStrongId))
+            if (supBd == null || supBd > getChipMaxRange(supBc)) continue
+            var supBr = useChip(supBc, supStrongId)
+            if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_buff" + supBc + "_ally" + supStrongId + "_ret" + supBr)
+            break
+        }
+    }
 }

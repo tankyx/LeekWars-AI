@@ -124,6 +124,17 @@ class ScenarioGenerator extends ScenarioCombos {
             }
         }
 
+        // Support template: for BUILD_SUPPORT with living teammates, in every
+        // combat state. The state machine is 1v1-target-centric; team support
+        // is orthogonal to it — the scenario competes on the allySupport
+        // dimension against the regular offensive/defensive candidates.
+        if (state != "PUZZLE" && __playerBuildType == BUILD_SUPPORT) {
+            var teamSupport = this.createTeamSupportScenario(availableTP, availableMP)
+            if (teamSupport != null && count(teamSupport) > 0) {
+                push(scenarios, teamSupport)
+            }
+        }
+
         return scenarios
     }
 
@@ -658,5 +669,102 @@ class ScenarioGenerator extends ScenarioCombos {
         if (defense != null) {
             push(scenarios, defense)
         }
+    }
+
+    // Team-support template (BUILD_SUPPORT only). Heal the most wounded
+    // ally, shield them, and put an offensive buff on the strongest attacker
+    // in range. Casts require the ally to be inside chip range from our
+    // CURRENT cell (v1: no dedicated support movement — team maps are dense
+    // enough that range-5..8 chips usually find a target; the executor's
+    // runtime useChip validates range/LoS anyway). Scored via the
+    // allySupport dimension.
+    createTeamSupportScenario(availableTP, availableMP) {
+        var allies = this._fieldMap.getAlliesSubMap()
+        var allyIds = mapKeys(allies)
+        if (count(allyIds) == 0) return null
+
+        var myCell = this._player._cellPos
+        var actions = []
+        var tpBudget = availableTP
+
+        // Most wounded living ally, and strongest attacker ally, in one pass.
+        var weakest = null
+        var weakestRatio = 1.1
+        var strongest = null
+        var strongestOffense = -1
+        for (var aid in allyIds) {
+            if (isDead(aid)) continue
+            var ally = allies[aid]
+            var lifeNow = getLife(aid)
+            var lifeMax = getTotalLife(aid)
+            if (lifeNow == null || lifeMax == null || lifeMax <= 0) continue
+            var ratio = lifeNow / lifeMax
+            if (ratio < weakestRatio) {
+                weakestRatio = ratio
+                weakest = ally
+            }
+            var offense = getStrength(aid) + getMagic(aid)
+            if (offense != null && offense > strongestOffense) {
+                strongestOffense = offense
+                strongest = ally
+            }
+        }
+        if (weakest == null) return null
+
+        // 1. Heal the weakest ally when meaningfully wounded.
+        if (weakestRatio < 0.85) {
+            var supHealChips = [CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
+            for (var shc in supHealChips) {
+                if (!mapContainsKey(this._arsenal.playerEquippedChips, shc)) continue
+                if (getCooldown(shc, this._player._id) > 0) continue
+                var shcCost = getCachedChipCost(shc)
+                if (tpBudget < shcCost) continue
+                var shcDist = getCellDistance(myCell, weakest._cellPos)
+                if (shcDist == null || shcDist > getChipMaxRange(shc)) continue
+                push(actions, new Action(Action.ACTION_BUFF, -1, shc, -1, weakest))
+                tpBudget -= shcCost
+                break
+            }
+        }
+
+        // 2. Shield the weakest ally (poison bypasses shields, but team
+        // fights are burst-dominated — shields on the focus target matter).
+        var supShieldChips = [CHIP_SHIELD, CHIP_HELMET, CHIP_WALL, CHIP_FORTRESS, CHIP_ARMOR, CHIP_SOLIDIFICATION]
+        for (var ssc in supShieldChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, ssc)) continue
+            if (getCooldown(ssc, this._player._id) > 0) continue
+            var sscCost = getCachedChipCost(ssc)
+            if (tpBudget < sscCost) continue
+            var sscDist = getCellDistance(myCell, weakest._cellPos)
+            if (sscDist == null || sscDist > getChipMaxRange(ssc)) continue
+            push(actions, new Action(Action.ACTION_BUFF, -1, ssc, -1, weakest))
+            tpBudget -= sscCost
+            break
+        }
+
+        // 3. Offensive buff on the strongest attacker in range.
+        if (strongest != null) {
+            var supBuffChips = [CHIP_MOTIVATION, CHIP_PROTEIN, CHIP_PRISM, CHIP_STEROID]
+            for (var sbc in supBuffChips) {
+                if (!mapContainsKey(this._arsenal.playerEquippedChips, sbc)) continue
+                if (getCooldown(sbc, this._player._id) > 0) continue
+                var sbcCost = getCachedChipCost(sbc)
+                if (tpBudget < sbcCost) continue
+                var sbcDist = getCellDistance(myCell, strongest._cellPos)
+                if (sbcDist == null || sbcDist > getChipMaxRange(sbc)) continue
+                push(actions, new Action(Action.ACTION_BUFF, -1, sbc, -1, strongest))
+                tpBudget -= sbcCost
+                break
+            }
+        }
+
+        if (count(actions) == 0) return null
+
+        // No attack tail appended: a partial-TP static attack routinely
+        // produces simulator-dropped actions, and droppedActions > 0 makes
+        // the WHOLE scenario infeasible at the pick site (Fix #1B) — that
+        // silently disqualified every support scenario. Leftover TP is spent
+        // by the executor's TP-recovery pass instead.
+        return actions
     }
 }

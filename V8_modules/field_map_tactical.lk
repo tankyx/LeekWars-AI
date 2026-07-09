@@ -159,6 +159,14 @@ class FieldMap extends FieldMapPatterns {
                 }
             }
 
+            // Ops guard: the danger/cover sweep does LoS work per candidate;
+            // entered late in the turn it can blow the hard operations limit
+            // (observed: LeekRunException at AI.ops via getCachedLineOfSight,
+            // MH vs v8_dijkstra seed 37). Return the best found so far.
+            if (getOperations() > _ops89) {
+                break
+            }
+
             var danger = this.computeDangerForCell(cand, enemyAccess)
             var coverScore = this.evaluateCoverScore(cand, enemyAccessSet)
 

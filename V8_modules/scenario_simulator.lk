@@ -77,6 +77,13 @@ class SimulationResult {
     strShackled = 0
     magShackled = 0
 
+    // Support: ally-targeted casts (heals/shields/buffs on teammates).
+    // Kept separate from hpGained/shieldsGained so the scorer's self-survival
+    // dimensions don't misread team support as personal defense.
+    allyHpGained = 0
+    allyShieldsGained = 0
+    allyBuffCount = 0
+
     erosionDamage = 0
 
     selfDamageHP = 0
@@ -129,6 +136,9 @@ class SimulationResult {
                this.poisonTurnsQueued + "|" +
                floor(this.denialApplied) + "|" +
                floor(this.mpDenialApplied) + "|" +
+               floor(this.allyHpGained) + "|" +
+               floor(this.allyShieldsGained) + "|" +
+               this.allyBuffCount + "|" +
                floor(this.strShackled) + "|" +
                floor(this.magShackled) + "|" +
                floor(this.erosionDamage) + "|" +
@@ -522,6 +532,34 @@ class ScenarioSimulator {
                 var buffCost = getChipCost(action.chip)
                 result.tpSpent += buffCost
                 simTP -= buffCost
+
+                // Support: ally-targeted cast — credit to ally dimensions and
+                // skip the self-effect chain below (amounts still scale with
+                // OUR stats; caster-scaled effects). Not pushed to
+                // buffsApplied so evaluateBuffs doesn't score it as self-buff.
+                var buffAllyTarget = (action.targetEntity != null
+                    && action.targetEntity._id != this._player._id
+                    && (this._target == null || action.targetEntity._id != this._target._id))
+                if (buffAllyTarget) {
+                    if (action.chip == CHIP_VACCINE || action.chip == CHIP_CURE
+                        || action.chip == CHIP_DRIP || action.chip == CHIP_BANDAGE
+                        || action.chip == CHIP_REMISSION) {
+                        result.allyHpGained += this.estimateHealing(action.chip, simWisdom)
+                    } else if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD) {
+                        result.allyShieldsGained += this.estimateShieldAmount(action.chip, simWisdom)
+                    } else if (action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS
+                               || action.chip == CHIP_ARMOR || action.chip == CHIP_PROTEIN
+                               || action.chip == CHIP_SOLIDIFICATION) {
+                        // Relative shields on an ally: flat EHP credit — the
+                        // ally's HP pool isn't modeled here.
+                        result.allyShieldsGained += 120
+                    } else {
+                        result.allyBuffCount += 1
+                    }
+                    result.actionsExecuted++
+                    continue
+                }
+
                 push(result.buffsApplied, action.chip)
 
                 if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD) {

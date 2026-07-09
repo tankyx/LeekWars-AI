@@ -15,6 +15,7 @@ class ScenarioScorer {
     _envelopeOne = 0
     _envelopeTwo = 0
     _preContact = false
+    _strikeWindowMitigation = 0
 
     constructor(player, target, fieldMap, weights) {
         this._player = player
@@ -70,6 +71,22 @@ class ScenarioScorer {
             }
             if (!pcHit && !predictEnemyCanAttackWithin(this._player._cellPos, this._target, 1)) {
                 this._preContact = true
+            }
+        }
+        // B5: strike-window detection. When the enemy's current shield stack
+        // (>=25% relative mitigation) fully expires at end of this turn, the
+        // NEXT turn is a strike window: a cooldown damage chip spent into the
+        // shield now both loses mitigation% of its value AND sits on CD when
+        // the window opens. Computed once per turn.
+        this._strikeWindowMitigation = 0
+        if (this._target != null && !_isBossFight) {
+            var b5Rel = getRelativeShield(this._target._id)
+            if (b5Rel != null && b5Rel >= 25) {
+                var b5RelRemain = this._target.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
+                var b5AbsRemain = this._target.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD)
+                if (b5RelRemain <= 1 && b5AbsRemain <= 1) {
+                    this._strikeWindowMitigation = b5Rel
+                }
             }
         }
     }
@@ -596,7 +613,12 @@ class ScenarioScorer {
                 var ePndFinal = simResult.finalPosition
                 if (ePndFinal == -1) ePndFinal = this._player._cellPos
                 var ePndDist = getCellDistance(ePndFinal, this._target._cellPos)
-                if (ePndDist != null && ePndDist >= ePlanND['minDist']) {
+                // rush_mage plans hold minDist=1, so "dist >= minDist" is true
+                // everywhere — softening the no-damage penalty would REWARD
+                // idling during a poison race. Rush turns must stay under full
+                // zero-damage pressure; only distance-keeping plans soften.
+                if (ePndDist != null && ePndDist >= ePlanND['minDist']
+                    && ePlanND['mode'] != 'rush_mage') {
                     noDamagePenalty = floor(noDamagePenalty * 0.4)
                 }
             }
@@ -801,6 +823,20 @@ class ScenarioScorer {
 
         score += shieldScore + relShieldScore + healScore + healingUrgencyBonus
 
+        // Support dimension: value casts on teammates (weight is 0 in every
+        // profile except BUILD_SUPPORT, so this is inert for other builds).
+        // Ally heals are worth slightly more than self heals — a support's
+        // own HP bar is not the team's win condition, its attackers' uptime is.
+        var allySupportWeight = this.getWeight('allySupport', 0)
+        if (allySupportWeight > 0
+            && (simResult.allyHpGained > 0 || simResult.allyShieldsGained > 0
+                || simResult.allyBuffCount > 0)) {
+            var allyScore = simResult.allyHpGained * 1.2
+                          + simResult.allyShieldsGained * 1.0
+                          + simResult.allyBuffCount * 150
+            score += allyScore * (allySupportWeight / 100.0)
+        }
+
         var positionWeight = this.calculatePositionWeight()
         var positionScore = this.evaluatePosition(simResult.finalPosition, simResult) * positionWeight
         score += positionScore
@@ -908,6 +944,28 @@ class ScenarioScorer {
         var efficiencyWeight = this.getWeight('tpEfficiency', this.calculateEfficiencyWeight())
         var efficiencyScore = this.calculateEfficiency(simResult) * efficiencyWeight
         score += efficiencyScore
+
+        // B5: cooldown-window strike scheduling. A strike window opens next
+        // turn (enemy shields expire); every cooldown damage chip fired into
+        // the shield NOW misses that window. Penalize per held-back chip,
+        // scaled by the mitigation being wasted — unless this scenario is
+        // already a kill race (>=50% of enemy HP in net damage). Weapons are
+        // unaffected (no cooldown — fire them either turn).
+        if (this._strikeWindowMitigation > 0 && scenario != null
+            && this._target != null
+            && simResult.damageDealt < this._target._currHealth * 0.5) {
+            var b5ChipHolds = 0
+            for (var b5a in scenario) {
+                if (b5a.chip != -1 && b5a.weaponId == -1
+                    && (b5a.type == Action.ACTION_DIRECT || b5a.type == Action.ACTION_DOT)) {
+                    var b5cd = getChipCooldown(b5a.chip)
+                    if (b5cd != null && b5cd >= 2) b5ChipHolds++
+                }
+            }
+            if (b5ChipHolds > 0) {
+                score -= b5ChipHolds * 350 * (this._strikeWindowMitigation / 100.0)
+            }
+        }
 
         var buffWeight = this.getWeight('buffs', this.calculateBuffWeight())
         var buffScore = this.evaluateBuffs(simResult.buffsApplied, simResult) * buffWeight

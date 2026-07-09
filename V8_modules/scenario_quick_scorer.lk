@@ -83,6 +83,17 @@ class ScenarioQuickScorer {
                 tpEstimate += chipCost
                 buffActionCount++
 
+                // Support: ally-targeted casts have zero damage estimate and
+                // would be pruned before the full scorer can credit the
+                // allySupport dimension. Flat credit per ally cast keeps
+                // support scenarios in the top-K (only BUILD_SUPPORT
+                // generates these actions).
+                if (action.targetEntity != null
+                    && action.targetEntity._id != this._player._id
+                    && (this._target == null || action.targetEntity._id != this._target._id)) {
+                    score += 400
+                }
+
                 if (action.chip == CHIP_STEROID || action.chip == CHIP_WARM_UP || action.chip == CHIP_DOPING || action.chip == CHIP_PRISM || action.chip == CHIP_WIZARDRY || action.chip == CHIP_KNOWLEDGE || action.chip == CHIP_ELEVATION) {
                     hasOffensiveBuff = true
                     if (action.chip == CHIP_STEROID) push(comboSignature, "STEROID")

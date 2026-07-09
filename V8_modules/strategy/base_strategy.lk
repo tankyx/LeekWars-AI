@@ -2443,9 +2443,10 @@ class Strategy {
 
                     var _execCdBefore = getCooldown(a.chip, getEntity())
                     var _execTpBefore = getTP()
-                    useChip(a.chip, buffTargetId)
+                    var _execChipRet = useChip(a.chip, buffTargetId)
                     if (getTurn() <= 20) {
-                        debugW("EXEC_T" + getTurn() + "_BUFFc" + a.chip + "_cd" + _execCdBefore + "_tp" + _execTpBefore + ">" + getTP())
+                        debugW("EXEC_T" + getTurn() + "_BUFFc" + a.chip + "_cd" + _execCdBefore + "_tp" + _execTpBefore + ">" + getTP()
+                               + (buffTargetId != player._id ? "_ALLY" + buffTargetId + "_ret" + _execChipRet : ""))
                     }
 
                     if (a.chip == CHIP_DOPING) {

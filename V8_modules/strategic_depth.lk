@@ -209,6 +209,24 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             }
         }
 
+        // Rush-mage sharpening: when a rush_mage engagement plan is locked on
+        // the primary enemy, the fight is a pure DPT-vs-poison race (trace
+        // F seed-11: ED lost with the enemy at 1356 HP — one turn short).
+        // Every point of burst matters more than sustain: heals barely dent
+        // 1400/turn poison ticks and shields don't block them at all.
+        if (primaryEnemy != null && mapContainsKey(__engagementPlan, primaryEnemy._id)
+            && __engagementPlan[primaryEnemy._id]['mode'] == 'rush_mage') {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.3)
+            adapted['healValue'] = floor(adapted['healValue'] * 0.6)
+            // Poison bypasses shields and the mage deals ~0 direct damage, so
+            // every TP on fortress/mirror/thorn is a wasted weapon shot
+            // (~400 dmg each) in a race lost by ~1 turn. Zero them out.
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * 0.4)
+            if (mapContainsKey(adapted, 'damageReturn')) {
+                adapted['damageReturn'] = 0
+            }
+        }
+
         if (primaryProfile['isBurstBuild']) {
             adapted['shieldValue'] = floor(adapted['shieldValue'] * COUNTER_MULTS['vs_burst_shield'] / 100)
             adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_burst_heal'] / 100)
