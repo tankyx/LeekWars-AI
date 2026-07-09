@@ -12,6 +12,9 @@ class ScenarioScorer {
     _aliveEnemyIds = null
     _aliveEnemyCount = 0
     _cdTracker = null
+    _envelopeOne = 0
+    _envelopeTwo = 0
+    _preContact = false
 
     constructor(player, target, fieldMap, weights) {
         this._player = player
@@ -32,6 +35,43 @@ class ScenarioScorer {
             }
         }
         this._aliveEnemyCount = count(this._aliveEnemyIds)
+        // B2: enemy reachability envelopes, computed once per turn.
+        // env1 = cells the enemy can attack NEXT turn (move + max attack range);
+        // env2 = two-turn reach. Distance beyond env2 is genuinely safe;
+        // (env1, env2] costs the enemy a full closing turn; inside env1 raw
+        // distance is kiting theater — they reach you regardless.
+        this._envelopeOne = 0
+        this._envelopeTwo = 0
+        if (this._enemyProfile != null && this._target != null
+            && mapContainsKey(this._enemyProfile, 'maxReach')
+            && this._enemyProfile['maxReach'] > 0) {
+            var envMP = this._target._currMp
+            if (envMP == null || envMP <= 0) envMP = 4
+            this._envelopeOne = this._enemyProfile['maxReach'] + envMP
+            this._envelopeTwo = this._enemyProfile['maxReach'] + envMP * 2
+        }
+        // B4: pre-contact opening detection — true when NEITHER side can land
+        // a hit this turn (we have no reachable hit cell; the enemy can't
+        // close into attack range from where they stand). During this phase a
+        // zero-damage turn is structurally forced, and defensive builds should
+        // maximize turns-until-contact rather than walk in. Opening only
+        // (turn <= 6), never under time pressure or in boss fights.
+        this._preContact = false
+        if (this._target != null && this._fieldMap != null && !_isBossFight
+            && getTurn() <= 6 && !__timePressure) {
+            var pcHit = false
+            for (var pcWid in mapKeys(this._fieldMap.weaponHitmap)) {
+                if (count(this._fieldMap.weaponHitmap[pcWid]) > 0) { pcHit = true; break }
+            }
+            if (!pcHit) {
+                for (var pcCid in mapKeys(this._fieldMap.chipHitmap)) {
+                    if (count(this._fieldMap.chipHitmap[pcCid]) > 0) { pcHit = true; break }
+                }
+            }
+            if (!pcHit && !predictEnemyCanAttackWithin(this._player._cellPos, this._target, 1)) {
+                this._preContact = true
+            }
+        }
     }
 
     getWeight(key, defaultValue) {
@@ -561,6 +601,25 @@ class ScenarioScorer {
                 }
             }
 
+            // B4: pre-contact waiver. Nobody can hit anybody this turn and
+            // this scenario keeps it that way (holds or gains distance, ends
+            // outside the enemy's one-turn reach) — zero damage is
+            // structurally forced, not a choice, so every penalty above is
+            // noise that pressures builds into premature contact. Scenarios
+            // that ADVANCE keep the full penalty stack (Fix A/B still decide).
+            // TANK_SCI only: race-archetype builds (magic poison, burst)
+            // WANT the pressure to make contact early.
+            if (this._preContact && __playerBuildType == BUILD_TANK_SCI && this._target != null) {
+                var b4Final = simResult.finalPosition
+                if (b4Final == -1) b4Final = this._player._cellPos
+                var b4Start = getCellDistance(this._player._cellPos, this._target._cellPos)
+                var b4End = getCellDistance(b4Final, this._target._cellPos)
+                if (b4Start != null && b4End != null && b4End >= b4Start
+                    && !predictEnemyCanAttackWithin(b4Final, this._target, 1)) {
+                    noDamagePenalty = 0
+                }
+            }
+
             score += noDamagePenalty
         }
 
@@ -868,6 +927,27 @@ class ScenarioScorer {
             var denialWeight = this.getWeight('denialValue', 100)
             denialValue *= (denialWeight / 100.0)
             score += denialValue
+        }
+
+        // B3: MP-denial tempo (weight-gated; set by strategic_depth for
+        // MAGIC/TANK_SCI vs closers, 0 otherwise). Stripped MP shrinks the
+        // enemy's reach envelope: value = fraction of their movement denied ×
+        // the damage a closing turn would have let them land. Only credited
+        // when we currently sit OUTSIDE their one-turn envelope — inside it,
+        // slowing them changes nothing this turn (they already reach us).
+        var mpTempoWeight = this.getWeight('mpDenialTempo', 0)
+        if (mpTempoWeight > 0 && simResult.mpDenialApplied > 0 && this._envelopeOne > 0) {
+            var b3Pos = simResult.finalPosition
+            if (b3Pos == -1) b3Pos = this._player._cellPos
+            var b3Dist = getCellDistance(b3Pos, this._target._cellPos)
+            if (b3Dist != null && b3Dist > this._envelopeOne - simResult.mpDenialApplied) {
+                var b3EnemyMP = max(1, this._target._currMp)
+                var b3Ratio = min(1.0, simResult.mpDenialApplied / b3EnemyMP)
+                var b3AvoidedDmg = max(1, this._target._strength + this._target._magic) * 1.5
+                var b3Value = b3Ratio * b3AvoidedDmg * 1.2 * (mpTempoWeight / 100.0)
+                if (b3Value > 2500) b3Value = 2500
+                score += b3Value
+            }
         }
 
         if (simResult.strShackled > 0) {
@@ -1269,11 +1349,60 @@ class ScenarioScorer {
 
             if (outOfRange) {
                 var currentDist = getCellDistance(this._player._cellPos, this._target._cellPos)
-                if (currentDist != null && distToTarget < currentDist) {
+                // B4: in the pre-contact opening, a defensive build facing a
+                // build that must CLOSE to kill should maximize turns-until-
+                // contact, not walk in (the old branch rewarded closing
+                // unconditionally). Every turn the closer spends approaching
+                // is a free buff/shield/cooldown turn for us — the tank's
+                // nova-attrition race is won or lost on exactly these turns.
+                // TANK_SCI only — magic builds RACE burst enemies (early
+                // poison uptime beats delay; MH vs v8_dijkstra dropped
+                // 39→32/40 when this bias also applied to magic).
+                var b4Defensive = (__playerBuildType == BUILD_TANK_SCI)
+                var b4Closer = (this._enemyProfile != null
+                                && (this._enemyProfile['isBurstBuild']
+                                    || this._enemyProfile['hasLifestealThreat']))
+                if (this._preContact && b4Defensive && b4Closer && currentDist != null) {
+                    kitingValue = (distToTarget - currentDist) * 60
+                    if (this._envelopeTwo > 0 && distToTarget > this._envelopeTwo) {
+                        kitingValue += 400
+                    }
+                } else if (currentDist != null && distToTarget < currentDist) {
                     kitingValue = (currentDist - distToTarget) * 50
                 }
             } else if (this._player._magic > this._player._strength) {
-                kitingValue = distToTarget * 10
+                // B2: envelope kiting — value distance by enemy REACHABILITY,
+                // not raw cells. Inside env1 the enemy attacks us next turn
+                // wherever we stand (kiting theater); the (env1, env2] band
+                // forces them to burn a full turn closing — a free poison/heal
+                // turn for us; beyond env2 is fully safe. offensiveValue
+                // already rewards cells we can still hit FROM, so the "apply
+                // DoT while unreachable" annulus emerges from the sum.
+                if (this._envelopeOne > 0) {
+                    if (distToTarget > this._envelopeTwo) {
+                        kitingValue = 900
+                    } else if (distToTarget > this._envelopeOne) {
+                        kitingValue = 650 + (distToTarget - this._envelopeOne) * 30
+                    } else {
+                        kitingValue = distToTarget * 5
+                    }
+                } else {
+                    kitingValue = distToTarget * 10
+                }
+            } else if (__playerBuildType == BUILD_TANK_SCI && this._enemyProfile != null
+                       && this._enemyProfile['isBurstBuild'] && this._envelopeOne > 0) {
+                // B2: tank vs burst — same envelope logic, replacing the
+                // default "reward closing" formula. The tank's win condition
+                // is nova attrition over 6+ turns; every closing step trades
+                // survival turns for nothing (quantum rifle out-ranges the
+                // gap anyway). Never reward being inside env1.
+                if (distToTarget > this._envelopeTwo) {
+                    kitingValue = 700
+                } else if (distToTarget > this._envelopeOne) {
+                    kitingValue = 500 + (distToTarget - this._envelopeOne) * 20
+                } else {
+                    kitingValue = distToTarget * 5
+                }
             } else if (this._enemyProfile != null && this._enemyProfile['hasLifestealThreat']) {
                 // AGI-lifesteal range discipline: at point-blank (dist 1-3)
                 // enemy's AGI crit + WIS lifesteal turns trade-shots into a

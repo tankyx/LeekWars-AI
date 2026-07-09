@@ -218,6 +218,19 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
             }
         }
 
+        // B3: MP denial as survival tempo. For TANK_SCI players facing a build
+        // that must CLOSE to kill (burst or melee lifesteal bruiser), every MP
+        // stripped is a turn-fraction of distance preserved — worth avoided
+        // incoming damage, not just the generic denial DPT credit. Weight
+        // consumed by the scorer's mpDenialTempo dimension (0 = off elsewhere).
+        // NOT applied to MAGIC: local matrix showed MH vs v8_dijkstra drop
+        // 38→33/40 (replicated) when shackle credit displaced poison scenarios
+        // — magic already wins the burst matchup through the poison race.
+        if (__playerBuildType == BUILD_TANK_SCI
+            && (primaryProfile['isBurstBuild'] || primaryProfile['hasLifestealThreat'])) {
+            adapted['mpDenialTempo'] = 100
+        }
+
         if (primaryProfile['isTank']) {
             if (mapContainsKey(adapted, 'novaEffects')) {
                 adapted['novaEffects'] = floor(adapted['novaEffects'] * COUNTER_MULTS['vs_tank_nova'] / 100)

@@ -32,6 +32,9 @@ function profileEnemy(enemy) {
     var maxBurst = 0
     var bestRange = 0
     var bestRangeDmg = 0
+    // B2: max attack reach across ALL weapons (not just the best-damage one).
+    // Feeds the reachability envelope: env1 = maxReach + enemyMP.
+    var maxReach = 0
     for (var weaponId in weapons) {
         var effects = getWeaponEffects(weaponId)
         var weaponDmg = 0
@@ -41,6 +44,8 @@ function profileEnemy(enemy) {
                 weaponDmg += avgDmg * (1 + str / 100)
             }
         }
+        var wReach = getWeaponMaxRange(weaponId)
+        if (wReach != null && weaponDmg > 0 && wReach > maxReach) maxReach = wReach
         var cost = getWeaponCost(weaponId)
         if (cost != null && cost > 0) {
             var uses = floor(12 / cost)
@@ -61,11 +66,14 @@ function profileEnemy(enemy) {
             if (eff[0] == EFFECT_DAMAGE) {
                 var avgDmg = (eff[1] + eff[2]) / 2
                 maxBurst += avgDmg * (1 + mag / 100)
+                var cReach = getChipMaxRange(chipId)
+                if (cReach != null && cReach > maxReach) maxReach = cReach
             }
         }
     }
     profile['maxBurstDamage'] = floor(maxBurst)
     profile['preferredRange'] = bestRange
+    profile['maxReach'] = maxReach
 
     var hasShield = false
     var hasHeal = false

@@ -556,6 +556,49 @@ class UnifiedStrategy extends Strategy {
 
         }
 
+        // B1: Lexicographic survival gate. Death is only a soft -8000 in the
+        // scorer, so stacked bonuses (POISON_DUMP +10k, kill multipliers,
+        // time-pressure urgency) can and do outbid it — the AI knowingly ends
+        // turns on cells where the enemy's best response kills it. When the
+        // chosen best is predicted-lethal and doesn't kill the target this
+        // turn, prefer the highest-scored scenario that SURVIVES the enemy's
+        // response instead, regardless of score gap. Off during boss fights
+        // and late time-pressure (a forced draw is worse than a risky swing).
+        if (bestScenario != null && bestSimResult != null && !_isBossFight
+            && !(__timePressure && getTurn() > 40) && __adversarialThreatCacheBuilt) {
+            var b1Cell = bestSimResult.finalPosition
+            if (b1Cell == -1) b1Cell = player._cellPos
+            var b1Threat = getAdversarialThreat(b1Cell)
+            var b1EHP = player._currHealth + bestSimResult.hpGained + bestSimResult.shieldsGained
+            var b1Lethal = (b1EHP - b1Threat * (1.0 - bestSimResult.relativeShieldGained / 100.0)) <= 0
+            var b1Kills = (target != null && bestSimResult.damageDealt >= target._currHealth)
+            if (b1Lethal && !b1Kills) {
+                var b1SafeBest = null
+                var b1SafeScore = -999999
+                for (var b1i = 0; b1i < count(scenarioResults); b1i++) {
+                    var b1sd = scenarioResults[b1i]
+                    if (!b1sd['feasible']) continue
+                    var b1sim = b1sd['simResult']
+                    var b1c = b1sim.finalPosition
+                    if (b1c == -1) b1c = player._cellPos
+                    var b1t = getAdversarialThreat(b1c)
+                    var b1e = player._currHealth + b1sim.hpGained + b1sim.shieldsGained
+                    if (b1e - b1t * (1.0 - b1sim.relativeShieldGained / 100.0) <= 0) continue
+                    var b1s = mapContainsKey(b1sd, 'finalScore') ? b1sd['finalScore'] : b1sd['score']
+                    if (b1s > b1SafeScore) {
+                        b1SafeScore = b1s
+                        b1SafeBest = b1sd
+                    }
+                }
+                if (b1SafeBest != null) {
+                    debugW("B1_GATE_T" + getTurn() + "_sc" + floor(bestScore) + "to" + floor(b1SafeScore) + "_thr" + floor(b1Threat))
+                    bestScenario = b1SafeBest['scenario']
+                    bestSimResult = b1SafeBest['simResult']
+                    bestScore = b1SafeScore
+                }
+            }
+        }
+
         if (bestScenario != null) {
             var isDamaging = bestSimResult.damageDealt > 0 || bestSimResult.dotDamageQueued > 0
             var isHealing = bestSimResult.hpGained > 0

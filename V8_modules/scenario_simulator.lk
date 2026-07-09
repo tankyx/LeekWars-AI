@@ -70,6 +70,10 @@ class SimulationResult {
     poisonTurnsQueued = 0
 
     denialApplied = 0
+    // B3: MP denial tracked separately from the TP/MP aggregate — for kiter
+    // builds vs closers, stripped MP is survival tempo (turns of distance
+    // preserved), valued differently from generic action denial.
+    mpDenialApplied = 0
     strShackled = 0
     magShackled = 0
 
@@ -124,6 +128,7 @@ class SimulationResult {
                this.poisonSourcesUsed + "|" +
                this.poisonTurnsQueued + "|" +
                floor(this.denialApplied) + "|" +
+               floor(this.mpDenialApplied) + "|" +
                floor(this.strShackled) + "|" +
                floor(this.magShackled) + "|" +
                floor(this.erosionDamage) + "|" +
@@ -371,6 +376,7 @@ class ScenarioSimulator {
                             var effScaled = effAvg * (1 + simMagic / 100.0) * effInfo._effectDuration
                             if (eff == EFFECT_SHACKLE_TP || eff == EFFECT_SHACKLE_MP) {
                                 result.denialApplied += effScaled
+                                if (eff == EFFECT_SHACKLE_MP) result.mpDenialApplied += effScaled
                             } else if (eff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += effScaled
                             } else if (eff == EFFECT_SHACKLE_MAGIC) {
@@ -485,6 +491,7 @@ class ScenarioSimulator {
                             var wEffScaled = wEffAvg * (1 + simMagic / 100.0) * wEffInfo._effectDuration
                             if (wEff == EFFECT_SHACKLE_TP || wEff == EFFECT_SHACKLE_MP) {
                                 result.denialApplied += wEffScaled
+                                if (wEff == EFFECT_SHACKLE_MP) result.mpDenialApplied += wEffScaled
                             } else if (wEff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += wEffScaled
                             } else if (wEff == EFFECT_SHACKLE_MAGIC) {
