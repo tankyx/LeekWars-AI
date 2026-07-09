@@ -336,10 +336,14 @@ class WeightProfileInjector:
         self.path.write_text(new_content)
 
     def backup(self):
-        """Create a safety backup of weight_profiles.lk."""
-        if not self.backup_path.exists():
-            shutil.copy2(self.path, self.backup_path)
-            print(f"Backup saved: {self.backup_path}")
+        """Snapshot the CURRENT weight_profiles.lk (always overwrite).
+
+        The old if-not-exists guard kept a stale months-old backup and
+        restore() then clobbered every change made since — observed
+        2026-07-09 (reverted BUILD_SUPPORT et al to March state).
+        """
+        shutil.copy2(self.path, self.backup_path)
+        print(f"Backup saved: {self.backup_path}")
 
     def restore(self):
         """Restore weight_profiles.lk from backup."""
@@ -449,10 +453,10 @@ class CounterWeightInjector:
         self.path.write_text(new_content)
 
     def backup(self):
-        """Create a safety backup of strategic_depth.lk."""
-        if not self.backup_path.exists():
-            shutil.copy2(self.path, self.backup_path)
-            print(f"Backup saved: {self.backup_path}")
+        """Snapshot the CURRENT strategic_depth.lk (always overwrite —
+        see WeightProfileInjector.backup for the stale-backup incident)."""
+        shutil.copy2(self.path, self.backup_path)
+        print(f"Backup saved: {self.backup_path}")
 
     def restore(self):
         """Restore strategic_depth.lk from backup."""
