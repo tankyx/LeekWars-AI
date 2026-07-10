@@ -1213,7 +1213,7 @@ function recoverRemainingTP(target) {
                 if (dist == null) continue
                 if (dist < chipObj._minRange || dist > chipObj._maxRange) continue
                 if (!lineOfSight(getCell(), targetCell)) continue
-                if (chipObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())) continue
+                if (chipObj._aoeType != AREA_POINT && !chipObj._selfImmune && fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())) continue
                 value = quickRecoveryChipValue(chipId, 'enemy')
                 // B5: don't burn a cooldown damage chip as end-of-turn filler
                 // into a shield stack that expires this turn — the chip would
@@ -1247,7 +1247,7 @@ function recoverRemainingTP(target) {
                     if (weaponObj._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(getCell(), target._cellPos)) {
                         // Line weapon not aligned — skip
                     } else if (lineOfSight(getCell(), target._cellPos)) {
-                        if (weaponObj._aoeType == AREA_POINT || !fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell())) {
+                        if (weaponObj._aoeType == AREA_POINT || weaponObj._selfImmune || !fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell())) {
                             var value = quickRecoveryWeaponValue(currentWeapon)
                             if (value > bestValue) {
                                 bestValue = value
@@ -1271,7 +1271,7 @@ function recoverRemainingTP(target) {
                 if (totalCost > getTP()) continue
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
                 if (wObj._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(myPos, target._cellPos)) continue
-                if (wObj._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)) continue
+                if (wObj._aoeType != AREA_POINT && !wObj._selfImmune && fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)) continue
                 var wValue = quickRecoveryWeaponValue(wid)
                 if (wValue > bestValue) {
                     bestValue = wValue
@@ -1388,7 +1388,7 @@ function recoverRemainingTP(target) {
             if (isDebuffChip(chipIdF)) continue
             if (floorDistToTarget == null || !floorHasLos) continue
             if (floorDistToTarget < chipObjF._minRange || floorDistToTarget > chipObjF._maxRange) continue
-            if (chipObjF._aoeType != AREA_POINT && fieldMap.wouldAoEHitCell(target._cellPos, chipObjF._aoeType, floorMyPos, floorMyPos)) continue
+            if (chipObjF._aoeType != AREA_POINT && !chipObjF._selfImmune && fieldMap.wouldAoEHitCell(target._cellPos, chipObjF._aoeType, floorMyPos, floorMyPos)) continue
             var fvDmg = quickRecoveryChipValue(chipIdF, 'enemy')
             if (fvDmg > floorBestValue) {
                 floorBestValue = fvDmg

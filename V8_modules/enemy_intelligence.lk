@@ -39,6 +39,8 @@ function profileEnemy(enemy) {
         var effects = getWeaponEffects(weaponId)
         var weaponDmg = 0
         for (var eff in effects) {
+            // Skip components that can't hit a leek (summons-only masks).
+            if (count(eff) >= 5 && (eff[4] & 8) == 0) { continue }
             if (eff[0] == EFFECT_DAMAGE) {
                 var avgDmg = (eff[1] + eff[2]) / 2
                 weaponDmg += avgDmg * (1 + str / 100)
@@ -63,6 +65,7 @@ function profileEnemy(enemy) {
         var effects = getChipEffects(chipId)
         if (effects == null) continue
         for (var eff in effects) {
+            if (count(eff) >= 5 && (eff[4] & 8) == 0) { continue }
             if (eff[0] == EFFECT_DAMAGE) {
                 var avgDmg = (eff[1] + eff[2]) / 2
                 maxBurst += avgDmg * (1 + mag / 100)
@@ -186,6 +189,10 @@ function profileEnemy(enemy) {
             var effs = getChipEffects(cid)
             if (effs != null) {
                 for (var eff in effs) {
+                    // Summons-only component (target mask lacks the
+                    // non-summons bit 8): never lands on a leek — don't
+                    // credit it (carapace/rampart big halves).
+                    if (count(eff) >= 5 && (eff[4] & 8) == 0) { continue }
                     if (eff[0] == EFFECT_HEAL) {
                         var avgHeal = (eff[1] + eff[2]) / 2 * wisScale
                         // HoT: multiply by duration
@@ -202,6 +209,7 @@ function profileEnemy(enemy) {
             var effs = getChipEffects(cid)
             if (effs != null) {
                 for (var eff in effs) {
+                    if (count(eff) >= 5 && (eff[4] & 8) == 0) { continue }
                     if (eff[0] == EFFECT_ABSOLUTE_SHIELD || eff[0] == EFFECT_RELATIVE_SHIELD) {
                         var avgShield = (eff[1] + eff[2]) / 2
                         if (eff[0] == EFFECT_RELATIVE_SHIELD) avgShield *= 30

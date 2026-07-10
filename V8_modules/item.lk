@@ -15,6 +15,12 @@ class Item {
     _launchType = -1
     _aoeType = -1
     _effects = [:]
+    // True when none of the item's damage/poison/nova components carry the
+    // caster bit (4) in their target mask — the engine makes the caster
+    // immune (e.g. LIGHTNING, targets=27). AoE self-hit guards skip these:
+    // point-blank casts are safe. Computed from API effects (the item DB's
+    // raw effect data doesn't carry target masks).
+    _selfImmune = false
 
     constructor(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType) {
         this._id = id
@@ -37,6 +43,23 @@ class Item {
 
             mapPut(this._effects, e[0], effectsInfos)
         }
+    }
+
+    computeSelfImmunity(apiEffects) {
+        if (apiEffects == null) { return }
+        var siSawDamage = false
+        var siSawSelfHit = false
+        for (var e in apiEffects) {
+            if (e[0] == EFFECT_DAMAGE || e[0] == EFFECT_POISON
+                || e[0] == EFFECT_NOVA_DAMAGE || e[0] == EFFECT_LIFE_DAMAGE) {
+                siSawDamage = true
+                // API effect entry: [id, min, max, turns, targets, modifiers].
+                // Missing/zero caster bit means the engine refuses to apply
+                // this component to the caster (Attack.java target filter).
+                if (count(e) < 5 || (e[4] & 4) != 0) { siSawSelfHit = true }
+            }
+        }
+        this._selfImmune = siSawDamage && !siSawSelfHit
     }
 }
 
@@ -93,7 +116,7 @@ class Arsenal {
             if (weaponData != null) {
                 dbCount++
                 var effects = this.convertEffectsMapToArray(weaponData[3])
-                mapPut(this.weaponsList, w, new Weapon(
+                var dbWeapon = new Weapon(
                     w,
                     weaponData[1],
                     weaponData[2],
@@ -102,19 +125,24 @@ class Arsenal {
                     1,
                     weaponData[5],
                     weaponData[6]
-                ));
+                )
+                dbWeapon.computeSelfImmunity(getWeaponEffects(w))
+                mapPut(this.weaponsList, w, dbWeapon);
             } else {
                 apiCount++
-                mapPut(this.weaponsList, w, new Weapon(
+                var apiWeaponEffects = getWeaponEffects(w)
+                var apiWeapon = new Weapon(
                     w,
                     getWeaponMinRange(w),
                     getWeaponMaxRange(w),
-                    getWeaponEffects(w),
+                    apiWeaponEffects,
                     getWeaponCost(w),
                     getWeaponMaxUses(w),
                     getWeaponLaunchType(w),
                     getWeaponArea(w)
-                ));
+                )
+                apiWeapon.computeSelfImmunity(apiWeaponEffects)
+                mapPut(this.weaponsList, w, apiWeapon);
             }
         }
         debug("Arsenal: " + dbCount + " weapons from DB, " + apiCount + " from API")
@@ -131,7 +159,7 @@ class Arsenal {
             if (chipData != null) {
                 dbCount++
                 var effects = this.convertEffectsMapToArray(chipData[3])
-                mapPut(this.chipsList, c, new Chip(
+                var dbChip = new Chip(
                     c,
                     chipData[1],
                     chipData[2],
@@ -141,20 +169,25 @@ class Arsenal {
                     chipData[5],
                     chipData[6],
                     chipData[7]
-                ));
+                )
+                dbChip.computeSelfImmunity(getChipEffects(c))
+                mapPut(this.chipsList, c, dbChip);
             } else {
                 apiCount++
-                mapPut(this.chipsList, c, new Chip(
+                var apiChipEffects = getChipEffects(c)
+                var apiChip = new Chip(
                     c,
                     getChipMinRange(c),
                     getChipMaxRange(c),
-                    getChipEffects(c),
+                    apiChipEffects,
                     getChipCost(c),
                     getChipMaxUses(c),
                     getChipLaunchType(c),
                     getChipArea(c),
                     getCooldown(c, getEntity())
-                ));
+                )
+                apiChip.computeSelfImmunity(apiChipEffects)
+                mapPut(this.chipsList, c, apiChip);
             }
         }
         debug("Arsenal: " + dbCount + " chips from DB, " + apiCount + " from API")

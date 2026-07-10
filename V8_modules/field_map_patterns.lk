@@ -221,7 +221,7 @@ class FieldMapPatterns extends FieldMapCore {
         // penalty when shooter is inside the AoE. This replaces the earlier
         // hard filter that rejected legitimate Nova trades vs tanks.
         var itemSelfBaseMax = 0
-        if (aoeType != AREA_POINT && aoeType != AREA_LASER_LINE) {
+        if (aoeType != AREA_POINT && aoeType != AREA_LASER_LINE && !item._selfImmune) {
             var sbd = arsenal.getDamageBreakdown(player._strength, player._magic,
                                                   player._wisdom, player._science, itemId)
             if (sbd != null) {

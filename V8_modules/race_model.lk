@@ -47,6 +47,9 @@ function raceEstimateGrossDPT(ent) {
         if (wEffects == null) continue
         var wDmg = 0
         for (var eff in wEffects) {
+            // Summons-only components (mask lacks non-summons bit 8) never
+            // land on a leek — don't credit them.
+            if (count(eff) >= 5 && (eff[4] & 8) == 0) { continue }
             if (eff[0] == EFFECT_DAMAGE) {
                 wDmg += (eff[1] + eff[2]) / 2 * (1 + str / 100)
             }
@@ -72,6 +75,7 @@ function raceEstimateGrossDPT(ent) {
         if (cd == null || cd < 1) cd = 1
         if (cd > 5) cd = 5
         for (var eff in cEffects) {
+            if (count(eff) >= 5 && (eff[4] & 8) == 0) { continue }
             if (eff[0] == EFFECT_DAMAGE) {
                 chipDPT += (eff[1] + eff[2]) / 2 * (1 + str / 100) / cd
             }
@@ -100,6 +104,7 @@ function raceEstimateSustain(ent) {
         var cd = getChipCooldown(cid)
         if (cd == null || cd <= 0) cd = 5
         for (var eff in effs) {
+            if (count(eff) >= 5 && (eff[4] & 8) == 0) { continue }
             if (eff[0] == EFFECT_HEAL) {
                 var avgHeal = (eff[1] + eff[2]) / 2 * wisScale
                 if (eff[3] != null && eff[3] > 0) avgHeal *= eff[3]

@@ -2282,7 +2282,7 @@ class ScenarioCombos extends ScenarioHelpers {
             if (dist == null || dist < dObj._minRange || dist > dObj._maxRange) continue
             if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
 
-            if (dObj._aoeType != AREA_POINT) {
+            if (dObj._aoeType != AREA_POINT && !dObj._selfImmune) {
                 if (fieldMap.wouldAoEHitCell(this._target._cellPos, dObj._aoeType, simPos, simPos)) continue
             }
 
@@ -2303,7 +2303,7 @@ class ScenarioCombos extends ScenarioHelpers {
             if (dist == null || dist < poisonChip._minRange || dist > poisonChip._maxRange) continue
             if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
 
-            if (poisonChip._aoeType != AREA_POINT) {
+            if (poisonChip._aoeType != AREA_POINT && !poisonChip._selfImmune) {
                 if (fieldMap.wouldAoEHitCell(this._target._cellPos, poisonChip._aoeType, simPos, simPos)) continue
             }
 
@@ -2648,7 +2648,7 @@ class ScenarioCombos extends ScenarioHelpers {
             if (grapplePulled) dDDist = simDist
             if (dDDist == null || dDDist < dDObj._minRange || dDDist > dDObj._maxRange) continue
             if (!getCachedLineOfSight(simPos, this._target._cellPos)) continue
-            if (dDObj._aoeType != AREA_POINT &&
+            if (dDObj._aoeType != AREA_POINT && !dDObj._selfImmune &&
                 fieldMap.wouldAoEHitCell(this._target._cellPos, dDObj._aoeType, simPos, simPos)) continue
             push(actions, new Action(Action.ACTION_DEBUFF, -1, dDChip, this._target._cellPos, this._target))
             tpBudget -= dDCost

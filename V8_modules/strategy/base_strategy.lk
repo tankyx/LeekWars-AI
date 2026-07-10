@@ -44,6 +44,9 @@ class Strategy {
         var chip = arsenal.playerEquippedChips[chipId]
 
         if (chip._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
+        // Caster-immune items (target mask excludes caster, e.g. LIGHTNING):
+        // the engine won't apply their damage to us — point-blank is safe.
+        if (chip._selfImmune) return ['safe': true, 'needsRepositioning': false]
 
         if (fieldMap.wouldAoEHitCell(targetCell, chip._aoeType, fromCell, fromCell)) {
             return ['safe': false, 'needsRepositioning': true]
@@ -57,6 +60,7 @@ class Strategy {
         var weapon = arsenal.playerEquippedWeapons[weaponId]
 
         if (weapon._aoeType == AREA_POINT) return ['safe': true, 'needsRepositioning': false]
+        if (weapon._selfImmune) return ['safe': true, 'needsRepositioning': false]
 
         if (fieldMap.wouldAoEHitCell(targetCell, weapon._aoeType, fromCell, fromCell)) {
             return ['safe': false, 'needsRepositioning': true]
@@ -2244,7 +2248,7 @@ class Strategy {
                         if (mapContainsKey(arsenal.playerEquippedChips, a.chip)) {
                             chipItem = arsenal.playerEquippedChips[a.chip]
                         }
-                        if (chipItem != null && chipItem._aoeType != AREA_POINT) {
+                        if (chipItem != null && chipItem._aoeType != AREA_POINT && !chipItem._selfImmune) {
                             if (fieldMap.wouldAoEHitCell(targetPos, chipItem._aoeType, currentPos, currentPos)) {
                                 if (getTurn() <= 20) {
                                     debugW("EXEC_T" + getTurn() + "_CHIPc" + a.chip + "_AOE_SELF_SKIP_fc" + currentPos + "_tc" + targetPos)
@@ -2371,7 +2375,7 @@ class Strategy {
                     }
 
                     var weaponItem = arsenal.playerEquippedWeapons[a.weaponId]
-                    if (weaponItem != null && weaponItem._aoeType != AREA_POINT) {
+                    if (weaponItem != null && weaponItem._aoeType != AREA_POINT && !weaponItem._selfImmune) {
                         if (fieldMap.wouldAoEHitCell(targetPos, weaponItem._aoeType, currentPos, currentPos)) {
                             if (getTurn() <= 20) {
                                 debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_AOE_SELF_HIT_fc" + currentPos + "_tc" + targetPos)
@@ -3016,7 +3020,7 @@ class Strategy {
                 }
                 if (aoeItem != null && aoeItem._aoeType != AREA_POINT) {
                     var aimCell = action.targetCell
-                    if (aimCell != -1 && aimCell != simulatedPos) {
+                    if (aimCell != -1 && aimCell != simulatedPos && !aoeItem._selfImmune) {
                         if (fieldMap.wouldAoEHitCell(aimCell, aoeItem._aoeType, simulatedPos, simulatedPos)) {
                             isValid = false
                             reason = "AoE would hit caster"
