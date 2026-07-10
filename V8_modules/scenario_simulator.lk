@@ -543,7 +543,7 @@ class ScenarioSimulator {
                 if (buffAllyTarget) {
                     if (action.chip == CHIP_VACCINE || action.chip == CHIP_CURE
                         || action.chip == CHIP_DRIP || action.chip == CHIP_BANDAGE
-                        || action.chip == CHIP_REMISSION) {
+                        || action.chip == CHIP_REMISSION || action.chip == CHIP_SERUM) {
                         result.allyHpGained += this.estimateHealing(action.chip, simWisdom)
                     } else if (action.chip == CHIP_HELMET || action.chip == CHIP_SHIELD) {
                         result.allyShieldsGained += this.estimateShieldAmount(action.chip, simWisdom)

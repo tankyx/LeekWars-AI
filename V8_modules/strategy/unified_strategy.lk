@@ -1483,6 +1483,10 @@ function quickRecoveryChipValue(chipId, mode) {
 
     if (mode == 'self') {
         if (isHealingChip(chipId)) {
+            // SERUM never applies to its caster (verified in-engine: cast
+            // succeeds, zero effects land — ally/summon-only in practice).
+            // Self-casting it burns 8 TP for nothing.
+            if (chipId == CHIP_SERUM) { return -1 }
             var hpMissing = player._maxHealth - player._currHealth
             if (hpMissing > 0) {
                 var healEst = min(hpMissing, beamEstimateHeal(chipId, player._wisdom))
@@ -1659,7 +1663,9 @@ function supportAlliesPass() {
 
     // 1. Heal the weakest ally when meaningfully wounded.
     if (supWeakRatio < 0.85) {
-        var supHealChips = [CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
+        // SERUM leads: strongest ally HoT and it can ONLY target allies —
+        // the caster is excluded in-engine despite the data mask.
+        var supHealChips = [CHIP_SERUM, CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
         for (var supHc in supHealChips) {
             if (!mapContainsKey(arsenal.playerEquippedChips, supHc)) continue
             if (getCooldown(supHc, supMyId) > 0) continue
