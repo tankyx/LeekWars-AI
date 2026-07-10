@@ -117,9 +117,9 @@ python3 tools/local_test.py 20 smart_str --leek AdaLovelace --parallel 2
 |---|---|---|
 | EdsgerDijkstra vs smart_str | ~100% | Strong matchup |
 | EdsgerDijkstra vs smart_agi | ~100% | Strong matchup |
-| EdsgerDijkstra vs smart_tank | ~95% W / 5% D | Was draw-prone; closing/buff-decay fixes drove the win rate up |
+| EdsgerDijkstra vs smart_tank | ~100% | 40/40 as of 2026-07-10 (race model + tunables) |
 | AdaLovelace vs smart_str | ~100% | Strong matchup |
-| KurtGodel vs smart_tank | ~60% W | Nova attrition vs tank, no more draws |
+| KurtGodel vs smart_tank | ~100% | 80/80 as of 2026-07-10 — old ~60% figure was stale |
 | MargaretHamilton vs smart_mag | ~95% W | Was structurally unfavorable; poison/denial scoring improvements |
 | LeekRain vs smart_dannyd | 100% (40/40, ~6.2 turns) | Validated after the bulb-race + no-antidote + motivation-gate fixes |
 
