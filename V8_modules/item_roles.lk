@@ -43,7 +43,6 @@ function initializeItemRoles() {
     ROLE_OFFENSIVE_BUFF[CHIP_WARM_UP] = true
     ROLE_OFFENSIVE_BUFF[CHIP_DOPING] = true
     ROLE_OFFENSIVE_BUFF[CHIP_RAGE] = true
-    ROLE_OFFENSIVE_BUFF[CHIP_TRANQUILIZER] = true
     ROLE_OFFENSIVE_BUFF[CHIP_FEROCITY] = true
     ROLE_OFFENSIVE_BUFF[CHIP_KNOWLEDGE] = true
     ROLE_OFFENSIVE_BUFF[CHIP_ELEVATION] = true
@@ -60,6 +59,10 @@ function initializeItemRoles() {
     ROLE_DEBUFF[CHIP_BALL_AND_CHAIN] = true
     ROLE_DEBUFF[CHIP_FRACTURE] = true
     ROLE_DEBUFF[CHIP_SOPORIFIC] = true
+    // TP shackle, cd 0 — was misfiled as OFFENSIVE_BUFF, so the scenario
+    // pipeline never cast it on enemies (found when MH equipped it and it
+    // sat at 0 uses while soporific/ball_and_chain fired normally).
+    ROLE_DEBUFF[CHIP_TRANQUILIZER] = true
 
     ROLE_UTILITY[CHIP_TELEPORTATION] = true
     ROLE_UTILITY[CHIP_JUMP] = true
@@ -75,6 +78,9 @@ function initializeItemRoles() {
 
     ROLE_NOVA_CHIP[CHIP_ALTERATION] = true
     ROLE_NOVA_CHIP[CHIP_MUTATION] = true
+    // Kurt's anti-sustain draw-breaker (SCI 260 -> ~250-290 nova/cast).
+    // Without the tag the quick-scorer prunes it and no template offers it.
+    ROLE_NOVA_CHIP[CHIP_DESINTEGRATION] = true
 }
 
 function isHealingChip(chipId) {

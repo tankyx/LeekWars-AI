@@ -513,7 +513,8 @@ class ScenarioHelpers {
             var damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG,
                                CHIP_ROCKFALL, CHIP_STALACTITE,
                                CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
-                               CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_PUNISHMENT]
+                               CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER,
+                               CHIP_DESINTEGRATION, CHIP_PUNISHMENT]
             var bestChipImmediate = 0
             var bestChipTotal = 0
             for (var chipId in damageChips) {
@@ -1496,7 +1497,7 @@ class ScenarioHelpers {
         if (getTP() < teleCost + 5) return null
         // Only worth doing if at least one shackle is off cooldown
         var anyShackleReady = false
-        var shackleIds = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+        var shackleIds = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER]
         for (var sId in shackleIds) {
             if (mapContainsKey(this._arsenal.playerEquippedChips, sId) &&
                 getCooldown(sId, this._player._id) == 0) {
@@ -1542,7 +1543,7 @@ class ScenarioHelpers {
         // shackle duration is meaningful. The previous gate (mag > str + 100)
         // excluded hybrids like MargaretHamilton (mag 500 / str 400) entirely.
         if (this._player._magic < 150) return actions
-        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN]
+        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER]
         for (var dChip in denialChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
             if (getCooldown(dChip, this._player._id) > 0) continue
@@ -1848,7 +1849,8 @@ class ScenarioHelpers {
                            CHIP_ROCKFALL,
                            CHIP_FIRE_BALL, CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE, CHIP_ARSENIC,
                            CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID,
-                           CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_PUNISHMENT]
+                           CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER,
+                           CHIP_DESINTEGRATION, CHIP_PUNISHMENT]
 
         for (var chipId in damageChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, chipId)) continue

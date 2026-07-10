@@ -492,7 +492,7 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
             }
         }
         else if (isDebuffChip(chipId)) {
-            if (chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN) {
+            if (chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN || chipId == CHIP_TRANQUILIZER) {
                 value += 200 * (1 + simMag / 500)
                 var hasPoison = false
                 for (var a in partial['actions']) {
@@ -721,7 +721,7 @@ function beamCountUnusedPoisonChips(partial, arsenalObj) {
 function beamCountUnusedDenialChips(partial, arsenalObj) {
     var count = 0
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
-        if ((chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN) &&
+        if ((chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN || chipId == CHIP_TRANQUILIZER) &&
             !mapContainsKey(partial['chipUsed'], chipId)) {
             if (getCooldown(chipId, getEntity()) == 0) count++
         }
