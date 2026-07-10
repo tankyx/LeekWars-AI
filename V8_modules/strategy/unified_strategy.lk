@@ -437,7 +437,30 @@ class UnifiedStrategy extends Strategy {
         var _hasMetallic = mapContainsKey(arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
         if (_hasSavant || _hasMetallic) {
             var _bulbChip = _hasSavant ? CHIP_SAVANT_BULB : CHIP_METALLIC_BULB
-            if (getCooldown(_bulbChip, player._id) == 0) {
+            // Reserve only while we're below the 2-concurrent-summons cap —
+            // otherwise the ready-again cooldown taxes every scenario 16 TP
+            // for a summon the tail will never place.
+            //
+            // Solo gate: pre-cutting 16 TP from a 25-TP leek's scenarios is
+            // measured harm (synthetic bulb-Kurt vs smart_tank: 13W/7D where
+            // vanilla is 40/40 — the reserve paced his damage into draws).
+            // With a leek ally the tempo is shared and the reserve pays; solo
+            // it needs 28+ TP (top-50 bulb users run 27-29). Below that,
+            // summons still happen opportunistically from the executor tail.
+            var _sumLeekAlly = false
+            var _sumAllies = getAliveAllies()
+            if (_sumAllies != null) {
+                for (var _suA in _sumAllies) {
+                    if (_suA == player._id) { continue }
+                    if (getType(_suA) == ENTITY_LEEK && !isDead(_suA)) {
+                        _sumLeekAlly = true
+                        break
+                    }
+                }
+            }
+            if (getCooldown(_bulbChip, player._id) == 0
+                && countMyLivingSummons(player._id) < 2
+                && (_sumLeekAlly || player._currTp >= getChipCost(_bulbChip) + 12)) {
                 summonReserveTP = getChipCost(_bulbChip)
             }
         }
@@ -1503,6 +1526,22 @@ function quickRecoveryChipValue(chipId, mode) {
             } else {
                 value += 50
             }
+            // Uptime awareness (top-50 pattern: rage/reflexes-class buffs are
+            // recast the moment they expire, all fight — 31-32 casts over 64
+            // turns observed at rank 5). An EXPIRED core buff amplifies every
+            // subsequent attack; a redundant re-stack does far less. Match by
+            // item id in our active effects (effect array index 5).
+            // High-TP leeks only: on a 12-TP support every doubled buff
+            // outbids the attack that actually ends the fight (DuskHope
+            // 5W/20 -> 2-3W/20, draws up — measured).
+            if (player._maxTp == null || player._maxTp >= 18) {
+                var upActive = false
+                for (var upE in player._effectsActive) {
+                    if (count(upE) >= 6 && upE[5] == chipId) { upActive = true; break }
+                }
+                if (!upActive) { value = floor(value * 2.0) }
+                else { value = floor(value * 0.6) }
+            }
             if (chipId == CHIP_KNOWLEDGE || chipId == CHIP_PRISM) {
                 var hpMissing = player._maxHealth - player._currHealth
                 if (hpMissing > 50) {
@@ -1518,7 +1557,8 @@ function quickRecoveryChipValue(chipId, mode) {
         }
     }
 
-    if (chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN) {
+    if (chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN
+        || chipId == CHIP_TRANQUILIZER || chipId == CHIP_SLOW_DOWN) {
         value += 200 * (1 + player._magic / 500)
     }
 

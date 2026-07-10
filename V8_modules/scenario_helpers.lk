@@ -1497,7 +1497,7 @@ class ScenarioHelpers {
         if (getTP() < teleCost + 5) return null
         // Only worth doing if at least one shackle is off cooldown
         var anyShackleReady = false
-        var shackleIds = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER]
+        var shackleIds = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
         for (var sId in shackleIds) {
             if (mapContainsKey(this._arsenal.playerEquippedChips, sId) &&
                 getCooldown(sId, this._player._id) == 0) {
@@ -1543,7 +1543,7 @@ class ScenarioHelpers {
         // shackle duration is meaningful. The previous gate (mag > str + 100)
         // excluded hybrids like MargaretHamilton (mag 500 / str 400) entirely.
         if (this._player._magic < 150) return actions
-        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER]
+        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
         for (var dChip in denialChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
             if (getCooldown(dChip, this._player._id) > 0) continue
@@ -1989,6 +1989,32 @@ class ScenarioHelpers {
     }
 
     createSummonAction() {
+        // Engine limit is 8 summons per TEAM; we allow ourselves 2 alive at
+        // once (top-50 meta keeps a bulb pool up all fight; beyond 2 the TP
+        // is better spent on the turn itself).
+        if (countMyLivingSummons(this._player._id) >= 2) { return null }
+
+        // TEAM FIGHTS ONLY — all tiers. Solo bulbs with our current bulb
+        // micro are measured harm at every tier tried: low-tier flipped
+        // DuskHope's unlosable matchups, and synthetic savant/metallic Kurt
+        // drew 4-7/20 vs bots he beats 40/40 clean (even with the reserve
+        // gated to allies, the 16-TP tail summons paced his damage into
+        // draws). Top-50 solo players DO run bulb pools — on 27-29 TP with
+        // sharper bulb micro. Revisit when either is true for us.
+        var sumHasLeekAlly = false
+        var sumAllies = getAliveAllies()
+        if (sumAllies != null) {
+            for (var sumA in sumAllies) {
+                if (sumA == this._player._id) { continue }
+                if (isDead(sumA)) { continue }
+                if (getType(sumA) == ENTITY_LEEK) {
+                    sumHasLeekAlly = true
+                    break
+                }
+            }
+        }
+        if (!sumHasLeekAlly) { return null }
+
         var playerHP = this._player._currHealth
         var playerMaxHP = this._player._maxHealth
         var hpPercent = (playerHP * 100) / playerMaxHP

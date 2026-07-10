@@ -2554,6 +2554,31 @@ class Strategy {
             }
         }
 
+        // Resurrection tail: revive a dead leek ally (team fights) or one of
+        // our own dead bulbs. 21/50 of the top-talent ladder carry this chip
+        // to keep the summon pool alive; the chip is implicit in resurrect().
+        if (mapContainsKey(arsenal.playerEquippedChips, CHIP_RESURRECTION)
+            && getCooldown(CHIP_RESURRECTION, getEntity()) == 0
+            && getTP() >= getChipCost(CHIP_RESURRECTION)) {
+            var rezTarget = -1
+            var rezDead = getDeadAllies()
+            if (rezDead != null) {
+                for (var rzA in rezDead) {
+                    if (rzA == player._id) { continue }
+                    if (getType(rzA) == ENTITY_LEEK) { rezTarget = rzA; break }
+                    if (rezTarget == -1 && getSummoner(rzA) == player._id) { rezTarget = rzA }
+                }
+            }
+            if (rezTarget != -1) {
+                player.updateEntity()
+                var _rezHelper = new ScenarioHelpers(arsenal, player, player, this._fieldMap, this)
+                var rezCell = _rezHelper.findBulbSummonCell(player._cellPos, 2)
+                if (rezCell != -1) {
+                    resurrect(rezTarget, rezCell)
+                }
+            }
+        }
+
         var poisonTrackTarget = null
         for (var action in this._actions) {
             if (action.targetEntity != null && action.targetEntity._id != player._id) {

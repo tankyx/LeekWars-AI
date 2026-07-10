@@ -2270,7 +2270,7 @@ class ScenarioCombos extends ScenarioHelpers {
         // Denial first — shackles are the highest-value action in BAIT (deny
         // enemy TP/MP for 2-3 turns AND bait their Antidote/Liberation). Queue
         // them before poisons so they don't get starved when TP runs low.
-        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER]
+        var denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
         for (var dChip in denialChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, dChip)) continue
             if (getCooldown(dChip, this._player._id) > 0) continue
@@ -2637,7 +2637,7 @@ class ScenarioCombos extends ScenarioHelpers {
 
         // Queue shackles in DUMP phase too — denial stacks with poison and
         // doesn't depend on the BAIT/DUMP state to be effective.
-        var dumpDenialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER]
+        var dumpDenialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
         for (var dDChip in dumpDenialChips) {
             if (!mapContainsKey(this._arsenal.playerEquippedChips, dDChip)) continue
             if (getCooldown(dDChip, this._player._id) > 0) continue

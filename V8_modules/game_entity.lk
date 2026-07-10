@@ -229,6 +229,21 @@ function getSummonerLevel(entityId) {
     return 150
 }
 
+// Living summons WE own. The engine caps summons at 8 per TEAM (not per
+// leek), so a solo leek can legally stack several bulbs — top-50 play keeps
+// a rotating pool alive all fight. We cap our own concurrency at 2 in the
+// summon logic; this is the counter that gates it.
+function countMyLivingSummons(playerId) {
+    var allies = getAliveAllies()
+    if (allies == null) { return 0 }
+    var n = 0
+    for (var a in allies) {
+        if (a == playerId) { continue }
+        if (getSummoner(a) == playerId) { n++ }
+    }
+    return n
+}
+
 function estimateBulbHP(entity) {
     if (entity == null) return 0
 
