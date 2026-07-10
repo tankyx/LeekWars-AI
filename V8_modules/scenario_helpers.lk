@@ -240,6 +240,16 @@ class ScenarioHelpers {
                 var turnsToFinish = enemyHP / __avgDamageRate
                 if (turnsToFinish < 2) return "ATTRITION"
             }
+            // Race model: when we decisively win the mutual-sustain race
+            // (they die ≥3 turns before we would, at current net rates),
+            // SUSTAIN only stretches the fight toward the 64-turn draw —
+            // the Ada pattern: 4 heal chips, 11% draw rate, out-sustaining
+            // opponents into stalemates instead of trading them down. Keep
+            // pressing. HP floor at 45% so genuine danger still sustains.
+            if (__raceVerdict == "WINNING" && __raceMargin >= 3
+                && playerHPPercent >= 45) {
+                return "ATTRITION"
+            }
             return "SUSTAIN"
         }
 

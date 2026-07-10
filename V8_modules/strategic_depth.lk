@@ -553,6 +553,54 @@ function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
         }
     }
 
+    // Race-model coupling: shift value toward race-CHANGING dimensions when
+    // the analytic race says trading at current rates loses or stalls, and
+    // toward closing it out when we're clearly ahead. Turn ≥4 gate lets the
+    // observed-rate blend accumulate evidence first; every nudge below is
+    // subject to the drift clamp that follows.
+    if (currentTurn >= 4 && __raceVerdict == "LOSING") {
+        // Straight trades lose. If the arsenal has race-CHANGING dimensions
+        // (denial, positive DoT, nova), shift value into them and out of the
+        // burst race we're losing. If it has none (pure burst builds like
+        // ED), the only slope we own is killing faster — press, don't hedge;
+        // backing off burst on a poison clock just guarantees the loss.
+        var raceHasChangers = mapContainsKey(adapted, 'denialValue')
+            || (mapContainsKey(adapted, 'novaEffects') && adapted['novaEffects'] > 0)
+            || (mapContainsKey(adapted, 'dotEffects') && adapted['dotEffects'] > 0)
+        if (raceHasChangers) {
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.25)
+            }
+            if (mapContainsKey(adapted, 'dotEffects') && adapted['dotEffects'] > 0) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * 1.15)
+            }
+            if (mapContainsKey(adapted, 'novaEffects')) {
+                adapted['novaEffects'] = floor(adapted['novaEffects'] * 1.3)
+            }
+            adapted['healValue'] = floor(adapted['healValue'] * 1.15)
+            adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.2)
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 0.9)
+        } else {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.1)
+            adapted['healValue'] = floor(adapted['healValue'] * 1.1)
+        }
+    } else if (__raceVerdict == "STALL" && currentTurn > 12) {
+        // Neither side kills inside the turn limit at current rates: the
+        // draw signature. Nova (permanent max-HP cuts erase heal-back room)
+        // and denial (break their sustain casts) are the only rate-changers.
+        if (mapContainsKey(adapted, 'novaEffects')) {
+            adapted['novaEffects'] = floor(adapted['novaEffects'] * 1.4)
+        }
+        if (mapContainsKey(adapted, 'denialValue')) {
+            adapted['denialValue'] = floor(adapted['denialValue'] * 1.3)
+        }
+    } else if (currentTurn >= 4 && __raceVerdict == "WINNING" && __raceMargin >= 3) {
+        // We win the race with margin: stop over-investing in sustain that
+        // only lengthens the fight; convert the margin into tempo.
+        adapted['healValue'] = floor(adapted['healValue'] * 0.85)
+        adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.1)
+    }
+
     // Audit item 6: bounded multiplier drift. The adaptations above stack
     // from independent systems (counter-mults, engagement plans, static
     // signals, observations, sustain-war, mirror doctrine) and nothing

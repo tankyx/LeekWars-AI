@@ -224,12 +224,17 @@ def main():
     }
 
     # Preserve existing opponents not in our dummy set (e.g. smart_* opponents)
+    # and leeks from OTHER accounts (fetching main must not clobber cure leeks
+    # and vice versa — DuskHope/ProdigalSon vanished this way once).
     if OUTPUT_FILE.exists():
         with open(OUTPUT_FILE) as f:
             existing = json.load(f)
         for key, val in existing.get("opponents", {}).items():
             if key not in opponents:
                 opponents[key] = val
+        for key, val in existing.get("leeks", {}).items():
+            if key not in leek_configs:
+                leek_configs[key] = val
 
     output = {
         "leeks": leek_configs,

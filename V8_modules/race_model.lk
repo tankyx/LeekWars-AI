@@ -1,0 +1,204 @@
+// Explicit race model: analytic turns-to-kill in BOTH directions, blended
+// with observed net damage rates. Everything the strategy machinery has been
+// approximating piecemeal (sustain-war branch, anti-poison AGGRO, stalemate
+// detector, __timePressure) is a shadow of one question: who dies first at
+// current rates, and can we change the answer?
+//
+// Per turn this publishes:
+//   __raceOurTTK    — projected turns until the primary target dies
+//   __raceEnemyTTK  — projected turns until WE die (all enemies' pressure)
+//   __raceMargin    — __raceEnemyTTK - __raceOurTTK (positive = we win)
+//   __raceVerdict   — "WINNING" / "LOSING" / "EVEN" / "STALL"
+//
+// STALL means neither side kills inside the 64-turn limit at current rates —
+// the draw signature. Consumers: determineStrategicState (stop SUSTAIN-ing
+// races we already win) and adaptWeightsToSituation (LOSING/STALL → shift
+// value into race-changing dimensions: denial, DoT, nova).
+//
+// Cost: a few thousand ops on turn 1 (arsenal scans, cached), ~hundreds after.
+
+global __raceOurTTK = 999.0
+global __raceEnemyTTK = 999.0
+global __raceMargin = 0.0
+global __raceVerdict = "EVEN"
+// Raw (unconfirmed) verdict from the previous turn — a verdict change only
+// publishes after two consecutive turns agree. Net-rate EMAs oscillate on
+// burst-vs-approach turn alternation (observed vs smart_tank: STALL↔WINNING
+// flapping every 2-3 turns); consumers need a stable signal.
+global __raceRawPrev = "EVEN"
+global __racePrevPlayerHP = -1
+global __avgDamageTakenRate = 0.0
+// entity id -> [grossDPT, sustainPerTurn], computed once (equipment is static)
+global __raceProfileCache = [:]
+
+// Gross damage-per-turn ceiling from an entity's arsenal: best weapon spam at
+// full TP plus cooldown-amortized damage chips. EFFECT_DAMAGE scales with STR
+// for weapons AND chips (generator Effect.java); EFFECT_POISON scales with MAG
+// and is credited at full duration spread over the cooldown.
+function raceEstimateGrossDPT(ent) {
+    var tp = getTotalTP(ent._id)
+    if (tp == null || tp <= 0) tp = 12
+    var str = max(0, ent._strength)
+    var mag = max(0, ent._magic)
+
+    var bestWeaponDPT = 0
+    for (var wid in ent._weapons) {
+        var wEffects = getWeaponEffects(wid)
+        if (wEffects == null) continue
+        var wDmg = 0
+        for (var eff in wEffects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                wDmg += (eff[1] + eff[2]) / 2 * (1 + str / 100)
+            }
+            if (eff[0] == EFFECT_POISON) {
+                // Per-use poison: full duration eventually lands; credit 2
+                // ticks as the per-turn contribution of one use.
+                var pTurns = (eff[3] != null && eff[3] > 0) ? min(2, eff[3]) : 1
+                wDmg += (eff[1] + eff[2]) / 2 * (1 + mag / 100) * pTurns
+            }
+        }
+        var wCost = getWeaponCost(wid)
+        if (wCost != null && wCost > 0 && wDmg > 0) {
+            var wTotal = wDmg * floor(tp / wCost)
+            if (wTotal > bestWeaponDPT) bestWeaponDPT = wTotal
+        }
+    }
+
+    var chipDPT = 0
+    for (var cid in ent._chips) {
+        var cEffects = getChipEffects(cid)
+        if (cEffects == null) continue
+        var cd = getChipCooldown(cid)
+        if (cd == null || cd < 1) cd = 1
+        if (cd > 5) cd = 5
+        for (var eff in cEffects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                chipDPT += (eff[1] + eff[2]) / 2 * (1 + str / 100) / cd
+            }
+            if (eff[0] == EFFECT_POISON) {
+                var pTot = (eff[1] + eff[2]) / 2 * (1 + mag / 100)
+                if (eff[3] != null && eff[3] > 1) pTot *= eff[3]
+                chipDPT += pTot / cd
+            }
+        }
+    }
+
+    // Weapons and chips compete for the same TP; chips mostly fill cooldown
+    // gaps and leftover TP. 40% chip credit avoids double counting.
+    return bestWeaponDPT + chipDPT * 0.4
+}
+
+// Amortized heal+shield per turn from equipped chips (same convention as
+// profileEnemy's sustain estimate; duplicated so both sides use one code path
+// and self-profiling never touches __enemyProfile).
+function raceEstimateSustain(ent) {
+    var wisScale = 1 + max(0, ent._wisdom) / 100
+    var sustain = 0
+    for (var cid in ent._chips) {
+        var effs = getChipEffects(cid)
+        if (effs == null) continue
+        var cd = getChipCooldown(cid)
+        if (cd == null || cd <= 0) cd = 5
+        for (var eff in effs) {
+            if (eff[0] == EFFECT_HEAL) {
+                var avgHeal = (eff[1] + eff[2]) / 2 * wisScale
+                if (eff[3] != null && eff[3] > 0) avgHeal *= eff[3]
+                sustain += avgHeal / cd
+            }
+            if (eff[0] == EFFECT_ABSOLUTE_SHIELD || eff[0] == EFFECT_RELATIVE_SHIELD) {
+                var avgShield = (eff[1] + eff[2]) / 2
+                if (eff[0] == EFFECT_RELATIVE_SHIELD) avgShield *= 30
+                if (eff[3] != null && eff[3] > 0) avgShield *= eff[3]
+                sustain += avgShield / cd
+            }
+        }
+    }
+    return sustain
+}
+
+function raceGetCachedProfile(ent) {
+    var rid = ent._id
+    if (!mapContainsKey(__raceProfileCache, rid)) {
+        __raceProfileCache[rid] = [raceEstimateGrossDPT(ent), raceEstimateSustain(ent)]
+    }
+    return __raceProfileCache[rid]
+}
+
+function computeRaceModel(playerEnt, targetEnt, fieldMapRef) {
+    // Damage-taken EMA must update every turn regardless of early exits —
+    // it mirrors __avgDamageRate (net of our heals, poison included).
+    var php = playerEnt._currHealth
+    if (getTurn() > 1 && __racePrevPlayerHP >= 0) {
+        var taken = __racePrevPlayerHP - php
+        __avgDamageTakenRate = __avgDamageTakenRate * 0.7 + taken * 0.3
+    }
+    __racePrevPlayerHP = php
+
+    if (targetEnt == null || (_isBossFight && _bossPhase == "PUZZLE")) {
+        __raceVerdict = "EVEN"
+        __raceOurTTK = 999.0
+        __raceEnemyTTK = 999.0
+        __raceMargin = 0.0
+        return
+    }
+
+    // Realized DPT runs well under the arsenal ceiling (movement turns, range
+    // gaps, LoS). Observed net rates take over as evidence accumulates.
+    var grossFactor = 0.6
+    var currentTurn = getTurn()
+    var obsWeight = 0.0
+    if (currentTurn >= 3) {
+        obsWeight = min(0.7, (currentTurn - 2) * 0.15)
+    }
+
+    // --- Our clock on the target ---
+    var selfProf = raceGetCachedProfile(playerEnt)
+    var tgtProf = raceGetCachedProfile(targetEnt)
+    var poisonOnEnemy = targetEnt.getTotalPoisonPerTurn()
+    if (poisonOnEnemy == null) poisonOnEnemy = 0
+    var ourAnalyticNet = selfProf[0] * grossFactor + poisonOnEnemy - tgtProf[1]
+    var ourNet = __avgDamageRate * obsWeight + ourAnalyticNet * (1 - obsWeight)
+    __raceOurTTK = (ourNet > 5) ? targetEnt._currHealth / ourNet : 999.0
+
+    // --- Their clock on us (sum pressure from all living enemies) ---
+    var enemyGross = 0
+    var raceEnemies = fieldMapRef.getEnemyArray()
+    for (var re in raceEnemies) {
+        if (re == null || re._currHealth <= 0) continue
+        var reProf = raceGetCachedProfile(re)
+        enemyGross += reProf[0]
+    }
+    var poisonOnUs = playerEnt.getTotalPoisonPerTurn()
+    if (poisonOnUs == null) poisonOnUs = 0
+    var theirAnalyticNet = enemyGross * grossFactor + poisonOnUs - selfProf[1]
+    var theirNet = __avgDamageTakenRate * obsWeight + theirAnalyticNet * (1 - obsWeight)
+    __raceEnemyTTK = (theirNet > 5) ? php / theirNet : 999.0
+
+    // --- Verdict ---
+    var turnsRemaining = 64 - currentTurn
+    var canKill = (__raceOurTTK < 900 && __raceOurTTK <= turnsRemaining)
+    var canDie = (__raceEnemyTTK < 900 && __raceEnemyTTK <= turnsRemaining)
+    __raceMargin = __raceEnemyTTK - __raceOurTTK
+
+    var rawVerdict = "EVEN"
+    if (!canKill && !canDie) {
+        rawVerdict = "STALL"
+    } else if (canKill && (!canDie || __raceMargin >= 2)) {
+        rawVerdict = "WINNING"
+    } else if (canDie && (!canKill || __raceMargin <= -2)) {
+        rawVerdict = "LOSING"
+    }
+
+    // Two-turn confirmation: publish a changed verdict only when this turn's
+    // raw verdict repeats last turn's. Exception: LOSING publishes instantly
+    // (defensive reactions shouldn't wait a turn).
+    if (rawVerdict == __raceRawPrev || rawVerdict == "LOSING") {
+        __raceVerdict = rawVerdict
+    }
+    __raceRawPrev = rawVerdict
+
+    if (currentTurn <= 20) {
+        debugW("RACE_T" + currentTurn + "_them" + floor(__raceOurTTK) + "_us"
+               + floor(__raceEnemyTTK) + "_" + rawVerdict + "_pub" + __raceVerdict)
+    }
+}

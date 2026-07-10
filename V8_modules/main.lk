@@ -55,6 +55,7 @@ include('cache_manager.lk')
 include('tactical_awareness.lk')
 include('weight_profiles.lk')
 include('enemy_intelligence.lk')
+include('race_model.lk')
 include('strategic_depth.lk')
 include('boss_context.lk')
 
@@ -202,6 +203,8 @@ function main() {
     }
 
     updateGameContext(player, target, fieldMap)
+
+    computeRaceModel(player, target, fieldMap)
 
     if (target != null) {
         var cooldownTracker = new CooldownTracker(target)

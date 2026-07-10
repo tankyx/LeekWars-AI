@@ -84,7 +84,8 @@ def main():
         print(out[-3000:])
         print(r.stderr[-2000:])
         sys.exit(1)
-    fight = json.loads(out[start:])
+    data = json.loads(out[start:], strict=False)
+    fight = data.get("fight", data)
 
     actions = fight.get("actions", [])
     names = {1: "DuskHope", 2: "ProdigalSon", 3: "DannyD_A", 4: "DannyD_B"}
@@ -102,7 +103,7 @@ def main():
         elif a[0] == 12 and cur == 1:  # DuskHope USE_CHIP: [12, chip, cellOrTarget, ...]
             ally_casts.append((turn, a))
 
-    print(f"winner: {fight.get('winner')}  duration: {turn} turns")
+    print(f"winner: {data.get('winner', fight.get('winner'))}  duration: {turn} turns")
     print(f"DuskHope USE_CHIP events: {len(ally_casts)}")
     for t, a in ally_casts[:30]:
         print(f"  T{t}: {a}")

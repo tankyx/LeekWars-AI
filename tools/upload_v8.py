@@ -122,7 +122,7 @@ class V8Uploader:
             "field_map", "field_map_core", "field_map_patterns", "field_map_tactical",
             "kill_planning", "cooldown_tracker", "enemy_predictor", "enemy_intelligence",
             "performance_infra", "cache_manager", "tactical_awareness",
-            "strategic_depth", "reachable_graph", "scenario_simulator", "scenario_scorer",
+            "strategic_depth", "race_model", "reachable_graph", "scenario_simulator", "scenario_scorer",
             "scenario_helpers", "scenario_combos", "scenario_generator",
             "scenario_quick_scorer", "scenario_mutation", "weight_profiles",
             "game_context", "bulb_ai", "boss_context", "beam_search",
