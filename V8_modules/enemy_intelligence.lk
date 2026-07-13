@@ -110,7 +110,12 @@ function profileEnemy(enemy) {
     // signature: meaningful MAG, has poison, low STR (so not a melee threat),
     // not an explicit HYBRID (mixed-range, doesn't want max distance).
     var isAgiKiter = (profile['buildType'] == BUILD_AGILITY || agi >= 400)
-    var isMagicKiter = (mag >= 300 && hasPoison && str < 250
+    // MAG floor lowered 300 -> 180: ProdigalSon's ladder audit (2026-07-13)
+    // found a farmer class of LOW-mag poison kiters (Excellent MAG 200 x4,
+    // Pomdeter MAG 210 x7) sitting just under the old gate — no rush plan
+    // fired and he buff-stacked 9 turns at out=0 while being chipped down.
+    // The str<250 + !HYBRID guards keep real bruisers out of the class.
+    var isMagicKiter = (mag >= 180 && hasPoison && str < 250
                         && profile['buildType'] != BUILD_HYBRID)
     profile['isKiter'] = isAgiKiter || isMagicKiter
     profile['kiterFlavor'] = isMagicKiter ? 'magic_poison' : (isAgiKiter ? 'agi' : 'none')

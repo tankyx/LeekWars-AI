@@ -210,8 +210,12 @@ class ScenarioHelpers {
         // mage down. Only applies to non-magic players (mages naturally carry
         // poison and stay at range). Previously this branch lived after the
         // SUSTAIN gate and was unreachable once HP dropped into 35-70%.
+        // MAG gate lowered 400 -> 180: the 3+-stack evidence requirement is
+        // the real guard — a mage that has already landed three poisons on
+        // us is refreshing them regardless of raw MAG (Excellent, MAG 200,
+        // farmed ProdigalSon exactly this way while he sustained in place).
         var apProfile = getEnemyProfile(this._target._id)
-        if (apProfile != null && this._target._magic > 400 &&
+        if (apProfile != null && this._target._magic >= 180 &&
             __playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
             var ownPoisonEffect = this._player.getEffect(EFFECT_POISON)
             if (ownPoisonEffect != null) {
