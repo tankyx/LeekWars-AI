@@ -6226,6 +6226,7 @@ def routeEdgeChip(fromCell, destCell, step, slideLen, standCell):
 
 def planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion):
     steps = [18, (-18), 17, (-17)]
+    routeArmyCells = puzzleArmyCells()
     queue = [crystalCell]
     visited = {}
     lw_put(visited, crystalCell, True)
@@ -6262,6 +6263,7 @@ def planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion):
                         push(queue, pos)
                 d = lw_add(d, 1)
             if allowInversion:
+                landingSafe = (nearestArmyDistFrom(cur, routeArmyCells) >= 4)
                 ipos = cur
                 d2 = 1
                 while (d2 <= 14):
@@ -6274,10 +6276,11 @@ def planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion):
                     if ((ipos != myCell) and isEntity(ipos)):
                         break
                     if (not mapContainsKey(visited, ipos)):
-                        lw_put(visited, ipos, True)
-                        lw_put(parentFrom, ipos, cur)
-                        lw_put(parentEdge, ipos, {'chip': CHIP_INVERSION, 'target': (-1), 'stand': ipos, 'dest': ipos})
-                        push(queue, ipos)
+                        if (landingSafe or isCellSolvedForAxis(ipos, goalAxis)):
+                            lw_put(visited, ipos, True)
+                            lw_put(parentFrom, ipos, cur)
+                            lw_put(parentEdge, ipos, {'chip': CHIP_INVERSION, 'target': (-1), 'stand': ipos, 'dest': ipos})
+                            push(queue, ipos)
                     d2 = lw_add(d2, 1)
             si = lw_add(si, 1)
     if (found == (-1)):
@@ -6744,7 +6747,20 @@ def solverSelfBuff(slMyID):
         if ((cd != None) and (cd == 0)):
             useChip(chip, slMyID)
 
+def isPoisoned(eid):
+    effs = getEffects(eid)
+    if (effs == None):
+        return False
+    for e in lw_values(effs):
+        if (lw_get(e, 0) == EFFECT_POISON):
+            return True
+    return False
+
 def solverSurvival(slMyID):
+    if (((getTP() >= 3) and allyHasChip(slMyID, CHIP_ANTIDOTE)) and isPoisoned(slMyID)):
+        pcd = getCooldown(CHIP_ANTIDOTE, slMyID)
+        if ((pcd != None) and (pcd == 0)):
+            useChip(CHIP_ANTIDOTE, slMyID)
     pct = entityHPPercent(slMyID)
     if (((pct < 40) and (getTP() >= 8)) and allyHasChip(slMyID, CHIP_REGENERATION)):
         rcd = getCooldown(CHIP_REGENERATION, slMyID)

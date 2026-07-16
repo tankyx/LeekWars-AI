@@ -816,6 +816,7 @@ function routeEdgeChip(fromCell, destCell, step, slideLen, standCell) {
 
 function planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion) {
     var steps = [18, -18, 17, -17]
+    var routeArmyCells = puzzleArmyCells()
     var queue = [crystalCell]
     var visited = [:]
     visited[crystalCell] = true
@@ -852,8 +853,13 @@ function planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion) {
             }
             // Inversion edges: solver stands on the destination (same line as the
             // crystal, real cast LoS) and swaps — walls between other columns
-            // become irrelevant.
+            // become irrelevant. CAUTION: the swap drops the SOLVER on the
+            // crystal's current cell. Fight 52977742: a mid-route swap teleported
+            // KG into the army's midst and he died two turns later. Mid-route
+            // swaps require the landing to be army-safe; goal-finishing swaps
+            // are always worth it.
             if (allowInversion) {
+                var landingSafe = nearestArmyDistFrom(cur, routeArmyCells) >= 4
                 var ipos = cur
                 for (var d2 = 1; d2 <= 14; d2++) {
                     var inx = diagNext(ipos, step)
@@ -862,10 +868,12 @@ function planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion) {
                     if (isObstacle(ipos) || ipos == _graalCell) break
                     if (ipos != myCell && isEntity(ipos)) break
                     if (!mapContainsKey(visited, ipos)) {
-                        visited[ipos] = true
-                        parentFrom[ipos] = cur
-                        parentEdge[ipos] = ['chip': CHIP_INVERSION, 'target': -1, 'stand': ipos, 'dest': ipos]
-                        push(queue, ipos)
+                        if (landingSafe || isCellSolvedForAxis(ipos, goalAxis)) {
+                            visited[ipos] = true
+                            parentFrom[ipos] = cur
+                            parentEdge[ipos] = ['chip': CHIP_INVERSION, 'target': -1, 'stand': ipos, 'dest': ipos]
+                            push(queue, ipos)
+                        }
                     }
                 }
             }
@@ -1346,6 +1354,15 @@ function solverSelfBuff(slMyID) {
     }
 }
 
+function isPoisoned(eid) {
+    var effs = getEffects(eid)
+    if (effs == null) { return false }
+    for (var e in effs) {
+        if (e[0] == EFFECT_POISON) { return true }
+    }
+    return false
+}
+
 // Survival comes before puzzle progress: called at the start of every solving
 // turn. A dead solver ends the fight — nobody else carries GRAPPLE/BOXING_GLOVE.
 // Shields are PROACTIVE: army fire during the puzzle is guaranteed, and fight
@@ -1353,6 +1370,12 @@ function solverSelfBuff(slMyID) {
 // before the first fortress; KG ate a 3045 volley). ~2.7 TP/turn of insurance
 // beats one more push.
 function solverSurvival(slMyID) {
+    // Excalibur (the king) applies heavy poison — cure it, don't tank it
+    // (fight 52977742: KG died with only ~1.6k direct damage logged)
+    if (getTP() >= 3 && allyHasChip(slMyID, CHIP_ANTIDOTE) && isPoisoned(slMyID)) {
+        var pcd = getCooldown(CHIP_ANTIDOTE, slMyID)
+        if (pcd != null && pcd == 0) useChip(CHIP_ANTIDOTE, slMyID)
+    }
     var pct = entityHPPercent(slMyID)
     if (pct < 40 && getTP() >= 8 && allyHasChip(slMyID, CHIP_REGENERATION)) {
         var rcd = getCooldown(CHIP_REGENERATION, slMyID)
