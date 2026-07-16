@@ -1987,12 +1987,26 @@ function executeSupportPuzzleTurn() {
     // SPAWN — solvers are in range, zero movement, zero added exposure — then
     // scatter forever.
     if (getStrength() >= 300) {
-        if (getTurn() == 1 && _puzzleSolverID != -1 && isAlive(_puzzleSolverID)) {
-            var farBuffs = [
-                [CHIP_ELEVATION, 5, 6, "elev"],
-                [CHIP_LEATHER_BOOTS, 5, 3, "boots"]
-            ]
-            castBuffsOnSolver(myID, farBuffs)
+        if (getTurn() == 1) {
+            // Aim at the NEAREST solver — the paired one can be out of spawn
+            // range (fight 52978352: ED->KG at dist 6, elevation range 5,
+            // nothing landed and KG entered at 3787)
+            var nearS = -1
+            var nearD = 999
+            var edAllies = getAliveAllies()
+            for (var aid in edAllies) {
+                if (!isNamedSolver(getName(aid))) continue
+                var dd = getCellDistance(getCell(), getCell(aid))
+                if (dd != null && dd < nearD) { nearD = dd; nearS = aid }
+            }
+            if (nearS != -1) {
+                _puzzleSolverID = nearS
+                var farBuffs = [
+                    [CHIP_ELEVATION, 5, 6, "elev"],
+                    [CHIP_LEATHER_BOOTS, 5, 3, "boots"]
+                ]
+                castBuffsOnSolver(myID, farBuffs)
+            }
         }
         puzzleSelfPreserve(myID, false)
         return true
@@ -2237,7 +2251,21 @@ function executeSolverPuzzleTurn() {
                 moveTowardCell(stand)
                 myCell = getCell()
                 if (myCell == prevCell) {
-                    // Path fully blocked — this route is dead, replan next turn
+                    // Path fully blocked (fight 52978352: Ada pinned by army
+                    // bodies for 3 turns) — teleport out if possible
+                    var stallTpCd = getCooldown(CHIP_TELEPORTATION, getEntity())
+                    if (stallTpCd != null && stallTpCd == 0 && getTP() >= 9 + 3) {
+                        var tpDest = stand
+                        if (isObstacle(tpDest) || (tpDest != myCell && isEntity(tpDest))) {
+                            tpDest = findEmptyCellNear(stand, myCell, 12, 1)
+                        }
+                        if (tpDest != -1 && getCellDistance(myCell, tpDest) <= 12) {
+                            if (useChipOnCell(CHIP_TELEPORTATION, tpDest) >= 1) {
+                                myCell = getCell()
+                                if (myCell == stand) continue
+                            }
+                        }
+                    }
                     _pzRouteEID = null
                     break
                 }

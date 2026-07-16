@@ -7310,11 +7310,24 @@ def choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap):
     return best
 
 def executeSupportPuzzleTurn():
+    global _puzzleSolverID
     myID = getEntity()
     if (getStrength() >= 300):
-        if (((getTurn() == 1) and (_puzzleSolverID != (-1))) and isAlive(_puzzleSolverID)):
-            farBuffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"]]
-            castBuffsOnSolver(myID, farBuffs)
+        if (getTurn() == 1):
+            nearS = (-1)
+            nearD = 999
+            edAllies = getAliveAllies()
+            for aid in lw_values(edAllies):
+                if (not isNamedSolver(getName(aid))):
+                    continue
+                dd = getCellDistance(getCell(), getCell(aid))
+                if ((dd != None) and (dd < nearD)):
+                    nearD = dd
+                    nearS = aid
+            if (nearS != (-1)):
+                _puzzleSolverID = nearS
+                farBuffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"]]
+                castBuffsOnSolver(myID, farBuffs)
         puzzleSelfPreserve(myID, False)
         return True
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
@@ -7476,6 +7489,16 @@ def executeSolverPuzzleTurn():
                 moveTowardCell(stand)
                 myCell = getCell()
                 if (myCell == prevCell):
+                    stallTpCd = getCooldown(CHIP_TELEPORTATION, getEntity())
+                    if (((stallTpCd != None) and (stallTpCd == 0)) and (getTP() >= lw_add(9, 3))):
+                        tpDest = stand
+                        if (isObstacle(tpDest) or (((tpDest != myCell) and isEntity(tpDest)))):
+                            tpDest = findEmptyCellNear(stand, myCell, 12, 1)
+                        if ((tpDest != (-1)) and (getCellDistance(myCell, tpDest) <= 12)):
+                            if (useChipOnCell(CHIP_TELEPORTATION, tpDest) >= 1):
+                                myCell = getCell()
+                                if (myCell == stand):
+                                    continue
                     _pzRouteEID = None
                     break
                 if (myCell != stand):
