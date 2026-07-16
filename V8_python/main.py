@@ -5484,6 +5484,12 @@ _puzzleRole = None
 _puzzleSolverID = (-1)
 _pzSolverMaxLifeSnapshot = (-1)
 _pzGatherDone = False
+_pzRouteEID = None
+_pzRouteCrystalCell = (-1)
+_pzRouteStand = (-1)
+_pzRouteChip = None
+_pzRouteTarget = (-1)
+_pzFocusEID = None
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -5654,6 +5660,15 @@ def assignSolverCrystal():
         _myAssignedCrystal = None
         _bossTargetEID = None
         clearCrystalScalars()
+
+def pickFocusCrystal(myCell):
+    global _pzFocusEID
+    if (_pzFocusEID != None):
+        fc = lw_get(_crystalMap, _pzFocusEID)
+        if ((fc != None) and (not isCrystalSolved(fc))):
+            return _pzFocusEID
+    _pzFocusEID = pickNearestUnsolvedCrystal(myCell)
+    return _pzFocusEID
 
 def pickNearestUnsolvedCrystal(myCell):
     bestDist = 999
@@ -6058,6 +6073,124 @@ def findGrapStand(targetCell, step, crystalSteps, myCell):
     if myCellValid:
         return myCell
     return firstStand
+
+def routeSlideStand(fromCell, destCell, step, slideLen, myCell):
+    best = (-1)
+    bestD = 9999
+    pos = fromCell
+    k = 1
+    while (k <= lw_sub(8, slideLen)):
+        nx = diagNext(pos, (-lw_num(step)))
+        if (nx == (-1)):
+            break
+        pos = nx
+        if isObstacle(pos):
+            break
+        if ((pos != myCell) and isEntity(pos)):
+            break
+        if (k < 2):
+            k = lw_add(k, 1)
+            continue
+        d1 = getCellDistance(myCell, pos)
+        if ((d1 != None) and (d1 < bestD)):
+            bestD = d1
+            best = pos
+        k = lw_add(k, 1)
+    pos = destCell
+    k2 = 1
+    while (k2 <= lw_sub(8, slideLen)):
+        nx2 = diagNext(pos, step)
+        if (nx2 == (-1)):
+            break
+        pos = nx2
+        if isObstacle(pos):
+            break
+        if ((pos != myCell) and isEntity(pos)):
+            break
+        d2 = getCellDistance(myCell, pos)
+        if ((d2 != None) and (d2 < bestD)):
+            bestD = d2
+            best = pos
+        k2 = lw_add(k2, 1)
+    return best
+
+def routeEdgeChip(fromCell, destCell, step, slideLen, standCell):
+    sx = getCellX(standCell)
+    cx = getCellX(fromCell)
+    dxs = getCellX(destCell)
+    if ((sx == cx) and (sx == dxs)):
+        sy = getCellY(standCell)
+        cy = getCellY(fromCell)
+        dy = getCellY(destCell)
+        if ((((dy > cy) and (sy < cy))) or (((dy < cy) and (sy > cy)))):
+            return CHIP_BOXING_GLOVE
+        return CHIP_GRAPPLE
+    if ((((dxs > cx) and (sx < cx))) or (((dxs < cx) and (sx > cx)))):
+        return CHIP_BOXING_GLOVE
+    return CHIP_GRAPPLE
+
+def planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion):
+    steps = [18, (-18), 17, (-17)]
+    queue = [crystalCell]
+    visited = {}
+    lw_put(visited, crystalCell, True)
+    parentFrom = {}
+    parentEdge = {}
+    found = (-1)
+    qi = 0
+    while ((qi < count(queue)) and (count(queue) < 400)):
+        cur = lw_get(queue, qi)
+        qi = lw_add(qi, 1)
+        if ((cur != crystalCell) and isCellSolvedForAxis(cur, goalAxis)):
+            found = cur
+            break
+        si = 0
+        while (si < 4):
+            step = lw_get(steps, si)
+            pos = cur
+            d = 1
+            while (d <= 8):
+                nx = diagNext(pos, step)
+                if (nx == (-1)):
+                    break
+                pos = nx
+                if (isObstacle(pos) or (pos == _graalCell)):
+                    break
+                if (((pos != crystalCell) and (pos != myCell)) and isEntity(pos)):
+                    break
+                if (not mapContainsKey(visited, pos)):
+                    stand = routeSlideStand(cur, pos, step, d, myCell)
+                    if (stand != (-1)):
+                        lw_put(visited, pos, True)
+                        lw_put(parentFrom, pos, cur)
+                        lw_put(parentEdge, pos, {'chip': routeEdgeChip(cur, pos, step, d, stand), 'target': pos, 'stand': stand, 'dest': pos})
+                        push(queue, pos)
+                d = lw_add(d, 1)
+            if allowInversion:
+                ipos = cur
+                d2 = 1
+                while (d2 <= 14):
+                    inx = diagNext(ipos, step)
+                    if (inx == (-1)):
+                        break
+                    ipos = inx
+                    if (isObstacle(ipos) or (ipos == _graalCell)):
+                        break
+                    if ((ipos != myCell) and isEntity(ipos)):
+                        break
+                    if (not mapContainsKey(visited, ipos)):
+                        lw_put(visited, ipos, True)
+                        lw_put(parentFrom, ipos, cur)
+                        lw_put(parentEdge, ipos, {'chip': CHIP_INVERSION, 'target': (-1), 'stand': ipos, 'dest': ipos})
+                        push(queue, ipos)
+                    d2 = lw_add(d2, 1)
+            si = lw_add(si, 1)
+    if (found == (-1)):
+        return None
+    node = found
+    while (lw_get(parentFrom, node) != crystalCell):
+        node = lw_get(parentFrom, node)
+    return lw_get(parentEdge, node)
 
 def findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, excludeStep):
     crystalX = getCellX(crystalCell)
@@ -6500,6 +6633,25 @@ def puzzleSustainSolver(myID):
             if (useChip(chip, _puzzleSolverID) >= 1):
                 say(lw_add(lw_add("PZ SHIELD ", label), " -> solver"))
 
+def isPuzzleWorkZone(cell):
+    if (_graalCell == (-1)):
+        return False
+    dG = getCellDistance(cell, _graalCell)
+    if ((dG != None) and (dG <= 4)):
+        return True
+    cx = getCellX(cell)
+    cy = getCellY(cell)
+    if (((((cx == _graalX) or (cy == _graalY))) and (dG != None)) and (dG <= 9)):
+        return True
+    for eid in lw_values(mapKeys(_crystalMap)):
+        cc = getCell(eid)
+        if ((cc == None) or (cc < 0)):
+            continue
+        dC = getCellDistance(cell, cc)
+        if ((dC != None) and (dC <= 1)):
+            return True
+    return False
+
 def puzzleSelfPreserve(myID):
     selfShields = [[CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_WALL, 3]]
     for sh in lw_values(selfShields):
@@ -6523,7 +6675,7 @@ def puzzleSelfPreserve(myID):
         tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (((tpCd != None) and (tpCd == 0)) and (getTP() >= 9)):
             tc = findEmptyCellNear(anchorCell, getCell(), 12, 2)
-            if (tc != (-1)):
+            if ((tc != (-1)) and (not isPuzzleWorkZone(tc))):
                 useChipOnCell(CHIP_TELEPORTATION, tc)
         followDist = getCellDistance(getCell(), anchorCell)
         if ((followDist != None) and (followDist > 2)):
@@ -6557,6 +6709,8 @@ def choosePuzzleSustainCell(myID, anchorCell, leashed):
                 c = lw_add(c, 1)
                 continue
         score = lw_mul(min(nearestArmyDistFrom(c, armyCells), 9), 10)
+        if isPuzzleWorkZone(c):
+            score = lw_num(score) - lw_num(80)
         if leashed:
             dS = getCellDistance(c, anchorCell)
             if ((dS != None) and (dS > 3)):
@@ -6592,7 +6746,7 @@ def executeSupportPuzzleTurn():
     return True
 
 def executeSolverPuzzleTurn():
-    global _bossTargetEID, _myAssignedCrystal, _pzGatherDone, _pzSolverMaxLifeSnapshot
+    global _bossTargetEID, _myAssignedCrystal, _pzGatherDone, _pzRouteChip, _pzRouteCrystalCell, _pzRouteEID, _pzRouteStand, _pzRouteTarget, _pzSolverMaxLifeSnapshot
     if (getTurn() == 1):
         allA = []
         push(allA, getEntity())
@@ -6613,7 +6767,7 @@ def executeSolverPuzzleTurn():
         return True
     _pzGatherDone = True
     solverSurvival(myID)
-    firstEID = pickNearestUnsolvedCrystal(myCell)
+    firstEID = pickFocusCrystal(myCell)
     if (firstEID == None):
         say("PZ SOLVER: all done")
         solverSelfBuff(myID)
@@ -6626,7 +6780,9 @@ def executeSolverPuzzleTurn():
         tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if ((((tpCd != None) and (tpCd == 0)) and (getTP() >= 12)) and (firstDest != None)):
             tpDone = False
-            preMove = findBestChipMove(crystalCell0, firstDest, myCell, 0, 0, 0)
+            preMove = planCrystalRoute(crystalCell0, _myCrystalGoalAxis, myCell, False)
+            if (preMove == None):
+                preMove = findBestChipMove(crystalCell0, firstDest, myCell, 0, 0, 0)
             if (preMove != None):
                 preStand = lw_get(preMove, 'stand')
                 dToStand = getCellDistance(myCell, preStand)
@@ -6655,6 +6811,8 @@ def executeSolverPuzzleTurn():
             if ((tpCd != None) and (tpCd > 0)):
                 dToCrystal = getCellDistance(myCell, crystalCell0)
                 if (dToCrystal > 10):
+                    say(lw_add(lw_add(lw_add("PZ SOLVER: closing on c=", firstEID), " d="), dToCrystal))
+                    moveTowardCell(crystalCell0)
                     solverSelfBuff(myID)
                     return True
     bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
@@ -6667,7 +6825,7 @@ def executeSolverPuzzleTurn():
     crystalsSolved = 0
     while (getTP() >= 3):
         myCell = getCell()
-        nextEID = pickNearestUnsolvedCrystal(myCell)
+        nextEID = pickFocusCrystal(myCell)
         if (nextEID == None):
             say(lw_add(lw_add("PZ SOLVER: ALL DONE (", crystalsSolved), " this turn)"))
             break
@@ -6679,59 +6837,6 @@ def executeSolverPuzzleTurn():
             say(lw_add("PZ: no dest for ", nextEID))
             moveTowardCell(lw_get(lw_get(_crystalMap, nextEID), 'cell'))
             return True
-        invCd = getCooldown(CHIP_INVERSION, myID)
-        if (((invCd != None) and (invCd == 0)) and (getTP() >= 4)):
-            crystalCell = getCell(_bossTargetEID)
-            if ((crystalCell != None) and (crystalCell >= 0)):
-                bestInvCell = (-1)
-                bestInvDist = 999
-                axis = _myCrystalGoalAxis
-                d = 1
-                while (d <= 8):
-                    ax = _graalX
-                    ay = _graalY
-                    if (axis == "south"):
-                        ay = lw_add(_graalY, d)
-                    else:
-                        if (axis == "north"):
-                            ay = lw_sub(_graalY, d)
-                        else:
-                            if (axis == "east"):
-                                ax = lw_add(_graalX, d)
-                            else:
-                                if (axis == "west"):
-                                    ax = lw_sub(_graalX, d)
-                    axCell = getCellFromXY(ax, ay)
-                    if ((axCell == None) or isObstacle(axCell)):
-                        d = lw_add(d, 1)
-                        continue
-                    if (not lineOfSight(axCell, _graalCell, allAliveEntities())):
-                        d = lw_add(d, 1)
-                        continue
-                    if (not isOnSameLine(axCell, crystalCell)):
-                        d = lw_add(d, 1)
-                        continue
-                    invDist = getCellDistance(axCell, crystalCell)
-                    if (((invDist == None) or (invDist < 1)) or (invDist > 14)):
-                        d = lw_add(d, 1)
-                        continue
-                    dFromMe = getCellDistance(myCell, axCell)
-                    if (dFromMe < bestInvDist):
-                        bestInvDist = dFromMe
-                        bestInvCell = axCell
-                    d = lw_add(d, 1)
-                if (bestInvCell != (-1)):
-                    if (myCell != bestInvCell):
-                        moveTowardCell(bestInvCell)
-                        myCell = getCell()
-                    if (myCell == bestInvCell):
-                        invR = useChip(CHIP_INVERSION, _bossTargetEID)
-                        if (invR == 1):
-                            myCell = getCell()
-                            crystalsSolved = lw_add(crystalsSolved, 1)
-                            totalChipsFired = lw_add(totalChipsFired, 1)
-                            say(lw_add(lw_add(lw_add("PZ INV c=", _bossTargetEID), " total="), crystalsSolved))
-                            continue
         grapUsed = 0
         boxUsed = 0
         chipsFired = 0
@@ -6746,7 +6851,18 @@ def executeSolverPuzzleTurn():
             if (getTP() < 3):
                 break
             myCell = getCell()
-            move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
+            invCd = getCooldown(CHIP_INVERSION, myID)
+            invReady = (((allyHasChip(myID, CHIP_INVERSION) and (invCd != None)) and (invCd == 0)) and (getTP() >= 4))
+            move = None
+            if (((_pzRouteEID == _bossTargetEID) and (_pzRouteCrystalCell == crystalCell)) and (_pzRouteStand != (-1))):
+                standFree = ((_pzRouteStand == myCell) or (((not isObstacle(_pzRouteStand)) and (not isEntity(_pzRouteStand)))))
+                chipOk = ((_pzRouteChip != CHIP_INVERSION) or invReady)
+                if (standFree and chipOk):
+                    move = {'stand': _pzRouteStand, 'chip': _pzRouteChip, 'target': _pzRouteTarget}
+            if (move == None):
+                move = planCrystalRoute(crystalCell, _myCrystalGoalAxis, myCell, invReady)
+            if (move == None):
+                move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
             if (move == None):
                 if (detourCount < 4):
                     move = findDetourMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
@@ -6754,6 +6870,11 @@ def executeSolverPuzzleTurn():
                         detourCount = lw_add(detourCount, 1)
             if (move == None):
                 break
+            _pzRouteEID = _bossTargetEID
+            _pzRouteCrystalCell = crystalCell
+            _pzRouteStand = lw_get(move, 'stand')
+            _pzRouteChip = lw_get(move, 'chip')
+            _pzRouteTarget = lw_get(move, 'target')
             stand = lw_get(move, 'stand')
             chip = lw_get(move, 'chip')
             target = lw_get(move, 'target')
@@ -6764,11 +6885,29 @@ def executeSolverPuzzleTurn():
                 moveTowardCell(stand)
                 myCell = getCell()
                 if (myCell == prevCell):
+                    _pzRouteEID = None
                     break
                 if (myCell != stand):
-                    continue
+                    break
+            if (chip == CHIP_INVERSION):
+                invR = useChip(CHIP_INVERSION, _bossTargetEID)
+                if (invR < 1):
+                    debug(lw_add(lw_add(lw_add(lw_add(lw_add("PZDBG inv fail r=", invR), " me="), myCell), " cr="), crystalCell))
+                    _pzRouteEID = None
+                    break
+                myCell = getCell()
+                chipsFired = lw_add(chipsFired, 1)
+                totalChipsFired = lw_add(totalChipsFired, 1)
+                say(lw_add("PZ INV c=", _bossTargetEID))
+                continue
+            if (not lineOfSight(myCell, crystalCell)):
+                debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("PZDBG los-block me=", myCell), " cr="), crystalCell), " chip="), chip), " tgt="), target))
+                _pzRouteEID = None
+                break
             r = useChipOnCell(chip, target)
-            if (r != 1):
+            if (r < 1):
+                debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("PZDBG cast fail r=", r), " chip="), chip), " me="), myCell), " tgt="), target), " cr="), crystalCell))
+                _pzRouteEID = None
                 break
             chipsFired = lw_add(chipsFired, 1)
             totalChipsFired = lw_add(totalChipsFired, 1)
@@ -6776,7 +6915,7 @@ def executeSolverPuzzleTurn():
                 grapUsed = lw_add(grapUsed, 1)
             else:
                 boxUsed = lw_add(boxUsed, 1)
-            if ((lockedStep == 0) and (lw_get(move, 'score') > 0)):
+            if (((lockedStep == 0) and mapContainsKey(move, 'score')) and (lw_get(move, 'score') > 0)):
                 firedStep = lw_get(move, 'step')
                 lockedStep = (-lw_num(firedStep))
         crCell = getCell(_bossTargetEID)

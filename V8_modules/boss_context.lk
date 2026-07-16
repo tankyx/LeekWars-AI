@@ -10,6 +10,17 @@ global _puzzleRole = null
 global _puzzleSolverID = -1
 global _pzSolverMaxLifeSnapshot = -1
 global _pzGatherDone = false
+// Committed route edge: reused across turns while the crystal hasn't moved and
+// the stand stays free — fresh replans flip between equivalent routes as the
+// escort shuffles, wasting whole turns of MP.
+global _pzRouteEID = null
+global _pzRouteCrystalCell = -1
+global _pzRouteStand = -1
+global _pzRouteChip = null
+global _pzRouteTarget = -1
+// Focus crystal: solver sticks to one crystal until solved — "nearest unsolved"
+// flips as she walks and the retargeting thrash wastes whole turns
+global _pzFocusEID = null
 
 global _graalCell = -1
 global _graalX = 0
@@ -223,6 +234,15 @@ function assignSolverCrystal() {
         _bossTargetEID = null
         clearCrystalScalars()
     }
+}
+
+function pickFocusCrystal(myCell) {
+    if (_pzFocusEID != null) {
+        var fc = _crystalMap[_pzFocusEID]
+        if (fc != null && !isCrystalSolved(fc)) { return _pzFocusEID }
+    }
+    _pzFocusEID = pickNearestUnsolvedCrystal(myCell)
+    return _pzFocusEID
 }
 
 function pickNearestUnsolvedCrystal(myCell) {
@@ -602,6 +622,133 @@ function findGrapStand(targetCell, step, crystalSteps, myCell) {
     }
     if (myCellValid) return myCell
     return firstStand
+}
+
+// ============ BFS crystal route planner ============
+// The greedy single-direction planner cannot route crystals around the castle
+// walls (fight 52975331: crystal on-axis but beam wall-blocked, solver stuck).
+// BFS over crystal cells: an edge is one grapple/boxing slide (cast cell = the
+// slide DESTINATION, chip is FIRST_IN_LINE so the crystal must be the first
+// entity from the stand) or one inversion swap (solver stands on the
+// destination, crystal lands there). Returns the first edge of the shortest
+// route as ['chip','target','stand','dest'] — replanned every cast, so stale
+// entity positions self-correct.
+
+function routeSlideStand(fromCell, destCell, step, slideLen, myCell) {
+    // Collect valid stands on both sides, return the one closest to me —
+    // stand choice stability matters, thrashing between far stands burns MP.
+    var best = -1
+    var bestD = 9999
+    // Boxing stands: behind the crystal, opposite the slide direction.
+    // k >= 2: boxing min range is 2 — adjacent to the crystal, the first-in-line
+    // window starts past it and the crystal blocks LoS instead (cast returns -4).
+    var pos = fromCell
+    for (var k = 1; k <= 8 - slideLen; k++) {
+        var nx = diagNext(pos, -step)
+        if (nx == -1) break
+        pos = nx
+        if (isObstacle(pos)) break
+        if (pos != myCell && isEntity(pos)) break
+        if (k < 2) continue
+        var d1 = getCellDistance(myCell, pos)
+        if (d1 != null && d1 < bestD) { bestD = d1; best = pos }
+    }
+    // Grapple stands: beyond the destination, in the slide direction.
+    pos = destCell
+    for (var k2 = 1; k2 <= 8 - slideLen; k2++) {
+        var nx2 = diagNext(pos, step)
+        if (nx2 == -1) break
+        pos = nx2
+        if (isObstacle(pos)) break
+        if (pos != myCell && isEntity(pos)) break
+        var d2 = getCellDistance(myCell, pos)
+        if (d2 != null && d2 < bestD) { bestD = d2; best = pos }
+    }
+    return best
+}
+
+function routeEdgeChip(fromCell, destCell, step, slideLen, standCell) {
+    // Which chip does this stand imply? Stand behind crystal => boxing (push),
+    // stand beyond destination => grapple (pull).
+    var sx = getCellX(standCell)
+    var cx = getCellX(fromCell)
+    var dxs = getCellX(destCell)
+    if (sx == cx && sx == dxs) {
+        // same column: compare y ordering
+        var sy = getCellY(standCell)
+        var cy = getCellY(fromCell)
+        var dy = getCellY(destCell)
+        if ((dy > cy && sy < cy) || (dy < cy && sy > cy)) { return CHIP_BOXING_GLOVE }
+        return CHIP_GRAPPLE
+    }
+    if ((dxs > cx && sx < cx) || (dxs < cx && sx > cx)) { return CHIP_BOXING_GLOVE }
+    return CHIP_GRAPPLE
+}
+
+function planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion) {
+    var steps = [18, -18, 17, -17]
+    var queue = [crystalCell]
+    var visited = [:]
+    visited[crystalCell] = true
+    var parentFrom = [:]
+    var parentEdge = [:]  // dest -> ['chip','target','stand','dest']
+    var found = -1
+    var qi = 0
+    while (qi < count(queue) && count(queue) < 400) {
+        var cur = queue[qi]
+        qi++
+        if (cur != crystalCell && isCellSolvedForAxis(cur, goalAxis)) {
+            found = cur
+            break
+        }
+        for (var si = 0; si < 4; si++) {
+            var step = steps[si]
+            // Slide edges: destinations along a clear straight run
+            var pos = cur
+            for (var d = 1; d <= 8; d++) {
+                var nx = diagNext(pos, step)
+                if (nx == -1) break
+                pos = nx
+                if (isObstacle(pos) || pos == _graalCell) break
+                if (pos != crystalCell && pos != myCell && isEntity(pos)) break
+                if (!mapContainsKey(visited, pos)) {
+                    var stand = routeSlideStand(cur, pos, step, d, myCell)
+                    if (stand != -1) {
+                        visited[pos] = true
+                        parentFrom[pos] = cur
+                        parentEdge[pos] = ['chip': routeEdgeChip(cur, pos, step, d, stand), 'target': pos, 'stand': stand, 'dest': pos]
+                        push(queue, pos)
+                    }
+                }
+            }
+            // Inversion edges: solver stands on the destination (same line as the
+            // crystal, real cast LoS) and swaps — walls between other columns
+            // become irrelevant.
+            if (allowInversion) {
+                var ipos = cur
+                for (var d2 = 1; d2 <= 14; d2++) {
+                    var inx = diagNext(ipos, step)
+                    if (inx == -1) break
+                    ipos = inx
+                    if (isObstacle(ipos) || ipos == _graalCell) break
+                    if (ipos != myCell && isEntity(ipos)) break
+                    if (!mapContainsKey(visited, ipos)) {
+                        visited[ipos] = true
+                        parentFrom[ipos] = cur
+                        parentEdge[ipos] = ['chip': CHIP_INVERSION, 'target': -1, 'stand': ipos, 'dest': ipos]
+                        push(queue, ipos)
+                    }
+                }
+            }
+        }
+    }
+    if (found == -1) { return null }
+    // Walk back to the first edge from the crystal's current cell
+    var node = found
+    while (parentFrom[node] != crystalCell) {
+        node = parentFrom[node]
+    }
+    return parentEdge[node]
 }
 
 function findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, excludeStep) {
@@ -1082,6 +1229,25 @@ function puzzleSustainSolver(myID) {
     }
 }
 
+// Escort no-go: cells that interfere with the puzzle — the chamber around the
+// graal (walls the solver in; entrances are narrow), the four beam/push lanes,
+// and cells adjacent to crystals (block slides and stands).
+function isPuzzleWorkZone(cell) {
+    if (_graalCell == -1) { return false }
+    var dG = getCellDistance(cell, _graalCell)
+    if (dG != null && dG <= 4) { return true }
+    var cx = getCellX(cell)
+    var cy = getCellY(cell)
+    if ((cx == _graalX || cy == _graalY) && dG != null && dG <= 9) { return true }
+    for (var eid in mapKeys(_crystalMap)) {
+        var cc = getCell(eid)
+        if (cc == null || cc < 0) continue
+        var dC = getCellDistance(cell, cc)
+        if (dC != null && dC <= 1) { return true }
+    }
+    return false
+}
+
 // Ally end-of-turn during PUZZLE: shield self with leftover TP, then reposition —
 // follow the solver (teleport if she jumped into the castle), keep spacing from
 // other allies (the army AoEs punish stacking), and maximize distance to the army.
@@ -1113,7 +1279,7 @@ function puzzleSelfPreserve(myID) {
         var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (tpCd != null && tpCd == 0 && getTP() >= 9) {
             var tc = findEmptyCellNear(anchorCell, getCell(), 12, 2)
-            if (tc != -1) useChipOnCell(CHIP_TELEPORTATION, tc)
+            if (tc != -1 && !isPuzzleWorkZone(tc)) useChipOnCell(CHIP_TELEPORTATION, tc)
         }
         var followDist = getCellDistance(getCell(), anchorCell)
         if (followDist != null && followDist > 2) {
@@ -1143,6 +1309,7 @@ function choosePuzzleSustainCell(myID, anchorCell, leashed) {
             if (pl == null || pl > mp) continue
         }
         var score = min(nearestArmyDistFrom(c, armyCells), 9) * 10
+        if (isPuzzleWorkZone(c)) score -= 80
         if (leashed) {
             var dS = getCellDistance(c, anchorCell)
             // Escort band 2-3: inside range 3 for armoring/regen/fortress/adren,
@@ -1223,7 +1390,7 @@ function executeSolverPuzzleTurn() {
     solverSurvival(myID)
 
     // Pick first crystal target for teleportation
-    var firstEID = pickNearestUnsolvedCrystal(myCell)
+    var firstEID = pickFocusCrystal(myCell)
     if (firstEID == null) {
         say("PZ SOLVER: all done")
         solverSelfBuff(myID)
@@ -1241,7 +1408,11 @@ function executeSolverPuzzleTurn() {
         var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (tpCd != null && tpCd == 0 && getTP() >= 12 && firstDest != null) {
             var tpDone = false
-            var preMove = findBestChipMove(crystalCell0, firstDest, myCell, 0, 0, 0)
+            // Teleport straight onto the BFS route's stand when one exists
+            var preMove = planCrystalRoute(crystalCell0, _myCrystalGoalAxis, myCell, false)
+            if (preMove == null) {
+                preMove = findBestChipMove(crystalCell0, firstDest, myCell, 0, 0, 0)
+            }
             if (preMove != null) {
                 var preStand = preMove['stand']
                 var dToStand = getCellDistance(myCell, preStand)
@@ -1279,6 +1450,10 @@ function executeSolverPuzzleTurn() {
         } else if (tpCd != null && tpCd > 0) {
             var dToCrystal = getCellDistance(myCell, crystalCell0)
             if (dToCrystal > 10) {
+                // Teleport down and crystal far: WALK toward it. Never stand
+                // still — that stranded the solver to death in fight 52975331.
+                say("PZ SOLVER: closing on c=" + firstEID + " d=" + dToCrystal)
+                moveTowardCell(crystalCell0)
                 solverSelfBuff(myID)
                 return true
             }
@@ -1303,7 +1478,7 @@ function executeSolverPuzzleTurn() {
 
     while (getTP() >= 3) {
         myCell = getCell()
-        var nextEID = pickNearestUnsolvedCrystal(myCell)
+        var nextEID = pickFocusCrystal(myCell)
         if (nextEID == null) {
             say("PZ SOLVER: ALL DONE (" + crystalsSolved + " this turn)")
             break
@@ -1321,55 +1496,7 @@ function executeSolverPuzzleTurn() {
             return true
         }
 
-        // Try INVERSION: move to an on-axis cell that's on the same line as the crystal
-        // Swapping puts crystal on-axis (where Ada stands) → instant solve
-        var invCd = getCooldown(CHIP_INVERSION, myID)
-        if (invCd != null && invCd == 0 && getTP() >= 4) {
-            var crystalCell = getCell(_bossTargetEID)
-            if (crystalCell != null && crystalCell >= 0) {
-                // Search axis cells near graal for one on the same line as crystal
-                var bestInvCell = -1
-                var bestInvDist = 999
-                var axis = _myCrystalGoalAxis
-                for (var d = 1; d <= 8; d++) {
-                    var ax = _graalX
-                    var ay = _graalY
-                    if (axis == "south") ay = _graalY + d
-                    else if (axis == "north") ay = _graalY - d
-                    else if (axis == "east") ax = _graalX + d
-                    else if (axis == "west") ax = _graalX - d
-                    var axCell = getCellFromXY(ax, ay)
-                    if (axCell == null || isObstacle(axCell)) continue
-                    if (!lineOfSight(axCell, _graalCell, allAliveEntities())) continue
-                    if (!isOnSameLine(axCell, crystalCell)) continue
-                    var invDist = getCellDistance(axCell, crystalCell)
-                    if (invDist == null || invDist < 1 || invDist > 14) continue
-                    var dFromMe = getCellDistance(myCell, axCell)
-                    if (dFromMe < bestInvDist) {
-                        bestInvDist = dFromMe
-                        bestInvCell = axCell
-                    }
-                }
-                if (bestInvCell != -1) {
-                    if (myCell != bestInvCell) {
-                        moveTowardCell(bestInvCell)
-                        myCell = getCell()
-                    }
-                    if (myCell == bestInvCell) {
-                        var invR = useChip(CHIP_INVERSION, _bossTargetEID)
-                        if (invR == 1) {
-                            myCell = getCell()
-                            crystalsSolved++
-                            totalChipsFired++
-                            say("PZ INV c=" + _bossTargetEID + " total=" + crystalsSolved)
-                            continue
-                        }
-                    }
-                }
-            }
-        }
-
-        // Solve with GRAPPLE/BOXING_GLOVE push/pull
+        // Solve via BFS route (handles walls + inversion), greedy as fallback
         var grapUsed = 0
         var boxUsed = 0
         var chipsFired = 0
@@ -1386,7 +1513,25 @@ function executeSolverPuzzleTurn() {
 
             myCell = getCell()
 
-            var move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
+            var invCd = getCooldown(CHIP_INVERSION, myID)
+            var invReady = allyHasChip(myID, CHIP_INVERSION) && invCd != null && invCd == 0 && getTP() >= 4
+
+            // Reuse the committed edge if still valid (same crystal, unmoved,
+            // stand free, chip still castable)
+            var move = null
+            if (_pzRouteEID == _bossTargetEID && _pzRouteCrystalCell == crystalCell && _pzRouteStand != -1) {
+                var standFree = _pzRouteStand == myCell || (!isObstacle(_pzRouteStand) && !isEntity(_pzRouteStand))
+                var chipOk = _pzRouteChip != CHIP_INVERSION || invReady
+                if (standFree && chipOk) {
+                    move = ['stand': _pzRouteStand, 'chip': _pzRouteChip, 'target': _pzRouteTarget]
+                }
+            }
+            if (move == null) {
+                move = planCrystalRoute(crystalCell, _myCrystalGoalAxis, myCell, invReady)
+            }
+            if (move == null) {
+                move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
+            }
             if (move == null) {
                 if (detourCount < 4) {
                     move = findDetourMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
@@ -1394,6 +1539,13 @@ function executeSolverPuzzleTurn() {
                 }
             }
             if (move == null) break
+
+            // Commit this edge for cross-turn stability
+            _pzRouteEID = _bossTargetEID
+            _pzRouteCrystalCell = crystalCell
+            _pzRouteStand = move['stand']
+            _pzRouteChip = move['chip']
+            _pzRouteTarget = move['target']
 
             var stand = move['stand']
             var chip = move['chip']
@@ -1404,19 +1556,53 @@ function executeSolverPuzzleTurn() {
                 var prevCell = myCell
                 moveTowardCell(stand)
                 myCell = getCell()
-                if (myCell == prevCell) break
-                if (myCell != stand) continue
+                if (myCell == prevCell) {
+                    // Path fully blocked — this route is dead, replan next turn
+                    _pzRouteEID = null
+                    break
+                }
+                // Not there yet: end the turn walking (commitment persists).
+                // Replanning mid-turn flips between equivalent routes and
+                // thrashes MP (f=0 turns).
+                if (myCell != stand) break
+            }
+
+            if (chip == CHIP_INVERSION) {
+                var invR = useChip(CHIP_INVERSION, _bossTargetEID)
+                if (invR < 1) {
+                    debug("PZDBG inv fail r=" + invR + " me=" + myCell + " cr=" + crystalCell)
+                    _pzRouteEID = null
+                    break
+                }
+                myCell = getCell()
+                chipsFired++
+                totalChipsFired++
+                say("PZ INV c=" + _bossTargetEID)
+                continue
+            }
+
+            // GRAPPLE/BOXING are FIRST_IN_LINE: whatever entity sits first on the
+            // line gets moved. If the crystal isn't cleanly visible (a knight
+            // stepped in since planning), abort — we'd drag the knight onto us.
+            if (!lineOfSight(myCell, crystalCell)) {
+                debug("PZDBG los-block me=" + myCell + " cr=" + crystalCell + " chip=" + chip + " tgt=" + target)
+                _pzRouteEID = null
+                break
             }
 
             var r = useChipOnCell(chip, target)
-            if (r != 1) break
+            if (r < 1) {
+                debug("PZDBG cast fail r=" + r + " chip=" + chip + " me=" + myCell + " tgt=" + target + " cr=" + crystalCell)
+                _pzRouteEID = null
+                break
+            }
 
             chipsFired++
             totalChipsFired++
             if (chip == CHIP_GRAPPLE) grapUsed++
             else boxUsed++
 
-            if (lockedStep == 0 && move['score'] > 0) {
+            if (lockedStep == 0 && mapContainsKey(move, 'score') && move['score'] > 0) {
                 var firedStep = move['step']
                 lockedStep = -firedStep
             }
