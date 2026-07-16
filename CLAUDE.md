@@ -142,12 +142,36 @@ If entity 0 has 0 ops and action 1002 every turn, the script has a runtime error
 
 ### Generator Setup
 
-- Generator: `/home/ubuntu/leek-wars-generator/generator.jar`
-- Build: `cd /home/ubuntu/leek-wars-generator && JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew jar`
-- Symlink: `leek-wars-generator/V8_modules` → our `V8_modules/`
+- Generator: `/home/ubuntu/leek-wars-generator` (upstream 2.49+, polyglot JS/TS/Python)
+- Build: `cd /home/ubuntu/leek-wars-generator && JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64 ./gradlew jar`
+  (JDK 25 + Gradle 9.2 wrapper; local patches: Scenario.java boss/map parsing,
+  official Maven isolate artifacts replacing the private graal-isolate jar)
+- **Run via classpath, not the fat jar**: `java -cp $(cat runtime_classpath.txt) com.leekwars.Main <scenario>`
+  — the fat jar flattens GraalVM isolate resources and breaks polyglot AIs.
+  local_test.py does this automatically when `runtime_classpath.txt` exists.
+- Symlinks: `leek-wars-generator/V8_modules` → our `V8_modules/`, `V8_python` → our `V8_python/`
 - Config: `cores=14` (ops budget), `ram=50` (memory)
 - `tools/refresh_generator_data.py` — syncs market data to generator
 - `tools/fetch_leek_configs.py` — fetches leek stats from API
+- Polyglot debug flags: `-Dlw.polyglot.debugExceptions=true`, `-Dlw.polyglot.turnWallClockMs=N`
+
+### V8-Python Port (polyglot)
+
+- LeekWars accepts Python AIs since 2.49. `tools/lk2py.py` transpiles all of
+  `V8_modules/` into a single `V8_python/main.py` (prelude + 34 modules + `turn()`).
+- Rebuild after ANY .lk change: `python3 tools/lk2py.py --check`
+  (no generator compile cache involved — .py is evaluated fresh each fight)
+- Test: `python3 tools/local_test.py 10 smart_tank --leek EdsgerDijkstra --ai V8_python/main.py`
+- Static audit: `python3 -m pyflakes V8_python/main.py | grep "undefined name"`
+  (bridged API names like getCell/CHIP_* are expected false positives)
+- `tools/lw_prelude.py` holds the LS-semantics runtime (lw_add/lw_get/lw_mod,
+  collection stdlib). NEVER import Python stdlib at runtime in guest code
+  (sandbox imports can fail); never trust `list`/`dict` builtins (bridge shadows
+  them — use the captured `_list`/`_dict`).
+- Known gap: local polyglot ops counter is CPU-time based; GraalPy cold start
+  consumes ~40% of the synthetic turn-1 budget → pipeline self-trims on T1.
+  100% vs local bots, but loses most mirror fights vs the LS twin. Server uses
+  deterministic statement counting — validate on beta before ladder use.
 
 ---
 

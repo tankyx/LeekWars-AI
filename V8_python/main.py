@@ -1,0 +1,19170 @@
+# ════════ LeekScript runtime prelude (generated header — do not edit in V8_python) ════════
+# Reimplements LS semantics the polyglot bridge does not provide:
+# null-tolerant arithmetic, tolerant subscripts, and the collection stdlib
+# (non-bridged: it operates on native guest containers). See
+# POLYGLOT_PORTING_GUIDE.md sections 2-3.
+import math as _math
+
+# The polyglot bridge injects LS stdlib functions named `list`/`dict` (and
+# possibly others) into the guest global scope, shadowing Python builtins.
+# Capture the real types via literals — immune to shadowing.
+_list = type([])
+_dict = type({})
+_str = type("")
+_int = type(0)
+_float = type(0.0)
+_tuple = type(())
+
+
+def lw_num(x):
+    if x is None:
+        return 0
+    if isinstance(x, (_int, _float)):
+        return x
+    if isinstance(x, type(True)):
+        return 1 if x else 0
+    if isinstance(x, _str):
+        try:
+            return _int(x)
+        except ValueError:
+            try:
+                return _float(x)
+            except ValueError:
+                return 0
+    return 0
+
+
+def lw_str(x):
+    if x is None:
+        return "null"
+    if x is True:
+        return "true"
+    if x is False:
+        return "false"
+    if isinstance(x, _float) and x == _int(x) and abs(x) < 1e15:
+        return _str(_int(x))
+    return _str(x)
+
+
+def lw_add(a, b):
+    if type(a) is _int and type(b) is _int:
+        return a + b
+    if isinstance(a, _str) or isinstance(b, _str):
+        return lw_str(a) + lw_str(b)
+    if isinstance(a, _list) and isinstance(b, _list):
+        return a + b
+    return lw_num(a) + lw_num(b)
+
+
+def lw_sub(a, b):
+    if type(a) is _int and type(b) is _int:
+        return a - b
+    return lw_num(a) - lw_num(b)
+
+
+def lw_mul(a, b):
+    if type(a) is _int and type(b) is _int:
+        return a * b
+    return lw_num(a) * lw_num(b)
+
+
+def lw_div(a, b):
+    b = lw_num(b)
+    if b == 0:
+        return 0
+    return lw_num(a) / b
+
+
+def lw_mod(a, b):
+    # Java remainder semantics (sign of the dividend), not Python floor-mod
+    a = lw_num(a)
+    b = lw_num(b)
+    if b == 0:
+        return 0
+    r = _math.fmod(a, b)
+    if isinstance(a, _int) and isinstance(b, _int):
+        return _int(r)
+    return r
+
+
+def lw_get(o, k):
+    if o is None:
+        return None
+    try:
+        if isinstance(o, _dict):
+            return o.get(k)
+        if isinstance(o, (_list, _str)):
+            i = _int(k)
+            n = len(o)
+            if -n <= i < n:
+                return o[i]
+            return None
+        return o[k]  # host proxies (game API arrays/maps)
+    except Exception:
+        return None
+
+
+def lw_put(o, k, v):
+    if isinstance(o, _list):
+        i = _int(k)
+        if i == len(o):
+            o.append(v)
+        else:
+            o[i] = v
+    else:
+        o[k] = v
+    return v
+
+
+def lw_values(coll):
+    if coll is None:
+        return []
+    if isinstance(coll, _dict):
+        return _list(coll.values())
+    if isinstance(coll, (_list, _tuple, _str)):
+        return _list(coll)
+    try:
+        return _list(coll.values())
+    except Exception:
+        pass
+    try:
+        return _list(coll)
+    except Exception:
+        return []
+
+
+def lw_count(x):
+    if x is None:
+        return 0
+    try:
+        return len(x)
+    except Exception:
+        try:
+            return sum(1 for _ in x)
+        except Exception:
+            return 0
+
+
+def _lwcall(f, *a):
+    try:
+        n = f.__code__.co_argcount
+    except AttributeError:
+        return f(*a)
+    return f(*a[:n])
+
+
+# ── LS collection stdlib (non-bridged) ──
+
+def count(x):
+    return lw_count(x)
+
+
+def push(arr, v):
+    arr.append(v)
+    return v
+
+
+def pop(arr):
+    if arr:
+        return arr.pop()
+    return None
+
+
+def insert(arr, element, position):
+    arr.insert(_int(position), element)
+
+
+def remove(arr, position):
+    try:
+        return arr.pop(_int(position))
+    except Exception:
+        return None
+
+
+def removeElement(arr, element):
+    try:
+        arr.remove(element)
+        return True
+    except ValueError:
+        return False
+
+
+def inArray(arr, v):
+    try:
+        return v in lw_values(arr) if isinstance(arr, _dict) else v in arr
+    except Exception:
+        return False
+
+
+def indexOf(haystack, needle, start=0):
+    try:
+        if isinstance(haystack, _str):
+            return haystack.find(lw_str(needle), _int(start))
+        return _list(haystack).index(needle, _int(start))
+    except ValueError:
+        return -1
+    except Exception:
+        return -1
+
+
+def contains(haystack, needle):
+    try:
+        if isinstance(haystack, _str):
+            return lw_str(needle) in haystack
+        if isinstance(haystack, _dict):
+            return needle in haystack.values()
+        return needle in haystack
+    except Exception:
+        return False
+
+
+def substring(s, start, length=None):
+    s = lw_str(s)
+    start = _int(start)
+    if length is None:
+        return s[start:]
+    return s[start:start + _int(length)]
+
+
+class _CmpKey:
+    # hand-rolled functools.cmp_to_key: stdlib imports can fail inside the
+    # polyglot sandbox, so avoid them entirely
+    __slots__ = ("v", "cmp")
+
+    def __init__(self, v, cmp):
+        self.v = v
+        self.cmp = cmp
+
+    def __lt__(self, other):
+        return lw_num(_lwcall(self.cmp, self.v, other.v)) < 0
+
+
+def arraySort(arr, cmp=None):
+    if cmp is None:
+        arr.sort(key=lambda v: (v is None, v))
+    else:
+        arr.sort(key=lambda v: _CmpKey(v, cmp))
+    return arr
+
+
+def sort(arr, cmp=None):
+    return arraySort(arr, cmp)
+
+
+def arrayFilter(arr, cb):
+    if isinstance(arr, _dict):
+        return {k: v for k, v in arr.items() if _lwcall(cb, v, k, arr)}
+    return [v for v in arr if _lwcall(cb, v)]
+
+
+def arrayMap(arr, cb):
+    if isinstance(arr, _dict):
+        return {k: _lwcall(cb, v, k, arr) for k, v in arr.items()}
+    return [_lwcall(cb, v) for v in arr]
+
+
+def mapContainsKey(m, k):
+    if m is None:
+        return False
+    try:
+        return k in m
+    except Exception:
+        return False
+
+
+def mapKeys(m):
+    if m is None:
+        return []
+    try:
+        return _list(m.keys())
+    except Exception:
+        return _list(iter(m))
+
+
+def mapValues(m):
+    return lw_values(m)
+
+
+def mapGet(m, k, default=None):
+    v = lw_get(m, k)
+    return default if v is None else v
+
+
+def mapPut(m, k, v):
+    m[k] = v
+    return v
+
+
+def mapRemove(m, k):
+    if isinstance(m, _dict):
+        return m.pop(k, None)
+    try:
+        del m[k]
+    except Exception:
+        return None
+
+
+def arrayClear(arr):
+    try:
+        arr.clear()
+    except Exception:
+        pass
+    return arr
+
+
+def mapMerge(m1, m2):
+    out = {}
+    if m1:
+        out.update(m1)
+    if m2:
+        out.update(m2)
+    return out
+
+
+def mapClear(m):
+    try:
+        m.clear()
+    except Exception:
+        pass
+    return m
+
+
+def mapSize(m):
+    return lw_count(m)
+
+
+def mapFilter(m, cb):
+    out = {}
+    if m is None:
+        return out
+    for k in _list(m.keys()):
+        v = m[k]
+        if _lwcall(cb, v, k, m):
+            out[k] = v
+    return out
+
+
+def clone(x):
+    if isinstance(x, _list):
+        return _list(x)
+    if isinstance(x, _dict):
+        return _dict(x)
+    return x
+
+
+def floor(x):
+    return _math.floor(lw_num(x))
+
+
+def ceil(x):
+    return _math.ceil(lw_num(x))
+
+
+def round(x):
+    # LS round = half away from zero (Java Math.round), not banker's
+    x = lw_num(x)
+    return _math.floor(x + 0.5) if x >= 0 else _math.ceil(x - 0.5)
+
+
+def sqrt(x):
+    x = lw_num(x)
+    return _math.sqrt(x) if x >= 0 else 0
+
+
+def pow(a, b):
+    return lw_num(a) ** lw_num(b)
+
+
+def abs(x):
+    x = lw_num(x)
+    return x if x >= 0 else -x
+
+
+def min(*args):
+    vals = args[0] if len(args) == 1 else args
+    vals = [v for v in lw_values(vals) if v is not None] if len(args) == 1 else [lw_num(v) for v in args]
+    if not vals:
+        return None
+    m = vals[0]
+    for v in vals[1:]:
+        if v < m:
+            m = v
+    return m
+
+
+def max(*args):
+    vals = args[0] if len(args) == 1 else args
+    vals = [v for v in lw_values(vals) if v is not None] if len(args) == 1 else [lw_num(v) for v in args]
+    if not vals:
+        return None
+    m = vals[0]
+    for v in vals[1:]:
+        if v > m:
+            m = v
+    return m
+# ════════ end prelude ════════
+
+
+# ════════ game_entity.lk ════════
+class Entity:
+    def __init__(self, cellPos):
+        self._cellPos = 0
+        self._maxHealth = 0
+        self._currHealth = 0
+        self._weapons = []
+        self._inUseWeapon = (-1)
+        self._chips = []
+        self._id = (-1)
+        self._strength = 0
+        self._resistance = 0
+        self._agility = 0
+        self._wisdom = 0
+        self._science = 0
+        self._magic = 0
+        self._relShield = 0
+        self._absShield = 0
+        self._cores = 0
+        self._ram = 0
+        self._frequency = 0
+        self._currMp = 0
+        self._maxMp = 0
+        self._currTp = 0
+        self._maxTp = 0
+        self._statuses = []
+        self._effectsActive = []
+        self._isAlive = True
+        self._cellPos = cellPos
+        self._id = getEntityOnCell(cellPos)
+        self._maxHealth = getTotalLife(self._id)
+        self._currHealth = getLife(self._id)
+        self._weapons = getWeapons(self._id)
+        self._inUseWeapon = getWeapon(self._id)
+        self._chips = getChips(self._id)
+        self._strength = getStrength(self._id)
+        self._resistance = getResistance(self._id)
+        self._agility = getAgility(self._id)
+        self._wisdom = getWisdom(self._id)
+        self._science = getScience(self._id)
+        self._magic = getMagic(self._id)
+        self._relShield = getRelativeShield(self._id)
+        self._absShield = getAbsoluteShield(self._id)
+        self._cores = getCores(self._id)
+        self._ram = getRAM(self._id)
+        self._frequency = getFrequency(self._id)
+        self._currMp = getMP(self._id)
+        self._maxMp = getTotalMP(self._id)
+        self._currTp = getTP(self._id)
+        self._maxTp = getTotalTP(self._id)
+        self._statuses = getStates(self._id)
+        self._isAlive = isAlive(self._id)
+
+    def updateEntity(self):
+        self._cellPos = getCell(self._id)
+        self._currHealth = getLife(self._id)
+        self._maxHealth = getTotalLife(self._id)
+        self._inUseWeapon = getWeapon(self._id)
+        self._currMp = getMP(self._id)
+        self._currTp = getTP(self._id)
+        self._statuses = getStates(self._id)
+        self._isAlive = isAlive(self._id)
+        self._relShield = getRelativeShield(self._id)
+        self._absShield = getAbsoluteShield(self._id)
+        self._effectsActive = getEffects(self._id)
+    
+    def getEffect(self, effectId):
+        if (self._effectsActive == None):
+            return None
+        for e in lw_values(self._effectsActive):
+            if (lw_get(e, 0) == effectId):
+                return e
+        return None
+    
+    def hasEffect(self, effectId):
+        return (self.getEffect(effectId) != None)
+    
+    def getEffectRemaining(self, effectId):
+        effect = self.getEffect(effectId)
+        if (effect == None):
+            return 0
+        if (count(effect) >= 4):
+            return lw_get(effect, 3)
+        return 1
+    
+    def hasDamageReturn(self):
+        return self.hasEffect(EFFECT_DAMAGE_RETURN)
+    
+    def getDamageReturnRemaining(self):
+        return self.getEffectRemaining(EFFECT_DAMAGE_RETURN)
+    
+    def hasVulnerability(self):
+        return self.hasEffect(EFFECT_VULNERABILITY)
+    
+    def getVulnerabilityRemaining(self):
+        return self.getEffectRemaining(EFFECT_VULNERABILITY)
+    
+    def isInvulnerable(self):
+        if (self._absShield >= 9999):
+            return True
+        if self.hasEffect(EFFECT_ABSOLUTE_SHIELD):
+            shieldValue = self.getEffectValue(EFFECT_ABSOLUTE_SHIELD)
+            if (shieldValue >= 9999):
+                return True
+        return False
+    
+    def getEffectValue(self, effectId):
+        effect = self.getEffect(effectId)
+        if (effect == None):
+            return 0
+        if (count(effect) >= 2):
+            return lw_get(effect, 1)
+        return 0
+    
+    def getPoisonStackCount(self):
+        if (self._effectsActive == None):
+            return 0
+        n = 0
+        for e in lw_values(self._effectsActive):
+            if (lw_get(e, 0) == EFFECT_POISON):
+                n = lw_add(n, 1)
+        return n
+    
+    def getTotalPoisonPerTurn(self):
+        if (self._effectsActive == None):
+            return 0
+        total = 0
+        for e in lw_values(self._effectsActive):
+            if ((lw_get(e, 0) == EFFECT_POISON) and (count(e) >= 2)):
+                total = lw_add(total, lw_get(e, 1))
+        return total
+    
+    def getMaxPoisonRemaining(self):
+        if (self._effectsActive == None):
+            return 0
+        maxR = 0
+        for e in lw_values(self._effectsActive):
+            if (((lw_get(e, 0) == EFFECT_POISON) and (count(e) >= 4)) and (lw_get(e, 3) > maxR)):
+                maxR = lw_get(e, 3)
+        return maxR
+    
+    def getTotalPoisonDamage(self):
+        if (self._effectsActive == None):
+            return 0
+        total = 0
+        for e in lw_values(self._effectsActive):
+            if ((lw_get(e, 0) == EFFECT_POISON) and (count(e) >= 4)):
+                total = lw_add(total, lw_mul(lw_get(e, 1), lw_get(e, 3)))
+        return total
+    
+
+class Player(Entity):
+    def __init__(self, cellPos):
+        super().__init__(cellPos)
+
+
+class Enemy(Entity):
+    def __init__(self, cellPos):
+        super().__init__(cellPos)
+
+
+class Chest(Entity):
+    def __init__(self, cellPos):
+        super().__init__(cellPos)
+
+
+BULB_TYPE_HEALER = 1
+BULB_TYPE_BUFFER = 2
+BULB_TYPE_ATTACKER = 3
+BULB_TYPE_UNKNOWN = 0
+def isBulb(entity):
+    if (entity == None):
+        return False
+    entityType = getType(entity._id)
+    return ((entityType == ENTITY_BULB))
+
+def getBulbType(entity):
+    if ((entity == None) or (not isBulb(entity))):
+        return BULB_TYPE_UNKNOWN
+    chips = entity._chips
+    if ((chips == None) or (count(chips) == 0)):
+        return BULB_TYPE_UNKNOWN
+    for chipId in lw_values(chips):
+        if isHealingChip(chipId):
+            return BULB_TYPE_HEALER
+    for chipId in lw_values(chips):
+        if (isOffensiveBuff(chipId) or isShieldChip(chipId)):
+            return BULB_TYPE_BUFFER
+    return BULB_TYPE_ATTACKER
+
+def estimateBulbStat(minStat, maxStat, summonerLevel):
+    level = min(300, summonerLevel)
+    return floor(lw_add(minStat, lw_div(lw_mul((lw_sub(maxStat, minStat)), level), 300)))
+
+def getSummonerLevel(entityId):
+    level = getLevel(entityId)
+    if ((level != None) and (level > 0)):
+        return level
+    return 150
+
+def countMyLivingSummons(playerId):
+    allies = getAliveAllies()
+    if (allies == None):
+        return 0
+    n = 0
+    for a in lw_values(allies):
+        if (a == playerId):
+            continue
+        if (getSummoner(a) == playerId):
+            n = lw_add(n, 1)
+    return n
+
+def estimateBulbHP(entity):
+    if (entity == None):
+        return 0
+    if (entity._maxHealth > 0):
+        return entity._maxHealth
+    summonerLevel = getSummonerLevel(entity._id)
+    return estimateBulbStat(50, 300, summonerLevel)
+
+def canKillBulbThisTurn(bulb, availableDamage):
+    if (bulb == None):
+        return False
+    estimatedHP = estimateBulbHP(bulb)
+    currentHP = bulb._currHealth
+    targetHP = (currentHP if (currentHP > 0) else estimatedHP)
+    return (availableDamage >= targetHP)
+
+
+# ════════ field_map_core.lk ════════
+# include: game_entity.lk (inlined by assembler)
+class Cell:
+    def __init__(self, id, isObstacle, entityID, weaponDamage, chipDamage, hasLOS, highestDamageWeapon, highestDamageChip):
+        self._id = None
+        self._isObstacle = False
+        self._entityID = (-1)
+        self._weaponDamage = 0
+        self._chipDamage = 0
+        self._totalDamage = 0
+        self._directDamage = 0
+        self._dotDamage = 0
+        self._bestType = (-1)
+        self._hasLOS = False
+        self._highestDamageWeapon = (-1)
+        self._highestDamageChip = (-1)
+        self._weaponsList = []
+        self._chipsList = []
+        self._totalAoEDamage = 0
+        self._enemiesHit = []
+        self._enemiesHitCount = 0
+        self._multiHitBonus = 0
+        self._weaponOptimalAims = {}
+        self._chipOptimalAims = {}
+        self._isOTKOCell = False
+        self._otkoDamage = 0
+        self._otkoKillProbability = 0.0
+        self._otkoTPRequired = 0
+        self._id = id
+        self._isObstacle = isObstacle
+        self._entityID = entityID
+        self._weaponDamage = weaponDamage
+        self._chipDamage = chipDamage
+        self._hasLOS = hasLOS
+        self._highestDamageWeapon = highestDamageWeapon
+        self._highestDamageChip = highestDamageChip
+        self._totalDamage = lw_add(weaponDamage, chipDamage)
+        if ((weaponDamage >= chipDamage) and (weaponDamage > 0)):
+            self._bestType = 0
+        else:
+            if (chipDamage > weaponDamage):
+                self._bestType = 1
+
+
+class Color:
+    def __init__(self, r, g, b):
+        self._r = 0
+        self._g = 0
+        self._b = 0
+        self._r = r
+        self._g = g
+        self._b = b
+
+    def getIntColor(self):
+        return getColor(self._r, self._g, self._b)
+    
+
+class FieldMapCore:
+    x_offset = 18
+    y_offset = 17
+    base_cell = 308
+    board_cell_count = 613
+    def __init__(self):
+        self.cells = {}
+        self.entities = {}
+        self.wColors = {}
+        self.cColors = {}
+        self._cachedEnemySubMap = {}
+        self._cachedEnemyArray = []
+        self._cachedEnemyValid = False
+        playerID = getEntity()
+        k = 1
+        for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+            wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+            mapPut(self.wColors, wid, Color(lw_mod((lw_mul(k, 50)), 255), lw_mod((lw_mul(k, 80)), 255), lw_mod((lw_mul(k, 110)), 255)))
+            k = lw_add(k, 1)
+        kc = 1
+        for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+            cObj = lw_get(arsenal.playerEquippedChips, cid)
+            mapPut(self.cColors, cid, Color(lw_mod((lw_mul(kc, 70)), 255), lw_mod((lw_mul(kc, 40)), 255), lw_mod((lw_mul(kc, 95)), 255)))
+            kc = lw_add(kc, 1)
+        i = 0
+        while (i < FieldMapCore.board_cell_count):
+            isObs = isObstacle(i)
+            entID = (-1)
+            if isEntity(i):
+                entID = getEntityOnCell(i)
+                entityType = getType(entID)
+                if (entityType == ENTITY_CHEST):
+                    mapPut(self.entities, entID, Chest(i))
+                else:
+                    if isAlly(entID):
+                        if (entID == playerID):
+                            mapPut(self.entities, entID, Player(i))
+                        else:
+                            mapPut(self.entities, entID, Player(i))
+                    else:
+                        entityName = getName(entID)
+                        if (entityName == "graal"):
+                            mapPut(self.entities, entID, Enemy(i))
+                        else:
+                            if ((((entityName == "red_crystal") or (entityName == "green_crystal")) or (entityName == "blue_crystal")) or (entityName == "yellow_crystal")):
+                                mapPut(self.entities, entID, Enemy(i))
+                            else:
+                                mapPut(self.entities, entID, Enemy(i))
+            mapPut(self.cells, i, Cell(i, isObs, entID, 0, 0, False, (-1), (-1)))
+            i = lw_add(i, 1)
+
+    def updateMapEntities(self):
+        self._cachedEnemyValid = False
+        aliveEnemies = getAliveEnemies()
+        for enemyId in lw_values(aliveEnemies):
+            if (not mapContainsKey(self.entities, enemyId)):
+                cellId = getCell(enemyId)
+                mapPut(self.entities, enemyId, Enemy(cellId))
+        aliveAllies = getAliveAllies()
+        for allyId in lw_values(aliveAllies):
+            if (allyId == getEntity()):
+                continue
+            if (not mapContainsKey(self.entities, allyId)):
+                cellId = getCell(allyId)
+                mapPut(self.entities, allyId, Player(cellId))
+        cellId = 0
+        while (cellId < 613):
+            if isEntity(cellId):
+                entID = getEntityOnCell(cellId)
+                entityType = getType(entID)
+                if ((entityType == ENTITY_CHEST) and (not mapContainsKey(self.entities, entID))):
+                    mapPut(self.entities, entID, Chest(cellId))
+            cellId = lw_add(cellId, 1)
+        for entity in lw_values(mapValues(self.entities)):
+            if (entity != None):
+                entity.updateEntity()
+    
+    def getAlliesSubMap(self):
+        def _lwfn1_1(value, key, entities):
+            return ((isinstance(value, Player)) and (key != getEntity()))
+        return mapFilter(self.entities, _lwfn1_1)
+    
+    def getEnemySubMap(self):
+        if (not self._cachedEnemyValid):
+            def _lwfn1_1(value, key, entities):
+                return (isinstance(value, Enemy))
+            self._cachedEnemySubMap = mapFilter(self.entities, _lwfn1_1)
+            self._cachedEnemyArray = mapValues(self._cachedEnemySubMap)
+            self._cachedEnemyValid = True
+        return self._cachedEnemySubMap
+    
+    def getEnemyArray(self):
+        if (not self._cachedEnemyValid):
+            self.getEnemySubMap()
+        return self._cachedEnemyArray
+    
+    def getChestSubMap(self):
+        def _lwfn1_1(value, key, entities):
+            return (isinstance(value, Chest))
+        return mapFilter(self.entities, _lwfn1_1)
+    
+    def getClosestEnemy(self):
+        playerPos = player._cellPos
+        closestEnemy = None
+        closestDist = 999
+        enemies = self.getEnemySubMap()
+        for e in lw_values(enemies):
+            if isDead(e._id):
+                continue
+            dist = getCellDistance(playerPos, e._cellPos)
+            if (dist < closestDist):
+                closestDist = dist
+                closestEnemy = e
+        return closestEnemy
+    
+    def selectOptimalTarget(self, criteria=None, excludeId=(-1)):
+        enemyMap = self.getEnemySubMap()
+        enemies = mapValues(enemyMap)
+        if (count(enemies) == 0):
+            return None
+        if (count(enemies) == 1):
+            if ((excludeId != (-1)) and (lw_get(enemies, 0)._id == excludeId)):
+                return None
+            return lw_get(enemies, 0)
+        priorityMode = (lw_get(criteria, 'prioritizeLowest') if ((criteria != None) and mapContainsKey(criteria, 'prioritizeLowest')) else "hp")
+        penalizeBuffed = (lw_get(criteria, 'penalizeBuffed') if ((criteria != None) and mapContainsKey(criteria, 'penalizeBuffed')) else False)
+        bonusForDebuffed = (lw_get(criteria, 'bonusForDebuffed') if ((criteria != None) and mapContainsKey(criteria, 'bonusForDebuffed')) else False)
+        isBattleRoyale = ((getFightType() == FIGHT_TYPE_BATTLE_ROYALE))
+        bestTarget = None
+        bestScore = (-99999)
+        playerPos = player._cellPos
+        for e in lw_values(enemies):
+            if isDead(e._id):
+                continue
+            if ((excludeId != (-1)) and (e._id == excludeId)):
+                continue
+            score = 0
+            dist = getCellDistance(playerPos, e._cellPos)
+            if (dist == None):
+                continue
+            entityType = getType(e._id)
+            enemyHP = getLife(e._id)
+            enemyMaxHP = getTotalLife(e._id)
+            hpPercent = lw_div((lw_mul(enemyHP, 100)), enemyMaxHP)
+            if isBattleRoyale:
+                score = lw_add(score, lw_mul((lw_sub(100, hpPercent)), 2))
+                score = lw_add(score, (lw_sub(200, lw_mul(dist, 10))))
+                threatAtEnemy = self.getThreatAtCell(e._cellPos)
+                threatPenalty = lw_mul(threatAtEnemy, 0.5)
+                score = lw_num(score) - lw_num(threatPenalty)
+            else:
+                if (priorityMode == "hp"):
+                    score = lw_add(score, lw_mul((lw_sub(100, hpPercent)), 2))
+                    score = lw_num(score) - lw_num(lw_mul(dist, 5))
+                else:
+                    score = lw_num(score) - lw_num(lw_mul(dist, 10))
+                    score = lw_add(score, (lw_sub(100, hpPercent)))
+            ktEstDPT = lw_add(lw_mul((lw_add(player._strength, player._magic)), 1.5), 100)
+            if (enemyHP <= ktEstDPT):
+                score = lw_add(score, 150)
+            else:
+                if (enemyHP <= lw_mul(ktEstDPT, 2)):
+                    score = lw_add(score, 75)
+            if (entityType == ENTITY_BULB):
+                maxWeaponRange = 0
+                for wObjMR in lw_values(arsenal.playerEquippedWeapons):
+                    if (wObjMR._maxRange > maxWeaponRange):
+                        maxWeaponRange = wObjMR._maxRange
+                bulbReach = lw_add(getMP(), maxWeaponRange)
+                if (dist > bulbReach):
+                    score = lw_num(score) - lw_num(100)
+                else:
+                    if (dist <= 6):
+                        score = lw_add(score, 200)
+                    else:
+                        if (dist <= 10):
+                            score = lw_add(score, 100)
+                        else:
+                            score = lw_add(score, 30)
+            if ((e._resistance != None) and (e._resistance >= 800)):
+                score = lw_num(score) - lw_num(500)
+            effChk = getEffects(e._id)
+            if (effChk != None):
+                for effR in lw_values(effChk):
+                    if (lw_get(effR, 0) == EFFECT_DAMAGE_RETURN):
+                        score = lw_num(score) - lw_num(200)
+                        break
+            if bonusForDebuffed:
+                effects = getEffects(e._id)
+                if (effects != None):
+                    for eff in lw_values(effects):
+                        if (lw_get(eff, 0) == EFFECT_POISON):
+                            score = lw_add(score, 30)
+                        if (lw_get(eff, 0) == EFFECT_SHACKLE_TP):
+                            score = lw_add(score, 20)
+                        if (lw_get(eff, 0) == EFFECT_SHACKLE_MP):
+                            score = lw_add(score, 15)
+            if penalizeBuffed:
+                if ((e._absShield > 50) or (e._relShield > 20)):
+                    score = lw_num(score) - lw_num(25)
+                effsBuff = getEffects(e._id)
+                if (effsBuff != None):
+                    for effB in lw_values(effsBuff):
+                        if (lw_get(effB, 0) == EFFECT_BUFF_STRENGTH):
+                            score = lw_num(score) - lw_num(20)
+                        if (lw_get(effB, 0) == EFFECT_DAMAGE_RETURN):
+                            score = lw_num(score) - lw_num(15)
+            if (score > bestScore):
+                bestScore = score
+                bestTarget = e
+        return bestTarget
+    
+    def getClosestChest(self):
+        playerPos = player._cellPos
+        closestChest = None
+        closestDist = 999
+        chests = self.getChestSubMap()
+        for c in lw_values(chests):
+            if isDead(c._id):
+                continue
+            dist = getCellDistance(playerPos, c._cellPos)
+            if (dist < closestDist):
+                closestDist = dist
+                closestChest = c
+        return closestChest
+    
+    def getCellID(self, x, y):
+        return lw_add(lw_add(FieldMapCore.base_cell, lw_mul(FieldMapCore.x_offset, x)), lw_mul(FieldMapCore.y_offset, y))
+    
+    def getPlayerPos(self):
+        return player._cellPos
+    
+    def isDamageItem(self, item):
+        return (mapContainsKey(item._effects, EFFECT_DAMAGE) or mapContainsKey(item._effects, EFFECT_POISON))
+    
+    def getCellsInLine(self, fromCell, toCell):
+        cells = []
+        x1 = getCellX(fromCell)
+        y1 = getCellY(fromCell)
+        x2 = getCellX(toCell)
+        y2 = getCellY(toCell)
+        dx = lw_sub(x2, x1)
+        dy = lw_sub(y2, y1)
+        steps = max(abs(dx), abs(dy))
+        if (steps == 0):
+            push(cells, fromCell)
+            return cells
+        i = 0
+        while (i <= steps):
+            x = lw_add(x1, floor(lw_div((lw_mul(dx, i)), steps)))
+            y = lw_add(y1, floor(lw_div((lw_mul(dy, i)), steps)))
+            cellId = getCellFromXY(x, y)
+            if (((cellId != None) and (cellId >= 0)) and (cellId < FieldMapCore.board_cell_count)):
+                push(cells, cellId)
+            i = lw_add(i, 1)
+        return cells
+    
+    def wouldAoEHitCell(self, centerCell, aoeType, shooterCell, checkCell):
+        if (aoeType == AREA_POINT):
+            return (checkCell == centerCell)
+        if (checkCell == centerCell):
+            return True
+        dist = getCellDistance(centerCell, checkCell)
+        if (dist == None):
+            return False
+        if ((aoeType == AREA_CIRCLE_1) or (aoeType == AREA_PLUS_1)):
+            return (dist <= 1)
+        if (aoeType == AREA_CIRCLE_2):
+            return (dist <= 2)
+        if (aoeType == AREA_CIRCLE_3):
+            return (dist <= 3)
+        if (aoeType == AREA_PLUS_2):
+            return (dist <= 2)
+        if (aoeType == AREA_PLUS_3):
+            return (dist <= 3)
+        if (aoeType == AREA_X_1):
+            return (dist <= 1)
+        if (aoeType == AREA_X_2):
+            return (dist <= 2)
+        if (aoeType == AREA_X_3):
+            return (dist <= 3)
+        if (aoeType == AREA_SQUARE_1):
+            return (dist <= 1)
+        if (aoeType == AREA_SQUARE_2):
+            return (dist <= 2)
+        if (aoeType == AREA_LASER_LINE):
+            return False
+        return False
+    
+    def getAoEAffectedCells(self, centerCell, aoeType, shooterCell=(-1)):
+        affected = []
+        if (aoeType == AREA_POINT):
+            push(affected, centerCell)
+            return affected
+        push(affected, centerCell)
+        if (((aoeType == AREA_CIRCLE_1) or (aoeType == AREA_CIRCLE_2)) or (aoeType == AREA_CIRCLE_3)):
+            radius = (1 if ((aoeType == AREA_CIRCLE_1)) else ((2 if ((aoeType == AREA_CIRCLE_2)) else 3)))
+            dx = (-lw_num(radius))
+            while (dx <= radius):
+                dy = (-lw_num(radius))
+                while (dy <= radius):
+                    dist = lw_add(abs(dx), abs(dy))
+                    if ((dist > 0) and (dist <= radius)):
+                        cellId = lw_add(lw_add(centerCell, lw_mul(FieldMapCore.x_offset, dx)), lw_mul(FieldMapCore.y_offset, dy))
+                        if ((cellId >= 0) and (cellId < FieldMapCore.board_cell_count)):
+                            push(affected, cellId)
+                    dy = lw_add(dy, 1)
+                dx = lw_add(dx, 1)
+        else:
+            if (((aoeType == AREA_PLUS_1) or (aoeType == AREA_PLUS_2)) or (aoeType == AREA_PLUS_3)):
+                radius = (1 if ((aoeType == AREA_PLUS_1)) else ((2 if ((aoeType == AREA_PLUS_2)) else 3)))
+                d = 1
+                while (d <= radius):
+                    cells = [lw_add(centerCell, lw_mul(FieldMapCore.x_offset, d)), lw_sub(centerCell, lw_mul(FieldMapCore.x_offset, d)), lw_add(centerCell, lw_mul(FieldMapCore.y_offset, d)), lw_sub(centerCell, lw_mul(FieldMapCore.y_offset, d))]
+                    for c in lw_values(cells):
+                        if ((c >= 0) and (c < FieldMapCore.board_cell_count)):
+                            push(affected, c)
+                    d = lw_add(d, 1)
+            else:
+                if (((aoeType == AREA_X_1) or (aoeType == AREA_X_2)) or (aoeType == AREA_X_3)):
+                    radius = (1 if ((aoeType == AREA_X_1)) else ((2 if ((aoeType == AREA_X_2)) else 3)))
+                    up_right_offset = lw_sub(FieldMapCore.x_offset, FieldMapCore.y_offset)
+                    down_right_offset = lw_add(FieldMapCore.x_offset, FieldMapCore.y_offset)
+                    down_left_offset = lw_mul((-1), (lw_sub(FieldMapCore.x_offset, FieldMapCore.y_offset)))
+                    up_left_offset = lw_mul((-1), (lw_add(FieldMapCore.x_offset, FieldMapCore.y_offset)))
+                    d = 1
+                    while (d <= radius):
+                        cells = [lw_add(centerCell, lw_mul(up_right_offset, d)), lw_add(centerCell, lw_mul(down_right_offset, d)), lw_add(centerCell, lw_mul(down_left_offset, d)), lw_add(centerCell, lw_mul(up_left_offset, d))]
+                        for c in lw_values(cells):
+                            if ((c >= 0) and (c < FieldMapCore.board_cell_count)):
+                                push(affected, c)
+                        d = lw_add(d, 1)
+                else:
+                    if ((aoeType == AREA_SQUARE_1) or (aoeType == AREA_SQUARE_2)):
+                        radius = (1 if ((aoeType == AREA_SQUARE_1)) else 2)
+                        dx = (-lw_num(radius))
+                        while (dx <= radius):
+                            dy = (-lw_num(radius))
+                            while (dy <= radius):
+                                if ((dx == 0) and (dy == 0)):
+                                    dy = lw_add(dy, 1)
+                                    continue
+                                cellId = lw_add(lw_add(centerCell, lw_mul(FieldMapCore.x_offset, dx)), lw_mul(FieldMapCore.y_offset, dy))
+                                if ((cellId >= 0) and (cellId < FieldMapCore.board_cell_count)):
+                                    push(affected, cellId)
+                                dy = lw_add(dy, 1)
+                            dx = lw_add(dx, 1)
+                    else:
+                        if (aoeType == AREA_LASER_LINE):
+                            if ((shooterCell != (-1)) and (shooterCell != centerCell)):
+                                lineCells = self.getCellsInLine(shooterCell, centerCell)
+                                if (lineCells != None):
+                                    i = 0
+                                    while (i < count(lineCells)):
+                                        c = lw_get(lineCells, i)
+                                        if ((c != shooterCell) and (c != centerCell)):
+                                            push(affected, c)
+                                        i = lw_add(i, 1)
+        return affected
+    
+    def getEnemiesInAoE(self, shooterCell, targetCell, aoeType):
+        aoeCells = self.getAoEAffectedCells(targetCell, aoeType, shooterCell)
+        hitEnemies = []
+        enemies = self.getEnemySubMap()
+        for e in lw_values(enemies):
+            if isDead(e._id):
+                continue
+            i = 0
+            while (i < count(aoeCells)):
+                if (lw_get(aoeCells, i) == e._cellPos):
+                    push(hitEnemies, e)
+                    break
+                i = lw_add(i, 1)
+        return hitEnemies
+    
+    def getThreatAtCell(self, cellId):
+        return 0
+    
+
+
+# ════════ field_map_patterns.lk ════════
+# include: field_map_core.lk (inlined by assembler)
+class FieldMapPatterns(FieldMapCore):
+    x_offset = 18
+    y_offset = 17
+    up_right_offset = lw_sub(18, 17)
+    down_right_offset = lw_add(18, 17)
+    down_left_offset = lw_mul((-1), (lw_sub(18, 17)))
+    up_left_offset = lw_mul((-1), (lw_add(18, 17)))
+    board_cell_count = 613
+    def __init__(self):
+        self.damageMap = {}
+        self.weaponHitmap = {}
+        self.chipHitmap = {}
+        self._damageMapCache = {}
+        self._lastCacheKey = ""
+        super().__init__()
+
+    def getLineHits(self, hitCells, cell, minR, maxR, aoeType, weapon=None, chip=None):
+        curCell = cell
+        dir = 0
+        while (dir < 4):
+            dist = minR
+            while (dist <= maxR):
+                if (dir == 0):
+                    curCell = lw_sub(cell, lw_mul(FieldMapPatterns.y_offset, dist))
+                else:
+                    if (dir == 1):
+                        curCell = lw_add(cell, lw_mul(FieldMapPatterns.x_offset, dist))
+                    else:
+                        if (dir == 2):
+                            curCell = lw_add(cell, lw_mul(FieldMapPatterns.y_offset, dist))
+                        else:
+                            if (dir == 3):
+                                curCell = lw_sub(cell, lw_mul(FieldMapPatterns.x_offset, dist))
+                actualDist = getCellDistance(cell, curCell)
+                if (((actualDist == None) or (actualDist < minR)) or (actualDist > maxR)):
+                    dist = lw_add(dist, 1)
+                    continue
+                _hasLOS = getCachedLineOfSight(cell, curCell)
+                if ((_hasLOS and (curCell >= 0)) and (curCell < FieldMapPatterns.board_cell_count)):
+                    self.updateHitCells(hitCells, curCell, weapon, chip, cell)
+                dist = lw_add(dist, 1)
+            dir = lw_add(dir, 1)
+        return hitCells
+    
+    def getDiagonalHits(self, hitCells, cell, minR, maxR, aoeType, weapon=None, chip=None):
+        curCell = cell
+        dir = 0
+        while (dir < 4):
+            dist = minR
+            while (dist <= maxR):
+                if (dir == 0):
+                    curCell = lw_add(cell, lw_mul(FieldMapPatterns.up_right_offset, dist))
+                else:
+                    if (dir == 1):
+                        curCell = lw_add(cell, lw_mul(FieldMapPatterns.down_right_offset, dist))
+                    else:
+                        if (dir == 2):
+                            curCell = lw_add(cell, lw_mul(FieldMapPatterns.down_left_offset, dist))
+                        else:
+                            if (dir == 3):
+                                curCell = lw_add(cell, lw_mul(FieldMapPatterns.up_left_offset, dist))
+                actualDist = getCellDistance(cell, curCell)
+                if (((actualDist == None) or (actualDist < minR)) or (actualDist > maxR)):
+                    dist = lw_add(dist, 1)
+                    continue
+                _hasLOS = getCachedLineOfSight(cell, curCell)
+                if ((_hasLOS and (curCell >= 0)) and (curCell < FieldMapPatterns.board_cell_count)):
+                    self.updateHitCells(hitCells, curCell, weapon, chip, cell)
+                dist = lw_add(dist, 1)
+            dir = lw_add(dir, 1)
+        return hitCells
+    
+    def getStarHits(self, hitCells, cell, minR, maxR, aoeType, weapon=None, chip=None):
+        lineMap = {}
+        lineMap = self.getLineHits(lineMap, cell, minR, maxR, aoeType, weapon, chip)
+        diagMap = {}
+        diagMap = self.getDiagonalHits(diagMap, cell, minR, maxR, aoeType, weapon, chip)
+        merged = mapMerge(lineMap, diagMap)
+        return mapMerge(hitCells, merged)
+    
+    def getCircleHits(self, hitCells, cell, minR, maxR, aoeType, weapon=None, chip=None):
+        dx = (-lw_num(maxR))
+        while (dx <= maxR):
+            dy = (-lw_num(maxR))
+            while (dy <= maxR):
+                dist = lw_add(abs(dx), abs(dy))
+                if ((dist >= minR) and (dist <= maxR)):
+                    curCell = lw_add(lw_add(cell, lw_mul(FieldMapPatterns.x_offset, dx)), lw_mul(FieldMapPatterns.y_offset, dy))
+                    _hasLOS = getCachedLineOfSight(cell, curCell)
+                    if ((_hasLOS and (curCell >= 0)) and (curCell < FieldMapPatterns.board_cell_count)):
+                        self.updateHitCells(hitCells, curCell, weapon, chip, cell)
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+        return hitCells
+    
+    def getAimCandidates(self, primaryTarget, aoeType, itemRange):
+        candidates = []
+        targetCell = primaryTarget._cellPos
+        if (aoeType == AREA_POINT):
+            push(candidates, targetCell)
+            return candidates
+        enemiesArray = fieldMap.getEnemyArray()
+        if (aoeType == AREA_LASER_LINE):
+            push(candidates, targetCell)
+            for e in lw_values(enemiesArray):
+                if ((e._cellPos != targetCell) and (not isDead(e._id))):
+                    push(candidates, e._cellPos)
+            return candidates
+        processedCells = {}
+        for e in lw_values(enemiesArray):
+            if ((not isDead(e._id)) and (not mapContainsKey(processedCells, e._cellPos))):
+                push(candidates, e._cellPos)
+                lw_put(processedCells, e._cellPos, True)
+        aoeRadius = 1
+        if ((((aoeType == AREA_CIRCLE_3) or (aoeType == AREA_PLUS_3)) or (aoeType == AREA_X_3)) or (aoeType == AREA_SQUARE_2)):
+            aoeRadius = 3
+        else:
+            if ((aoeType == AREA_CIRCLE_2) or (aoeType == AREA_PLUS_2)):
+                aoeRadius = 2
+        maxCandidates = 15
+        for e in lw_values(enemiesArray):
+            if (count(candidates) >= maxCandidates):
+                break
+            if isDead(e._id):
+                continue
+            enemyCell = e._cellPos
+            dx = (-lw_num(aoeRadius))
+            while (dx <= aoeRadius):
+                if (count(candidates) >= maxCandidates):
+                    break
+                dy = (-lw_num(aoeRadius))
+                while (dy <= aoeRadius):
+                    if (count(candidates) >= maxCandidates):
+                        break
+                    if ((dx == 0) and (dy == 0)):
+                        dy = lw_add(dy, 1)
+                        continue
+                    dist = lw_add(abs(dx), abs(dy))
+                    if (dist > aoeRadius):
+                        dy = lw_add(dy, 1)
+                        continue
+                    aimCell = lw_add(lw_add(enemyCell, lw_mul(FieldMapPatterns.x_offset, dx)), lw_mul(FieldMapPatterns.y_offset, dy))
+                    if ((((aimCell >= 0) and (aimCell < FieldMapPatterns.board_cell_count)) and (not isObstacle(aimCell))) and (not mapContainsKey(processedCells, aimCell))):
+                        push(candidates, aimCell)
+                        lw_put(processedCells, aimCell, True)
+                    dy = lw_add(dy, 1)
+                dx = lw_add(dx, 1)
+        return candidates
+    
+    def findOptimalAimPoint(self, shooterCell, item, isWeapon, primaryTarget):
+        enemiesArray = fieldMap.getEnemyArray()
+        primaryCell = primaryTarget._cellPos
+        if (item._aoeType == AREA_POINT):
+            result = arsenal.calculateMultiEnemyDamage(shooterCell, primaryCell, item._id, enemiesArray)
+            totalDamage = lw_get(result, 'total')
+            if isWeapon:
+                totalDamage = lw_num(totalDamage) * lw_num(item._maxUse)
+            return {'aimCell': primaryCell, 'damage': totalDamage, 'enemies': lw_get(result, 'enemies'), 'hitCount': count(lw_get(result, 'enemies'))}
+        itemId = item._id
+        aimCandidates = self.getAimCandidates(primaryTarget, item._aoeType, item._maxRange)
+        bestAimCell = primaryCell
+        bestDamage = 0
+        bestEnemies = []
+        bestHitCount = 0
+        bestDistToTarget = 0
+        aoeType = item._aoeType
+        _dbgAoE = ((aoeType == AREA_CIRCLE_2))
+        if _dbgAoE:
+            debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("AOEAIM t", getTurn()), " item="), itemId), " shoot="), shooterCell), " primaryCell="), primaryCell), " primaryId="), primaryTarget._id), " range=["), item._minRange), "-"), item._maxRange), "]"), " candidates="), count(aimCandidates)))
+        _dbgRejRange = 0
+        _dbgRejLoS = 0
+        _dbgAccepted = 0
+        itemSelfBaseMax = 0
+        if (((aoeType != AREA_POINT) and (aoeType != AREA_LASER_LINE)) and (not item._selfImmune)):
+            sbd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId)
+            if (sbd != None):
+                itemSelfBaseMax = lw_add(lw_get(sbd, 'direct'), lw_get(sbd, 'nova'))
+        for aimCell in lw_values(aimCandidates):
+            dist = getCellDistance(shooterCell, aimCell)
+            if (((dist == None) or (dist < item._minRange)) or (dist > item._maxRange)):
+                if _dbgAoE:
+                    _dbgRejRange = lw_add(_dbgRejRange, 1)
+                continue
+            if (not getCachedLineOfSight(shooterCell, aimCell)):
+                if _dbgAoE:
+                    _dbgRejLoS = lw_add(_dbgRejLoS, 1)
+                continue
+            if _dbgAoE:
+                _dbgAccepted = lw_add(_dbgAccepted, 1)
+            result = arsenal.calculateMultiEnemyDamage(shooterCell, aimCell, itemId, enemiesArray)
+            totalDamage = lw_get(result, 'total')
+            hitEnemies = lw_get(result, 'enemies')
+            hitCount = count(hitEnemies)
+            if isWeapon:
+                totalDamage = lw_num(totalDamage) * lw_num(item._maxUse)
+            if (_dbgAoE and (totalDamage > 0)):
+                debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("  cand=", aimCell), " dist="), dist), " raw="), lw_get(result, 'total')), " hits="), hitCount), " total="), totalDamage))
+            if ((itemSelfBaseMax > 0) and fieldMap.wouldAoEHitCell(aimCell, aoeType, shooterCell, shooterCell)):
+                selfMod = arsenal.computeAoEModifier(aimCell, shooterCell, aoeType)
+                if (selfMod > 0):
+                    selfRel = (player._relShield if ((player._relShield != None)) else 0)
+                    selfAbs = (player._absShield if ((player._absShield != None)) else 0)
+                    rawSelf = lw_mul(itemSelfBaseMax, selfMod)
+                    netSelf = lw_sub(lw_div(lw_mul(rawSelf, (lw_sub(100, selfRel))), 100), selfAbs)
+                    if (netSelf < 0):
+                        netSelf = 0
+                    if isWeapon:
+                        netSelf = lw_num(netSelf) * lw_num(item._maxUse)
+                    totalDamage = lw_num(totalDamage) - lw_num(lw_mul(netSelf, 2))
+            isBetter = False
+            distToTarget = (-1)
+            if (totalDamage > bestDamage):
+                isBetter = True
+            else:
+                if ((totalDamage == bestDamage) and (hitCount > bestHitCount)):
+                    isBetter = True
+                else:
+                    if ((totalDamage == bestDamage) and (hitCount == bestHitCount)):
+                        distToTarget = getCellDistance(aimCell, primaryCell)
+                        if ((distToTarget != None) and (distToTarget < bestDistToTarget)):
+                            isBetter = True
+            if isBetter:
+                bestDamage = totalDamage
+                bestAimCell = aimCell
+                bestEnemies = hitEnemies
+                bestHitCount = hitCount
+                if (distToTarget == (-1)):
+                    d = getCellDistance(aimCell, primaryCell)
+                    bestDistToTarget = (9999 if ((d == None)) else d)
+                else:
+                    bestDistToTarget = distToTarget
+        if _dbgAoE:
+            debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("AOEAIM RESULT bestAim=", bestAimCell), " bestDmg="), bestDamage), " hits="), bestHitCount), " rejRange="), _dbgRejRange), " rejLoS="), _dbgRejLoS), " accepted="), _dbgAccepted))
+        return {'aimCell': bestAimCell, 'damage': bestDamage, 'enemies': bestEnemies, 'hitCount': bestHitCount}
+    
+    def buildSingleItemHitMap(self, localMap, oppCell, item, isWeapon):
+        if (not self.isDamageItem(item)):
+            return localMap
+        minR = item._minRange
+        maxR = item._maxRange
+        launchType = item._launchType
+        aoeType = item._aoeType
+        weapon = (item if isWeapon else None)
+        chip = (None if isWeapon else item)
+        if (launchType == LAUNCH_TYPE_CIRCLE):
+            return self.getCircleHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        else:
+            if (launchType == LAUNCH_TYPE_STAR):
+                return self.getStarHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+            else:
+                if (launchType == LAUNCH_TYPE_LINE):
+                    return self.getLineHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+                else:
+                    if (launchType == LAUNCH_TYPE_DIAGONAL):
+                        return self.getDiagonalHits(localMap, oppCell, minR, maxR, aoeType, weapon, chip)
+        return localMap
+    
+    def markLocalHits(self, localMap, isWeapon):
+        if isWeapon:
+            for c in lw_values(localMap):
+                if ((c._highestDamageWeapon != (-1)) and mapContainsKey(self.wColors, c._highestDamageWeapon._id)):
+                    mark(c._id, lw_get(self.wColors, c._highestDamageWeapon._id).getIntColor(), 2)
+        else:
+            for cc in lw_values(localMap):
+                if ((cc._highestDamageChip != (-1)) and mapContainsKey(self.cColors, cc._highestDamageChip._id)):
+                    chipId = cc._highestDamageChip._id
+                    chipName = getChipName(chipId)
+                    shortName = chipName
+                    temp = substring(chipName, 0, 2)
+                    if (temp != None):
+                        shortName = temp
+                    code = lw_add("C_", shortName)
+                    baseCol = lw_get(self.cColors, chipId)
+                    dr = max(0, lw_sub(baseCol._r, 60))
+                    dg = max(0, lw_sub(baseCol._g, 60))
+                    db = max(0, lw_sub(baseCol._b, 60))
+                    darkInt = getColor(dr, dg, db)
+                    markText(cc._id, code, darkInt, 1)
+    
+    def markChosenDestinationAndPath(self, playerPos, destinationCell):
+        if ((destinationCell != None) and (destinationCell != playerPos)):
+            path = getPath(playerPos, destinationCell)
+            if (path != None):
+                pathLength = count(path)
+                if (pathLength > 0):
+                    for pathCell in lw_values(path):
+                        if ((pathCell != playerPos) and (pathCell != destinationCell)):
+                            blueColor = getColor(100, 200, 255)
+                            mark(pathCell, blueColor, 2)
+                    goldColor = getColor(255, 215, 0)
+                    mark(destinationCell, goldColor, 3)
+    
+    def buildHitMap(self, oppCell, reachableGraph=None):
+        enemyId = getEntityOnCell(oppCell)
+        if (enemyId == None):
+            enemyId = (-1)
+        cacheKey = lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(enemyId, "_"), oppCell), "_"), getCell()), "_"), getMP())
+        if ((self._lastCacheKey == cacheKey) and (self._lastCacheKey != "")):
+            self.damageMap = self._damageMapCache
+            return self.damageMap
+        clearMarks()
+        mapClear(self.damageMap)
+        self.integrateEquippedItemsIntoDamageMap(oppCell)
+        chipCells = []
+        weaponOnlyCells = []
+        for dmCell in lw_values(self.damageMap):
+            if (count(dmCell._chipsList) > 0):
+                push(chipCells, dmCell._id)
+            else:
+                if (count(dmCell._weaponsList) > 0):
+                    push(weaponOnlyCells, dmCell._id)
+        multiHitCells = []
+        for cell in lw_values(self.damageMap):
+            if (cell._enemiesHitCount >= 2):
+                push(multiHitCells, {'cell': cell._id, 'enemies': cell._enemiesHitCount, 'damage': cell._totalAoEDamage})
+        if (count(multiHitCells) > 0):
+            for mh in lw_values(multiHitCells):
+                pass
+        target = None
+        enemiesArray = fieldMap.getEnemyArray()
+        for e in lw_values(enemiesArray):
+            if (e._cellPos == oppCell):
+                target = e
+                break
+        if (target != None):
+            target.updateEntity()
+        enableOTKOCells = True
+        if (((enableOTKOCells and (target != None)) and (player._currTp >= 10)) and (target._currHealth < (lw_mul(target._maxHealth, 0.7)))):
+            playerTP = player._currTp
+            candidateCells = []
+            for dmCell in lw_values(self.damageMap):
+                push(candidateCells, dmCell)
+            otkoCount = 0
+            cellsChecked = 0
+            cellsLimit = min(count(candidateCells), 20)
+            maxOTKOCells = 5
+            idx = 0
+            while ((idx < cellsLimit) and (idx < count(candidateCells))):
+                if (getOperations() > _ops89):
+                    break
+                cell = lw_get(candidateCells, idx)
+                cellsChecked = lw_add(cellsChecked, 1)
+                burstInfo = fieldMap.calculateBurstDamageFromCell(cell._id, target, playerTP)
+                if (burstInfo == None):
+                    idx = lw_add(idx, 1)
+                    continue
+                damage = lw_get(burstInfo, 'damage')
+                tpRequired = lw_get(burstInfo, 'tpRequired')
+                killProb = lw_get(burstInfo, 'killProbability')
+                if (killProb >= 0.85):
+                    cell._isOTKOCell = True
+                    cell._otkoDamage = damage
+                    cell._otkoKillProbability = killProb
+                    cell._otkoTPRequired = tpRequired
+                    otkoCount = lw_add(otkoCount, 1)
+                    if (otkoCount <= 3):
+                        goldColor = getColor(255, 215, 0)
+                        mark(cell._id, goldColor, 3)
+                        markText(cell._id, "OTKO", goldColor, 2)
+                    if (otkoCount >= maxOTKOCells):
+                        break
+                idx = lw_add(idx, 1)
+        self._damageMapCache = self.damageMap
+        self._lastCacheKey = cacheKey
+        return self.damageMap
+    
+    def integrateReachableGraphIntoDamageMap(self, oppCell, reachableGraph):
+        reachableCells = reachableGraph.getReachableCells()
+        mapClear(self.weaponHitmap)
+        mapClear(self.chipHitmap)
+        for cellData in lw_values(reachableCells):
+            if (cellData.damageToTarget <= 0):
+                continue
+            cellId = cellData.cellId
+            for weaponId in lw_values(cellData.usableWeapons):
+                weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+                if (weapon != None):
+                    self.updateHitCells(self.damageMap, cellId, weapon, None, oppCell)
+                    weaponCells = lw_get(self.weaponHitmap, weaponId)
+                    if (weaponCells == None):
+                        weaponCells = []
+                        lw_put(self.weaponHitmap, weaponId, weaponCells)
+                    push(weaponCells, cellId)
+            for chipId in lw_values(cellData.usableChips):
+                if self.isBuffChip(chipId):
+                    continue
+                chip = lw_get(arsenal.playerEquippedChips, chipId)
+                if (chip != None):
+                    self.updateHitCells(self.damageMap, cellId, None, chip, oppCell)
+                    chipCells = lw_get(self.chipHitmap, chipId)
+                    if (chipCells == None):
+                        chipCells = []
+                        lw_put(self.chipHitmap, chipId, chipCells)
+                    push(chipCells, cellId)
+        for weaponId in lw_values(mapKeys(self.weaponHitmap)):
+            cells = lw_get(self.weaponHitmap, weaponId)
+        for chipId in lw_values(mapKeys(self.chipHitmap)):
+            cells = lw_get(self.chipHitmap, chipId)
+    
+    def isBuffChip(self, chipId):
+        return isBuffChipRole(chipId)
+    
+    def integrateEquippedItemsIntoDamageMap(self, oppCell):
+        reachableCells = getReachableCells()
+        useGraph = (count(reachableCells) > 0)
+        for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+            if (getOperations() > _ops86):
+                break
+            wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+            listIDs = []
+            if useGraph:
+                localWeaponMap = {}
+                localWeaponMap = self.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, True)
+                for cellRef in lw_values(localWeaponMap):
+                    if cellRef._isObstacle:
+                        continue
+                    cellId = cellRef._id
+                    if mapContainsKey(ReachableGraph, cellId):
+                        self.updateHitCells(self.damageMap, cellId, wObj, None, oppCell)
+                        push(listIDs, cellId)
+            else:
+                localWeaponMap = {}
+                localWeaponMap = self.buildSingleItemHitMap(localWeaponMap, oppCell, wObj, True)
+                for cellRef in lw_values(localWeaponMap):
+                    if cellRef._isObstacle:
+                        continue
+                    self.updateHitCells(self.damageMap, cellRef._id, wObj, None, oppCell)
+                    push(listIDs, cellRef._id)
+            lw_put(self.weaponHitmap, wObj._id, listIDs)
+        for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+            if (getOperations() > _ops86):
+                break
+            chipObj = lw_get(arsenal.playerEquippedChips, cid)
+            if self.isBuffChip(cid):
+                continue
+            if (getCooldown(cid, player._id) > 0):
+                continue
+            listCID = []
+            if useGraph:
+                localChipMap = {}
+                localChipMap = self.buildSingleItemHitMap(localChipMap, oppCell, chipObj, False)
+                for cellRef2 in lw_values(localChipMap):
+                    if cellRef2._isObstacle:
+                        continue
+                    cellId = cellRef2._id
+                    if mapContainsKey(ReachableGraph, cellId):
+                        self.updateHitCells(self.damageMap, cellId, None, chipObj, oppCell)
+                        push(listCID, cellId)
+            else:
+                localChipMap = {}
+                localChipMap = self.buildSingleItemHitMap(localChipMap, oppCell, chipObj, False)
+                for cellRef2 in lw_values(localChipMap):
+                    if cellRef2._isObstacle:
+                        continue
+                    self.updateHitCells(self.damageMap, cellRef2._id, None, chipObj, oppCell)
+                    push(listCID, cellRef2._id)
+            lw_put(self.chipHitmap, chipObj._id, listCID)
+    
+    def updateHitCells(self, hitCells, curCell, weapon=None, chip=None, targetCell=(-1)):
+        if ((weapon == None) and (chip == None)):
+            return hitCells
+        item = (weapon if (weapon != None) else chip)
+        itemId = item._id
+        target = None
+        enemiesArray = fieldMap.getEnemyArray()
+        for e in lw_values(enemiesArray):
+            if (e._cellPos == targetCell):
+                target = e
+                break
+        if ((target == None) and (count(enemiesArray) > 0)):
+            target = lw_get(enemiesArray, 0)
+        optimalAim = self.findOptimalAimPoint(curCell, item, (weapon != None), target)
+        optimalAimCell = lw_get(optimalAim, 'aimCell')
+        totalDamage = lw_get(optimalAim, 'damage')
+        hitEnemies = lw_get(optimalAim, 'enemies')
+        enemyCount = lw_get(optimalAim, 'hitCount')
+        if mapContainsKey(hitCells, curCell):
+            cell = lw_get(hitCells, curCell)
+            if (weapon != None):
+                if (totalDamage > cell._weaponDamage):
+                    cell._weaponDamage = totalDamage
+                    cell._highestDamageWeapon = weapon
+                    cell._totalAoEDamage = totalDamage
+                    cell._enemiesHit = hitEnemies
+                    cell._enemiesHitCount = enemyCount
+                    mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
+                already = False
+                for w in lw_values(cell._weaponsList):
+                    if (w._id == weapon._id):
+                        already = True
+                        break
+                if (not already):
+                    push(cell._weaponsList, weapon)
+                    mapPut(cell._weaponOptimalAims, itemId, optimalAimCell)
+            else:
+                cell._chipDamage = lw_add(cell._chipDamage, totalDamage)
+                cell._totalAoEDamage = lw_add(cell._totalAoEDamage, totalDamage)
+                for e in lw_values(hitEnemies):
+                    found = False
+                    for existing in lw_values(cell._enemiesHit):
+                        if (existing._id == e._id):
+                            found = True
+                            break
+                    if (not found):
+                        push(cell._enemiesHit, e)
+                        cell._enemiesHitCount = lw_add(cell._enemiesHitCount, 1)
+                push(cell._chipsList, chip)
+                mapPut(cell._chipOptimalAims, itemId, optimalAimCell)
+        else:
+            newCell = Cell(curCell, False, getEntityOnCell(curCell), (totalDamage if (weapon != None) else 0), (totalDamage if (chip != None) else 0), True, (weapon if (weapon != None) else (-1)), (chip if (chip != None) else (-1)))
+            newCell._totalAoEDamage = totalDamage
+            newCell._enemiesHit = hitEnemies
+            newCell._enemiesHitCount = enemyCount
+            if (weapon != None):
+                push(newCell._weaponsList, weapon)
+                mapPut(newCell._weaponOptimalAims, itemId, optimalAimCell)
+            if (chip != None):
+                push(newCell._chipsList, chip)
+                mapPut(newCell._chipOptimalAims, itemId, optimalAimCell)
+            mapPut(hitCells, curCell, newCell)
+        if mapContainsKey(hitCells, curCell):
+            cellRef = lw_get(hitCells, curCell)
+            cellRef._totalDamage = lw_add(cellRef._weaponDamage, cellRef._chipDamage)
+            if ((cellRef._weaponDamage >= cellRef._chipDamage) and (cellRef._weaponDamage > 0)):
+                cellRef._bestType = 0
+            else:
+                if (cellRef._chipDamage > cellRef._weaponDamage):
+                    cellRef._bestType = 1
+        return hitCells
+    
+    def getClosestHighestDmgHitCell(self):
+        playerPos = player._cellPos
+        closestCell = (-1)
+        closestDist = 999
+        highestDmg = (-1)
+        for c in lw_values(self.damageMap):
+            dist = getCachedPathLength(playerPos, c._id)
+            if (dist == None):
+                continue
+            if (c._weaponDamage > highestDmg):
+                highestDmg = c._weaponDamage
+                closestDist = dist
+                closestCell = c
+            else:
+                if ((c._weaponDamage == highestDmg) and (dist < closestDist)):
+                    closestDist = dist
+                    closestCell = c
+        if ((closestCell != (-1)) and (closestDist > player._currMp)):
+            potentialCell = self.getClosestHitCell()
+            dist = getCachedPathLength(playerPos, potentialCell._id)
+            if ((potentialCell != (-1)) and (dist <= player._currMp)):
+                closestCell = potentialCell
+        return closestCell
+    
+    def getClosestHitCellForWeapon(self, weapon):
+        playerPos = player._cellPos
+        closestCell = (-1)
+        closestDist = 999
+        for c in lw_values(self.damageMap):
+            if (c._highestDamageWeapon == (-1)):
+                continue
+            if (c._highestDamageWeapon._id != weapon._id):
+                continue
+            dist = getCachedPathLength(playerPos, c._id)
+            if (dist == None):
+                continue
+            if ((dist < closestDist) and (dist <= player._currMp)):
+                closestDist = dist
+                closestCell = c
+        return closestCell
+    
+    def getClosestHitCell(self):
+        playerPos = self.getPlayerPos()
+        closestCell = (-1)
+        closestDist = 999
+        for c in lw_values(self.damageMap):
+            dist = getCachedPathLength(playerPos, c._id)
+            if (dist == None):
+                continue
+            if (dist < closestDist):
+                closestDist = dist
+                closestCell = c
+        return closestCell
+    
+    def getBestWeaponOrChipCell(self):
+        best = (-1)
+        bestDmg = (-1)
+        bestDist = 99999
+        playerPos = player._cellPos
+        for c in lw_values(self.damageMap):
+            dmg = c._totalDamage
+            dist = getCachedPathLength(playerPos, c._id)
+            if (dist == None):
+                continue
+            if ((dmg > bestDmg) or (((dmg == bestDmg) and (dist < bestDist)))):
+                bestDmg = dmg
+                best = c
+                bestDist = dist
+        return best
+    
+    def getBestWeightedDamageCell(self, dotWeight, directWeight):
+        best = (-1)
+        bestScore = (-1)
+        for c in lw_values(self.damageMap):
+            score = lw_add(lw_mul(c._directDamage, directWeight), lw_mul(c._dotDamage, dotWeight))
+            if (score > bestScore):
+                bestScore = score
+                best = c
+        return best
+    
+    def getAllCellsForItem(self, item, isWeapon):
+        result = []
+        for c in lw_values(self.damageMap):
+            if isWeapon:
+                if ((c._highestDamageWeapon != (-1)) and (c._highestDamageWeapon._id == item._id)):
+                    push(result, c)
+            else:
+                if ((c._highestDamageChip != (-1)) and (c._highestDamageChip._id == item._id)):
+                    push(result, c)
+        return result
+    
+    def canShootFromCell(self, weaponId, cellId):
+        if (not mapContainsKey(self.weaponHitmap, weaponId)):
+            return False
+        shooterCells = lw_get(self.weaponHitmap, weaponId)
+        return inArray(shooterCells, cellId)
+    
+    def canShootChipFromCell(self, chipId, cellId):
+        if (not mapContainsKey(self.chipHitmap, chipId)):
+            return False
+        shooterCells = lw_get(self.chipHitmap, chipId)
+        return inArray(shooterCells, cellId)
+    
+
+
+# ════════ field_map_tactical.lk ════════
+# include: field_map_patterns.lk (inlined by assembler)
+class FieldMap(FieldMapPatterns):
+    board_cell_count = 613
+    def __init__(self):
+        self._enemyAccessCache = []
+        self._enemyAccessCacheTurn = (-1)
+        self._enemyAccessCacheIds = []
+        self.enemyThreatMap = {}
+        self._threatMapCacheTurn = (-1)
+        self._threatMapCacheEnemyPositions = {}
+        self._lobbyThreatMap = {}
+        self._lobbyThreatSources = {}
+        self._isBattleRoyale = False
+        super().__init__()
+
+    def getAccessibleCells(self, entity):
+        acc = []
+        if (entity == None):
+            return acc
+        origin = entity._cellPos
+        if (entity._id == getEntity()):
+            reachable = getReachableCells()
+            for cellId in lw_values(reachable):
+                push(acc, cellId)
+            return acc
+        mp = getEffectiveEnemyMP(entity)
+        cid = 0
+        while (cid < FieldMap.board_cell_count):
+            if isObstacle(cid):
+                cid = lw_add(cid, 1)
+                continue
+            approx = getCellDistance(origin, cid)
+            if ((approx == None) or (approx > mp)):
+                cid = lw_add(cid, 1)
+                continue
+            len = getCachedPathLength(origin, cid)
+            if (len == None):
+                cid = lw_add(cid, 1)
+                continue
+            if (len <= mp):
+                push(acc, cid)
+            cid = lw_add(cid, 1)
+        blink = getEntityBlinkCells(entity)
+        bi = 0
+        while (bi < count(blink)):
+            push(acc, lw_get(blink, bi))
+            bi = lw_add(bi, 1)
+        return acc
+    
+    def getEnemyAccess(self):
+        curTurn = getTurn()
+        enemiesMap = self.getEnemySubMap()
+        enemyIdsNow = mapKeys(enemiesMap)
+        needRebuild = ((curTurn != self._enemyAccessCacheTurn))
+        if ((not needRebuild) and (count(enemyIdsNow) != count(self._enemyAccessCacheIds))):
+            needRebuild = True
+        if (not needRebuild):
+            i = 0
+            while (i < count(enemyIdsNow)):
+                found = False
+                j = 0
+                while (j < count(self._enemyAccessCacheIds)):
+                    if (lw_get(enemyIdsNow, i) == lw_get(self._enemyAccessCacheIds, j)):
+                        found = True
+                        break
+                    j = lw_add(j, 1)
+                if (not found):
+                    needRebuild = True
+                    break
+                i = lw_add(i, 1)
+        if needRebuild:
+            self._enemyAccessCache = []
+            self._enemyAccessCacheIds = []
+            ei = 0
+            while (ei < count(enemyIdsNow)):
+                eid = lw_get(enemyIdsNow, ei)
+                enemyObj = lw_get(enemiesMap, eid)
+                if (enemyObj == None):
+                    ei = lw_add(ei, 1)
+                    continue
+                eAcc = self.getAccessibleCells(enemyObj)
+                if (indexOf(eAcc, enemyObj._cellPos) == (-1)):
+                    push(eAcc, enemyObj._cellPos)
+                push(self._enemyAccessCache, {'enemy': enemyObj, 'cells': eAcc})
+                push(self._enemyAccessCacheIds, eid)
+                ei = lw_add(ei, 1)
+            self._enemyAccessCacheTurn = curTurn
+        return self._enemyAccessCache
+    
+    def findHideAndSeekCell(self, mode="defensive", target=None):
+        enemyAccess = self.getEnemyAccess()
+        if (count(enemyAccess) == 0):
+            return None
+        playerAccessible = self.getAccessibleCells(player)
+        if (indexOf(playerAccessible, player._cellPos) == (-1)):
+            push(playerAccessible, player._cellPos)
+        isApproachMode = ((mode == "approach"))
+        targetPos = (target._cellPos if isApproachMode else (-1))
+        currentDist = (getCellDistance(player._cellPos, targetPos) if isApproachMode else (-1))
+        bestCell = (-1)
+        bestDanger = 99999
+        bestDist = (99999 if isApproachMode else (-1))
+        bestCanAttack = False
+        bestCover = (-1)
+        playerPos = player._cellPos
+        enemyPositions = []
+        if (not isApproachMode):
+            ea = 0
+            while (ea < count(enemyAccess)):
+                enemyRef = lw_get(lw_get(enemyAccess, ea), 'enemy')
+                if (enemyRef != None):
+                    push(enemyPositions, enemyRef._cellPos)
+                ea = lw_add(ea, 1)
+        enemyPositionsCount = count(enemyPositions)
+        enemyAccessSet = {}
+        ea2 = 0
+        while (ea2 < count(enemyAccess)):
+            cellsArr2 = lw_get(lw_get(enemyAccess, ea2), 'cells')
+            ci = 0
+            while (ci < count(cellsArr2)):
+                lw_put(enemyAccessSet, lw_get(cellsArr2, ci), True)
+                ci = lw_add(ci, 1)
+            ea2 = lw_add(ea2, 1)
+        i = 0
+        while (i < count(playerAccessible)):
+            cand = lw_get(playerAccessible, i)
+            distMetric = 0
+            if isApproachMode:
+                distMetric = getCellDistance(cand, targetPos)
+                if (distMetric == None):
+                    i = lw_add(i, 1)
+                    continue
+            else:
+                closestEnemyDist = 999
+                ep = 0
+                while (ep < enemyPositionsCount):
+                    eOrigDist = getCellDistance(cand, lw_get(enemyPositions, ep))
+                    if ((eOrigDist != None) and (eOrigDist < closestEnemyDist)):
+                        closestEnemyDist = eOrigDist
+                    ep = lw_add(ep, 1)
+                distMetric = (0 if ((closestEnemyDist == 999)) else closestEnemyDist)
+            canAttack = False
+            if isApproachMode:
+                if (distMetric > currentDist):
+                    if mapContainsKey(self.damageMap, cand):
+                        cellRef = lw_get(self.damageMap, cand)
+                        if ((cellRef._highestDamageWeapon != (-1)) or (cellRef._highestDamageChip != (-1))):
+                            canAttack = True
+                    if (not canAttack):
+                        i = lw_add(i, 1)
+                        continue
+                else:
+                    if mapContainsKey(self.damageMap, cand):
+                        cellRef = lw_get(self.damageMap, cand)
+                        if ((cellRef._highestDamageWeapon != (-1)) or (cellRef._highestDamageChip != (-1))):
+                            canAttack = True
+            if (getOperations() > _ops89):
+                break
+            danger = self.computeDangerForCell(cand, enemyAccess)
+            coverScore = self.evaluateCoverScore(cand, enemyAccessSet)
+            shouldUpdate = False
+            if (bestCell == (-1)):
+                shouldUpdate = True
+            else:
+                if isApproachMode:
+                    if (canAttack and (not bestCanAttack)):
+                        shouldUpdate = True
+                    else:
+                        if (canAttack == bestCanAttack):
+                            if ((((danger < bestDanger) or (((danger == bestDanger) and (distMetric < bestDist)))) or ((((danger == bestDanger) and (distMetric == bestDist)) and (coverScore > bestCover)))) or ((((((danger == bestDanger) and (distMetric == bestDist)) and (coverScore == bestCover)) and (distMetric < currentDist)) and (bestDist >= currentDist)))):
+                                shouldUpdate = True
+                else:
+                    if (((danger < bestDanger) or (((danger == bestDanger) and (distMetric > bestDist)))) or ((((danger == bestDanger) and (distMetric == bestDist)) and (coverScore > bestCover)))):
+                        shouldUpdate = True
+            if shouldUpdate:
+                bestCell = cand
+                bestDanger = danger
+                bestDist = distMetric
+                bestCanAttack = canAttack
+                bestCover = coverScore
+            i = lw_add(i, 1)
+        if (bestCell == (-1)):
+            return None
+        if isApproachMode:
+            if (bestCell != playerPos):
+                mark(bestCell, getColor(255, 200, 120), 3)
+            return {'cell': bestCell, 'danger': bestDanger, 'canAttack': bestCanAttack, 'dist': bestDist, 'cover': bestCover, 'safe': ((bestDanger == 0))}
+        else:
+            if (bestCell != playerPos):
+                mark(bestCell, getColor(120, 200, 255), 3)
+            return {'cell': bestCell, 'danger': bestDanger, 'safe': ((bestDanger == 0)), 'dist': bestDist, 'cover': bestCover}
+    
+    def paintCoverHeatmap(self):
+        if (not _showCoverHeatmap):
+            return None
+        enemyAccess = self.getEnemyAccess()
+        if (count(enemyAccess) == 0):
+            return None
+        enemyAccessSet = {}
+        ea = 0
+        while (ea < count(enemyAccess)):
+            cellsArr = lw_get(lw_get(enemyAccess, ea), 'cells')
+            ci = 0
+            while (ci < count(cellsArr)):
+                lw_put(enemyAccessSet, lw_get(cellsArr, ci), True)
+                ci = lw_add(ci, 1)
+            ea = lw_add(ea, 1)
+        seen = {}
+        candidates = []
+        mpReach = self.getAccessibleCells(player)
+        mr = 0
+        while (mr < count(mpReach)):
+            mc = lw_get(mpReach, mr)
+            if (not mapContainsKey(seen, mc)):
+                push(candidates, mc)
+                lw_put(seen, mc, True)
+            mr = lw_add(mr, 1)
+        blink = getEntityBlinkCells(player)
+        bi = 0
+        while (bi < count(blink)):
+            bc = lw_get(blink, bi)
+            if (not mapContainsKey(seen, bc)):
+                push(candidates, bc)
+                lw_put(seen, bc, True)
+            bi = lw_add(bi, 1)
+        i = 0
+        while (i < count(candidates)):
+            cc = lw_get(candidates, i)
+            cov = self.evaluateCoverScore(cc, enemyAccessSet)
+            clamped = cov
+            if (clamped > 4):
+                clamped = 4
+            if (clamped < 0):
+                clamped = 0
+            rChan = lw_sub(255, floor(lw_div(lw_mul(255, clamped), 4)))
+            mark(cc, getColor(rChan, 255, 0), 1)
+            i = lw_add(i, 1)
+    
+    def computeDangerForCell(self, cellId, enemyAccess):
+        if mapContainsKey(lw__dangerCellCache, cellId):
+            return lw_get(lw__dangerCellCache, cellId)
+        danger = 0
+        ea = 0
+        while (ea < count(enemyAccess)):
+            cellsArr = lw_get(lw_get(enemyAccess, ea), 'cells')
+            ec = 0
+            while (ec < count(cellsArr)):
+                if getCachedLineOfSight(lw_get(cellsArr, ec), cellId):
+                    danger = lw_add(danger, 1)
+                ec = lw_add(ec, 1)
+            ea = lw_add(ea, 1)
+        lw_put(lw__dangerCellCache, cellId, danger)
+        return danger
+    
+    def evaluateCoverScore(self, cellId, enemyAccessSet):
+        cellX = getCellX(cellId)
+        cellY = getCellY(cellId)
+        effectiveCover = 0
+        offsets = [[(-1), (-1)], [(-1), 0], [(-1), 1], [0, (-1)], [0, 1], [1, (-1)], [1, 0], [1, 1]]
+        o = 0
+        while (o < count(offsets)):
+            dx = lw_get(lw_get(offsets, o), 0)
+            dy = lw_get(lw_get(offsets, o), 1)
+            neighborCell = getCellFromXY(lw_add(cellX, dx), lw_add(cellY, dy))
+            if ((neighborCell == None) or (not isObstacle(neighborCell))):
+                o = lw_add(o, 1)
+                continue
+            functional = False
+            step = 2
+            while (step <= 3):
+                sCell = getCellFromXY(lw_add(cellX, lw_mul(dx, step)), lw_add(cellY, lw_mul(dy, step)))
+                if (sCell == None):
+                    step = lw_add(step, 1)
+                    continue
+                if (not mapContainsKey(enemyAccessSet, sCell)):
+                    step = lw_add(step, 1)
+                    continue
+                if (not getCachedLineOfSight(sCell, cellId)):
+                    functional = True
+                    break
+                step = lw_add(step, 1)
+            if functional:
+                effectiveCover = lw_add(effectiveCover, 1)
+            o = lw_add(o, 1)
+        return effectiveCover
+    
+    def findOptimalTeleportCell(self, target):
+        if (target == None):
+            return None
+        playerPos = player._cellPos
+        bestCell = (-1)
+        bestDamage = (-1)
+        bestDistFromPlayer = 9999
+        targetHP = target._currHealth
+        cellId = 0
+        while (cellId < FieldMap.board_cell_count):
+            if isObstacle(cellId):
+                cellId = lw_add(cellId, 1)
+                continue
+            if isEntity(cellId):
+                cellId = lw_add(cellId, 1)
+                continue
+            distFromPlayer = getCellDistance(playerPos, cellId)
+            if (((distFromPlayer == None) or (distFromPlayer < 1)) or (distFromPlayer > 12)):
+                cellId = lw_add(cellId, 1)
+                continue
+            totalDamage = 0
+            playerTP = lw_sub(player._currTp, 9)
+            tpSpent = 0
+            distToTarget = getCellDistance(cellId, target._cellPos)
+            if (distToTarget == None):
+                cellId = lw_add(cellId, 1)
+                continue
+            hasLosToTarget = getCachedLineOfSight(cellId, target._cellPos)
+            for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+                if (wObj == None):
+                    continue
+                if ((distToTarget < wObj._minRange) or (distToTarget > wObj._maxRange)):
+                    continue
+                if (not hasLosToTarget):
+                    continue
+                if (wObj._aoeType == AREA_LASER_LINE):
+                    if (not self.isOnSameLine(cellId, target._cellPos)):
+                        continue
+                weaponDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, wid, target)
+                tpBudget = lw_sub(playerTP, tpSpent)
+                swapCost = (1 if ((getWeapon() != wid)) else 0)
+                if (tpBudget <= swapCost):
+                    continue
+                uses = min(wObj._maxUse, floor(lw_div((lw_sub(tpBudget, swapCost)), wObj._cost)))
+                if (uses <= 0):
+                    continue
+                totalDamage = lw_add(totalDamage, lw_mul(weaponDmg, uses))
+                tpSpent = lw_add(tpSpent, lw_add(swapCost, lw_mul(uses, wObj._cost)))
+            tpRemaining = lw_sub(playerTP, tpSpent)
+            if (tpRemaining > 0):
+                for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                    chipObj = lw_get(arsenal.playerEquippedChips, cid)
+                    if (chipObj == None):
+                        continue
+                    if ((cid == CHIP_TELEPORTATION) or (cid == CHIP_JUMP)):
+                        continue
+                    if ((not mapContainsKey(chipObj._effects, EFFECT_DAMAGE)) and (not mapContainsKey(chipObj._effects, EFFECT_POISON))):
+                        continue
+                    if ((distToTarget < chipObj._minRange) or (distToTarget > chipObj._maxRange)):
+                        continue
+                    if (not hasLosToTarget):
+                        continue
+                    chipDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, cid, target)
+                    tpBudgetChip = lw_sub(playerTP, tpSpent)
+                    if (tpBudgetChip < chipObj._cost):
+                        continue
+                    usesChip = min(chipObj._maxUse, floor(lw_div(tpBudgetChip, chipObj._cost)))
+                    if (usesChip <= 0):
+                        continue
+                    totalDamage = lw_add(totalDamage, lw_mul(chipDmg, usesChip))
+                    tpSpent = lw_add(tpSpent, lw_mul(usesChip, chipObj._cost))
+            if ((totalDamage > bestDamage) or (((totalDamage == bestDamage) and (distFromPlayer < bestDistFromPlayer)))):
+                bestDamage = totalDamage
+                bestCell = cellId
+                bestDistFromPlayer = distFromPlayer
+                if (bestDamage >= lw_mul(targetHP, 1.5)):
+                    break
+            cellId = lw_add(cellId, 1)
+        if (bestCell == (-1)):
+            return None
+        bestCellItems = []
+        tpForItems = lw_sub(player._currTp, 9)
+        bestDistToTarget = getCellDistance(bestCell, target._cellPos)
+        bestHasLos = (getCachedLineOfSight(bestCell, target._cellPos) if (bestDistToTarget != None) else False)
+        for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+            wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+            if (wObj == None):
+                continue
+            if (bestDistToTarget == None):
+                continue
+            if ((bestDistToTarget < wObj._minRange) or (bestDistToTarget > wObj._maxRange)):
+                continue
+            if (not bestHasLos):
+                continue
+            if (wObj._aoeType == AREA_LASER_LINE):
+                if (not self.isOnSameLine(bestCell, target._cellPos)):
+                    continue
+            swapCost = (1 if ((getWeapon() != wid)) else 0)
+            uses = min(wObj._maxUse, floor(lw_div((lw_sub(tpForItems, swapCost)), wObj._cost)))
+            u = 0
+            while (u < uses):
+                push(bestCellItems, wid)
+                u = lw_add(u, 1)
+        for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+            chipObj = lw_get(arsenal.playerEquippedChips, cid)
+            if (chipObj == None):
+                continue
+            if ((cid == CHIP_TELEPORTATION) or (cid == CHIP_JUMP)):
+                continue
+            if ((not mapContainsKey(chipObj._effects, EFFECT_DAMAGE)) and (not mapContainsKey(chipObj._effects, EFFECT_POISON))):
+                continue
+            if (bestDistToTarget == None):
+                continue
+            if ((bestDistToTarget < chipObj._minRange) or (bestDistToTarget > chipObj._maxRange)):
+                continue
+            if (not bestHasLos):
+                continue
+            usesChip = min(chipObj._maxUse, floor(lw_div(tpForItems, chipObj._cost)))
+            uc = 0
+            while (uc < usesChip):
+                push(bestCellItems, cid)
+                uc = lw_add(uc, 1)
+        killProb = arsenal.getKillProbability(bestCellItems, player._strength, player._magic, player._wisdom, player._science, player._agility, target)
+        return {'cell': bestCell, 'damage': bestDamage, 'killProbability': killProb}
+    
+    def calculateBurstDamageFromCell(self, cellId, target, availableTP):
+        if (target == None):
+            return None
+        if ((cellId < 0) or (cellId >= FieldMap.board_cell_count)):
+            return None
+        cell = None
+        for dmCell in lw_values(self.damageMap):
+            if (dmCell._id == cellId):
+                cell = dmCell
+                break
+        if (cell == None):
+            return None
+        distToTarget = getCellDistance(cellId, target._cellPos)
+        if (distToTarget == None):
+            return None
+        validWeaponDamage = 0
+        for weapon in lw_values(cell._weaponsList):
+            minRange = getWeaponMinRange(weapon._id)
+            maxRange = getWeaponMaxRange(weapon._id)
+            if ((distToTarget >= minRange) and (distToTarget <= maxRange)):
+                if (not getCachedLineOfSight(cellId, target._cellPos)):
+                    continue
+                area = getWeaponArea(weapon._id)
+                if (area == AREA_LASER_LINE):
+                    if (not self.isOnSameLine(cellId, target._cellPos)):
+                        continue
+                dmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, weapon._id, target)
+                if (dmg > validWeaponDamage):
+                    validWeaponDamage = dmg
+        baseDamage = lw_add(validWeaponDamage, cell._chipDamage)
+        if (baseDamage <= 0):
+            return None
+        avgTPPerUse = 6.0
+        totalCost = 0
+        costCount = 0
+        for weapon in lw_values(cell._weaponsList):
+            minRange = getWeaponMinRange(weapon._id)
+            maxRange = getWeaponMaxRange(weapon._id)
+            if ((distToTarget >= minRange) and (distToTarget <= maxRange)):
+                if (not getCachedLineOfSight(cellId, target._cellPos)):
+                    continue
+                area = getWeaponArea(weapon._id)
+                if (area == AREA_LASER_LINE):
+                    if (not self.isOnSameLine(cellId, target._cellPos)):
+                        continue
+                weaponCost = getCachedWeaponCost(weapon._id, arsenal)
+                if ((weaponCost != None) and (weaponCost > 0)):
+                    totalCost = lw_add(totalCost, weaponCost)
+                    costCount = lw_add(costCount, 1)
+        for chip in lw_values(cell._chipsList):
+            chipCost = getCachedChipCost(chip._id)
+            if ((chipCost != None) and (chipCost > 0)):
+                totalCost = lw_add(totalCost, chipCost)
+                costCount = lw_add(costCount, 1)
+        if (costCount > 0):
+            avgTPPerUse = lw_div(totalCost, costCount)
+        estimatedUses = floor(lw_div(availableTP, avgTPPerUse))
+        if (estimatedUses < 1):
+            estimatedUses = 1
+        if (estimatedUses > 4):
+            estimatedUses = 4
+        estimatedMaxDamage = lw_mul(baseDamage, estimatedUses)
+        targetHP = target._currHealth
+        killProbability = ((lw_div(estimatedMaxDamage, targetHP)) if ((targetHP > 0)) else 0.0)
+        return {'damage': estimatedMaxDamage, 'tpRequired': availableTP, 'killProbability': killProbability}
+    
+    def getBestOTKOCell(self):
+        bestCell = None
+        bestKillProb = 0
+        for cell in lw_values(self.damageMap):
+            if (cell._isOTKOCell and (cell._otkoKillProbability > bestKillProb)):
+                bestKillProb = cell._otkoKillProbability
+                bestCell = cell
+        return bestCell
+    
+    def getAllOTKOCells(self):
+        otkoCells = []
+        for cell in lw_values(self.damageMap):
+            if cell._isOTKOCell:
+                push(otkoCells, cell)
+        return otkoCells
+    
+    def buildEnemyThreatMap(self):
+        currentTurn = getTurn()
+        cacheValid = ((self._threatMapCacheTurn == currentTurn))
+        if cacheValid:
+            enemies = self.getEnemySubMap()
+            for eid in lw_values(mapKeys(enemies)):
+                enemy = lw_get(enemies, eid)
+                if mapContainsKey(self._threatMapCacheEnemyPositions, eid):
+                    if (lw_get(self._threatMapCacheEnemyPositions, eid) != enemy._cellPos):
+                        cacheValid = False
+                        break
+                else:
+                    cacheValid = False
+                    break
+        if cacheValid:
+            return None
+        mapClear(self.enemyThreatMap)
+        mapClear(self._threatMapCacheEnemyPositions)
+        mapClear(self._lobbyThreatMap)
+        mapClear(self._lobbyThreatSources)
+        enemies = self.getEnemySubMap()
+        enemyCount = count(mapKeys(enemies))
+        if (enemyCount == 0):
+            return None
+        self._isBattleRoyale = ((getFightType() == FIGHT_TYPE_BATTLE_ROYALE))
+        if (self._isBattleRoyale and (enemyCount > 3)):
+            playerPos = player._cellPos
+            enemyList = []
+            for eid in lw_values(mapKeys(enemies)):
+                enemy = lw_get(enemies, eid)
+                if isDead(eid):
+                    continue
+                dist = getCellDistance(playerPos, enemy._cellPos)
+                if (dist == None):
+                    dist = 999
+                push(enemyList, {'enemy': enemy, 'distance': dist})
+            i = 0
+            while (i < lw_sub(count(enemyList), 1)):
+                j = 0
+                while (j < lw_sub(lw_sub(count(enemyList), i), 1)):
+                    if (lw_get(lw_get(enemyList, j), 'distance') > lw_get(lw_get(enemyList, lw_add(j, 1)), 'distance')):
+                        temp = lw_get(enemyList, j)
+                        lw_put(enemyList, j, lw_get(enemyList, lw_add(j, 1)))
+                        lw_put(enemyList, lw_add(j, 1), temp)
+                    j = lw_add(j, 1)
+                i = lw_add(i, 1)
+            processed = 0
+            for entry in lw_values(enemyList):
+                enemy = lw_get(entry, 'enemy')
+                dist = lw_get(entry, 'distance')
+                lw_put(self._threatMapCacheEnemyPositions, enemy._id, enemy._cellPos)
+                if (dist > 20):
+                    continue
+                if ((processed < 3) or (dist <= 10)):
+                    self.addEnemyThreatToMap(enemy)
+                else:
+                    self.addSimplifiedThreatEstimate(enemy, dist)
+                processed = lw_add(processed, 1)
+        else:
+            totalEnemyMP = 0
+            for eid in lw_values(mapKeys(enemies)):
+                enemy = lw_get(enemies, eid)
+                if (not isDead(eid)):
+                    totalEnemyMP = lw_add(totalEnemyMP, enemy._currMp)
+            if (totalEnemyMP > 20):
+                self._threatMapCacheTurn = currentTurn
+                return None
+            for eid in lw_values(mapKeys(enemies)):
+                enemy = lw_get(enemies, eid)
+                if isDead(eid):
+                    continue
+                lw_put(self._threatMapCacheEnemyPositions, eid, enemy._cellPos)
+                self.addEnemyThreatToMap(enemy)
+        self._threatMapCacheTurn = currentTurn
+        threatenedCells = count(mapKeys(self.enemyThreatMap))
+    
+    def addSimplifiedThreatEstimate(self, enemy, enemyDist):
+        enemyPos = enemy._cellPos
+        estimatedRange = lw_add(8, enemy._currMp)
+        estimatedDamage = 300
+        playerPos = player._cellPos
+        reachableCells = getReachableCells()
+        for cellId in lw_values(reachableCells):
+            distToCell = getCellDistance(enemyPos, cellId)
+            if ((distToCell == None) or (distToCell > estimatedRange)):
+                continue
+            if (distToCell <= estimatedRange):
+                if (not mapContainsKey(self.enemyThreatMap, cellId)):
+                    lw_put(self.enemyThreatMap, cellId, 0)
+                if (estimatedDamage > lw_get(self.enemyThreatMap, cellId)):
+                    lw_put(self.enemyThreatMap, cellId, estimatedDamage)
+                if self._isBattleRoyale:
+                    if (not mapContainsKey(self._lobbyThreatMap, cellId)):
+                        lw_put(self._lobbyThreatMap, cellId, 0)
+                        lw_put(self._lobbyThreatSources, cellId, 0)
+                    lw_put(self._lobbyThreatMap, cellId, lw_add(lw_get(self._lobbyThreatMap, cellId), estimatedDamage))
+                    lw_put(self._lobbyThreatSources, cellId, lw_add(lw_get(self._lobbyThreatSources, cellId), 1))
+    
+    def addEnemyThreatToMap(self, enemy):
+        enemyPos = enemy._cellPos
+        enemyMP = enemy._currMp
+        enemyWeapons = getWeapons(enemy._id)
+        totalThreats = 0
+        reachableCells = getReachableCells()
+        if (count(reachableCells) == 0):
+            return None
+        distFromEnemy = {}
+        for rc in lw_values(reachableCells):
+            lw_put(distFromEnemy, rc, getCellDistance(enemyPos, rc))
+        j = 0
+        while (j < count(enemyWeapons)):
+            weaponId = lw_get(enemyWeapons, j)
+            minRange = getWeaponMinRange(weaponId)
+            maxRange = lw_add(getWeaponMaxRange(weaponId), enemyMP)
+            area = getWeaponArea(weaponId)
+            damage = self.estimateEnemyWeaponDamage(weaponId, enemy)
+            for cellId in lw_values(reachableCells):
+                if (getOperations() > _ops86):
+                    return None
+                dist = lw_get(distFromEnemy, cellId)
+                if ((dist == None) or (dist > maxRange)):
+                    continue
+                if ((dist < minRange) and (dist < enemyMP)):
+                    continue
+                if (not mapContainsKey(self.enemyThreatMap, cellId)):
+                    lw_put(self.enemyThreatMap, cellId, 0)
+                if (damage > lw_get(self.enemyThreatMap, cellId)):
+                    lw_put(self.enemyThreatMap, cellId, damage)
+                    totalThreats = lw_add(totalThreats, 1)
+                if self._isBattleRoyale:
+                    if (not mapContainsKey(self._lobbyThreatMap, cellId)):
+                        lw_put(self._lobbyThreatMap, cellId, 0)
+                        lw_put(self._lobbyThreatSources, cellId, 0)
+                    lw_put(self._lobbyThreatMap, cellId, lw_add(lw_get(self._lobbyThreatMap, cellId), damage))
+                    lw_put(self._lobbyThreatSources, cellId, lw_add(lw_get(self._lobbyThreatSources, cellId), 1))
+            j = lw_add(j, 1)
+    
+    def getReachableCellsWithinMP(self, startCell, maxMP):
+        reachable = []
+        radius = min(maxMP, 8)
+        dx = (-lw_num(radius))
+        while (dx <= radius):
+            dy = (-lw_num(radius))
+            while (dy <= radius):
+                dist = lw_add(abs(dx), abs(dy))
+                if (dist > radius):
+                    dy = lw_add(dy, 1)
+                    continue
+                cellId = lw_add(lw_add(startCell, lw_mul(FieldMapCore.x_offset, dx)), lw_mul(FieldMapCore.y_offset, dy))
+                if ((cellId < 0) or (cellId >= FieldMap.board_cell_count)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if isObstacle(cellId):
+                    dy = lw_add(dy, 1)
+                    continue
+                pathLen = getCachedPathLength(startCell, cellId)
+                if ((pathLen != None) and (pathLen <= maxMP)):
+                    push(reachable, cellId)
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+        return reachable
+    
+    def getCellsInWeaponRange(self, fromCell, weaponId, enemy):
+        cells = []
+        minRange = getWeaponMinRange(weaponId)
+        maxRange = getWeaponMaxRange(weaponId)
+        area = getWeaponArea(weaponId)
+        dx = (-lw_num(maxRange))
+        while (dx <= maxRange):
+            dy = (-lw_num(maxRange))
+            while (dy <= maxRange):
+                cellId = lw_add(lw_add(fromCell, lw_mul(FieldMapCore.x_offset, dx)), lw_mul(FieldMapCore.y_offset, dy))
+                if ((cellId < 0) or (cellId >= FieldMap.board_cell_count)):
+                    dy = lw_add(dy, 1)
+                    continue
+                dist = getCellDistance(fromCell, cellId)
+                if (((dist == None) or (dist < minRange)) or (dist > maxRange)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if (area == AREA_LASER_LINE):
+                    if (not getCachedLineOfSight(fromCell, cellId)):
+                        dy = lw_add(dy, 1)
+                        continue
+                push(cells, cellId)
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+        return cells
+    
+    def estimateEnemyWeaponDamage(self, weaponId, enemy):
+        effects = getWeaponEffects(weaponId)
+        minDmg = 0
+        maxDmg = 0
+        i = 0
+        while (i < count(effects)):
+            effect = lw_get(effects, i)
+            if (lw_get(effect, 0) == EFFECT_DAMAGE):
+                minDmg = lw_get(effect, 1)
+                maxDmg = lw_get(effect, 2)
+                break
+            i = lw_add(i, 1)
+        baseDmg = lw_div((lw_add(minDmg, maxDmg)), 2)
+        enemyStr = enemy._strength
+        enemyMag = enemy._magic
+        enemyWis = enemy._wisdom
+        if ((enemyStr != None) and (enemyStr > 0)):
+            scaledDmg = lw_mul(baseDmg, (lw_add(1, lw_div(enemyStr, 100))))
+            return scaledDmg
+        else:
+            if ((enemyMag != None) and (enemyMag > 0)):
+                scaledDmg = lw_mul(baseDmg, (lw_add(1, lw_div(enemyMag, 100))))
+                return scaledDmg
+        return lw_mul(baseDmg, 7)
+    
+    def getThreatAtCell(self, cellId):
+        if self._isBattleRoyale:
+            return self.getLobbyThreatAtCell(cellId)
+        if mapContainsKey(self.enemyThreatMap, cellId):
+            return lw_get(self.enemyThreatMap, cellId)
+        return 0
+    
+    def getLobbyThreatAtCell(self, cellId):
+        if (not mapContainsKey(self._lobbyThreatMap, cellId)):
+            return 0
+        totalThreat = lw_get(self._lobbyThreatMap, cellId)
+        sources = lw_get(self._lobbyThreatSources, cellId)
+        focusFireMultiplier = lw_add(1.0, (lw_mul(sources, 0.2)))
+        return lw_mul(totalThreat, focusFireMultiplier)
+    
+    def getSafeCells(self, maxMP, maxThreat=0):
+        safe = []
+        playerPos = player._cellPos
+        candidates = self.getReachableCellsWithinMP(playerPos, maxMP)
+        i = 0
+        while (i < count(candidates)):
+            cell = lw_get(candidates, i)
+            threat = self.getThreatAtCell(cell)
+            if (threat <= maxThreat):
+                push(safe, cell)
+            i = lw_add(i, 1)
+        return safe
+    
+    def findSafeWaypointToward(self, targetCell, maxMP, maxThreat=200):
+        playerPos = player._cellPos
+        bestWaypoint = (-1)
+        bestScore = (-99999)
+        currentDist = getCellDistance(playerPos, targetCell)
+        checked = 0
+        limit = 50
+        for cellId in lw_values(mapKeys(self.damageMap)):
+            if (checked >= limit):
+                break
+            checked = lw_add(checked, 1)
+            pathLen = getCachedPathLength(playerPos, cellId)
+            if ((pathLen == None) or (pathLen > maxMP)):
+                continue
+            threat = self.getThreatAtCell(cellId)
+            if (threat > maxThreat):
+                continue
+            newDist = getCellDistance(cellId, targetCell)
+            progress = lw_sub(currentDist, newDist)
+            if (progress <= 0):
+                continue
+            score = lw_sub(lw_sub(lw_mul(progress, 100), lw_mul(threat, 0.5)), lw_mul(pathLen, 5))
+            if (score > bestScore):
+                bestScore = score
+                bestWaypoint = cellId
+        if (bestWaypoint != (-1)):
+            threat = self.getThreatAtCell(bestWaypoint)
+            newDist = getCellDistance(bestWaypoint, targetCell)
+        return bestWaypoint
+    
+    def findBestTacticalCell(self, maxMP, threatWeight=0.5):
+        best = (-1)
+        bestScore = (-99999)
+        playerPos = player._cellPos
+        for cellId in lw_values(mapKeys(self.damageMap)):
+            cell = lw_get(self.damageMap, cellId)
+            pathLen = getCachedPathLength(playerPos, cell._id)
+            if ((pathLen == None) or (pathLen > maxMP)):
+                continue
+            ourDamage = cell._totalDamage
+            threat = self.getThreatAtCell(cell._id)
+            multiTargetBonus = self.calculateMultiTargetBonus(cell._id)
+            score = lw_sub(lw_add(lw_sub(ourDamage, (lw_mul(threat, threatWeight))), multiTargetBonus), lw_mul(pathLen, 2.0))
+            if (score > bestScore):
+                bestScore = score
+                best = cell
+        if (best != (-1)):
+            threat = self.getThreatAtCell(best._id)
+            multiTargetBonus = self.calculateMultiTargetBonus(best._id)
+            multiHitInfo = (lw_add(lw_add(", MULTI-HIT: ", best._enemiesHitCount), " enemies") if (best._enemiesHitCount >= 2) else "")
+        return best
+    
+    def calculateMultiTargetBonus(self, cellId):
+        enemies = self.getEnemySubMap()
+        if (count(mapKeys(enemies)) <= 1):
+            return 0
+        hasLoSToBulb = False
+        hasLoSToLeek = False
+        bulbCount = 0
+        leekCount = 0
+        for eid in lw_values(mapKeys(enemies)):
+            enemy = lw_get(enemies, eid)
+            if ((enemy == None) or isDead(eid)):
+                continue
+            if (not getCachedLineOfSight(cellId, enemy._cellPos)):
+                continue
+            if isBulb(enemy):
+                hasLoSToBulb = True
+                bulbCount = lw_add(bulbCount, 1)
+            else:
+                hasLoSToLeek = True
+                leekCount = lw_add(leekCount, 1)
+        bonus = 0
+        if (hasLoSToBulb and hasLoSToLeek):
+            bonus = lw_add(bonus, 500)
+        else:
+            if hasLoSToBulb:
+                bonus = lw_add(bonus, 200)
+            else:
+                if hasLoSToLeek:
+                    bonus = lw_add(bonus, 200)
+        if (lw_add(bulbCount, leekCount) >= 3):
+            bonus = lw_add(bonus, 300)
+        return bonus
+    
+    def getHideAndSeekCell(self):
+        result = self.findHideAndSeekCell("defensive")
+        if (result != None):
+            return lw_get(result, 'cell')
+        return None
+    
+    def isOnSameLine(self, cell1, cell2):
+        x1 = getCellX(cell1)
+        y1 = getCellY(cell1)
+        x2 = getCellX(cell2)
+        y2 = getCellY(cell2)
+        return (((x1 == x2) or (y1 == y2)))
+    
+    def getTopTacticalCells(self, limit, playerHP, playerMaxHP):
+        hpRatio = lw_div(playerHP, playerMaxHP)
+        threatWeight = 0.3
+        if (hpRatio < 0.4):
+            threatWeight = 0.8
+        else:
+            if (hpRatio < 0.7):
+                threatWeight = 0.5
+        candidates = []
+        for cell in lw_values(self.damageMap):
+            if (cell._totalDamage <= 0):
+                continue
+            threat = self.getThreatAtCell(cell._id)
+            score = lw_sub(cell._totalDamage, (lw_mul(threat, threatWeight)))
+            push(candidates, {'cell': cell._id, 'damage': cell._totalDamage, 'threat': threat, 'score': score, 'threatReduction': 0})
+        def _lwfn1_1(a, b):
+            return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+        def _lwfn2_1(a, b):
+            return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+        arraySort(candidates, _lwfn2_1)
+        result = []
+        actualLimit = min(limit, count(candidates))
+        i = 0
+        while (i < actualLimit):
+            push(result, lw_get(candidates, i))
+            i = lw_add(i, 1)
+        return result
+    
+    def getSafestCell(self, fromCell):
+        minThreat = 99999
+        safestCell = (-1)
+        for cell in lw_values(self.damageMap):
+            threat = self.getThreatAtCell(cell._id)
+            if (threat < minThreat):
+                minThreat = threat
+                safestCell = cell._id
+        return safestCell
+    
+
+
+# ════════ item_database.lk ════════
+WEAPON_DATABASE = {37: ["pistol", 1, 7, {1: [15, 5, 0]}, 3, 7, 1], 38: ["machine_gun", 1, 6, {1: [30, 15, 0]}, 4, 1, 1], 182: ["neutrino", 2, 6, {1: [25, 5, 0], 26: [8, 0, 2]}, 4, 2, 1], 41: ["shotgun", 1, 5, {1: [33, 10, 0], 27: [25, 0, 1]}, 5, 1, 1], 45: ["magnum", 1, 8, {1: [25, 15, 0]}, 5, 7, 1], 108: ["broadsword", 1, 1, {1: [39, 2, 0], 38: [40, 0, 2]}, 5, 7, 1], 42: ["laser", 2, 9, {1: [43, 16, 0]}, 6, 1, 2], 39: ["double_gun", 2, 7, {1: [18, 7, 0], 13: [9, 3, 2]}, 4, 7, 1], 408: ["odachi", 1, 1, {1: [100, 20, 0]}, 9, 7, 1], 277: ["sword", 1, 1, {1: [50, 10, 0], 54: [8, 0, 2]}, 6, 7, 1], 40: ["destroyer", 1, 6, {1: [40, 20, 0], 19: [17, 0, 2]}, 6, 7, 1], 226: ["unstable_destroyer", 1, 6, {1: [10, 80, 0]}, 6, 7, 1], 46: ["flame_thrower", 2, 8, {1: [35, 5, 0], 13: [24, 6, 2]}, 6, 1, 2], 60: ["b_laser", 2, 8, {1: [50, 10, 0], 2: [50, 10, 0]}, 5, 1, 2], 409: ["excalibur", 1, 1, {1: [150, 20, 0], 13: [150, 20, 2]}, 12, 7, 1], 109: ["axe", 1, 1, {1: [55, 22, 0], 17: [0.7, 0.1, 1]}, 6, 7, 1], 43: ["grenade_launcher", 4, 7, {1: [55, 8, 0]}, 6, 7, 4], 116: ["illicit_grenade_launcher", 4, 7, {1: [40, 0, 0]}, 6, 7, 4], 115: ["j_laser", 5, 11, {27: [25, 0, 2], 29: [25, 0, 2]}, 5, 1, 2], 184: ["bazooka", 8, 12, {1: [110, 8, 0]}, 11, 2, 5], 153: ["rhino", 2, 4, {1: [54, 6, 0]}, 5, 7, 1], 410: ["scythe", 1, 1, {1: [300, 50, 0]}, 15, 7, 1], 44: ["electrisor", 7, 7, {1: [70, 10, 0]}, 7, 7, 3], 117: ["mysterious_electrisor", 7, 7, {30: [34, 6, 0], 26: [7, 0, 2]}, 7, 7, 3], 180: ["lightninger", 6, 10, {1: [99, 8, 0]}, 9, 3, 8], 225: ["enhanced_lightninger", 6, 10, {1: [89, 4, 0], 57: [100, 0, 0]}, 9, 7, 11], 107: ["katana", 1, 1, {1: [77, 0, 0], 18: [0.3, 0.1, 1]}, 7, 7, 1], 187: ["dark_katana", 1, 1, {1: [143, 0, 0], 26: [15, 0, 1]}, 7, 7, 1], 151: ["rifle", 7, 9, {1: [73, 6, 0]}, 7, 7, 1], 175: ["explorer_rifle", 7, 9, {2: [78, 8, 0]}, 7, 7, 1], 428: ["quantum_rifle", 5, 10, {1: [68, 7, 0], 30: [68, 7, 0], 61: [0, 0, 0]}, 10, 7, 9], 278: ["heavy_sword", 1, 1, {1: [156, 17, 0], 27: [60, 0, 1]}, 15, 7, 1], 48: ["gazor", 2, 7, {13: [27, 5, 3]}, 8, 1, 5], 118: ["unbridled_gazor", 2, 7, {1: [81, 4, 0]}, 8, 1, 5], 47: ["m_laser", 5, 12, {1: [90, 10, 0]}, 8, 1, 2], 119: ["revoked_m_laser", 5, 12, {13: [50, 10, 2]}, 8, 1, 2]}
+CHIP_DATABASE = {425: ["exasperation", 0, 0, {60: [100, 0, 0], 26: [20, 0, 1]}, 0, 7, 1, 1], 418: ["apocalypse", 0, 0, {16: [0, 0, 0]}, 5, 7, 14, 0], 419: ["divine_protection", 0, 0, {59: [3, 0, (-1)]}, 5, 7, 15, 0], 1: ["shock", 0, 6, {1: [7, 2, 0]}, 2, 7, 1, 0], 3: ["bandage", 0, 6, {2: [23, 5, 0]}, 2, 7, 1, 1], 19: ["pebble", 0, 5, {1: [2, 32, 0]}, 2, 7, 1, 1], 8: ["protein", 0, 4, {38: [80, 20, 2]}, 3, 7, 1, 3], 2: ["ice", 0, 8, {1: [17, 2, 0]}, 4, 7, 1, 0], 21: ["helmet", 0, 4, {6: [15, 0, 2]}, 3, 7, 1, 3], 7: ["rock", 2, 6, {1: [38, 1, 0]}, 5, 7, 1, 1], 15: ["motivation", 0, 5, {32: [2, 0, 3]}, 4, 7, 1, 6], 9: ["stretching", 0, 5, {41: [80, 20, 2]}, 3, 7, 1, 3], 23: ["wall", 0, 3, {5: [4, 1, 2]}, 3, 7, 1, 3], 18: ["spark", 0, 10, {1: [8, 8, 0]}, 3, 7, 1, 0], 4: ["cure", 0, 5, {2: [38, 8, 0]}, 4, 7, 1, 2], 14: ["leather_boots", 0, 5, {31: [2, 0, 2]}, 3, 7, 1, 5], 6: ["flash", 1, 10, {1: [32, 3, 0]}, 3, 1, 3, 1], 5: ["flame", 2, 7, {1: [29, 2, 0]}, 4, 7, 1, 0], 155: ["knowledge", 0, 7, {44: [250, 20, 2]}, 5, 7, 1, 4], 20: ["shield", 0, 4, {6: [20, 0, 3]}, 4, 7, 1, 4], 96: ["solidification", 0, 3, {42: [180, 20, 3]}, 6, 7, 1, 5], 97: ["venom", 1, 10, {13: [15, 5, 3]}, 4, 7, 1, 1], 73: ["puny_bulb", 1, 3, {14: [1, 0, 0]}, 6, 7, 1, 4], 412: ["kemuridama", 1, 50, {10: [0, 0, 0]}, 8, 7, 1, 2], 30: ["stalactite", 2, 7, {1: [64, 3, 0]}, 6, 7, 1, 3], 411: ["shuriken", 1, 10, {1: [50, 10, 0], 26: [30, 0, 2]}, 6, 1, 1, 1], 141: ["alteration", 6, 12, {30: [18, 2, 0]}, 3, 7, 1, 1], 10: ["drip", 2, 6, {2: [40, 5, 0]}, 5, 7, 4, 1], 34: ["liberation", 0, 6, {9: [40, 0, 0]}, 5, 7, 1, 5], 94: ["tranquilizer", 1, 8, {18: [0.5, 0.1, 1]}, 3, 7, 3, 0], 67: ["armoring", 0, 3, {12: [25, 5, 0]}, 5, 7, 1, 5], 144: ["jump", 1, 3, {10: [0, 0, 0], 41: [100, 0, 2]}, 4, 7, 1, 3], 22: ["armor", 0, 4, {6: [25, 0, 4]}, 6, 7, 1, 5], 32: ["rockfall", 5, 7, {1: [50, 8, 0]}, 5, 7, 4, 1], 11: ["vaccine", 0, 6, {2: [38, 4, 3]}, 6, 7, 1, 4], 159: ["mutation", 0, 8, {45: [15, 5, 0]}, 7, 7, 12, 4], 276: ["prism", 0, 6, {38: [60, 0, 2], 44: [60, 0, 2], 41: [60, 0, 2], 42: [60, 0, 2], 40: [60, 0, 2], 39: [60, 0, 2]}, 6, 4, 1, 6], 92: ["slow_down", 1, 8, {17: [0.3, 0.1, 1]}, 3, 7, 1, 0], 414: ["trebuchet", 3, 50, {1: [200, 20, 0]}, 12, 7, 5, 3], 413: ["fire_ball", 3, 6, {1: [80, 10, 0]}, 6, 7, 3, 1], 31: ["iceberg", 3, 5, {1: [82, 8, 0]}, 7, 1, 4, 3], 417: ["kill", 0, 50, {16: [0, 0, 0]}, 1, 7, 1, 0], 76: ["rocky_bulb", 1, 3, {14: [4, 0, 0]}, 10, 7, 1, 5], 102: ["ferocity", 1, 8, {3: [50, 10, 2]}, 5, 7, 1, 1], 89: ["loam", 1, 7, {12: [56, 10, 0]}, 4, 7, 1, 2], 110: ["antidote", 0, 4, {23: [100, 0, 0], 2: [25, 10, 0]}, 3, 7, 1, 4], 24: ["rampart", 2, 7, {5: [13, 2, 3]}, 5, 7, 1, 2], 88: ["whip", 0, 6, {8: [0.6, 0.1, 2]}, 4, 7, 1, 1], 162: ["grapple", 1, 8, {46: [0, 0, 0], 44: [30, 10, 1], 47: [15, 5, 1]}, 3, 1, 13, 0], 35: ["regeneration", 0, 3, {2: [500, 0, 0]}, 8, 7, 1, (-1)], 98: ["toxin", 1, 7, {13: [25, 10, 3]}, 5, 7, 4, 2], 28: ["warm_up", 0, 3, {41: [170, 20, 3]}, 7, 7, 1, 5], 77: ["iced_bulb", 1, 2, {14: [5, 0, 0]}, 12, 7, 1, 5], 100: ["thorn", 0, 3, {20: [3, 1, 2]}, 4, 7, 3, 3], 25: ["steroid", 0, 5, {38: [150, 20, 3]}, 7, 7, 1, 5], 120: ["covetousness", 0, 8, {32: [1, 0, 2]}, 2, 7, 9, 2], 163: ["boxing_glove", 2, 8, {51: [0, 0, 0], 42: [30, 10, 1], 19: [10, 5, 1]}, 3, 1, 13, 0], 81: ["carapace", 1, 6, {6: [70, 5, 3]}, 5, 7, 1, 1], 91: ["acceleration", 0, 8, {7: [0.4, 0.1, 2]}, 4, 7, 1, 1], 95: ["soporific", 1, 6, {18: [0.4, 0.1, 3]}, 5, 7, 5, 1], 114: ["punishment", 1, 1, {28: [25, 0, 0]}, 5, 7, 1, 3], 174: ["manumission", 0, 5, {49: [0, 0, 0], 32: [2, 0, 1]}, 6, 1, 1, 5], 68: ["inversion", 1, 14, {11: [0, 0, 0], 2: [50, 0, 0], 26: [20, 0, 1]}, 4, 1, 1, 4], 16: ["adrenaline", 0, 3, {32: [5, 0, 1]}, 1, 7, 1, 7], 169: ["crushing", 1, 8, {47: [45, 4, 2]}, 6, 3, 1, 1], 36: ["meteorite", 5, 9, {1: [70, 10, 0]}, 8, 7, 4, 3], 157: ["repotting", 1, 14, {11: [0, 0, 0], 1: [18, 2, 0]}, 4, 7, 1, 2], 156: ["wizardry", 0, 6, {39: [150, 20, 2]}, 6, 7, 1, 4], 80: ["remission", 0, 7, {2: [66, 11, 0]}, 5, 7, 1, 1], 85: ["devil_strike", 0, 0, {1: [125, 0, 0]}, 6, 7, 5, 3], 75: ["healer_bulb", 1, 2, {14: [3, 0, 0]}, 14, 7, 1, 7], 13: ["winged_boots", 0, 2, {31: [3, 0, 1]}, 6, 7, 1, 5], 121: ["vampirization", 0, 8, {2: [42, 2, 0]}, 6, 7, 7, 1], 33: ["lightning", 2, 5, {1: [35, 12, 0]}, 4, 1, 4, 0], 103: ["collar", 1, 6, {22: [80, 10, 2]}, 5, 7, 1, 1], 93: ["ball_and_chain", 1, 6, {17: [0.4, 0.1, 2]}, 5, 7, 4, 2], 74: ["fire_bulb", 2, 3, {14: [2, 0, 0]}, 14, 7, 1, 6], 122: ["precipitation", 0, 8, {31: [1, 0, 2]}, 3, 7, 9, 2], 29: ["fortress", 0, 3, {5: [7, 1, 3]}, 6, 7, 1, 4], 27: ["reflexes", 0, 6, {4: [35, 5, 3]}, 5, 7, 7, 2], 168: ["serum", 0, 6, {2: [50, 5, 4]}, 8, 1, 11, 5], 59: ["teleportation", 1, 12, {10: [0, 0, 0], 12: [15, 5, 0]}, 9, 7, 1, 10], 416: ["thunder", 3, 8, {1: [100, 20, 0]}, 8, 7, 4, 1], 415: ["awakening", 1, 50, {15: [0, 0, 0], 59: [3, 0, (-1)]}, 0, 7, 1, 1], 12: ["seven_league_boots", 0, 8, {7: [0.4, 0.1, 3]}, 4, 7, 6, 2], 90: ["fertilizer", 1, 5, {12: [80, 10, 0]}, 6, 7, 1, 2], 26: ["doping", 0, 6, {3: [30, 5, 3], 25: [30, 5, 3]}, 5, 7, 4, 1], 105: ["burning", 4, 6, {1: [78, 9, 0], 13: [78, 9, 1], 16: [0, 0, 0]}, 5, 7, 5, 2], 99: ["plague", 1, 5, {13: [40, 10, 4]}, 6, 7, 5, 4], 142: ["wizard_bulb", 1, 3, {14: [8, 0, 0]}, 15, 7, 1, 7], 152: ["covid", 0, 2, {43: [2, 0, 0], 13: [69, 10, 7]}, 8, 7, 1, 7], 160: ["desintegration", 1, 6, {30: [70, 10, 0]}, 8, 1, 11, 2], 17: ["rage", 0, 8, {8: [0.5, 0.1, 3]}, 4, 7, 5, 2], 154: ["elevation", 0, 5, {12: [80, 0, 0]}, 6, 7, 1, (-1)], 79: ["metallic_bulb", 1, 1, {14: [7, 0, 0]}, 16, 7, 1, 7], 104: ["bark", 1, 6, {21: [60, 10, 2]}, 5, 7, 1, 1], 106: ["fracture", 1, 6, {19: [17, 5, 2]}, 4, 7, 1, 1], 173: ["dome", 0, 0, {5: [11, 2, 4]}, 9, 7, 5, 8], 101: ["mirror", 0, 2, {20: [5, 1, 3]}, 5, 7, 4, 4], 167: ["savant_bulb", 1, 4, {14: [12, 0, 0]}, 16, 7, 1, 7], 161: ["transmutation", 1, 6, {45: [40, 4, 0]}, 8, 1, 11, 9], 158: ["therapy", 1, 5, {2: [75, 5, 0]}, 7, 7, 6, 2], 170: ["brainwashing", 1, 8, {48: [32, 7, 2]}, 6, 3, 1, 1], 166: ["tactician_bulb", 3, 3, {14: [11, 0, 0]}, 16, 7, 1, 7], 172: ["bramble", 0, 7, {20: [25, 0, 1]}, 4, 7, 1, 8], 78: ["lightning_bulb", 1, 5, {14: [6, 0, 0]}, 16, 7, 1, 6], 171: ["arsenic", 3, 4, {13: [62, 5, 2]}, 8, 7, 1, 2], 143: ["plasma", 0, 6, {1: [37, 2, 0]}, 9, 7, 6, 3], 84: ["resurrection", 1, 2, {15: [0, 0, 0]}, 18, 7, 1, 15]}
+def getWeaponData(weaponId):
+    if mapContainsKey(WEAPON_DATABASE, weaponId):
+        return lw_get(WEAPON_DATABASE, weaponId)
+    return None
+
+def getChipData(chipId):
+    if mapContainsKey(CHIP_DATABASE, chipId):
+        return lw_get(CHIP_DATABASE, chipId)
+    return None
+
+def hasWeaponData(weaponId):
+    return mapContainsKey(WEAPON_DATABASE, weaponId)
+
+def hasChipData(chipId):
+    return mapContainsKey(CHIP_DATABASE, chipId)
+
+
+# ════════ item.lk ════════
+# include: item_database.lk (inlined by assembler)
+class EffectsInfos:
+    def __init__(self):
+        self._minEffectAmount = 0
+        self._maxEffectAmount = 0
+        self._effectDuration = 0
+
+
+class Item:
+    def __init__(self, id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType):
+        self._id = (-1)
+        self._minRange = 0
+        self._maxRange = 0
+        self._cost = 0
+        self._maxUse = 0
+        self._launchType = (-1)
+        self._aoeType = (-1)
+        self._effects = {}
+        self._selfImmune = False
+        self._id = id
+        self._minRange = minRange
+        self._maxRange = maxRange
+        self._cost = cost
+        self._maxUse = maxUse
+        self._launchType = launchType
+        self._aoeType = aoeType
+        self.parseAllEffects(effects)
+
+    def parseAllEffects(self, effects):
+        for e in lw_values(effects):
+            effectsInfos = EffectsInfos()
+            effectsInfos._minEffectAmount = lw_add(effectsInfos._minEffectAmount, lw_get(e, 1))
+            effectsInfos._maxEffectAmount = lw_add(effectsInfos._maxEffectAmount, lw_get(e, 2))
+            effectsInfos._effectDuration = lw_add(effectsInfos._effectDuration, lw_get(e, 3))
+            mapPut(self._effects, lw_get(e, 0), effectsInfos)
+    
+    def computeSelfImmunity(self, apiEffects):
+        if (apiEffects == None):
+            return None
+        siSawDamage = False
+        siSawSelfHit = False
+        for e in lw_values(apiEffects):
+            if ((((lw_get(e, 0) == EFFECT_DAMAGE) or (lw_get(e, 0) == EFFECT_POISON)) or (lw_get(e, 0) == EFFECT_NOVA_DAMAGE)) or (lw_get(e, 0) == EFFECT_LIFE_DAMAGE)):
+                siSawDamage = True
+                if ((count(e) < 5) or (((lw_get(e, 4) & 4)) != 0)):
+                    siSawSelfHit = True
+        self._selfImmune = (siSawDamage and (not siSawSelfHit))
+    
+
+class Weapon(Item):
+    def __init__(self, id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType):
+        super().__init__(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType)
+
+
+class Chip(Item):
+    def __init__(self, id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType, cooldown):
+        self.cooldown = (-1)
+        super().__init__(id, minRange, maxRange, effects, cost, maxUse, launchType, aoeType)
+        self.cooldown = cooldown
+
+
+class Arsenal:
+    def __init__(self):
+        self.weaponsList = {}
+        self.chipsList = {}
+        self.playerEquippedWeapons = {}
+        self.playerEquippedChips = {}
+        self.buildAllWeaponsList()
+        self.buildAllChipsList()
+        self.getEquippedWeaponsSubMap()
+        self.getEquippedChipsSubMap()
+
+    def convertEffectsMapToArray(self, effectsMap):
+        effectsArray = []
+        for effectType in lw_values(mapKeys(effectsMap)):
+            effectData = lw_get(effectsMap, effectType)
+            push(effectsArray, [effectType, lw_get(effectData, 0), lw_add(lw_get(effectData, 0), lw_get(effectData, 1)), lw_get(effectData, 2)])
+        return effectsArray
+    
+    def buildAllWeaponsList(self):
+        allWeapons = getAllWeapons()
+        dbCount = 0
+        apiCount = 0
+        for w in lw_values(allWeapons):
+            weaponData = getWeaponData(w)
+            if (weaponData != None):
+                dbCount = lw_add(dbCount, 1)
+                effects = self.convertEffectsMapToArray(lw_get(weaponData, 3))
+                dbWeapon = Weapon(w, lw_get(weaponData, 1), lw_get(weaponData, 2), effects, lw_get(weaponData, 4), 1, lw_get(weaponData, 5), lw_get(weaponData, 6))
+                dbWeapon.computeSelfImmunity(getWeaponEffects(w))
+                mapPut(self.weaponsList, w, dbWeapon)
+            else:
+                apiCount = lw_add(apiCount, 1)
+                apiWeaponEffects = getWeaponEffects(w)
+                apiWeapon = Weapon(w, getWeaponMinRange(w), getWeaponMaxRange(w), apiWeaponEffects, getWeaponCost(w), getWeaponMaxUses(w), getWeaponLaunchType(w), getWeaponArea(w))
+                apiWeapon.computeSelfImmunity(apiWeaponEffects)
+                mapPut(self.weaponsList, w, apiWeapon)
+        debug(lw_add(lw_add(lw_add(lw_add("Arsenal: ", dbCount), " weapons from DB, "), apiCount), " from API"))
+    
+    def buildAllChipsList(self):
+        allChips = getAllChips()
+        dbCount = 0
+        apiCount = 0
+        for c in lw_values(allChips):
+            chipData = getChipData(c)
+            if (chipData != None):
+                dbCount = lw_add(dbCount, 1)
+                effects = self.convertEffectsMapToArray(lw_get(chipData, 3))
+                dbChip = Chip(c, lw_get(chipData, 1), lw_get(chipData, 2), effects, lw_get(chipData, 4), 1, lw_get(chipData, 5), lw_get(chipData, 6), lw_get(chipData, 7))
+                dbChip.computeSelfImmunity(getChipEffects(c))
+                mapPut(self.chipsList, c, dbChip)
+            else:
+                apiCount = lw_add(apiCount, 1)
+                apiChipEffects = getChipEffects(c)
+                apiChip = Chip(c, getChipMinRange(c), getChipMaxRange(c), apiChipEffects, getChipCost(c), getChipMaxUses(c), getChipLaunchType(c), getChipArea(c), getCooldown(c, getEntity()))
+                apiChip.computeSelfImmunity(apiChipEffects)
+                mapPut(self.chipsList, c, apiChip)
+        debug(lw_add(lw_add(lw_add(lw_add("Arsenal: ", dbCount), " chips from DB, "), apiCount), " from API"))
+    
+    def getEquippedWeaponsSubMap(self):
+        equippedWeapons = getWeapons()
+        for w in lw_values(equippedWeapons):
+            mapPut(self.playerEquippedWeapons, w, lw_get(self.weaponsList, w))
+    
+    def getEquippedChipsSubMap(self):
+        equippedChips = getChips()
+        for c in lw_values(equippedChips):
+            mapPut(self.playerEquippedChips, c, lw_get(self.chipsList, c))
+    
+    def computeAoEModifier(self, centerCell, targetCell, aoeType):
+        if (aoeType == AREA_POINT):
+            return (1.0 if ((centerCell == targetCell)) else 0.0)
+        if (centerCell == targetCell):
+            return 1.0
+        dist = getCellDistance(centerCell, targetCell)
+        if (dist == None):
+            return 0.0
+        percentage = lw_sub(1.0, lw_mul(0.2, dist))
+        if (percentage < 0):
+            percentage = 0
+        return percentage
+    
+    def computeEffectsBaseDamage(self, effectsMap, str, mag, sci, aoeModifier=1.0, isChip=False):
+        total = 0
+        directStat = str
+        for e in lw_values(mapKeys(effectsMap)):
+            info = lw_get(effectsMap, e)
+            if (e == EFFECT_DAMAGE):
+                avg = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                total = lw_add(total, lw_mul(lw_mul(avg, (lw_add(1, (lw_div(directStat, 100))))), aoeModifier))
+            else:
+                if (e == EFFECT_POISON):
+                    avg2 = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                    totalOverTime = lw_mul(avg2, info._effectDuration)
+                    total = lw_add(total, lw_mul(lw_mul(totalOverTime, (lw_add(1, (lw_div(mag, 100))))), aoeModifier))
+                else:
+                    if (e == EFFECT_NOVA_DAMAGE):
+                        avgNova = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                        total = lw_add(total, lw_mul(lw_mul(avgNova, (lw_add(1, (lw_div(sci, 100))))), aoeModifier))
+        return total
+    
+    def getDamageBreakdown(self, str, mag, wis, sci, itemID, centerCell=(-1), targetCell=(-1)):
+        isWeapon = mapContainsKey(self.playerEquippedWeapons, itemID)
+        chipInFull = mapContainsKey(self.chipsList, itemID)
+        chipInEquipped = mapContainsKey(self.playerEquippedChips, itemID)
+        isChip = ((not isWeapon) and ((chipInFull or chipInEquipped)))
+        if ((not isWeapon) and (not isChip)):
+            return {'direct': 0, 'dot': 0, 'nova': 0, 'total': 0, 'directMin': 0, 'directMax': 0, 'dotMin': 0, 'dotMax': 0, 'novaMin': 0, 'novaMax': 0}
+        item = (lw_get(self.playerEquippedWeapons, itemID) if isWeapon else ((lw_get(self.chipsList, itemID) if chipInFull else lw_get(self.playerEquippedChips, itemID))))
+        aoeModifier = 1.0
+        if ((centerCell != (-1)) and (targetCell != (-1))):
+            aoeModifier = self.computeAoEModifier(centerCell, targetCell, item._aoeType)
+        directStat = str
+        direct = 0
+        dot = 0
+        nova = 0
+        directMin = 0
+        directMax = 0
+        dotMin = 0
+        dotMax = 0
+        novaMin = 0
+        novaMax = 0
+        denial = 0
+        statReduce = 0
+        for e in lw_values(mapKeys(item._effects)):
+            info = lw_get(item._effects, e)
+            if (e == EFFECT_DAMAGE):
+                avg = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                dirScale = lw_mul((lw_add(1, (lw_div(directStat, 100)))), aoeModifier)
+                direct = lw_add(direct, lw_mul(avg, dirScale))
+                directMin = lw_add(directMin, lw_mul(info._minEffectAmount, dirScale))
+                directMax = lw_add(directMax, lw_mul(info._maxEffectAmount, dirScale))
+            else:
+                if (e == EFFECT_POISON):
+                    avg2 = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                    totalOverTime = lw_mul(avg2, info._effectDuration)
+                    poisonScale = lw_mul((lw_add(1, (lw_div(mag, 100)))), aoeModifier)
+                    dot = lw_add(dot, lw_mul(totalOverTime, poisonScale))
+                    dotMin = lw_add(dotMin, lw_mul(lw_mul(info._minEffectAmount, info._effectDuration), poisonScale))
+                    dotMax = lw_add(dotMax, lw_mul(lw_mul(info._maxEffectAmount, info._effectDuration), poisonScale))
+                else:
+                    if (e == EFFECT_NOVA_DAMAGE):
+                        avgNova = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                        novaScale = lw_mul((lw_add(1, (lw_div(sci, 100)))), aoeModifier)
+                        nova = lw_add(nova, lw_mul(avgNova, novaScale))
+                        novaMin = lw_add(novaMin, lw_mul(info._minEffectAmount, novaScale))
+                        novaMax = lw_add(novaMax, lw_mul(info._maxEffectAmount, novaScale))
+                    else:
+                        if ((e == EFFECT_SHACKLE_TP) or (e == EFFECT_SHACKLE_MP)):
+                            avg3 = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                            denial = lw_add(denial, lw_mul(lw_mul(avg3, (lw_add(1, (lw_div(mag, 100))))), info._effectDuration))
+                        else:
+                            if ((e == EFFECT_SHACKLE_STRENGTH) or (e == EFFECT_SHACKLE_MAGIC)):
+                                avg4 = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                                statReduce = lw_add(statReduce, lw_mul(lw_mul(avg4, (lw_add(1, (lw_div(mag, 100))))), info._effectDuration))
+                            else:
+                                if (e == EFFECT_LIFE_DAMAGE):
+                                    avgPct = lw_div((lw_add(info._minEffectAmount, info._maxEffectAmount)), 2)
+                                    currentHP = getLife()
+                                    lifeDmg = lw_mul((lw_div(avgPct, 100)), currentHP)
+                                    direct = lw_add(direct, lw_mul(lifeDmg, aoeModifier))
+                                    directMin = lw_add(directMin, lw_mul(lw_mul((lw_div(info._minEffectAmount, 100)), currentHP), aoeModifier))
+                                    directMax = lw_add(directMax, lw_mul(lw_mul((lw_div(info._maxEffectAmount, 100)), currentHP), aoeModifier))
+        selfDamage = 0
+        if (itemID == CHIP_PUNISHMENT):
+            selfDamage = lw_mul(getLife(), 0.75)
+        return {'direct': direct, 'dot': dot, 'nova': nova, 'total': lw_add(lw_add(direct, dot), nova), 'directMin': directMin, 'directMax': directMax, 'dotMin': dotMin, 'dotMax': dotMax, 'novaMin': novaMin, 'novaMax': novaMax, 'denial': denial, 'statReduce': statReduce, 'selfDamage': selfDamage}
+    
+    def getPoisonChipsSorted(self, str, mag, wis, sci):
+        arr = []
+        for cid in lw_values(mapKeys(self.playerEquippedChips)):
+            chip = lw_get(self.playerEquippedChips, cid)
+            if (not mapContainsKey(chip._effects, EFFECT_POISON)):
+                continue
+            bd = self.getDamageBreakdown(str, mag, wis, sci, cid)
+            push(arr, {'chip': chip, 'dot': lw_get(bd, 'dot'), 'direct': lw_get(bd, 'direct'), 'nova': lw_get(bd, 'nova'), 'total': lw_get(bd, 'total')})
+        sorted = []
+        while (count(arr) > 0):
+            bestIdx = 0
+            bestDot = lw_get(lw_get(arr, 0), 'dot')
+            i = 1
+            while (i < count(arr)):
+                if (lw_get(lw_get(arr, i), 'dot') > bestDot):
+                    bestDot = lw_get(lw_get(arr, i), 'dot')
+                    bestIdx = i
+                i = lw_add(i, 1)
+            push(sorted, lw_get(lw_get(arr, bestIdx), 'chip'))
+            remove(arr, bestIdx)
+        return sorted
+    
+    def getDotWeaponsSorted(self, str, mag, wis, sci):
+        arr = []
+        for wid in lw_values(mapKeys(self.playerEquippedWeapons)):
+            w = lw_get(self.playerEquippedWeapons, wid)
+            bd = self.getDamageBreakdown(str, mag, wis, sci, wid)
+            if ((lw_get(bd, 'dot') > 0) or (lw_get(bd, 'nova') > 0)):
+                push(arr, {'weapon': w, 'dot': lw_get(bd, 'dot'), 'nova': lw_get(bd, 'nova'), 'direct': lw_get(bd, 'direct'), 'total': lw_get(bd, 'total')})
+        if (count(arr) == 0):
+            for wid2 in lw_values(mapKeys(self.playerEquippedWeapons)):
+                w2 = lw_get(self.playerEquippedWeapons, wid2)
+                bd2 = self.getDamageBreakdown(str, mag, wis, sci, wid2)
+                push(arr, {'weapon': w2, 'dot': lw_get(bd2, 'dot'), 'nova': lw_get(bd2, 'nova'), 'direct': lw_get(bd2, 'direct'), 'total': lw_get(bd2, 'total')})
+        sorted = []
+        while (count(arr) > 0):
+            bestIdx = 0
+            bestDot = lw_get(lw_get(arr, 0), 'dot')
+            bestTot = lw_get(lw_get(arr, 0), 'total')
+            i = 1
+            while (i < count(arr)):
+                if ((lw_get(lw_get(arr, i), 'dot') > bestDot) or (((lw_get(lw_get(arr, i), 'dot') == bestDot) and (lw_get(lw_get(arr, i), 'total') > bestTot)))):
+                    bestDot = lw_get(lw_get(arr, i), 'dot')
+                    bestTot = lw_get(lw_get(arr, i), 'total')
+                    bestIdx = i
+                i = lw_add(i, 1)
+            push(sorted, lw_get(lw_get(arr, bestIdx), 'weapon'))
+            remove(arr, bestIdx)
+        return sorted
+    
+    def getNetDamageAgainstTarget(self, str, mag, wis, sci, itemID, targetEntity):
+        bd = self.getDamageBreakdown(str, mag, wis, sci, itemID)
+        directDmg = lw_get(bd, 'direct')
+        dotDmg = lw_get(bd, 'dot')
+        novaDmg = lw_get(bd, 'nova')
+        relShield = lw_div(targetEntity._relShield, 100)
+        absShield = targetEntity._absShield
+        netDirect = lw_sub(lw_mul(directDmg, (lw_sub(1, relShield))), absShield)
+        if (netDirect < 0):
+            netDirect = 0
+        hpDeficit = lw_sub(targetEntity._maxHealth, targetEntity._currHealth)
+        cappedNova = novaDmg
+        if ((netDirect > 0) and (novaDmg > 0)):
+            cappedNova = min(novaDmg, lw_add(hpDeficit, netDirect))
+        else:
+            if (novaDmg > 0):
+                cappedNova = min(novaDmg, hpDeficit)
+        return lw_add(lw_add(netDirect, dotDmg), cappedNova)
+    
+    def calculateMultiEnemyDamage(self, shooterCell, aimCell, itemId, enemies):
+        item = None
+        if mapContainsKey(self.playerEquippedWeapons, itemId):
+            item = lw_get(self.playerEquippedWeapons, itemId)
+        else:
+            if mapContainsKey(self.playerEquippedChips, itemId):
+                item = lw_get(self.playerEquippedChips, itemId)
+        if (item == None):
+            return {'total': 0, 'enemies': [], 'breakdown': {}}
+        totalDamage = 0
+        hitEnemies = []
+        breakdown = {}
+        aoeType = item._aoeType
+        useOptimization = (mapContainsKey(lw__aoePatternMasks, aoeType) and (aoeType != 4))
+        if useOptimization:
+            mask = lw_get(lw__aoePatternMasks, aoeType)
+            processedEnemies = {}
+            for offset in lw_values(mask):
+                checkCell = lw_add(aimCell, offset)
+                if ((checkCell < 0) or (checkCell >= 613)):
+                    continue
+                entityId = getEntityAtCell(checkCell)
+                if (entityId == None):
+                    continue
+                if mapContainsKey(processedEnemies, entityId):
+                    continue
+                enemyObj = None
+                for e in lw_values(enemies):
+                    if ((e._id == entityId) and (not isDead(e._id))):
+                        enemyObj = e
+                        break
+                if (enemyObj == None):
+                    continue
+                mapPut(processedEnemies, entityId, True)
+                aoeModifier = self.computeAoEModifier(aimCell, enemyObj._cellPos, aoeType)
+                if (aoeModifier <= 0):
+                    continue
+                bd = self.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId, aimCell, enemyObj._cellPos)
+                directAfterShield = lw_get(bd, 'direct')
+                if ((lw_get(bd, 'direct') > 0) and (((enemyObj._relShield > 0) or (enemyObj._absShield > 0)))):
+                    directAfterShield = lw_sub(lw_mul(directAfterShield, (lw_sub(1, lw_div(enemyObj._relShield, 100)))), enemyObj._absShield)
+                    if (directAfterShield < 0):
+                        directAfterShield = 0
+                dotDamage = lw_get(bd, 'dot')
+                novaDamage = lw_get(bd, 'nova')
+                hpDeficit = lw_sub(enemyObj._maxHealth, enemyObj._currHealth)
+                cappedNova = novaDamage
+                if ((directAfterShield > 0) and (novaDamage > 0)):
+                    cappedNova = min(novaDamage, lw_add(hpDeficit, directAfterShield))
+                else:
+                    if (novaDamage > 0):
+                        cappedNova = min(novaDamage, hpDeficit)
+                netDmg = lw_add(lw_add(directAfterShield, dotDamage), cappedNova)
+                totalDamage = lw_add(totalDamage, netDmg)
+                push(hitEnemies, enemyObj)
+                mapPut(breakdown, enemyObj._id, netDmg)
+        else:
+            for e in lw_values(enemies):
+                if isDead(e._id):
+                    continue
+                aoeModifier = self.computeAoEModifier(aimCell, e._cellPos, aoeType)
+                if (aoeModifier > 0):
+                    bd = self.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, itemId, aimCell, e._cellPos)
+                    directAfterShield = lw_get(bd, 'direct')
+                    if ((lw_get(bd, 'direct') > 0) and (((e._relShield > 0) or (e._absShield > 0)))):
+                        directAfterShield = lw_sub(lw_mul(directAfterShield, (lw_sub(1, lw_div(e._relShield, 100)))), e._absShield)
+                        if (directAfterShield < 0):
+                            directAfterShield = 0
+                    dotDamage = lw_get(bd, 'dot')
+                    novaDamage = lw_get(bd, 'nova')
+                    hpDeficit = lw_sub(e._maxHealth, e._currHealth)
+                    cappedNova = novaDamage
+                    if ((directAfterShield > 0) and (novaDamage > 0)):
+                        cappedNova = min(novaDamage, lw_add(hpDeficit, directAfterShield))
+                    else:
+                        if (novaDamage > 0):
+                            cappedNova = min(novaDamage, hpDeficit)
+                    netDmg = lw_add(lw_add(directAfterShield, dotDamage), cappedNova)
+                    totalDamage = lw_add(totalDamage, netDmg)
+                    push(hitEnemies, e)
+                    mapPut(breakdown, e._id, netDmg)
+        if ((itemId == CHIP_PLASMA) and (count(hitEnemies) > 1)):
+            multiplier = count(hitEnemies)
+            totalDamage = 0
+            for eid in lw_values(mapKeys(breakdown)):
+                lw_put(breakdown, eid, lw_mul(lw_get(breakdown, eid), multiplier))
+                totalDamage = lw_add(totalDamage, lw_get(breakdown, eid))
+        return {'total': totalDamage, 'enemies': hitEnemies, 'breakdown': breakdown}
+    
+    def getHighestDamageWeapon(self):
+        highestDmg = (-1)
+        highestDmgWeapon = None
+        for w in lw_values(mapKeys(self.playerEquippedWeapons)):
+            bd = self.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, w)
+            dmg = lw_get(bd, 'total')
+            if (dmg > highestDmg):
+                highestDmg = dmg
+                highestDmgWeapon = w
+        return highestDmgWeapon
+    
+    def getDamageReturnValue(self, agility, chipID):
+        baseMin = 0
+        baseMax = 0
+        if (chipID == CHIP_BRAMBLE):
+            baseMin = 25
+            baseMax = 25
+        else:
+            if (chipID == CHIP_MIRROR):
+                baseMin = 5
+                baseMax = 6
+            else:
+                if (chipID == CHIP_THORN):
+                    baseMin = 3
+                    baseMax = 4
+                else:
+                    return 0
+        baseAvg = lw_div((lw_add(baseMin, baseMax)), 2.0)
+        return lw_mul(baseAvg, (lw_add(1, lw_div(agility, 100.0))))
+    
+    def estimateReturnDamagePerTurn(self, agility, chipID, estimatedEnemyDPS):
+        returnPct = lw_div(self.getDamageReturnValue(agility, chipID), 100.0)
+        return lw_mul(estimatedEnemyDPS, returnPct)
+    
+    def getKillProbability(self, itemIds, playerStr, playerMag, playerWis, playerSci, playerAgility, targetEntity):
+        totalDmg = 0
+        i = 0
+        while (i < count(itemIds)):
+            bd = self.getDamageBreakdown(playerStr, playerMag, playerWis, playerSci, lw_get(itemIds, i))
+            netDmg = self.getNetDamageAgainstTarget(playerStr, playerMag, playerWis, playerSci, lw_get(itemIds, i), targetEntity)
+            totalDmg = lw_add(totalDmg, netDmg)
+            i = lw_add(i, 1)
+        if (totalDmg >= targetEntity._currHealth):
+            return 0.9
+        else:
+            if (totalDmg >= lw_mul(targetEntity._currHealth, 0.8)):
+                return 0.5
+            else:
+                return 0.1
+    
+    def calculateNeutrinoAmplification(self, stacks, futureAttacks, avgWeaponDamage):
+        vulnPercent = lw_mul(stacks, 8)
+        multiplier = lw_add(1, (lw_div(vulnPercent, 100.0)))
+        baseTotal = lw_mul(futureAttacks, avgWeaponDamage)
+        amplifiedTotal = lw_mul(baseTotal, multiplier)
+        amplificationValue = lw_sub(amplifiedTotal, baseTotal)
+        neutrinoCost = lw_mul(stacks, 4)
+        neutrinoDirectDamage = lw_mul(stacks, 27.5)
+        netBenefit = lw_add(amplificationValue, neutrinoDirectDamage)
+        return {'amplification': amplificationValue, 'tpCost': neutrinoCost, 'directDamage': neutrinoDirectDamage, 'netBenefit': netBenefit, 'multiplier': multiplier}
+    
+    def getVulnerabilityStacks(self, targetEntity):
+        relShield = targetEntity._relShield
+        if (relShield <= (-20)):
+            return 3
+        if (relShield <= (-12)):
+            return 2
+        if (relShield <= (-4)):
+            return 1
+        return 0
+    
+    def getExpectedHeal(self, chip, wisdom):
+        if (chip == CHIP_REGENERATION):
+            return lw_mul(500, (lw_add(1, lw_div(wisdom, 100))))
+        else:
+            if (chip == CHIP_REMISSION):
+                baseAvg = 71.5
+                return lw_mul(baseAvg, (lw_add(1, lw_div(wisdom, 100))))
+            else:
+                if (chip == CHIP_CURE):
+                    return lw_mul(100, (lw_add(1, lw_div(wisdom, 100))))
+                else:
+                    if (chip == CHIP_DRIP):
+                        return lw_mul(200, (lw_add(1, lw_div(wisdom, 100))))
+                    else:
+                        if (chip == CHIP_VACCINE):
+                            return lw_mul(114, (lw_add(1, lw_div(wisdom, 100))))
+        return 0
+    
+
+
+# ════════ item_roles.lk ════════
+ROLE_HEALING = {}
+ROLE_POISON = {}
+ROLE_SHIELD_ABSOLUTE = {}
+ROLE_SHIELD_RELATIVE = {}
+ROLE_OFFENSIVE_BUFF = {}
+ROLE_DAMAGE_RETURN = {}
+ROLE_DEBUFF = {}
+ROLE_UTILITY = {}
+ROLE_RESOURCE = {}
+ROLE_POISON_WEAPON = {}
+ROLE_NOVA_CHIP = {}
+def initializeItemRoles():
+    lw_put(ROLE_HEALING, CHIP_REGENERATION, True)
+    lw_put(ROLE_HEALING, CHIP_REMISSION, True)
+    lw_put(ROLE_HEALING, CHIP_CURE, True)
+    lw_put(ROLE_HEALING, CHIP_DRIP, True)
+    lw_put(ROLE_HEALING, CHIP_SERUM, True)
+    lw_put(ROLE_HEALING, CHIP_BANDAGE, True)
+    lw_put(ROLE_HEALING, CHIP_VACCINE, True)
+    lw_put(ROLE_POISON, CHIP_VENOM, True)
+    lw_put(ROLE_POISON, CHIP_TOXIN, True)
+    lw_put(ROLE_POISON, CHIP_PLAGUE, True)
+    lw_put(ROLE_POISON, CHIP_COVID, True)
+    lw_put(ROLE_POISON, CHIP_ARSENIC, True)
+    lw_put(ROLE_POISON_WEAPON, WEAPON_GAZOR, True)
+    lw_put(ROLE_POISON_WEAPON, WEAPON_DESTROYER, True)
+    lw_put(ROLE_POISON_WEAPON, WEAPON_FLAME_THROWER, True)
+    lw_put(ROLE_SHIELD_ABSOLUTE, CHIP_HELMET, True)
+    lw_put(ROLE_SHIELD_ABSOLUTE, CHIP_SHIELD, True)
+    lw_put(ROLE_SHIELD_ABSOLUTE, CHIP_ARMOR, True)
+    lw_put(ROLE_SHIELD_RELATIVE, CHIP_WALL, True)
+    lw_put(ROLE_SHIELD_RELATIVE, CHIP_FORTRESS, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_PROTEIN, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_STEROID, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_WIZARDRY, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_WARM_UP, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_DOPING, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_RAGE, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_FEROCITY, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_KNOWLEDGE, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_ELEVATION, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_ARMORING, True)
+    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_PRISM, True)
+    lw_put(ROLE_DAMAGE_RETURN, CHIP_MIRROR, True)
+    lw_put(ROLE_DAMAGE_RETURN, CHIP_THORN, True)
+    lw_put(ROLE_DAMAGE_RETURN, CHIP_BRAMBLE, True)
+    lw_put(ROLE_DEBUFF, CHIP_LIBERATION, True)
+    lw_put(ROLE_DEBUFF, CHIP_SOLIDIFICATION, True)
+    lw_put(ROLE_DEBUFF, CHIP_SLOW_DOWN, True)
+    lw_put(ROLE_DEBUFF, CHIP_BALL_AND_CHAIN, True)
+    lw_put(ROLE_DEBUFF, CHIP_FRACTURE, True)
+    lw_put(ROLE_DEBUFF, CHIP_SOPORIFIC, True)
+    lw_put(ROLE_DEBUFF, CHIP_TRANQUILIZER, True)
+    lw_put(ROLE_UTILITY, CHIP_TELEPORTATION, True)
+    lw_put(ROLE_UTILITY, CHIP_JUMP, True)
+    lw_put(ROLE_UTILITY, CHIP_INVERSION, True)
+    lw_put(ROLE_UTILITY, CHIP_GRAPPLE, True)
+    lw_put(ROLE_UTILITY, CHIP_BOXING_GLOVE, True)
+    lw_put(ROLE_UTILITY, CHIP_ANTIDOTE, True)
+    lw_put(ROLE_UTILITY, CHIP_MOTIVATION, True)
+    lw_put(ROLE_UTILITY, CHIP_MANUMISSION, True)
+    lw_put(ROLE_RESOURCE, CHIP_ADRENALINE, True)
+    lw_put(ROLE_RESOURCE, CHIP_LEATHER_BOOTS, True)
+    lw_put(ROLE_NOVA_CHIP, CHIP_ALTERATION, True)
+    lw_put(ROLE_NOVA_CHIP, CHIP_MUTATION, True)
+    lw_put(ROLE_NOVA_CHIP, CHIP_DESINTEGRATION, True)
+
+def isHealingChip(chipId):
+    return mapContainsKey(ROLE_HEALING, chipId)
+
+def isPoisonChip(chipId):
+    return mapContainsKey(ROLE_POISON, chipId)
+
+def isPoisonWeapon(weaponId):
+    return mapContainsKey(ROLE_POISON_WEAPON, weaponId)
+
+def isAbsoluteShieldChip(chipId):
+    return mapContainsKey(ROLE_SHIELD_ABSOLUTE, chipId)
+
+def isRelativeShieldChip(chipId):
+    return mapContainsKey(ROLE_SHIELD_RELATIVE, chipId)
+
+def isShieldChip(chipId):
+    return (mapContainsKey(ROLE_SHIELD_ABSOLUTE, chipId) or mapContainsKey(ROLE_SHIELD_RELATIVE, chipId))
+
+def isOffensiveBuff(chipId):
+    return mapContainsKey(ROLE_OFFENSIVE_BUFF, chipId)
+
+def isDamageReturnChip(chipId):
+    return mapContainsKey(ROLE_DAMAGE_RETURN, chipId)
+
+def isDebuffChip(chipId):
+    return mapContainsKey(ROLE_DEBUFF, chipId)
+
+def isUtilityChip(chipId):
+    return mapContainsKey(ROLE_UTILITY, chipId)
+
+def isResourceChip(chipId):
+    return mapContainsKey(ROLE_RESOURCE, chipId)
+
+def isNovaChip(chipId):
+    return mapContainsKey(ROLE_NOVA_CHIP, chipId)
+
+def isBuffChipRole(chipId):
+    return (((((isHealingChip(chipId) or isShieldChip(chipId)) or isOffensiveBuff(chipId)) or isDamageReturnChip(chipId)) or isResourceChip(chipId)) or isUtilityChip(chipId))
+
+def isDefensiveChip(chipId):
+    return ((isShieldChip(chipId) or isDamageReturnChip(chipId)) or isHealingChip(chipId))
+
+
+# ════════ game_context.lk ════════
+GameContext = {'player': None, 'target': None, 'enemies': [], 'map': None, 'arsenal': None, 'turn': 0, 'fightType': None, 'phase': "EARLY", 'caches': {'distances': {}, 'threats': {}, 'los': {}}}
+def initGameContext(playerObj, arsenalObj, fieldMapObj):
+    lw_put(GameContext, 'player', playerObj)
+    lw_put(GameContext, 'arsenal', arsenalObj)
+    lw_put(GameContext, 'map', fieldMapObj)
+    lw_put(GameContext, 'fightType', getFightType())
+    lw_put(GameContext, 'turn', 0)
+    invalidateGameContextCaches()
+
+def updateGameContext(playerObj, targetObj, fieldMapObj):
+    lw_put(GameContext, 'player', playerObj)
+    lw_put(GameContext, 'target', targetObj)
+    lw_put(GameContext, 'map', fieldMapObj)
+    lw_put(GameContext, 'turn', getTurn())
+    aliveEnemies = getAliveEnemies()
+    enemyList = []
+    for eid in lw_values(aliveEnemies):
+        if (not isDead(eid)):
+            push(enemyList, eid)
+    lw_put(GameContext, 'enemies', enemyList)
+    enemyCount = count(enemyList)
+    if (enemyCount > 4):
+        lw_put(GameContext, 'phase', "EARLY")
+    else:
+        if (enemyCount >= 3):
+            lw_put(GameContext, 'phase', "MID")
+        else:
+            lw_put(GameContext, 'phase', "LATE")
+    invalidateGameContextCaches()
+
+def invalidateGameContextCaches():
+    lw_put(GameContext, 'caches', {'distances': {}, 'threats': {}, 'los': {}})
+
+def getGameContextPlayer():
+    return lw_get(GameContext, 'player')
+
+def getGameContextTarget():
+    return lw_get(GameContext, 'target')
+
+def getGameContextEnemies():
+    return lw_get(GameContext, 'enemies')
+
+def getGameContextPhase():
+    return lw_get(GameContext, 'phase')
+
+def getGameContextTurn():
+    return lw_get(GameContext, 'turn')
+
+def isGameContextBattleRoyale():
+    return (lw_get(GameContext, 'fightType') == FIGHT_TYPE_BATTLE_ROYALE)
+
+
+# ════════ kill_planning.lk ════════
+KILL_PLAN_TARGET_ID = (-1)
+KILL_PLAN_STATE = None
+class KillPlanner:
+    def __init__(self, arsenal, player, target):
+        self._arsenal = None
+        self._player = None
+        self._target = None
+        self._arsenal = arsenal
+        self._player = player
+        self._target = target
+
+    def calculateMaxDamageThisTurn(self, availableTP):
+        damageItems = []
+        weapons = mapValues(self._arsenal.playerEquippedWeapons)
+        for weapon in lw_values(weapons):
+            if (weapon._cost <= availableTP):
+                netDmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, weapon._id, self._target)
+                if (netDmg > 0):
+                    push(damageItems, {'id': weapon._id, 'cost': weapon._cost, 'damage': netDmg, 'maxUse': weapon._maxUse, 'isWeapon': True})
+        chips = mapValues(self._arsenal.playerEquippedChips)
+        for chip in lw_values(chips):
+            if (chip._cost <= availableTP):
+                netDmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, chip._id, self._target)
+                if (netDmg > 0):
+                    push(damageItems, {'id': chip._id, 'cost': chip._cost, 'damage': netDmg, 'maxUse': 1, 'isWeapon': False})
+        def _lwfn1_1(a, b):
+            ratioA = lw_div(lw_get(a, 'damage'), lw_get(a, 'cost'))
+            ratioB = lw_div(lw_get(b, 'damage'), lw_get(b, 'cost'))
+            return lw_sub(ratioB, ratioA)
+        def _lwfn2_1(a, b):
+            ratioA = lw_div(lw_get(a, 'damage'), lw_get(a, 'cost'))
+            ratioB = lw_div(lw_get(b, 'damage'), lw_get(b, 'cost'))
+            return lw_sub(ratioB, ratioA)
+        arraySort(damageItems, _lwfn2_1)
+        remainingTP = availableTP
+        totalDamage = 0
+        for item in lw_values(damageItems):
+            cost = lw_get(item, 'cost')
+            damage = lw_get(item, 'damage')
+            maxUse = lw_get(item, 'maxUse')
+            isWeapon = lw_get(item, 'isWeapon')
+            if isWeapon:
+                affordableUses = floor(lw_div(remainingTP, cost))
+                actualUses = min(affordableUses, maxUse)
+                totalDamage = lw_add(totalDamage, lw_mul(damage, actualUses))
+                remainingTP = lw_num(remainingTP) - lw_num(lw_mul(cost, actualUses))
+            else:
+                if (remainingTP >= cost):
+                    totalDamage = lw_add(totalDamage, damage)
+                    remainingTP = lw_num(remainingTP) - lw_num(cost)
+        return totalDamage
+    
+    def detect2TurnKill(self):
+        targetHP = self._target._currHealth
+        currentTP = self._player._currTp
+        damage1 = self.calculateMaxDamageThisTurn(currentTP)
+        nextTurnTP = min(12, lw_add(currentTP, 6))
+        damage2 = self.calculateMaxDamageThisTurn(nextTurnTP)
+        totalDamage = lw_add(damage1, damage2)
+        canKill2Turn = ((totalDamage >= targetHP))
+        canKill1Turn = ((damage1 >= targetHP))
+        result = {'canKill1Turn': canKill1Turn, 'canKill2Turn': canKill2Turn, 'damage1': damage1, 'damage2': damage2, 'totalDamage': totalDamage, 'targetHP': targetHP, 'tpReserveNeeded': 0}
+        if (canKill2Turn and (not canKill1Turn)):
+            hpAfterThisTurn = lw_sub(targetHP, damage1)
+            minTPNeeded = self.calculateMinTPForDamage(hpAfterThisTurn)
+            lw_put(result, 'tpReserveNeeded', minTPNeeded)
+        return result
+    
+    def calculateMinTPForDamage(self, targetDamage):
+        weapons = mapValues(self._arsenal.playerEquippedWeapons)
+        bestRatio = 0
+        bestCost = 12
+        for weapon in lw_values(weapons):
+            netDmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, weapon._id, self._target)
+            if (netDmg > 0):
+                ratio = lw_div(netDmg, weapon._cost)
+                if (ratio > bestRatio):
+                    bestRatio = ratio
+                    bestCost = weapon._cost
+        if (bestRatio > 0):
+            usesNeeded = ceil(lw_div(targetDamage, (lw_mul(bestRatio, bestCost))))
+            return min(12, lw_mul(usesNeeded, bestCost))
+        return 12
+    
+    def updateGlobalKillPlan(self):
+        global KILL_PLAN_STATE, KILL_PLAN_TARGET_ID
+        plan = self.detect2TurnKill()
+        KILL_PLAN_TARGET_ID = (self._target._id if ((self._target != None)) else (-1))
+        KILL_PLAN_STATE = {'active': (lw_get(plan, 'canKill2Turn') and (not lw_get(plan, 'canKill1Turn'))), 'tpReserve': lw_get(plan, 'tpReserveNeeded'), 'targetHP': lw_get(plan, 'targetHP'), 'damage1': lw_get(plan, 'damage1'), 'damage2': lw_get(plan, 'damage2')}
+        return KILL_PLAN_STATE
+    
+
+def isKillReserveActive():
+    if (KILL_PLAN_STATE == None):
+        return False
+    return lw_get(KILL_PLAN_STATE, 'active')
+
+def getReservedTP():
+    if (KILL_PLAN_TARGET_ID == (-1)):
+        return 0
+    if isDead(KILL_PLAN_TARGET_ID):
+        return 0
+    if (KILL_PLAN_STATE == None):
+        return 0
+    if (not lw_get(KILL_PLAN_STATE, 'active')):
+        return 0
+    return lw_get(KILL_PLAN_STATE, 'tpReserve')
+
+def getAvailableTPAfterReservation(currentTP):
+    reserved = getReservedTP()
+    return max(0, lw_sub(currentTP, reserved))
+
+
+# ════════ cooldown_tracker.lk ════════
+COOLDOWN_STATE = {}
+POISON_PHASE = "BAIT"
+ANTIDOTE_USED_THIS_FIGHT = False
+LAST_POISON_DUMP_TURN = (-999)
+PREV_ENEMY_POISON = 0
+BAIT_START_TURN = 1
+ANTIDOTE_USE_COUNT = {}
+class CooldownTracker:
+    CHIP_ANTIDOTE_ID = CHIP_ANTIDOTE
+    CHIP_CURE_ID = CHIP_CURE
+    CHIP_REMISSION_ID = CHIP_REMISSION
+    CHIP_WALL_ID = CHIP_WALL
+    CHIP_FORTRESS_ID = CHIP_FORTRESS
+    CHIP_MIRROR_ID = CHIP_MIRROR
+    CHIP_SHIELD_ID = CHIP_SHIELD
+    def __init__(self, target):
+        self._target = None
+        self._target = target
+
+    def detectChipUsage(self, enemyId, previousEffects, currentEffects):
+        newEffects = []
+        for effect in lw_values(currentEffects):
+            effectType = lw_get(effect, 'type')
+            isNew = True
+            for prevEffect in lw_values(previousEffects):
+                if (lw_get(prevEffect, 'type') == effectType):
+                    isNew = False
+                    break
+            if isNew:
+                push(newEffects, effect)
+        return newEffects
+    
+    def updateCooldowns(self, enemyId):
+        if (not mapContainsKey(COOLDOWN_STATE, enemyId)):
+            lw_put(COOLDOWN_STATE, enemyId, {})
+        entityCooldowns = lw_get(COOLDOWN_STATE, enemyId)
+        for chipId in lw_values(mapKeys(entityCooldowns)):
+            cooldownInfo = lw_get(entityCooldowns, chipId)
+            if mapContainsKey(cooldownInfo, 'turnsRemaining'):
+                remaining = lw_get(cooldownInfo, 'turnsRemaining')
+                if (remaining > 0):
+                    lw_put(lw_get(entityCooldowns, chipId), 'turnsRemaining', lw_sub(remaining, 1))
+    
+    def recordChipUse(self, enemyId, chipId):
+        if (not mapContainsKey(COOLDOWN_STATE, enemyId)):
+            lw_put(COOLDOWN_STATE, enemyId, {})
+        cooldown = self.getChipCooldown(chipId)
+        if (cooldown > 0):
+            lw_put(lw_get(COOLDOWN_STATE, enemyId), chipId, {'turnsRemaining': cooldown, 'lastUsedTurn': getTurn()})
+    
+    def getChipCooldown(self, chipId):
+        if (chipId == CooldownTracker.CHIP_ANTIDOTE_ID):
+            return 4
+        if (chipId == CooldownTracker.CHIP_CURE_ID):
+            return 3
+        if (chipId == CooldownTracker.CHIP_REMISSION_ID):
+            return 6
+        if (chipId == CooldownTracker.CHIP_WALL_ID):
+            return 3
+        if (chipId == CooldownTracker.CHIP_FORTRESS_ID):
+            return 4
+        if (chipId == CooldownTracker.CHIP_SHIELD_ID):
+            return 4
+        if (chipId == CooldownTracker.CHIP_MIRROR_ID):
+            return 4
+        return 0
+    
+    def isChipOnCooldown(self, enemyId, chipId):
+        if (not mapContainsKey(COOLDOWN_STATE, enemyId)):
+            return False
+        entityCooldowns = lw_get(COOLDOWN_STATE, enemyId)
+        if (not mapContainsKey(entityCooldowns, chipId)):
+            return False
+        cooldownInfo = lw_get(entityCooldowns, chipId)
+        if (not mapContainsKey(cooldownInfo, 'turnsRemaining')):
+            return False
+        return (lw_get(cooldownInfo, 'turnsRemaining') > 0)
+    
+    def getCooldownRemaining(self, enemyId, chipId):
+        if (not mapContainsKey(COOLDOWN_STATE, enemyId)):
+            return 0
+        entityCooldowns = lw_get(COOLDOWN_STATE, enemyId)
+        if (not mapContainsKey(entityCooldowns, chipId)):
+            return 0
+        cooldownInfo = lw_get(entityCooldowns, chipId)
+        if (not mapContainsKey(cooldownInfo, 'turnsRemaining')):
+            return 0
+        return lw_get(cooldownInfo, 'turnsRemaining')
+    
+    def detectAntidoteUse(self, enemyId, prevPoison, currPoison):
+        global ANTIDOTE_USED_THIS_FIGHT, POISON_PHASE
+        if (prevPoison <= 1):
+            return False
+        if ((prevPoison > 1) and (currPoison == 0)):
+            self.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
+            self.bumpAntidoteUseCount(enemyId)
+            ANTIDOTE_USED_THIS_FIGHT = True
+            POISON_PHASE = "DUMP"
+            return True
+        if (prevPoison > lw_add(currPoison, 1)):
+            self.recordChipUse(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
+            self.bumpAntidoteUseCount(enemyId)
+            return True
+        return False
+    
+    def bumpAntidoteUseCount(self, enemyId):
+        if (not mapContainsKey(ANTIDOTE_USE_COUNT, enemyId)):
+            lw_put(ANTIDOTE_USE_COUNT, enemyId, 0)
+        lw_put(ANTIDOTE_USE_COUNT, enemyId, lw_add(lw_get(ANTIDOTE_USE_COUNT, enemyId), 1))
+        if ((lw_get(ANTIDOTE_USE_COUNT, enemyId) >= 2) and mapContainsKey(lw__enemyProfile, enemyId)):
+            lw_put(lw_get(lw__enemyProfile, enemyId), 'doubleAntidoteCarrier', True)
+    
+    def getAntidoteUseCount(self, enemyId):
+        if (not mapContainsKey(ANTIDOTE_USE_COUNT, enemyId)):
+            return 0
+        return lw_get(ANTIDOTE_USE_COUNT, enemyId)
+    
+    def isAntidoteAvailable(self, enemyId):
+        return (not self.isChipOnCooldown(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID))
+    
+    def getPoisonWindow(self, enemyId):
+        remaining = self.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
+        if (remaining > 0):
+            return remaining
+        return 0
+    
+
+def isEnemyAntidoteOnCooldown(enemyId):
+    tracker = CooldownTracker(None)
+    return (not tracker.isAntidoteAvailable(enemyId))
+
+def getEnemyPoisonWindow(enemyId):
+    tracker = CooldownTracker(None)
+    return tracker.getPoisonWindow(enemyId)
+
+
+# ════════ enemy_predictor.lk ════════
+class EnemyPredictor:
+    def __init__(self, fieldMap, arsenal, player, enemy):
+        self._fieldMap = None
+        self._arsenal = None
+        self._player = None
+        self._enemy = None
+        self._fieldMap = fieldMap
+        self._arsenal = arsenal
+        self._player = player
+        self._enemy = enemy
+
+    def predictEnemyBestWeapon(self):
+        enemyWeapons = getWeapons(self._enemy._id)
+        if (count(enemyWeapons) == 0):
+            return None
+        bestWeapon = None
+        bestDamage = 0
+        for weaponId in lw_values(enemyWeapons):
+            minRange = getWeaponMinRange(weaponId)
+            maxRange = getWeaponMaxRange(weaponId)
+            cost = getWeaponCost(weaponId)
+            if ((cost == None) or (cost <= 0)):
+                continue
+            effects = getWeaponEffects(weaponId)
+            estimatedDamage = 0
+            for eff in lw_values(effects):
+                if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                    avgDmg = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                    statScale = lw_add(1, lw_div(self._enemy._strength, 100))
+                    estimatedDamage = lw_add(estimatedDamage, lw_mul(avgDmg, statScale))
+            if (estimatedDamage == 0):
+                estimatedDamage = lw_mul(150, (lw_div(cost, 4.0)))
+            if (estimatedDamage > bestDamage):
+                bestDamage = estimatedDamage
+                bestWeapon = {'id': weaponId, 'damage': estimatedDamage, 'minRange': minRange, 'maxRange': maxRange, 'cost': cost}
+        return bestWeapon
+    
+    def predictEnemyBestChip(self):
+        enemyChips = getChips(self._enemy._id)
+        bestDamage = 0
+        bestCost = 0
+        for chipId in lw_values(enemyChips):
+            effects = getChipEffects(chipId)
+            if (effects == None):
+                continue
+            for eff in lw_values(effects):
+                if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                    avgDmg = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                    statScale = lw_add(1, lw_div(self._enemy._magic, 100))
+                    chipDmg = lw_mul(avgDmg, statScale)
+                    if (chipDmg > bestDamage):
+                        bestDamage = chipDmg
+                        bestCost = getChipCost(chipId)
+        if (bestDamage > 0):
+            return {'damage': bestDamage, 'cost': bestCost}
+        return None
+    
+    def predictEnemyMovement(self, playerEndPos, enemyMP):
+        enemyPos = self._enemy._cellPos
+        distance = getCellDistance(enemyPos, playerEndPos)
+        if ((distance == None) or (distance <= 1)):
+            return enemyPos
+        bestWeapon = self.predictEnemyBestWeapon()
+        targetRange = 1
+        if (bestWeapon != None):
+            targetRange = lw_get(bestWeapon, 'maxRange')
+        gapToClose = max(0, lw_sub(distance, targetRange))
+        if (gapToClose <= 0):
+            return enemyPos
+        closingDist = min(enemyMP, gapToClose)
+        if (closingDist <= 0):
+            return enemyPos
+        if (closingDist <= 5):
+            bestCell = enemyPos
+            bestDist = distance
+            searchR = min(closingDist, 4)
+            ex = getCellX(enemyPos)
+            ey = getCellY(enemyPos)
+            dx = (-lw_num(searchR))
+            while (dx <= searchR):
+                dy = (-lw_num(searchR))
+                while (dy <= searchR):
+                    if ((lw_add(abs(dx), abs(dy)) > searchR) or (((dx == 0) and (dy == 0)))):
+                        dy = lw_add(dy, 1)
+                        continue
+                    testCell = getCellFromXY(lw_add(ex, dx), lw_add(ey, dy))
+                    if ((testCell == None) or isObstacle(testCell)):
+                        dy = lw_add(dy, 1)
+                        continue
+                    testDist = getCellDistance(testCell, playerEndPos)
+                    if (testDist == None):
+                        dy = lw_add(dy, 1)
+                        continue
+                    if ((testDist < bestDist) and (testDist >= max(1, lw_sub(targetRange, 1)))):
+                        pathLen = getCachedPathLength(enemyPos, testCell)
+                        if ((pathLen != None) and (pathLen <= enemyMP)):
+                            bestDist = testDist
+                            bestCell = testCell
+                    dy = lw_add(dy, 1)
+                dx = lw_add(dx, 1)
+            return bestCell
+        return enemyPos
+    
+    def simulateEnemyResponse(self, playerEndPos, playerEndHP, playerEndTP, shieldAbs=0, shieldRel=0):
+        enemyTP = min(12, lw_add(self._enemy._currTp, 6))
+        enemyMP = self._enemy._currMp
+        weapon = self.predictEnemyBestWeapon()
+        if (weapon == None):
+            return {'damage': 0, 'tpUsed': 0, 'enemyEndPos': self._enemy._cellPos}
+        enemyEndPos = self.predictEnemyMovement(playerEndPos, enemyMP)
+        affordableUses = floor(lw_div(enemyTP, lw_get(weapon, 'cost')))
+        distance = getCellDistance(enemyEndPos, playerEndPos)
+        if (((distance == None) or (distance < lw_get(weapon, 'minRange'))) or (distance > lw_get(weapon, 'maxRange'))):
+            return {'damage': 0, 'tpUsed': 0, 'enemyEndPos': enemyEndPos}
+        totalDamage = lw_mul(lw_get(weapon, 'damage'), affordableUses)
+        tpUsed = lw_mul(lw_get(weapon, 'cost'), affordableUses)
+        remainingTP = lw_sub(enemyTP, tpUsed)
+        if (remainingTP > 0):
+            bestChip = self.predictEnemyBestChip()
+            if (((bestChip != None) and (lw_get(bestChip, 'cost') > 0)) and (remainingTP >= lw_get(bestChip, 'cost'))):
+                chipUses = floor(lw_div(remainingTP, lw_get(bestChip, 'cost')))
+                totalDamage = lw_add(totalDamage, lw_mul(lw_get(bestChip, 'damage'), chipUses))
+                tpUsed = lw_add(tpUsed, lw_mul(lw_get(bestChip, 'cost'), chipUses))
+        totalRel = lw_div((lw_add(self._player._relShield, shieldRel)), 100.0)
+        if (totalRel > 0.95):
+            totalRel = 0.95
+        totalAbs = lw_add(self._player._absShield, shieldAbs)
+        afterRel = lw_mul(totalDamage, (lw_sub(1.0, totalRel)))
+        afterAbs = lw_sub(afterRel, totalAbs)
+        if (afterAbs < 0):
+            afterAbs = 0
+        totalDamage = afterAbs
+        twoTurnSetup = 0
+        if (remainingTP >= 6):
+            twoTurnSetup = floor(lw_mul(totalDamage, 0.3))
+        return {'damage': floor(totalDamage), 'twoTurnSetup': twoTurnSetup, 'tpUsed': tpUsed, 'enemyEndPos': enemyEndPos}
+    
+    def evaluateScenarioWithLookahead(self, scenarioResult, discountFactor=0.7):
+        playerEndPos = lw_get(scenarioResult, 'endPosition')
+        playerEndHP = lw_get(scenarioResult, 'endHP')
+        playerEndTP = lw_get(scenarioResult, 'endTP')
+        currentTurnValue = lw_get(scenarioResult, 'score')
+        shieldAbs = (lw_get(scenarioResult, 'shieldAbs') if mapContainsKey(scenarioResult, 'shieldAbs') else 0)
+        shieldRel = (lw_get(scenarioResult, 'shieldRel') if mapContainsKey(scenarioResult, 'shieldRel') else 0)
+        enemyResponse = self.simulateEnemyResponse(playerEndPos, playerEndHP, playerEndTP, shieldAbs, shieldRel)
+        enemyDamage = lw_get(enemyResponse, 'damage')
+        enemyEndPos = lw_get(enemyResponse, 'enemyEndPos')
+        hpAfterEnemy = lw_sub(playerEndHP, enemyDamage)
+        survivalPenalty = 0
+        if (hpAfterEnemy <= 0):
+            survivalPenalty = (-10000)
+        else:
+            if (hpAfterEnemy < lw_mul(playerEndHP, 0.3)):
+                survivalPenalty = (-2000)
+            else:
+                if (hpAfterEnemy < lw_mul(playerEndHP, 0.5)):
+                    survivalPenalty = (-1000)
+        twoTurnSetup = (lw_get(enemyResponse, 'twoTurnSetup') if mapContainsKey(enemyResponse, 'twoTurnSetup') else 0)
+        if ((twoTurnSetup > 0) and (hpAfterEnemy > 0)):
+            survivalPenalty = lw_num(survivalPenalty) - lw_num(lw_mul(twoTurnSetup, 2))
+        if ((self._fieldMap != None) and (playerEndPos != (-1))):
+            trapThreat = self._fieldMap.getThreatAtCell(playerEndPos)
+            if (trapThreat > 300):
+                survivalPenalty = lw_num(survivalPenalty) - lw_num(floor(lw_mul(trapThreat, 0.5)))
+        offenseBonus = 0
+        distToEnemy = getCellDistance(playerEndPos, enemyEndPos)
+        if (distToEnemy != None):
+            for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                wObj = lw_get(self._arsenal.playerEquippedWeapons, wid)
+                if ((distToEnemy >= wObj._minRange) and (distToEnemy <= wObj._maxRange)):
+                    bd = getCachedDamageBreakdown(wid)
+                    if (bd != None):
+                        offenseBonus = lw_add(offenseBonus, lw_mul(lw_get(bd, 'total'), 0.3))
+            for cid in lw_values(mapKeys(self._arsenal.playerEquippedChips)):
+                if ((((isHealingChip(cid) or isOffensiveBuff(cid)) or isShieldChip(cid)) or isDamageReturnChip(cid)) or isResourceChip(cid)):
+                    continue
+                cObj = lw_get(self._arsenal.playerEquippedChips, cid)
+                if ((distToEnemy >= cObj._minRange) and (distToEnemy <= cObj._maxRange)):
+                    bd = getCachedDamageBreakdown(cid)
+                    if (bd != None):
+                        offenseBonus = lw_add(offenseBonus, lw_mul(lw_get(bd, 'total'), 0.2))
+        nextTurnValue = lw_add(survivalPenalty, offenseBonus)
+        discountedNextTurn = lw_mul(nextTurnValue, discountFactor)
+        finalScore = lw_add(currentTurnValue, discountedNextTurn)
+        return {'currentTurnValue': currentTurnValue, 'nextTurnValue': nextTurnValue, 'discountedNextTurn': discountedNextTurn, 'finalScore': finalScore, 'enemyDamage': enemyDamage, 'playerHPAfter': hpAfterEnemy}
+    
+
+def enhanceScenariosWithLookahead(scenarios, topK, fieldMap, arsenal, player, enemy):
+    if (count(scenarios) == 0):
+        return scenarios
+    predictor = EnemyPredictor(fieldMap, arsenal, player, enemy)
+    enhancedCount = min(topK, count(scenarios))
+    i = 0
+    while (i < enhancedCount):
+        if (getOperations() > _ops86):
+            break
+        scenario = lw_get(scenarios, i)
+        scenarioResult = scenario
+        lookaheadDiscount = 0.85
+        lpProfile = (getEnemyProfile(enemy._id) if ((enemy != None)) else None)
+        if ((lpProfile != None) and lw_get(lpProfile, 'isBurstBuild')):
+            lookaheadDiscount = 0.75
+        lookahead = predictor.evaluateScenarioWithLookahead(scenarioResult, lookaheadDiscount)
+        lw_put(scenario, 'lookaheadScore', lw_get(lookahead, 'finalScore'))
+        lw_put(scenario, 'enemyDamagePrediction', lw_get(lookahead, 'enemyDamage'))
+        lw_put(scenario, 'playerHPAfterEnemy', lw_get(lookahead, 'playerHPAfter'))
+        i = lw_add(i, 1)
+    return scenarios
+
+
+# ════════ reachable_graph.lk ════════
+GLOBAL_NEIGHBORS = []
+ReachableGraph = None
+def initializeAdjacency():
+    global GLOBAL_NEIGHBORS
+    if (count(GLOBAL_NEIGHBORS) > 0):
+        return None
+    GLOBAL_NEIGHBORS = []
+    cell = 0
+    while (cell < 613):
+        neighbors = []
+        candidates = [lw_sub(cell, 18), lw_sub(cell, 17), lw_sub(cell, 1), lw_add(cell, 1), lw_add(cell, 17), lw_add(cell, 18)]
+        for n in lw_values(candidates):
+            if (((n >= 0) and (n < 613)) and (not isObstacle(n))):
+                dist = getCellDistance(cell, n)
+                if (dist == 1):
+                    push(neighbors, n)
+        push(GLOBAL_NEIGHBORS, neighbors)
+        cell = lw_add(cell, 1)
+    return None
+
+def buildReachableGraph(startCell, maxMP, playerObj, targetObj, arsenalObj):
+    global ReachableGraph
+    mpCost = {}
+    queue = [startCell]
+    head = 0
+    lw_put(mpCost, startCell, 0)
+    while (head < count(queue)):
+        if (getOperations() > _ops86):
+            break
+        current = lw_get(queue, head)
+        head = lw_add(head, 1)
+        currentCost = lw_get(mpCost, current)
+        if (currentCost >= maxMP):
+            continue
+        neighbors = lw_get(GLOBAL_NEIGHBORS, current)
+        for neighbor in lw_values(neighbors):
+            if (not mapContainsKey(mpCost, neighbor)):
+                lw_put(mpCost, neighbor, lw_add(currentCost, 1))
+                push(queue, neighbor)
+    ReachableGraph = enrichReachableGraph(mpCost, playerObj, targetObj, arsenalObj)
+    cellCount = count(mapKeys(ReachableGraph))
+    return ReachableGraph
+
+def enrichReachableGraph(mpCost, playerObj, targetObj, arsenalObj):
+    graph = {}
+    for cellId in lw_values(mapKeys(mpCost)):
+        lw_put(graph, cellId, {'mp': lw_get(mpCost, cellId), 'threat': 0})
+    return graph
+
+def getGraphMPCost(cellId):
+    if (ReachableGraph == None):
+        return 999
+    if (not mapContainsKey(ReachableGraph, cellId)):
+        return 999
+    return lw_get(lw_get(ReachableGraph, cellId), 'mp')
+
+def getGraphThreat(cellId):
+    if (ReachableGraph == None):
+        return 0
+    if (not mapContainsKey(ReachableGraph, cellId)):
+        return 0
+    return lw_get(lw_get(ReachableGraph, cellId), 'threat')
+
+def isGraphReachableCell(cellId):
+    if (ReachableGraph == None):
+        return False
+    return mapContainsKey(ReachableGraph, cellId)
+
+def getReachableCells():
+    if (ReachableGraph == None):
+        return []
+    return mapKeys(ReachableGraph)
+
+def updateGraphThreat(cellId, threat):
+    if (ReachableGraph == None):
+        return None
+    if (not mapContainsKey(ReachableGraph, cellId)):
+        return None
+    lw_put(lw_get(ReachableGraph, cellId), 'threat', threat)
+    return None
+
+
+# ════════ performance_infra.lk ════════
+lw__occupancyMap = {}
+lw__aoePatternMasks = {}
+lw__multiEnemyDamageCache = {}
+def initializeAoEMasks():
+    if (count(mapKeys(lw__aoePatternMasks)) > 0):
+        return None
+    lw_put(lw__aoePatternMasks, 0, [0])
+    lw_put(lw__aoePatternMasks, 1, [0, (-18), 18, (-17), 17, (-19), 19, (-1), 1])
+    lw_put(lw__aoePatternMasks, 2, [0, (-18), 18, (-17), 17, (-19), 19, (-1), 1, (-36), 36, (-34), 34, (-38), 38, (-2), 2, (-35), 35, (-37), 37, (-20), 20, (-16), 16])
+    lw_put(lw__aoePatternMasks, 3, [0, (-18), 18, (-17), 17, (-19), 19, (-1), 1, (-36), 36, (-34), 34, (-38), 38, (-2), 2, (-35), 35, (-37), 37, (-20), 20, (-16), 16, (-54), 54, (-51), 51, (-57), 57, (-3), 3, (-52), 52, (-56), 56, (-53), 53, (-55), 55, (-39), 39, (-33), 33, (-21), 21, (-15), 15])
+    lw_put(lw__aoePatternMasks, 4, [0])
+
+def buildOccupancyMap():
+    global lw__occupancyMap
+    lw__occupancyMap = {}
+    allEntities = getAllies()
+    for ally in lw_values(allEntities):
+        cell = getCell(ally)
+        if (cell != None):
+            lw_put(lw__occupancyMap, cell, ally)
+    enemies = getAliveEnemies()
+    for enemy in lw_values(enemies):
+        cell = getCell(enemy)
+        if (cell != None):
+            lw_put(lw__occupancyMap, cell, enemy)
+
+def getEntityAtCell(cellId):
+    if mapContainsKey(lw__occupancyMap, cellId):
+        return lw_get(lw__occupancyMap, cellId)
+    return None
+
+def isEnemyAtCell(cellId, enemies):
+    entityId = getEntityAtCell(cellId)
+    if (entityId == None):
+        return False
+    for e in lw_values(enemies):
+        if (e._id == entityId):
+            return True
+    return False
+
+def isReachable(fromCell, toCell, mp):
+    return isGraphReachableCell(toCell)
+
+def getMPCostToCell(fromCell, toCell, mp):
+    if isGraphReachableCell(toCell):
+        return getGraphMPCost(toCell)
+    return None
+
+def getEnemiesInAoE(aimCell, aoeType, enemies):
+    hitEnemies = []
+    if (not mapContainsKey(lw__aoePatternMasks, aoeType)):
+        for e in lw_values(enemies):
+            if isDead(e._id):
+                continue
+            push(hitEnemies, e)
+        return hitEnemies
+    mask = lw_get(lw__aoePatternMasks, aoeType)
+    for offset in lw_values(mask):
+        checkCell = lw_add(aimCell, offset)
+        if ((checkCell < 0) or (checkCell >= 613)):
+            continue
+        entityId = getEntityAtCell(checkCell)
+        if (entityId == None):
+            continue
+        for e in lw_values(enemies):
+            if ((e._id == entityId) and (not isDead(e._id))):
+                push(hitEnemies, e)
+                break
+    return hitEnemies
+
+def hashEnemyPositions(enemies):
+    hash = 0
+    for e in lw_values(enemies):
+        if (not isDead(e._id)):
+            hash = lw_add(hash, lw_mul(e._cellPos, e._id))
+    return hash
+
+def getCachedMultiEnemyDamage(shooterCell, itemId, aimCell, enemies, arsenal):
+    enemyHash = hashEnemyPositions(enemies)
+    cacheKey = lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("", shooterCell), ":"), itemId), ":"), aimCell), ":"), enemyHash)
+    if mapContainsKey(lw__multiEnemyDamageCache, cacheKey):
+        return lw_get(lw__multiEnemyDamageCache, cacheKey)
+    enemiesArray = []
+    for e in lw_values(enemies):
+        push(enemiesArray, e)
+    result = arsenal.calculateMultiEnemyDamage(shooterCell, aimCell, itemId, enemiesArray)
+    lw_put(lw__multiEnemyDamageCache, cacheKey, result)
+    return result
+
+def clearMultiEnemyDamageCache():
+    global lw__multiEnemyDamageCache
+    lw__multiEnemyDamageCache = {}
+
+def initializePerformanceInfra():
+    initializeAoEMasks()
+    buildOccupancyMap()
+
+def clearPerformanceInfra():
+    global lw__multiEnemyDamageCache, lw__occupancyMap
+    lw__occupancyMap = {}
+    lw__multiEnemyDamageCache = {}
+
+
+# ════════ cache_manager.lk ════════
+lw__adversarialThreatCache = {}
+lw__adversarialThreatCacheBuilt = False
+lw__reachableCellsCache = {}
+lw__damageCache = {}
+lw__chipCostCache = {}
+lw__weaponCostCache = {}
+lw__pathLengthCache = {}
+lw__losCache = {}
+lw__dangerCellCache = {}
+lw__zeroDamageStreak = 0
+def hashTwoCells(cell1, cell2):
+    return lw_add(lw_mul(cell1, 1024), cell2)
+
+def getCachedLineOfSight(cell1, cell2):
+    hash = hashTwoCells(cell1, cell2)
+    if mapContainsKey(lw__losCache, hash):
+        return lw_get(lw__losCache, hash)
+    result = lineOfSight(cell1, cell2)
+    lw_put(lw__losCache, hash, result)
+    return result
+
+def clearCaches():
+    global lw__adversarialThreatCache, lw__adversarialThreatCacheBuilt, lw__chipCostCache, lw__damageCache, lw__dangerCellCache, lw__losCache, lw__pathLengthCache, lw__reachableCellsCache, lw__weaponCostCache
+    lw__reachableCellsCache = {}
+    lw__damageCache = {}
+    lw__chipCostCache = {}
+    lw__weaponCostCache = {}
+    lw__pathLengthCache = {}
+    lw__losCache = {}
+    lw__dangerCellCache = {}
+    lw__adversarialThreatCache = {}
+    lw__adversarialThreatCacheBuilt = False
+    clearPerformanceInfra()
+
+def buildReachableCellsCache(fromCell, mp):
+    if (mp <= 0):
+        return {}
+    reachable = {}
+    queue = []
+    visited = {}
+    queueIndex = 0
+    push(queue, {'cell': fromCell, 'cost': 0})
+    mapPut(visited, fromCell, True)
+    mapPut(reachable, fromCell, 0)
+    while (queueIndex < count(queue)):
+        if (getOperations() > _ops86):
+            break
+        current = lw_get(queue, queueIndex)
+        queueIndex = lw_add(queueIndex, 1)
+        currentCell = lw_get(current, 'cell')
+        currentCost = lw_get(current, 'cost')
+        neighbors = [lw_add(currentCell, 1), lw_sub(currentCell, 1), lw_add(currentCell, 18), lw_sub(currentCell, 18), lw_add(currentCell, 17), lw_sub(currentCell, 17)]
+        for neighbor in lw_values(neighbors):
+            if ((neighbor < 0) or (neighbor >= 613)):
+                continue
+            if mapContainsKey(visited, neighbor):
+                continue
+            pathLen = getPathLength(currentCell, neighbor)
+            if ((pathLen == None) or (pathLen < 0)):
+                continue
+            newCost = lw_add(currentCost, pathLen)
+            if (newCost > mp):
+                continue
+            mapPut(visited, neighbor, True)
+            mapPut(reachable, neighbor, newCost)
+            push(queue, {'cell': neighbor, 'cost': newCost})
+    cacheKey = lw_add(lw_mul(fromCell, 1000), mp)
+    lw_put(lw__reachableCellsCache, cacheKey, reachable)
+    return reachable
+
+def isCachedReachableCell(fromCell, toCell, mp):
+    return isReachable(fromCell, toCell, mp)
+
+def getCachedMPCost(fromCell, toCell, mp):
+    return getMPCostToCell(fromCell, toCell, mp)
+
+def getCachedPathLength(fromCell, toCell):
+    hash = hashTwoCells(fromCell, toCell)
+    if mapContainsKey(lw__pathLengthCache, hash):
+        return lw_get(lw__pathLengthCache, hash)
+    pathLen = getPathLength(fromCell, toCell)
+    lw_put(lw__pathLengthCache, hash, pathLen)
+    return pathLen
+
+def buildDamageCache(arsenal, player, target):
+    str = player._strength
+    mag = player._magic
+    wis = player._wisdom
+    sci = player._science
+    for weaponId in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+        bd = arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
+        netDmg = 0
+        if (target != None):
+            netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
+        lw_put(lw__damageCache, weaponId, {'breakdown': bd, 'net': netDmg})
+    for chipId in lw_values(mapKeys(arsenal.playerEquippedChips)):
+        bd = arsenal.getDamageBreakdown(str, mag, wis, sci, chipId)
+        netDmg = 0
+        if (target != None):
+            netDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
+        lw_put(lw__damageCache, chipId, {'breakdown': bd, 'net': netDmg})
+
+def getCachedDamageBreakdown(itemId):
+    if mapContainsKey(lw__damageCache, itemId):
+        return lw_get(lw_get(lw__damageCache, itemId), 'breakdown')
+    return None
+
+def getCachedNetDamage(itemId):
+    if mapContainsKey(lw__damageCache, itemId):
+        return lw_get(lw_get(lw__damageCache, itemId), 'net')
+    return None
+
+def buildCostCache(arsenal):
+    for chipId in lw_values(mapKeys(arsenal.playerEquippedChips)):
+        lw_put(lw__chipCostCache, chipId, getChipCost(chipId))
+    for weaponId in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+        weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+        lw_put(lw__weaponCostCache, weaponId, weapon._cost)
+
+def getCachedChipCost(chipId):
+    if mapContainsKey(lw__chipCostCache, chipId):
+        return lw_get(lw__chipCostCache, chipId)
+    cost = getChipCost(chipId)
+    lw_put(lw__chipCostCache, chipId, cost)
+    return cost
+
+def getCachedWeaponCost(weaponId, arsenal):
+    if mapContainsKey(lw__weaponCostCache, weaponId):
+        return lw_get(lw__weaponCostCache, weaponId)
+    weapon = None
+    if mapContainsKey(arsenal.playerEquippedWeapons, weaponId):
+        weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+    else:
+        if mapContainsKey(arsenal.weaponsList, weaponId):
+            weapon = lw_get(arsenal.weaponsList, weaponId)
+    if (weapon != None):
+        lw_put(lw__weaponCostCache, weaponId, weapon._cost)
+        return weapon._cost
+    return None
+
+def initializeCaches(player, target, arsenal):
+    clearCaches()
+    initializePerformanceInfra()
+    buildDamageCache(arsenal, player, target)
+    buildCostCache(arsenal)
+
+def warmLosCacheFromCell(centerCell, opsCap):
+    if (((centerCell == None) or (centerCell < 0)) or (centerCell >= 613)):
+        return 0
+    warmed = 0
+    c = 0
+    while (c < 613):
+        if (getOperations() >= opsCap):
+            break
+        if isObstacle(c):
+            c = lw_add(c, 1)
+            continue
+        if (c == centerCell):
+            c = lw_add(c, 1)
+            continue
+        hash = hashTwoCells(centerCell, c)
+        if mapContainsKey(lw__losCache, hash):
+            c = lw_add(c, 1)
+            continue
+        result = lineOfSight(centerCell, c)
+        lw_put(lw__losCache, hash, result)
+        hashRev = hashTwoCells(c, centerCell)
+        if (not mapContainsKey(lw__losCache, hashRev)):
+            lw_put(lw__losCache, hashRev, result)
+        warmed = lw_add(warmed, 1)
+        c = lw_add(c, 1)
+    return warmed
+
+def extendLosCache(centerCells, opsCap):
+    if ((centerCells == None) or (count(centerCells) == 0)):
+        return 0
+    extended = 0
+    i = 0
+    while (i < count(centerCells)):
+        if (getOperations() >= opsCap):
+            break
+        extended = lw_add(extended, warmLosCacheFromCell(lw_get(centerCells, i), opsCap))
+        i = lw_add(i, 1)
+    return extended
+
+
+# ════════ tactical_awareness.lk ════════
+class ThreatPrediction:
+    def __init__(self):
+        self.maxDamage = 0
+        self.enemyId = (-1)
+        self.enemyName = ""
+        self.assumedPosition = (-1)
+        self.weaponId = (-1)
+        self.chipId = (-1)
+        self.confidence = 1.0
+
+
+def getEffectiveEnemyMP(enemy):
+    mp = enemy._currMp
+    tp = enemy._currTp
+    chips = getChips(enemy._id)
+    bonus = 0
+    if (inArray(chips, CHIP_SEVEN_LEAGUE_BOOTS) and (getCooldown(CHIP_SEVEN_LEAGUE_BOOTS, enemy._id) == 0)):
+        slbCost = getChipCost(CHIP_SEVEN_LEAGUE_BOOTS)
+        if ((slbCost != None) and (tp >= slbCost)):
+            bonus = 3
+    if (((bonus < 2) and inArray(chips, CHIP_LEATHER_BOOTS)) and (getCooldown(CHIP_LEATHER_BOOTS, enemy._id) == 0)):
+        lbCost = getChipCost(CHIP_LEATHER_BOOTS)
+        if ((lbCost != None) and (tp >= lbCost)):
+            if (bonus < 2):
+                bonus = 2
+    return lw_add(mp, bonus)
+
+def getEntityBlinkCells(enemy):
+    blinkCells = []
+    tp = enemy._currTp
+    chips = getChips(enemy._id)
+    origin = enemy._cellPos
+    ranges = []
+    if (inArray(chips, CHIP_TELEPORTATION) and (getCooldown(CHIP_TELEPORTATION, enemy._id) == 0)):
+        tCost = getChipCost(CHIP_TELEPORTATION)
+        if ((tCost != None) and (tp >= tCost)):
+            push(ranges, {'min': getChipMinRange(CHIP_TELEPORTATION), 'max': getChipMaxRange(CHIP_TELEPORTATION)})
+    if (inArray(chips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, enemy._id) == 0)):
+        jCost = getChipCost(CHIP_JUMP)
+        if ((jCost != None) and (tp >= jCost)):
+            push(ranges, {'min': getChipMinRange(CHIP_JUMP), 'max': getChipMaxRange(CHIP_JUMP)})
+    if (count(ranges) == 0):
+        return blinkCells
+    c = 0
+    while (c < 613):
+        if isObstacle(c):
+            c = lw_add(c, 1)
+            continue
+        if isEntity(c):
+            c = lw_add(c, 1)
+            continue
+        if (c == origin):
+            c = lw_add(c, 1)
+            continue
+        d = getCellDistance(origin, c)
+        if (d == None):
+            c = lw_add(c, 1)
+            continue
+        inRange = False
+        r = 0
+        while (r < count(ranges)):
+            if ((d >= lw_get(lw_get(ranges, r), 'min')) and (d <= lw_get(lw_get(ranges, r), 'max'))):
+                inRange = True
+                break
+            r = lw_add(r, 1)
+        if (not inRange):
+            c = lw_add(c, 1)
+            continue
+        if (not getCachedLineOfSight(origin, c)):
+            c = lw_add(c, 1)
+            continue
+        push(blinkCells, c)
+        c = lw_add(c, 1)
+    return blinkCells
+
+def predictEnemyThreatAtCell(targetCell, enemy, player, arsenal):
+    prediction = ThreatPrediction()
+    prediction.enemyId = enemy._id
+    prediction.enemyName = getName(enemy._id)
+    prediction.assumedPosition = enemy._cellPos
+    enemyWeapons = getWeapons(enemy._id)
+    enemyChips = getChips(enemy._id)
+    enemyMP = getEffectiveEnemyMP(enemy)
+    enemyTP = enemy._currTp
+    currentPosDamage = calculateBestAttackDamage(enemy._cellPos, targetCell, enemy, enemyWeapons, enemyChips, enemyTP)
+    maxDamageAfterMovement = currentPosDamage
+    bestPosition = enemy._cellPos
+    if (enemyMP > 0):
+        searchRadius = min(enemyMP, 11)
+        dx = (-lw_num(searchRadius))
+        while (dx <= searchRadius):
+            dy = (-lw_num(searchRadius))
+            while (dy <= searchRadius):
+                dist = lw_add(abs(dx), abs(dy))
+                if ((dist == 0) or (dist > searchRadius)):
+                    dy = lw_add(dy, 1)
+                    continue
+                testCell = lw_add(lw_add(enemy._cellPos, lw_mul(18, dx)), lw_mul(17, dy))
+                if ((testCell < 0) or (testCell >= 613)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if isObstacle(testCell):
+                    dy = lw_add(dy, 1)
+                    continue
+                pathLen = getCachedPathLength(enemy._cellPos, testCell)
+                if ((pathLen == None) or (pathLen > enemyMP)):
+                    dy = lw_add(dy, 1)
+                    continue
+                testDamage = calculateBestAttackDamage(testCell, targetCell, enemy, enemyWeapons, enemyChips, enemyTP)
+                if (testDamage > maxDamageAfterMovement):
+                    maxDamageAfterMovement = testDamage
+                    bestPosition = testCell
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+    blinkCells = getEntityBlinkCells(enemy)
+    bi = 0
+    while (bi < count(blinkCells)):
+        bCell = lw_get(blinkCells, bi)
+        bDmg = calculateBestAttackDamage(bCell, targetCell, enemy, enemyWeapons, enemyChips, enemyTP)
+        if (bDmg > maxDamageAfterMovement):
+            maxDamageAfterMovement = bDmg
+            bestPosition = bCell
+        bi = lw_add(bi, 1)
+    enemyCritChance = min(0.5, lw_div(enemy._agility, 2000.0))
+    enemyCritMult = lw_add(1.0, lw_mul(enemyCritChance, 0.3))
+    maxDamageAfterMovement = lw_num(maxDamageAfterMovement) * lw_num(enemyCritMult)
+    prediction.maxDamage = maxDamageAfterMovement
+    prediction.assumedPosition = bestPosition
+    prediction.confidence = (1.0 if ((bestPosition == enemy._cellPos)) else 0.8)
+    return prediction
+
+def calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, availableTP):
+    dist = getCellDistance(fromCell, targetCell)
+    if (dist == None):
+        return 0
+    hasLos = lineOfSight(fromCell, targetCell)
+    attacks = []
+    for weaponId in lw_values(weapons):
+        minRange = getWeaponMinRange(weaponId)
+        maxRange = getWeaponMaxRange(weaponId)
+        weaponCost = getWeaponCost(weaponId)
+        maxUses = getWeaponMaxUses(weaponId)
+        if ((dist < minRange) or (dist > maxRange)):
+            continue
+        if (not hasLos):
+            continue
+        if (weaponCost <= 0):
+            continue
+        effects = getWeaponEffects(weaponId)
+        baseDmg = 0
+        for eff in lw_values(effects):
+            if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                baseDmg = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                break
+        if (baseDmg <= 0):
+            continue
+        scaledDmg = lw_mul(baseDmg, (lw_add(1, lw_div(enemy._strength, 100))))
+        push(attacks, [scaledDmg, weaponCost, True, maxUses])
+    for chipId in lw_values(chips):
+        minRange = getChipMinRange(chipId)
+        maxRange = getChipMaxRange(chipId)
+        chipCost = getChipCost(chipId)
+        if ((dist < minRange) or (dist > maxRange)):
+            continue
+        if (chipCost > availableTP):
+            continue
+        if (chipCost <= 0):
+            continue
+        effects = getChipEffects(chipId)
+        baseDmg = 0
+        for eff in lw_values(effects):
+            if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                baseDmg = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                break
+        if (baseDmg <= 0):
+            continue
+        scaledDmg = lw_mul(baseDmg, (lw_add(1, lw_div(max(enemy._strength, enemy._magic), 100))))
+        push(attacks, [scaledDmg, chipCost, False, 1])
+    if (count(attacks) == 0):
+        return 0
+    def _lwfn1_1(a, b):
+        if (lw_get(a, 0) > lw_get(b, 0)):
+            return (-1)
+        if (lw_get(a, 0) < lw_get(b, 0)):
+            return 1
+        return 0
+    def _lwfn2_1(a, b):
+        if (lw_get(a, 0) > lw_get(b, 0)):
+            return (-1)
+        if (lw_get(a, 0) < lw_get(b, 0)):
+            return 1
+        return 0
+    arraySort(attacks, _lwfn2_1)
+    totalDamage = 0
+    remainingTP = availableTP
+    for atk in lw_values(attacks):
+        if (remainingTP <= 0):
+            break
+        aDmg = lw_get(atk, 0)
+        aCost = lw_get(atk, 1)
+        aIsWeapon = lw_get(atk, 2)
+        aUses = lw_get(atk, 3)
+        uses = (min(aUses, floor(lw_div(remainingTP, aCost))) if aIsWeapon else ((1 if (remainingTP >= aCost) else 0)))
+        if (uses <= 0):
+            continue
+        totalDamage = lw_add(totalDamage, lw_mul(aDmg, uses))
+        remainingTP = lw_num(remainingTP) - lw_num(lw_mul(aCost, uses))
+    return totalDamage
+
+def predictTotalThreatAtCell(targetCell, enemies, player, arsenal):
+    totalThreat = 0
+    predictions = []
+    for enemy in lw_values(enemies):
+        if isDead(enemy._id):
+            continue
+        pred = predictEnemyThreatAtCell(targetCell, enemy, player, arsenal)
+        totalThreat = lw_add(totalThreat, pred.maxDamage)
+        push(predictions, pred)
+    return {'total': totalThreat, 'predictions': predictions}
+
+def precomputeEnemyReachablePositions(enemy):
+    positions = [enemy._cellPos]
+    enemyMP = getEffectiveEnemyMP(enemy)
+    if (enemyMP > 0):
+        searchRadius = min(enemyMP, 11)
+        dx = (-lw_num(searchRadius))
+        while (dx <= searchRadius):
+            dy = (-lw_num(searchRadius))
+            while (dy <= searchRadius):
+                dist = lw_add(abs(dx), abs(dy))
+                if ((dist == 0) or (dist > searchRadius)):
+                    dy = lw_add(dy, 1)
+                    continue
+                testCell = lw_add(lw_add(enemy._cellPos, lw_mul(18, dx)), lw_mul(17, dy))
+                if ((testCell < 0) or (testCell >= 613)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if isObstacle(testCell):
+                    dy = lw_add(dy, 1)
+                    continue
+                pathLen = getCachedPathLength(enemy._cellPos, testCell)
+                if ((pathLen == None) or (pathLen > enemyMP)):
+                    dy = lw_add(dy, 1)
+                    continue
+                push(positions, testCell)
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+    blink = getEntityBlinkCells(enemy)
+    b = 0
+    while (b < count(blink)):
+        push(positions, lw_get(blink, b))
+        b = lw_add(b, 1)
+    return positions
+
+def predictEnemyThreatAtCellFast(targetCell, enemy, reachablePositions, enemyWeapons, enemyChips, enemyTP):
+    maxDamage = 0
+    for pos in lw_values(reachablePositions):
+        dmg = calculateBestAttackDamage(pos, targetCell, enemy, enemyWeapons, enemyChips, enemyTP)
+        if (dmg > maxDamage):
+            maxDamage = dmg
+    enemyCritChance = min(0.5, lw_div(enemy._agility, 2000.0))
+    enemyCritMult = lw_add(1.0, lw_mul(enemyCritChance, 0.3))
+    return lw_mul(maxDamage, enemyCritMult)
+
+def buildAdversarialThreatCache(playerObj, enemies, arsenalObj):
+    global lw__adversarialThreatCache, lw__adversarialThreatCacheBuilt
+    lw__adversarialThreatCache = {}
+    lw__adversarialThreatCacheBuilt = False
+    reachable = getReachableCells()
+    playerCell = playerObj._cellPos
+    cellsToEvaluate = []
+    push(cellsToEvaluate, playerCell)
+    for c in lw_values(reachable):
+        push(cellsToEvaluate, c)
+    aliveEnemies = []
+    for eid in lw_values(mapKeys(enemies)):
+        if (not isDead(eid)):
+            push(aliveEnemies, lw_get(enemies, eid))
+    if (count(aliveEnemies) > 0):
+        if (count(aliveEnemies) > 2):
+            def _lwfn1_1(a, b):
+                da = getCellDistance(playerCell, a._cellPos)
+                db = getCellDistance(playerCell, b._cellPos)
+                if (da == None):
+                    da = 999
+                if (db == None):
+                    db = 999
+                return lw_sub(da, db)
+            def _lwfn2_1(a, b):
+                da = getCellDistance(playerCell, a._cellPos)
+                db = getCellDistance(playerCell, b._cellPos)
+                if (da == None):
+                    da = 999
+                if (db == None):
+                    db = 999
+                return lw_sub(da, db)
+            arraySort(aliveEnemies, _lwfn2_1)
+            aliveEnemies = [lw_get(aliveEnemies, 0), lw_get(aliveEnemies, 1)]
+        enemyData = []
+        for enemy in lw_values(aliveEnemies):
+            push(enemyData, {'enemy': enemy, 'positions': precomputeEnemyReachablePositions(enemy), 'weapons': getWeapons(enemy._id), 'chips': getChips(enemy._id), 'tp': enemy._currTp})
+        i = 0
+        while (i < count(cellsToEvaluate)):
+            if (getOperations() > _ops71):
+                break
+            evalCell = lw_get(cellsToEvaluate, i)
+            totalThreat = 0
+            for ed in lw_values(enemyData):
+                totalThreat = lw_add(totalThreat, predictEnemyThreatAtCellFast(evalCell, lw_get(ed, 'enemy'), lw_get(ed, 'positions'), lw_get(ed, 'weapons'), lw_get(ed, 'chips'), lw_get(ed, 'tp')))
+            lw_put(lw__adversarialThreatCache, evalCell, totalThreat)
+            i = lw_add(i, 1)
+        lw__adversarialThreatCacheBuilt = True
+
+def getAdversarialThreat(cell):
+    if (not lw__adversarialThreatCacheBuilt):
+        return 0
+    if mapContainsKey(lw__adversarialThreatCache, cell):
+        return lw_get(lw__adversarialThreatCache, cell)
+    return 0
+
+def calculateTPReservation(player, enemies):
+    hpPercent = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+    reservation = {'reserved': 0, 'reason': "none", 'action': (-1)}
+    if (hpPercent >= 50):
+        return reservation
+    if (hpPercent < 30):
+        emergencyTeleChip = None
+        for chip in lw_values(player._chips):
+            if ((chip == CHIP_TELEPORTATION) or (chip == CHIP_JUMP)):
+                emergencyTeleChip = chip
+                break
+        if (emergencyTeleChip != None):
+            tpCost = getChipCost(emergencyTeleChip)
+            lw_put(reservation, 'reserved', tpCost)
+            lw_put(reservation, 'reason', "emergency_teleport")
+            lw_put(reservation, 'action', emergencyTeleChip)
+            return reservation
+    if (hpPercent < 40):
+        hasRemission = False
+        hasFortress = False
+        for chip in lw_values(player._chips):
+            if (chip == CHIP_REMISSION):
+                hasRemission = True
+            if (chip == CHIP_FORTRESS):
+                hasFortress = True
+        reserveAmount = 0
+        if hasRemission:
+            reserveAmount = lw_add(reserveAmount, getChipCost(CHIP_REMISSION))
+        if hasFortress:
+            reserveAmount = lw_add(reserveAmount, getChipCost(CHIP_FORTRESS))
+        if (reserveAmount > 0):
+            lw_put(reservation, 'reserved', reserveAmount)
+            lw_put(reservation, 'reason', "heal_shield_combo")
+            lw_put(reservation, 'action', CHIP_REMISSION)
+            return reservation
+    return reservation
+
+def shouldReserveTP(player, enemies):
+    hpPercent = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+    return (hpPercent < 40)
+
+def calculate2TurnKill(player, target, arsenal, availableTP):
+    result = {'viable': False, 'debuffCost': 0, 'expectedKillTP': 0, 'confidence': 0.0}
+    targetHP = target._currHealth
+    if (targetHP <= 0):
+        return result
+    directDamageThisTurn = calculateMaxDirectDamage(player, target, arsenal, availableTP)
+    if (directDamageThisTurn >= targetHP):
+        lw_put(result, 'viable', False)
+        lw_put(result, 'confidence', 0.0)
+        return result
+    debuffOptions = analyzeDebuffOptions(player, target, arsenal)
+    if (count(debuffOptions) == 0):
+        return result
+    for opt in lw_values(debuffOptions):
+        debuffCost = lw_get(opt, 'tpCost')
+        damageAmplification = lw_get(opt, 'amplification')
+        remainingTP = lw_sub(availableTP, debuffCost)
+        thisTurnDamage = calculateMaxDirectDamage(player, target, arsenal, remainingTP)
+        nextTurnTP = player._maxTp
+        nextTurnDamage = lw_mul(calculateMaxDirectDamage(player, target, arsenal, nextTurnTP), damageAmplification)
+        totalDamage = lw_add(thisTurnDamage, nextTurnDamage)
+        if (totalDamage >= lw_mul(targetHP, 0.9)):
+            lw_put(result, 'viable', True)
+            lw_put(result, 'debuffCost', debuffCost)
+            lw_put(result, 'expectedKillTP', nextTurnTP)
+            lw_put(result, 'confidence', min(1.0, lw_div(totalDamage, targetHP)))
+            return result
+    return result
+
+def calculateMaxDirectDamage(player, target, arsenal, availableTP):
+    maxDamage = 0
+    for weaponId in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+        weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+        cost = weapon._cost
+        maxUses = weapon._maxUse
+        possibleUses = min(maxUses, floor(lw_div(availableTP, cost)))
+        if (possibleUses <= 0):
+            continue
+        damagePerUse = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, weaponId, target)
+        totalDamage = lw_mul(damagePerUse, possibleUses)
+        if (totalDamage > maxDamage):
+            maxDamage = totalDamage
+    return maxDamage
+
+def analyzeDebuffOptions(player, target, arsenal):
+    options = []
+    playerWeapons = getWeapons()
+    playerChips = getChips()
+    hasNeutrino = False
+    for wpn in lw_values(playerWeapons):
+        if (wpn == WEAPON_NEUTRINO):
+            hasNeutrino = True
+            break
+    if hasNeutrino:
+        neutrinoCost = getWeaponCost(WEAPON_NEUTRINO)
+        push(options, {'chip': WEAPON_NEUTRINO, 'tpCost': lw_mul(neutrinoCost, 3), 'amplification': 1.24, 'stacks': 3})
+    hasLiberation = False
+    for chip in lw_values(playerChips):
+        if (chip == CHIP_LIBERATION):
+            hasLiberation = True
+            break
+    if (hasLiberation and (((target._absShield > 50) or (target._relShield > 20)))):
+        liberationCost = getChipCost(CHIP_LIBERATION)
+        amplification = lw_add(1.0, (lw_div(target._relShield, 100)))
+        push(options, {'chip': CHIP_LIBERATION, 'tpCost': liberationCost, 'amplification': amplification, 'stacks': 1})
+    return options
+
+def getSafeOffensiveTP(player, enemies):
+    reservation = calculateTPReservation(player, enemies)
+    return lw_sub(player._currTp, lw_get(reservation, 'reserved'))
+
+def isPredictedSurvivable(cell, enemies, player, arsenal):
+    threatData = predictTotalThreatAtCell(cell, enemies, player, arsenal)
+    predictedThreat = lw_get(threatData, 'total')
+    safetyMargin = 1.2
+    return ((lw_mul(predictedThreat, safetyMargin)) < player._currHealth)
+
+def _canShootAtTargetFrom(cell, target, weaponIds, damageChipIds, arsenalObj):
+    d = getCellDistance(cell, target._cellPos)
+    if (d == None):
+        return False
+    for wid in lw_values(weaponIds):
+        w = lw_get(arsenalObj.playerEquippedWeapons, wid)
+        if ((d < w._minRange) or (d > w._maxRange)):
+            continue
+        if ((w._launchType == LAUNCH_TYPE_LINE) and (not fieldMap.isOnSameLine(cell, target._cellPos))):
+            continue
+        if (not lineOfSight(cell, target._cellPos)):
+            continue
+        return True
+    for cid in lw_values(damageChipIds):
+        c = lw_get(arsenalObj.playerEquippedChips, cid)
+        if ((d < c._minRange) or (d > c._maxRange)):
+            continue
+        if (not lineOfSight(cell, target._cellPos)):
+            continue
+        return True
+    return False
+
+def estimateNearestFireTurn(playerObj, targetObj, arsenalObj):
+    if (targetObj == None):
+        return 3
+    weaponIds = mapKeys(arsenalObj.playerEquippedWeapons)
+    damageChipIds = []
+    for cid in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if (isPoisonChip(cid) or isDebuffChip(cid)):
+            continue
+        cobj = lw_get(arsenalObj.playerEquippedChips, cid)
+        if (cobj == None):
+            continue
+        bd = getCachedDamageBreakdown(cid)
+        if ((bd != None) and (((lw_get(bd, 'direct') > 0) or (lw_get(bd, 'nova') > 0)))):
+            push(damageChipIds, cid)
+    if _canShootAtTargetFrom(playerObj._cellPos, targetObj, weaponIds, damageChipIds, arsenalObj):
+        return 0
+    mpCells = fieldMap.getReachableCellsWithinMP(playerObj._cellPos, playerObj._currMp)
+    for c in lw_values(mpCells):
+        if _canShootAtTargetFrom(c, targetObj, weaponIds, damageChipIds, arsenalObj):
+            return 1
+    hasJump = (mapContainsKey(arsenalObj.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, playerObj._id) == 0))
+    if hasJump:
+        pX = getCellX(playerObj._cellPos)
+        pY = getCellY(playerObj._cellPos)
+        jdx = (-3)
+        while (jdx <= 3):
+            jdy = (-3)
+            while (jdy <= 3):
+                if ((jdx == 0) and (jdy == 0)):
+                    jdy = lw_add(jdy, 1)
+                    continue
+                if (lw_add(abs(jdx), abs(jdy)) > 3):
+                    jdy = lw_add(jdy, 1)
+                    continue
+                jc = getCellFromXY(lw_add(pX, jdx), lw_add(pY, jdy))
+                if ((jc == None) or (jc < 0)):
+                    jdy = lw_add(jdy, 1)
+                    continue
+                if (isObstacle(jc) or isEntity(jc)):
+                    jdy = lw_add(jdy, 1)
+                    continue
+                if _canShootAtTargetFrom(jc, targetObj, weaponIds, damageChipIds, arsenalObj):
+                    return 1
+                jdy = lw_add(jdy, 1)
+            jdx = lw_add(jdx, 1)
+    if (getOperations() < _ops79):
+        farRadius = min(lw_add(playerObj._currMp, getMP()), 8)
+        pX2 = getCellX(playerObj._cellPos)
+        pY2 = getCellY(playerObj._cellPos)
+        dx2 = (-lw_num(farRadius))
+        while (dx2 <= farRadius):
+            dy2 = (-lw_num(farRadius))
+            while (dy2 <= farRadius):
+                if (lw_add(abs(dx2), abs(dy2)) > farRadius):
+                    dy2 = lw_add(dy2, 1)
+                    continue
+                if (lw_add(abs(dx2), abs(dy2)) <= playerObj._currMp):
+                    dy2 = lw_add(dy2, 1)
+                    continue
+                fc = getCellFromXY(lw_add(pX2, dx2), lw_add(pY2, dy2))
+                if ((fc == None) or (fc < 0)):
+                    dy2 = lw_add(dy2, 1)
+                    continue
+                if isObstacle(fc):
+                    dy2 = lw_add(dy2, 1)
+                    continue
+                if _canShootAtTargetFrom(fc, targetObj, weaponIds, damageChipIds, arsenalObj):
+                    return 2
+                dy2 = lw_add(dy2, 1)
+            dx2 = lw_add(dx2, 1)
+    return 3
+
+
+# ════════ weight_profiles.lk ════════
+BUILD_STRENGTH = 1
+BUILD_MAGIC = 2
+BUILD_AGILITY = 3
+BUILD_STRENGTH_SCIENCE = 4
+BUILD_TANK_SCI = 5
+BUILD_HYBRID = 6
+BUILD_BRUISER_REFLECT = 7
+BUILD_SUPPORT = 8
+lw__playerBuildType = 0
+STRENGTH_WEIGHTS = {'burstDamage': 163, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': (-50), 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 80, 'healValue': 60, 'distanceToTarget': (-20), 'threatReduction': 40, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 500, 'noDamagePenalty': (-4000)}
+MAGIC_WEIGHTS = {'burstDamage': 54, 'weaponUses': 0, 'tpEfficiency': 50, 'dotEffects': 272, 'kiteDistance': 200, 'damageReturn': 0, 'poisonStacks': 217, 'denialValue': 230, 'shieldValue': 100, 'healValue': 80, 'distanceToTarget': 30, 'threatReduction': 80, 'otkoBonus': 3000, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 3000, 'bulbKillBonusBuffer': 1800, 'bulbKillBonusAttacker': 1000, 'multiTargetBonus': 400}
+AGILITY_WEIGHTS = {'burstDamage': 136, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 50, 'damageReturn': 300, 'poisonStacks': 0, 'shieldValue': 80, 'healValue': 60, 'distanceToTarget': (-10), 'threatReduction': 50, 'otkoBonus': 4500, 'checkpointBonus': 2500, 'novaEffects': 200, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2700, 'bulbKillBonusBuffer': 1600, 'bulbKillBonusAttacker': 900, 'multiTargetBonus': 550}
+STRENGTH_SCIENCE_WEIGHTS = {'burstDamage': 136, 'weaponUses': 80, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 80, 'healValue': 60, 'distanceToTarget': (-15), 'threatReduction': 40, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'novaEffects': 326, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 500, 'noDamagePenalty': (-4000)}
+TANK_SCI_WEIGHTS = {'burstDamage': 50, 'weaponUses': 60, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 20, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 400, 'healValue': 280, 'distanceToTarget': (-10), 'threatReduction': 300, 'otkoBonus': 3500, 'checkpointBonus': 2500, 'novaEffects': 450, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 3000, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 500}
+HYBRID_WEIGHTS = {'burstDamage': 109, 'weaponUses': 60, 'tpEfficiency': 50, 'dotEffects': 136, 'kiteDistance': 50, 'damageReturn': 0, 'poisonStacks': 109, 'denialValue': 136, 'shieldValue': 100, 'healValue': 70, 'distanceToTarget': 0, 'threatReduction': 60, 'otkoBonus': 4000, 'checkpointBonus': 2500, 'novaEffects': 109, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2800, 'bulbKillBonusBuffer': 1600, 'bulbKillBonusAttacker': 900, 'multiTargetBonus': 500}
+BRUISER_REFLECT_WEIGHTS = {'burstDamage': 100, 'weaponUses': 65, 'tpEfficiency': 100, 'dotEffects': (-96), 'kiteDistance': (-30), 'damageReturn': 449, 'poisonStacks': 0, 'shieldValue': 200, 'healValue': 4, 'distanceToTarget': (-10), 'threatReduction': 50, 'otkoBonus': 6789, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 741}
+BOSS_PUZZLE_WEIGHTS = {'burstDamage': 0, 'weaponUses': 0, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 0, 'healValue': 50, 'distanceToTarget': (-100), 'threatReduction': 0, 'novaEffects': 0, 'otkoBonus': 0, 'checkpointBonus': 0, 'noDamagePenalty': 0, 'axisAlignment': 2000, 'crystalProximity': 800, 'crystalSolved': 5000, 'multiTargetBonus': 0}
+BOSS_COMBAT_WEIGHTS = {'burstDamage': 163, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': 109, 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 54, 'shieldValue': 200, 'healValue': 150, 'distanceToTarget': (-20), 'threatReduction': 100, 'novaEffects': 109, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'noDamagePenalty': (-2000), 'antidoteUrgency': 500, 'multiTargetBonus': 300}
+SUPPORT_WEIGHTS = {'burstDamage': 100, 'weaponUses': 80, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 60, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 280, 'healValue': 240, 'distanceToTarget': 0, 'threatReduction': 180, 'otkoBonus': 3000, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 400, 'noDamagePenalty': (-1500), 'allySupport': 350}
+def getWeightsForBuild(buildType, player):
+    if (buildType == BUILD_STRENGTH):
+        return STRENGTH_WEIGHTS
+    if (buildType == BUILD_MAGIC):
+        return MAGIC_WEIGHTS
+    if (buildType == BUILD_AGILITY):
+        if ((player != None) and (player._science >= 200)):
+            return blendWeights(AGILITY_WEIGHTS, STRENGTH_SCIENCE_WEIGHTS, 0.6)
+        return AGILITY_WEIGHTS
+    if (buildType == BUILD_STRENGTH_SCIENCE):
+        return STRENGTH_SCIENCE_WEIGHTS
+    if (buildType == BUILD_TANK_SCI):
+        return TANK_SCI_WEIGHTS
+    if (buildType == BUILD_HYBRID):
+        if (((player != None) and (player._magic >= 500)) and (player._magic > player._strength)):
+            return blendWeights(HYBRID_WEIGHTS, MAGIC_WEIGHTS, 0.6)
+        return HYBRID_WEIGHTS
+    if (buildType == BUILD_BRUISER_REFLECT):
+        return BRUISER_REFLECT_WEIGHTS
+    if (buildType == BUILD_SUPPORT):
+        return SUPPORT_WEIGHTS
+    return STRENGTH_WEIGHTS
+
+def detectBuildType(player):
+    strStat = player._strength
+    magStat = player._magic
+    agiStat = player._agility
+    sciStat = player._science
+    resStat = player._resistance
+    wisStat = player._wisdom
+    if ((resStat >= 300) and (sciStat >= 300)):
+        return BUILD_TANK_SCI
+    if ((((((resStat >= 250) and (wisStat >= 250)) and (strStat < 300)) and (magStat < 300)) and (sciStat < 300)) and (agiStat < 300)):
+        return BUILD_SUPPORT
+    if (((strStat > 400) and (agiStat > 400)) and (((mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) or mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)) or mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)))):
+        return BUILD_BRUISER_REFLECT
+    if (((strStat >= magStat) and (strStat >= agiStat)) and (sciStat >= 200)):
+        return BUILD_STRENGTH_SCIENCE
+    if (magStat >= lw_add(strStat, 100)):
+        if (strStat >= 200):
+            return BUILD_HYBRID
+        return BUILD_MAGIC
+    if (((abs(lw_sub(strStat, magStat)) < 100) and (magStat >= 100)) and (strStat >= 100)):
+        return BUILD_HYBRID
+    if ((agiStat >= strStat) and (agiStat >= magStat)):
+        return BUILD_AGILITY
+    if (magStat >= strStat):
+        return BUILD_MAGIC
+    return BUILD_STRENGTH
+
+def blendWeights(weights1, weights2, ratio):
+    blended = {}
+    for key in lw_values(mapKeys(weights1)):
+        val1 = lw_get(weights1, key)
+        val2 = 0
+        if mapContainsKey(weights2, key):
+            val2 = lw_get(weights2, key)
+        lw_put(blended, key, floor(lw_add(lw_mul(val1, ratio), lw_mul(val2, (lw_sub(1.0, ratio))))))
+    return blended
+
+
+# ════════ enemy_intelligence.lk ════════
+lw__enemyProfile = {}
+lw__enemyObservations = {}
+lw__engagementPlan = {}
+def profileEnemy(enemy):
+    if (enemy == None):
+        return None
+    eid = enemy._id
+    if mapContainsKey(lw__enemyProfile, eid):
+        return None
+    chips = enemy._chips
+    weapons = enemy._weapons
+    str = enemy._strength
+    mag = enemy._magic
+    agi = enemy._agility
+    sci = enemy._science
+    res = enemy._resistance
+    wis = enemy._wisdom
+    profile = {}
+    lw_put(profile, 'buildType', detectEnemyBuildType(str, mag, agi, sci, res))
+    maxBurst = 0
+    bestRange = 0
+    bestRangeDmg = 0
+    maxReach = 0
+    for weaponId in lw_values(weapons):
+        effects = getWeaponEffects(weaponId)
+        weaponDmg = 0
+        for eff in lw_values(effects):
+            if ((count(eff) >= 5) and (((lw_get(eff, 4) & 8)) == 0)):
+                continue
+            if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                avgDmg = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                weaponDmg = lw_add(weaponDmg, lw_mul(avgDmg, (lw_add(1, lw_div(str, 100)))))
+        wReach = getWeaponMaxRange(weaponId)
+        if (((wReach != None) and (weaponDmg > 0)) and (wReach > maxReach)):
+            maxReach = wReach
+        cost = getWeaponCost(weaponId)
+        if ((cost != None) and (cost > 0)):
+            uses = floor(lw_div(12, cost))
+            totalDmg = lw_mul(weaponDmg, uses)
+            if (totalDmg > maxBurst):
+                maxBurst = totalDmg
+        if (weaponDmg > bestRangeDmg):
+            bestRangeDmg = weaponDmg
+            bestRange = getWeaponMaxRange(weaponId)
+    for chipId in lw_values(chips):
+        effects = getChipEffects(chipId)
+        if (effects == None):
+            continue
+        for eff in lw_values(effects):
+            if ((count(eff) >= 5) and (((lw_get(eff, 4) & 8)) == 0)):
+                continue
+            if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                avgDmg = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                maxBurst = lw_add(maxBurst, lw_mul(avgDmg, (lw_add(1, lw_div(mag, 100)))))
+                cReach = getChipMaxRange(chipId)
+                if ((cReach != None) and (cReach > maxReach)):
+                    maxReach = cReach
+    lw_put(profile, 'maxBurstDamage', floor(maxBurst))
+    lw_put(profile, 'preferredRange', bestRange)
+    lw_put(profile, 'maxReach', maxReach)
+    hasShield = False
+    hasHeal = False
+    hasPoison = False
+    hasReflect = False
+    hasAntidote = False
+    for cid in lw_values(chips):
+        if (mapContainsKey(ROLE_SHIELD_RELATIVE, cid) or mapContainsKey(ROLE_SHIELD_ABSOLUTE, cid)):
+            hasShield = True
+        if mapContainsKey(ROLE_HEALING, cid):
+            hasHeal = True
+        if mapContainsKey(ROLE_POISON, cid):
+            hasPoison = True
+        if mapContainsKey(ROLE_DAMAGE_RETURN, cid):
+            hasReflect = True
+        if (cid == CHIP_ANTIDOTE):
+            hasAntidote = True
+    if (not hasPoison):
+        for wid in lw_values(weapons):
+            if mapContainsKey(ROLE_POISON_WEAPON, wid):
+                hasPoison = True
+                break
+    lw_put(profile, 'hasShield', hasShield)
+    lw_put(profile, 'hasHeal', hasHeal)
+    lw_put(profile, 'hasPoison', hasPoison)
+    lw_put(profile, 'hasReflect', hasReflect)
+    lw_put(profile, 'hasAntidote', hasAntidote)
+    lw_put(profile, 'isTank', (((lw_get(profile, 'buildType') == BUILD_TANK_SCI) or (res >= 300))))
+    lw_put(profile, 'isBurstBuild', (((str >= 400) and (not lw_get(profile, 'isTank')))))
+    isAgiKiter = (((lw_get(profile, 'buildType') == BUILD_AGILITY) or (agi >= 400)))
+    isMagicKiter = (((((mag >= 180) and hasPoison) and (str < 250)) and (lw_get(profile, 'buildType') != BUILD_HYBRID)))
+    lw_put(profile, 'isKiter', (isAgiKiter or isMagicKiter))
+    lw_put(profile, 'kiterFlavor', ('magic_poison' if isMagicKiter else (('agi' if isAgiKiter else 'none'))))
+    hasLifestealThreat = False
+    if (((wis >= 80) and (bestRange > 0)) and (bestRange <= 8)):
+        if (((lw_get(profile, 'buildType') == BUILD_AGILITY) or (lw_get(profile, 'buildType') == BUILD_BRUISER_REFLECT)) or (agi >= 300)):
+            hasLifestealThreat = True
+    if (((((not hasLifestealThreat) and (str >= 350)) and (wis >= 200)) and (bestRange > 0)) and (bestRange <= 4)):
+        hasLifestealThreat = True
+    lw_put(profile, 'hasLifestealThreat', hasLifestealThreat)
+    if (hasLifestealThreat and (not mapContainsKey(lw__engagementPlan, eid))):
+        lw_put(lw__engagementPlan, eid, {'minDist': 6, 'maxDist': 9, 'mode': 'kite_bruiser', 'lockTurn': getTurn()})
+    if ((((isMagicKiter and (not mapContainsKey(lw__engagementPlan, eid))) and (lw__playerBuildType != BUILD_MAGIC)) and (lw__playerBuildType != BUILD_TANK_SCI)) and (lw__playerBuildType != BUILD_HYBRID)):
+        lw_put(lw__engagementPlan, eid, {'minDist': 1, 'maxDist': 4, 'mode': 'rush_mage', 'lockTurn': getTurn()})
+    healPerTurn = 0
+    shieldPerTurn = 0
+    hasLiberation = False
+    hasTeleport = False
+    wisScale = lw_add(1, lw_div(wis, 100))
+    for cid in lw_values(chips):
+        if mapContainsKey(ROLE_HEALING, cid):
+            effs = getChipEffects(cid)
+            if (effs != None):
+                for eff in lw_values(effs):
+                    if ((count(eff) >= 5) and (((lw_get(eff, 4) & 8)) == 0)):
+                        continue
+                    if (lw_get(eff, 0) == EFFECT_HEAL):
+                        avgHeal = lw_mul(lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2), wisScale)
+                        if ((lw_get(eff, 3) != None) and (lw_get(eff, 3) > 0)):
+                            avgHeal = lw_num(avgHeal) * lw_num(lw_get(eff, 3))
+                        cd = getChipCooldown(cid)
+                        if ((cd == None) or (cd <= 0)):
+                            cd = 5
+                        healPerTurn = lw_add(healPerTurn, lw_div(avgHeal, cd))
+        if (mapContainsKey(ROLE_SHIELD_ABSOLUTE, cid) or mapContainsKey(ROLE_SHIELD_RELATIVE, cid)):
+            effs = getChipEffects(cid)
+            if (effs != None):
+                for eff in lw_values(effs):
+                    if ((count(eff) >= 5) and (((lw_get(eff, 4) & 8)) == 0)):
+                        continue
+                    if ((lw_get(eff, 0) == EFFECT_ABSOLUTE_SHIELD) or (lw_get(eff, 0) == EFFECT_RELATIVE_SHIELD)):
+                        avgShield = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                        if (lw_get(eff, 0) == EFFECT_RELATIVE_SHIELD):
+                            avgShield = lw_num(avgShield) * lw_num(30)
+                        if ((lw_get(eff, 3) != None) and (lw_get(eff, 3) > 0)):
+                            avgShield = lw_num(avgShield) * lw_num(lw_get(eff, 3))
+                        cd = getChipCooldown(cid)
+                        if ((cd == None) or (cd <= 0)):
+                            cd = 5
+                        shieldPerTurn = lw_add(shieldPerTurn, lw_div(avgShield, cd))
+        if (cid == CHIP_LIBERATION):
+            hasLiberation = True
+        if (((cid == CHIP_TELEPORTATION) or (cid == CHIP_JUMP)) or (cid == CHIP_INVERSION)):
+            hasTeleport = True
+    lw_put(profile, 'healPerTurn', floor(healPerTurn))
+    lw_put(profile, 'shieldPerTurn', floor(shieldPerTurn))
+    lw_put(profile, 'hasLiberation', hasLiberation)
+    lw_put(profile, 'hasTeleport', hasTeleport)
+    lw_put(profile, 'mobilityMP', (enemy._currMp if (enemy._currMp != None) else 3))
+    lw_put(lw__enemyProfile, eid, profile)
+
+def detectEnemyBuildType(str, mag, agi, sci, res):
+    if ((res >= 300) and (sci >= 300)):
+        return BUILD_TANK_SCI
+    if ((str > 400) and (agi > 400)):
+        return BUILD_BRUISER_REFLECT
+    if (((str >= mag) and (str >= agi)) and (sci >= 200)):
+        return BUILD_STRENGTH_SCIENCE
+    if (mag > lw_add(str, 100)):
+        return BUILD_MAGIC
+    if (((abs(lw_sub(str, mag)) < 100) and (mag >= 100)) and (str >= 100)):
+        return BUILD_HYBRID
+    if ((agi >= str) and (agi >= mag)):
+        return BUILD_AGILITY
+    if (mag >= str):
+        return BUILD_MAGIC
+    return BUILD_STRENGTH
+
+def getEnemyProfile(enemyId):
+    if mapContainsKey(lw__enemyProfile, enemyId):
+        return lw_get(lw__enemyProfile, enemyId)
+    return None
+
+def profileAllEnemies(fieldMap):
+    enemies = fieldMap.getEnemySubMap()
+    for eid in lw_values(mapKeys(enemies)):
+        if (not isDead(eid)):
+            profileEnemy(lw_get(enemies, eid))
+
+def predictEnemyCanAttackWithin(playerPos, enemy, turnsWindow):
+    if (enemy == None):
+        return True
+    dist = getCellDistance(playerPos, enemy._cellPos)
+    if (dist == None):
+        return True
+    maxRange = 8
+    profile = getEnemyProfile(enemy._id)
+    if (((profile != None) and (lw_get(profile, 'preferredRange') != None)) and (lw_get(profile, 'preferredRange') > 0)):
+        maxRange = lw_get(profile, 'preferredRange')
+    else:
+        weapons = getWeapons(enemy._id)
+        if (weapons != None):
+            for wid in lw_values(weapons):
+                wr = getWeaponMaxRange(wid)
+                if ((wr != None) and (wr > maxRange)):
+                    maxRange = wr
+    enemyMP = enemy._currMp
+    if ((enemyMP == None) or (enemyMP <= 0)):
+        enemyMP = 7
+    gapToClose = max(0, lw_sub(dist, maxRange))
+    return (gapToClose <= (lw_mul(enemyMP, turnsWindow)))
+
+def observeEnemyBehavior(fieldMap):
+    currentTurn = getTurn()
+    enemies = fieldMap.getEnemySubMap()
+    for eid in lw_values(mapKeys(enemies)):
+        if isDead(eid):
+            continue
+        enemy = lw_get(enemies, eid)
+        if (not mapContainsKey(lw__enemyObservations, eid)):
+            lw_put(lw__enemyObservations, eid, {'turnsObserved': 0, 'timesShielded': 0, 'lastHP': enemy._currHealth, 'hpTrend': 0})
+        obs = lw_get(lw__enemyObservations, eid)
+        lw_put(obs, 'turnsObserved', lw_add(lw_get(obs, 'turnsObserved'), 1))
+        hpChange = lw_sub(enemy._currHealth, lw_get(obs, 'lastHP'))
+        lw_put(obs, 'hpTrend', lw_add(lw_mul(lw_get(obs, 'hpTrend'), 0.7), lw_mul(hpChange, 0.3)))
+        lw_put(obs, 'lastHP', enemy._currHealth)
+        if (enemy.hasEffect(EFFECT_RELATIVE_SHIELD) or enemy.hasEffect(EFFECT_ABSOLUTE_SHIELD)):
+            lw_put(obs, 'timesShielded', lw_add(lw_get(obs, 'timesShielded'), 1))
+        lw_put(lw__enemyObservations, eid, obs)
+        if ((lw_mod(lw_get(obs, 'turnsObserved'), 5) == 0) and mapContainsKey(lw__enemyProfile, eid)):
+            updateEnemyProfile(eid, obs, enemy)
+
+def updateEnemyProfile(eid, obs, enemy):
+    profile = lw_get(lw__enemyProfile, eid)
+    turnsObs = lw_get(obs, 'turnsObserved')
+    if (not lw_get(profile, 'isTank')):
+        if ((lw_get(obs, 'timesShielded') >= 3) and (lw_div(lw_mul(lw_get(obs, 'timesShielded'), 1.0), turnsObs) > 0.33)):
+            lw_put(profile, 'isTank', True)
+            lw_put(profile, 'isBurstBuild', False)
+        else:
+            if ((lw_get(obs, 'timesShielded') >= 2) and (enemy != None)):
+                eResistance = (enemy._resistance if (enemy._resistance != None) else 0)
+                eScience = (enemy._science if (enemy._science != None) else 0)
+                if ((eResistance >= 300) and (eScience >= 200)):
+                    lw_put(profile, 'isTank', True)
+                    lw_put(profile, 'isBurstBuild', False)
+    if ((lw_get(obs, 'hpTrend') > 20) and (turnsObs >= 5)):
+        lw_put(profile, 'hasHeal', True)
+    currentHP = enemy._currHealth
+    maxHP = enemy._maxHealth
+    if (((maxHP != None) and (maxHP > 0)) and (currentHP != None)):
+        hpPercent = lw_div(lw_mul(currentHP, 100), maxHP)
+        if ((turnsObs >= 10) and (hpPercent > 70)):
+            lw_put(profile, 'isTank', True)
+    lw_put(lw__enemyProfile, eid, profile)
+
+def getEnemyObservation(enemyId):
+    if mapContainsKey(lw__enemyObservations, enemyId):
+        return lw_get(lw__enemyObservations, enemyId)
+    return None
+
+
+# ════════ race_model.lk ════════
+lw__raceOurTTK = 999.0
+lw__raceEnemyTTK = 999.0
+lw__raceMargin = 0.0
+lw__raceVerdict = "EVEN"
+lw__raceRawPrev = "EVEN"
+lw__racePrevPlayerHP = (-1)
+lw__avgDamageTakenRate = 0.0
+lw__raceProfileCache = {}
+def raceEstimateGrossDPT(ent):
+    tp = getTotalTP(ent._id)
+    if ((tp == None) or (tp <= 0)):
+        tp = 12
+    str = max(0, ent._strength)
+    mag = max(0, ent._magic)
+    bestWeaponDPT = 0
+    for wid in lw_values(ent._weapons):
+        wEffects = getWeaponEffects(wid)
+        if (wEffects == None):
+            continue
+        wDmg = 0
+        for eff in lw_values(wEffects):
+            if ((count(eff) >= 5) and (((lw_get(eff, 4) & 8)) == 0)):
+                continue
+            if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                wDmg = lw_add(wDmg, lw_mul(lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2), (lw_add(1, lw_div(str, 100)))))
+            if (lw_get(eff, 0) == EFFECT_POISON):
+                pTurns = (min(2, lw_get(eff, 3)) if (((lw_get(eff, 3) != None) and (lw_get(eff, 3) > 0))) else 1)
+                wDmg = lw_add(wDmg, lw_mul(lw_mul(lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2), (lw_add(1, lw_div(mag, 100)))), pTurns))
+        wCost = getWeaponCost(wid)
+        if (((wCost != None) and (wCost > 0)) and (wDmg > 0)):
+            wTotal = lw_mul(wDmg, floor(lw_div(tp, wCost)))
+            if (wTotal > bestWeaponDPT):
+                bestWeaponDPT = wTotal
+    chipDPT = 0
+    for cid in lw_values(ent._chips):
+        cEffects = getChipEffects(cid)
+        if (cEffects == None):
+            continue
+        cd = getChipCooldown(cid)
+        if ((cd == None) or (cd < 1)):
+            cd = 1
+        if (cd > 5):
+            cd = 5
+        for eff in lw_values(cEffects):
+            if ((count(eff) >= 5) and (((lw_get(eff, 4) & 8)) == 0)):
+                continue
+            if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                chipDPT = lw_add(chipDPT, lw_div(lw_mul(lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2), (lw_add(1, lw_div(str, 100)))), cd))
+            if (lw_get(eff, 0) == EFFECT_POISON):
+                pTot = lw_mul(lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2), (lw_add(1, lw_div(mag, 100))))
+                if ((lw_get(eff, 3) != None) and (lw_get(eff, 3) > 1)):
+                    pTot = lw_num(pTot) * lw_num(lw_get(eff, 3))
+                chipDPT = lw_add(chipDPT, lw_div(pTot, cd))
+    return lw_add(bestWeaponDPT, lw_mul(chipDPT, 0.4))
+
+def raceEstimateSustain(ent):
+    wisScale = lw_add(1, lw_div(max(0, ent._wisdom), 100))
+    sustain = 0
+    for cid in lw_values(ent._chips):
+        effs = getChipEffects(cid)
+        if (effs == None):
+            continue
+        cd = getChipCooldown(cid)
+        if ((cd == None) or (cd <= 0)):
+            cd = 5
+        for eff in lw_values(effs):
+            if ((count(eff) >= 5) and (((lw_get(eff, 4) & 8)) == 0)):
+                continue
+            if (lw_get(eff, 0) == EFFECT_HEAL):
+                avgHeal = lw_mul(lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2), wisScale)
+                if ((lw_get(eff, 3) != None) and (lw_get(eff, 3) > 0)):
+                    avgHeal = lw_num(avgHeal) * lw_num(lw_get(eff, 3))
+                sustain = lw_add(sustain, lw_div(avgHeal, cd))
+            if ((lw_get(eff, 0) == EFFECT_ABSOLUTE_SHIELD) or (lw_get(eff, 0) == EFFECT_RELATIVE_SHIELD)):
+                avgShield = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                if (lw_get(eff, 0) == EFFECT_RELATIVE_SHIELD):
+                    avgShield = lw_num(avgShield) * lw_num(30)
+                if ((lw_get(eff, 3) != None) and (lw_get(eff, 3) > 0)):
+                    avgShield = lw_num(avgShield) * lw_num(lw_get(eff, 3))
+                sustain = lw_add(sustain, lw_div(avgShield, cd))
+    return sustain
+
+def raceGetCachedProfile(ent):
+    rid = ent._id
+    if (not mapContainsKey(lw__raceProfileCache, rid)):
+        lw_put(lw__raceProfileCache, rid, [raceEstimateGrossDPT(ent), raceEstimateSustain(ent)])
+    return lw_get(lw__raceProfileCache, rid)
+
+def computeRaceModel(playerEnt, targetEnt, fieldMapRef):
+    global lw__avgDamageTakenRate, lw__raceEnemyTTK, lw__raceMargin, lw__raceOurTTK, lw__racePrevPlayerHP, lw__raceRawPrev, lw__raceVerdict
+    php = playerEnt._currHealth
+    if ((getTurn() > 1) and (lw__racePrevPlayerHP >= 0)):
+        taken = lw_sub(lw__racePrevPlayerHP, php)
+        lw__avgDamageTakenRate = lw_add(lw_mul(lw__avgDamageTakenRate, 0.7), lw_mul(taken, 0.3))
+    lw__racePrevPlayerHP = php
+    if ((targetEnt == None) or ((_isBossFight and (_bossPhase == "PUZZLE")))):
+        lw__raceVerdict = "EVEN"
+        lw__raceOurTTK = 999.0
+        lw__raceEnemyTTK = 999.0
+        lw__raceMargin = 0.0
+        return None
+    grossFactor = 0.6
+    currentTurn = getTurn()
+    obsWeight = 0.0
+    if (currentTurn >= 3):
+        obsWeight = min(0.7, lw_mul((lw_sub(currentTurn, 2)), 0.15))
+    selfProf = raceGetCachedProfile(playerEnt)
+    tgtProf = raceGetCachedProfile(targetEnt)
+    poisonOnEnemy = targetEnt.getTotalPoisonPerTurn()
+    if (poisonOnEnemy == None):
+        poisonOnEnemy = 0
+    ourAnalyticNet = lw_sub(lw_add(lw_mul(lw_get(selfProf, 0), grossFactor), poisonOnEnemy), lw_get(tgtProf, 1))
+    ourNet = lw_add(lw_mul(lw__avgDamageRate, obsWeight), lw_mul(ourAnalyticNet, (lw_sub(1, obsWeight))))
+    lw__raceOurTTK = (lw_div(targetEnt._currHealth, ourNet) if ((ourNet > 5)) else 999.0)
+    enemyGross = 0
+    raceEnemies = fieldMapRef.getEnemyArray()
+    for re in lw_values(raceEnemies):
+        if ((re == None) or (re._currHealth <= 0)):
+            continue
+        reProf = raceGetCachedProfile(re)
+        enemyGross = lw_add(enemyGross, lw_get(reProf, 0))
+    poisonOnUs = playerEnt.getTotalPoisonPerTurn()
+    if (poisonOnUs == None):
+        poisonOnUs = 0
+    theirAnalyticNet = lw_sub(lw_add(lw_mul(enemyGross, grossFactor), poisonOnUs), lw_get(selfProf, 1))
+    theirNet = lw_add(lw_mul(lw__avgDamageTakenRate, obsWeight), lw_mul(theirAnalyticNet, (lw_sub(1, obsWeight))))
+    lw__raceEnemyTTK = (lw_div(php, theirNet) if ((theirNet > 5)) else 999.0)
+    turnsRemaining = lw_sub(64, currentTurn)
+    canKill = (((lw__raceOurTTK < 900) and (lw__raceOurTTK <= turnsRemaining)))
+    canDie = (((lw__raceEnemyTTK < 900) and (lw__raceEnemyTTK <= turnsRemaining)))
+    lw__raceMargin = lw_sub(lw__raceEnemyTTK, lw__raceOurTTK)
+    rawVerdict = "EVEN"
+    if ((not canKill) and (not canDie)):
+        rawVerdict = "STALL"
+    else:
+        if (canKill and (((not canDie) or (lw__raceMargin >= 2)))):
+            rawVerdict = "WINNING"
+        else:
+            if (canDie and (((not canKill) or (lw__raceMargin <= (-2))))):
+                rawVerdict = "LOSING"
+    if ((rawVerdict == lw__raceRawPrev) or (rawVerdict == "LOSING")):
+        lw__raceVerdict = rawVerdict
+    lw__raceRawPrev = rawVerdict
+    if (currentTurn <= 20):
+        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("RACE_T", currentTurn), "_them"), floor(lw__raceOurTTK)), "_us"), floor(lw__raceEnemyTTK)), "_"), rawVerdict), "_pub"), lw__raceVerdict))
+
+
+# ════════ strategic_depth.lk ════════
+# include: weight_profiles.lk (inlined by assembler)
+COUNTER_MULTS = {'vs_kiter_burst': 80, 'vs_kiter_heal': 135, 'vs_kiter_kite': 70, 'vs_kiter_dist': 150, 'vs_kiter_dot': 130, 'vs_burst_shield': 140, 'vs_burst_heal': 120, 'vs_burst_threat': 120, 'vs_burst_burst': 120, 'vs_tank_nova': 190, 'vs_tank_denial': 130, 'vs_tank_dot': 120, 'vs_reflect_on_burst': 65, 'vs_reflect_on_shield': 130, 'vs_reflect_on_heal': 168, 'vs_reflect_off_burst': 130, 'cd_shield_burst': 121, 'cd_shield_otko': 101, 'cd_heal_burst': 115}
+lw__enemyChipUsage = {}
+lw__currentTurn = (-1)
+WEIGHT_DRIFT_BOUNDS = {'burstDamage': [0.5, 1.7], 'shieldValue': [0.3, 1.7], 'healValue': [0.4, 1.6], 'dotEffects': [0.5, 1.8], 'poisonStacks': [0.5, 1.8], 'denialValue': [0.5, 1.9], 'kiteDistance': [0.35, 1.8], 'threatReduction': [0.5, 1.7], 'novaEffects': [0.6, 1.9], 'damageReturn': [0.0, 1.6], 'otkoBonus': [0.6, 1.6]}
+class ChipCooldownInfo:
+    def __init__(self):
+        self.chipId = (-1)
+        self.lastUsedTurn = (-1)
+        self.cooldownDuration = 0
+        self.availableOnTurn = (-1)
+        self.isAvailable = False
+        self.confidence = 1.0
+
+
+def initializeCooldownTracker():
+    global lw__currentTurn
+    lw__currentTurn = getTurn()
+    enemies = getAliveEnemies()
+    for enemyId in lw_values(enemies):
+        if (not mapContainsKey(lw__enemyChipUsage, enemyId)):
+            lw_put(lw__enemyChipUsage, enemyId, {})
+
+def trackEnemyChipUsage(enemyId, chipId):
+    currentTurn = getTurn()
+    if (not mapContainsKey(lw__enemyChipUsage, enemyId)):
+        lw_put(lw__enemyChipUsage, enemyId, {})
+    lw_put(lw_get(lw__enemyChipUsage, enemyId), chipId, currentTurn)
+    chipName = lw_add("chip_", chipId)
+
+def predictChipAvailability(enemyId, chipId):
+    info = ChipCooldownInfo()
+    info.chipId = chipId
+    currentTurn = getTurn()
+    if (not mapContainsKey(lw__enemyChipUsage, enemyId)):
+        info.isAvailable = True
+        info.confidence = 0.3
+        return info
+    chipHistory = lw_get(lw__enemyChipUsage, enemyId)
+    if (not mapContainsKey(chipHistory, chipId)):
+        info.isAvailable = True
+        info.confidence = 0.5
+        return info
+    lastUsed = lw_get(chipHistory, chipId)
+    info.lastUsedTurn = lastUsed
+    cooldown = estimateChipCooldown(chipId)
+    info.cooldownDuration = cooldown
+    info.availableOnTurn = lw_add(lw_add(lastUsed, cooldown), 1)
+    turnsSinceUse = lw_sub(currentTurn, lastUsed)
+    info.isAvailable = ((turnsSinceUse > cooldown))
+    info.confidence = 0.9
+    return info
+
+def estimateChipCooldown(chipId):
+    if (((chipId == 58) or (chipId == 59)) or (chipId == 60)):
+        return 3
+    if ((chipId == 66) or (chipId == 67)):
+        return 3
+    if (chipId == 49):
+        return 3
+    if (chipId == 70):
+        return 1
+    if (chipId == 76):
+        return 2
+    return 2
+
+def getKeyChipPredictions(enemyId):
+    predictions = {}
+    keyChips = [58, 59, 49, 66, 67, 70, 76]
+    for chipId in lw_values(keyChips):
+        pred = predictChipAvailability(enemyId, chipId)
+        lw_put(predictions, chipId, pred)
+    return predictions
+
+def isEnemyShieldAvailable(enemyId):
+    fortress = predictChipAvailability(enemyId, 58)
+    wall = predictChipAvailability(enemyId, 59)
+    return (fortress.isAvailable or wall.isAvailable)
+
+def isEnemyAntidoteAvailable(enemyId):
+    antidote = predictChipAvailability(enemyId, 49)
+    return antidote.isAvailable
+
+def adaptWeightsToSituation(baseWeights, player, enemies, fieldMap):
+    adapted = {}
+    for key in lw_values(mapKeys(baseWeights)):
+        lw_put(adapted, key, lw_get(baseWeights, key))
+    currentTurn = getTurn()
+    enemyCount = count(mapKeys(enemies))
+    if (enemyCount >= 3):
+        lw_put(adapted, 'threatReduction', floor(lw_mul(lw_get(adapted, 'threatReduction'), 1.5)))
+        lw_put(adapted, 'otkoBonus', floor(lw_mul(lw_get(adapted, 'otkoBonus'), 0.9)))
+    else:
+        if (enemyCount == 2):
+            lw_put(adapted, 'threatReduction', floor(lw_mul(lw_get(adapted, 'threatReduction'), 1.2)))
+    if (currentTurn <= 3):
+        lw_put(adapted, 'tpEfficiency', floor(lw_mul(lw_get(adapted, 'tpEfficiency'), 1.5)))
+    enemies3 = mapKeys(enemies)
+    for eid3 in lw_values(enemies3):
+        if isDead(eid3):
+            continue
+        obs = getEnemyObservation(eid3)
+        if (obs == None):
+            continue
+        turnsObs = lw_get(obs, 'turnsObserved')
+        if (turnsObs < 3):
+            continue
+        if (lw_get(obs, 'hpTrend') > 20):
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.3)))
+            if mapContainsKey(adapted, 'denialValue'):
+                lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.5)))
+        if (lw_get(obs, 'timesShielded') == 0):
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.2)))
+            lw_put(adapted, 'shieldValue', floor(lw_mul(lw_get(adapted, 'shieldValue'), 0.8)))
+        break
+    primaryEnemy = None
+    primaryProfile = None
+    primaryRank = (-1)
+    enemies4 = mapKeys(enemies)
+    for eid in lw_values(enemies4):
+        if isDead(eid):
+            continue
+        candEnemy = lw_get(enemies, eid)
+        if (candEnemy == None):
+            continue
+        candProfile = getEnemyProfile(eid)
+        candThreat = 500
+        if (((candProfile != None) and (lw_get(candProfile, 'maxBurstDamage') != None)) and (lw_get(candProfile, 'maxBurstDamage') > 0)):
+            candThreat = lw_get(candProfile, 'maxBurstDamage')
+        candDist = getCellDistance(player._cellPos, candEnemy._cellPos)
+        if (candDist == None):
+            candDist = 20
+        candRank = lw_div(candThreat, (lw_add(1.0, lw_div(candDist, 6.0))))
+        if (candRank > primaryRank):
+            primaryRank = candRank
+            primaryEnemy = candEnemy
+            primaryProfile = candProfile
+    if (primaryProfile != None):
+        if (lw_get(primaryProfile, 'isKiter') and lw_get(primaryProfile, 'hasPoison')):
+            lw_put(adapted, 'burstDamage', floor(lw_div(lw_mul(lw_get(adapted, 'burstDamage'), lw_get(COUNTER_MULTS, 'vs_kiter_burst')), 100)))
+            lw_put(adapted, 'healValue', floor(lw_div(lw_mul(lw_get(adapted, 'healValue'), lw_get(COUNTER_MULTS, 'vs_kiter_heal')), 100)))
+            if mapContainsKey(adapted, 'kiteDistance'):
+                lw_put(adapted, 'kiteDistance', floor(lw_div(lw_mul(lw_get(adapted, 'kiteDistance'), lw_get(COUNTER_MULTS, 'vs_kiter_kite')), 100)))
+            lw_put(adapted, 'distanceToTarget', floor(lw_div(lw_mul(lw_get(adapted, 'distanceToTarget'), lw_get(COUNTER_MULTS, 'vs_kiter_dist')), 100)))
+            if ((not lw_get(primaryProfile, 'hasAntidote')) and mapContainsKey(adapted, 'dotEffects')):
+                lw_put(adapted, 'dotEffects', floor(lw_div(lw_mul(lw_get(adapted, 'dotEffects'), lw_get(COUNTER_MULTS, 'vs_kiter_dot')), 100)))
+        if (((primaryEnemy != None) and mapContainsKey(lw__engagementPlan, primaryEnemy._id)) and (lw_get(lw_get(lw__engagementPlan, primaryEnemy._id), 'mode') == 'rush_mage')):
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.3)))
+            lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 0.6)))
+            lw_put(adapted, 'shieldValue', floor(lw_mul(lw_get(adapted, 'shieldValue'), 0.4)))
+            if mapContainsKey(adapted, 'damageReturn'):
+                lw_put(adapted, 'damageReturn', 0)
+        if lw_get(primaryProfile, 'isBurstBuild'):
+            lw_put(adapted, 'shieldValue', floor(lw_div(lw_mul(lw_get(adapted, 'shieldValue'), lw_get(COUNTER_MULTS, 'vs_burst_shield')), 100)))
+            lw_put(adapted, 'healValue', floor(lw_div(lw_mul(lw_get(adapted, 'healValue'), lw_get(COUNTER_MULTS, 'vs_burst_heal')), 100)))
+            lw_put(adapted, 'threatReduction', floor(lw_div(lw_mul(lw_get(adapted, 'threatReduction'), lw_get(COUNTER_MULTS, 'vs_burst_threat')), 100)))
+            if (not lw_get(primaryProfile, 'hasShield')):
+                lw_put(adapted, 'burstDamage', floor(lw_div(lw_mul(lw_get(adapted, 'burstDamage'), lw_get(COUNTER_MULTS, 'vs_burst_burst')), 100)))
+        if ((lw__playerBuildType == BUILD_TANK_SCI) and ((lw_get(primaryProfile, 'isBurstBuild') or lw_get(primaryProfile, 'hasLifestealThreat')))):
+            lw_put(adapted, 'mpDenialTempo', 100)
+        if lw_get(primaryProfile, 'isTank'):
+            if mapContainsKey(adapted, 'novaEffects'):
+                lw_put(adapted, 'novaEffects', floor(lw_div(lw_mul(lw_get(adapted, 'novaEffects'), lw_get(COUNTER_MULTS, 'vs_tank_nova')), 100)))
+            if mapContainsKey(adapted, 'denialValue'):
+                lw_put(adapted, 'denialValue', floor(lw_div(lw_mul(lw_get(adapted, 'denialValue'), lw_get(COUNTER_MULTS, 'vs_tank_denial')), 100)))
+            if (mapContainsKey(adapted, 'dotEffects') and (lw_get(adapted, 'dotEffects') > 0)):
+                lw_put(adapted, 'dotEffects', floor(lw_div(lw_mul(lw_get(adapted, 'dotEffects'), lw_get(COUNTER_MULTS, 'vs_tank_dot')), 100)))
+        if ((((primaryEnemy != None) and (primaryEnemy._magic > 400)) and (lw__playerBuildType != BUILD_MAGIC)) and (lw__playerBuildType != BUILD_HYBRID)):
+            if mapContainsKey(adapted, 'kiteDistance'):
+                lw_put(adapted, 'kiteDistance', floor(lw_sub(lw_get(adapted, 'kiteDistance'), 200)))
+            if mapContainsKey(adapted, 'distanceToTarget'):
+                lw_put(adapted, 'distanceToTarget', floor(lw_sub(lw_get(adapted, 'distanceToTarget'), 30)))
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.25)))
+            lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 0.75)))
+            enemyRes = primaryEnemy._resistance
+            if ((lw_get(primaryProfile, 'hasPoison') and lw_get(primaryProfile, 'hasAntidote')) and (enemyRes >= 300)):
+                if mapContainsKey(adapted, 'damageReturn'):
+                    lw_put(adapted, 'damageReturn', floor(lw_mul(lw_get(adapted, 'damageReturn'), 0.25)))
+                lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.35)))
+                lw_put(adapted, 'shieldValue', floor(lw_mul(lw_get(adapted, 'shieldValue'), 0.4)))
+                lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 0.6)))
+        meEntity = getEntity()
+        poisonStackCount = 0
+        poisonTotalTick = 0
+        meEffects = getEffects(meEntity)
+        if (meEffects != None):
+            for meEff in lw_values(meEffects):
+                if ((lw_get(meEff, 0) == EFFECT_POISON) and (count(meEff) >= 2)):
+                    poisonStackCount = lw_add(poisonStackCount, 1)
+                    pVal = lw_get(meEff, 1)
+                    pRem = (lw_get(meEff, 3) if ((count(meEff) >= 4)) else 1)
+                    poisonTotalTick = lw_add(poisonTotalTick, lw_mul(pVal, max(1, pRem)))
+        meMaxHP = getTotalLife(meEntity)
+        if ((meMaxHP == None) or (meMaxHP <= 0)):
+            meMaxHP = 1
+        poisonRatioPct = lw_div(lw_mul(poisonTotalTick, 100), meMaxHP)
+        if ((poisonStackCount >= 3) and (poisonRatioPct >= 12)):
+            lw_put(adapted, 'shieldValue', floor(lw_mul(lw_get(adapted, 'shieldValue'), 1.5)))
+            lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 1.3)))
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.2)))
+            lw_put(adapted, 'otkoBonus', floor(lw_mul(lw_get(adapted, 'otkoBonus'), 1.3)))
+            if mapContainsKey(adapted, 'buffValue'):
+                lw_put(adapted, 'buffValue', floor(lw_mul(lw_get(adapted, 'buffValue'), 0.7)))
+        if lw_get(primaryProfile, 'hasReflect'):
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 0.85)))
+        if ((lw_get(primaryProfile, 'hasAntidote') and (POISON_PHASE == "BAIT")) and (lw__playerBuildType != BUILD_MAGIC)):
+            if ((not mapContainsKey(primaryProfile, 'doubleAntidoteCarrier')) or (not lw_get(primaryProfile, 'doubleAntidoteCarrier'))):
+                if mapContainsKey(adapted, 'dotEffects'):
+                    lw_put(adapted, 'dotEffects', floor(lw_mul(lw_get(adapted, 'dotEffects'), 1.15)))
+                if mapContainsKey(adapted, 'denialValue'):
+                    lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.15)))
+        if (not lw_get(primaryProfile, 'hasShield')):
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.1)))
+        if (not lw_get(primaryProfile, 'hasAntidote')):
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.15)))
+        if (((primaryProfile != None) and mapContainsKey(primaryProfile, 'doubleAntidoteCarrier')) and lw_get(primaryProfile, 'doubleAntidoteCarrier')):
+            if mapContainsKey(adapted, 'dotEffects'):
+                lw_put(adapted, 'dotEffects', floor(lw_mul(lw_get(adapted, 'dotEffects'), 0.6)))
+            if mapContainsKey(adapted, 'poisonStacks'):
+                lw_put(adapted, 'poisonStacks', floor(lw_mul(lw_get(adapted, 'poisonStacks'), 0.6)))
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.15)))
+            if mapContainsKey(adapted, 'denialValue'):
+                lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.15)))
+        if (lw_get(primaryProfile, 'hasReflect') and (primaryEnemy != None)):
+            reflectActive = primaryEnemy.hasDamageReturn()
+            if reflectActive:
+                reflectRemaining = primaryEnemy.getDamageReturnRemaining()
+                reflectMult = (85 if ((reflectRemaining <= 1)) else lw_get(COUNTER_MULTS, 'vs_reflect_on_burst'))
+                lw_put(adapted, 'burstDamage', floor(lw_div(lw_mul(lw_get(adapted, 'burstDamage'), reflectMult), 100)))
+                lw_put(adapted, 'shieldValue', floor(lw_div(lw_mul(lw_get(adapted, 'shieldValue'), lw_get(COUNTER_MULTS, 'vs_reflect_on_shield')), 100)))
+                lw_put(adapted, 'healValue', floor(lw_div(lw_mul(lw_get(adapted, 'healValue'), lw_get(COUNTER_MULTS, 'vs_reflect_on_heal')), 100)))
+            else:
+                lw_put(adapted, 'burstDamage', floor(lw_div(lw_mul(lw_get(adapted, 'burstDamage'), lw_get(COUNTER_MULTS, 'vs_reflect_off_burst')), 100)))
+        if lw_get(primaryProfile, 'hasLiberation'):
+            if mapContainsKey(adapted, 'damageReturn'):
+                lw_put(adapted, 'damageReturn', floor(lw_mul(lw_get(adapted, 'damageReturn'), 0.35)))
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.25)))
+            lw_put(adapted, 'otkoBonus', floor(lw_mul(lw_get(adapted, 'otkoBonus'), 1.15)))
+        if (primaryEnemy != None):
+            enemyId = primaryEnemy._id
+            if (lw_get(primaryProfile, 'hasShield') and (not isEnemyShieldAvailable(enemyId))):
+                lw_put(adapted, 'burstDamage', floor(lw_div(lw_mul(lw_get(adapted, 'burstDamage'), lw_get(COUNTER_MULTS, 'cd_shield_burst')), 100)))
+                lw_put(adapted, 'otkoBonus', floor(lw_div(lw_mul(lw_get(adapted, 'otkoBonus'), lw_get(COUNTER_MULTS, 'cd_shield_otko')), 100)))
+            if lw_get(primaryProfile, 'hasHeal'):
+                healAvail = predictChipAvailability(enemyId, 67)
+                if (not healAvail.isAvailable):
+                    lw_put(adapted, 'burstDamage', floor(lw_div(lw_mul(lw_get(adapted, 'burstDamage'), lw_get(COUNTER_MULTS, 'cd_heal_burst')), 100)))
+    if (primaryProfile != None):
+        enemyBuildType = lw_get(primaryProfile, 'buildType')
+        if ((enemyBuildType == lw__playerBuildType) and (enemyCount <= 1)):
+            entityId = getEntity()
+            if (lw_mod(entityId, 2) == 0):
+                lw_put(adapted, 'shieldValue', floor(lw_mul(lw_get(adapted, 'shieldValue'), 1.25)))
+                lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 1.20)))
+                lw_put(adapted, 'threatReduction', floor(lw_mul(lw_get(adapted, 'threatReduction'), 1.20)))
+                if mapContainsKey(adapted, 'kiteDistance'):
+                    lw_put(adapted, 'kiteDistance', floor(lw_mul(lw_get(adapted, 'kiteDistance'), 1.30)))
+            else:
+                lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.15)))
+                lw_put(adapted, 'distanceToTarget', floor(lw_mul(lw_get(adapted, 'distanceToTarget'), 1.3)))
+                if mapContainsKey(adapted, 'kiteDistance'):
+                    lw_put(adapted, 'kiteDistance', floor(lw_mul(lw_get(adapted, 'kiteDistance'), 0.7)))
+            if (lw__playerBuildType == BUILD_MAGIC):
+                if mapContainsKey(adapted, 'kiteDistance'):
+                    lw_put(adapted, 'kiteDistance', floor(lw_mul(lw_get(adapted, 'kiteDistance'), 0.5)))
+                if mapContainsKey(adapted, 'otkoBonus'):
+                    lw_put(adapted, 'otkoBonus', floor(lw_mul(lw_get(adapted, 'otkoBonus'), 1.4)))
+                if mapContainsKey(adapted, 'denialValue'):
+                    lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.2)))
+    if ((currentTurn > 20) and (primaryEnemy != None)):
+        swEnemyHp = primaryEnemy._currHealth
+        swEnemyMaxHp = primaryEnemy._maxHealth
+        if (((swEnemyHp != None) and (swEnemyMaxHp != None)) and (swEnemyHp > lw_mul(swEnemyMaxHp, 0.5))):
+            if mapContainsKey(adapted, 'novaEffects'):
+                lw_put(adapted, 'novaEffects', floor(lw_mul(lw_get(adapted, 'novaEffects'), 1.5)))
+            if mapContainsKey(adapted, 'denialValue'):
+                lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.5)))
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.15)))
+    if ((((primaryProfile != None) and (lw__playerBuildType == BUILD_MAGIC)) and mapContainsKey(primaryProfile, 'healPerTurn')) and (lw_get(primaryProfile, 'healPerTurn') >= 150)):
+        if mapContainsKey(adapted, 'denialValue'):
+            lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.25)))
+        if mapContainsKey(adapted, 'dotEffects'):
+            lw_put(adapted, 'dotEffects', floor(lw_mul(lw_get(adapted, 'dotEffects'), 1.15)))
+    if ((currentTurn >= 4) and (lw__raceVerdict == "LOSING")):
+        raceHasChangers = ((mapContainsKey(adapted, 'denialValue') or ((mapContainsKey(adapted, 'novaEffects') and (lw_get(adapted, 'novaEffects') > 0)))) or ((mapContainsKey(adapted, 'dotEffects') and (lw_get(adapted, 'dotEffects') > 0))))
+        if raceHasChangers:
+            if mapContainsKey(adapted, 'denialValue'):
+                lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.25)))
+            if (mapContainsKey(adapted, 'dotEffects') and (lw_get(adapted, 'dotEffects') > 0)):
+                lw_put(adapted, 'dotEffects', floor(lw_mul(lw_get(adapted, 'dotEffects'), 1.15)))
+            if mapContainsKey(adapted, 'novaEffects'):
+                lw_put(adapted, 'novaEffects', floor(lw_mul(lw_get(adapted, 'novaEffects'), 1.3)))
+            lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 1.15)))
+            lw_put(adapted, 'threatReduction', floor(lw_mul(lw_get(adapted, 'threatReduction'), 1.2)))
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 0.9)))
+        else:
+            lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.1)))
+            lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 1.1)))
+    else:
+        if ((lw__raceVerdict == "STALL") and (currentTurn > 12)):
+            if mapContainsKey(adapted, 'novaEffects'):
+                lw_put(adapted, 'novaEffects', floor(lw_mul(lw_get(adapted, 'novaEffects'), 1.4)))
+            if mapContainsKey(adapted, 'denialValue'):
+                lw_put(adapted, 'denialValue', floor(lw_mul(lw_get(adapted, 'denialValue'), 1.3)))
+        else:
+            if (((currentTurn >= 4) and (lw__raceVerdict == "WINNING")) and (lw__raceMargin >= 3)):
+                lw_put(adapted, 'healValue', floor(lw_mul(lw_get(adapted, 'healValue'), 0.85)))
+                lw_put(adapted, 'burstDamage', floor(lw_mul(lw_get(adapted, 'burstDamage'), 1.1)))
+    for wdbKey in lw_values(mapKeys(WEIGHT_DRIFT_BOUNDS)):
+        if ((not mapContainsKey(adapted, wdbKey)) or (not mapContainsKey(baseWeights, wdbKey))):
+            continue
+        wdbBase = lw_get(baseWeights, wdbKey)
+        if ((wdbBase == None) or (wdbBase <= 0)):
+            continue
+        wdbLo = floor(lw_mul(wdbBase, lw_get(lw_get(WEIGHT_DRIFT_BOUNDS, wdbKey), 0)))
+        wdbHi = floor(lw_mul(wdbBase, lw_get(lw_get(WEIGHT_DRIFT_BOUNDS, wdbKey), 1)))
+        if (lw_get(adapted, wdbKey) < wdbLo):
+            lw_put(adapted, wdbKey, wdbLo)
+        if (lw_get(adapted, wdbKey) > wdbHi):
+            lw_put(adapted, wdbKey, wdbHi)
+    return adapted
+
+def calculateAverageThreat(playerCell, enemies, fieldMap):
+    totalThreat = 0
+    threatCount = 0
+    for enemyId in lw_values(mapKeys(enemies)):
+        enemy = lw_get(enemies, enemyId)
+        if isDead(enemyId):
+            continue
+        enemyPos = enemy._cellPos
+        dist = getCellDistance(playerCell, enemyPos)
+        if ((dist != None) and (dist <= 15)):
+            threat = estimateEnemyThreat(enemy)
+            totalThreat = lw_add(totalThreat, threat)
+            threatCount = lw_add(threatCount, 1)
+    if (threatCount == 0):
+        return 0
+    return lw_div(totalThreat, threatCount)
+
+def estimateEnemyThreat(enemy):
+    weapons = getWeapons(enemy._id)
+    maxThreat = 0
+    for weaponId in lw_values(weapons):
+        effects = getWeaponEffects(weaponId)
+        for eff in lw_values(effects):
+            if (lw_get(eff, 0) == EFFECT_DAMAGE):
+                avgDmg = lw_div((lw_add(lw_get(eff, 1), lw_get(eff, 2))), 2)
+                scaledDmg = lw_mul(avgDmg, (lw_add(1, lw_div(enemy._strength, 100))))
+                if (scaledDmg > maxThreat):
+                    maxThreat = scaledDmg
+    return lw_mul(maxThreat, 3)
+
+def getAdaptedWeights(buildType, player, enemies, fieldMap):
+    baseWeights = getWeightsForBuild(buildType, player)
+    adapted = adaptWeightsToSituation(baseWeights, player, enemies, fieldMap)
+    return adapted
+
+def shouldPrioritizeDefense(player, enemies):
+    hpPercent = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+    enemyCount = count(mapKeys(enemies))
+    if (hpPercent < 30):
+        return True
+    if ((hpPercent < 50) and (enemyCount >= 2)):
+        return True
+    return False
+
+def shouldPrioritizeAggression(player, target):
+    targetHPPercent = lw_div((lw_mul(target._currHealth, 100)), target._maxHealth)
+    playerHPPercent = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+    if ((targetHPPercent < 40) and (playerHPPercent > 50)):
+        return True
+    if (playerHPPercent > lw_add(targetHPPercent, 30)):
+        return True
+    return False
+
+
+# ════════ boss_context.lk ════════
+_bossPhase = None
+_graalEntity = None
+_crystalMap = {}
+_myAssignedCrystal = None
+_bossTargetEID = None
+_usedInversion = False
+_isBossFight = False
+_puzzleRole = None
+_puzzleSolverID = (-1)
+_graalCell = (-1)
+_graalX = 0
+_graalY = 0
+_myCrystalCell = (-1)
+_myCrystalX = 0
+_myCrystalY = 0
+_myCrystalColor = None
+_myCrystalGoalAxis = None
+_myCrystalSolved = False
+def detectBossFight():
+    entities = getAliveEnemies()
+    for eid in lw_values(entities):
+        entityType = getName(eid)
+        if (entityType == "graal"):
+            return True
+    return False
+
+def initBossContext():
+    global _isBossFight
+    _isBossFight = True
+    updateBossContext()
+
+def updateBossContext():
+    global _bossPhase, _bossTargetEID, _crystalMap, _graalCell, _graalEntity, _graalX, _graalY, _myAssignedCrystal, _puzzleRole, _puzzleSolverID
+    if (not _isBossFight):
+        return None
+    _graalEntity = None
+    _graalCell = (-1)
+    _graalX = 0
+    _graalY = 0
+    _crystalMap = {}
+    allEntities = []
+    enemies = getAliveEnemies()
+    for eid in lw_values(enemies):
+        push(allEntities, eid)
+    allies = getAliveAllies()
+    for aid in lw_values(allies):
+        push(allEntities, aid)
+    for eid in lw_values(allEntities):
+        entityType = getName(eid)
+        cellId = getCell(eid)
+        if (entityType == "graal"):
+            _graalEntity = {'id': eid, 'cell': cellId, 'x': getCellX(cellId), 'y': getCellY(cellId)}
+            _graalCell = cellId
+            _graalX = getCellX(cellId)
+            _graalY = getCellY(cellId)
+        else:
+            if ((((entityType == "red_crystal") or (entityType == "blue_crystal")) or (entityType == "yellow_crystal")) or (entityType == "green_crystal")):
+                color = substring(entityType, 0, indexOf(entityType, "_"))
+                goalAxis = getGoalAxis(color)
+                lw_put(_crystalMap, eid, {'id': eid, 'color': color, 'goalAxis': goalAxis, 'cell': cellId, 'x': getCellX(cellId), 'y': getCellY(cellId), 'solved': False})
+    if (_graalEntity != None):
+        _bossPhase = "PUZZLE"
+    else:
+        _bossPhase = "COMBAT"
+    if (_bossPhase == "PUZZLE"):
+        assignPuzzleRoles()
+        if (_puzzleRole == "SOLVER"):
+            assignSolverCrystal()
+        else:
+            _myAssignedCrystal = None
+            _bossTargetEID = None
+            clearCrystalScalars()
+    else:
+        _puzzleRole = None
+        _puzzleSolverID = (-1)
+        _myAssignedCrystal = None
+        _bossTargetEID = None
+        clearCrystalScalars()
+
+def getBossPhase():
+    return _bossPhase
+
+def syncCrystalScalars(crystal):
+    global _myCrystalCell, _myCrystalColor, _myCrystalGoalAxis, _myCrystalSolved, _myCrystalX, _myCrystalY
+    _myCrystalCell = lw_get(crystal, 'cell')
+    _myCrystalX = lw_get(crystal, 'x')
+    _myCrystalY = lw_get(crystal, 'y')
+    _myCrystalColor = lw_get(crystal, 'color')
+    _myCrystalGoalAxis = lw_get(crystal, 'goalAxis')
+    _myCrystalSolved = lw_get(crystal, 'solved')
+
+def clearCrystalScalars():
+    global _myCrystalCell, _myCrystalColor, _myCrystalGoalAxis, _myCrystalSolved, _myCrystalX, _myCrystalY
+    _myCrystalCell = (-1)
+    _myCrystalX = 0
+    _myCrystalY = 0
+    _myCrystalColor = None
+    _myCrystalGoalAxis = None
+    _myCrystalSolved = False
+
+def isCellSolvedForAxis(cell, goalAxis):
+    if (((_graalCell == (-1)) or (cell == None)) or (cell < 0)):
+        return False
+    cx = getCellX(cell)
+    cy = getCellY(cell)
+    return (checkOnAxis(cx, cy, _graalX, _graalY, goalAxis) and lineOfSight(cell, _graalCell))
+
+def allyHasChip(eid, chipId):
+    cd = getCooldown(chipId, eid)
+    return (cd != None)
+
+def assignPuzzleRoles():
+    global _puzzleRole, _puzzleSolverID
+    if (_bossPhase != "PUZZLE"):
+        _puzzleRole = None
+        _puzzleSolverID = (-1)
+        return None
+    myID = getEntity()
+    allAllies = [myID]
+    allies = getAliveAllies()
+    for aid in lw_values(allies):
+        push(allAllies, aid)
+    if (count(allAllies) <= 1):
+        _puzzleRole = "SOLVER"
+        _puzzleSolverID = myID
+        return None
+    solverID = (-1)
+    bufferID = (-1)
+    for aid in lw_values(allAllies):
+        name = getName(aid)
+        if (name == "AdaLovelace"):
+            solverID = aid
+        else:
+            if (name == "KurtGodel"):
+                bufferID = aid
+    if (solverID == (-1)):
+        solverID = lw_get(allAllies, 0)
+    _puzzleSolverID = solverID
+    if (myID == bufferID):
+        _puzzleRole = "BUFFER"
+    else:
+        if (myID == solverID):
+            _puzzleRole = "SOLVER"
+        else:
+            _puzzleRole = "SUPPORT"
+
+def assignSolverCrystal():
+    global _bossTargetEID, _myAssignedCrystal
+    myCell = getCell()
+    bestDist = 999
+    bestEID = None
+    for eid in lw_values(mapKeys(_crystalMap)):
+        cData = lw_get(_crystalMap, eid)
+        if isCrystalSolved(cData):
+            continue
+        d = getCellDistance(myCell, lw_get(cData, 'cell'))
+        if (d < bestDist):
+            bestDist = d
+            bestEID = eid
+    if (bestEID != None):
+        _myAssignedCrystal = lw_get(_crystalMap, bestEID)
+        _bossTargetEID = bestEID
+        syncCrystalScalars(lw_get(_crystalMap, bestEID))
+    else:
+        _myAssignedCrystal = None
+        _bossTargetEID = None
+        clearCrystalScalars()
+
+def pickNearestUnsolvedCrystal(myCell):
+    bestDist = 999
+    bestEID = None
+    for eid in lw_values(mapKeys(_crystalMap)):
+        cData = lw_get(_crystalMap, eid)
+        cCell = lw_get(cData, 'cell')
+        if isCellSolvedForAxis(cCell, lw_get(cData, 'goalAxis')):
+            continue
+        d = getCellDistance(myCell, cCell)
+        if (d < bestDist):
+            bestDist = d
+            bestEID = eid
+    return bestEID
+
+def getGoalAxis(color):
+    if (color == "red"):
+        return "south"
+    if (color == "blue"):
+        return "east"
+    if (color == "yellow"):
+        return "west"
+    if (color == "green"):
+        return "north"
+    return "unknown"
+
+def isOnGoalAxis(crystal):
+    if (_graalCell == (-1)):
+        return False
+    axis = lw_get(crystal, 'goalAxis')
+    cx = lw_get(crystal, 'x')
+    cy = lw_get(crystal, 'y')
+    gx = _graalX
+    gy = _graalY
+    if (axis == "north"):
+        return ((cx == gx) and (cy < gy))
+    else:
+        if (axis == "south"):
+            return ((cx == gx) and (cy > gy))
+        else:
+            if (axis == "east"):
+                return ((cy == gy) and (cx > gx))
+            else:
+                if (axis == "west"):
+                    return ((cy == gy) and (cx < gx))
+    return False
+
+def hasLOSToGraal(crystal):
+    if (_graalCell == (-1)):
+        return False
+    return lineOfSight(lw_get(crystal, 'cell'), _graalCell)
+
+def isCrystalSolved(crystal):
+    return isCellSolvedForAxis(lw_get(crystal, 'cell'), lw_get(crystal, 'goalAxis'))
+
+def getDistanceToAxis(ignoredCrystal):
+    if (_graalCell == (-1)):
+        return 999
+    axis = _myCrystalGoalAxis
+    cx = _myCrystalX
+    cy = _myCrystalY
+    gx = _graalX
+    gy = _graalY
+    if ((axis == "north") or (axis == "south")):
+        return abs(lw_sub(cx, gx))
+    else:
+        return abs(lw_sub(cy, gy))
+
+def getDirectionToSlide(ignoredCrystal):
+    if (_graalCell == (-1)):
+        return None
+    axis = _myCrystalGoalAxis
+    cx = _myCrystalX
+    cy = _myCrystalY
+    gx = _graalX
+    gy = _graalY
+    if ((axis == "north") or (axis == "south")):
+        if (cx < gx):
+            return "pull"
+        if (cx > gx):
+            return "push"
+        if ((axis == "north") and (cy >= gy)):
+            return "push"
+        if ((axis == "south") and (cy <= gy)):
+            return "pull"
+    else:
+        if (cy < gy):
+            return "pull"
+        if (cy > gy):
+            return "push"
+        if ((axis == "east") and (cx <= gx)):
+            return "pull"
+        if ((axis == "west") and (cx >= gx)):
+            return "push"
+    return None
+
+def getTargetAxisCell(ignoredCrystal):
+    if (_graalCell == (-1)):
+        return (-1)
+    axis = _myCrystalGoalAxis
+    gx = _graalX
+    gy = _graalY
+    tx = gx
+    ty = gy
+    if (axis == "south"):
+        ty = lw_add(gy, 1)
+    else:
+        if (axis == "north"):
+            ty = lw_sub(gy, 1)
+        else:
+            if (axis == "east"):
+                tx = lw_add(gx, 1)
+            else:
+                if (axis == "west"):
+                    tx = lw_sub(gx, 1)
+    cell = getCellFromXY(tx, ty)
+    if ((cell != None) and (not isObstacle(cell))):
+        return cell
+    d = 2
+    while (d <= 8):
+        sx = gx
+        sy = gy
+        if (axis == "south"):
+            sy = lw_add(gy, d)
+        else:
+            if (axis == "north"):
+                sy = lw_sub(gy, d)
+            else:
+                if (axis == "east"):
+                    sx = lw_add(gx, d)
+                else:
+                    if (axis == "west"):
+                        sx = lw_sub(gx, d)
+        scanCell = getCellFromXY(sx, sy)
+        if (((scanCell != None) and (not isObstacle(scanCell))) and lineOfSight(scanCell, _graalCell)):
+            return scanCell
+        d = lw_add(d, 1)
+    return (-1)
+
+def computePullDirection(cx, cy, playerCell):
+    px = getCellX(playerCell)
+    py = getCellY(playerCell)
+    dx = 0
+    dy = 0
+    if (px < cx):
+        dx = (-1)
+    else:
+        if (px > cx):
+            dx = 1
+    if (py < cy):
+        dy = (-1)
+    else:
+        if (py > cy):
+            dy = 1
+    return [dx, dy]
+
+def computePushDirection(cx, cy, playerCell):
+    px = getCellX(playerCell)
+    py = getCellY(playerCell)
+    dx = 0
+    dy = 0
+    if (px < cx):
+        dx = 1
+    else:
+        if (px > cx):
+            dx = (-1)
+    if (py < cy):
+        dy = 1
+    else:
+        if (py > cy):
+            dy = (-1)
+    return [dx, dy]
+
+def computeAxisDist(cx, cy, gx, gy, goalAxis):
+    if ((goalAxis == "north") or (goalAxis == "south")):
+        return abs(lw_sub(cx, gx))
+    else:
+        return abs(lw_sub(cy, gy))
+
+def checkOnAxis(cx, cy, gx, gy, goalAxis):
+    if (goalAxis == "north"):
+        return ((cx == gx) and (cy < gy))
+    if (goalAxis == "south"):
+        return ((cx == gx) and (cy > gy))
+    if (goalAxis == "east"):
+        return ((cy == gy) and (cx > gx))
+    if (goalAxis == "west"):
+        return ((cy == gy) and (cx < gx))
+    return False
+
+def computeCrystalFinalDest():
+    axis = _myCrystalGoalAxis
+    gx = _graalX
+    gy = _graalY
+    if (axis == "north"):
+        return getCellFromXY(gx, lw_sub(gy, 1))
+    if (axis == "south"):
+        return getCellFromXY(gx, lw_add(gy, 1))
+    if (axis == "east"):
+        return getCellFromXY(lw_add(gx, 1), gy)
+    if (axis == "west"):
+        return getCellFromXY(lw_sub(gx, 1), gy)
+    return None
+
+def computeCrystalAxisDest():
+    axis = _myCrystalGoalAxis
+    if ((axis == "north") or (axis == "south")):
+        return getCellFromXY(_graalX, _myCrystalY)
+    else:
+        return getCellFromXY(_myCrystalX, _graalY)
+
+def isCrystalOnAxis():
+    axis = _myCrystalGoalAxis
+    if (axis == "north"):
+        return ((_myCrystalX == _graalX) and (_myCrystalY < _graalY))
+    if (axis == "south"):
+        return ((_myCrystalX == _graalX) and (_myCrystalY > _graalY))
+    if (axis == "east"):
+        return ((_myCrystalY == _graalY) and (_myCrystalX > _graalX))
+    if (axis == "west"):
+        return ((_myCrystalY == _graalY) and (_myCrystalX < _graalX))
+    return False
+
+def findIdealSlideCell(ignoredCrystal, direction, playerCell):
+    if ((_myCrystalCell == (-1)) or (_graalCell == (-1))):
+        return (-1)
+    axis = _myCrystalGoalAxis
+    cx = _myCrystalX
+    cy = _myCrystalY
+    moveAxis = ("x" if (((axis == "north") or (axis == "south"))) else "y")
+    delta = ((lw_sub(_graalX, cx)) if ((moveAxis == "x")) else (lw_sub(_graalY, cy)))
+    absDelta = abs(delta)
+    sign = (1 if ((delta > 0)) else (-1))
+    if (direction == "pull"):
+        destX = (_graalX if ((moveAxis == "x")) else cx)
+        destY = (_graalY if ((moveAxis == "y")) else cy)
+        maxD = lw_sub(8, absDelta)
+        d = 1
+        while (d <= maxD):
+            tx = destX
+            ty = destY
+            if (moveAxis == "x"):
+                tx = lw_add(destX, lw_mul(sign, d))
+            else:
+                ty = lw_add(destY, lw_mul(sign, d))
+            cell = getCellFromXY(tx, ty)
+            if (cell == None):
+                d = lw_add(d, 1)
+                continue
+            if isObstacle(cell):
+                d = lw_add(d, 1)
+                continue
+            if ((cell != playerCell) and isEntity(cell)):
+                d = lw_add(d, 1)
+                continue
+            return cell
+            d = lw_add(d, 1)
+    else:
+        d = 2
+        while (d <= 8):
+            tx = cx
+            ty = cy
+            if (moveAxis == "x"):
+                tx = lw_sub(cx, lw_mul(sign, d))
+            else:
+                ty = lw_sub(cy, lw_mul(sign, d))
+            cell = getCellFromXY(tx, ty)
+            if (cell == None):
+                d = lw_add(d, 1)
+                continue
+            if isObstacle(cell):
+                d = lw_add(d, 1)
+                continue
+            if ((cell != playerCell) and isEntity(cell)):
+                d = lw_add(d, 1)
+                continue
+            return cell
+            d = lw_add(d, 1)
+    return (-1)
+
+def selectCombatTarget(fieldMapObj):
+    enemies = getAliveEnemies()
+    if (count(enemies) == 0):
+        return None
+    priority = ["fennel_king", "fennel_knight", "fennel_scribe", "fennel_squire"]
+    for pName in lw_values(priority):
+        for eid in lw_values(enemies):
+            if (getName(eid) == pName):
+                enemySub = fieldMapObj.getEnemySubMap()
+                if mapContainsKey(enemySub, eid):
+                    return lw_get(enemySub, eid)
+    bestTarget = None
+    bestHP = 999999
+    for eid in lw_values(enemies):
+        hp = getLife(eid)
+        if (hp < bestHP):
+            bestHP = hp
+            bestTarget = eid
+    if (bestTarget != None):
+        enemySub = fieldMapObj.getEnemySubMap()
+        if mapContainsKey(enemySub, bestTarget):
+            return lw_get(enemySub, bestTarget)
+    return None
+
+def isCrystalEntity(eid):
+    return mapContainsKey(_crystalMap, eid)
+
+def bossDiag(myCell):
+    say(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("B1 PH=", _bossPhase), " R="), _puzzleRole), " SID="), _puzzleSolverID), " EID="), _bossTargetEID), " me="), myCell))
+
+def hasEntityBlockingLine(fromCell, toCell):
+    dTotal = getCellDistance(fromCell, toCell)
+    if ((dTotal == None) or (dTotal <= 1)):
+        return False
+    enemies = getAliveEnemies()
+    for eid in lw_values(enemies):
+        if (eid == _bossTargetEID):
+            continue
+        eCell = getCell(eid)
+        if ((eCell == fromCell) or (eCell == toCell)):
+            continue
+        if (isOnSameLine(fromCell, eCell) and isOnSameLine(eCell, toCell)):
+            d1 = getCellDistance(fromCell, eCell)
+            d2 = getCellDistance(eCell, toCell)
+            if (lw_add(d1, d2) == dTotal):
+                return True
+    allies = getAliveAllies()
+    for aid in lw_values(allies):
+        aCell = getCell(aid)
+        if ((aCell == fromCell) or (aCell == toCell)):
+            continue
+        if (isOnSameLine(fromCell, aCell) and isOnSameLine(aCell, toCell)):
+            d1 = getCellDistance(fromCell, aCell)
+            d2 = getCellDistance(aCell, toCell)
+            if (lw_add(d1, d2) == dTotal):
+                return True
+    return False
+
+def diagNext(cell, step):
+    next = lw_add(cell, step)
+    if ((next < 0) or (next > 612)):
+        return (-1)
+    if (getCellDistance(cell, next) != 1):
+        return (-1)
+    return next
+
+def walkDiag(startCell, step, numSteps):
+    cell = startCell
+    i = 0
+    while (i < numSteps):
+        cell = diagNext(cell, step)
+        if (cell == (-1)):
+            return (-1)
+        i = lw_add(i, 1)
+    return cell
+
+def findBoxStand(crystalCell, step, myCell):
+    pos = crystalCell
+    firstStand = (-1)
+    myCellValid = False
+    k = 1
+    while (k <= 8):
+        next = diagNext(pos, (-lw_num(step)))
+        if (next == (-1)):
+            break
+        pos = next
+        if isObstacle(pos):
+            break
+        if ((pos != myCell) and isEntity(pos)):
+            break
+        if (k >= 2):
+            if (firstStand == (-1)):
+                firstStand = pos
+            if (pos == myCell):
+                myCellValid = True
+                break
+        k = lw_add(k, 1)
+    if myCellValid:
+        return myCell
+    return firstStand
+
+def findGrapStand(targetCell, step, crystalSteps, myCell):
+    pos = targetCell
+    firstStand = (-1)
+    myCellValid = False
+    j = 1
+    while (j <= lw_sub(8, crystalSteps)):
+        next = diagNext(pos, step)
+        if (next == (-1)):
+            break
+        pos = next
+        if isObstacle(pos):
+            break
+        if ((pos != myCell) and isEntity(pos)):
+            break
+        if (firstStand == (-1)):
+            firstStand = pos
+        if (pos == myCell):
+            myCellValid = True
+            break
+        j = lw_add(j, 1)
+    if myCellValid:
+        return myCell
+    return firstStand
+
+def findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, excludeStep):
+    crystalX = getCellX(crystalCell)
+    crystalY = getCellY(crystalCell)
+    fx = getCellX(finalDest)
+    fy = getCellY(finalDest)
+    dx = lw_sub(fx, crystalX)
+    dy = lw_sub(fy, crystalY)
+    curManhattan = lw_add(abs(dx), abs(dy))
+    steps = [18, (-18), 17, (-17)]
+    sdxs = [1, (-1), 0, 0]
+    sdys = [0, 0, 1, (-1)]
+    bestScore = (-999)
+    bestStand = (-1)
+    bestChip = None
+    bestTarget = (-1)
+    bestNavDist = 999
+    bestStep = 0
+    si = 0
+    while (si < 4):
+        step = lw_get(steps, si)
+        sdx = lw_get(sdxs, si)
+        sdy = lw_get(sdys, si)
+        if ((excludeStep != 0) and (step == excludeStep)):
+            si = lw_add(si, 1)
+            continue
+        maxClear = 0
+        pos = crystalCell
+        d = 1
+        while (d <= 8):
+            next = diagNext(pos, step)
+            if (next == (-1)):
+                break
+            pos = next
+            if isObstacle(pos):
+                break
+            if (pos == _graalCell):
+                break
+            if ((pos != finalDest) and isEntity(pos)):
+                break
+            maxClear = d
+            d = lw_add(d, 1)
+        if (maxClear == 0):
+            si = lw_add(si, 1)
+            continue
+        bestD = 0
+        bestImprove = (-999)
+        d = 1
+        while (d <= maxClear):
+            newManhattan = lw_add(abs(lw_sub(dx, lw_mul(sdx, d))), abs(lw_sub(dy, lw_mul(sdy, d))))
+            improve = lw_sub(curManhattan, newManhattan)
+            if (improve > bestImprove):
+                bestImprove = improve
+                bestD = d
+            d = lw_add(d, 1)
+        if ((bestD == 0) or (bestImprove <= 0)):
+            si = lw_add(si, 1)
+            continue
+        newCX = lw_add(crystalX, lw_mul(sdx, bestD))
+        newCY = lw_add(crystalY, lw_mul(sdy, bestD))
+        goalAxis = _myCrystalGoalAxis
+        trapped = False
+        if (((goalAxis == "north") and (newCX == _graalX)) and (newCY >= _graalY)):
+            trapped = True
+        if (((goalAxis == "south") and (newCX == _graalX)) and (newCY <= _graalY)):
+            trapped = True
+        if (((goalAxis == "east") and (newCY == _graalY)) and (newCX <= _graalX)):
+            trapped = True
+        if (((goalAxis == "west") and (newCY == _graalY)) and (newCX >= _graalX)):
+            trapped = True
+        if trapped:
+            bestD = lw_sub(bestD, 1)
+            if (bestD <= 0):
+                si = lw_add(si, 1)
+                continue
+            bestImprove = lw_sub(curManhattan, (lw_add(abs(lw_sub(dx, lw_mul(sdx, bestD))), abs(lw_sub(dy, lw_mul(sdy, bestD))))))
+            if (bestImprove <= 0):
+                si = lw_add(si, 1)
+                continue
+            newCX = lw_add(crystalX, lw_mul(sdx, bestD))
+            newCY = lw_add(crystalY, lw_mul(sdy, bestD))
+        targetCell = lw_add(crystalCell, lw_mul(step, bestD))
+        if (boxUsed < 4):
+            boxStand = findBoxStand(crystalCell, step, myCell)
+            if (boxStand != (-1)):
+                dBox = getCellDistance(myCell, boxStand)
+                if ((bestImprove > bestScore) or (((bestImprove == bestScore) and (dBox < bestNavDist)))):
+                    bestScore = bestImprove
+                    bestStand = boxStand
+                    bestChip = CHIP_BOXING_GLOVE
+                    bestTarget = targetCell
+                    bestNavDist = dBox
+                    bestStep = step
+        if (grapUsed < 4):
+            grapStand = findGrapStand(targetCell, step, bestD, myCell)
+            if (grapStand != (-1)):
+                dGrap = getCellDistance(myCell, grapStand)
+                if ((bestImprove > bestScore) or (((bestImprove == bestScore) and (dGrap < bestNavDist)))):
+                    bestScore = bestImprove
+                    bestStand = grapStand
+                    bestChip = CHIP_GRAPPLE
+                    bestTarget = targetCell
+                    bestNavDist = dGrap
+                    bestStep = step
+        si = lw_add(si, 1)
+    if (bestStand == (-1)):
+        return None
+    return {'stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': bestScore, 'step': bestStep}
+
+def hasImprovingPath(fromCell, finalDest, excludeStep):
+    fromX = getCellX(fromCell)
+    fromY = getCellY(fromCell)
+    fx = getCellX(finalDest)
+    fy = getCellY(finalDest)
+    curManhattan = lw_add(abs(lw_sub(fx, fromX)), abs(lw_sub(fy, fromY)))
+    steps = [18, (-18), 17, (-17)]
+    sdxs = [1, (-1), 0, 0]
+    sdys = [0, 0, 1, (-1)]
+    si = 0
+    while (si < 4):
+        step = lw_get(steps, si)
+        if ((excludeStep != 0) and (step == excludeStep)):
+            si = lw_add(si, 1)
+            continue
+        next = diagNext(fromCell, step)
+        if (next == (-1)):
+            si = lw_add(si, 1)
+            continue
+        if isObstacle(next):
+            si = lw_add(si, 1)
+            continue
+        if (next == _graalCell):
+            si = lw_add(si, 1)
+            continue
+        newManhattan = lw_add(abs(lw_sub(lw_sub(fx, fromX), lw_get(sdxs, si))), abs(lw_sub(lw_sub(fy, fromY), lw_get(sdys, si))))
+        if (newManhattan < curManhattan):
+            return True
+        si = lw_add(si, 1)
+    return False
+
+def findDetourMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, excludeStep):
+    steps = [18, (-18), 17, (-17)]
+    bestStand = (-1)
+    bestChip = None
+    bestTarget = (-1)
+    bestNavDist = 999
+    bestStep = 0
+    si = 0
+    while (si < 4):
+        step = lw_get(steps, si)
+        if ((excludeStep != 0) and (step == excludeStep)):
+            si = lw_add(si, 1)
+            continue
+        next = diagNext(crystalCell, step)
+        if (next == (-1)):
+            si = lw_add(si, 1)
+            continue
+        if isObstacle(next):
+            si = lw_add(si, 1)
+            continue
+        if (next == _graalCell):
+            si = lw_add(si, 1)
+            continue
+        if isEntity(next):
+            si = lw_add(si, 1)
+            continue
+        if (not hasImprovingPath(next, finalDest, (-lw_num(step)))):
+            si = lw_add(si, 1)
+            continue
+        if (boxUsed < 4):
+            boxStand = findBoxStand(crystalCell, step, myCell)
+            if (boxStand != (-1)):
+                dBox = getCellDistance(myCell, boxStand)
+                if ((bestStand == (-1)) or (dBox < bestNavDist)):
+                    bestStand = boxStand
+                    bestChip = CHIP_BOXING_GLOVE
+                    bestTarget = next
+                    bestNavDist = dBox
+                    bestStep = step
+        if (grapUsed < 4):
+            grapStand = findGrapStand(next, step, 1, myCell)
+            if (grapStand != (-1)):
+                dGrap = getCellDistance(myCell, grapStand)
+                if ((bestStand == (-1)) or (dGrap < bestNavDist)):
+                    bestStand = grapStand
+                    bestChip = CHIP_GRAPPLE
+                    bestTarget = next
+                    bestNavDist = dGrap
+                    bestStep = step
+        si = lw_add(si, 1)
+    if (bestStand == (-1)):
+        return None
+    return {'stand': bestStand, 'chip': bestChip, 'target': bestTarget, 'score': 0, 'step': bestStep}
+
+def getEnclaveCells():
+    visited = {}
+    queue = [_graalCell]
+    lw_put(visited, _graalCell, True)
+    for ceid in lw_values(mapKeys(_crystalMap)):
+        cCell = lw_get(lw_get(_crystalMap, ceid), 'cell')
+        lw_put(visited, cCell, True)
+    idx = 0
+    while (idx < count(queue)):
+        cell = lw_get(queue, idx)
+        idx = lw_add(idx, 1)
+        steps = [17, (-17), 18, (-18)]
+        for s in lw_values(steps):
+            next = lw_add(cell, s)
+            if ((next < 0) or (next > 612)):
+                continue
+            if mapContainsKey(visited, next):
+                continue
+            if (getCellDistance(cell, next) != 1):
+                continue
+            if isObstacle(next):
+                continue
+            lw_put(visited, next, True)
+            push(queue, next)
+    return queue
+
+def findNearestEnclaveCell(myCell):
+    enclave = getEnclaveCells()
+    bestCell = (-1)
+    bestDist = 999
+    for cell in lw_values(enclave):
+        d = getCellDistance(myCell, cell)
+        if (d < bestDist):
+            bestDist = d
+            bestCell = cell
+    return bestCell
+
+def findTeleportTarget(crystalCell, myCell):
+    queue = getEnclaveCells()
+    bestCell = (-1)
+    bestDist = 999
+    for cell in lw_values(queue):
+        if isEntity(cell):
+            continue
+        dFromMe = getCellDistance(myCell, cell)
+        if ((dFromMe < 1) or (dFromMe > 12)):
+            continue
+        dFromCrystal = getCellDistance(crystalCell, cell)
+        if (dFromCrystal < bestDist):
+            bestDist = dFromCrystal
+            bestCell = cell
+    return bestCell
+
+def logMapLayout():
+    obstacles = getObstacles()
+    obsSet = {}
+    for o in lw_values(obstacles):
+        lw_put(obsSet, o, True)
+    cellId = 0
+    row = 0
+    while (row < 35):
+        rowSize = (18 if ((lw_mod(row, 2) == 0)) else 17)
+        line = ""
+        if (lw_mod(row, 2) != 0):
+            line = lw_add(line, "   ")
+        col = 0
+        while (col < rowSize):
+            if mapContainsKey(obsSet, cellId):
+                line = lw_add(line, "  X  ")
+            else:
+                if (cellId < 10):
+                    line = lw_add(line, lw_add(lw_add("  ", cellId), "  "))
+                else:
+                    if (cellId < 100):
+                        line = lw_add(line, lw_add(lw_add(" ", cellId), "  "))
+                    else:
+                        line = lw_add(line, lw_add(lw_add(" ", cellId), " "))
+            cellId = lw_add(cellId, 1)
+            col = lw_add(col, 1)
+        debug(line)
+        row = lw_add(row, 1)
+
+def executePuzzleTurn():
+    if (_puzzleRole == "SOLVER"):
+        return executeSolverPuzzleTurn()
+    if (_puzzleRole == "BUFFER"):
+        return executeBufferPuzzleTurn()
+    if (_puzzleRole == "SUPPORT"):
+        return executeSupportPuzzleTurn()
+    return False
+
+def findEmptyCellNear(targetCell, fromCell, maxRange):
+    offsets = [0, 17, (-17), 18, (-18), 34, (-34), 35, (-35), 36, (-36), 1, (-1)]
+    bestCell = (-1)
+    bestDist = 999
+    for off in lw_values(offsets):
+        cell = lw_add(targetCell, off)
+        if ((cell < 0) or (cell > 612)):
+            continue
+        if isObstacle(cell):
+            continue
+        if ((cell != fromCell) and isEntity(cell)):
+            continue
+        dFrom = getCellDistance(fromCell, cell)
+        if (((dFrom == None) or (dFrom < 1)) or (dFrom > maxRange)):
+            continue
+        dTo = getCellDistance(cell, targetCell)
+        if (dTo < bestDist):
+            bestDist = dTo
+            bestCell = cell
+    return bestCell
+
+def puzzleGatherMove(gathererID, targetSolverCell):
+    moveTowardCell(targetSolverCell)
+    gatherCell = getCell()
+    gatherDist = getCellDistance(gatherCell, targetSolverCell)
+    if ((gatherDist > 5) and (getTurn() >= 2)):
+        gTpCd = getCooldown(CHIP_TELEPORTATION, gathererID)
+        if (((gTpCd != None) and (gTpCd == 0)) and (getTP() >= 9)):
+            tpCell = findEmptyCellNear(targetSolverCell, gatherCell, 12)
+            if (tpCell != (-1)):
+                useChipOnCell(CHIP_TELEPORTATION, tpCell)
+
+def castBuffsOnSolver(myID, buffList):
+    solverCell = getCell(_puzzleSolverID)
+    dist = getCellDistance(getCell(), solverCell)
+    for buff in lw_values(buffList):
+        chip = lw_get(buff, 0)
+        range = lw_get(buff, 1)
+        cost = lw_get(buff, 2)
+        label = lw_get(buff, 3)
+        if (not allyHasChip(myID, chip)):
+            continue
+        cd = getCooldown(chip, myID)
+        if ((((cd != None) and (cd == 0)) and (getTP() >= cost)) and (dist <= range)):
+            if (useChip(chip, _puzzleSolverID) == 1):
+                say(lw_add(lw_add("PZ BUFF ", label), " -> solver"))
+
+def solverSelfBuff(slMyID):
+    selfBuffs = [[CHIP_KNOWLEDGE, 5], [CHIP_ELEVATION, 6], [CHIP_ARMORING, 5], [CHIP_LEATHER_BOOTS, 3], [CHIP_ADRENALINE, 1]]
+    for buff in lw_values(selfBuffs):
+        chip = lw_get(buff, 0)
+        cost = lw_get(buff, 1)
+        if (getTP() < cost):
+            continue
+        cd = getCooldown(chip, slMyID)
+        if ((cd != None) and (cd == 0)):
+            useChip(chip, slMyID)
+
+def executeBufferPuzzleTurn():
+    myID = getEntity()
+    if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
+        say("PZ BUFFER: no solver")
+        return True
+    buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_RAGE, 8, 4, "rage"], [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
+    castBuffsOnSolver(myID, buffs)
+    return True
+
+def executeSupportPuzzleTurn():
+    myID = getEntity()
+    if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
+        say("PZ SUPPORT: no solver")
+        return True
+    solverCell = getCell(_puzzleSolverID)
+    dist = getCellDistance(getCell(), solverCell)
+    if ((getTurn() <= 2) and (dist > 3)):
+        puzzleGatherMove(myID, solverCell)
+    buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
+    castBuffsOnSolver(myID, buffs)
+    return True
+
+def executeSolverPuzzleTurn():
+    global _bossTargetEID, _myAssignedCrystal
+    if (getTurn() == 1):
+        allA = []
+        push(allA, getEntity())
+        als = getAliveAllies()
+        for a in lw_values(als):
+            push(allA, a)
+        sort(allA)
+        if (lw_get(allA, 0) == getEntity()):
+            logMapLayout()
+    myCell = getCell()
+    myID = getEntity()
+    if (getTurn() <= 2):
+        say(lw_add(lw_add("PZ SOLVER: waiting for allies (turn ", getTurn()), ")"))
+        solverSelfBuff(myID)
+        return True
+    firstEID = pickNearestUnsolvedCrystal(myCell)
+    if (firstEID == None):
+        say("PZ SOLVER: all done")
+        solverSelfBuff(myID)
+        return True
+    _bossTargetEID = firstEID
+    syncCrystalScalars(lw_get(_crystalMap, firstEID))
+    firstDest = computeCrystalFinalDest()
+    crystalCell0 = getCell(firstEID)
+    if ((crystalCell0 != None) and (crystalCell0 >= 0)):
+        tpCd = getCooldown(CHIP_TELEPORTATION, myID)
+        if ((((tpCd != None) and (tpCd == 0)) and (getTP() >= 12)) and (firstDest != None)):
+            tpDone = False
+            preMove = findBestChipMove(crystalCell0, firstDest, myCell, 0, 0, 0)
+            if (preMove != None):
+                preStand = lw_get(preMove, 'stand')
+                dToStand = getCellDistance(myCell, preStand)
+                if ((dToStand >= 1) and (dToStand <= 12)):
+                    if (useChipOnCell(CHIP_TELEPORTATION, preStand) == 1):
+                        myCell = getCell()
+                        tpDone = True
+            if (not tpDone):
+                tpTarget = findTeleportTarget(crystalCell0, myCell)
+                if (tpTarget != (-1)):
+                    if (useChipOnCell(CHIP_TELEPORTATION, tpTarget) == 1):
+                        myCell = getCell()
+                        tpDone = True
+            if (not tpDone):
+                nearest = findNearestEnclaveCell(myCell)
+                if (nearest != (-1)):
+                    moveTowardCell(nearest)
+                    myCell = getCell()
+                    tpTarget2 = findTeleportTarget(crystalCell0, myCell)
+                    if (tpTarget2 != (-1)):
+                        if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1):
+                            myCell = getCell()
+                solverSelfBuff(myID)
+                return True
+        else:
+            if ((tpCd != None) and (tpCd > 0)):
+                dToCrystal = getCellDistance(myCell, crystalCell0)
+                if (dToCrystal > 10):
+                    solverSelfBuff(myID)
+                    return True
+    bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
+    if (((bootsCd != None) and (bootsCd == 0)) and (getTP() >= 4)):
+        useChip(CHIP_LEATHER_BOOTS, myID)
+    adrenCd = getCooldown(CHIP_ADRENALINE, myID)
+    if (((adrenCd != None) and (adrenCd == 0)) and (getTP() >= 1)):
+        useChip(CHIP_ADRENALINE, myID)
+    totalChipsFired = 0
+    crystalsSolved = 0
+    while (getTP() >= 3):
+        myCell = getCell()
+        nextEID = pickNearestUnsolvedCrystal(myCell)
+        if (nextEID == None):
+            say(lw_add(lw_add("PZ SOLVER: ALL DONE (", crystalsSolved), " this turn)"))
+            break
+        _bossTargetEID = nextEID
+        _myAssignedCrystal = lw_get(_crystalMap, nextEID)
+        syncCrystalScalars(lw_get(_crystalMap, nextEID))
+        finalDest = computeCrystalFinalDest()
+        if (finalDest == None):
+            say(lw_add("PZ: no dest for ", nextEID))
+            moveTowardCell(lw_get(lw_get(_crystalMap, nextEID), 'cell'))
+            return True
+        invCd = getCooldown(CHIP_INVERSION, myID)
+        if (((invCd != None) and (invCd == 0)) and (getTP() >= 4)):
+            crystalCell = getCell(_bossTargetEID)
+            if ((crystalCell != None) and (crystalCell >= 0)):
+                bestInvCell = (-1)
+                bestInvDist = 999
+                axis = _myCrystalGoalAxis
+                d = 1
+                while (d <= 8):
+                    ax = _graalX
+                    ay = _graalY
+                    if (axis == "south"):
+                        ay = lw_add(_graalY, d)
+                    else:
+                        if (axis == "north"):
+                            ay = lw_sub(_graalY, d)
+                        else:
+                            if (axis == "east"):
+                                ax = lw_add(_graalX, d)
+                            else:
+                                if (axis == "west"):
+                                    ax = lw_sub(_graalX, d)
+                    axCell = getCellFromXY(ax, ay)
+                    if ((axCell == None) or isObstacle(axCell)):
+                        d = lw_add(d, 1)
+                        continue
+                    if (not lineOfSight(axCell, _graalCell)):
+                        d = lw_add(d, 1)
+                        continue
+                    if (not isOnSameLine(axCell, crystalCell)):
+                        d = lw_add(d, 1)
+                        continue
+                    invDist = getCellDistance(axCell, crystalCell)
+                    if (((invDist == None) or (invDist < 1)) or (invDist > 14)):
+                        d = lw_add(d, 1)
+                        continue
+                    dFromMe = getCellDistance(myCell, axCell)
+                    if (dFromMe < bestInvDist):
+                        bestInvDist = dFromMe
+                        bestInvCell = axCell
+                    d = lw_add(d, 1)
+                if (bestInvCell != (-1)):
+                    if (myCell != bestInvCell):
+                        moveTowardCell(bestInvCell)
+                        myCell = getCell()
+                    if (myCell == bestInvCell):
+                        invR = useChip(CHIP_INVERSION, _bossTargetEID)
+                        if (invR == 1):
+                            myCell = getCell()
+                            crystalsSolved = lw_add(crystalsSolved, 1)
+                            totalChipsFired = lw_add(totalChipsFired, 1)
+                            say(lw_add(lw_add(lw_add("PZ INV c=", _bossTargetEID), " total="), crystalsSolved))
+                            continue
+        grapUsed = 0
+        boxUsed = 0
+        chipsFired = 0
+        lockedStep = 0
+        detourCount = 0
+        while (chipsFired < 8):
+            crystalCell = getCell(_bossTargetEID)
+            if ((crystalCell == None) or (crystalCell < 0)):
+                break
+            if isCellSolvedForAxis(crystalCell, _myCrystalGoalAxis):
+                break
+            if (getTP() < 3):
+                break
+            myCell = getCell()
+            move = findBestChipMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
+            if (move == None):
+                if (detourCount < 4):
+                    move = findDetourMove(crystalCell, finalDest, myCell, grapUsed, boxUsed, lockedStep)
+                    if (move != None):
+                        detourCount = lw_add(detourCount, 1)
+            if (move == None):
+                break
+            stand = lw_get(move, 'stand')
+            chip = lw_get(move, 'chip')
+            target = lw_get(move, 'target')
+            if (myCell != stand):
+                if (getMP() == 0):
+                    break
+                prevCell = myCell
+                moveTowardCell(stand)
+                myCell = getCell()
+                if (myCell == prevCell):
+                    break
+                if (myCell != stand):
+                    continue
+            r = useChipOnCell(chip, target)
+            if (r != 1):
+                break
+            chipsFired = lw_add(chipsFired, 1)
+            totalChipsFired = lw_add(totalChipsFired, 1)
+            if (chip == CHIP_GRAPPLE):
+                grapUsed = lw_add(grapUsed, 1)
+            else:
+                boxUsed = lw_add(boxUsed, 1)
+            if ((lockedStep == 0) and (lw_get(move, 'score') > 0)):
+                firedStep = lw_get(move, 'step')
+                lockedStep = (-lw_num(firedStep))
+        crCell = getCell(_bossTargetEID)
+        solved = isCellSolvedForAxis(crCell, _myCrystalGoalAxis)
+        if solved:
+            crystalsSolved = lw_add(crystalsSolved, 1)
+            say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ DONE c=", _bossTargetEID), " f="), chipsFired), " total="), crystalsSolved))
+            continue
+        else:
+            say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ f=", chipsFired), " cr="), crCell), " dst="), finalDest))
+            if (((chipsFired > 0) and (crCell != None)) and (crCell >= 0)):
+                moveTowardCell(crCell)
+            else:
+                if (chipsFired == 0):
+                    crystalNow = getCell(_bossTargetEID)
+                    if (((crystalNow != None) and (crystalNow >= 0)) and (getCellDistance(getCell(), crystalNow) <= 1)):
+                        moveTowardCell(finalDest)
+                    else:
+                        if ((crystalNow != None) and (crystalNow >= 0)):
+                            moveTowardCell(crystalNow)
+            break
+    solverSelfBuff(myID)
+    return True
+
+def getBossPuzzleTarget(fieldMapObj):
+    if (_bossTargetEID == None):
+        return None
+    enemySub = fieldMapObj.getEnemySubMap()
+    if mapContainsKey(enemySub, _bossTargetEID):
+        return lw_get(enemySub, _bossTargetEID)
+    if mapContainsKey(fieldMapObj.entities, _bossTargetEID):
+        return lw_get(fieldMapObj.entities, _bossTargetEID)
+    if (_myCrystalCell != (-1)):
+        return Enemy(_myCrystalCell)
+    return None
+
+
+# ════════ action.lk ════════
+class Action:
+    NONE = (-1)
+    ACTION_DIRECT = 0
+    ACTION_DOT = 1
+    ACTION_DEBUFF = 2
+    ACTION_BUFF = 3
+    ACTION_WEAPON_SWAP = 4
+    MOVEMENT_APPROACH = 5
+    MOVEMENT_OFFENSIVE = 6
+    MOVEMENT_DEFENSIVE = 7
+    MOVEMENT_OTKO = 8
+    MOVEMENT_DOT_OFFENSIVE = 9
+    MOVEMENT_DEBUFF = 10
+    MOVEMENT_FLEE = 11
+    MOVEMENT_HNS = 12
+    MOVEMENT_PAB = 13
+    ACTION_TELEPORT = 14
+    ACTION_CHECKPOINT = 15
+    ACTION_SUMMON = 16
+    def __init__(self, type, weaponId, chip, targetCell, targetEntity):
+        self.type = (-1)
+        self.weaponId = (-1)
+        self.chip = (-1)
+        self.targetCell = (-1)
+        self.targetEntity = (-1)
+        self.isSplash = False
+        self.weapon = None
+        self.checkpointType = ""
+        self.continuationFn = ""
+        self.context = None
+        self.bulbAIFunc = None
+        self.type = type
+        self.weaponId = weaponId
+        self.chip = chip
+        self.targetCell = targetCell
+        self.targetEntity = targetEntity
+
+    @staticmethod
+    def createCheckpoint(checkpointType, continuationFn, context):
+        checkpoint = Action(Action.ACTION_CHECKPOINT, (-1), (-1), (-1), None)
+        checkpoint.checkpointType = checkpointType
+        checkpoint.continuationFn = continuationFn
+        checkpoint.context = context
+        return checkpoint
+    
+
+
+# ════════ bulb_ai.lk ════════
+def savantBulbAI():
+    me = getEntity()
+    summoner = getSummoner()
+    myCell = getCell()
+    summonerCell = getCell(summoner)
+    myTP = getTP()
+    distToSummoner = getCellDistance(myCell, summonerCell)
+    if (distToSummoner > 3):
+        moveToward(summoner)
+        myCell = getCell()
+    if ((myTP >= 1) and (getCooldown(CHIP_ADRENALINE, me) == 0)):
+        summonerTP = getTP(summoner)
+        if (summonerTP < 10):
+            dist = getCellDistance(myCell, summonerCell)
+            if ((((dist != None) and (dist >= 0)) and (dist <= 3)) and lineOfSight(myCell, summonerCell)):
+                useChip(CHIP_ADRENALINE, summoner)
+                myTP = getTP()
+    if ((myTP >= 7) and (getCooldown(CHIP_MUTATION, me) == 0)):
+        dist = getCellDistance(myCell, summonerCell)
+        if ((((dist != None) and (dist >= 0)) and (dist <= 8)) and lineOfSight(myCell, summonerCell)):
+            useChip(CHIP_MUTATION, summoner)
+            myTP = getTP()
+    if ((myTP >= 3) and (getCooldown(CHIP_ALTERATION, me) == 0)):
+        enemies = getAliveEnemies()
+        bestTarget = None
+        bestHP = 999999
+        for eid in lw_values(enemies):
+            if isDead(eid):
+                continue
+            enemyCell = getCell(eid)
+            dist = getCellDistance(myCell, enemyCell)
+            if ((((dist != None) and (dist >= 6)) and (dist <= 12)) and lineOfSight(myCell, enemyCell)):
+                hp = getLife(eid)
+                if (hp < bestHP):
+                    bestHP = hp
+                    bestTarget = eid
+        if (bestTarget != None):
+            useChip(CHIP_ALTERATION, bestTarget)
+            myTP = getTP()
+    if ((myTP >= 4) and (getCooldown(CHIP_THORN, me) == 0)):
+        enemies = getAliveEnemies()
+        nearbyEnemy = False
+        for eid in lw_values(enemies):
+            if isDead(eid):
+                continue
+            dist = getCellDistance(myCell, getCell(eid))
+            if ((dist != None) and (dist <= 5)):
+                nearbyEnemy = True
+                break
+        if nearbyEnemy:
+            useChip(CHIP_THORN, me)
+            myTP = getTP()
+
+def metallicBulbAI():
+    me = getEntity()
+    summoner = getSummoner()
+    myCell = getCell()
+    summonerCell = getCell(summoner)
+    myTP = getTP()
+    distToSummoner = getCellDistance(myCell, summonerCell)
+    if (distToSummoner > 2):
+        moveToward(summoner)
+        myCell = getCell()
+    if ((myTP >= 6) and (getCooldown(CHIP_ARMOR, me) == 0)):
+        dist = getCellDistance(myCell, summonerCell)
+        if ((((dist != None) and (dist >= 0)) and (dist <= 4)) and lineOfSight(myCell, summonerCell)):
+            useChip(CHIP_ARMOR, summoner)
+            myTP = getTP()
+    if ((myTP >= 4) and (getCooldown(CHIP_SHIELD, me) == 0)):
+        dist = getCellDistance(myCell, summonerCell)
+        if ((((dist != None) and (dist >= 0)) and (dist <= 4)) and lineOfSight(myCell, summonerCell)):
+            useChip(CHIP_SHIELD, summoner)
+            myTP = getTP()
+    if ((myTP >= 3) and (getCooldown(CHIP_WALL, me) == 0)):
+        dist = getCellDistance(myCell, summonerCell)
+        if ((((dist != None) and (dist >= 0)) and (dist <= 3)) and lineOfSight(myCell, summonerCell)):
+            useChip(CHIP_WALL, summoner)
+            myTP = getTP()
+    if ((myTP >= 6) and (getCooldown(CHIP_WINGED_BOOTS, me) == 0)):
+        enemies = getAliveEnemies()
+        nearestEnemyDist = 999
+        for eid in lw_values(enemies):
+            if isDead(eid):
+                continue
+            dist = getCellDistance(summonerCell, getCell(eid))
+            if ((dist != None) and (dist < nearestEnemyDist)):
+                nearestEnemyDist = dist
+        if (nearestEnemyDist > 5):
+            dist = getCellDistance(myCell, summonerCell)
+            if ((((dist != None) and (dist >= 0)) and (dist <= 2)) and lineOfSight(myCell, summonerCell)):
+                useChip(CHIP_WINGED_BOOTS, summoner)
+                myTP = getTP()
+
+def attackerBulbAI():
+    abMe = getEntity()
+    abCell = getCell()
+    abEnemies = getAliveEnemies()
+    if ((abEnemies == None) or (count(abEnemies) == 0)):
+        return None
+    abBest = None
+    abBestDist = 999
+    for abEid in lw_values(abEnemies):
+        if isDead(abEid):
+            continue
+        abD = getCellDistance(abCell, getCell(abEid))
+        if ((abD != None) and (abD < abBestDist)):
+            abBestDist = abD
+            abBest = abEid
+    if (abBest == None):
+        return None
+    moveToward(abBest)
+    abCell = getCell()
+    abChips = getChips(abMe)
+    if (abChips == None):
+        return None
+    for abC in lw_values(abChips):
+        if (getCooldown(abC, abMe) > 0):
+            continue
+        abEffs = getChipEffects(abC)
+        if (abEffs == None):
+            continue
+        abIsDamage = False
+        for abE in lw_values(abEffs):
+            if ((lw_get(abE, 0) == EFFECT_DAMAGE) or (lw_get(abE, 0) == EFFECT_POISON)):
+                abIsDamage = True
+                break
+        if (not abIsDamage):
+            continue
+        abCost = getChipCost(abC)
+        if ((abCost == None) or (getTP() < abCost)):
+            continue
+        abTgtCell = getCell(abBest)
+        abD2 = getCellDistance(abCell, abTgtCell)
+        if (((abD2 == None) or (abD2 < getChipMinRange(abC))) or (abD2 > getChipMaxRange(abC))):
+            continue
+        if (not lineOfSight(abCell, abTgtCell)):
+            continue
+        useChip(abC, abBest)
+
+
+# ════════ beam_search.lk ════════
+# include: item_roles.lk (inlined by assembler)
+# include: cache_manager.lk (inlined by assembler)
+# include: reachable_graph.lk (inlined by assembler)
+def beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj):
+    if (targetObj == None):
+        return []
+    beamWidth = _beamWidth
+    maxDepth = _beamMaxDepth
+    playerPos = playerObj._cellPos
+    targetPos = targetObj._cellPos
+    str = playerObj._strength
+    mag = playerObj._magic
+    wis = playerObj._wisdom
+    sci = playerObj._science
+    currentWeapon = getWeapon()
+    weaponMaxUses = {}
+    for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+        lw_put(weaponMaxUses, wid, getWeaponMaxUses(wid))
+    agi = playerObj._agility
+    beam = []
+    push(beam, {'actions': [], 'simTP': getTP(), 'simMP': getMP(), 'simPos': playerPos, 'simWeapon': currentWeapon, 'simStr': str, 'simMag': mag, 'simWis': wis, 'simSci': sci, 'simAgi': agi, 'chipUsed': {}, 'weaponUses': {}, 'cumScore': 0, 'cumDamage': 0, 'moveCount': 0, 'wMaxUses': weaponMaxUses})
+    depth = 0
+    while (depth < maxDepth):
+        allCandidates = []
+        for partial in lw_values(beam):
+            if ((lw_get(partial, 'simTP') < 2) and (lw_get(partial, 'simMP') < 1)):
+                push(allCandidates, partial)
+                continue
+            legalActions = beamGetLegalActions(partial, targetObj, arsenalObj)
+            if (count(legalActions) == 0):
+                push(allCandidates, partial)
+                continue
+            for actionInfo in lw_values(legalActions):
+                value = beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fieldMapObj)
+                if (value < 0):
+                    continue
+                newCandidate = beamExtendCandidate(partial, actionInfo, value, targetObj, arsenalObj)
+                push(allCandidates, newCandidate)
+        if (count(allCandidates) == 0):
+            break
+        def _lwfn1_1(a, b):
+            return lw_sub(lw_get(b, 'cumScore'), lw_get(a, 'cumScore'))
+        def _lwfn2_1(a, b):
+            return lw_sub(lw_get(b, 'cumScore'), lw_get(a, 'cumScore'))
+        arraySort(allCandidates, _lwfn2_1)
+        beam = []
+        selected = {}
+        limit = min(max(4, lw_sub(_beamWidth, 6)), count(allCandidates))
+        i = 0
+        while (i < limit):
+            push(beam, lw_get(allCandidates, i))
+            lw_put(selected, i, True)
+            i = lw_add(i, 1)
+        defAdded = 0
+        i = 0
+        while ((i < count(allCandidates)) and (defAdded < 3)):
+            if mapContainsKey(selected, i):
+                i = lw_add(i, 1)
+                continue
+            if beamHasDefensiveAction(lw_get(allCandidates, i)):
+                push(beam, lw_get(allCandidates, i))
+                lw_put(selected, i, True)
+                defAdded = lw_add(defAdded, 1)
+            i = lw_add(i, 1)
+        utilAdded = 0
+        i = 0
+        while ((i < count(allCandidates)) and (utilAdded < 3)):
+            if mapContainsKey(selected, i):
+                i = lw_add(i, 1)
+                continue
+            if beamHasUtilityAction(lw_get(allCandidates, i)):
+                push(beam, lw_get(allCandidates, i))
+                lw_put(selected, i, True)
+                utilAdded = lw_add(utilAdded, 1)
+            i = lw_add(i, 1)
+        if (getOperations() > _ops82):
+            break
+        depth = lw_add(depth, 1)
+    scenarios = []
+    for candidate in lw_values(beam):
+        if (count(lw_get(candidate, 'actions')) > 0):
+            push(scenarios, lw_get(candidate, 'actions'))
+    return scenarios
+
+def beamGetLegalActions(partial, targetObj, arsenalObj):
+    actions = []
+    simTP = lw_get(partial, 'simTP')
+    simMP = lw_get(partial, 'simMP')
+    simPos = lw_get(partial, 'simPos')
+    simWeapon = lw_get(partial, 'simWeapon')
+    chipUsed = lw_get(partial, 'chipUsed')
+    weaponUses = lw_get(partial, 'weaponUses')
+    wMaxUses = lw_get(partial, 'wMaxUses')
+    targetPos = targetObj._cellPos
+    dist = getCellDistance(simPos, targetPos)
+    for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        chipObj = lw_get(arsenalObj.playerEquippedChips, chipId)
+        cost = chipObj._cost
+        if (cost > simTP):
+            continue
+        if mapContainsKey(chipUsed, chipId):
+            continue
+        cd = getCooldown(chipId, getEntity())
+        if (cd > 0):
+            continue
+        chipTargetCell = (-1)
+        isSelfTarget = False
+        if ((((isHealingChip(chipId) or isOffensiveBuff(chipId)) or isShieldChip(chipId)) or isDamageReturnChip(chipId)) or isResourceChip(chipId)):
+            chipTargetCell = simPos
+            isSelfTarget = True
+        else:
+            if isUtilityChip(chipId):
+                if ((chipId == CHIP_TELEPORTATION) or (chipId == CHIP_JUMP)):
+                    continue
+                if ((chipId == CHIP_INVERSION) and _isBossFight):
+                    continue
+                chipTargetCell = targetPos
+            else:
+                chipTargetCell = targetPos
+        if ((not isSelfTarget) and (chipTargetCell != (-1))):
+            chipDist = getCellDistance(simPos, chipTargetCell)
+            if (((chipDist == None) or (chipDist < chipObj._minRange)) or (chipDist > chipObj._maxRange)):
+                continue
+            if (not getCachedLineOfSight(simPos, chipTargetCell)):
+                continue
+        actionType = Action.ACTION_BUFF
+        if isPoisonChip(chipId):
+            actionType = Action.ACTION_DOT
+        else:
+            if isDebuffChip(chipId):
+                actionType = Action.ACTION_DEBUFF
+            else:
+                if ((((((not isHealingChip(chipId)) and (not isOffensiveBuff(chipId))) and (not isShieldChip(chipId))) and (not isDamageReturnChip(chipId))) and (not isResourceChip(chipId))) and (not isUtilityChip(chipId))):
+                    actionType = Action.ACTION_DIRECT
+        push(actions, {'type': 'chip', 'actionType': actionType, 'id': chipId, 'targetCell': chipTargetCell, 'cost': cost, 'isSelf': isSelfTarget})
+    if ((simWeapon != None) and (simWeapon != (-1))):
+        wCost = 0
+        weaponObj = None
+        if mapContainsKey(arsenalObj.playerEquippedWeapons, simWeapon):
+            weaponObj = lw_get(arsenalObj.playerEquippedWeapons, simWeapon)
+            wCost = weaponObj._cost
+        if ((weaponObj != None) and (wCost <= simTP)):
+            currentUses = 0
+            if mapContainsKey(weaponUses, simWeapon):
+                currentUses = lw_get(weaponUses, simWeapon)
+            maxUse = (lw_get(wMaxUses, simWeapon) if mapContainsKey(wMaxUses, simWeapon) else 1)
+            if (currentUses < maxUse):
+                if ((((dist != None) and (dist >= weaponObj._minRange)) and (dist <= weaponObj._maxRange)) and getCachedLineOfSight(simPos, targetPos)):
+                    push(actions, {'type': 'weapon', 'actionType': Action.ACTION_DIRECT, 'id': simWeapon, 'targetCell': targetPos, 'cost': wCost, 'isSelf': False, 'needsSwap': False})
+    for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+        if (wid == simWeapon):
+            continue
+        weaponObj = lw_get(arsenalObj.playerEquippedWeapons, wid)
+        totalCost = lw_add(1, weaponObj._cost)
+        if (totalCost > simTP):
+            continue
+        currentUses = 0
+        if mapContainsKey(weaponUses, wid):
+            currentUses = lw_get(weaponUses, wid)
+        maxUse = (lw_get(wMaxUses, wid) if mapContainsKey(wMaxUses, wid) else 1)
+        if (currentUses >= maxUse):
+            continue
+        if ((((dist != None) and (dist >= weaponObj._minRange)) and (dist <= weaponObj._maxRange)) and getCachedLineOfSight(simPos, targetPos)):
+            push(actions, {'type': 'weapon', 'actionType': Action.ACTION_DIRECT, 'id': wid, 'targetCell': targetPos, 'cost': totalCost, 'isSelf': False, 'needsSwap': True})
+    if ((simMP > 0) and (lw_get(partial, 'moveCount') < 2)):
+        moveCells = beamGetMoveCells(simPos, targetPos, simMP, arsenalObj, partial)
+        for moveCell in lw_values(moveCells):
+            push(actions, {'type': 'move', 'actionType': Action.MOVEMENT_APPROACH, 'id': (-1), 'targetCell': moveCell, 'cost': 0, 'isSelf': True, 'mpCost': getGraphMPCost(moveCell)})
+    return actions
+
+def beamGetMoveCells(simPos, targetPos, simMP, arsenalObj, partial):
+    cells = []
+    reachable = getReachableCells()
+    if (count(reachable) == 0):
+        return cells
+    currentDist = getCellDistance(simPos, targetPos)
+    if (currentDist == None):
+        return cells
+    bestApproachCell = (-1)
+    bestApproachDist = currentDist
+    bestKiteCell = (-1)
+    bestKiteDist = currentDist
+    bestWeaponCell = (-1)
+    bestWeaponScore = (-1)
+    for cell in lw_values(reachable):
+        if (cell == simPos):
+            continue
+        mpCost = getGraphMPCost(cell)
+        if ((mpCost > simMP) or (mpCost <= 0)):
+            continue
+        d = getCellDistance(cell, targetPos)
+        if (d == None):
+            continue
+        if (d < bestApproachDist):
+            bestApproachDist = d
+            bestApproachCell = cell
+        if (d > bestKiteDist):
+            bestKiteDist = d
+            bestKiteCell = cell
+        weaponScore = 0
+        for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+            wObj = lw_get(arsenalObj.playerEquippedWeapons, wid)
+            if ((d >= wObj._minRange) and (d <= wObj._maxRange)):
+                bd = getCachedDamageBreakdown(wid)
+                if (bd != None):
+                    weaponScore = lw_add(weaponScore, lw_get(bd, 'total'))
+                else:
+                    weaponScore = lw_add(weaponScore, 100)
+        for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+            if mapContainsKey(lw_get(partial, 'chipUsed'), chipId):
+                continue
+            if (((((isHealingChip(chipId) or isOffensiveBuff(chipId)) or isShieldChip(chipId)) or isDamageReturnChip(chipId)) or isResourceChip(chipId)) or isUtilityChip(chipId)):
+                continue
+            chipObj = lw_get(arsenalObj.playerEquippedChips, chipId)
+            if ((d >= chipObj._minRange) and (d <= chipObj._maxRange)):
+                bd = getCachedDamageBreakdown(chipId)
+                if (bd != None):
+                    weaponScore = lw_add(weaponScore, lw_get(bd, 'total'))
+                else:
+                    weaponScore = lw_add(weaponScore, 50)
+        if (weaponScore > bestWeaponScore):
+            bestWeaponScore = weaponScore
+            bestWeaponCell = cell
+    if (bestApproachCell != (-1)):
+        push(cells, bestApproachCell)
+    if ((bestWeaponCell != (-1)) and (bestWeaponCell != bestApproachCell)):
+        push(cells, bestWeaponCell)
+    if (((bestKiteCell != (-1)) and (bestKiteCell != bestApproachCell)) and (bestKiteCell != bestWeaponCell)):
+        push(cells, bestKiteCell)
+    if ((lw__playerBuildType == BUILD_MAGIC) or (lw__playerBuildType == BUILD_TANK_SCI)):
+        if (lw__adversarialThreatCacheBuilt and (count(cells) > 1)):
+            playerHP = getLife()
+            safeCells = []
+            for c in lw_values(cells):
+                threat = getAdversarialThreat(c)
+                if (threat < lw_mul(playerHP, 0.50)):
+                    push(safeCells, c)
+            if (count(safeCells) > 0):
+                cells = safeCells
+    return cells
+
+def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fieldMapObj):
+    value = 0
+    simStr = lw_get(partial, 'simStr')
+    simMag = lw_get(partial, 'simMag')
+    simWis = lw_get(partial, 'simWis')
+    simSci = lw_get(partial, 'simSci')
+    cumDamage = lw_get(partial, 'cumDamage')
+    enemyHP = targetObj._currHealth
+    if (lw_get(actionInfo, 'type') == 'chip'):
+        chipId = lw_get(actionInfo, 'id')
+        if (lw_get(actionInfo, 'actionType') == Action.ACTION_DIRECT):
+            bd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
+            dmg = lw_add(lw_get(bd, 'direct'), lw_get(bd, 'nova'))
+            value = lw_add(value, lw_mul(dmg, 2.0))
+            if ((chipId == CHIP_PLASMA) and (fieldMapObj != None)):
+                plasmaTargetCell = lw_get(actionInfo, 'targetCell')
+                plasmaHitCount = 1
+                enemies = fieldMapObj.getEnemySubMap()
+                for eid in lw_values(mapKeys(enemies)):
+                    if (eid == targetObj._id):
+                        continue
+                    if isDead(eid):
+                        continue
+                    eCell = lw_get(enemies, eid)._cellPos
+                    if ((eCell != None) and (eCell != plasmaTargetCell)):
+                        eDist = getCellDistance(plasmaTargetCell, eCell)
+                        if ((eDist != None) and (eDist <= 2)):
+                            plasmaHitCount = lw_add(plasmaHitCount, 1)
+                if (plasmaHitCount > 1):
+                    value = lw_num(value) * lw_num(plasmaHitCount)
+            if (lw_get(bd, 'nova') > 0):
+                value = lw_add(value, lw_mul(lw_get(bd, 'nova'), 1.5))
+            if (chipId == CHIP_PUNISHMENT):
+                if ((isBulb(targetObj) or (enemyHP <= 0)) or ((lw_add(cumDamage, dmg)) < enemyHP)):
+                    return (-999999)
+            if ((enemyHP > 0) and (lw_div((lw_add(cumDamage, dmg)), enemyHP) > 0.7)):
+                value = lw_num(value) * lw_num(3.0)
+        else:
+            if isPoisonChip(chipId):
+                bd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
+                dot = lw_get(bd, 'dot')
+                value = lw_add(value, lw_mul(dot, 1.5))
+                poisonCount = 0
+                for a in lw_values(lw_get(partial, 'actions')):
+                    if (a.type == Action.ACTION_DOT):
+                        poisonCount = lw_add(poisonCount, 1)
+                if (poisonCount > 0):
+                    value = lw_add(value, lw_mul(100, poisonCount))
+                antidoteCd = 0
+                tracker = CooldownTracker(targetObj)
+                antidoteCd = tracker.getCooldownRemaining(targetObj._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                if (antidoteCd >= 3):
+                    value = lw_num(value) * lw_num(1.5)
+                else:
+                    if (antidoteCd == 0):
+                        value = lw_num(value) * lw_num(0.3)
+            else:
+                if isOffensiveBuff(chipId):
+                    if (chipId == CHIP_WIZARDRY):
+                        value = lw_add(value, 200)
+                        unusedPoison = beamCountUnusedPoisonChips(partial, arsenalObj)
+                        unusedDenial = beamCountUnusedDenialChips(partial, arsenalObj)
+                        if (unusedPoison > 0):
+                            value = lw_add(value, lw_mul(200, unusedPoison))
+                        if (unusedDenial > 0):
+                            value = lw_add(value, lw_mul(200, unusedDenial))
+                    else:
+                        if (chipId == CHIP_PRISM):
+                            value = lw_add(value, 180)
+                            if beamHasUnusedNovaWeapon(partial, arsenalObj):
+                                value = lw_add(value, 300)
+                            unusedShields = beamCountUnusedShieldChips(partial, arsenalObj)
+                            if (unusedShields > 0):
+                                value = lw_add(value, 150)
+                        else:
+                            if (chipId == CHIP_STEROID):
+                                value = lw_add(value, 200)
+                                unusedWeapons = beamCountUnusedWeapons(partial, arsenalObj)
+                                if (unusedWeapons > 0):
+                                    value = lw_add(value, 250)
+                            else:
+                                if (chipId == CHIP_DOPING):
+                                    bsDopDist = getCellDistance(playerObj._cellPos, targetObj._cellPos)
+                                    if (bsDopDist == None):
+                                        bsDopDist = 99
+                                    if (((not lw__dopingUsed) and (bsDopDist <= 8)) and (playerObj._currHealth > lw_mul(playerObj._maxHealth, 0.5))):
+                                        value = lw_add(value, 100)
+                                        unusedWeapons2 = beamCountUnusedWeapons(partial, arsenalObj)
+                                        if (unusedWeapons2 > 0):
+                                            value = lw_add(value, 150)
+                                    else:
+                                        value = lw_num(value) - lw_num(300)
+                                else:
+                                    if (chipId == CHIP_KNOWLEDGE):
+                                        value = lw_add(value, 150)
+                                        unusedHeals = beamCountUnusedHealChips(partial, arsenalObj)
+                                        if (unusedHeals > 0):
+                                            value = lw_add(value, lw_mul(100, unusedHeals))
+                                    else:
+                                        if (chipId == CHIP_WARM_UP):
+                                            value = lw_add(value, 200)
+                                            unusedReturn = beamCountUnusedReturnChips(partial, arsenalObj)
+                                            if (unusedReturn > 0):
+                                                value = lw_add(value, 200)
+                                            unusedWeaponsWU = beamCountUnusedWeapons(partial, arsenalObj)
+                                            if (unusedWeaponsWU > 0):
+                                                value = lw_add(value, 150)
+                                        else:
+                                            if (chipId == CHIP_ADRENALINE):
+                                                value = lw_add(value, 400)
+                                            else:
+                                                if (chipId == CHIP_ARMORING):
+                                                    value = lw_add(value, 120)
+                                                else:
+                                                    if (chipId == CHIP_ELEVATION):
+                                                        value = lw_add(value, 150)
+                                                    else:
+                                                        value = lw_add(value, 100)
+                else:
+                    if isHealingChip(chipId):
+                        hpMissing = lw_sub(playerObj._maxHealth, playerObj._currHealth)
+                        if (hpMissing > 0):
+                            healEstimate = beamEstimateHeal(chipId, simWis)
+                            effectiveHeal = min(hpMissing, healEstimate)
+                            healEffFloor = 0.6
+                            if (chipId == CHIP_REGENERATION):
+                                healEffFloor = 0.9
+                            if (effectiveHeal < lw_mul(healEstimate, healEffFloor)):
+                                return (-1)
+                            value = lw_add(value, lw_mul(effectiveHeal, 1.5))
+                            hpRatio = lw_div(playerObj._currHealth, playerObj._maxHealth)
+                            if (hpRatio < 0.3):
+                                value = lw_num(value) * lw_num(3.0)
+                            else:
+                                if (hpRatio < 0.5):
+                                    value = lw_num(value) * lw_num(2.0)
+                        else:
+                            return (-1)
+                    else:
+                        if isShieldChip(chipId):
+                            value = lw_add(value, 150)
+                            threat = 0
+                            if (fieldMapObj != None):
+                                threat = fieldMapObj.getThreatAtCell(lw_get(partial, 'simPos'))
+                            if (threat > 300):
+                                value = lw_num(value) * lw_num(2.0)
+                        else:
+                            if isDamageReturnChip(chipId):
+                                drDuration = (1 if ((chipId == CHIP_BRAMBLE)) else (2 if ((chipId == CHIP_THORN)) else 3))
+                                if predictEnemyCanAttackWithin(lw_get(partial, 'simPos'), targetObj, drDuration):
+                                    value = lw_add(value, 200)
+                                    threat = 0
+                                    if (fieldMapObj != None):
+                                        threat = fieldMapObj.getThreatAtCell(lw_get(partial, 'simPos'))
+                                    if (threat > 300):
+                                        value = lw_num(value) * lw_num(2.0)
+                                else:
+                                    value = lw_add(value, 10)
+                            else:
+                                if isDebuffChip(chipId):
+                                    if ((((chipId == CHIP_SOPORIFIC) or (chipId == CHIP_BALL_AND_CHAIN)) or (chipId == CHIP_TRANQUILIZER)) or (chipId == CHIP_SLOW_DOWN)):
+                                        value = lw_add(value, lw_mul(200, (lw_add(1, lw_div(simMag, 500)))))
+                                        hasPoison = False
+                                        for a in lw_values(lw_get(partial, 'actions')):
+                                            if (a.type == Action.ACTION_DOT):
+                                                hasPoison = True
+                                                break
+                                        if hasPoison:
+                                            value = lw_add(value, 150)
+                                    else:
+                                        if (chipId == CHIP_LIBERATION):
+                                            value = lw_add(value, 120)
+                                        else:
+                                            cBd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
+                                            if (lw_get(cBd, 'statReduce') > 0):
+                                                value = lw_add(value, lw_mul(150, (lw_add(1, lw_div(simMag, 500)))))
+                                            else:
+                                                if (lw_get(cBd, 'denial') > 0):
+                                                    value = lw_add(value, lw_mul(150, (lw_add(1, lw_div(simMag, 500)))))
+                                                else:
+                                                    value = lw_add(value, 80)
+                                else:
+                                    if isResourceChip(chipId):
+                                        if (chipId == CHIP_LEATHER_BOOTS):
+                                            value = lw_add(value, 150)
+                                    else:
+                                        if isUtilityChip(chipId):
+                                            if (chipId == CHIP_ANTIDOTE):
+                                                if playerObj.hasEffect(EFFECT_POISON):
+                                                    value = lw_add(value, 300)
+                                                else:
+                                                    return (-1)
+                                            else:
+                                                if (chipId == CHIP_MANUMISSION):
+                                                    shackled = (((playerObj.hasEffect(EFFECT_SHACKLE_TP) or playerObj.hasEffect(EFFECT_SHACKLE_MP)) or playerObj.hasEffect(EFFECT_SHACKLE_STRENGTH)) or playerObj.hasEffect(EFFECT_SHACKLE_MAGIC))
+                                                    if shackled:
+                                                        value = lw_add(value, 350)
+                                                    else:
+                                                        return (-1)
+                                                else:
+                                                    if (chipId == CHIP_GRAPPLE):
+                                                        value = lw_add(value, 200)
+                                                        shortRangeCount = 0
+                                                        for cid in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+                                                            if mapContainsKey(lw_get(partial, 'chipUsed'), cid):
+                                                                continue
+                                                            cObj = lw_get(arsenalObj.playerEquippedChips, cid)
+                                                            if ((((((cObj._maxRange <= 4) and (not isHealingChip(cid))) and (not isOffensiveBuff(cid))) and (not isShieldChip(cid))) and (not isDamageReturnChip(cid))) and (not isResourceChip(cid))):
+                                                                shortRangeCount = lw_add(shortRangeCount, 1)
+                                                        if (shortRangeCount > 0):
+                                                            value = lw_add(value, lw_mul(100, shortRangeCount))
+                                                    else:
+                                                        value = lw_add(value, 150)
+    else:
+        if (lw_get(actionInfo, 'type') == 'weapon'):
+            wid = lw_get(actionInfo, 'id')
+            bd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, wid)
+            directDmg = lw_get(bd, 'direct')
+            dotDmg = lw_get(bd, 'dot')
+            novaDmg = lw_get(bd, 'nova')
+            value = lw_add(value, lw_mul(directDmg, 2.0))
+            value = lw_add(value, lw_mul(dotDmg, 1.5))
+            value = lw_add(value, lw_mul(novaDmg, 2.5))
+            if (dotDmg > 0):
+                antidoteCd = 0
+                tracker = CooldownTracker(targetObj)
+                antidoteCd = tracker.getCooldownRemaining(targetObj._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                if (antidoteCd >= 3):
+                    value = lw_add(value, lw_mul(dotDmg, 0.5))
+                else:
+                    if (antidoteCd == 0):
+                        value = lw_num(value) - lw_num(lw_mul(dotDmg, 0.5))
+            if ((enemyHP > 0) and (lw_div((lw_add(lw_add(lw_add(cumDamage, directDmg), dotDmg), novaDmg)), enemyHP) > 0.7)):
+                value = lw_num(value) * lw_num(3.0)
+            if (lw_get(bd, 'statReduce') > 0):
+                value = lw_add(value, 100)
+            if (lw_get(bd, 'denial') > 0):
+                value = lw_add(value, 80)
+            if lw_get(actionInfo, 'needsSwap'):
+                value = lw_num(value) - lw_num(50)
+        else:
+            if (lw_get(actionInfo, 'type') == 'move'):
+                moveTargetPos = lw_get(actionInfo, 'targetCell')
+                targetEnemyPos = targetObj._cellPos
+                newDist = getCellDistance(moveTargetPos, targetEnemyPos)
+                oldDist = getCellDistance(lw_get(partial, 'simPos'), targetEnemyPos)
+                if ((newDist != None) and (oldDist != None)):
+                    newAttacks = beamCountAttacksFromPos(moveTargetPos, targetEnemyPos, arsenalObj, partial)
+                    oldAttacks = beamCountAttacksFromPos(lw_get(partial, 'simPos'), targetEnemyPos, arsenalObj, partial)
+                    enabledDelta = lw_sub(newAttacks, oldAttacks)
+                    value = lw_add(value, lw_mul(enabledDelta, 150))
+                    value = lw_add(value, lw_mul(newAttacks, 50))
+                    if (newDist < oldDist):
+                        value = lw_add(value, lw_mul((lw_sub(oldDist, newDist)), 50))
+                    if (fieldMapObj != None):
+                        enemies = fieldMapObj.getEnemySubMap()
+                        exposureNew = 0
+                        exposureOld = 0
+                        for eid in lw_values(mapKeys(enemies)):
+                            if (not isDead(eid)):
+                                eCell = lw_get(enemies, eid)._cellPos
+                                if (eCell != None):
+                                    if getCachedLineOfSight(moveTargetPos, eCell):
+                                        exposureNew = lw_add(exposureNew, 1)
+                                    if getCachedLineOfSight(lw_get(partial, 'simPos'), eCell):
+                                        exposureOld = lw_add(exposureOld, 1)
+                        if (exposureNew < exposureOld):
+                            value = lw_add(value, lw_mul((lw_sub(exposureOld, exposureNew)), 100))
+    return value
+
+def beamExtendCandidate(partial, actionInfo, value, targetObj, arsenalObj):
+    newActions = []
+    for a in lw_values(lw_get(partial, 'actions')):
+        push(newActions, a)
+    newChipUsed = {}
+    for k in lw_values(mapKeys(lw_get(partial, 'chipUsed'))):
+        lw_put(newChipUsed, k, True)
+    newWeaponUses = {}
+    for k in lw_values(mapKeys(lw_get(partial, 'weaponUses'))):
+        lw_put(newWeaponUses, k, lw_get(lw_get(partial, 'weaponUses'), k))
+    newTP = lw_get(partial, 'simTP')
+    newMP = lw_get(partial, 'simMP')
+    newPos = lw_get(partial, 'simPos')
+    newWeapon = lw_get(partial, 'simWeapon')
+    newStr = lw_get(partial, 'simStr')
+    newMag = lw_get(partial, 'simMag')
+    newWis = lw_get(partial, 'simWis')
+    newSci = lw_get(partial, 'simSci')
+    newAgi = lw_get(partial, 'simAgi')
+    newCumDamage = lw_get(partial, 'cumDamage')
+    newMoveCount = lw_get(partial, 'moveCount')
+    if (lw_get(actionInfo, 'type') == 'chip'):
+        chipId = lw_get(actionInfo, 'id')
+        targetEntity = (None if lw_get(actionInfo, 'isSelf') else targetObj)
+        action = Action(lw_get(actionInfo, 'actionType'), (-1), chipId, lw_get(actionInfo, 'targetCell'), targetEntity)
+        push(newActions, action)
+        newTP = lw_num(newTP) - lw_num(lw_get(actionInfo, 'cost'))
+        lw_put(newChipUsed, chipId, True)
+        if (chipId == CHIP_STEROID):
+            newStr = lw_add(newStr, 200)
+        else:
+            if (chipId == CHIP_DOPING):
+                newStr = lw_add(newStr, 100)
+            else:
+                if (chipId == CHIP_WIZARDRY):
+                    newMag = lw_add(newMag, 160)
+                else:
+                    if (chipId == CHIP_KNOWLEDGE):
+                        newWis = lw_add(newWis, 260)
+                    else:
+                        if (chipId == CHIP_WARM_UP):
+                            newAgi = lw_add(newAgi, 180)
+                        else:
+                            if (chipId == CHIP_PRISM):
+                                newStr = lw_add(newStr, 60)
+                                newMag = lw_add(newMag, 60)
+                                newWis = lw_add(newWis, 60)
+                                newSci = lw_add(newSci, 60)
+                                newAgi = lw_add(newAgi, 60)
+                            else:
+                                if (chipId == CHIP_ADRENALINE):
+                                    newTP = lw_add(newTP, 5)
+                                else:
+                                    if (chipId == CHIP_LEATHER_BOOTS):
+                                        newMP = lw_add(newMP, 2)
+        if ((lw_get(actionInfo, 'actionType') == Action.ACTION_DIRECT) or (lw_get(actionInfo, 'actionType') == Action.ACTION_DOT)):
+            bd = arsenalObj.getDamageBreakdown(newStr, newMag, newWis, newSci, chipId)
+            if (bd != None):
+                newCumDamage = lw_add(newCumDamage, lw_add(lw_add(lw_get(bd, 'direct'), lw_get(bd, 'dot')), lw_get(bd, 'nova')))
+    else:
+        if (lw_get(actionInfo, 'type') == 'weapon'):
+            wid = lw_get(actionInfo, 'id')
+            if lw_get(actionInfo, 'needsSwap'):
+                swapAction = Action(Action.ACTION_WEAPON_SWAP, wid, (-1), (-1), None)
+                push(newActions, swapAction)
+                newWeapon = wid
+            attackAction = Action(Action.ACTION_DIRECT, wid, (-1), lw_get(actionInfo, 'targetCell'), targetObj)
+            push(newActions, attackAction)
+            newTP = lw_num(newTP) - lw_num(lw_get(actionInfo, 'cost'))
+            uses = 0
+            if mapContainsKey(newWeaponUses, wid):
+                uses = lw_get(newWeaponUses, wid)
+            lw_put(newWeaponUses, wid, lw_add(uses, 1))
+            newWeapon = wid
+            bd = arsenalObj.getDamageBreakdown(newStr, newMag, newWis, newSci, wid)
+            if (bd != None):
+                newCumDamage = lw_add(newCumDamage, lw_add(lw_add(lw_get(bd, 'direct'), lw_get(bd, 'dot')), lw_get(bd, 'nova')))
+        else:
+            if (lw_get(actionInfo, 'type') == 'move'):
+                moveAction = Action(Action.MOVEMENT_APPROACH, (-1), (-1), lw_get(actionInfo, 'targetCell'), None)
+                push(newActions, moveAction)
+                mpCost = lw_get(actionInfo, 'mpCost')
+                if ((mpCost == None) or (mpCost == 999)):
+                    mpCost = 1
+                newMP = lw_num(newMP) - lw_num(mpCost)
+                newPos = lw_get(actionInfo, 'targetCell')
+                newMoveCount = lw_add(newMoveCount, 1)
+    return {'actions': newActions, 'simTP': newTP, 'simMP': newMP, 'simPos': newPos, 'simWeapon': newWeapon, 'simStr': newStr, 'simMag': newMag, 'simWis': newWis, 'simSci': newSci, 'simAgi': newAgi, 'chipUsed': newChipUsed, 'weaponUses': newWeaponUses, 'cumScore': lw_add(lw_get(partial, 'cumScore'), value), 'cumDamage': newCumDamage, 'moveCount': newMoveCount, 'wMaxUses': lw_get(partial, 'wMaxUses')}
+
+def beamCountUnusedPoisonChips(partial, arsenalObj):
+    count = 0
+    for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if (isPoisonChip(chipId) and (not mapContainsKey(lw_get(partial, 'chipUsed'), chipId))):
+            if (getCooldown(chipId, getEntity()) == 0):
+                count = lw_add(count, 1)
+    return count
+
+def beamCountUnusedDenialChips(partial, arsenalObj):
+    count = 0
+    for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if ((((((chipId == CHIP_SOPORIFIC) or (chipId == CHIP_BALL_AND_CHAIN)) or (chipId == CHIP_TRANQUILIZER)) or (chipId == CHIP_SLOW_DOWN))) and (not mapContainsKey(lw_get(partial, 'chipUsed'), chipId))):
+            if (getCooldown(chipId, getEntity()) == 0):
+                count = lw_add(count, 1)
+    return count
+
+def beamCountUnusedHealChips(partial, arsenalObj):
+    count = 0
+    for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if (isHealingChip(chipId) and (not mapContainsKey(lw_get(partial, 'chipUsed'), chipId))):
+            if (getCooldown(chipId, getEntity()) == 0):
+                count = lw_add(count, 1)
+    return count
+
+def beamCountUnusedReturnChips(partial, arsenalObj):
+    count = 0
+    for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if (isDamageReturnChip(chipId) and (not mapContainsKey(lw_get(partial, 'chipUsed'), chipId))):
+            if (getCooldown(chipId, getEntity()) == 0):
+                count = lw_add(count, 1)
+    return count
+
+def beamHasUnusedNovaWeapon(partial, arsenalObj):
+    for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+        bd = getCachedDamageBreakdown(wid)
+        if ((bd != None) and (lw_get(bd, 'nova') > 0)):
+            uses = 0
+            if mapContainsKey(lw_get(partial, 'weaponUses'), wid):
+                uses = lw_get(lw_get(partial, 'weaponUses'), wid)
+            maxUse = (lw_get(lw_get(partial, 'wMaxUses'), wid) if mapContainsKey(lw_get(partial, 'wMaxUses'), wid) else 1)
+            if (uses < maxUse):
+                return True
+    return False
+
+def beamCountUnusedShieldChips(partial, arsenalObj):
+    count = 0
+    for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if (isShieldChip(chipId) and (not mapContainsKey(lw_get(partial, 'chipUsed'), chipId))):
+            if (getCooldown(chipId, getEntity()) == 0):
+                count = lw_add(count, 1)
+    return count
+
+def beamCountUnusedWeapons(partial, arsenalObj):
+    count = 0
+    for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+        uses = 0
+        if mapContainsKey(lw_get(partial, 'weaponUses'), wid):
+            uses = lw_get(lw_get(partial, 'weaponUses'), wid)
+        maxUse = (lw_get(lw_get(partial, 'wMaxUses'), wid) if mapContainsKey(lw_get(partial, 'wMaxUses'), wid) else 1)
+        if (uses < maxUse):
+            count = lw_add(count, 1)
+    return count
+
+def beamCountAttacksFromPos(fromPos, targetPos, arsenalObj, partial):
+    count = 0
+    dist = getCellDistance(fromPos, targetPos)
+    if (dist == None):
+        return 0
+    for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+        wObj = lw_get(arsenalObj.playerEquippedWeapons, wid)
+        if ((dist >= wObj._minRange) and (dist <= wObj._maxRange)):
+            count = lw_add(count, 1)
+    for chipId in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if mapContainsKey(lw_get(partial, 'chipUsed'), chipId):
+            continue
+        if ((((isHealingChip(chipId) or isOffensiveBuff(chipId)) or isShieldChip(chipId)) or isDamageReturnChip(chipId)) or isResourceChip(chipId)):
+            continue
+        chipObj = lw_get(arsenalObj.playerEquippedChips, chipId)
+        if ((dist >= chipObj._minRange) and (dist <= chipObj._maxRange)):
+            count = lw_add(count, 1)
+    return count
+
+def beamEstimateHeal(chipId, wisdom):
+    if (chipId == CHIP_REGENERATION):
+        return lw_mul(500, (lw_add(1, lw_div(wisdom, 100))))
+    if (chipId == CHIP_REMISSION):
+        return lw_mul(71.5, (lw_add(1, lw_div(wisdom, 100))))
+    if (chipId == CHIP_CURE):
+        return lw_mul(100, (lw_add(1, lw_div(wisdom, 100))))
+    if (chipId == CHIP_DRIP):
+        return lw_mul(200, (lw_add(1, lw_div(wisdom, 100))))
+    return lw_mul(50, (lw_add(1, lw_div(wisdom, 100))))
+
+def beamHasDefensiveAction(candidate):
+    for action in lw_values(lw_get(candidate, 'actions')):
+        if ((action.chip != None) and (action.chip != (-1))):
+            if (isShieldChip(action.chip) or isHealingChip(action.chip)):
+                return True
+            if isDamageReturnChip(action.chip):
+                return True
+    return False
+
+def beamHasUtilityAction(candidate):
+    for action in lw_values(lw_get(candidate, 'actions')):
+        if (action.type == Action.ACTION_DOT):
+            return True
+        if (action.type == Action.ACTION_DEBUFF):
+            return True
+        if (((action.chip != None) and (action.chip != (-1))) and isOffensiveBuff(action.chip)):
+            return True
+    return False
+
+
+# ════════ scenario_helpers.lk ════════
+# include: cooldown_tracker.lk (inlined by assembler)
+class ScenarioParams:
+    def __init__(self, buffStrat, healThr, moveFrac, attackFrac, reposition):
+        self.buffStrategy = 0
+        self.healThreshold = (-1)
+        self.movementFraction = 1.0
+        self.attackFraction = 1.0
+        self.repositioning = "hide"
+        self.buffStrategy = buffStrat
+        self.healThreshold = healThr
+        self.movementFraction = moveFrac
+        self.attackFraction = attackFrac
+        self.repositioning = reposition
+
+
+def getAvailableTeleportChip(arsenal, playerId):
+    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) and (getCooldown(CHIP_TELEPORTATION, playerId) == 0)):
+        return CHIP_TELEPORTATION
+    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, playerId) == 0)):
+        return CHIP_JUMP
+    return None
+
+def hasAnyTeleportChip(arsenal):
+    return (mapContainsKey(arsenal.playerEquippedChips, CHIP_TELEPORTATION) or mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP))
+
+def getTeleportMaxRange(chipId):
+    if (chipId == CHIP_TELEPORTATION):
+        return 12
+    if (chipId == CHIP_JUMP):
+        return 3
+    return 0
+
+class ScenarioHelpers:
+    USE_STATE_BASED_SCENARIOS = True
+    def __init__(self, arsenal, player, target, fieldMap, strategy):
+        self._arsenal = None
+        self._player = None
+        self._target = None
+        self._fieldMap = None
+        self._strategy = None
+        self._moveCache = {}
+        self._hideCache = None
+        self._kiteCache = None
+        self._dotDiscountReason = None
+        self._arsenal = arsenal
+        self._player = player
+        self._target = target
+        self._fieldMap = fieldMap
+        self._strategy = strategy
+        self._moveCache = {}
+
+    def determineStrategicState(self):
+        global lw__avgDamageRate, lw__lastEnemyHP, lw__timePressure, lw__zeroDamageStreak
+        if (_isBossFight and (_bossPhase == "PUZZLE")):
+            return "PUZZLE"
+        playerHP = self._player._currHealth
+        playerMaxHP = self._player._maxHealth
+        enemyHP = self._target._currHealth
+        enemyMaxHP = self._target._maxHealth
+        playerHPPercent = lw_div((lw_mul(playerHP, 100)), playerMaxHP)
+        enemyHPPercent = lw_div((lw_mul(enemyHP, 100)), enemyMaxHP)
+        currentTurn = getTurn()
+        availableTP = getTP()
+        isBattleRoyale = ((getFightType() == FIGHT_TYPE_BATTLE_ROYALE))
+        if isBattleRoyale:
+            aliveEnemies = getAliveEnemies()
+            enemyCount = count(aliveEnemies)
+            if (enemyCount > 4):
+                if (playerHPPercent < 30):
+                    return "FLEE"
+                if (enemyHPPercent < 40):
+                    dmgEstimate = self.estimateMaxDamageThisTurn(availableTP)
+                    if (lw_div(lw_get(dmgEstimate, 'immediate'), enemyHP) >= 0.85):
+                        return "KILL"
+                return "ATTRITION"
+            else:
+                if (enemyCount >= 3):
+                    if (playerHPPercent < 35):
+                        return "FLEE"
+                    if (enemyHPPercent < 50):
+                        dmgEstimate = self.estimateMaxDamageThisTurn(availableTP)
+                        if (lw_div(lw_get(dmgEstimate, 'immediate'), enemyHP) >= 0.75):
+                            return "KILL"
+                    return "ATTRITION"
+                else:
+                    pass
+        if ((currentTurn > 3) and (lw__lastEnemyHP > 0)):
+            netDamageThisTurn = lw_sub(lw__lastEnemyHP, enemyHP)
+            lw__avgDamageRate = lw_add(lw_mul(lw__avgDamageRate, 0.7), lw_mul(netDamageThisTurn, 0.3))
+            if (netDamageThisTurn > 0):
+                lw__zeroDamageStreak = 0
+            else:
+                lw__zeroDamageStreak = lw_add(lw__zeroDamageStreak, 1)
+        lw__lastEnemyHP = enemyHP
+        turnsRemaining = lw_sub(64, currentTurn)
+        if ((currentTurn > 5) and (lw__avgDamageRate > 0)):
+            turnsToKill = lw_div(enemyHP, lw__avgDamageRate)
+            if (turnsToKill < 0):
+                turnsToKill = 999
+            lw__timePressure = ((turnsToKill > turnsRemaining))
+        else:
+            if ((currentTurn > 15) and (enemyHP > lw_mul(enemyMaxHP, 0.7))):
+                lw__timePressure = True
+            else:
+                lw__timePressure = False
+        if ((not lw__timePressure) and (currentTurn > 15)):
+            if ((playerHPPercent > 80) and (enemyHPPercent > 80)):
+                lw__timePressure = True
+        dmgEstimate = self.estimateMaxDamageThisTurn(availableTP)
+        estimatedDamage = lw_get(dmgEstimate, 'immediate')
+        existingPoisonDmg = self._target.getTotalPoisonDamage()
+        poisonKillDmg = lw_add(estimatedDamage, existingPoisonDmg)
+        killSuppressed = False
+        if ((poisonKillDmg > 0) and (poisonKillDmg >= lw_mul(enemyHP, 0.90))):
+            inWeaponRange = self.isInAnyWeaponRange()
+            if inWeaponRange:
+                if ((playerHPPercent < 40) and (not self.hasUsableAttackFromCurrentCell())):
+                    killSuppressed = True
+                else:
+                    return "KILL"
+            else:
+                killSuppressed = True
+        if killSuppressed:
+            return "ATTRITION"
+        if ((((((not _isBossFight) and (not lw__timePressure)) and (playerHPPercent > 70)) and (enemyHPPercent < 25)) and (poisonKillDmg > 0)) and (poisonKillDmg >= lw_mul(enemyHP, 0.70))):
+            return "CLEANUP"
+        if ((lw__timePressure and (currentTurn > 35)) and (enemyHPPercent > 40)):
+            if (not (((playerHPPercent < 60) and (enemyHPPercent > 60)))):
+                return "AGGRO"
+        if (((currentTurn > 25) and (enemyHPPercent > 70)) and (playerHPPercent > 50)):
+            return "AGGRO"
+        if (playerHPPercent < 40):
+            return "FLEE"
+        apProfile = getEnemyProfile(self._target._id)
+        if ((((apProfile != None) and (self._target._magic >= 180)) and (lw__playerBuildType != BUILD_MAGIC)) and (lw__playerBuildType != BUILD_HYBRID)):
+            ownPoisonEffect = self._player.getEffect(EFFECT_POISON)
+            if (ownPoisonEffect != None):
+                apPoisonStacks = 0
+                apAllEffects = getEffects(self._player._id)
+                if (apAllEffects != None):
+                    for ef in lw_values(apAllEffects):
+                        if (lw_get(ef, 0) == EFFECT_POISON):
+                            apPoisonStacks = lw_add(apPoisonStacks, 1)
+                if (apPoisonStacks >= 3):
+                    return "AGGRO"
+        if (((playerHPPercent >= 35) and (playerHPPercent <= 70)) and (enemyHPPercent > 40)):
+            if (((lw__avgDamageRate != None) and (lw__avgDamageRate > 150)) and (enemyHPPercent < 40)):
+                turnsToFinish = lw_div(enemyHP, lw__avgDamageRate)
+                if (turnsToFinish < 2):
+                    return "ATTRITION"
+            if (((lw__raceVerdict == "WINNING") and (lw__raceMargin >= 3)) and (playerHPPercent >= 45)):
+                return "ATTRITION"
+            return "SUSTAIN"
+        if (lw__timePressure and (currentTurn > 30)):
+            return "ATTRITION"
+        if ((currentTurn <= 4) and (((lw__playerBuildType == BUILD_TANK_SCI) or (lw__playerBuildType == BUILD_MAGIC)))):
+            enemyProfile = getEnemyProfile(self._target._id)
+            if ((enemyProfile != None) and lw_get(enemyProfile, 'isBurstBuild')):
+                return "SUSTAIN"
+        burstProfile = getEnemyProfile(self._target._id)
+        if (((burstProfile != None) and lw_get(burstProfile, 'isBurstBuild')) and (currentTurn <= 6)):
+            enemyMaxBurst = lw_get(burstProfile, 'maxBurstDamage')
+            if ((enemyMaxBurst != None) and (enemyMaxBurst > 0)):
+                pAbs = self._player._absShield
+                pRel = self._player._relShield
+                if (pAbs == None):
+                    pAbs = 0
+                if (pRel == None):
+                    pRel = 0
+                myEffectiveHP = lw_add(floor(lw_div(lw_mul(playerHP, (lw_sub(100, pRel))), 100)), pAbs)
+                shieldBuffer = lw_add(pAbs, floor(lw_div(lw_mul(playerHP, pRel), 100)))
+                burstMult = (1.5 if ((shieldBuffer >= lw_mul(playerHP, 0.2))) else 2.0)
+                if (lw_mul(enemyMaxBurst, burstMult) >= myEffectiveHP):
+                    return "ATTRITION"
+        earlyGame = (((currentTurn >= 1) and (currentTurn <= 4)))
+        buffsExpired = self.checkCriticalBuffsExpired()
+        if ((((earlyGame or buffsExpired)) and (playerHPPercent > 50)) and (enemyHPPercent > 60)):
+            return "AGGRO"
+        return "ATTRITION"
+    
+    def checkCriticalBuffsExpired(self):
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if (((str > 400) and (agi > 400)) and (((mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) or mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN)) or mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE)))):
+            if mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID):
+                steroidActive = (getCooldown(CHIP_STEROID, self._player._id) > 0)
+                if (not steroidActive):
+                    return True
+            if mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP):
+                warmUpActive = (getCooldown(CHIP_WARM_UP, self._player._id) > 0)
+                if (not warmUpActive):
+                    return True
+            hasReturn = self._player.hasDamageReturn()
+            if (not hasReturn):
+                mirrorAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) and (getCooldown(CHIP_MIRROR, self._player._id) == 0))
+                thornAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) and (getCooldown(CHIP_THORN, self._player._id) == 0))
+                brambleAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE) and (getCooldown(CHIP_BRAMBLE, self._player._id) == 0))
+                if ((mirrorAvailable or thornAvailable) or brambleAvailable):
+                    return True
+        else:
+            if ((str > mag) and (str > agi)):
+                if mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID):
+                    steroidActive = (getCooldown(CHIP_STEROID, self._player._id) > 0)
+                    if (not steroidActive):
+                        return True
+                else:
+                    if mapContainsKey(arsenal.playerEquippedChips, CHIP_PRISM):
+                        prismActive = (getCooldown(CHIP_PRISM, self._player._id) > 0)
+                        if (not prismActive):
+                            return True
+            else:
+                if ((mag > str) and (mag > agi)):
+                    if mapContainsKey(arsenal.playerEquippedChips, CHIP_WIZARDRY):
+                        wizardryActive = (getCooldown(CHIP_WIZARDRY, self._player._id) > 0)
+                        if (not wizardryActive):
+                            return True
+                    else:
+                        if mapContainsKey(arsenal.playerEquippedChips, CHIP_PRISM):
+                            prismActive = (getCooldown(CHIP_PRISM, self._player._id) > 0)
+                            if (not prismActive):
+                                return True
+                else:
+                    if ((agi > str) and (agi > mag)):
+                        hasReturn = self._player.hasDamageReturn()
+                        if (not hasReturn):
+                            mirrorAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) and (getCooldown(CHIP_MIRROR, self._player._id) == 0))
+                            thornAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) and (getCooldown(CHIP_THORN, self._player._id) == 0))
+                            brambleAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE) and (getCooldown(CHIP_BRAMBLE, self._player._id) == 0))
+                            if ((mirrorAvailable or thornAvailable) or brambleAvailable):
+                                return True
+        hasShield = self._player.hasEffect(EFFECT_RELATIVE_SHIELD)
+        if (not hasShield):
+            fortressAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_FORTRESS) and (getCooldown(CHIP_FORTRESS, self._player._id) == 0))
+            wallAvailable = (mapContainsKey(arsenal.playerEquippedChips, CHIP_WALL) and (getCooldown(CHIP_WALL, self._player._id) == 0))
+            if (fortressAvailable or wallAvailable):
+                return True
+        return False
+    
+    def isInAnyWeaponRange(self):
+        dist = getCellDistance(self._player._cellPos, self._target._cellPos)
+        if (dist == None):
+            return False
+        for weaponId in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            weapon = lw_get(self._arsenal.playerEquippedWeapons, weaponId)
+            if ((dist >= weapon._minRange) and (dist <= weapon._maxRange)):
+                return True
+        damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG, CHIP_ROCKFALL, CHIP_STALACTITE, CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID, CHIP_PUNISHMENT]
+        for chipId in lw_values(damageChips):
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, chipId)):
+                continue
+            chip = lw_get(self._arsenal.playerEquippedChips, chipId)
+            if ((dist >= chip._minRange) and (dist <= chip._maxRange)):
+                return True
+        return False
+    
+    def hasUsableAttackFromCurrentCell(self):
+        fromCell = self._player._cellPos
+        toCell = self._target._cellPos
+        dist = getCellDistance(fromCell, toCell)
+        if (dist == None):
+            return False
+        availableTP = self._player._currTp
+        for weaponId in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            w = lw_get(self._arsenal.playerEquippedWeapons, weaponId)
+            if (w == None):
+                continue
+            if ((dist < w._minRange) or (dist > w._maxRange)):
+                continue
+            if (availableTP < w._cost):
+                continue
+            if (not getCachedLineOfSight(fromCell, toCell)):
+                continue
+            if (((w._launchType != None) and (w._launchType > 0)) and (not isSimLaunchValid(w._launchType, fromCell, toCell))):
+                continue
+            return True
+        damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG, CHIP_ROCKFALL, CHIP_STALACTITE, CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID, CHIP_PUNISHMENT]
+        for chipId in lw_values(damageChips):
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, chipId)):
+                continue
+            c = lw_get(self._arsenal.playerEquippedChips, chipId)
+            if (c == None):
+                continue
+            if ((dist < c._minRange) or (dist > c._maxRange)):
+                continue
+            if (getCooldown(chipId, self._player._id) > 0):
+                continue
+            if (availableTP < c._cost):
+                continue
+            if (not getCachedLineOfSight(fromCell, toCell)):
+                continue
+            if (((c._launchType != None) and (c._launchType > 0)) and (not isSimLaunchValid(c._launchType, fromCell, toCell))):
+                continue
+            return True
+        return False
+    
+    def checkOTKOOpportunity(self):
+        enemyHP = self._target._currHealth
+        enemyMaxHP = self._target._maxHealth
+        hpPercent = lw_div((lw_mul(enemyHP, 100)), enemyMaxHP)
+        return (((hpPercent < 35) or (enemyHP < 500)))
+    
+    def estimateMaxDamageThisTurn(self, availableTP):
+        baseStr = self._player._strength
+        baseMag = self._player._magic
+        baseAgi = self._player._agility
+        baseWis = self._player._wisdom
+        baseSci = self._player._science
+        distToEnemy = getCellDistance(self._player._cellPos, self._target._cellPos)
+        if (distToEnemy == None):
+            distToEnemy = 99
+        availableMP = self._player._currMp
+        def _lwfn1_1(str, mag, wis, sci, tpBudget, arsenal, target, playerId, dist, mp):
+            immediateDamage = 0
+            totalDamage = 0
+            for weaponId in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+                closestDist = max(1, lw_sub(dist, mp))
+                if (closestDist > weapon._maxRange):
+                    continue
+                bd = arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
+                directDmg = lw_get(bd, 'direct')
+                novaDmg = lw_get(bd, 'nova')
+                dotDmg = lw_get(bd, 'dot')
+                relShield = lw_div(target._relShield, 100)
+                absShield = target._absShield
+                netDirect = lw_sub(lw_mul(directDmg, (lw_sub(1, relShield))), absShield)
+                if (netDirect < 0):
+                    netDirect = 0
+                hpDeficit = lw_sub(target._maxHealth, target._currHealth)
+                cappedNova = novaDmg
+                if ((netDirect > 0) and (novaDmg > 0)):
+                    cappedNova = min(novaDmg, lw_add(hpDeficit, netDirect))
+                else:
+                    if (novaDmg > 0):
+                        cappedNova = min(novaDmg, hpDeficit)
+                maxUses = min(weapon._maxUse, floor(lw_div(tpBudget, weapon._cost)))
+                immediateDamage = lw_add(immediateDamage, lw_mul((lw_add(netDirect, cappedNova)), maxUses))
+                totalDamage = lw_add(totalDamage, lw_mul((lw_add(lw_add(netDirect, cappedNova), dotDmg)), maxUses))
+            damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG, CHIP_ROCKFALL, CHIP_STALACTITE, CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID, CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_DESINTEGRATION, CHIP_PUNISHMENT]
+            bestChipImmediate = 0
+            bestChipTotal = 0
+            for chipId in lw_values(damageChips):
+                if (not mapContainsKey(arsenal.playerEquippedChips, chipId)):
+                    continue
+                if (getCooldown(chipId, playerId) > 0):
+                    continue
+                chip = lw_get(arsenal.playerEquippedChips, chipId)
+                closestDist = max(1, lw_sub(dist, mp))
+                if (closestDist > chip._maxRange):
+                    continue
+                cbd = arsenal.getDamageBreakdown(str, mag, wis, sci, chipId)
+                chipImmediate = lw_add(lw_get(cbd, 'direct'), lw_get(cbd, 'nova'))
+                chipTotal = lw_add(lw_add(lw_get(cbd, 'direct'), lw_get(cbd, 'nova')), lw_get(cbd, 'dot'))
+                if (chipTotal > bestChipTotal):
+                    bestChipImmediate = chipImmediate
+                    bestChipTotal = chipTotal
+            immediateDamage = lw_add(immediateDamage, bestChipImmediate)
+            totalDamage = lw_add(totalDamage, bestChipTotal)
+            return {'immediate': immediateDamage, 'total': totalDamage}
+        calcDmg = _lwfn1_1
+        bestResult = calcDmg(baseStr, baseMag, baseWis, baseSci, availableTP, self._arsenal, self._target, self._player._id, distToEnemy, availableMP)
+        maxImmediate = lw_get(bestResult, 'immediate')
+        maxTotal = lw_get(bestResult, 'total')
+        hasAdrenaline = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ADRENALINE)
+        adrenalineReady = (hasAdrenaline and (getCooldown(CHIP_ADRENALINE, self._player._id) == 0))
+        adrenalineBonus = (4 if adrenalineReady else 0)
+        hasSteroid = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID)
+        steroidReady = (hasSteroid and (getCooldown(CHIP_STEROID, self._player._id) == 0))
+        if (steroidReady and (availableTP >= 7)):
+            buffedStr = lw_add(baseStr, 150)
+            tpAfterBuff = lw_add(lw_sub(availableTP, 7), adrenalineBonus)
+            if (tpAfterBuff > 0):
+                r = calcDmg(buffedStr, baseMag, baseWis, baseSci, tpAfterBuff, self._arsenal, self._target, self._player._id, distToEnemy, availableMP)
+                if (lw_get(r, 'total') > maxTotal):
+                    maxImmediate = lw_get(r, 'immediate')
+                    maxTotal = lw_get(r, 'total')
+        hasWizardry = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WIZARDRY)
+        wizardryReady = (hasWizardry and (getCooldown(CHIP_WIZARDRY, self._player._id) == 0))
+        if (wizardryReady and (availableTP >= 6)):
+            buffedMag = lw_add(baseMag, 150)
+            tpAfterBuff = lw_add(lw_sub(availableTP, 6), adrenalineBonus)
+            if (tpAfterBuff > 0):
+                r = calcDmg(baseStr, buffedMag, baseWis, baseSci, tpAfterBuff, self._arsenal, self._target, self._player._id, distToEnemy, availableMP)
+                if (lw_get(r, 'total') > maxTotal):
+                    maxImmediate = lw_get(r, 'immediate')
+                    maxTotal = lw_get(r, 'total')
+        hasKnowledge = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_KNOWLEDGE)
+        knowledgeReady = (hasKnowledge and (getCooldown(CHIP_KNOWLEDGE, self._player._id) == 0))
+        if (knowledgeReady and (availableTP >= 5)):
+            buffedSci = lw_add(baseSci, 250)
+            tpAfterBuff = lw_add(lw_sub(availableTP, 5), adrenalineBonus)
+            if (tpAfterBuff > 0):
+                r = calcDmg(baseStr, baseMag, baseWis, buffedSci, tpAfterBuff, self._arsenal, self._target, self._player._id, distToEnemy, availableMP)
+                if (lw_get(r, 'total') > maxTotal):
+                    maxImmediate = lw_get(r, 'immediate')
+                    maxTotal = lw_get(r, 'total')
+        hasPrism = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_PRISM)
+        prismReady = (hasPrism and (getCooldown(CHIP_PRISM, self._player._id) == 0))
+        if (prismReady and (availableTP >= 6)):
+            tpAfterBuff = lw_add(lw_sub(availableTP, 6), adrenalineBonus)
+            if (tpAfterBuff > 0):
+                r = calcDmg(lw_add(baseStr, 60), lw_add(baseMag, 60), lw_add(baseWis, 60), lw_add(baseSci, 60), tpAfterBuff, self._arsenal, self._target, self._player._id, distToEnemy, availableMP)
+                if (lw_get(r, 'total') > maxTotal):
+                    maxImmediate = lw_get(r, 'immediate')
+                    maxTotal = lw_get(r, 'total')
+        return {'immediate': maxImmediate, 'total': maxTotal}
+    
+    def hasPoisonCapability(self):
+        for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            if isPoisonWeapon(wid):
+                return True
+        for cid in lw_values(mapKeys(self._arsenal.playerEquippedChips)):
+            if isPoisonChip(cid):
+                return True
+        return False
+    
+    def getOffensiveBuff(self):
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if ((((str > 400) and (agi > 400)) and mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID)) and mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WARM_UP)):
+            if (getCooldown(CHIP_WARM_UP, self._player._id) == 0):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_WARM_UP, (-1), self._player)
+            if (getCooldown(CHIP_STEROID, self._player._id) == 0):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player)
+        if ((str > mag) and (str > agi)):
+            if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID) and (getCooldown(CHIP_STEROID, self._player._id) == 0)):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player)
+        else:
+            if ((mag > str) and (mag > agi)):
+                if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WIZARDRY) and (getCooldown(CHIP_WIZARDRY, self._player._id) == 0)):
+                    return Action(Action.ACTION_BUFF, (-1), CHIP_WIZARDRY, (-1), self._player)
+            else:
+                if ((agi > str) and (agi > mag)):
+                    if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WARM_UP) and (getCooldown(CHIP_WARM_UP, self._player._id) == 0)):
+                        return Action(Action.ACTION_BUFF, (-1), CHIP_WARM_UP, (-1), self._player)
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_PRISM) and (getCooldown(CHIP_PRISM, self._player._id) == 0)):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_PRISM, (-1), self._player)
+        return None
+    
+    def getDefensiveBuff(self):
+        currentTP = getTP()
+        resistance = self._player._resistance
+        refreshThreshold = (2 if ((resistance >= 200)) else 1)
+        hasShield = self._player.hasEffect(EFFECT_RELATIVE_SHIELD)
+        shieldRemaining = (self._player.getEffectRemaining(EFFECT_RELATIVE_SHIELD) if hasShield else 0)
+        if (hasShield and (shieldRemaining > refreshThreshold)):
+            return None
+        hasFortress = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_FORTRESS)
+        hasWall = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WALL)
+        fortressCd = (getCooldown(CHIP_FORTRESS, self._player._id) if hasFortress else 999)
+        wallCd = (getCooldown(CHIP_WALL, self._player._id) if hasWall else 999)
+        if ((hasFortress and (fortressCd == 0)) and (currentTP >= 6)):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_FORTRESS, (-1), self._player)
+        if ((hasWall and (wallCd == 0)) and (currentTP >= 3)):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_WALL, (-1), self._player)
+        return None
+    
+    def getLeatherBootsBuff(self):
+        baseMP = getTotalMP()
+        if (baseMP >= 10):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS)):
+            return None
+        if mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ADRENALINE):
+            adrenalineCd = getCooldown(CHIP_ADRENALINE, self._player._id)
+            if (adrenalineCd > 0):
+                return None
+        currentTP = getTP()
+        hasMPBuff = self._player.hasEffect(EFFECT_BUFF_MP)
+        buffRemaining = (self._player.getEffectRemaining(EFFECT_BUFF_MP) if hasMPBuff else 0)
+        mpShackled = self._player.hasEffect(EFFECT_SHACKLE_MP)
+        if ((hasMPBuff and (buffRemaining > 1)) and (not mpShackled)):
+            return None
+        bootsCd = getCooldown(CHIP_LEATHER_BOOTS, self._player._id)
+        if ((bootsCd == 0) and (currentTP >= 6)):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_LEATHER_BOOTS, (-1), self._player)
+        return None
+    
+    def getMotivationBuff(self):
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MOTIVATION)):
+            return None
+        if (getCooldown(CHIP_MOTIVATION, self._player._id) > 0):
+            return None
+        motivCost = getCachedChipCost(CHIP_MOTIVATION)
+        currentTP = getTP()
+        if (currentTP < motivCost):
+            return None
+        shackled = (self._player.hasEffect(EFFECT_SHACKLE_TP) or self._player.hasEffect(EFFECT_SHACKLE_MP))
+        openingTurn = (((getTurn() <= 2) and (currentTP >= lw_add(motivCost, 8))))
+        if openingTurn:
+            motivMaxWR = 1
+            for motivWid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                motivW = lw_get(self._arsenal.playerEquippedWeapons, motivWid)
+                if (motivW._maxRange > motivMaxWR):
+                    motivMaxWR = motivW._maxRange
+            motivDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+            if ((motivDist != None) and (motivDist <= lw_add(lw_add(getTotalMP(), motivMaxWR), 2))):
+                openingTurn = False
+        enemyHPPct = lw_div((lw_mul(self._target._currHealth, 100)), max(1, self._target._maxHealth))
+        playerHPPct = lw_div((lw_mul(self._player._currHealth, 100)), max(1, self._player._maxHealth))
+        combatHorizon = (((((getTurn() <= 30) and (enemyHPPct > 40)) and (playerHPPct > 35)) and (currentTP >= lw_add(motivCost, 6))))
+        if (((not shackled) and (not openingTurn)) and (not combatHorizon)):
+            return None
+        return Action(Action.ACTION_BUFF, (-1), CHIP_MOTIVATION, (-1), self._player)
+    
+    def getAdrenalineBuff(self):
+        baseMP = getTotalMP()
+        if (baseMP >= 10):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ADRENALINE)):
+            return None
+        currentTP = getTP()
+        adrenalineCd = getCooldown(CHIP_ADRENALINE, self._player._id)
+        if (adrenalineCd > 0):
+            return None
+        if (currentTP >= 3):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_ADRENALINE, (-1), self._player)
+        return None
+    
+    def getDamageReturnBuff(self):
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        hasMirror = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MIRROR)
+        hasThorn = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_THORN)
+        hasBramble = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        hasAnyDamageReturn = ((hasMirror or hasThorn) or hasBramble)
+        if ((agi < 300) or (not hasAnyDamageReturn)):
+            return None
+        currentTP = getTP()
+        refreshThreshold = (2 if ((agi >= 200)) else 1)
+        hasReturn = self._player.hasDamageReturn()
+        returnRemaining = (self._player.getDamageReturnRemaining() if hasReturn else 0)
+        if (hasReturn and (returnRemaining > refreshThreshold)):
+            return None
+        distToEnemy = getCellDistance(self._player._cellPos, self._target._cellPos)
+        if (distToEnemy == None):
+            distToEnemy = 99
+        inCloseCombat = (distToEnemy <= 8)
+        mirrorCd = (getCooldown(CHIP_MIRROR, self._player._id) if hasMirror else 999)
+        thornCd = (getCooldown(CHIP_THORN, self._player._id) if hasThorn else 999)
+        brambleCd = (getCooldown(CHIP_BRAMBLE, self._player._id) if hasBramble else 999)
+        mirrorReady = (((mirrorCd == 0) and hasMirror) and (currentTP >= 5))
+        thornReady = (((thornCd == 0) and hasThorn) and (currentTP >= 4))
+        brambleReady = (((brambleCd == 0) and hasBramble) and (currentTP >= 4))
+        enemyCanAttack1 = predictEnemyCanAttackWithin(self._player._cellPos, self._target, 1)
+        enemyCanAttack2 = predictEnemyCanAttackWithin(self._player._cellPos, self._target, 2)
+        expectedThreat = self._fieldMap.getThreatAtCell(self._player._cellPos)
+        if ((((brambleReady and inCloseCombat) and (currentTP >= 15)) and (expectedThreat > 300)) and enemyCanAttack1):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_BRAMBLE, (-1), self._player)
+        if (currentTP < 10):
+            if (thornReady and enemyCanAttack2):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_THORN, (-1), self._player)
+            if mirrorReady:
+                return Action(Action.ACTION_BUFF, (-1), CHIP_MIRROR, (-1), self._player)
+            return None
+        if ((mirrorReady and thornReady) and (currentTP >= 10)):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_MIRROR, (-1), self._player)
+        if mirrorReady:
+            return Action(Action.ACTION_BUFF, (-1), CHIP_MIRROR, (-1), self._player)
+        if (thornReady and enemyCanAttack2):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_THORN, (-1), self._player)
+        return None
+    
+    def getAgiBuff(self):
+        buffs = []
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WARM_UP) and (getCooldown(CHIP_WARM_UP, self._player._id) == 0)):
+            push(buffs, Action(Action.ACTION_BUFF, (-1), CHIP_WARM_UP, (-1), self._player))
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STRETCHING) and (getCooldown(CHIP_STRETCHING, self._player._id) == 0)):
+            push(buffs, Action(Action.ACTION_BUFF, (-1), CHIP_STRETCHING, (-1), self._player))
+        return buffs
+    
+    def getAllDamageReturnBuffs(self):
+        agi = self._player._agility
+        buffs = []
+        hasMirror = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MIRROR)
+        hasThorn = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_THORN)
+        hasBramble = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        if ((agi < 300) or ((((not hasMirror) and (not hasThorn)) and (not hasBramble)))):
+            return buffs
+        hasReturn = self._player.hasDamageReturn()
+        returnRemaining = (self._player.getDamageReturnRemaining() if hasReturn else 0)
+        if (hasReturn and (returnRemaining > 2)):
+            return buffs
+        mirrorCd = (getCooldown(CHIP_MIRROR, self._player._id) if hasMirror else 999)
+        thornCd = (getCooldown(CHIP_THORN, self._player._id) if hasThorn else 999)
+        brambleCd = (getCooldown(CHIP_BRAMBLE, self._player._id) if hasBramble else 999)
+        if ((mirrorCd == 0) and hasMirror):
+            push(buffs, Action(Action.ACTION_BUFF, (-1), CHIP_MIRROR, (-1), self._player))
+        if ((thornCd == 0) and hasThorn):
+            push(buffs, Action(Action.ACTION_BUFF, (-1), CHIP_THORN, (-1), self._player))
+        if ((brambleCd == 0) and hasBramble):
+            distToEnemy = getCellDistance(self._player._cellPos, self._target._cellPos)
+            if (distToEnemy == None):
+                distToEnemy = 99
+            if (distToEnemy <= 10):
+                push(buffs, Action(Action.ACTION_BUFF, (-1), CHIP_BRAMBLE, (-1), self._player))
+        return buffs
+    
+    def getHealingAction(self, tpBudget, hpThreshold=0.7):
+        currentHP = self._player._currHealth
+        maxHP = self._player._maxHealth
+        hpRatio = lw_div(currentHP, maxHP)
+        missingHP = lw_sub(maxHP, currentHP)
+        if (((getCooldown(CHIP_REGENERATION, self._player._id) == 0) and mapContainsKey(self._arsenal.playerEquippedChips, CHIP_REGENERATION)) and (tpBudget >= 8)):
+            if (hpRatio < 0.40):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_REGENERATION, (-1), self._player)
+        if ((hpRatio < 0.80) and (tpBudget >= 5)):
+            healAction = self.getSmartHealingAction()
+            if (healAction != None):
+                return healAction
+        return None
+    
+    def getRemissionAction(self):
+        return self.getSmartHealingAction()
+    
+    def getSmartHealingAction(self):
+        wisdom = self._player._wisdom
+        currentHP = self._player._currHealth
+        maxHP = self._player._maxHealth
+        missingHP = lw_sub(maxHP, currentHP)
+        if ((wisdom >= 400) and mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_ENHANCED_LIGHTNINGER)):
+            if (getTP() >= 9):
+                dist = getCellDistance(self._player._cellPos, self._target._cellPos)
+                if (((dist != None) and (dist >= 1)) and (dist <= 8)):
+                    estimatedLifesteal = 150
+                    if (missingHP >= lw_mul(estimatedLifesteal, 0.85)):
+                        return Action(Action.ACTION_DIRECT, WEAPON_ENHANCED_LIGHTNINGER, (-1), self._target._cellPos, self._target)
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_REMISSION) and (getCooldown(CHIP_REMISSION, self._player._id) == 0)):
+            expectedHeal = self._arsenal.getExpectedHeal(CHIP_REMISSION, wisdom)
+            if (missingHP >= lw_mul(expectedHeal, 0.85)):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_REMISSION, (-1), self._player)
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_CURE) and (getCooldown(CHIP_CURE, self._player._id) == 0)):
+            expectedCureHeal = self._arsenal.getExpectedHeal(CHIP_CURE, wisdom)
+            if (missingHP >= lw_mul(expectedCureHeal, 0.85)):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_CURE, (-1), self._player)
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_VACCINE) and (getCooldown(CHIP_VACCINE, self._player._id) == 0)):
+            expectedVaccHeal = self._arsenal.getExpectedHeal(CHIP_VACCINE, wisdom)
+            if (missingHP >= lw_mul(expectedVaccHeal, 0.85)):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_VACCINE, (-1), self._player)
+        return None
+    
+    def getRegenerationAction(self):
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_REGENERATION) and (getCooldown(CHIP_REGENERATION, self._player._id) == 0)):
+            currentHP = self._player._currHealth
+            maxHP = self._player._maxHealth
+            hpRatio = ((lw_div(currentHP, maxHP)) if ((maxHP > 0)) else 1.0)
+            if (hpRatio < 0.40):
+                return Action(Action.ACTION_BUFF, (-1), CHIP_REGENERATION, (-1), self._player)
+        return None
+    
+    def getMoveToOptimalCell(self, mpBudget):
+        if (mpBudget <= 0):
+            return None
+        otkoCells = self._fieldMap.getAllOTKOCells()
+        if (count(otkoCells) > 0):
+            bestOTKO = None
+            bestOTKOScore = (-999999)
+            for otkoCell in lw_values(otkoCells):
+                pathLen = getGraphMPCost(otkoCell._id)
+                if ((pathLen < 999) and (pathLen <= mpBudget)):
+                    score = lw_sub(lw_add(lw_mul(otkoCell._otkoKillProbability, 10000), otkoCell._otkoDamage), lw_mul(pathLen, 10))
+                    if (score > bestOTKOScore):
+                        bestOTKOScore = score
+                        bestOTKO = otkoCell
+            if (bestOTKO != None):
+                return Action(Action.MOVEMENT_OFFENSIVE, (-1), (-1), bestOTKO._id, self._target)
+        playerHP = self._player._currHealth
+        playerMaxHP = self._player._maxHealth
+        hpPercent = lw_div((lw_mul(playerHP, 100)), playerMaxHP)
+        threatWeight = 0.3
+        if (hpPercent < 40):
+            threatWeight = 0.8
+        else:
+            if (hpPercent < 70):
+                threatWeight = 0.5
+        bestCell = self._fieldMap.findBestTacticalCell(mpBudget, threatWeight)
+        if ((bestCell == None) or (bestCell == (-1))):
+            bestCell = self._fieldMap.getBestWeaponOrChipCell()
+            if ((bestCell == None) or (bestCell == (-1))):
+                approachCell = self.getApproachEnemyCell(mpBudget)
+                if ((approachCell != None) and (approachCell != (-1))):
+                    return Action(Action.MOVEMENT_APPROACH, (-1), (-1), approachCell, self._target)
+                return None
+            pathLength = getGraphMPCost(bestCell._id)
+            if ((pathLength >= 999) or (pathLength > mpBudget)):
+                if (self._strategy != None):
+                    bestCell = self._strategy.findBestReachableDamageCell(mpBudget)
+                else:
+                    bestCell = None
+                if ((bestCell == None) or (bestCell == (-1))):
+                    approachCell = self.getApproachEnemyCell(mpBudget)
+                    if ((approachCell != None) and (approachCell != (-1))):
+                        return Action(Action.MOVEMENT_APPROACH, (-1), (-1), approachCell, self._target)
+                    return None
+        action = Action(Action.MOVEMENT_OFFENSIVE, (-1), (-1), bestCell._id, self._target)
+        return action
+    
+    def getHideAndSeekAction(self, mpBudget):
+        if (mpBudget <= 0):
+            return None
+        if (self._hideCache != None):
+            return self._hideCache
+        hideCell = self._fieldMap.findHideAndSeekCell("defensive")
+        if (hideCell != None):
+            self._hideCache = Action(Action.MOVEMENT_HNS, (-1), (-1), lw_get(hideCell, 'cell'), self._target)
+            return self._hideCache
+        return None
+    
+    def getKiteAwayAction(self, mpBudget):
+        if (mpBudget <= 0):
+            return None
+        if (self._kiteCache != None):
+            return self._kiteCache
+        self._kiteCache = Action(Action.MOVEMENT_FLEE, (-1), (-1), (-1), self._target)
+        return self._kiteCache
+    
+    def cellOpenness(self, cellId, radius):
+        openCount = 0
+        cx = getCellX(cellId)
+        cy = getCellY(cellId)
+        ox = (-lw_num(radius))
+        while (ox <= radius):
+            oy = (-lw_num(radius))
+            while (oy <= radius):
+                if ((ox == 0) and (oy == 0)):
+                    oy = lw_add(oy, 1)
+                    continue
+                c = getCellFromXY(lw_add(cx, ox), lw_add(cy, oy))
+                if (c == None):
+                    oy = lw_add(oy, 1)
+                    continue
+                if (not isObstacle(c)):
+                    openCount = lw_add(openCount, 1)
+                oy = lw_add(oy, 1)
+            ox = lw_add(ox, 1)
+        return openCount
+    
+    def predictEnemyRetreatCell(self, approachCell, enemyCell, enemyMP):
+        if (enemyMP <= 0):
+            return enemyCell
+        ax = getCellX(approachCell)
+        ay = getCellY(approachCell)
+        ex = getCellX(enemyCell)
+        ey = getCellY(enemyCell)
+        dx = lw_sub(ex, ax)
+        dy = lw_sub(ey, ay)
+        mag = max(1, lw_add(abs(dx), abs(dy)))
+        rx = lw_add(ex, lw_div((lw_mul(dx, enemyMP)), mag))
+        ry = lw_add(ey, lw_div((lw_mul(dy, enemyMP)), mag))
+        primary = getCellFromXY(rx, ry)
+        if ((primary != None) and (not isObstacle(primary))):
+            return primary
+        perpDx = (-lw_num(dy))
+        perpDy = dx
+        jit = 1
+        while (jit <= 2):
+            sign = (-1)
+            while (sign <= 1):
+                jx = lw_add(rx, lw_div((lw_mul(perpDx, jit)), max(1, lw_add(abs(perpDx), abs(perpDy)))))
+                jy = lw_add(ry, lw_div((lw_mul(perpDy, jit)), max(1, lw_add(abs(perpDx), abs(perpDy)))))
+                jc = getCellFromXY(lw_mul(jx, sign), lw_mul(jy, sign))
+                if ((jc != None) and (not isObstacle(jc))):
+                    return jc
+                sign = lw_add(sign, 2)
+            jit = lw_add(jit, 1)
+        return enemyCell
+    
+    def getApproachEnemyCell(self, mpBudget):
+        if (mpBudget <= 0):
+            return None
+        reachableCells = getReachableCells()
+        if ((reachableCells == None) or (count(reachableCells) == 0)):
+            return None
+        enemyPos = self._target._cellPos
+        currentDist = getCellDistance(self._player._cellPos, enemyPos)
+        if (currentDist == None):
+            return None
+        bestCell = None
+        bestScore = lw_add(currentDist, 1000)
+        maxWRApr = 0
+        for wIdAp in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            wObjAp = lw_get(self._arsenal.playerEquippedWeapons, wIdAp)
+            if ((wObjAp != None) and (wObjAp._maxRange > maxWRApr)):
+                maxWRApr = wObjAp._maxRange
+        poisonDoTAp = 0
+        pEffsAp = getEffects(self._player._id)
+        if (pEffsAp != None):
+            for peAp in lw_values(pEffsAp):
+                if ((lw_get(peAp, 0) == EFFECT_POISON) and (count(peAp) >= 2)):
+                    dotV = lw_get(peAp, 1)
+                    dotR = (lw_get(peAp, 3) if ((count(peAp) >= 4)) else 1)
+                    poisonDoTAp = lw_add(poisonDoTAp, lw_mul(dotV, max(1, dotR)))
+        poisonRatioAp = lw_div(lw_mul(poisonDoTAp, 100), max(1, self._player._maxHealth))
+        poisonHideBonus = 0
+        if (poisonRatioAp >= 25):
+            poisonHideBonus = 2.0
+        if (poisonRatioAp >= 50):
+            poisonHideBonus = 5.0
+        if (poisonRatioAp >= 75):
+            poisonHideBonus = 10.0
+        enemyMPHerd = self._target._currMp
+        herdingEnabled = ((enemyMPHerd >= 3))
+        openBaseline = 22
+        maxHerdBonus = 6.0
+        for cellId in lw_values(reachableCells):
+            cellDist = getCellDistance(cellId, enemyPos)
+            if (cellDist == None):
+                continue
+            pathCost = getGraphMPCost(cellId)
+            if ((pathCost >= 999) or (pathCost > mpBudget)):
+                continue
+            if ((cellDist >= currentDist) and (poisonHideBonus == 0)):
+                continue
+            threat = getAdversarialThreat(cellId)
+            canHitBack = ((((cellDist >= 1) and (cellDist <= maxWRApr)) and lineOfSight(cellId, enemyPos)))
+            threatPenalty = (lw_div(threat, 200.0) if canHitBack else lw_div(threat, 50.0))
+            hideBonus = 0
+            hidesLoS = (not lineOfSight(cellId, enemyPos))
+            if hidesLoS:
+                if (cellDist > maxWRApr):
+                    hideBonus = lw_add(hideBonus, 1.0)
+                hideBonus = lw_add(hideBonus, poisonHideBonus)
+            herdingBonus = 0
+            if (herdingEnabled and (poisonHideBonus == 0)):
+                retreatCell = self.predictEnemyRetreatCell(cellId, enemyPos, enemyMPHerd)
+                if (retreatCell != None):
+                    openness = self.cellOpenness(retreatCell, 2)
+                    herd = lw_div((lw_sub(openness, openBaseline)), 4.0)
+                    if (herd > maxHerdBonus):
+                        herd = maxHerdBonus
+                    if (herd < (-lw_num(maxHerdBonus))):
+                        herd = (-lw_num(maxHerdBonus))
+                    herdingBonus = herd
+            score = lw_sub(lw_sub(lw_add(cellDist, threatPenalty), hideBonus), herdingBonus)
+            if (score < bestScore):
+                bestScore = score
+                bestCell = cellId
+        if (bestCell != None):
+            return bestCell
+        fallbackCell = None
+        fallbackDist = 999
+        for cellId in lw_values(reachableCells):
+            cellDist = getCellDistance(cellId, enemyPos)
+            if (cellDist == None):
+                continue
+            if (cellDist < fallbackDist):
+                pathCost = getGraphMPCost(cellId)
+                if ((pathCost < 999) and (pathCost <= mpBudget)):
+                    fallbackDist = cellDist
+                    fallbackCell = cellId
+        if (fallbackCell != None):
+            return fallbackCell
+        return None
+    
+    def getWeaponSpamActions(self, tpBudget, fraction, simPos=(-1)):
+        actions = []
+        tpToUse = floor(lw_mul(tpBudget, fraction))
+        checkPos = (self._player._cellPos if ((simPos == (-1))) else simPos)
+        str = self._player._strength
+        mag = self._player._magic
+        wis = self._player._wisdom
+        for weaponId in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            weapon = lw_get(self._arsenal.playerEquippedWeapons, weaponId)
+            if (tpToUse < weapon._cost):
+                continue
+            dist = getCellDistance(checkPos, self._target._cellPos)
+            if (((dist == None) or (dist < weapon._minRange)) or (dist > weapon._maxRange)):
+                continue
+            if (not lineOfSight(checkPos, self._target._cellPos)):
+                continue
+            uses = min(weapon._maxUse, floor(lw_div(tpToUse, weapon._cost)))
+            i = 0
+            while (i < uses):
+                push(actions, Action(Action.ACTION_DIRECT, weapon._id, (-1), self._target._cellPos, self._target))
+                tpToUse = lw_num(tpToUse) - lw_num(weapon._cost)
+                i = lw_add(i, 1)
+        return actions
+    
+    def getAntidoteAction(self, tpBudget):
+        if (not self._player.hasEffect(EFFECT_POISON)):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ANTIDOTE)):
+            return None
+        if (getCooldown(CHIP_ANTIDOTE, self._player._id) != 0):
+            return None
+        if (tpBudget < 3):
+            return None
+        poisonStacks = self._player.getPoisonStackCount()
+        poisonRemaining = self._player.getMaxPoisonRemaining()
+        if (poisonRemaining < 1):
+            return None
+        poisonDamagePerTurn = self._player.getTotalPoisonPerTurn()
+        totalPoisonDamage = self._player.getTotalPoisonDamage()
+        currentHP = self._player._currHealth
+        maxHP = self._player._maxHealth
+        hpRatio = lw_div(currentHP, maxHP)
+        if (poisonStacks >= 3):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_ANTIDOTE, (-1), self._player)
+        if (totalPoisonDamage > 60):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_ANTIDOTE, (-1), self._player)
+        if ((poisonDamagePerTurn > 30) and (poisonRemaining >= 2)):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_ANTIDOTE, (-1), self._player)
+        if ((hpRatio < 0.5) and (totalPoisonDamage > 50)):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_ANTIDOTE, (-1), self._player)
+        if (totalPoisonDamage > currentHP):
+            return Action(Action.ACTION_BUFF, (-1), CHIP_ANTIDOTE, (-1), self._player)
+        return None
+    
+    def getManumissionAction(self, tpBudget):
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MANUMISSION)):
+            return None
+        if (getCooldown(CHIP_MANUMISSION, self._player._id) != 0):
+            return None
+        mCost = getCachedChipCost(CHIP_MANUMISSION)
+        if (tpBudget < mCost):
+            return None
+        hasShackle = (((self._player.hasEffect(EFFECT_SHACKLE_TP) or self._player.hasEffect(EFFECT_SHACKLE_MP)) or self._player.hasEffect(EFFECT_SHACKLE_STRENGTH)) or self._player.hasEffect(EFFECT_SHACKLE_MAGIC))
+        if hasShackle:
+            return Action(Action.ACTION_BUFF, (-1), CHIP_MANUMISSION, self._player._cellPos, self._player)
+        return None
+    
+    def getDebuffAction(self):
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_LIBERATION)):
+            return None
+        if (getCooldown(CHIP_LIBERATION, self._player._id) != 0):
+            return None
+        antidoteEquipped = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ANTIDOTE)
+        antidoteAvailable = (antidoteEquipped and (getCooldown(CHIP_ANTIDOTE, self._player._id) == 0))
+        ownPoisonStacks = self._player.getPoisonStackCount()
+        ownPoisonDPT = self._player.getTotalPoisonPerTurn()
+        hp = self._player._currHealth
+        maxHp = self._player._maxHealth
+        hpPct = (lw_div((lw_mul(hp, 100)), maxHp) if ((maxHp > 0)) else 100)
+        hasShackleMP = self._player.hasEffect(EFFECT_SHACKLE_MP)
+        hasShackleTP = self._player.hasEffect(EFFECT_SHACKLE_TP)
+        hasShackleStr = self._player.hasEffect(EFFECT_SHACKLE_STRENGTH)
+        underShackle = ((hasShackleMP or hasShackleTP) or hasShackleStr)
+        poisonPressure = ((((not antidoteAvailable) and (ownPoisonStacks >= 2)) and (lw_mul(ownPoisonDPT, 100) > lw_mul(hp, 15))))
+        multiDenial = (underShackle and (ownPoisonStacks >= 1))
+        if (poisonPressure or multiDenial):
+            freshSteroid = (self._player.hasEffect(EFFECT_BUFF_STRENGTH) and (self._player.getEffectRemaining(EFFECT_BUFF_STRENGTH) >= 2))
+            if ((not freshSteroid) or (hpPct < 35)):
+                return Action(Action.ACTION_DEBUFF, (-1), CHIP_LIBERATION, self._player._cellPos, self._player)
+        dist = getCellDistance(self._player._cellPos, self._target._cellPos)
+        if ((dist == None) or (dist > 6)):
+            return None
+        targetBuffs = 0
+        if self._target.hasEffect(EFFECT_ABSOLUTE_SHIELD):
+            targetBuffs = lw_add(targetBuffs, 1)
+        if self._target.hasEffect(EFFECT_RELATIVE_SHIELD):
+            targetBuffs = lw_add(targetBuffs, 1)
+        if self._target.hasEffect(EFFECT_DAMAGE_RETURN):
+            targetBuffs = lw_add(targetBuffs, 1)
+        if self._target.hasEffect(EFFECT_BUFF_RESISTANCE):
+            targetBuffs = lw_add(targetBuffs, 1)
+        if self._target.hasEffect(EFFECT_BUFF_STRENGTH):
+            targetBuffs = lw_add(targetBuffs, 1)
+        if (targetBuffs > 0):
+            return Action(Action.ACTION_DEBUFF, (-1), CHIP_LIBERATION, self._target._cellPos, self._target)
+        targetProfile = getEnemyProfile(self._target._id)
+        if (((targetProfile != None) and lw_get(targetProfile, 'isTank')) and lw_get(targetProfile, 'hasShield')):
+            return Action(Action.ACTION_DEBUFF, (-1), CHIP_LIBERATION, self._target._cellPos, self._target)
+        return None
+    
+    def findDenialTeleportCell(self):
+        if (self._player._magic < 150):
+            return None
+        teleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if (teleChip == None):
+            return None
+        teleCost = getCachedChipCost(teleChip)
+        if (getTP() < lw_add(teleCost, 5)):
+            return None
+        anyShackleReady = False
+        shackleIds = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
+        for sId in lw_values(shackleIds):
+            if (mapContainsKey(self._arsenal.playerEquippedChips, sId) and (getCooldown(sId, self._player._id) == 0)):
+                anyShackleReady = True
+                break
+        if (not anyShackleReady):
+            return None
+        targetCell = self._target._cellPos
+        currentDist = getCellDistance(self._player._cellPos, targetCell)
+        if ((currentDist != None) and (currentDist <= 6)):
+            return None
+        teleMaxRange = getTeleportMaxRange(teleChip)
+        bestCell = (-1)
+        bestDistToTarget = 999
+        reachable = getReachableCells()
+        if (reachable == None):
+            return None
+        for cellId in lw_values(reachable):
+            teleDist = getCellDistance(self._player._cellPos, cellId)
+            if (((teleDist == None) or (teleDist < 1)) or (teleDist > teleMaxRange)):
+                continue
+            if (isObstacle(cellId) or isEntity(cellId)):
+                continue
+            distFromTele = getCellDistance(cellId, targetCell)
+            if (((distFromTele == None) or (distFromTele < 1)) or (distFromTele > 6)):
+                continue
+            if (not getCachedLineOfSight(cellId, targetCell)):
+                continue
+            if (distFromTele < bestDistToTarget):
+                bestDistToTarget = distFromTele
+                bestCell = cellId
+        if (bestCell == (-1)):
+            return None
+        return {'cell': bestCell, 'chip': teleChip, 'cost': teleCost}
+    
+    def getDenialActions(self, tpBudget, simPos):
+        actions = []
+        tpUsed = 0
+        if (self._player._magic < 150):
+            return actions
+        denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
+        for dChip in lw_values(denialChips):
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, dChip)):
+                continue
+            if (getCooldown(dChip, self._player._id) > 0):
+                continue
+            dCost = getCachedChipCost(dChip)
+            if (lw_sub(tpBudget, tpUsed) < dCost):
+                continue
+            chipObj = lw_get(self._arsenal.playerEquippedChips, dChip)
+            dist = getCellDistance(simPos, self._target._cellPos)
+            if (((dist == None) or (dist < chipObj._minRange)) or (dist > chipObj._maxRange)):
+                continue
+            push(actions, Action(Action.ACTION_DEBUFF, (-1), dChip, self._target._cellPos, self._target))
+            tpUsed = lw_add(tpUsed, dCost)
+        return actions
+    
+    def getAttackActions(self, tpBudget, fraction, simPos):
+        actions = []
+        tpToUse = tpBudget
+        weaponUses = {}
+        chipCooldowns = {}
+        currentWeaponId = (lw__lastTurnWeaponId if ((lw__lastTurnWeaponId != None)) else getWeapon())
+        while (tpToUse >= 4):
+            bestAttack = self.findBestAvailableAttack(simPos, weaponUses, chipCooldowns, currentWeaponId)
+            if (bestAttack == None):
+                break
+            attackCost = lw_get(bestAttack, 'cost')
+            attackType = lw_get(bestAttack, 'type')
+            attackId = lw_get(bestAttack, 'id')
+            swapCost = 0
+            if (((attackType == 'weapon') and (currentWeaponId != None)) and (attackId != currentWeaponId)):
+                swapCost = 1
+            if (tpToUse < lw_add(attackCost, swapCost)):
+                break
+            attackTargetCell = lw_get(bestAttack, 'targetCell')
+            if (attackTargetCell == None):
+                attackTargetCell = self._target._cellPos
+            repositionCell = lw_get(bestAttack, 'repositionCell')
+            if (((repositionCell != None) and (repositionCell != (-1))) and (repositionCell != simPos)):
+                moveAction = Action(Action.MOVEMENT_OFFENSIVE, (-1), (-1), repositionCell, self._target)
+                push(actions, moveAction)
+            if (attackType == 'weapon'):
+                weaponAction = Action(Action.ACTION_DIRECT, attackId, (-1), attackTargetCell, self._target)
+                weaponAction.isSplash = lw_get(bestAttack, 'isSplash')
+                push(actions, weaponAction)
+                currentUses = lw_get(weaponUses, attackId)
+                if (currentUses == None):
+                    currentUses = 0
+                lw_put(weaponUses, attackId, lw_add(currentUses, 1))
+                currentWeaponId = attackId
+            else:
+                chipAction = Action(Action.ACTION_DIRECT, (-1), attackId, attackTargetCell, self._target)
+                chipAction.isSplash = lw_get(bestAttack, 'isSplash')
+                push(actions, chipAction)
+                lw_put(chipCooldowns, attackId, True)
+            tpToUse = lw_num(tpToUse) - lw_num((lw_add(attackCost, swapCost)))
+        return actions
+    
+    def findSafeAoEWeaponCell(self, weaponId, targetCell, currentPos, weaponUses, chipCooldowns):
+        reachableCells = getReachableCells()
+        if ((reachableCells == None) or (count(reachableCells) == 0)):
+            return (-1)
+        weapon = lw_get(self._arsenal.playerEquippedWeapons, weaponId)
+        if (weapon == None):
+            return (-1)
+        bestCell = (-1)
+        bestDist = 999
+        for cellId in lw_values(reachableCells):
+            dist = getCellDistance(cellId, self._target._cellPos)
+            if (((dist == None) or (dist < weapon._minRange)) or (dist > weapon._maxRange)):
+                continue
+            if (not lineOfSight(cellId, targetCell)):
+                continue
+            if (self._strategy != None):
+                aoeCheck = self._strategy.checkAoEWeaponSafety(weaponId, targetCell, cellId)
+                if lw_get(aoeCheck, 'safe'):
+                    moveDist = getCellDistance(currentPos, cellId)
+                    if ((moveDist != None) and (moveDist < bestDist)):
+                        bestDist = moveDist
+                        bestCell = cellId
+        return bestCell
+    
+    def findSafeAoEAttackCell(self, chipId, targetCell, currentPos, weaponUses, chipCooldowns):
+        reachableCells = getReachableCells()
+        if ((reachableCells == None) or (count(reachableCells) == 0)):
+            return (-1)
+        chip = lw_get(self._arsenal.playerEquippedChips, chipId)
+        if (chip == None):
+            return (-1)
+        bestCell = (-1)
+        bestDist = 999
+        for cellId in lw_values(reachableCells):
+            dist = getCellDistance(cellId, self._target._cellPos)
+            if (((dist == None) or (dist < chip._minRange)) or (dist > chip._maxRange)):
+                continue
+            if (not lineOfSight(cellId, targetCell)):
+                continue
+            if (self._strategy != None):
+                aoeCheck = self._strategy.checkAoESafetyFromCell(chipId, targetCell, cellId)
+                if lw_get(aoeCheck, 'safe'):
+                    moveDist = getCellDistance(currentPos, cellId)
+                    if ((moveDist != None) and (moveDist < bestDist)):
+                        bestDist = moveDist
+                        bestCell = cellId
+        return bestCell
+    
+    def findBestAvailableAttack(self, simPos, weaponUses, chipCooldowns, currentWeaponId=None):
+        str = self._player._strength
+        mag = self._player._magic
+        wis = self._player._wisdom
+        sci = self._player._science
+        bestAttack = None
+        bestDamage = 0
+        SWAP_PENALTY_DAMAGE = 30
+        weaponDamageMultiplier = 1.0
+        if (mag > lw_add(str, 100)):
+            weaponDamageMultiplier = 0.3
+        dotWeight = 1.0
+        if (self._dotDiscountReason == "poisons_queued"):
+            dotWeight = 0.0
+        else:
+            enemyProfileH = getEnemyProfile(self._target._id)
+            if (((enemyProfileH != None) and mapContainsKey(enemyProfileH, 'hasAntidote')) and lw_get(enemyProfileH, 'hasAntidote')):
+                antidoteTrackerH = CooldownTracker(self._target)
+                antidoteCDH = antidoteTrackerH.getCooldownRemaining(self._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                if (antidoteCDH <= 0):
+                    dotWeight = 0.4
+        for weaponId in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            weapon = lw_get(self._arsenal.playerEquippedWeapons, weaponId)
+            currentUses = lw_get(weaponUses, weaponId)
+            if (currentUses == None):
+                currentUses = 0
+            if (currentUses >= weapon._maxUse):
+                continue
+            targetCell = self._target._cellPos
+            isSplashAttack = False
+            inHitmap = False
+            if mapContainsKey(self._fieldMap.weaponHitmap, weaponId):
+                shooterCells = lw_get(self._fieldMap.weaponHitmap, weaponId)
+                for cell in lw_values(shooterCells):
+                    if (cell == simPos):
+                        inHitmap = True
+                        break
+            if (not inHitmap):
+                dist = getCellDistance(simPos, self._target._cellPos)
+                if (((dist == None) or (dist < weapon._minRange)) or (dist > weapon._maxRange)):
+                    continue
+                if (((weapon._launchType != None) and (weapon._launchType > 0)) and (not isSimLaunchValid(weapon._launchType, simPos, self._target._cellPos))):
+                    continue
+            if (not lineOfSight(simPos, self._target._cellPos)):
+                if (self._strategy != None):
+                    splashResult = self._strategy.findAoEWeaponSplashCell(weaponId, self._target._cellPos, simPos)
+                    if (splashResult != None):
+                        targetCell = lw_get(splashResult, 'cell')
+                        isSplashAttack = True
+                    else:
+                        continue
+                else:
+                    continue
+            rawDamage = self._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, self._target)
+            weaponBd = self._arsenal.getDamageBreakdown(str, mag, wis, sci, weaponId)
+            rawDot = (lw_get(weaponBd, 'dot') if (weaponBd != None) else 0)
+            rawDirect = lw_sub(rawDamage, rawDot)
+            if (rawDirect < 0):
+                rawDirect = 0
+            adjustedRaw = lw_add(rawDirect, lw_mul(rawDot, dotWeight))
+            damage = (adjustedRaw if isPoisonWeapon(weaponId) else lw_mul(adjustedRaw, weaponDamageMultiplier))
+            if (weaponBd != None):
+                enemyTP = max(1, self._target._currTp)
+                dpt = lw_mul(max(1, lw_add(self._target._strength, self._target._magic)), 1.5)
+                if (lw_get(weaponBd, 'denial') > 0):
+                    weaponDenialBonus = lw_mul(lw_mul(min(1.0, lw_div(lw_get(weaponBd, 'denial'), enemyTP)), dpt), 1.63)
+                    damage = lw_add(damage, weaponDenialBonus)
+                if (lw_get(weaponBd, 'statReduce') > 0):
+                    enemyStr = max(1, self._target._strength)
+                    srBonus = lw_mul(lw_mul(min(1.0, lw_div(lw_get(weaponBd, 'statReduce'), enemyStr)), enemyStr), 1.63)
+                    damage = lw_add(damage, srBonus)
+            effectiveDamage = damage
+            if ((currentWeaponId != None) and (weaponId != currentWeaponId)):
+                effectiveDamage = lw_sub(damage, SWAP_PENALTY_DAMAGE)
+            if (effectiveDamage > bestDamage):
+                isSafe = True
+                needsReposition = False
+                repositionCell = (-1)
+                if (self._strategy != None):
+                    aoeCheck = self._strategy.checkAoEWeaponSafety(weaponId, targetCell, simPos)
+                    isSafe = lw_get(aoeCheck, 'safe')
+                    needsReposition = lw_get(aoeCheck, 'needsRepositioning')
+                    if ((not isSafe) and needsReposition):
+                        repositionCell = self.findSafeAoEWeaponCell(weaponId, targetCell, simPos, weaponUses, chipCooldowns)
+                        if (repositionCell != (-1)):
+                            isSafe = True
+                if isSafe:
+                    bestDamage = effectiveDamage
+                    bestAttack = {"type": "weapon", "id": weaponId, "cost": weapon._cost, "damage": damage, "targetCell": targetCell, "isSplash": isSplashAttack, "repositionCell": repositionCell}
+        damageChips = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG, CHIP_ROCKFALL, CHIP_FIRE_BALL, CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE, CHIP_ARSENIC, CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_COVID, CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_DESINTEGRATION, CHIP_PUNISHMENT]
+        for chipId in lw_values(damageChips):
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, chipId)):
+                continue
+            if (lw_get(chipCooldowns, chipId) != None):
+                continue
+            if (getCooldown(chipId, self._player._id) > 0):
+                continue
+            chip = lw_get(self._arsenal.playerEquippedChips, chipId)
+            dist = getCellDistance(simPos, self._target._cellPos)
+            if (((dist == None) or (dist < chip._minRange)) or (dist > chip._maxRange)):
+                continue
+            if (((chip._launchType != None) and (chip._launchType > 0)) and (not isSimLaunchValid(chip._launchType, simPos, self._target._cellPos))):
+                continue
+            chipTargetCell = self._target._cellPos
+            isChipSplash = False
+            if (not lineOfSight(simPos, self._target._cellPos)):
+                if (self._strategy != None):
+                    chipSplashResult = self._strategy.findAoESplashCell(chipId, self._target._cellPos, simPos)
+                    if (chipSplashResult != None):
+                        chipTargetCell = lw_get(chipSplashResult, 'cell')
+                        isChipSplash = True
+                    else:
+                        continue
+                else:
+                    continue
+            damage = self._arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, self._target)
+            if (damage > bestDamage):
+                isSafe = True
+                needsReposition = False
+                repositionCell = (-1)
+                if (self._strategy != None):
+                    aoeCheck = self._strategy.checkAoESafetyFromCell(chipId, chipTargetCell, simPos)
+                    isSafe = lw_get(aoeCheck, 'safe')
+                    needsReposition = lw_get(aoeCheck, 'needsRepositioning')
+                    if ((not isSafe) and needsReposition):
+                        repositionCell = self.findSafeAoEAttackCell(chipId, chipTargetCell, simPos, weaponUses, chipCooldowns)
+                        if (repositionCell != (-1)):
+                            isSafe = True
+                if isSafe:
+                    bestDamage = damage
+                    bestAttack = {"type": "chip", "id": chipId, "cost": getCachedChipCost(chipId), "damage": damage, "targetCell": chipTargetCell, "isSplash": isChipSplash, "repositionCell": repositionCell}
+        return bestAttack
+    
+    def isDiagonal(self, cell1, cell2):
+        x1 = getCellX(cell1)
+        y1 = getCellY(cell1)
+        x2 = getCellX(cell2)
+        y2 = getCellY(cell2)
+        dx = abs(lw_sub(x2, x1))
+        dy = abs(lw_sub(y2, y1))
+        return ((dx == dy) and (dx > 0))
+    
+    def isOnSameLine(self, cell1, cell2):
+        x1 = getCellX(cell1)
+        y1 = getCellY(cell1)
+        x2 = getCellX(cell2)
+        y2 = getCellY(cell2)
+        return (((x1 == x2) or (y1 == y2)))
+    
+    def calculateLifestealHealing(self, damage):
+        wisdom = self._player._wisdom
+        return lw_div((lw_mul(damage, wisdom)), 1000)
+    
+    def findBulbSummonCell(self, fromCell, summonRange):
+        bestCell = (-1)
+        bestScore = (-999)
+        for offset in lw_values([1, (-1), 17, (-17), 18, (-18)]):
+            candidate = lw_add(fromCell, offset)
+            if ((candidate < 0) or (candidate >= 613)):
+                continue
+            if (isObstacle(candidate) or isEntity(candidate)):
+                continue
+            dist = getCellDistance(fromCell, candidate)
+            if (((dist == None) or (dist < 1)) or (dist > summonRange)):
+                continue
+            neighborCount = 0
+            for nOffset in lw_values([1, (-1), 17, (-17), 18, (-18)]):
+                n = lw_add(candidate, nOffset)
+                if (((n >= 0) and (n < 613)) and (not isObstacle(n))):
+                    neighborCount = lw_add(neighborCount, 1)
+            score = lw_mul(neighborCount, 10)
+            if (neighborCount <= 2):
+                score = lw_num(score) - lw_num(50)
+            if (score > bestScore):
+                bestScore = score
+                bestCell = candidate
+        return bestCell
+    
+    def calculateMetallicBulbValue(self):
+        shieldValue = lw_add(lw_add(lw_mul(20, 3), lw_mul(25, 4)), 15)
+        bulbHP = estimateBulbStat(150, 400, getLevel())
+        return lw_add(lw_mul(shieldValue, 3), floor(lw_div(bulbHP, 2)))
+    
+    def calculateSavantBulbValue(self):
+        mutationHP = 17
+        alterationDmg = 19
+        adrenalineTPValue = lw_mul(5, 30)
+        return lw_add(lw_add(mutationHP, lw_mul(alterationDmg, 2)), adrenalineTPValue)
+    
+    def createSummonAction(self):
+        if (countMyLivingSummons(self._player._id) >= 2):
+            return None
+        sumHasLeekAlly = False
+        sumAllies = getAliveAllies()
+        if (sumAllies != None):
+            for sumA in lw_values(sumAllies):
+                if (sumA == self._player._id):
+                    continue
+                if isDead(sumA):
+                    continue
+                if (getType(sumA) == ENTITY_LEEK):
+                    sumHasLeekAlly = True
+                    break
+        if (not sumHasLeekAlly):
+            return None
+        playerHP = self._player._currHealth
+        playerMaxHP = self._player._maxHealth
+        hpPercent = lw_div((lw_mul(playerHP, 100)), playerMaxHP)
+        hasSavant = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_SAVANT_BULB)
+        savantReady = (hasSavant and (getCooldown(CHIP_SAVANT_BULB, self._player._id) == 0))
+        hasMetallic = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
+        metallicReady = (hasMetallic and (getCooldown(CHIP_METALLIC_BULB, self._player._id) == 0))
+        chosenChip = (-1)
+        chosenAI = None
+        summonRange = 1
+        if ((hpPercent < 50) and metallicReady):
+            chosenChip = CHIP_METALLIC_BULB
+            chosenAI = metallicBulbAI
+            summonRange = 1
+        else:
+            if savantReady:
+                chosenChip = CHIP_SAVANT_BULB
+                chosenAI = savantBulbAI
+                summonRange = 4
+            else:
+                if metallicReady:
+                    chosenChip = CHIP_METALLIC_BULB
+                    chosenAI = metallicBulbAI
+                    summonRange = 1
+                else:
+                    ltHasLeekAlly = False
+                    ltAllies = getAliveAllies()
+                    if (ltAllies != None):
+                        for ltA in lw_values(ltAllies):
+                            if (ltA == self._player._id):
+                                continue
+                            if isDead(ltA):
+                                continue
+                            if (getType(ltA) == ENTITY_LEEK):
+                                ltHasLeekAlly = True
+                                break
+                    if ltHasLeekAlly:
+                        lowTierBulbs = [CHIP_ROCKY_BULB, CHIP_ICED_BULB, CHIP_PUNY_BULB]
+                        for ltb in lw_values(lowTierBulbs):
+                            if (not mapContainsKey(self._arsenal.playerEquippedChips, ltb)):
+                                continue
+                            if (getCooldown(ltb, self._player._id) > 0):
+                                continue
+                            if (self._player._currTp < getCachedChipCost(ltb)):
+                                continue
+                            chosenChip = ltb
+                            chosenAI = attackerBulbAI
+                            summonRange = 2
+                            break
+        if (chosenChip == (-1)):
+            return None
+        summonCell = self.findBulbSummonCell(self._player._cellPos, summonRange)
+        if (summonCell == (-1)):
+            return None
+        action = Action(Action.ACTION_SUMMON, (-1), chosenChip, summonCell, None)
+        action.bulbAIFunc = chosenAI
+        return action
+    
+
+
+# ════════ scenario_combos.lk ════════
+# include: scenario_helpers.lk (inlined by assembler)
+class ScenarioCombos(ScenarioHelpers):
+    def __init__(self, arsenal, player, target, fieldMap, strategy):
+        super().__init__(arsenal, player, target, fieldMap, strategy)
+
+    def createAggressiveScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        cheapestAtkCost = 4
+        for wIdMin in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            wObjMin = lw_get(self._arsenal.playerEquippedWeapons, wIdMin)
+            if ((wObjMin != None) and (wObjMin._cost < cheapestAtkCost)):
+                cheapestAtkCost = wObjMin._cost
+        if (cheapestAtkCost < 3):
+            cheapestAtkCost = 3
+        minAttackTP = max(lw_add(cheapestAtkCost, 1), floor(lw_mul(availableTP, 0.5)))
+        antidoteAction = self.getAntidoteAction(tpBudget)
+        if (antidoteAction != None):
+            push(actions, antidoteAction)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ANTIDOTE))
+        manumissionAction = self.getManumissionAction(tpBudget)
+        if (manumissionAction != None):
+            push(actions, manumissionAction)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_MANUMISSION))
+            tpBudget = lw_add(tpBudget, 2)
+        buffAction = self.getOffensiveBuff()
+        if (buffAction != None):
+            buffCostA = getCachedChipCost(buffAction.chip)
+            if (lw_sub(tpBudget, buffCostA) >= minAttackTP):
+                push(actions, buffAction)
+                tpBudget = lw_num(tpBudget) - lw_num(buffCostA)
+        damageReturnAction = self.getDamageReturnBuff()
+        if (damageReturnAction != None):
+            drCost = getCachedChipCost(damageReturnAction.chip)
+            if (lw_sub(tpBudget, drCost) >= minAttackTP):
+                push(actions, damageReturnAction)
+                tpBudget = lw_num(tpBudget) - lw_num(drCost)
+        debuffAction = self.getDebuffAction()
+        if ((debuffAction != None) and (debuffAction.chip != (-1))):
+            debuffCost = getCachedChipCost(debuffAction.chip)
+            if (lw_sub(tpBudget, debuffCost) >= minAttackTP):
+                push(actions, debuffAction)
+                tpBudget = lw_num(tpBudget) - lw_num(debuffCost)
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        denialActions = self.getDenialActions(tpBudget, simPos)
+        for da in lw_values(denialActions):
+            push(actions, da)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(da.chip))
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createConservativeScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        cheapestAtkCostC = 4
+        for wIdMinC in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            wObjMinC = lw_get(self._arsenal.playerEquippedWeapons, wIdMinC)
+            if ((wObjMinC != None) and (wObjMinC._cost < cheapestAtkCostC)):
+                cheapestAtkCostC = wObjMinC._cost
+        if (cheapestAtkCostC < 3):
+            cheapestAtkCostC = 3
+        minAttackTP = max(lw_add(cheapestAtkCostC, 1), floor(lw_mul(availableTP, 0.5)))
+        conservativeAntidote = self.getAntidoteAction(tpBudget)
+        if (conservativeAntidote != None):
+            push(actions, conservativeAntidote)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ANTIDOTE))
+        conservativeManumission = self.getManumissionAction(tpBudget)
+        if (conservativeManumission != None):
+            push(actions, conservativeManumission)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_MANUMISSION))
+            tpBudget = lw_add(tpBudget, 2)
+        buffAction = self.getOffensiveBuff()
+        if (buffAction != None):
+            buffCostC = getCachedChipCost(buffAction.chip)
+            if (lw_sub(tpBudget, buffCostC) >= minAttackTP):
+                push(actions, buffAction)
+                tpBudget = lw_num(tpBudget) - lw_num(buffCostC)
+        damageReturnAction = self.getDamageReturnBuff()
+        if (damageReturnAction != None):
+            drCostC = getCachedChipCost(damageReturnAction.chip)
+            if (lw_sub(tpBudget, drCostC) >= minAttackTP):
+                push(actions, damageReturnAction)
+                tpBudget = lw_num(tpBudget) - lw_num(drCostC)
+        defensiveBuff = self.getDefensiveBuff()
+        if (defensiveBuff != None):
+            defCostC = getCachedChipCost(defensiveBuff.chip)
+            if (lw_sub(tpBudget, defCostC) >= minAttackTP):
+                push(actions, defensiveBuff)
+                tpBudget = lw_num(tpBudget) - lw_num(defCostC)
+        healAction = self.getHealingAction(tpBudget, 0.7)
+        if (healAction != None):
+            push(actions, healAction)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(healAction.chip))
+        moveAction = self.getMoveToOptimalCell(floor(lw_mul(mpBudget, 0.7)))
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        denialActionsC = self.getDenialActions(tpBudget, simPos)
+        for da in lw_values(denialActionsC):
+            push(actions, da)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(da.chip))
+        attackActions = self.getAttackActions(tpBudget, 0.7, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createDefensiveScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        defensiveAntidote = self.getAntidoteAction(tpBudget)
+        if (defensiveAntidote != None):
+            push(actions, defensiveAntidote)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ANTIDOTE))
+        defensiveManumission = self.getManumissionAction(tpBudget)
+        if (defensiveManumission != None):
+            push(actions, defensiveManumission)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_MANUMISSION))
+            tpBudget = lw_add(tpBudget, 2)
+        healAction = self.getHealingAction(tpBudget, 0.7)
+        if (healAction != None):
+            push(actions, healAction)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(healAction.chip))
+        defensiveBuff = self.getDefensiveBuff()
+        if ((defensiveBuff != None) and (tpBudget >= getCachedChipCost(defensiveBuff.chip))):
+            push(actions, defensiveBuff)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(defensiveBuff.chip))
+        moveAction = self.getMoveToOptimalCell(floor(lw_mul(mpBudget, 0.5)))
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        attackActions = self.getAttackActions(tpBudget, 0.5, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createAllInDamageScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        if self.checkOTKOOpportunity():
+            distToTarget = getCellDistance(self._player._cellPos, self._target._cellPos)
+            maxWeaponRange = 12
+            soTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+            if ((distToTarget > maxWeaponRange) and (soTeleChip != None)):
+                tpTeleportOTKO = getCachedChipCost(soTeleChip)
+                if (tpBudget >= tpTeleportOTKO):
+                    bestCell = self._fieldMap.getBestWeaponOrChipCell()
+                    if ((bestCell != None) and (bestCell != (-1))):
+                        teleportDist = getCellDistance(self._player._cellPos, bestCell._id)
+                        maxTeleRange = getTeleportMaxRange(soTeleChip)
+                        if ((teleportDist >= 1) and (teleportDist <= maxTeleRange)):
+                            push(actions, Action(Action.ACTION_TELEPORT, (-1), soTeleChip, bestCell._id, self._target))
+                            tpBudget = lw_num(tpBudget) - lw_num(tpTeleportOTKO)
+                            simPos = bestCell._id
+            attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+            for atk in lw_values(attackActions):
+                push(actions, atk)
+            return actions
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        return actions
+    
+    def createKitingScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        attackActions = self.getAttackActions(tpBudget, 0.6, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        kiteAction = self.getKiteAwayAction(mpBudget)
+        if (kiteAction != None):
+            push(actions, kiteAction)
+        return actions
+    
+    def createEfficientScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        if (tpBudget >= 30):
+            buffAction = self.getOffensiveBuff()
+            if ((buffAction != None) and (getCachedChipCost(buffAction.chip) <= 6)):
+                push(actions, buffAction)
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(buffAction.chip))
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        attackActions = self.getAttackActions(tpBudget, 0.8, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createOTKOTeleportScenario(self, otkoCell, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        otkoTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if (otkoTeleChip == None):
+            otkoTeleChip = CHIP_TELEPORTATION
+        tpTeleportOTKO = getCachedChipCost(otkoTeleChip)
+        if (tpBudget >= tpTeleportOTKO):
+            push(actions, Action(Action.ACTION_TELEPORT, (-1), otkoTeleChip, otkoCell, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(tpTeleportOTKO)
+        attackActions = self.getAttackActions(tpBudget, 1.0, otkoCell)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        return actions
+    
+    def createTeleportEscapeScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        escapeTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if (escapeTeleChip == None):
+            return None
+        tpTeleportEscape = getCachedChipCost(escapeTeleChip)
+        escapeMaxRange = getTeleportMaxRange(escapeTeleChip)
+        if (tpBudget < tpTeleportEscape):
+            return None
+        safestCell = (-1)
+        bestScore = (-99999)
+        playerPos = self._player._cellPos
+        enemyPos = self._target._cellPos
+        currentDistFromEnemy = getCellDistance(playerPos, enemyPos)
+        reachableCells = getReachableCells()
+        for cellId in lw_values(reachableCells):
+            dist = getCellDistance(playerPos, cellId)
+            if ((dist >= 1) and (dist <= escapeMaxRange)):
+                threat = self._fieldMap.getThreatAtCell(cellId)
+                distFromEnemy = getCellDistance(cellId, enemyPos)
+                if (distFromEnemy <= currentDistFromEnemy):
+                    continue
+                score = lw_sub(lw_mul(distFromEnemy, 100), threat)
+                if (score > bestScore):
+                    bestScore = score
+                    safestCell = cellId
+        if (safestCell == (-1)):
+            return None
+        push(actions, Action(Action.ACTION_TELEPORT, (-1), escapeTeleChip, safestCell, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(tpTeleportEscape)
+        escapeAntidote = self.getAntidoteAction(tpBudget)
+        if (escapeAntidote != None):
+            push(actions, escapeAntidote)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ANTIDOTE))
+        tpRemissionEscape = getCachedChipCost(CHIP_REMISSION)
+        if (((tpBudget >= tpRemissionEscape) and mapContainsKey(self._arsenal.playerEquippedChips, CHIP_REMISSION)) and (getCooldown(CHIP_REMISSION, self._player._id) == 0)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_REMISSION, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpRemissionEscape)
+        shieldAction = self.getDefensiveBuff()
+        if (shieldAction != None):
+            shieldCost = getCachedChipCost(shieldAction.chip)
+            if (tpBudget >= shieldCost):
+                push(actions, shieldAction)
+                tpBudget = lw_num(tpBudget) - lw_num(shieldCost)
+        if (tpBudget >= 3):
+            distAfterTeleport = getCellDistance(safestCell, self._target._cellPos)
+            poisonChips = [CHIP_VENOM, CHIP_TOXIN, CHIP_PLAGUE, CHIP_ARSENIC, CHIP_COVID]
+            for pChip in lw_values(poisonChips):
+                if (tpBudget < 3):
+                    break
+                if (not mapContainsKey(self._arsenal.playerEquippedChips, pChip)):
+                    continue
+                if (getCooldown(pChip, self._player._id) > 0):
+                    continue
+                chip = lw_get(self._arsenal.playerEquippedChips, pChip)
+                chipCost = getCachedChipCost(pChip)
+                if (tpBudget < chipCost):
+                    continue
+                if ((distAfterTeleport < chip._minRange) or (distAfterTeleport > chip._maxRange)):
+                    continue
+                push(actions, Action(Action.ACTION_DIRECT, (-1), pChip, self._target._cellPos, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(chipCost)
+            attackActions = self.getAttackActions(tpBudget, 1.0, safestCell)
+            for atk in lw_values(attackActions):
+                push(actions, atk)
+        return actions
+    
+    def createEmergencyApproachScenario(self, availableTP, availableMP):
+        if ((self._target != None) and (getTurn() <= 2)):
+            emaProfile = getEnemyProfile(self._target._id)
+            if ((((emaProfile != None) and (lw_get(emaProfile, 'kiterFlavor') == 'magic_poison')) and (self._player._maxHealth > 0)) and (lw_div(lw_mul(self._player._currHealth, 100), self._player._maxHealth) >= 60)):
+                return None
+        approachTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if (approachTeleChip == None):
+            return None
+        tpTeleportApproach = getCachedChipCost(approachTeleChip)
+        approachMaxRange = getTeleportMaxRange(approachTeleChip)
+        if (availableTP < lw_add(tpTeleportApproach, 4)):
+            return None
+        playerPos = self._player._cellPos
+        targetPos = self._target._cellPos
+        distNow = getCellDistance(playerPos, targetPos)
+        if (distNow == None):
+            return None
+        maxWeaponRange = 0
+        for wIdRng in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            wObjRng = lw_get(self._arsenal.playerEquippedWeapons, wIdRng)
+            if ((wObjRng != None) and (wObjRng._maxRange > maxWeaponRange)):
+                maxWeaponRange = wObjRng._maxRange
+        if (maxWeaponRange == 0):
+            return None
+        canFireFromHere = False
+        for wIdFire in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            wObjFire = lw_get(self._arsenal.playerEquippedWeapons, wIdFire)
+            if (wObjFire == None):
+                continue
+            if ((distNow < wObjFire._minRange) or (distNow > wObjFire._maxRange)):
+                continue
+            if (not getCachedLineOfSight(playerPos, targetPos)):
+                continue
+            if (((wObjFire._launchType != None) and (wObjFire._launchType > 0)) and (not isSimLaunchValid(wObjFire._launchType, playerPos, targetPos))):
+                continue
+            canFireFromHere = True
+            break
+        if canFireFromHere:
+            return None
+        tpBudgetAfterTele = lw_sub(availableTP, tpTeleportApproach)
+        bestCell = (-1)
+        bestDamage = 0
+        candidate = 0
+        while (candidate < 613):
+            if (getOperations() > _ops86):
+                break
+            if isObstacle(candidate):
+                candidate = lw_add(candidate, 1)
+                continue
+            if isEntity(candidate):
+                candidate = lw_add(candidate, 1)
+                continue
+            teleDist = getCellDistance(playerPos, candidate)
+            if (((teleDist == None) or (teleDist < 1)) or (teleDist > approachMaxRange)):
+                candidate = lw_add(candidate, 1)
+                continue
+            distToTarget = getCellDistance(candidate, targetPos)
+            if ((distToTarget == None) or (distToTarget > maxWeaponRange)):
+                candidate = lw_add(candidate, 1)
+                continue
+            if (not getCachedLineOfSight(candidate, targetPos)):
+                candidate = lw_add(candidate, 1)
+                continue
+            cellDamage = 0
+            for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                wObj = lw_get(self._arsenal.playerEquippedWeapons, wid)
+                if (wObj == None):
+                    continue
+                if ((distToTarget < wObj._minRange) or (distToTarget > wObj._maxRange)):
+                    continue
+                if (((wObj._launchType != None) and (wObj._launchType > 0)) and (not isSimLaunchValid(wObj._launchType, candidate, targetPos))):
+                    continue
+                dmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, wid, self._target)
+                swapCost = (1 if ((getWeapon() != wid)) else 0)
+                uses = min(wObj._maxUse, floor(lw_div((lw_sub(tpBudgetAfterTele, swapCost)), wObj._cost)))
+                if (uses > 0):
+                    cellDamage = lw_add(cellDamage, lw_mul(dmg, uses))
+            if (cellDamage > bestDamage):
+                bestDamage = cellDamage
+                bestCell = candidate
+            candidate = lw_add(candidate, 1)
+        if ((bestCell == (-1)) or (bestDamage <= 0)):
+            return None
+        actions = []
+        push(actions, Action(Action.ACTION_TELEPORT, (-1), approachTeleChip, bestCell, self._target))
+        attackActions = self.getAttackActions(tpBudgetAfterTele, 1.0, bestCell)
+        for aa in lw_values(attackActions):
+            push(actions, aa)
+        return actions
+    
+    def createBaitAnchorScenario(self, availableTP, availableMP):
+        if (getTurn() <= 20):
+            debugW(lw_add("BANCHOR_ENTRY_T", getTurn()))
+        if (self._target == None):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add("BANCHOR_EXIT_T", getTurn()), "_NO_TARGET"))
+            return None
+        if (_isBossFight and (_bossPhase == "PUZZLE")):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add("BANCHOR_EXIT_T", getTurn()), "_BOSS_PUZZLE"))
+            return None
+        enemyProfile = getEnemyProfile(self._target._id)
+        if (enemyProfile == None):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add("BANCHOR_EXIT_T", getTurn()), "_NO_PROFILE"))
+            return None
+        if (not lw_get(enemyProfile, 'isKiter')):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add(lw_add("BANCHOR_EXIT_T", getTurn()), "_NOT_KITER_flavor"), lw_get(enemyProfile, 'kiterFlavor')))
+            return None
+        playerPos = self._player._cellPos
+        targetPos = self._target._cellPos
+        distNow = getCellDistance(playerPos, targetPos)
+        if (distNow == None):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add("BANCHOR_EXIT_T", getTurn()), "_NULL_DIST"))
+            return None
+        if ((self._player._maxHealth > 0) and (lw_div(lw_mul(self._player._currHealth, 100), self._player._maxHealth) < 35)):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add("BANCHOR_EXIT_T", getTurn()), "_LOW_HP"))
+            return None
+        minWR = 99
+        maxWR = 0
+        for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            w = lw_get(self._arsenal.playerEquippedWeapons, wid)
+            if (w == None):
+                continue
+            if (w._minRange < minWR):
+                minWR = w._minRange
+            if (w._maxRange > maxWR):
+                maxWR = w._maxRange
+        if (maxWR == 0):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add("BANCHOR_EXIT_T", getTurn()), "_NO_WEAPON_RANGE"))
+            return None
+        enemyMP = lw_get(enemyProfile, 'mobilityMP')
+        if ((enemyMP == None) or (enemyMP <= 0)):
+            enemyMP = 3
+        bestCell = (-1)
+        bestScore = (-999999)
+        anchorScanned = 0
+        reach = getReachableCells()
+        reachCount = count(reach)
+        bandLo = maxWR
+        bandHi = lw_add(lw_add(maxWR, enemyMP), 2)
+        retreatCap = lw_add(distNow, 1)
+        ri = 0
+        while (ri < reachCount):
+            if (anchorScanned >= 80):
+                break
+            if (getOperations() > _ops79):
+                break
+            cand = lw_get(reach, ri)
+            if (cand == playerPos):
+                ri = lw_add(ri, 1)
+                continue
+            if isObstacle(cand):
+                ri = lw_add(ri, 1)
+                continue
+            if (isEntity(cand) and (cand != playerPos)):
+                ri = lw_add(ri, 1)
+                continue
+            mpCost = getGraphMPCost(cand)
+            if ((mpCost >= 999) or (mpCost > availableMP)):
+                ri = lw_add(ri, 1)
+                continue
+            candDistToEnemy = getCellDistance(cand, targetPos)
+            if (candDistToEnemy == None):
+                ri = lw_add(ri, 1)
+                continue
+            if (candDistToEnemy > retreatCap):
+                ri = lw_add(ri, 1)
+                continue
+            anchorScanned = lw_add(anchorScanned, 1)
+            shooterScore = 0
+            if (((candDistToEnemy >= minWR) and (candDistToEnemy <= maxWR)) and getCachedLineOfSight(cand, targetPos)):
+                shooterScore = 400
+            advanceTrap = 0
+            enemyAdv = lw_get(GLOBAL_NEIGHBORS, targetPos)
+            if (enemyAdv != None):
+                ringSamples = 0
+                for advCell in lw_values(enemyAdv):
+                    if (ringSamples >= 8):
+                        break
+                    ringSamples = lw_add(ringSamples, 1)
+                    if isObstacle(advCell):
+                        continue
+                    advDist = getCellDistance(advCell, cand)
+                    if (advDist == None):
+                        continue
+                    if ((advDist < minWR) or (advDist > maxWR)):
+                        continue
+                    if (not getCachedLineOfSight(advCell, cand)):
+                        continue
+                    advanceTrap = lw_add(advanceTrap, 120)
+            threatHere = self._fieldMap.getThreatAtCell(cand)
+            if (threatHere == None):
+                threatHere = 0
+            bandTerm = 0
+            if ((candDistToEnemy >= bandLo) and (candDistToEnemy <= bandHi)):
+                bandTerm = 200
+            else:
+                if (candDistToEnemy < bandLo):
+                    if (shooterScore > 0):
+                        bandTerm = 0
+                    else:
+                        bandTerm = lw_mul((-150), (lw_sub(bandLo, candDistToEnemy)))
+                else:
+                    bandTerm = lw_mul((-80), (lw_sub(candDistToEnemy, bandHi)))
+            closeBonus = lw_mul((lw_sub(distNow, candDistToEnemy)), 30)
+            score = lw_sub(lw_sub(lw_add(lw_add(lw_add(shooterScore, advanceTrap), bandTerm), closeBonus), threatHere), lw_mul(mpCost, 5))
+            if (score > bestScore):
+                bestScore = score
+                bestCell = cand
+            ri = lw_add(ri, 1)
+        if (getTurn() <= 20):
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("BANCHOR_DIAG_T", getTurn()), "_scanned"), anchorScanned), "_bc"), bestCell), "_bs"), bestScore), "_dn"), distNow), "_mr"), maxWR), "_em"), enemyMP), "_rc"), reachCount))
+        if (bestCell == (-1)):
+            return None
+        if (bestScore < 100):
+            return None
+        actions = []
+        tpBudget = availableTP
+        push(actions, Action(Action.MOVEMENT_DEFENSIVE, (-1), (-1), bestCell, self._target))
+        antidoteAction = self.getAntidoteAction(tpBudget)
+        if (antidoteAction != None):
+            push(actions, antidoteAction)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ANTIDOTE))
+        hasShield = (self._player.hasEffect(EFFECT_ABSOLUTE_SHIELD) or self._player.hasEffect(EFFECT_RELATIVE_SHIELD))
+        if (not hasShield):
+            shieldCandidates = [CHIP_FORTRESS, CHIP_WALL, CHIP_HELMET, CHIP_BARK]
+            for sChip in lw_values(shieldCandidates):
+                if (not mapContainsKey(self._arsenal.playerEquippedChips, sChip)):
+                    continue
+                if (getCooldown(sChip, self._player._id) > 0):
+                    continue
+                sCost = getCachedChipCost(sChip)
+                if (tpBudget < sCost):
+                    continue
+                push(actions, Action(Action.ACTION_BUFF, (-1), sChip, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(sCost)
+                break
+        hpRatio = ((lw_div(lw_mul(self._player._currHealth, 100), self._player._maxHealth)) if ((self._player._maxHealth > 0)) else 100)
+        if (hpRatio < 80):
+            healCandidates = [CHIP_REMISSION, CHIP_CURE, CHIP_BANDAGE]
+            for hChip in lw_values(healCandidates):
+                if (not mapContainsKey(self._arsenal.playerEquippedChips, hChip)):
+                    continue
+                if (getCooldown(hChip, self._player._id) > 0):
+                    continue
+                hCost = getCachedChipCost(hChip)
+                if (tpBudget < hCost):
+                    continue
+                push(actions, Action(Action.ACTION_BUFF, (-1), hChip, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(hCost)
+                break
+        bestDistToEnemy = getCellDistance(bestCell, targetPos)
+        attacksAppended = 0
+        if (((((bestDistToEnemy != None) and (bestDistToEnemy >= minWR)) and (bestDistToEnemy <= maxWR)) and getCachedLineOfSight(bestCell, targetPos)) and (tpBudget >= 4)):
+            anchorAttacks = self.getAttackActions(tpBudget, 1.0, bestCell)
+            for atkAct in lw_values(anchorAttacks):
+                push(actions, atkAct)
+                attacksAppended = lw_add(attacksAppended, 1)
+        if (attacksAppended == 0):
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("BANCHOR_SKIP_T", getTurn()), "_c"), bestCell), "_sc"), bestScore), "_dn"), distNow), "_bd"), bestDistToEnemy), "_NO_SHOT"))
+            return None
+        checkpoint = Action(Action.ACTION_CHECKPOINT, (-1), (-1), (-1), None)
+        checkpoint.checkpointType = "BAIT_ANCHOR"
+        push(actions, checkpoint)
+        if (getTurn() <= 20):
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("BANCHOR_T", getTurn()), "_c"), bestCell), "_sc"), bestScore), "_mp"), getGraphMPCost(bestCell)), "_atk"), attacksAppended))
+        return actions
+    
+    def createParametricScenario(self, params, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        antidoteAction = self.getAntidoteAction(tpBudget)
+        if (antidoteAction != None):
+            push(actions, antidoteAction)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ANTIDOTE))
+        paramManumission = self.getManumissionAction(tpBudget)
+        if (paramManumission != None):
+            push(actions, paramManumission)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_MANUMISSION))
+            tpBudget = lw_add(tpBudget, 2)
+        minAttackTPp = max(4, floor(lw_mul(availableTP, 0.5)))
+        if ((params.buffStrategy == 1) or (params.buffStrategy == 3)):
+            offensiveBuff = self.getOffensiveBuff()
+            if (offensiveBuff != None):
+                offCostP = getCachedChipCost(offensiveBuff.chip)
+                if (lw_sub(tpBudget, offCostP) >= minAttackTPp):
+                    push(actions, offensiveBuff)
+                    tpBudget = lw_num(tpBudget) - lw_num(offCostP)
+        if ((params.buffStrategy == 2) or (params.buffStrategy == 3)):
+            defensiveBuff = self.getDefensiveBuff()
+            if (defensiveBuff != None):
+                defCostP = getCachedChipCost(defensiveBuff.chip)
+                if (lw_sub(tpBudget, defCostP) >= minAttackTPp):
+                    push(actions, defensiveBuff)
+                    tpBudget = lw_num(tpBudget) - lw_num(defCostP)
+        if (params.buffStrategy == 4):
+            damageReturnBuff = self.getDamageReturnBuff()
+            if (damageReturnBuff != None):
+                drCostP = getCachedChipCost(damageReturnBuff.chip)
+                if (lw_sub(tpBudget, drCostP) >= minAttackTPp):
+                    push(actions, damageReturnBuff)
+                    tpBudget = lw_num(tpBudget) - lw_num(drCostP)
+            debuffAction = self.getDebuffAction()
+            if ((debuffAction != None) and (debuffAction.chip != (-1))):
+                debuffCostParam = getCachedChipCost(debuffAction.chip)
+                if (lw_sub(tpBudget, debuffCostParam) >= minAttackTPp):
+                    push(actions, debuffAction)
+                    tpBudget = lw_num(tpBudget) - lw_num(debuffCostParam)
+        if (params.healThreshold >= 0):
+            pmHpPct = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+            healReserve = (0 if ((pmHpPct < 25)) else minAttackTPp)
+            if (params.healThreshold >= 0.99):
+                currentHP = self._player._currHealth
+                maxHP = self._player._maxHealth
+                hpRatio = lw_div(currentHP, maxHP)
+                if (hpRatio < params.healThreshold):
+                    remissionAction = self.getRemissionAction()
+                    if (remissionAction != None):
+                        tpRemission = getCachedChipCost(CHIP_REMISSION)
+                        if (lw_sub(tpBudget, tpRemission) >= healReserve):
+                            push(actions, remissionAction)
+                            tpBudget = lw_num(tpBudget) - lw_num(tpRemission)
+                    regenAction = self.getRegenerationAction()
+                    if (regenAction != None):
+                        tpRegen = getCachedChipCost(CHIP_REGENERATION)
+                        if (lw_sub(tpBudget, tpRegen) >= healReserve):
+                            push(actions, regenAction)
+                            tpBudget = lw_num(tpBudget) - lw_num(tpRegen)
+            else:
+                healAction = self.getHealingAction(tpBudget, params.healThreshold)
+                if (healAction != None):
+                    healCost = getCachedChipCost(healAction.chip)
+                    if (lw_sub(tpBudget, healCost) >= healReserve):
+                        push(actions, healAction)
+                        tpBudget = lw_num(tpBudget) - lw_num(healCost)
+        appliedLeatherBoots = False
+        leatherBootsBuff = self.getLeatherBootsBuff()
+        if (leatherBootsBuff != None):
+            tpLeatherBoots = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= tpLeatherBoots):
+                push(actions, leatherBootsBuff)
+                tpBudget = lw_num(tpBudget) - lw_num(tpLeatherBoots)
+                mpBudget = lw_add(mpBudget, 2)
+                appliedLeatherBoots = True
+        motivBuff = self.getMotivationBuff()
+        if (motivBuff != None):
+            tpMotiv = getCachedChipCost(CHIP_MOTIVATION)
+            if (tpBudget >= tpMotiv):
+                push(actions, motivBuff)
+                tpBudget = lw_num(tpBudget) - lw_num(tpMotiv)
+                tpBudget = lw_add(tpBudget, 2)
+        adrenalineBuff = self.getAdrenalineBuff()
+        if (adrenalineBuff != None):
+            tpAdrenaline = getCachedChipCost(CHIP_ADRENALINE)
+            if (tpBudget >= tpAdrenaline):
+                push(actions, adrenalineBuff)
+                tpBudget = lw_num(tpBudget) - lw_num(tpAdrenaline)
+                tpBudget = lw_add(tpBudget, 5)
+        didJump = False
+        if (((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_JUMP))) and (not self._player.hasEffect(EFFECT_BUFF_AGILITY))):
+            jumpCostP = getCachedChipCost(CHIP_JUMP)
+            jumpTarget = (-1)
+            targetPos = self._target._cellPos
+            origDistP = getCellDistance(simPos, targetPos)
+            if (origDistP == None):
+                origDistP = 99
+            maxWRJP = 0
+            for wIdJP in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                wObjJP = lw_get(self._arsenal.playerEquippedWeapons, wIdJP)
+                if ((wObjJP != None) and (wObjJP._maxRange > maxWRJP)):
+                    maxWRJP = wObjJP._maxRange
+            deniedJP = ((self._player.hasEffect(EFFECT_SHACKLE_TP) or self._player.hasEffect(EFFECT_SHACKLE_STRENGTH)) or self._player.hasEffect(EFFECT_SHACKLE_MAGIC))
+            lowHPJP = ((lw_div(lw_mul(self._player._currHealth, 100), max(1, self._player._maxHealth))) < 60)
+            enemyMPJP = self._target._currMp
+            if (enemyMPJP == None):
+                enemyMPJP = 5
+            kiteHorizonJP = lw_add(maxWRJP, enemyMPJP)
+            bestTierP = 5
+            bestMetricP = 99999
+            simX = getCellX(simPos)
+            simY = getCellY(simPos)
+            jdx = (-3)
+            while (jdx <= 3):
+                jdy = (-3)
+                while (jdy <= 3):
+                    if ((jdx == 0) and (jdy == 0)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    if (lw_add(abs(jdx), abs(jdy)) > 3):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    jCand = getCellFromXY(lw_add(simX, jdx), lw_add(simY, jdy))
+                    if ((jCand == None) or (jCand < 0)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    if (isObstacle(jCand) or isEntity(jCand)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    jDist = getCellDistance(simPos, jCand)
+                    if (((jDist == None) or (jDist < 1)) or (jDist > 3)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    d = getCellDistance(jCand, targetPos)
+                    if (d == None):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    hasLosJP = lineOfSight(jCand, targetPos)
+                    tier = 4
+                    metric = d
+                    if ((hasLosJP and (d >= 1)) and (d <= maxWRJP)):
+                        tier = 1
+                    else:
+                        if (((deniedJP or lowHPJP)) and (not hasLosJP)):
+                            tier = 2
+                            metric = abs(lw_sub(d, max(2, lw_sub(maxWRJP, 2))))
+                        else:
+                            if ((lw_sub(origDistP, d) >= 2) and (d <= kiteHorizonJP)):
+                                tier = 3
+                                metric = lw_add(d, lw_div(getAdversarialThreat(jCand), 100.0))
+                    if ((tier < bestTierP) or (((tier == bestTierP) and (metric < bestMetricP)))):
+                        bestTierP = tier
+                        bestMetricP = metric
+                        jumpTarget = jCand
+                    jdy = lw_add(jdy, 1)
+                jdx = lw_add(jdx, 1)
+            if (bestTierP > 3):
+                jumpTarget = (-1)
+            if (jumpTarget != (-1)):
+                push(actions, Action(Action.ACTION_TELEPORT, (-1), CHIP_JUMP, jumpTarget, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(jumpCostP)
+                simPos = jumpTarget
+                didJump = True
+        didTeleport = False
+        if (((not didJump) and (params.repositioning == "otko")) and self.checkOTKOOpportunity()):
+            distToTarget = getCellDistance(self._player._cellPos, self._target._cellPos)
+            maxWeaponRange = 12
+            repoTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+            if ((distToTarget > maxWeaponRange) and (repoTeleChip != None)):
+                tpTeleportRepo = getCachedChipCost(repoTeleChip)
+                if (tpBudget >= tpTeleportRepo):
+                    bestCell = self._fieldMap.getBestWeaponOrChipCell()
+                    if ((bestCell != None) and (bestCell != (-1))):
+                        teleportDist = getCellDistance(self._player._cellPos, bestCell._id)
+                        repoMaxRange = getTeleportMaxRange(repoTeleChip)
+                        if ((teleportDist >= 1) and (teleportDist <= repoMaxRange)):
+                            push(actions, Action(Action.ACTION_TELEPORT, (-1), repoTeleChip, bestCell._id, self._target))
+                            tpBudget = lw_num(tpBudget) - lw_num(tpTeleportRepo)
+                            simPos = bestCell._id
+                            didTeleport = True
+        if (((params.movementFraction > 0) and (not didTeleport)) and (not didJump)):
+            mpToUse = floor(lw_mul(mpBudget, params.movementFraction))
+            moveAction = self.getMoveToOptimalCell(mpToUse)
+            if (moveAction != None):
+                push(actions, moveAction)
+                moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999):
+                    mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                    simPos = moveAction.targetCell
+        paramInRange = False
+        for paramWid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            paramW = lw_get(self._arsenal.playerEquippedWeapons, paramWid)
+            paramDist = getCellDistance(simPos, self._target._cellPos)
+            if (((paramDist != None) and (paramDist >= paramW._minRange)) and (paramDist <= paramW._maxRange)):
+                paramInRange = True
+                break
+        paramReservedAttackTP = (8 if paramInRange else 0)
+        denialActionsP = self.getDenialActions(tpBudget, simPos)
+        for da in lw_values(denialActionsP):
+            daCost = getCachedChipCost(da.chip)
+            if (lw_sub(tpBudget, daCost) < paramReservedAttackTP):
+                break
+            push(actions, da)
+            tpBudget = lw_num(tpBudget) - lw_num(daCost)
+        if (tpBudget >= 4):
+            attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+            for atk in lw_values(attackActions):
+                push(actions, atk)
+        if (params.repositioning == "hide"):
+            hideAction = self.getHideAndSeekAction(mpBudget)
+            if (hideAction != None):
+                push(actions, hideAction)
+        else:
+            if (params.repositioning == "kite"):
+                kiteAction = self.getKiteAwayAction(mpBudget)
+                if (kiteAction != None):
+                    push(actions, kiteAction)
+        return actions
+    
+    def createNeutrinoStackingScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        if (not mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)):
+            return None
+        dist = getCellDistance(simPos, self._target._cellPos)
+        if (dist == None):
+            return None
+        isDiagonal = self.isDiagonal(simPos, self._target._cellPos)
+        if (((not isDiagonal) or (dist < 2)) or (dist > 6)):
+            return None
+        if (not getCachedLineOfSight(simPos, self._target._cellPos)):
+            return None
+        if (tpBudget < 16):
+            return None
+        currentStacks = self._arsenal.getVulnerabilityStacks(self._target)
+        vulnRemaining = self._target.getEffectRemaining(EFFECT_VULNERABILITY)
+        if ((currentStacks >= 3) and (vulnRemaining >= 2)):
+            return None
+        if (getWeapon() != WEAPON_NEUTRINO):
+            push(actions, Action(Action.ACTION_WEAPON_SWAP, (-1), (-1), (-1), self._target))
+            lw_get(actions, lw_sub(count(actions), 1)).weapon = WEAPON_NEUTRINO
+            tpBudget = lw_num(tpBudget) - lw_num(1)
+        i = 0
+        while (i < 3):
+            if (tpBudget >= 4):
+                push(actions, Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, (-1), self._target._cellPos, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(4)
+            i = lw_add(i, 1)
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createGrappleHeavySwordScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        if (not mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_GRAPPLE)):
+            return None
+        if (getCooldown(CHIP_GRAPPLE, self._player._id) > 0):
+            return None
+        dist = getCellDistance(simPos, self._target._cellPos)
+        if (dist == None):
+            return None
+        if (tpBudget < 10):
+            return None
+        playerX = getCellX(simPos)
+        playerY = getCellY(simPos)
+        enemyPos = self._target._cellPos
+        enemyX = getCellX(enemyPos)
+        enemyY = getCellY(enemyPos)
+        isOnSameLine = (((playerY == enemyY)) or ((playerX == enemyX)))
+        if (not isOnSameLine):
+            return None
+        grappleCell = (-1)
+        if (playerY == enemyY):
+            grappleCell = (getCellFromXY(lw_sub(playerX, 1), playerY) if ((enemyX < playerX)) else getCellFromXY(lw_add(playerX, 1), playerY))
+        else:
+            grappleCell = (getCellFromXY(playerX, lw_sub(playerY, 1)) if ((enemyY < playerY)) else getCellFromXY(playerX, lw_add(playerY, 1)))
+        if ((grappleCell == (-1)) or (grappleCell == None)):
+            return None
+        push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_GRAPPLE, grappleCell, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_GRAPPLE))
+        enemyPulledPosition = grappleCell
+        if (getWeapon() != WEAPON_HEAVY_SWORD):
+            push(actions, Action(Action.ACTION_WEAPON_SWAP, WEAPON_HEAVY_SWORD, (-1), (-1), self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(1)
+        heavySwordCost = getCachedWeaponCost(WEAPON_HEAVY_SWORD, self._arsenal)
+        if (heavySwordCost == None):
+            heavySwordCost = 15
+        push(actions, Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, (-1), enemyPulledPosition, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(heavySwordCost)
+        if (tpBudget >= heavySwordCost):
+            push(actions, Action(Action.ACTION_DIRECT, WEAPON_HEAVY_SWORD, (-1), enemyPulledPosition, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(heavySwordCost)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createGrappleAxeScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        if (not mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_AXE)):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_GRAPPLE)):
+            return None
+        if (getCooldown(CHIP_GRAPPLE, self._player._id) > 0):
+            return None
+        dist = getCellDistance(simPos, self._target._cellPos)
+        if (dist == None):
+            return None
+        axeCost = getCachedWeaponCost(WEAPON_AXE, self._arsenal)
+        if (axeCost == None):
+            axeCost = 6
+        grappleCost = getCachedChipCost(CHIP_GRAPPLE)
+        if (tpBudget < lw_add(grappleCost, axeCost)):
+            return None
+        playerX = getCellX(simPos)
+        playerY = getCellY(simPos)
+        enemyPos = self._target._cellPos
+        enemyX = getCellX(enemyPos)
+        enemyY = getCellY(enemyPos)
+        isOnSameLine = (((playerY == enemyY)) or ((playerX == enemyX)))
+        if (not isOnSameLine):
+            return None
+        grappleCell = (-1)
+        if (playerY == enemyY):
+            grappleCell = (getCellFromXY(lw_sub(playerX, 1), playerY) if ((enemyX < playerX)) else getCellFromXY(lw_add(playerX, 1), playerY))
+        else:
+            grappleCell = (getCellFromXY(playerX, lw_sub(playerY, 1)) if ((enemyY < playerY)) else getCellFromXY(playerX, lw_add(playerY, 1)))
+        if ((grappleCell == (-1)) or (grappleCell == None)):
+            return None
+        push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_GRAPPLE, grappleCell, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(grappleCost)
+        enemyPulledPosition = grappleCell
+        if (getWeapon() != WEAPON_AXE):
+            push(actions, Action(Action.ACTION_WEAPON_SWAP, WEAPON_AXE, (-1), (-1), self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(1)
+        push(actions, Action(Action.ACTION_DIRECT, WEAPON_AXE, (-1), enemyPulledPosition, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(axeCost)
+        if (tpBudget >= axeCost):
+            push(actions, Action(Action.ACTION_DIRECT, WEAPON_AXE, (-1), enemyPulledPosition, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(axeCost)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createGrappleRangedScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        hasMagnum = mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_MAGNUM)
+        hasDestroyer = mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_DESTROYER)
+        if ((not hasMagnum) and (not hasDestroyer)):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_GRAPPLE)):
+            return None
+        if (getCooldown(CHIP_GRAPPLE, self._player._id) > 0):
+            return None
+        dist = getCellDistance(simPos, self._target._cellPos)
+        if (dist == None):
+            return None
+        if ((dist < 2) or (dist > 8)):
+            return None
+        weaponId = (WEAPON_MAGNUM if hasMagnum else WEAPON_DESTROYER)
+        weaponCost = getCachedWeaponCost(weaponId, self._arsenal)
+        if (weaponCost == None):
+            weaponCost = 8
+        grappleCost = getCachedChipCost(CHIP_GRAPPLE)
+        if (tpBudget < lw_add(grappleCost, weaponCost)):
+            return None
+        playerX = getCellX(simPos)
+        playerY = getCellY(simPos)
+        enemyPos = self._target._cellPos
+        enemyX = getCellX(enemyPos)
+        enemyY = getCellY(enemyPos)
+        isOnSameLine = (((playerY == enemyY)) or ((playerX == enemyX)))
+        if (not isOnSameLine):
+            return None
+        grappleCell = (-1)
+        if (playerY == enemyY):
+            grappleCell = (getCellFromXY(lw_sub(playerX, 1), playerY) if ((enemyX < playerX)) else getCellFromXY(lw_add(playerX, 1), playerY))
+        else:
+            grappleCell = (getCellFromXY(playerX, lw_sub(playerY, 1)) if ((enemyY < playerY)) else getCellFromXY(playerX, lw_add(playerY, 1)))
+        if ((grappleCell == (-1)) or (grappleCell == None)):
+            return None
+        push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_GRAPPLE, grappleCell, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(grappleCost)
+        enemyPulledPosition = grappleCell
+        if (getWeapon() != weaponId):
+            push(actions, Action(Action.ACTION_WEAPON_SWAP, weaponId, (-1), (-1), self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(1)
+        push(actions, Action(Action.ACTION_DIRECT, weaponId, (-1), enemyPulledPosition, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(weaponCost)
+        while (tpBudget >= weaponCost):
+            push(actions, Action(Action.ACTION_DIRECT, weaponId, (-1), enemyPulledPosition, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(weaponCost)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createSteroidOTKOScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID)):
+            return None
+        if (getCooldown(CHIP_STEROID, self._player._id) > 0):
+            return None
+        steroidTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if (steroidTeleChip == None):
+            return None
+        tpTeleportSteroid = getCachedChipCost(steroidTeleChip)
+        steroidMaxRange = getTeleportMaxRange(steroidTeleChip)
+        tpSteroidCost = getCachedChipCost(CHIP_STEROID)
+        if (tpBudget < lw_add(tpSteroidCost, tpTeleportSteroid)):
+            return None
+        push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player))
+        tpBudget = lw_num(tpBudget) - lw_num(tpSteroidCost)
+        bestOTKO = self._fieldMap.getBestOTKOCell()
+        if (bestOTKO == None):
+            bestOTKO = self._fieldMap.getBestWeaponOrChipCell()
+            if ((bestOTKO == None) or (bestOTKO == (-1))):
+                return None
+        teleportDist = getCellDistance(self._player._cellPos, bestOTKO._id)
+        if (((teleportDist == None) or (teleportDist < 1)) or (teleportDist > steroidMaxRange)):
+            return None
+        push(actions, Action(Action.ACTION_TELEPORT, (-1), steroidTeleChip, bestOTKO._id, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(tpTeleportSteroid)
+        attackActions = self.getAttackActions(tpBudget, 1.0, bestOTKO._id)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        return actions
+    
+    def createSteroidRecheckScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID)):
+            return None
+        if (getCooldown(CHIP_STEROID, self._player._id) > 0):
+            return None
+        tpSteroidRecheck = getCachedChipCost(CHIP_STEROID)
+        if (tpBudget < lw_add(tpSteroidRecheck, 3)):
+            return None
+        push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player))
+        tpBudget = lw_num(tpBudget) - lw_num(tpSteroidRecheck)
+        context = {}
+        lw_put(context, 'target', self._target)
+        lw_put(context, 'remainingTP', tpBudget)
+        checkpoint = Action.createCheckpoint("BUFF_RECHECK", "evaluateBuffRecheckContinuation", context)
+        push(actions, checkpoint)
+        return actions
+    
+    def createDualBuffAttackScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID)):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WARM_UP)):
+            return None
+        if (getCooldown(CHIP_STEROID, self._player._id) > 0):
+            return None
+        if (getCooldown(CHIP_WARM_UP, self._player._id) > 0):
+            return None
+        tpSteroid = getCachedChipCost(CHIP_STEROID)
+        tpWarmUp = getCachedChipCost(CHIP_WARM_UP)
+        buffCost = lw_add(tpSteroid, tpWarmUp)
+        if (tpBudget < lw_add(buffCost, 4)):
+            return None
+        push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player))
+        tpBudget = lw_num(tpBudget) - lw_num(tpSteroid)
+        push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WARM_UP, (-1), self._player))
+        tpBudget = lw_num(tpBudget) - lw_num(tpWarmUp)
+        simPos = self._player._cellPos
+        approachCell = self.getApproachEnemyCell(mpBudget)
+        if ((approachCell != None) and (approachCell != (-1))):
+            push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), approachCell, self._target))
+            simPos = approachCell
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        if (count(actions) < 3):
+            return None
+        return actions
+    
+    def createJumpAttackScenario(self, availableTP, availableMP):
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP)):
+            return None
+        if (getCooldown(CHIP_JUMP, self._player._id) > 0):
+            return None
+        jumpCost = getCachedChipCost(CHIP_JUMP)
+        if (availableTP < lw_add(jumpCost, 4)):
+            return None
+        playerPos = self._player._cellPos
+        targetPos = self._target._cellPos
+        maxWeaponRange = 0
+        for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            wObj = lw_get(self._arsenal.playerEquippedWeapons, wid)
+            if ((wObj != None) and (wObj._maxRange > maxWeaponRange)):
+                maxWeaponRange = wObj._maxRange
+        if (maxWeaponRange == 0):
+            return None
+        bestAttackCell = (-1)
+        bestLaunchCell = (-1)
+        bestDamage = 0
+        reachable = getReachableCells()
+        baselineDamage = 0
+        baselineOpsLimit = lw_sub(_ops86, 300000)
+        for rCell in lw_values(reachable):
+            if (getOperations() > baselineOpsLimit):
+                break
+            rDist = getCellDistance(rCell, targetPos)
+            if ((rDist == None) or (rDist > maxWeaponRange)):
+                continue
+            rDamage = 0
+            for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                wObj = lw_get(self._arsenal.playerEquippedWeapons, wid)
+                if (wObj == None):
+                    continue
+                if ((rDist < wObj._minRange) or (rDist > wObj._maxRange)):
+                    continue
+                if (not getCachedLineOfSight(rCell, targetPos)):
+                    continue
+                dmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, wid, self._target)
+                swapCost = (1 if ((getWeapon() != wid)) else 0)
+                uses = min(wObj._maxUse, floor(lw_div((lw_sub(availableTP, swapCost)), wObj._cost)))
+                if (uses > 0):
+                    rDamage = lw_add(rDamage, lw_mul(dmg, uses))
+            if (rDamage > baselineDamage):
+                baselineDamage = rDamage
+        jaEnemyProf = getEnemyProfile(self._target._id)
+        jaSkipBunker = ((((jaEnemyProf != None) and lw_get(jaEnemyProf, 'isKiter')) and (lw_get(jaEnemyProf, 'kiterFlavor') == 'magic_poison')))
+        candidate = 0
+        while (candidate < 613):
+            if (getOperations() > _ops86):
+                break
+            if isObstacle(candidate):
+                candidate = lw_add(candidate, 1)
+                continue
+            if isEntity(candidate):
+                candidate = lw_add(candidate, 1)
+                continue
+            distToTarget = getCellDistance(candidate, targetPos)
+            if ((distToTarget == None) or (distToTarget > maxWeaponRange)):
+                candidate = lw_add(candidate, 1)
+                continue
+            if (jaSkipBunker and (candidate != playerPos)):
+                jaCx = getCellX(candidate)
+                jaCy = getCellY(candidate)
+                jaWalk = 0
+                jaN1 = getCellFromXY(lw_add(jaCx, 1), jaCy)
+                if (((jaN1 != None) and (jaN1 != (-1))) and (getCellContent(jaN1) == CELL_EMPTY)):
+                    jaWalk = lw_add(jaWalk, 1)
+                jaN2 = getCellFromXY(lw_sub(jaCx, 1), jaCy)
+                if (((jaN2 != None) and (jaN2 != (-1))) and (getCellContent(jaN2) == CELL_EMPTY)):
+                    jaWalk = lw_add(jaWalk, 1)
+                jaN3 = getCellFromXY(jaCx, lw_add(jaCy, 1))
+                if (((jaN3 != None) and (jaN3 != (-1))) and (getCellContent(jaN3) == CELL_EMPTY)):
+                    jaWalk = lw_add(jaWalk, 1)
+                jaN4 = getCellFromXY(jaCx, lw_sub(jaCy, 1))
+                if (((jaN4 != None) and (jaN4 != (-1))) and (getCellContent(jaN4) == CELL_EMPTY)):
+                    jaWalk = lw_add(jaWalk, 1)
+                if (jaWalk <= 2):
+                    candidate = lw_add(candidate, 1)
+                    continue
+            launchCell = (-1)
+            launchMP = 999
+            for rCell in lw_values(reachable):
+                jumpDist = getCellDistance(rCell, candidate)
+                if (((jumpDist != None) and (jumpDist >= 1)) and (jumpDist <= 3)):
+                    mp = getGraphMPCost(rCell)
+                    if ((mp < launchMP) and (mp <= availableMP)):
+                        launchMP = mp
+                        launchCell = rCell
+            if (launchCell == (-1)):
+                candidate = lw_add(candidate, 1)
+                continue
+            tpBudget = lw_sub(availableTP, jumpCost)
+            cellDamage = 0
+            for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                wObj = lw_get(self._arsenal.playerEquippedWeapons, wid)
+                if (wObj == None):
+                    continue
+                if ((distToTarget < wObj._minRange) or (distToTarget > wObj._maxRange)):
+                    continue
+                if (not getCachedLineOfSight(candidate, targetPos)):
+                    continue
+                dmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, wid, self._target)
+                swapCost = (1 if ((getWeapon() != wid)) else 0)
+                uses = min(wObj._maxUse, floor(lw_div((lw_sub(tpBudget, swapCost)), wObj._cost)))
+                if (uses > 0):
+                    cellDamage = lw_add(cellDamage, lw_mul(dmg, uses))
+            if (cellDamage > bestDamage):
+                bestDamage = cellDamage
+                bestAttackCell = candidate
+                bestLaunchCell = launchCell
+            candidate = lw_add(candidate, 1)
+        if (bestAttackCell == (-1)):
+            return None
+        if ((baselineDamage > 0) and (availableTP > 0)):
+            avgDmgPerTP = lw_div(baselineDamage, availableTP)
+            requiredImprovement = lw_mul(jumpCost, avgDmgPerTP)
+            if (bestDamage <= lw_add(baselineDamage, requiredImprovement)):
+                return None
+        actions = []
+        if (bestLaunchCell != playerPos):
+            push(actions, Action(Action.MOVEMENT_OFFENSIVE, (-1), (-1), bestLaunchCell, self._target))
+        push(actions, Action(Action.ACTION_TELEPORT, (-1), CHIP_JUMP, bestAttackCell, self._target))
+        tpAfterJump = lw_sub(availableTP, jumpCost)
+        attackActions = self.getAttackActions(tpAfterJump, 1.0, bestAttackCell)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        return actions
+    
+    def createJumpToFireScenario(self, availableTP, availableMP):
+        if (self._target == None):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP)):
+            return None
+        if (getCooldown(CHIP_JUMP, self._player._id) > 0):
+            return None
+        jumpCost = getCachedChipCost(CHIP_JUMP)
+        if (availableTP < lw_add(jumpCost, 4)):
+            return None
+        pX = getCellX(self._player._cellPos)
+        pY = getCellY(self._player._cellPos)
+        targetPos = self._target._cellPos
+        tpAfterJump = lw_sub(availableTP, jumpCost)
+        bestCell = (-1)
+        bestDamage = 0
+        dx = (-3)
+        while (dx <= 3):
+            dy = (-3)
+            while (dy <= 3):
+                if ((dx == 0) and (dy == 0)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if (lw_add(abs(dx), abs(dy)) > 3):
+                    dy = lw_add(dy, 1)
+                    continue
+                jc = getCellFromXY(lw_add(pX, dx), lw_add(pY, dy))
+                if ((jc == None) or (jc < 0)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if (isObstacle(jc) or isEntity(jc)):
+                    dy = lw_add(dy, 1)
+                    continue
+                jd = getCellDistance(jc, targetPos)
+                if (jd == None):
+                    dy = lw_add(dy, 1)
+                    continue
+                hasLoSCached = (-1)
+                cellDamage = 0
+                for wid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                    w = lw_get(self._arsenal.playerEquippedWeapons, wid)
+                    if (w == None):
+                        continue
+                    if ((jd < w._minRange) or (jd > w._maxRange)):
+                        continue
+                    if (((w._launchType != None) and (w._launchType > 0)) and (not isSimLaunchValid(w._launchType, jc, targetPos))):
+                        continue
+                    if (hasLoSCached == (-1)):
+                        hasLoSCached = (1 if getCachedLineOfSight(jc, targetPos) else 0)
+                    if (hasLoSCached == 0):
+                        break
+                    swapCost = (1 if ((getWeapon() != wid)) else 0)
+                    uses = min(w._maxUse, floor(lw_div((lw_sub(tpAfterJump, swapCost)), w._cost)))
+                    if (uses <= 0):
+                        continue
+                    dmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, wid, self._target)
+                    if (dmg <= 0):
+                        continue
+                    totalDmg = lw_mul(dmg, uses)
+                    if (totalDmg > cellDamage):
+                        cellDamage = totalDmg
+                if (hasLoSCached == (-1)):
+                    hasLoSCached = (1 if getCachedLineOfSight(jc, targetPos) else 0)
+                if (hasLoSCached == 1):
+                    damageChipsJ2F = [CHIP_LIGHTNING, CHIP_PLASMA, CHIP_METEORITE, CHIP_ICEBERG, CHIP_ROCKFALL, CHIP_FIRE_BALL, CHIP_ROCK, CHIP_FLAME, CHIP_STALACTITE]
+                    for cid in lw_values(damageChipsJ2F):
+                        if (not mapContainsKey(self._arsenal.playerEquippedChips, cid)):
+                            continue
+                        if (getCooldown(cid, self._player._id) > 0):
+                            continue
+                        ch = lw_get(self._arsenal.playerEquippedChips, cid)
+                        if (ch == None):
+                            continue
+                        if ((jd < ch._minRange) or (jd > ch._maxRange)):
+                            continue
+                        if (((ch._launchType != None) and (ch._launchType > 0)) and (not isSimLaunchValid(ch._launchType, jc, targetPos))):
+                            continue
+                        chCost = getCachedChipCost(cid)
+                        if (tpAfterJump < chCost):
+                            continue
+                        chDmg = self._arsenal.getNetDamageAgainstTarget(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, cid, self._target)
+                        if ((chDmg == None) or (chDmg <= 0)):
+                            continue
+                        if (chDmg > cellDamage):
+                            cellDamage = chDmg
+                if (cellDamage > bestDamage):
+                    bestDamage = cellDamage
+                    bestCell = jc
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+        if ((bestCell == (-1)) or (bestDamage == 0)):
+            return None
+        actions = []
+        push(actions, Action(Action.ACTION_TELEPORT, (-1), CHIP_JUMP, bestCell, self._target))
+        attackActions = self.getAttackActions(tpAfterJump, 1.0, bestCell)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        if (count(actions) < 2):
+            return None
+        if (getTurn() <= 20):
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("J2FIRE_T", getTurn()), "_jc"), bestCell), "_d"), bestDamage), "_tp"), availableTP))
+        return actions
+    
+    def createNeutrinoRecheckScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        simPos = self._player._cellPos
+        if (not mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)):
+            return None
+        if (tpBudget < 15):
+            return None
+        dist = getCellDistance(simPos, self._target._cellPos)
+        if (dist == None):
+            return None
+        isOnAxis = ((getCellX(simPos) == getCellX(self._target._cellPos)) or (getCellY(simPos) == getCellY(self._target._cellPos)))
+        if (not isOnAxis):
+            return None
+        if ((dist < 2) or (dist > 6)):
+            return None
+        neutrinoCount = floor(lw_div((lw_sub(tpBudget, 10)), 4))
+        if (neutrinoCount > 3):
+            neutrinoCount = 3
+        if (neutrinoCount < 2):
+            neutrinoCount = 2
+        n = 0
+        while (n < neutrinoCount):
+            push(actions, Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, (-1), (-1), self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(4)
+            n = lw_add(n, 1)
+        expectedVuln = lw_mul(neutrinoCount, 8)
+        context = {}
+        lw_put(context, 'target', self._target)
+        lw_put(context, 'remainingTP', tpBudget)
+        lw_put(context, 'vulnerabilityPercent', expectedVuln)
+        checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
+        push(actions, checkpoint)
+        return actions
+    
+    def createGrappleHSRecheckScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        simPos = self._player._cellPos
+        if (not mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_HEAVY_SWORD)):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_GRAPPLE)):
+            return None
+        if (getCooldown(CHIP_GRAPPLE, self._player._id) > 0):
+            return None
+        if (tpBudget < 12):
+            return None
+        enemyPos = self._target._cellPos
+        isOnAxis = ((getCellX(simPos) == getCellX(enemyPos)) or (getCellY(simPos) == getCellY(enemyPos)))
+        if (not isOnAxis):
+            return None
+        dist = getCellDistance(simPos, enemyPos)
+        if (dist == None):
+            return None
+        if ((dist < 2) or (dist > 8)):
+            return None
+        dx = lw_sub(getCellX(enemyPos), getCellX(simPos))
+        dy = lw_sub(getCellY(enemyPos), getCellY(simPos))
+        dirX = 0
+        dirY = 0
+        if (dx != 0):
+            dirX = lw_div(dx, abs(dx))
+        if (dy != 0):
+            dirY = lw_div(dy, abs(dy))
+        grappleTargetCell = getCellFromXY(lw_add(getCellX(simPos), dirX), lw_add(getCellY(simPos), dirY))
+        if (grappleTargetCell == None):
+            return None
+        push(actions, Action(Action.ACTION_DEBUFF, (-1), CHIP_GRAPPLE, grappleTargetCell, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_GRAPPLE))
+        context = {}
+        lw_put(context, 'target', self._target)
+        lw_put(context, 'remainingTP', tpBudget)
+        lw_put(context, 'vulnerabilityPercent', 0)
+        checkpoint = Action.createCheckpoint("VULNERABILITY_RECHECK", "evaluateVulnerabilityRecheckContinuation", context)
+        push(actions, checkpoint)
+        return actions
+    
+    def createHealRecheckScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        playerHP = self._player._currHealth
+        playerMaxHP = self._player._maxHealth
+        playerHPPercent = lw_div((lw_mul(playerHP, 100)), playerMaxHP)
+        if (playerHPPercent > 70):
+            return None
+        if (tpBudget < 10):
+            return None
+        healAction = self.getSmartHealingAction()
+        if (healAction == None):
+            return None
+        push(actions, healAction)
+        if ((healAction.weaponId != (-1)) and (healAction.weaponId != None)):
+            healWeaponCost = getCachedWeaponCost(healAction.weaponId, self._arsenal)
+            if (healWeaponCost == None):
+                healWeaponCost = 9
+            tpBudget = lw_num(tpBudget) - lw_num(healWeaponCost)
+        else:
+            if ((healAction.chip != (-1)) and (healAction.chip != None)):
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(healAction.chip))
+        context = {}
+        lw_put(context, 'target', self._target)
+        lw_put(context, 'remainingTP', tpBudget)
+        checkpoint = Action.createCheckpoint("HEAL_RECHECK", "evaluateHealRecheckContinuation", context)
+        push(actions, checkpoint)
+        return actions
+    
+    def createGrappleCovidScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if (not (((mag > str) and (mag > agi)))):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_GRAPPLE)):
+            return None
+        if (getCooldown(CHIP_GRAPPLE, self._player._id) > 0):
+            return None
+        hasCovid = (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_COVID) and (getCooldown(CHIP_COVID, self._player._id) == 0))
+        if (not hasCovid):
+            return None
+        covidTracker = CooldownTracker(self._target)
+        covidAntidoteCD = covidTracker.getCooldownRemaining(self._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+        if (covidAntidoteCD < 3):
+            return None
+        tpGrapple = getCachedChipCost(CHIP_GRAPPLE)
+        tpCovid = getCachedChipCost(CHIP_COVID)
+        if (tpBudget < lw_add(tpGrapple, tpCovid)):
+            return None
+        enemyPos = self._target._cellPos
+        enemyX = getCellX(enemyPos)
+        enemyY = getCellY(enemyPos)
+        playerX = getCellX(simPos)
+        playerY = getCellY(simPos)
+        onAxis = (((playerX == enemyX) or (playerY == enemyY)))
+        dist = getCellDistance(simPos, enemyPos)
+        grappleCell = simPos
+        moveCost = 0
+        if ((((onAxis and (dist != None)) and (dist >= 3)) and (dist <= 8)) and getCachedLineOfSight(simPos, enemyPos)):
+            grappleCell = simPos
+        else:
+            reachableCells = getReachableCells()
+            if ((reachableCells == None) or (count(reachableCells) == 0)):
+                return None
+            bestCell = (-1)
+            bestScore = (-999999)
+            for cellId in lw_values(reachableCells):
+                pathCost = getGraphMPCost(cellId)
+                if ((pathCost >= 999) or (pathCost > mpBudget)):
+                    continue
+                cx = getCellX(cellId)
+                cy = getCellY(cellId)
+                cellOnAxis = (((cx == enemyX) or (cy == enemyY)))
+                if (not cellOnAxis):
+                    continue
+                cellDist = getCellDistance(cellId, enemyPos)
+                if (((cellDist == None) or (cellDist < 3)) or (cellDist > 8)):
+                    continue
+                if (not getCachedLineOfSight(cellId, enemyPos)):
+                    continue
+                score = lw_sub(1000, lw_mul(pathCost, 50))
+                if ((cellDist >= 4) and (cellDist <= 6)):
+                    score = lw_add(score, 200)
+                if (score > bestScore):
+                    bestScore = score
+                    bestCell = cellId
+                    moveCost = pathCost
+            if (bestCell == (-1)):
+                return None
+            grappleCell = bestCell
+        if (grappleCell != simPos):
+            push(actions, Action(Action.MOVEMENT_OFFENSIVE, (-1), (-1), grappleCell, self._target))
+            mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+            simPos = grappleCell
+        grappleDist = getCellDistance(grappleCell, enemyPos)
+        hasArsenic = (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ARSENIC) and (getCooldown(CHIP_ARSENIC, self._player._id) == 0))
+        if (((hasArsenic and (grappleDist != None)) and (grappleDist >= 3)) and (grappleDist <= 4)):
+            tpArsenic = getCachedChipCost(CHIP_ARSENIC)
+            if (tpBudget >= lw_add(lw_add(tpGrapple, tpCovid), tpArsenic)):
+                push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_ARSENIC, enemyPos, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(tpArsenic)
+        push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_GRAPPLE, enemyPos, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(tpGrapple)
+        push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_COVID, enemyPos, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(tpCovid)
+        covidBreakdown = self._arsenal.getDamageBreakdown(str, mag, self._player._wisdom, self._player._science, CHIP_COVID)
+        poisonChips = self._arsenal.getPoisonChipsSorted(str, mag, self._player._wisdom, self._player._science)
+        for poisonChip in lw_values(poisonChips):
+            chipId = poisonChip._id
+            if (((chipId == CHIP_COVID) or (chipId == CHIP_ARSENIC)) or (chipId == CHIP_GRAPPLE)):
+                continue
+            chipCost = getCachedChipCost(chipId)
+            if (tpBudget < chipCost):
+                continue
+            if (getCooldown(chipId, self._player._id) > 0):
+                continue
+            if ((2 < poisonChip._minRange) or (2 > poisonChip._maxRange)):
+                continue
+            push(actions, Action(Action.ACTION_DIRECT, (-1), chipId, enemyPos, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(chipCost)
+        if (tpBudget >= 3):
+            attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+            for atk in lw_values(attackActions):
+                push(actions, atk)
+        kiteAction = self.getKiteAwayAction(mpBudget)
+        if (kiteAction != None):
+            push(actions, kiteAction)
+        markerAction = Action(Action.ACTION_CHECKPOINT, (-1), (-1), (-1), self._target)
+        markerAction.checkpointType = "POISON_DUMP"
+        push(actions, markerAction)
+        return actions
+    
+    def createPoisonBaitScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if (not (((mag > str) and (mag > agi)))):
+            return None
+        if (POISON_PHASE != "BAIT"):
+            return None
+        tpBoots = getCachedChipCost(CHIP_LEATHER_BOOTS)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) and (getCooldown(CHIP_LEATHER_BOOTS, self._player._id) == 0)) and (tpBudget >= tpBoots)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_LEATHER_BOOTS, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpBoots)
+            mpBudget = lw_add(mpBudget, 2)
+        distToEnemy = getCellDistance(simPos, self._target._cellPos)
+        denialTele = (self.findDenialTeleportCell() if (((distToEnemy != None) and (distToEnemy > 6))) else None)
+        if ((denialTele != None) and (tpBudget >= lw_get(denialTele, 'cost'))):
+            push(actions, Action(Action.ACTION_TELEPORT, (-1), lw_get(denialTele, 'chip'), lw_get(denialTele, 'cell'), self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(lw_get(denialTele, 'cost'))
+            simPos = lw_get(denialTele, 'cell')
+            distToEnemy = getCellDistance(simPos, self._target._cellPos)
+        moveAction = None
+        if ((distToEnemy != None) and (distToEnemy > 6)):
+            moveAction = Action(Action.MOVEMENT_APPROACH, (-1), (-1), self._target._cellPos, self._target)
+        else:
+            moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            if (moveAction.type == Action.MOVEMENT_APPROACH):
+                path = getPath(simPos, self._target._cellPos)
+                if ((path != None) and (count(path) > 1)):
+                    maxSteps = min(mpBudget, lw_sub(count(path), 1))
+                    if (maxSteps > 0):
+                        simPos = lw_get(path, maxSteps)
+                        mpBudget = lw_num(mpBudget) - lw_num(maxSteps)
+            else:
+                if (moveAction.targetCell != (-1)):
+                    simPos = moveAction.targetCell
+                    moveCost = getGraphMPCost(simPos)
+                    if (moveCost < 999):
+                        mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+        tpWiz = getCachedChipCost(CHIP_WIZARDRY)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WIZARDRY) and (getCooldown(CHIP_WIZARDRY, self._player._id) == 0)) and (tpBudget >= tpWiz)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WIZARDRY, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpWiz)
+        tpAdren = getCachedChipCost(CHIP_ADRENALINE)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ADRENALINE) and (getCooldown(CHIP_ADRENALINE, self._player._id) == 0)) and (tpBudget >= tpAdren)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_ADRENALINE, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpAdren)
+            tpBudget = lw_add(tpBudget, 5)
+        denialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
+        for dChip in lw_values(denialChips):
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, dChip)):
+                continue
+            if (getCooldown(dChip, self._player._id) > 0):
+                continue
+            dCost = getCachedChipCost(dChip)
+            if (tpBudget < dCost):
+                continue
+            dObj = lw_get(self._arsenal.playerEquippedChips, dChip)
+            dist = getCellDistance(simPos, self._target._cellPos)
+            if (((dist == None) or (dist < dObj._minRange)) or (dist > dObj._maxRange)):
+                continue
+            if (not getCachedLineOfSight(simPos, self._target._cellPos)):
+                continue
+            if ((dObj._aoeType != AREA_POINT) and (not dObj._selfImmune)):
+                if fieldMap.wouldAoEHitCell(self._target._cellPos, dObj._aoeType, simPos, simPos):
+                    continue
+            push(actions, Action(Action.ACTION_DEBUFF, (-1), dChip, self._target._cellPos, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(dCost)
+        poisonChips = self._arsenal.getPoisonChipsSorted(str, mag, self._player._wisdom, self._player._science)
+        for poisonChip in lw_values(poisonChips):
+            chipId = poisonChip._id
+            if (chipId == CHIP_COVID):
+                continue
+            chipCost = getCachedChipCost(chipId)
+            if (tpBudget < chipCost):
+                continue
+            if (getCooldown(chipId, self._player._id) > 0):
+                continue
+            dist = getCellDistance(simPos, self._target._cellPos)
+            if (((dist == None) or (dist < poisonChip._minRange)) or (dist > poisonChip._maxRange)):
+                continue
+            if (not getCachedLineOfSight(simPos, self._target._cellPos)):
+                continue
+            if ((poisonChip._aoeType != AREA_POINT) and (not poisonChip._selfImmune)):
+                if fieldMap.wouldAoEHitCell(self._target._cellPos, poisonChip._aoeType, simPos, simPos):
+                    continue
+            push(actions, Action(Action.ACTION_DIRECT, (-1), chipId, self._target._cellPos, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(chipCost)
+        if (tpBudget >= 4):
+            self._dotDiscountReason = "poisons_queued"
+            attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+            self._dotDiscountReason = None
+            for atk in lw_values(attackActions):
+                push(actions, atk)
+        kiteAction = self.getKiteAwayAction(mpBudget)
+        if (kiteAction != None):
+            push(actions, kiteAction)
+        if (count(actions) > 0):
+            checkpoint = Action(Action.ACTION_CHECKPOINT, (-1), (-1), (-1), None)
+            checkpoint.checkpointType = "POISON_BAIT"
+            push(actions, checkpoint)
+            return actions
+        return None
+    
+    def createShieldRotationScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        if (tpBudget < 10):
+            return None
+        hasFortress = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_FORTRESS)
+        hasWall = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WALL)
+        fortressTurns = self._player.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
+        wallTurns = self._player.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD)
+        shieldApplied = False
+        tpFortressShield = getCachedChipCost(CHIP_FORTRESS)
+        tpWallShield = getCachedChipCost(CHIP_WALL)
+        if (((hasFortress and (fortressTurns <= 1)) and (getCooldown(CHIP_FORTRESS, self._player._id) == 0)) and (tpBudget >= tpFortressShield)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_FORTRESS, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpFortressShield)
+            shieldApplied = True
+        else:
+            if (((hasWall and (wallTurns <= 1)) and (getCooldown(CHIP_WALL, self._player._id) == 0)) and (tpBudget >= tpWallShield)):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WALL, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(tpWallShield)
+                shieldApplied = True
+        if (not shieldApplied):
+            return None
+        simPos = self._player._cellPos
+        attackActions = []
+        if (tpBudget >= 4):
+            attackActions = self.getAttackActions(tpBudget, 0.65, simPos)
+        if (count(attackActions) == 0):
+            moveAction = self.getMoveToOptimalCell(availableMP)
+            if (moveAction != None):
+                push(actions, moveAction)
+                moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999):
+                    simPos = moveAction.targetCell
+            if (tpBudget >= 4):
+                attackActions = self.getAttackActions(tpBudget, 0.65, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        if (count(actions) > 0):
+            return actions
+        return None
+    
+    def createDamageReturnCyclingScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        if (tpBudget < 8):
+            return None
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        hasMirror = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MIRROR)
+        hasThorn = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_THORN)
+        hasBramble = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        hasAnyDamageReturn = ((hasMirror or hasThorn) or hasBramble)
+        if ((agi < 300) or (not hasAnyDamageReturn)):
+            return None
+        returnRemaining = self._player.getDamageReturnRemaining()
+        mirrorCd = (getCooldown(CHIP_MIRROR, self._player._id) if hasMirror else 999)
+        thornCd = (getCooldown(CHIP_THORN, self._player._id) if hasThorn else 999)
+        brambleCd = (getCooldown(CHIP_BRAMBLE, self._player._id) if hasBramble else 999)
+        distToEnemy = getCellDistance(self._player._cellPos, self._target._cellPos)
+        if (distToEnemy == None):
+            distToEnemy = 99
+        inCloseCombat = (distToEnemy <= 8)
+        expectedThreat = self._fieldMap.getThreatAtCell(self._player._cellPos)
+        tpBrambleCost = getCachedChipCost(CHIP_BRAMBLE)
+        tpMirrorCost = getCachedChipCost(CHIP_MIRROR)
+        tpThornCost = getCachedChipCost(CHIP_THORN)
+        enemyCanAttack1 = predictEnemyCanAttackWithin(self._player._cellPos, self._target, 1)
+        enemyCanAttack2 = predictEnemyCanAttackWithin(self._player._cellPos, self._target, 2)
+        needsReflect = (returnRemaining <= 2)
+        anyReady = (((((mirrorCd == 0) and hasMirror)) or (((thornCd == 0) and hasThorn))) or (((brambleCd == 0) and hasBramble)))
+        if ((not needsReflect) or (not anyReady)):
+            return None
+        agiBufs = self.getAgiBuff()
+        for ab in lw_values(agiBufs):
+            if (tpBudget >= lw_add(getCachedChipCost(ab.chip), 8)):
+                push(actions, ab)
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(ab.chip))
+        buffApplied = False
+        if ((((((hasBramble and (returnRemaining <= 1)) and (brambleCd == 0)) and (tpBudget >= lw_add(tpBrambleCost, 8))) and inCloseCombat) and (expectedThreat > 300)) and enemyCanAttack1):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_BRAMBLE, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpBrambleCost)
+            buffApplied = True
+        if (((hasMirror and (returnRemaining <= 2)) and (mirrorCd == 0)) and (tpBudget >= lw_add(tpMirrorCost, 4))):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_MIRROR, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpMirrorCost)
+            buffApplied = True
+        if ((((hasThorn and (returnRemaining <= 2)) and (thornCd == 0)) and (tpBudget >= lw_add(tpThornCost, 4))) and enemyCanAttack2):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_THORN, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpThornCost)
+            buffApplied = True
+        if (not buffApplied):
+            return None
+        simPos = self._player._cellPos
+        attackActions = []
+        if (tpBudget >= 4):
+            attackActions = self.getAttackActions(tpBudget, 0.65, simPos)
+        if (count(attackActions) == 0):
+            moveAction = self.getMoveToOptimalCell(availableMP)
+            if (moveAction != None):
+                push(actions, moveAction)
+                moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999):
+                    simPos = moveAction.targetCell
+            if (tpBudget >= 4):
+                attackActions = self.getAttackActions(tpBudget, 0.65, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        if (count(actions) > 0):
+            return actions
+        return None
+    
+    def createPoisonDumpScenario(self, availableTP, availableMP):
+        global LAST_POISON_DUMP_TURN, POISON_PHASE
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if (not (((mag > str) and (mag > agi)))):
+            return None
+        currentTurn = getTurn()
+        if (POISON_PHASE != "DUMP"):
+            return None
+        hpPercent = lw_div(lw_mul(self._player._currHealth, 100), self._player._maxHealth)
+        if (hpPercent < 50):
+            dumpInWeaponRange = False
+            for dumpWid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                dumpW = lw_get(self._arsenal.playerEquippedWeapons, dumpWid)
+                dumpDist = getCellDistance(simPos, self._target._cellPos)
+                if (((dumpDist != None) and (dumpDist >= dumpW._minRange)) and (dumpDist <= dumpW._maxRange)):
+                    dumpInWeaponRange = True
+                    break
+            dumpReservedAttackTP = (8 if dumpInWeaponRange else 0)
+            dumpDefBudget = lw_sub(tpBudget, dumpReservedAttackTP)
+            tpFortress = getCachedChipCost(CHIP_FORTRESS)
+            tpWall = getCachedChipCost(CHIP_WALL)
+            if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_FORTRESS) and (getCooldown(CHIP_FORTRESS, self._player._id) == 0)) and (dumpDefBudget >= tpFortress)):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_FORTRESS, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(tpFortress)
+                dumpDefBudget = lw_num(dumpDefBudget) - lw_num(tpFortress)
+            else:
+                if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WALL) and (getCooldown(CHIP_WALL, self._player._id) == 0)) and (dumpDefBudget >= tpWall)):
+                    push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WALL, (-1), self._player))
+                    tpBudget = lw_num(tpBudget) - lw_num(tpWall)
+                    dumpDefBudget = lw_num(dumpDefBudget) - lw_num(tpWall)
+            tpRemissionDump = getCachedChipCost(CHIP_REMISSION)
+            if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_REMISSION) and (getCooldown(CHIP_REMISSION, self._player._id) == 0)) and (dumpDefBudget >= tpRemissionDump)):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_REMISSION, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(tpRemissionDump)
+                dumpDefBudget = lw_num(dumpDefBudget) - lw_num(tpRemissionDump)
+        dumpDistToEnemy = getCellDistance(simPos, self._target._cellPos)
+        dumpDenialTele = (self.findDenialTeleportCell() if (((dumpDistToEnemy != None) and (dumpDistToEnemy > 6))) else None)
+        if ((dumpDenialTele != None) and (tpBudget >= lw_get(dumpDenialTele, 'cost'))):
+            push(actions, Action(Action.ACTION_TELEPORT, (-1), lw_get(dumpDenialTele, 'chip'), lw_get(dumpDenialTele, 'cell'), self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(lw_get(dumpDenialTele, 'cost'))
+            simPos = lw_get(dumpDenialTele, 'cell')
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            if (moveAction.targetCell != (-1)):
+                simPos = moveAction.targetCell
+                moveCost = getGraphMPCost(simPos)
+                if (moveCost < 999):
+                    mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+        dumpTracker = CooldownTracker(self._target)
+        dumpAntidoteCD = dumpTracker.getCooldownRemaining(self._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+        hasGrapple = (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_GRAPPLE) and (getCooldown(CHIP_GRAPPLE, self._player._id) == 0))
+        hasCovid = ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_COVID) and (getCooldown(CHIP_COVID, self._player._id) == 0)) and (dumpAntidoteCD >= 3))
+        tpGrapple = getCachedChipCost(CHIP_GRAPPLE)
+        tpCovid = getCachedChipCost(CHIP_COVID)
+        grapplePulled = False
+        simDist = getCellDistance(simPos, self._target._cellPos)
+        if (((hasGrapple and hasCovid) and (tpBudget >= lw_add(tpGrapple, tpCovid))) and (simDist != None)):
+            hasArsenic = (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ARSENIC) and (getCooldown(CHIP_ARSENIC, self._player._id) == 0))
+            if ((hasArsenic and (simDist >= 3)) and (simDist <= 4)):
+                tpArsenic = getCachedChipCost(CHIP_ARSENIC)
+                if ((tpBudget >= lw_add(lw_add(tpGrapple, tpCovid), tpArsenic)) and getCachedLineOfSight(simPos, self._target._cellPos)):
+                    push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_ARSENIC, self._target._cellPos, self._target))
+                    tpBudget = lw_num(tpBudget) - lw_num(tpArsenic)
+            if (((simDist >= 1) and (simDist <= 8)) and getCachedLineOfSight(simPos, self._target._cellPos)):
+                push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_GRAPPLE, self._target._cellPos, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(tpGrapple)
+                grapplePulled = True
+                simDist = 2
+                push(actions, Action(Action.ACTION_DIRECT, (-1), CHIP_COVID, self._target._cellPos, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(tpCovid)
+        tpWizardryDump = getCachedChipCost(CHIP_WIZARDRY)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WIZARDRY) and (getCooldown(CHIP_WIZARDRY, self._player._id) == 0)) and (tpBudget >= tpWizardryDump)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WIZARDRY, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpWizardryDump)
+        dumpDenialChips = [CHIP_SOPORIFIC, CHIP_BALL_AND_CHAIN, CHIP_TRANQUILIZER, CHIP_SLOW_DOWN]
+        for dDChip in lw_values(dumpDenialChips):
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, dDChip)):
+                continue
+            if (getCooldown(dDChip, self._player._id) > 0):
+                continue
+            dDCost = getCachedChipCost(dDChip)
+            if (tpBudget < dDCost):
+                continue
+            dDObj = lw_get(self._arsenal.playerEquippedChips, dDChip)
+            dDDist = getCellDistance(simPos, self._target._cellPos)
+            if grapplePulled:
+                dDDist = simDist
+            if (((dDDist == None) or (dDDist < dDObj._minRange)) or (dDDist > dDObj._maxRange)):
+                continue
+            if (not getCachedLineOfSight(simPos, self._target._cellPos)):
+                continue
+            if (((dDObj._aoeType != AREA_POINT) and (not dDObj._selfImmune)) and fieldMap.wouldAoEHitCell(self._target._cellPos, dDObj._aoeType, simPos, simPos)):
+                continue
+            push(actions, Action(Action.ACTION_DEBUFF, (-1), dDChip, self._target._cellPos, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(dDCost)
+        poisonChips = self._arsenal.getPoisonChipsSorted(str, mag, self._player._wisdom, self._player._science)
+        for poisonChip in lw_values(poisonChips):
+            chipId = poisonChip._id
+            if (grapplePulled and ((((chipId == CHIP_COVID) or (chipId == CHIP_ARSENIC)) or (chipId == CHIP_GRAPPLE)))):
+                continue
+            chipCost = getCachedChipCost(chipId)
+            if (tpBudget < chipCost):
+                continue
+            if (getCooldown(chipId, self._player._id) > 0):
+                continue
+            dist = getCellDistance(simPos, self._target._cellPos)
+            if grapplePulled:
+                dist = simDist
+            if (((dist == None) or (dist < poisonChip._minRange)) or (dist > poisonChip._maxRange)):
+                continue
+            if (not getCachedLineOfSight(simPos, self._target._cellPos)):
+                continue
+            push(actions, Action(Action.ACTION_DIRECT, (-1), chipId, self._target._cellPos, self._target))
+            tpBudget = lw_num(tpBudget) - lw_num(chipCost)
+        if (tpBudget >= 4):
+            self._dotDiscountReason = "poisons_queued"
+            attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+            self._dotDiscountReason = None
+            for atk in lw_values(attackActions):
+                push(actions, atk)
+        kiteAction = self.getKiteAwayAction(mpBudget)
+        if (kiteAction != None):
+            push(actions, kiteAction)
+        if (count(actions) > 0):
+            markerAction = Action(Action.ACTION_CHECKPOINT, (-1), (-1), (-1), self._target)
+            markerAction.checkpointType = "POISON_DUMP"
+            push(actions, markerAction)
+            POISON_PHASE = "SUSTAIN"
+            LAST_POISON_DUMP_TURN = currentTurn
+            return actions
+        return None
+    
+    def createNeutrinoOTKOScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        if (not mapContainsKey(self._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)):
+            return None
+        neutrinoTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if (neutrinoTeleChip == None):
+            return None
+        tpTeleportNeutrino = getCachedChipCost(neutrinoTeleChip)
+        neutrinoTeleMaxRange = getTeleportMaxRange(neutrinoTeleChip)
+        if (tpBudget < lw_add(12, tpTeleportNeutrino)):
+            return None
+        enemyHP = self._target._currHealth
+        enemyMaxHP = self._target._maxHealth
+        enemyHPPercent = lw_div((lw_mul(enemyHP, 100)), enemyMaxHP)
+        if (enemyHPPercent >= 40):
+            return None
+        dist = getCellDistance(simPos, self._target._cellPos)
+        if (dist == None):
+            return None
+        isDiagonal = self.isDiagonal(simPos, self._target._cellPos)
+        if (((not isDiagonal) or (dist < 2)) or (dist > 6)):
+            return None
+        if (not getCachedLineOfSight(simPos, self._target._cellPos)):
+            return None
+        if (getWeapon() != WEAPON_NEUTRINO):
+            push(actions, Action(Action.ACTION_WEAPON_SWAP, (-1), (-1), (-1), self._target))
+            lw_get(actions, lw_sub(count(actions), 1)).weapon = WEAPON_NEUTRINO
+            tpBudget = lw_num(tpBudget) - lw_num(1)
+        i = 0
+        while (i < 3):
+            if (tpBudget >= 4):
+                push(actions, Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, (-1), self._target._cellPos, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(4)
+            i = lw_add(i, 1)
+        bestOTKO = self._fieldMap.getBestOTKOCell()
+        if (bestOTKO == None):
+            bestOTKO = self._fieldMap.getBestWeaponOrChipCell()
+            if (bestOTKO == None):
+                return None
+        teleportDist = getCellDistance(simPos, bestOTKO._id)
+        if (((teleportDist == None) or (teleportDist < 1)) or (teleportDist > neutrinoTeleMaxRange)):
+            return None
+        push(actions, Action(Action.ACTION_TELEPORT, (-1), neutrinoTeleChip, bestOTKO._id, self._target))
+        tpBudget = lw_num(tpBudget) - lw_num(tpTeleportNeutrino)
+        attackActions = self.getAttackActions(tpBudget, 1.0, bestOTKO._id)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        return actions
+    
+    def createAdrenalineComboScenario(self, comboScenarioCreator, requiredTP, availableTP, availableMP):
+        tpGap = lw_sub(requiredTP, availableTP)
+        if ((tpGap < 1) or (tpGap > 4)):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ADRENALINE)):
+            return None
+        if (getCooldown(CHIP_ADRENALINE, self._player._id) > 0):
+            return None
+        if (availableTP < 1):
+            return None
+        actions = []
+        push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_ADRENALINE, (-1), self._player))
+        newTPBudget = lw_add(lw_sub(availableTP, 1), 5)
+        comboActions = comboScenarioCreator(newTPBudget, availableMP)
+        if ((comboActions == None) or (count(comboActions) == 0)):
+            return None
+        for action in lw_values(comboActions):
+            push(actions, action)
+        return actions
+    
+    def createStaticAttackScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        simPos = self._player._cellPos
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        if (count(attackActions) == 0):
+            moveAction = self.getMoveToOptimalCell(availableMP)
+            if (moveAction != None):
+                push(actions, moveAction)
+                moveCost = getGraphMPCost(moveAction.targetCell)
+                if (moveCost < 999):
+                    simPos = moveAction.targetCell
+            attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        return actions
+    
+    def createTimePressureScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        tpAdren = getCachedChipCost(CHIP_ADRENALINE)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ADRENALINE) and (getCooldown(CHIP_ADRENALINE, self._player._id) == 0)) and (tpBudget >= tpAdren)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_ADRENALINE, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpAdren)
+            tpBudget = lw_add(tpBudget, 5)
+        tpBoots = getCachedChipCost(CHIP_LEATHER_BOOTS)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) and (getCooldown(CHIP_LEATHER_BOOTS, self._player._id) == 0)) and (tpBudget >= tpBoots)):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_LEATHER_BOOTS, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(tpBoots)
+            mpBudget = lw_add(mpBudget, 2)
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        denialActionsTP = self.getDenialActions(tpBudget, simPos)
+        for da in lw_values(denialActionsTP):
+            push(actions, da)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(da.chip))
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        return actions
+    
+    def createSimpleOffensiveScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        denialActionsS = self.getDenialActions(tpBudget, simPos)
+        for da in lw_values(denialActionsS):
+            push(actions, da)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(da.chip))
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        return actions
+    
+    def createNovaAttritionScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        sci = self._player._science
+        res = self._player._resistance
+        if ((sci < 200) or (res < 200)):
+            return None
+        antidoteAction = self.getAntidoteAction(tpBudget)
+        if (antidoteAction != None):
+            push(actions, antidoteAction)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ANTIDOTE))
+        defensiveBuff = self.getDefensiveBuff()
+        if ((defensiveBuff != None) and (tpBudget >= getCachedChipCost(defensiveBuff.chip))):
+            push(actions, defensiveBuff)
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(defensiveBuff.chip))
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_PRISM) and (getCooldown(CHIP_PRISM, self._player._id) == 0)):
+            prismCost = getCachedChipCost(CHIP_PRISM)
+            if (tpBudget >= prismCost):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_PRISM, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(prismCost)
+        else:
+            if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_KNOWLEDGE) and (getCooldown(CHIP_KNOWLEDGE, self._player._id) == 0)):
+                knowledgeCost = getCachedChipCost(CHIP_KNOWLEDGE)
+                if (tpBudget >= knowledgeCost):
+                    push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_KNOWLEDGE, (-1), self._player))
+                    tpBudget = lw_num(tpBudget) - lw_num(knowledgeCost)
+        healAction = self.getHealingAction(tpBudget, 0.80)
+        if (healAction != None):
+            push(actions, healAction)
+            if (healAction.chip != (-1)):
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(healAction.chip))
+        leatherBoots = self.getLeatherBootsBuff()
+        if (leatherBoots != None):
+            bootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= bootsCost):
+                push(actions, leatherBoots)
+                tpBudget = lw_num(tpBudget) - lw_num(bootsCost)
+                mpBudget = lw_add(mpBudget, 2)
+        motivBuffA = self.getMotivationBuff()
+        if (motivBuffA != None):
+            motivCostA = getCachedChipCost(CHIP_MOTIVATION)
+            if (tpBudget >= motivCostA):
+                push(actions, motivBuffA)
+                tpBudget = lw_num(tpBudget) - lw_num(motivCostA)
+                tpBudget = lw_add(tpBudget, 2)
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        novaWeaponFired = False
+        for weaponId in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            weapon = lw_get(self._arsenal.playerEquippedWeapons, weaponId)
+            if (not mapContainsKey(weapon._effects, EFFECT_NOVA_DAMAGE)):
+                continue
+            dist = getCellDistance(simPos, self._target._cellPos)
+            if (((dist == None) or (dist < weapon._minRange)) or (dist > weapon._maxRange)):
+                continue
+            if (not getCachedLineOfSight(simPos, self._target._cellPos)):
+                continue
+            if (tpBudget >= weapon._cost):
+                push(actions, Action(Action.ACTION_DIRECT, weaponId, (-1), self._target._cellPos, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(weapon._cost)
+                novaWeaponFired = True
+                break
+        attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+        for atk in lw_values(attackActions):
+            push(actions, atk)
+        hideAction = self.getHideAndSeekAction(mpBudget)
+        if (hideAction != None):
+            push(actions, hideAction)
+        if (count(actions) < 2):
+            return None
+        return actions
+    
+    def createBruiserReflectScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        simPos = self._player._cellPos
+        str = self._player._strength
+        agi = self._player._agility
+        if ((str < 400) or (agi < 400)):
+            return None
+        hasMirror = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MIRROR)
+        hasThorn = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_THORN)
+        hasBramble = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_BRAMBLE)
+        if (((not hasMirror) and (not hasThorn)) and (not hasBramble)):
+            return None
+        if (tpBudget < 10):
+            return None
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ADRENALINE) and (getCooldown(CHIP_ADRENALINE, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_ADRENALINE))):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_ADRENALINE, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ADRENALINE))
+            tpBudget = lw_add(tpBudget, 5)
+        agiBufActions = self.getAgiBuff()
+        for ab in lw_values(agiBufActions):
+            if (tpBudget >= getCachedChipCost(ab.chip)):
+                push(actions, ab)
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(ab.chip))
+        damageReturnActions = self.getAllDamageReturnBuffs()
+        for dr in lw_values(damageReturnActions):
+            if (tpBudget >= getCachedChipCost(dr.chip)):
+                push(actions, dr)
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(dr.chip))
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID) and (getCooldown(CHIP_STEROID, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_STEROID))):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_STEROID))
+        hpPercent = lw_div(lw_mul(self._player._currHealth, 100), self._player._maxHealth)
+        if (hpPercent < 70):
+            healAction = self.getHealingAction(tpBudget, 0.7)
+            if (healAction != None):
+                push(actions, healAction)
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(healAction.chip))
+        leatherBoots = self.getLeatherBootsBuff()
+        if (leatherBoots != None):
+            bootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= bootsCost):
+                push(actions, leatherBoots)
+                tpBudget = lw_num(tpBudget) - lw_num(bootsCost)
+                mpBudget = lw_add(mpBudget, 2)
+        motivBuffR = self.getMotivationBuff()
+        if (motivBuffR != None):
+            motivCostR = getCachedChipCost(CHIP_MOTIVATION)
+            if (tpBudget >= motivCostR):
+                push(actions, motivBuffR)
+                tpBudget = lw_num(tpBudget) - lw_num(motivCostR)
+                tpBudget = lw_add(tpBudget, 2)
+        moveAction = self.getMoveToOptimalCell(mpBudget)
+        if (moveAction != None):
+            push(actions, moveAction)
+            moveCost = getGraphMPCost(moveAction.targetCell)
+            if (moveCost < 999):
+                mpBudget = lw_num(mpBudget) - lw_num(moveCost)
+                simPos = moveAction.targetCell
+        if (tpBudget >= 5):
+            attackActions = self.getAttackActions(tpBudget, 1.0, simPos)
+            for atk in lw_values(attackActions):
+                push(actions, atk)
+        if (hpPercent < 30):
+            hideAction = self.getHideAndSeekAction(mpBudget)
+            if (hideAction != None):
+                push(actions, hideAction)
+        if (count(actions) < 2):
+            return None
+        return actions
+    
+    def createMotivationSetupScenario(self, availableTP, availableMP):
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MOTIVATION)):
+            return None
+        if (getCooldown(CHIP_MOTIVATION, self._player._id) > 0):
+            return None
+        msMotivCost = getCachedChipCost(CHIP_MOTIVATION)
+        if (availableTP < lw_add(msMotivCost, 3)):
+            return None
+        msEnemyHPPct = lw_div((lw_mul(self._target._currHealth, 100)), max(1, self._target._maxHealth))
+        msPlayerHPPct = lw_div((lw_mul(self._player._currHealth, 100)), max(1, self._player._maxHealth))
+        if (msEnemyHPPct <= 40):
+            return None
+        if (msPlayerHPPct <= 35):
+            return None
+        if (getTurn() > 30):
+            return None
+        msDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+        if (msDist == None):
+            return None
+        msMaxWR = 0
+        for msWid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            msW = lw_get(self._arsenal.playerEquippedWeapons, msWid)
+            if ((msW != None) and (msW._maxRange > msMaxWR)):
+                msMaxWR = msW._maxRange
+        if ((msDist <= msMaxWR) and getCachedLineOfSight(self._player._cellPos, self._target._cellPos)):
+            return None
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_MOTIVATION, (-1), self._player))
+        tpBudget = lw_num(tpBudget) - lw_num(msMotivCost)
+        tpBudget = lw_add(tpBudget, 2)
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) and (getCooldown(CHIP_LEATHER_BOOTS, self._player._id) == 0)):
+            msBootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= msBootsCost):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_LEATHER_BOOTS, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(msBootsCost)
+                mpBudget = lw_add(mpBudget, 2)
+        msApproachCell = self.getApproachEnemyCell(mpBudget)
+        if ((msApproachCell != None) and (msApproachCell != (-1))):
+            push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), msApproachCell, self._target))
+        msJumpCost = getCachedChipCost(CHIP_JUMP)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, self._player._id) == 0)) and (tpBudget >= msJumpCost)):
+            msJumpFrom = (msApproachCell if (((msApproachCell != None) and (msApproachCell != (-1)))) else self._player._cellPos)
+            msFromDist = getCellDistance(msJumpFrom, self._target._cellPos)
+            if (msFromDist == None):
+                msFromDist = 99
+            msJumpBest = (-1)
+            msJumpBestDist = msFromDist
+            msFromX = getCellX(msJumpFrom)
+            msFromY = getCellY(msJumpFrom)
+            msDx = (-3)
+            while (msDx <= 3):
+                msDy = (-3)
+                while (msDy <= 3):
+                    if ((msDx == 0) and (msDy == 0)):
+                        msDy = lw_add(msDy, 1)
+                        continue
+                    if (lw_add(abs(msDx), abs(msDy)) > 3):
+                        msDy = lw_add(msDy, 1)
+                        continue
+                    msCand = getCellFromXY(lw_add(msFromX, msDx), lw_add(msFromY, msDy))
+                    if ((msCand == None) or (msCand < 0)):
+                        msDy = lw_add(msDy, 1)
+                        continue
+                    if (isObstacle(msCand) or isEntity(msCand)):
+                        msDy = lw_add(msDy, 1)
+                        continue
+                    msCandDist = getCellDistance(msJumpFrom, msCand)
+                    if (((msCandDist == None) or (msCandDist < 1)) or (msCandDist > 3)):
+                        msDy = lw_add(msDy, 1)
+                        continue
+                    msToEnemy = getCellDistance(msCand, self._target._cellPos)
+                    if (msToEnemy == None):
+                        msDy = lw_add(msDy, 1)
+                        continue
+                    if (msToEnemy < msJumpBestDist):
+                        msJumpBestDist = msToEnemy
+                        msJumpBest = msCand
+                    msDy = lw_add(msDy, 1)
+                msDx = lw_add(msDx, 1)
+            if ((msJumpBest != (-1)) and (msJumpBestDist < msFromDist)):
+                push(actions, Action(Action.ACTION_TELEPORT, (-1), CHIP_JUMP, msJumpBest, None))
+                tpBudget = lw_num(tpBudget) - lw_num(msJumpCost)
+        msCheckpoint = Action(Action.ACTION_CHECKPOINT, (-1), (-1), (-1), None)
+        msCheckpoint.checkpointType = "MOTIVATION_SETUP"
+        push(actions, msCheckpoint)
+        if (count(actions) < 3):
+            return None
+        return actions
+    
+    def createBuffStageScenario(self, availableTP, availableMP):
+        if (self._target == None):
+            return None
+        if ((lw__nearestFireTurn < 2) or (lw__nearestFireTurn > 3)):
+            return None
+        if lw__timePressure:
+            return None
+        if (getTurn() > 35):
+            return None
+        bsEnemyHPPct = lw_div((lw_mul(self._target._currHealth, 100)), max(1, self._target._maxHealth))
+        bsPlayerHPPct = lw_div((lw_mul(self._player._currHealth, 100)), max(1, self._player._maxHealth))
+        if (bsEnemyHPPct <= 35):
+            return None
+        if (bsPlayerHPPct <= 35):
+            return None
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MOTIVATION) and (getCooldown(CHIP_MOTIVATION, self._player._id) == 0)):
+            return None
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        buffsCast = 0
+        bsCandidates = []
+        if (self._player._strength >= self._player._magic):
+            push(bsCandidates, CHIP_STEROID)
+            push(bsCandidates, CHIP_WARM_UP)
+            push(bsCandidates, CHIP_RAGE)
+        else:
+            push(bsCandidates, CHIP_WIZARDRY)
+            push(bsCandidates, CHIP_PRISM)
+        if (lw__nearestFireTurn == 2):
+            push(bsCandidates, CHIP_KNOWLEDGE)
+        bsi = 0
+        while (bsi < count(bsCandidates)):
+            bsChip = lw_get(bsCandidates, bsi)
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, bsChip)):
+                bsi = lw_add(bsi, 1)
+                continue
+            if (getCooldown(bsChip, self._player._id) > 0):
+                bsi = lw_add(bsi, 1)
+                continue
+            bsCost = getCachedChipCost(bsChip)
+            if (tpBudget < lw_add(bsCost, 1)):
+                bsi = lw_add(bsi, 1)
+                continue
+            push(actions, Action(Action.ACTION_BUFF, (-1), bsChip, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(bsCost)
+            buffsCast = lw_add(buffsCast, 1)
+            if (buffsCast >= 2):
+                break
+            bsi = lw_add(bsi, 1)
+        if (buffsCast == 0):
+            return None
+        if (mapContainsKey(self._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) and (getCooldown(CHIP_LEATHER_BOOTS, self._player._id) == 0)):
+            bsBootsCost = getCachedChipCost(CHIP_LEATHER_BOOTS)
+            if (tpBudget >= bsBootsCost):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_LEATHER_BOOTS, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(bsBootsCost)
+                mpBudget = lw_add(mpBudget, 2)
+        bsApproachCell = self.getApproachEnemyCell(mpBudget)
+        if ((bsApproachCell != None) and (bsApproachCell != (-1))):
+            push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), bsApproachCell, self._target))
+        bsJumpCost = getCachedChipCost(CHIP_JUMP)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, self._player._id) == 0)) and (tpBudget >= bsJumpCost)):
+            bsJumpFrom = (bsApproachCell if (((bsApproachCell != None) and (bsApproachCell != (-1)))) else self._player._cellPos)
+            bsFromDist = getCellDistance(bsJumpFrom, self._target._cellPos)
+            if (bsFromDist == None):
+                bsFromDist = 99
+            bsJumpBest = (-1)
+            bsJumpBestDist = bsFromDist
+            bsFromX = getCellX(bsJumpFrom)
+            bsFromY = getCellY(bsJumpFrom)
+            bsDx = (-3)
+            while (bsDx <= 3):
+                bsDy = (-3)
+                while (bsDy <= 3):
+                    if ((bsDx == 0) and (bsDy == 0)):
+                        bsDy = lw_add(bsDy, 1)
+                        continue
+                    if (lw_add(abs(bsDx), abs(bsDy)) > 3):
+                        bsDy = lw_add(bsDy, 1)
+                        continue
+                    bsCand = getCellFromXY(lw_add(bsFromX, bsDx), lw_add(bsFromY, bsDy))
+                    if ((bsCand == None) or (bsCand < 0)):
+                        bsDy = lw_add(bsDy, 1)
+                        continue
+                    if (isObstacle(bsCand) or isEntity(bsCand)):
+                        bsDy = lw_add(bsDy, 1)
+                        continue
+                    bsCandDist = getCellDistance(bsJumpFrom, bsCand)
+                    if (((bsCandDist == None) or (bsCandDist < 1)) or (bsCandDist > 3)):
+                        bsDy = lw_add(bsDy, 1)
+                        continue
+                    bsToEnemy = getCellDistance(bsCand, self._target._cellPos)
+                    if (bsToEnemy == None):
+                        bsDy = lw_add(bsDy, 1)
+                        continue
+                    if (bsToEnemy < bsJumpBestDist):
+                        bsJumpBestDist = bsToEnemy
+                        bsJumpBest = bsCand
+                    bsDy = lw_add(bsDy, 1)
+                bsDx = lw_add(bsDx, 1)
+            if ((bsJumpBest != (-1)) and (bsJumpBestDist < bsFromDist)):
+                push(actions, Action(Action.ACTION_TELEPORT, (-1), CHIP_JUMP, bsJumpBest, None))
+                tpBudget = lw_num(tpBudget) - lw_num(bsJumpCost)
+        bsCheckpoint = Action(Action.ACTION_CHECKPOINT, (-1), (-1), (-1), None)
+        bsCheckpoint.checkpointType = "BUFF_STAGE"
+        push(actions, bsCheckpoint)
+        if (count(actions) < 3):
+            return None
+        return actions
+    
+    def createBuffApproachScenario(self, availableTP, availableMP):
+        actions = []
+        tpBudget = availableTP
+        mpBudget = availableMP
+        hasAnyHitCells = False
+        for weaponId in lw_values(mapKeys(self._fieldMap.weaponHitmap)):
+            cells = lw_get(self._fieldMap.weaponHitmap, weaponId)
+            if (count(cells) > 0):
+                hasAnyHitCells = True
+                break
+        if (not hasAnyHitCells):
+            for chipId in lw_values(mapKeys(self._fieldMap.chipHitmap)):
+                cells = lw_get(self._fieldMap.chipHitmap, chipId)
+                if (count(cells) > 0):
+                    hasAnyHitCells = True
+                    break
+        if hasAnyHitCells:
+            return None
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        buffApplied = False
+        distNow = getCellDistance(self._player._cellPos, self._target._cellPos)
+        if (distNow == None):
+            distNow = 99
+        maxWeapRange = 0
+        for wRangeId in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+            wRangeObj = lw_get(self._arsenal.playerEquippedWeapons, wRangeId)
+            if ((wRangeObj != None) and (wRangeObj._maxRange > maxWeapRange)):
+                maxWeapRange = wRangeObj._maxRange
+        engagementHorizon = lw_add(maxWeapRange, lw_mul(2, (lw_add(mpBudget, 3))))
+        skipOffensiveBuffs = ((distNow > engagementHorizon))
+        if ((((not skipOffensiveBuffs) and (str > 400)) and (agi > 400)) and (((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_MIRROR) or mapContainsKey(self._arsenal.playerEquippedChips, CHIP_THORN)) or mapContainsKey(self._arsenal.playerEquippedChips, CHIP_BRAMBLE)))):
+            tpSterBR = getCachedChipCost(CHIP_STEROID)
+            if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID) and (getCooldown(CHIP_STEROID, self._player._id) == 0)) and (tpBudget >= tpSterBR)):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(tpSterBR)
+                buffApplied = True
+            tpWarmBR = getCachedChipCost(CHIP_WARM_UP)
+            if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WARM_UP) and (getCooldown(CHIP_WARM_UP, self._player._id) == 0)) and (tpBudget >= tpWarmBR)):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WARM_UP, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(tpWarmBR)
+                buffApplied = True
+        else:
+            if (((not skipOffensiveBuffs) and (mag > str)) and (mag > agi)):
+                tpKnowBA = getCachedChipCost(CHIP_KNOWLEDGE)
+                if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_KNOWLEDGE) and (getCooldown(CHIP_KNOWLEDGE, self._player._id) == 0)) and (tpBudget >= tpKnowBA)):
+                    push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_KNOWLEDGE, (-1), self._player))
+                    tpBudget = lw_num(tpBudget) - lw_num(tpKnowBA)
+                    buffApplied = True
+            else:
+                if (((not skipOffensiveBuffs) and (str > mag)) and (str > agi)):
+                    tpSterBA = getCachedChipCost(CHIP_STEROID)
+                    if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_STEROID) and (getCooldown(CHIP_STEROID, self._player._id) == 0)) and (tpBudget >= tpSterBA)):
+                        push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_STEROID, (-1), self._player))
+                        tpBudget = lw_num(tpBudget) - lw_num(tpSterBA)
+                        buffApplied = True
+                else:
+                    if (((not skipOffensiveBuffs) and (agi > str)) and (agi > mag)):
+                        tpWarmBA = getCachedChipCost(CHIP_WARM_UP)
+                        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WARM_UP) and (getCooldown(CHIP_WARM_UP, self._player._id) == 0)) and (tpBudget >= tpWarmBA)):
+                            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WARM_UP, (-1), self._player))
+                            tpBudget = lw_num(tpBudget) - lw_num(tpWarmBA)
+                            buffApplied = True
+        hasShield = (self._player.hasEffect(EFFECT_ABSOLUTE_SHIELD) or self._player.hasEffect(EFFECT_RELATIVE_SHIELD))
+        tpFortressBR = getCachedChipCost(CHIP_FORTRESS)
+        tpWallBR = getCachedChipCost(CHIP_WALL)
+        if ((not hasShield) and (tpBudget >= tpWallBR)):
+            if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_FORTRESS) and (getCooldown(CHIP_FORTRESS, self._player._id) == 0)) and (tpBudget >= tpFortressBR)):
+                push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_FORTRESS, (-1), self._player))
+                tpBudget = lw_num(tpBudget) - lw_num(tpFortressBR)
+            else:
+                if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WALL) and (getCooldown(CHIP_WALL, self._player._id) == 0)) and (tpBudget >= tpWallBR)):
+                    push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WALL, (-1), self._player))
+                    tpBudget = lw_num(tpBudget) - lw_num(tpWallBR)
+        approachCell = self.getApproachEnemyCell(mpBudget)
+        postMoveCell = (approachCell if (((approachCell != None) and (approachCell != (-1)))) else self._player._cellPos)
+        if ((approachCell != None) and (approachCell != (-1))):
+            push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), approachCell, self._target))
+        jumpCostBA = getCachedChipCost(CHIP_JUMP)
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, self._player._id) == 0)) and (tpBudget >= jumpCostBA)):
+            jumpTargetBA = (-1)
+            origDistBA = getCellDistance(postMoveCell, self._target._cellPos)
+            if (origDistBA == None):
+                origDistBA = 99
+            maxWRBA = 0
+            for wIdBA in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                wObjBA = lw_get(self._arsenal.playerEquippedWeapons, wIdBA)
+                if ((wObjBA != None) and (wObjBA._maxRange > maxWRBA)):
+                    maxWRBA = wObjBA._maxRange
+            deniedBA = ((self._player.hasEffect(EFFECT_SHACKLE_TP) or self._player.hasEffect(EFFECT_SHACKLE_STRENGTH)) or self._player.hasEffect(EFFECT_SHACKLE_MAGIC))
+            lowHPBA = ((lw_div(lw_mul(self._player._currHealth, 100), max(1, self._player._maxHealth))) < 60)
+            enemyMPBA = self._target._currMp
+            if (enemyMPBA == None):
+                enemyMPBA = 5
+            kiteHorizonBA = lw_add(maxWRBA, enemyMPBA)
+            bestTierBA = 5
+            bestMetricBA = 99999
+            pmX = getCellX(postMoveCell)
+            pmY = getCellY(postMoveCell)
+            jdx = (-3)
+            while (jdx <= 3):
+                jdy = (-3)
+                while (jdy <= 3):
+                    if ((jdx == 0) and (jdy == 0)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    if (lw_add(abs(jdx), abs(jdy)) > 3):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    jCand = getCellFromXY(lw_add(pmX, jdx), lw_add(pmY, jdy))
+                    if ((jCand == None) or (jCand < 0)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    if (isObstacle(jCand) or isEntity(jCand)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    jDist = getCellDistance(postMoveCell, jCand)
+                    if (((jDist == None) or (jDist < 1)) or (jDist > 3)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    toEnemy = getCellDistance(jCand, self._target._cellPos)
+                    if (toEnemy == None):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    hasLosBA = lineOfSight(jCand, self._target._cellPos)
+                    tierBA = 4
+                    metricBA = toEnemy
+                    if ((hasLosBA and (toEnemy >= 1)) and (toEnemy <= maxWRBA)):
+                        tierBA = 1
+                    else:
+                        if (((deniedBA or lowHPBA)) and (not hasLosBA)):
+                            tierBA = 2
+                            metricBA = abs(lw_sub(toEnemy, max(2, lw_sub(maxWRBA, 2))))
+                        else:
+                            if ((lw_sub(origDistBA, toEnemy) >= 2) and (toEnemy <= kiteHorizonBA)):
+                                tierBA = 3
+                                metricBA = lw_add(toEnemy, lw_div(getAdversarialThreat(jCand), 100.0))
+                    if ((tierBA < bestTierBA) or (((tierBA == bestTierBA) and (metricBA < bestMetricBA)))):
+                        bestTierBA = tierBA
+                        bestMetricBA = metricBA
+                        jumpTargetBA = jCand
+                    jdy = lw_add(jdy, 1)
+                jdx = lw_add(jdx, 1)
+            if (bestTierBA > 3):
+                jumpTargetBA = (-1)
+            if (jumpTargetBA != (-1)):
+                push(actions, Action(Action.ACTION_TELEPORT, (-1), CHIP_JUMP, jumpTargetBA, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(jumpCostBA)
+        if (count(actions) > 0):
+            return actions
+        return None
+    
+    def createCrystalSlideScenario(self, tp, mp):
+        if ((_bossTargetEID == None) or _myCrystalSolved):
+            return None
+        if (_graalEntity == None):
+            return None
+        primaryDir = getDirectionToSlide(None)
+        if (primaryDir == None):
+            return None
+        directions = [primaryDir]
+        altDir = ("push" if ((primaryDir == "pull")) else "pull")
+        push(directions, altDir)
+        playerCell = self._player._cellPos
+        for direction in lw_values(directions):
+            slideChip = (CHIP_GRAPPLE if ((direction == "pull")) else CHIP_BOXING_GLOVE)
+            minDist = (1 if ((direction == "pull")) else 2)
+            maxDist = 8
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, slideChip)):
+                continue
+            chipCost = getCachedChipCost(slideChip)
+            if (tp < chipCost):
+                continue
+            distToCrystal = getCellDistance(playerCell, _myCrystalCell)
+            onSameLine = self.isOnSameLine(playerCell, _myCrystalCell)
+            inRange = (((distToCrystal != None) and (distToCrystal >= minDist)) and (distToCrystal <= maxDist))
+            if (inRange and onSameLine):
+                correctSide = self.checkCorrectSide(playerCell, None, direction)
+                if correctSide:
+                    actions = []
+                    push(actions, Action(Action.ACTION_DEBUFF, (-1), slideChip, _myCrystalCell, self._target))
+                    return actions
+            posCell = self.findSlidePositionCell(None, direction, mp)
+            if ((posCell != None) and (posCell != (-1))):
+                moveCost = getGraphMPCost(posCell)
+                if (((moveCost != None) and (moveCost < 999)) and (moveCost <= mp)):
+                    actions = []
+                    push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), posCell, self._target))
+                    push(actions, Action(Action.ACTION_DEBUFF, (-1), slideChip, _myCrystalCell, self._target))
+                    return actions
+        return None
+    
+    def createMultiSlideScenario(self, tp, mp):
+        if ((_bossTargetEID == None) or _myCrystalSolved):
+            return None
+        if (_graalEntity == None):
+            return None
+        primaryDir = getDirectionToSlide(None)
+        if (primaryDir == None):
+            return None
+        playerCell = self._player._cellPos
+        distToCrystal = getCellDistance(playerCell, _myCrystalCell)
+        onSameLine = self.isOnSameLine(playerCell, _myCrystalCell)
+        if ((not onSameLine) or (distToCrystal == None)):
+            return None
+        directions = [primaryDir]
+        altDir = ("push" if ((primaryDir == "pull")) else "pull")
+        push(directions, altDir)
+        for direction in lw_values(directions):
+            slideChip = (CHIP_GRAPPLE if ((direction == "pull")) else CHIP_BOXING_GLOVE)
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, slideChip)):
+                continue
+            minDist = (1 if ((direction == "pull")) else 2)
+            if ((distToCrystal < minDist) or (distToCrystal > 8)):
+                continue
+            if (not self.checkCorrectSide(playerCell, None, direction)):
+                continue
+            chipCost = getCachedChipCost(slideChip)
+            maxUsesPerRound = 4
+            actions = []
+            tpBudget = tp
+            usesAdded = 0
+            while ((tpBudget >= chipCost) and (usesAdded < maxUsesPerRound)):
+                push(actions, Action(Action.ACTION_DEBUFF, (-1), slideChip, _myCrystalCell, self._target))
+                tpBudget = lw_num(tpBudget) - lw_num(chipCost)
+                usesAdded = lw_add(usesAdded, 1)
+            if (usesAdded > 1):
+                return actions
+        return None
+    
+    def createCrystalInversionScenario(self, tp, mp):
+        if ((_bossTargetEID == None) or _myCrystalSolved):
+            return None
+        if (_graalEntity == None):
+            return None
+        if _usedInversion:
+            return None
+        distToAxis = getDistanceToAxis(None)
+        if (distToAxis <= 8):
+            return None
+        if (not mapContainsKey(self._arsenal.playerEquippedChips, CHIP_INVERSION)):
+            return None
+        chipCost = getCachedChipCost(CHIP_INVERSION)
+        if (tp < chipCost):
+            return None
+        actions = []
+        playerCell = self._player._cellPos
+        dist = getCellDistance(playerCell, _myCrystalCell)
+        if ((((dist != None) and (dist >= 1)) and (dist <= 14)) and getCachedLineOfSight(playerCell, _myCrystalCell)):
+            push(actions, Action(Action.ACTION_DEBUFF, (-1), CHIP_INVERSION, _myCrystalCell, self._target))
+            return actions
+        if (mp <= 0):
+            return None
+        reachableCells = getReachableCells()
+        bestCell = (-1)
+        bestDist = 999
+        for cellId in lw_values(reachableCells):
+            d = getCellDistance(cellId, _myCrystalCell)
+            if (((d == None) or (d < 1)) or (d > 14)):
+                continue
+            if (not getCachedLineOfSight(cellId, _myCrystalCell)):
+                continue
+            pathCost = getGraphMPCost(cellId)
+            if ((pathCost >= 999) or (pathCost > mp)):
+                continue
+            if (d < bestDist):
+                bestDist = d
+                bestCell = cellId
+        if (bestCell == (-1)):
+            return None
+        push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), bestCell, self._target))
+        push(actions, Action(Action.ACTION_DEBUFF, (-1), CHIP_INVERSION, _myCrystalCell, self._target))
+        return actions
+    
+    def createCrystalApproachScenario(self, tp, mp):
+        if ((_bossTargetEID == None) or _myCrystalSolved):
+            return None
+        if (_graalEntity == None):
+            return None
+        if (mp <= 0):
+            return None
+        primaryDir = getDirectionToSlide(None)
+        if (primaryDir == None):
+            return None
+        actions = []
+        tpBudget = tp
+        mpBudget = mp
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) and (getCooldown(CHIP_LEATHER_BOOTS, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_LEATHER_BOOTS))):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_LEATHER_BOOTS, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_LEATHER_BOOTS))
+            mpBudget = lw_add(mpBudget, 2)
+        directions = [primaryDir]
+        altDir = ("push" if ((primaryDir == "pull")) else "pull")
+        push(directions, altDir)
+        for direction in lw_values(directions):
+            slideChip = (CHIP_GRAPPLE if ((direction == "pull")) else CHIP_BOXING_GLOVE)
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, slideChip)):
+                continue
+            posCell = self.findSlidePositionCell(None, direction, mpBudget)
+            if ((posCell != None) and (posCell != (-1))):
+                push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), posCell, self._target))
+                if (count(actions) > 0):
+                    return actions
+            idealCell = findIdealSlideCell(None, direction, self._player._cellPos)
+            if (idealCell != (-1)):
+                push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), idealCell, self._target))
+                if (count(actions) > 0):
+                    return actions
+        approachCell = self.getApproachEnemyCell(mpBudget)
+        if ((approachCell != None) and (approachCell != (-1))):
+            push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), approachCell, self._target))
+        if (count(actions) > 0):
+            return actions
+        return None
+    
+    def createPuzzleDefenseScenario(self, tp, mp):
+        actions = []
+        tpBudget = tp
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_FORTRESS) and (getCooldown(CHIP_FORTRESS, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_FORTRESS))):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_FORTRESS, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_FORTRESS))
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_WALL) and (getCooldown(CHIP_WALL, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_WALL))):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_WALL, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_WALL))
+        if ((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_ARMORING) and (getCooldown(CHIP_ARMORING, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_ARMORING))):
+            push(actions, Action(Action.ACTION_BUFF, (-1), CHIP_ARMORING, (-1), self._player))
+            tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(CHIP_ARMORING))
+        hpRatio = lw_div(self._player._currHealth, self._player._maxHealth)
+        if (hpRatio < 0.8):
+            healAction = self.getHealingAction(tpBudget, 0.8)
+            if (healAction != None):
+                push(actions, healAction)
+        if (count(actions) > 0):
+            return actions
+        return None
+    
+    def checkCorrectSide(self, playerCell, crystal, direction):
+        pcx = getCellX(playerCell)
+        pcy = getCellY(playerCell)
+        cx = _myCrystalX
+        cy = _myCrystalY
+        gx = _graalX
+        gy = _graalY
+        axis = _myCrystalGoalAxis
+        if ((axis == "north") or (axis == "south")):
+            if (direction == "pull"):
+                return ((((cx < gx) and (pcx > cx))) or (((cx > gx) and (pcx < cx))))
+            else:
+                return ((((cx < gx) and (pcx < cx))) or (((cx > gx) and (pcx > cx))))
+        else:
+            if (direction == "pull"):
+                return ((((cy < gy) and (pcy > cy))) or (((cy > gy) and (pcy < cy))))
+            else:
+                return ((((cy < gy) and (pcy < cy))) or (((cy > gy) and (pcy > cy))))
+    
+    def findSlidePositionCell(self, crystal, direction, mpBudget):
+        minDist = (1 if ((direction == "pull")) else 2)
+        maxDist = 8
+        reachableCells = getReachableCells()
+        if ((reachableCells == None) or (count(reachableCells) == 0)):
+            return (-1)
+        bestCell = (-1)
+        bestCost = 999
+        for cellId in lw_values(reachableCells):
+            if (not self.isOnSameLine(cellId, _myCrystalCell)):
+                continue
+            dist = getCellDistance(cellId, _myCrystalCell)
+            if (((dist == None) or (dist < minDist)) or (dist > maxDist)):
+                continue
+            if (not self.checkCorrectSide(cellId, crystal, direction)):
+                continue
+            if (isEntity(cellId) and (cellId != self._player._cellPos)):
+                continue
+            pathCost = getGraphMPCost(cellId)
+            if ((pathCost >= 999) or (pathCost > mpBudget)):
+                continue
+            if (pathCost < bestCost):
+                bestCost = pathCost
+                bestCell = cellId
+        return bestCell
+    
+
+
+# ════════ scenario_generator.lk ════════
+# include: scenario_combos.lk (inlined by assembler)
+class ScenarioGenerator(ScenarioCombos):
+    def __init__(self, arsenal, player, target, fieldMap, strategy):
+        super().__init__(arsenal, player, target, fieldMap, strategy)
+
+    def generateScenarios(self):
+        global BAIT_START_TURN, POISON_PHASE, _beamMaxDepth, _mutationMaxPerSeed, _mutationMaxSeeds
+        if (self._target != None):
+            self._target.updateEntity()
+        if ((self._target != None) and self.hasPoisonCapability()):
+            currentPoison = self._target.getPoisonStackCount()
+            tracker = CooldownTracker(self._target)
+            tracker.detectAntidoteUse(self._target._id, PREV_ENEMY_POISON, currentPoison)
+            if (POISON_PHASE == "BAIT"):
+                enemyChips = self._target._chips
+                enemyHasAntidote = False
+                for chipId in lw_values(enemyChips):
+                    if (chipId == CHIP_ANTIDOTE):
+                        enemyHasAntidote = True
+                        break
+                if (not enemyHasAntidote):
+                    POISON_PHASE = "DUMP"
+            currentTurn = getTurn()
+            if (POISON_PHASE == "SUSTAIN"):
+                antidoteCD = tracker.getCooldownRemaining(self._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                if ((antidoteCD == 0) and ((lw_sub(currentTurn, LAST_POISON_DUMP_TURN)) >= 3)):
+                    POISON_PHASE = "BAIT"
+                    BAIT_START_TURN = currentTurn
+            if (POISON_PHASE == "BAIT"):
+                baitAntidoteCD = tracker.getCooldownRemaining(self._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                elapsed = lw_sub(currentTurn, BAIT_START_TURN)
+                antidoteUses = tracker.getAntidoteUseCount(self._target._id)
+                isDoubleCarrier = (((antidoteUses >= 2) and ((lw_sub(currentTurn, BAIT_START_TURN)) < 12)))
+                if isDoubleCarrier:
+                    pass
+                else:
+                    if ((baitAntidoteCD >= 2) and (elapsed >= 2)):
+                        POISON_PHASE = "DUMP"
+                    else:
+                        if (elapsed >= 8):
+                            POISON_PHASE = "DUMP"
+        scenarios = []
+        availableTP = getTP()
+        availableMP = getMP()
+        state = self.determineStrategicState()
+        if (getTurn() <= 20):
+            debugW(lw_add(lw_add(lw_add("GEN_STATE_T", getTurn()), "_"), state))
+        _beamMaxDepth = _beamMaxDepthBase
+        _mutationMaxSeeds = _mutationMaxSeedsBase
+        _mutationMaxPerSeed = _mutationMaxPerSeedBase
+        curT = getTurn()
+        if (((state != "PUZZLE") and (state != "FLEE")) and (not _isBossFight)):
+            weakDamageRate = ((((curT > 5) and (lw__avgDamageRate > 0)) and (lw__avgDamageRate < 100)))
+            earlyStalemate = (((curT < 25) and lw__timePressure))
+            if (((weakDamageRate or earlyStalemate)) and (getOperations() < _ops64)):
+                _beamMaxDepth = min(12, lw_add(_beamMaxDepthBase, 2))
+                _mutationMaxSeeds = min(10, lw_add(_mutationMaxSeedsBase, 4))
+                _mutationMaxPerSeed = min(120, lw_add(_mutationMaxPerSeedBase, 40))
+        if (state == "PUZZLE"):
+            self.buildPuzzleScenarios(scenarios, availableTP, availableMP)
+        else:
+            if (state == "KILL"):
+                self.buildKillScenarios(scenarios, availableTP, availableMP)
+            else:
+                if (state == "CLEANUP"):
+                    self.buildKillScenarios(scenarios, availableTP, availableMP)
+                else:
+                    if (state == "AGGRO"):
+                        self.buildAggroScenarios(scenarios, availableTP, availableMP)
+                    else:
+                        if (state == "ATTRITION"):
+                            self.buildAttritionScenarios(scenarios, availableTP, availableMP)
+                        else:
+                            if (state == "SUSTAIN"):
+                                self.buildSustainScenarios(scenarios, availableTP, availableMP)
+                            else:
+                                if (state == "FLEE"):
+                                    self.buildFleeScenarios(scenarios, availableTP, availableMP)
+        if (((state != "PUZZLE") and (state != "FLEE")) and (getOperations() < _ops64)):
+            beamScenarios = beamSearchScenarios(self._player, self._target, self._arsenal, self._fieldMap)
+            for bs in lw_values(beamScenarios):
+                push(scenarios, bs)
+        if ((state != "PUZZLE") and (lw__playerBuildType == BUILD_SUPPORT)):
+            teamSupport = self.createTeamSupportScenario(availableTP, availableMP)
+            if ((teamSupport != None) and (count(teamSupport) > 0)):
+                push(scenarios, teamSupport)
+        return scenarios
+    
+    def buildKillScenarios(self, scenarios, availableTP, availableMP):
+        bruiserReflect = self.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != None):
+            push(scenarios, bruiserReflect)
+        poisonBait = self.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != None):
+            push(scenarios, poisonBait)
+        poisonDump = self.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != None):
+            push(scenarios, poisonDump)
+        grappleCovid = self.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != None):
+            push(scenarios, grappleCovid)
+        shieldRotation = self.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != None):
+            push(scenarios, shieldRotation)
+        damageReturnCycling = self.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != None):
+            push(scenarios, damageReturnCycling)
+        neutrinoOTKO = self.createNeutrinoOTKOScenario(availableTP, availableMP)
+        if (neutrinoOTKO != None):
+            push(scenarios, neutrinoOTKO)
+        bestOTKO = self._fieldMap.getBestOTKOCell()
+        killTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if ((bestOTKO != None) and (killTeleChip != None)):
+            teleportCost = getCachedChipCost(killTeleChip)
+            if (availableTP >= lw_add(teleportCost, 10)):
+                distToOTKO = getCellDistance(self._player._cellPos, bestOTKO._id)
+                maxRange = getTeleportMaxRange(killTeleChip)
+                if (((distToOTKO != None) and (distToOTKO >= 1)) and (distToOTKO <= maxRange)):
+                    push(scenarios, self.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
+        jumpAttackKill = self.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackKill != None):
+            push(scenarios, jumpAttackKill)
+        jumpToFireKill = self.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireKill != None):
+            push(scenarios, jumpToFireKill)
+        baitAnchorKill = self.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorKill != None):
+            push(scenarios, baitAnchorKill)
+        push(scenarios, self.createParametricScenario(ScenarioParams(4, (-1), 1.0, 1.0, "otko"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(0, (-1), 1.0, 1.0, "stand"), availableTP, availableMP))
+        push(scenarios, self.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, self.createStaticAttackScenario(availableTP, availableMP))
+    
+    def buildAggroScenarios(self, scenarios, availableTP, availableMP):
+        bruiserReflect = self.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != None):
+            push(scenarios, bruiserReflect)
+        novaAttrition = self.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != None):
+            push(scenarios, novaAttrition)
+        grappleHS = self.createGrappleHeavySwordScenario(availableTP, availableMP)
+        if (grappleHS != None):
+            push(scenarios, grappleHS)
+        grappleAxe = self.createGrappleAxeScenario(availableTP, availableMP)
+        if (grappleAxe != None):
+            push(scenarios, grappleAxe)
+        grappleRanged = self.createGrappleRangedScenario(availableTP, availableMP)
+        if (grappleRanged != None):
+            push(scenarios, grappleRanged)
+        neutrinoStack = self.createNeutrinoStackingScenario(availableTP, availableMP)
+        if (neutrinoStack != None):
+            push(scenarios, neutrinoStack)
+        steroidOTKO = self.createSteroidOTKOScenario(availableTP, availableMP)
+        if (steroidOTKO != None):
+            push(scenarios, steroidOTKO)
+        dualBuff = self.createDualBuffAttackScenario(availableTP, availableMP)
+        if (dualBuff != None):
+            push(scenarios, dualBuff)
+        steroidRecheck = self.createSteroidRecheckScenario(availableTP, availableMP)
+        if (steroidRecheck != None):
+            push(scenarios, steroidRecheck)
+        poisonBait = self.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != None):
+            push(scenarios, poisonBait)
+        poisonDump = self.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != None):
+            push(scenarios, poisonDump)
+        shieldRotation = self.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != None):
+            push(scenarios, shieldRotation)
+        damageReturnCycling = self.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != None):
+            push(scenarios, damageReturnCycling)
+        grappleCovid = self.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != None):
+            push(scenarios, grappleCovid)
+        if (getAvailableTeleportChip(self._arsenal, self._player._id) != None):
+            emergencyApproach = self.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproach != None):
+                push(scenarios, emergencyApproach)
+        baitAnchorAggro = self.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorAggro != None):
+            push(scenarios, baitAnchorAggro)
+        jumpAttackAggro = self.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackAggro != None):
+            push(scenarios, jumpAttackAggro)
+        jumpToFireAggro = self.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireAggro != None):
+            push(scenarios, jumpToFireAggro)
+        buffApproach = self.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != None):
+            push(scenarios, buffApproach)
+        motivationSetup = self.createMotivationSetupScenario(availableTP, availableMP)
+        if (motivationSetup != None):
+            push(scenarios, motivationSetup)
+        buffStage = self.createBuffStageScenario(availableTP, availableMP)
+        if (buffStage != None):
+            push(scenarios, buffStage)
+        push(scenarios, self.createParametricScenario(ScenarioParams(4, (-1), 1.0, 1.0, "hide"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(1, (-1), 1.0, 1.0, "hide"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(0, (-1), 1.0, 1.0, "hide"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(2, (-1), 1.0, 1.0, "hide"), availableTP, availableMP))
+        if lw__timePressure:
+            timePressureScenario = self.createTimePressureScenario(availableTP, availableMP)
+            if ((timePressureScenario != None) and (count(timePressureScenario) > 0)):
+                push(scenarios, timePressureScenario)
+        push(scenarios, self.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, self.createStaticAttackScenario(availableTP, availableMP))
+    
+    def buildAttritionScenarios(self, scenarios, availableTP, availableMP):
+        bruiserReflect = self.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != None):
+            push(scenarios, bruiserReflect)
+        novaAttrition = self.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != None):
+            push(scenarios, novaAttrition)
+        playerHP = self._player._currHealth
+        enemyHP = self._target._currHealth
+        losingHPRace = ((playerHP < enemyHP))
+        if losingHPRace:
+            push(scenarios, self.createParametricScenario(ScenarioParams(2, 0.7, 0.7, 0.7, "hide"), availableTP, availableMP))
+            push(scenarios, self.createParametricScenario(ScenarioParams(3, 0.5, 0.8, 0.8, "hide"), availableTP, availableMP))
+        grappleHS = self.createGrappleHeavySwordScenario(availableTP, availableMP)
+        if (grappleHS != None):
+            push(scenarios, grappleHS)
+        grappleAxe = self.createGrappleAxeScenario(availableTP, availableMP)
+        if (grappleAxe != None):
+            push(scenarios, grappleAxe)
+        grappleRanged = self.createGrappleRangedScenario(availableTP, availableMP)
+        if (grappleRanged != None):
+            push(scenarios, grappleRanged)
+        neutrinoStack = self.createNeutrinoStackingScenario(availableTP, availableMP)
+        if (neutrinoStack != None):
+            push(scenarios, neutrinoStack)
+        steroidOTKO = self.createSteroidOTKOScenario(availableTP, availableMP)
+        if (steroidOTKO != None):
+            push(scenarios, steroidOTKO)
+        dualBuffAttr = self.createDualBuffAttackScenario(availableTP, availableMP)
+        if (dualBuffAttr != None):
+            push(scenarios, dualBuffAttr)
+        neutrinoRecheck = self.createNeutrinoRecheckScenario(availableTP, availableMP)
+        if (neutrinoRecheck != None):
+            push(scenarios, neutrinoRecheck)
+        grappleHSRecheck = self.createGrappleHSRecheckScenario(availableTP, availableMP)
+        if (grappleHSRecheck != None):
+            push(scenarios, grappleHSRecheck)
+        poisonBait = self.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != None):
+            push(scenarios, poisonBait)
+        poisonDump = self.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != None):
+            push(scenarios, poisonDump)
+        grappleCovid = self.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != None):
+            push(scenarios, grappleCovid)
+        shieldRotation = self.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != None):
+            push(scenarios, shieldRotation)
+        damageReturnCycling = self.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != None):
+            push(scenarios, damageReturnCycling)
+        buffApproach = self.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != None):
+            push(scenarios, buffApproach)
+        motivationSetupAttr = self.createMotivationSetupScenario(availableTP, availableMP)
+        if (motivationSetupAttr != None):
+            push(scenarios, motivationSetupAttr)
+        buffStageAttr = self.createBuffStageScenario(availableTP, availableMP)
+        if (buffStageAttr != None):
+            push(scenarios, buffStageAttr)
+        if (getAvailableTeleportChip(self._arsenal, self._player._id) != None):
+            emergencyApproachAttr = self.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproachAttr != None):
+                push(scenarios, emergencyApproachAttr)
+        baitAnchorAttr = self.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorAttr != None):
+            push(scenarios, baitAnchorAttr)
+        push(scenarios, self.createParametricScenario(ScenarioParams(4, (-1), 0.8, 0.8, "hide"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(3, (-1), 0.8, 0.8, "hide"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(0, (-1), 1.0, 1.0, "hide"), availableTP, availableMP))
+        if lw__timePressure:
+            timePressureScenario = self.createTimePressureScenario(availableTP, availableMP)
+            if ((timePressureScenario != None) and (count(timePressureScenario) > 0)):
+                push(scenarios, timePressureScenario)
+        push(scenarios, self.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, self.createStaticAttackScenario(availableTP, availableMP))
+    
+    def buildSustainScenarios(self, scenarios, availableTP, availableMP):
+        bruiserReflect = self.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != None):
+            push(scenarios, bruiserReflect)
+        novaAttrition = self.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != None):
+            push(scenarios, novaAttrition)
+        poisonBait = self.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != None):
+            push(scenarios, poisonBait)
+        poisonDump = self.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != None):
+            push(scenarios, poisonDump)
+        grappleCovid = self.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != None):
+            push(scenarios, grappleCovid)
+        shieldRotation = self.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != None):
+            push(scenarios, shieldRotation)
+        damageReturnCycling = self.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != None):
+            push(scenarios, damageReturnCycling)
+        healRecheck = self.createHealRecheckScenario(availableTP, availableMP)
+        if (healRecheck != None):
+            push(scenarios, healRecheck)
+        buffApproach = self.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != None):
+            push(scenarios, buffApproach)
+        if (getAvailableTeleportChip(self._arsenal, self._player._id) != None):
+            emergencyApproachSus = self.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproachSus != None):
+                push(scenarios, emergencyApproachSus)
+        baitAnchorSus = self.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorSus != None):
+            push(scenarios, baitAnchorSus)
+        push(scenarios, self.createParametricScenario(ScenarioParams(2, 0.7, 0.6, 0.6, "hide"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(4, 0.7, 0.6, 0.6, "kite"), availableTP, availableMP))
+        push(scenarios, self.createParametricScenario(ScenarioParams(3, (-1), 0.6, 0.6, "hide"), availableTP, availableMP))
+        push(scenarios, self.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, self.createStaticAttackScenario(availableTP, availableMP))
+    
+    def buildFleeScenarios(self, scenarios, availableTP, availableMP):
+        poisonBait = self.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != None):
+            push(scenarios, poisonBait)
+        poisonDump = self.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != None):
+            push(scenarios, poisonDump)
+        grappleCovid = self.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != None):
+            push(scenarios, grappleCovid)
+        shieldRotation = self.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != None):
+            push(scenarios, shieldRotation)
+        damageReturnCycling = self.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != None):
+            push(scenarios, damageReturnCycling)
+        fleeTeleChip = getAvailableTeleportChip(self._arsenal, self._player._id)
+        if (fleeTeleChip != None):
+            currentThreat = self._fieldMap.getThreatAtCell(self._player._cellPos)
+            if (currentThreat > 200):
+                escapeScenario = self.createTeleportEscapeScenario(availableTP, availableMP)
+                if (escapeScenario != None):
+                    push(scenarios, escapeScenario)
+        jumpAttackAttr = self.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackAttr != None):
+            push(scenarios, jumpAttackAttr)
+        jumpToFireAttr = self.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireAttr != None):
+            push(scenarios, jumpToFireAttr)
+        healRecheck = self.createHealRecheckScenario(availableTP, availableMP)
+        if (healRecheck != None):
+            push(scenarios, healRecheck)
+        buffApproach = self.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != None):
+            push(scenarios, buffApproach)
+        hasRegen = mapContainsKey(self._arsenal.playerEquippedChips, CHIP_REGENERATION)
+        regenAvailable = (hasRegen and (getCooldown(CHIP_REGENERATION, self._player._id) == 0))
+        if regenAvailable:
+            push(scenarios, self.createParametricScenario(ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))
+            push(scenarios, self.createParametricScenario(ScenarioParams(2, 1.0, 0.3, 0.2, "hide"), availableTP, availableMP))
+        else:
+            push(scenarios, self.createParametricScenario(ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))
+            push(scenarios, self.createParametricScenario(ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))
+        push(scenarios, self.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, self.createStaticAttackScenario(availableTP, availableMP))
+    
+    def buildPuzzleScenarios(self, scenarios, availableTP, availableMP):
+        crystalInfo = "null"
+        if (_bossTargetEID != None):
+            crystalInfo = lw_add(lw_add(lw_add(lw_add(_myCrystalColor, " cell="), _myCrystalCell), " solved="), _myCrystalSolved)
+        slide = self.createCrystalSlideScenario(availableTP, availableMP)
+        if (slide != None):
+            push(scenarios, slide)
+        multiSlide = self.createMultiSlideScenario(availableTP, availableMP)
+        if (multiSlide != None):
+            push(scenarios, multiSlide)
+        inversion = self.createCrystalInversionScenario(availableTP, availableMP)
+        if (inversion != None):
+            push(scenarios, inversion)
+        approach = self.createCrystalApproachScenario(availableTP, availableMP)
+        if (approach != None):
+            push(scenarios, approach)
+        defense = self.createPuzzleDefenseScenario(availableTP, availableMP)
+        if (defense != None):
+            push(scenarios, defense)
+    
+    def createTeamSupportScenario(self, availableTP, availableMP):
+        allies = self._fieldMap.getAlliesSubMap()
+        allyIds = mapKeys(allies)
+        if (count(allyIds) == 0):
+            return None
+        myCell = self._player._cellPos
+        actions = []
+        tpBudget = availableTP
+        weakest = None
+        weakestRatio = 1.1
+        strongest = None
+        strongestOffense = (-1)
+        for aid in lw_values(allyIds):
+            if isDead(aid):
+                continue
+            ally = lw_get(allies, aid)
+            lifeNow = getLife(aid)
+            lifeMax = getTotalLife(aid)
+            if (((lifeNow == None) or (lifeMax == None)) or (lifeMax <= 0)):
+                continue
+            ratio = lw_div(lifeNow, lifeMax)
+            if (ratio < weakestRatio):
+                weakestRatio = ratio
+                weakest = ally
+            offense = lw_add(getStrength(aid), getMagic(aid))
+            if ((offense != None) and (offense > strongestOffense)):
+                strongestOffense = offense
+                strongest = ally
+        if (weakest == None):
+            return None
+        if (weakestRatio < 0.85):
+            supHealChips = [CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
+            for shc in lw_values(supHealChips):
+                if (not mapContainsKey(self._arsenal.playerEquippedChips, shc)):
+                    continue
+                if (getCooldown(shc, self._player._id) > 0):
+                    continue
+                shcCost = getCachedChipCost(shc)
+                if (tpBudget < shcCost):
+                    continue
+                shcDist = getCellDistance(myCell, weakest._cellPos)
+                if ((shcDist == None) or (shcDist > getChipMaxRange(shc))):
+                    continue
+                push(actions, Action(Action.ACTION_BUFF, (-1), shc, (-1), weakest))
+                tpBudget = lw_num(tpBudget) - lw_num(shcCost)
+                break
+        supShieldChips = [CHIP_SHIELD, CHIP_HELMET, CHIP_WALL, CHIP_FORTRESS, CHIP_ARMOR, CHIP_SOLIDIFICATION]
+        for ssc in lw_values(supShieldChips):
+            if (not mapContainsKey(self._arsenal.playerEquippedChips, ssc)):
+                continue
+            if (getCooldown(ssc, self._player._id) > 0):
+                continue
+            sscCost = getCachedChipCost(ssc)
+            if (tpBudget < sscCost):
+                continue
+            sscDist = getCellDistance(myCell, weakest._cellPos)
+            if ((sscDist == None) or (sscDist > getChipMaxRange(ssc))):
+                continue
+            push(actions, Action(Action.ACTION_BUFF, (-1), ssc, (-1), weakest))
+            tpBudget = lw_num(tpBudget) - lw_num(sscCost)
+            break
+        if (strongest != None):
+            supBuffChips = [CHIP_MOTIVATION, CHIP_PROTEIN, CHIP_PRISM, CHIP_STEROID]
+            for sbc in lw_values(supBuffChips):
+                if (not mapContainsKey(self._arsenal.playerEquippedChips, sbc)):
+                    continue
+                if (getCooldown(sbc, self._player._id) > 0):
+                    continue
+                sbcCost = getCachedChipCost(sbc)
+                if (tpBudget < sbcCost):
+                    continue
+                sbcDist = getCellDistance(myCell, strongest._cellPos)
+                if ((sbcDist == None) or (sbcDist > getChipMaxRange(sbc))):
+                    continue
+                push(actions, Action(Action.ACTION_BUFF, (-1), sbc, (-1), strongest))
+                tpBudget = lw_num(tpBudget) - lw_num(sbcCost)
+                break
+        if (count(actions) == 0):
+            return None
+        return actions
+    
+
+
+# ════════ scenario_simulator.lk ════════
+# include: game_entity.lk (inlined by assembler)
+def isSimLaunchValid(launchType, fromCell, toCell):
+    if (launchType == LAUNCH_TYPE_CIRCLE):
+        return True
+    if ((launchType == None) or (launchType <= 0)):
+        return True
+    fx = getCellX(fromCell)
+    fy = getCellY(fromCell)
+    tx = getCellX(toCell)
+    ty = getCellY(toCell)
+    sameLine = (((fx == tx) or (fy == ty)))
+    sameDiag = ((abs(lw_sub(fx, tx)) == abs(lw_sub(fy, ty))))
+    if (launchType == LAUNCH_TYPE_LINE):
+        return sameLine
+    if (launchType == LAUNCH_TYPE_DIAGONAL):
+        return sameDiag
+    if (launchType == LAUNCH_TYPE_STAR):
+        return (sameLine or sameDiag)
+    if (launchType == LAUNCH_TYPE_LINE_INVERTED):
+        return (not sameLine)
+    if (launchType == LAUNCH_TYPE_DIAGONAL_INVERTED):
+        return (not sameDiag)
+    if (launchType == LAUNCH_TYPE_STAR_INVERTED):
+        return (not ((sameLine or sameDiag)))
+    return True
+
+class SimulationResult:
+    def __init__(self):
+        self.damageDealt = 0
+        self.damageDealtMin = 0
+        self.damageDealtMax = 0
+        self.dotDamageQueued = 0
+        self.dotDamageMin = 0
+        self.dotDamageMax = 0
+        self.novaDamageQueued = 0
+        self.novaDamageMin = 0
+        self.novaDamageMax = 0
+        self.hpGained = 0
+        self.lifestealHealing = 0
+        self.shieldsGained = 0
+        self.relativeShieldGained = 0
+        self.tpSpent = 0
+        self.tpRefunded = 0
+        self.mpSpent = 0
+        self.finalPosition = (-1)
+        self.buffsApplied = []
+        self.debuffsApplied = []
+        self.actionsExecuted = 0
+        self.droppedActions = 0
+        self.vulnerabilityApplied = 0
+        self.totalLobbyDamage = 0
+        self.enemiesHit = 0
+        self.killsSecured = 0
+        self.bulbDamage = 0
+        self.leekDamage = 0
+        self.bulbsHit = 0
+        self.bulbKillsSecured = 0
+        self.poisonSourcesUsed = 0
+        self.poisonTurnsQueued = 0
+        self.denialApplied = 0
+        self.mpDenialApplied = 0
+        self.strShackled = 0
+        self.magShackled = 0
+        self.allyHpGained = 0
+        self.allyShieldsGained = 0
+        self.allyBuffCount = 0
+        self.erosionDamage = 0
+        self.selfDamageHP = 0
+        self.crystalAxisReduction = 0
+        self.crystalSolved = False
+        self.buffsApplied = []
+        self.debuffsApplied = []
+
+    def getStateHash(self):
+        bSig = ""
+        for b in lw_values(self.buffsApplied):
+            bSig = lw_add(bSig, lw_add(b, ","))
+        dSig = ""
+        for d in lw_values(self.debuffsApplied):
+            dSig = lw_add(dSig, lw_add(d, ","))
+        return lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(floor(self.damageDealt), "|"), floor(self.damageDealtMin)), "|"), floor(self.damageDealtMax)), "|"), floor(self.dotDamageQueued)), "|"), floor(self.dotDamageMin)), "|"), floor(self.dotDamageMax)), "|"), floor(self.novaDamageQueued)), "|"), floor(self.novaDamageMin)), "|"), floor(self.novaDamageMax)), "|"), floor(self.hpGained)), "|"), floor(self.lifestealHealing)), "|"), floor(self.shieldsGained)), "|"), floor(lw_mul(self.relativeShieldGained, 100))), "|"), self.tpSpent), "|"), self.mpSpent), "|"), self.finalPosition), "|"), bSig), "|"), dSig), "|"), floor(self.totalLobbyDamage)), "|"), self.enemiesHit), "|"), self.killsSecured), "|"), floor(self.bulbDamage)), "|"), floor(self.leekDamage)), "|"), self.bulbsHit), "|"), self.bulbKillsSecured), "|"), self.poisonSourcesUsed), "|"), self.poisonTurnsQueued), "|"), floor(self.denialApplied)), "|"), floor(self.mpDenialApplied)), "|"), floor(self.allyHpGained)), "|"), floor(self.allyShieldsGained)), "|"), self.allyBuffCount), "|"), floor(self.strShackled)), "|"), floor(self.magShackled)), "|"), floor(self.erosionDamage)), "|"), floor(self.selfDamageHP)), "|"), self.vulnerabilityApplied)
+    
+
+class ScenarioSimulator:
+    def __init__(self, arsenal, player, target, fieldMap):
+        self._arsenal = None
+        self._player = None
+        self._target = None
+        self._fieldMap = None
+        self._arsenal = arsenal
+        self._player = player
+        self._target = target
+        self._fieldMap = fieldMap
+
+    def simulate(self, actions):
+        result = SimulationResult()
+        simPos = self._player._cellPos
+        simTP = getTP()
+        simMP = getMP()
+        simWeapon = getWeapon()
+        simStrength = self._player._strength
+        simMagic = self._player._magic
+        simWisdom = self._player._wisdom
+        simScience = self._player._science
+        simAgility = self._player._agility
+        simWeaponUses = {}
+        simChipUses = {}
+        simPlayerHP = self._player._currHealth
+        expectedCritMult = lw_add(1.0, lw_mul(min(0.5, lw_div(simAgility, 2000.0)), 0.3))
+        simEnemyCurrHP = 1
+        simEnemyMaxHP = 1
+        simEnemyAbsShield = 0
+        simEnemyRelShield = 0
+        if (self._target != None):
+            simEnemyCurrHP = self._target._currHealth
+            simEnemyMaxHP = self._target._maxHealth
+            simEnemyAbsShield = self._target._absShield
+            simEnemyRelShield = lw_div(self._target._relShield, 100.0)
+        targetIsBulb = (isBulb(self._target) if ((self._target != None)) else False)
+        result.finalPosition = simPos
+        for action in lw_values(actions):
+            if (not self.canExecuteAction(action, simPos, simTP, simMP, simWeapon)):
+                if (action.type != Action.ACTION_CHECKPOINT):
+                    result.droppedActions = lw_add(result.droppedActions, 1)
+                continue
+            if (((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)):
+                if (action.chip != (-1)):
+                    chipForMaxUse = None
+                    if mapContainsKey(self._arsenal.playerEquippedChips, action.chip):
+                        chipForMaxUse = lw_get(self._arsenal.playerEquippedChips, action.chip)
+                    if (chipForMaxUse != None):
+                        chipUseCount = lw_get(simChipUses, action.chip)
+                        if (chipUseCount == None):
+                            chipUseCount = 0
+                        if ((chipForMaxUse._maxUse > 0) and (chipUseCount >= chipForMaxUse._maxUse)):
+                            continue
+                        lw_put(simChipUses, action.chip, lw_add(chipUseCount, 1))
+                    if ((action.chip == CHIP_INVERSION) and (not _isBossFight)):
+                        invCost = getChipCost(CHIP_INVERSION)
+                        result.tpSpent = lw_add(result.tpSpent, invCost)
+                        simTP = lw_num(simTP) - lw_num(invCost)
+                        if (action.targetEntity != None):
+                            simPos = action.targetEntity._cellPos
+                            result.finalPosition = simPos
+                        result.vulnerabilityApplied = lw_add(result.vulnerabilityApplied, 20)
+                        simEnemyRelShield = lw_num(simEnemyRelShield) - lw_num(0.20)
+                        result.hpGained = lw_add(result.hpGained, 50)
+                        push(result.debuffsApplied, action.chip)
+                        result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                        continue
+                    if (action.chip == CHIP_LIBERATION):
+                        libCost = getChipCost(CHIP_LIBERATION)
+                        result.tpSpent = lw_add(result.tpSpent, libCost)
+                        simTP = lw_num(simTP) - lw_num(libCost)
+                        simEnemyAbsShield = floor(lw_mul(simEnemyAbsShield, 0.6))
+                        simEnemyRelShield = lw_mul(simEnemyRelShield, 0.6)
+                        push(result.debuffsApplied, action.chip)
+                        result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                        continue
+                    if (action.chip == CHIP_PUNISHMENT):
+                        pCost = getChipCost(action.chip)
+                        punishDmg = lw_mul(simPlayerHP, 0.25)
+                        punishNet = lw_sub(lw_mul(punishDmg, (lw_sub(1, simEnemyRelShield))), simEnemyAbsShield)
+                        if (punishNet < 0):
+                            punishNet = 0
+                        if (targetIsBulb or (((simEnemyCurrHP > 0) and (punishNet < simEnemyCurrHP)))):
+                            continue
+                        result.damageDealt = lw_add(result.damageDealt, punishNet)
+                        result.damageDealtMin = lw_add(result.damageDealtMin, punishNet)
+                        result.damageDealtMax = lw_add(result.damageDealtMax, punishNet)
+                        result.erosionDamage = lw_add(result.erosionDamage, lw_mul(punishNet, 0.05))
+                        simEnemyCurrHP = lw_num(simEnemyCurrHP) - lw_num(punishNet)
+                        if (simEnemyCurrHP < 0):
+                            simEnemyCurrHP = 0
+                        selfCost = lw_mul(simPlayerHP, 0.75)
+                        result.selfDamageHP = lw_add(result.selfDamageHP, selfCost)
+                        simPlayerHP = lw_num(simPlayerHP) - lw_num(selfCost)
+                        pLifesteal = lw_div((lw_mul(punishNet, simWisdom)), 1000)
+                        result.lifestealHealing = lw_add(result.lifestealHealing, pLifesteal)
+                        simPlayerHP = lw_add(simPlayerHP, pLifesteal)
+                        if targetIsBulb:
+                            result.bulbDamage = lw_add(result.bulbDamage, punishNet)
+                        else:
+                            result.leekDamage = lw_add(result.leekDamage, punishNet)
+                        result.tpSpent = lw_add(result.tpSpent, pCost)
+                        simTP = lw_num(simTP) - lw_num(pCost)
+                        result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                        continue
+                    chipCost = getChipCost(action.chip)
+                    chipDmg = (self._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.chip, self._target) if ((self._target != None)) else 0)
+                    breakdown = getCachedDamageBreakdown(action.chip)
+                    if (breakdown == None):
+                        breakdown = self._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.chip)
+                    rawDirect = lw_mul(lw_get(breakdown, 'direct'), expectedCritMult)
+                    rawDirectMin = lw_mul(lw_get(breakdown, 'directMin'), expectedCritMult)
+                    rawDirectMax = lw_mul(lw_get(breakdown, 'directMax'), expectedCritMult)
+                    if ((action.chip == CHIP_PLASMA) and (self._fieldMap != None)):
+                        plasmaAimCell = (action.targetCell if (((action.targetCell != None) and (action.targetCell != (-1)))) else self._target._cellPos)
+                        plasmaHits = 1
+                        enemies = self._fieldMap.getEnemySubMap()
+                        for eid in lw_values(mapKeys(enemies)):
+                            if (eid == self._target._id):
+                                continue
+                            if isDead(eid):
+                                continue
+                            eCell = lw_get(enemies, eid)._cellPos
+                            if (eCell != None):
+                                eDist = getCellDistance(plasmaAimCell, eCell)
+                                if ((eDist != None) and (eDist <= 2)):
+                                    plasmaHits = lw_add(plasmaHits, 1)
+                        if (plasmaHits > 1):
+                            rawDirect = lw_num(rawDirect) * lw_num(plasmaHits)
+                            rawDirectMin = lw_num(rawDirectMin) * lw_num(plasmaHits)
+                            rawDirectMax = lw_num(rawDirectMax) * lw_num(plasmaHits)
+                    directDmg = lw_sub(lw_mul(rawDirect, (lw_sub(1, simEnemyRelShield))), simEnemyAbsShield)
+                    if (directDmg < 0):
+                        directDmg = 0
+                    directDmgMin = lw_sub(lw_mul(rawDirectMin, (lw_sub(1, simEnemyRelShield))), simEnemyAbsShield)
+                    if (directDmgMin < 0):
+                        directDmgMin = 0
+                    directDmgMax = lw_sub(lw_mul(rawDirectMax, (lw_sub(1, simEnemyRelShield))), simEnemyAbsShield)
+                    if (directDmgMax < 0):
+                        directDmgMax = 0
+                    result.damageDealt = lw_add(result.damageDealt, directDmg)
+                    result.damageDealtMin = lw_add(result.damageDealtMin, directDmgMin)
+                    result.damageDealtMax = lw_add(result.damageDealtMax, directDmgMax)
+                    result.erosionDamage = lw_add(result.erosionDamage, lw_mul(directDmg, 0.05))
+                    simEnemyCurrHP = lw_num(simEnemyCurrHP) - lw_num(directDmg)
+                    if (simEnemyCurrHP < 0):
+                        simEnemyCurrHP = 0
+                    lifesteal = lw_div((lw_mul(directDmg, simWisdom)), 1000)
+                    result.lifestealHealing = lw_add(result.lifestealHealing, lifesteal)
+                    simPlayerHP = lw_add(simPlayerHP, lifesteal)
+                    if targetIsBulb:
+                        result.bulbDamage = lw_add(result.bulbDamage, directDmg)
+                    else:
+                        result.leekDamage = lw_add(result.leekDamage, directDmg)
+                    chipDot = lw_mul(lw_get(breakdown, 'dot'), expectedCritMult)
+                    result.dotDamageQueued = lw_add(result.dotDamageQueued, chipDot)
+                    result.dotDamageMin = lw_add(result.dotDamageMin, lw_mul(lw_get(breakdown, 'dotMin'), expectedCritMult))
+                    result.dotDamageMax = lw_add(result.dotDamageMax, lw_mul(lw_get(breakdown, 'dotMax'), expectedCritMult))
+                    result.erosionDamage = lw_add(result.erosionDamage, lw_mul(chipDot, 0.10))
+                    if (chipDot > 0):
+                        result.poisonSourcesUsed = lw_add(result.poisonSourcesUsed, 1)
+                        if mapContainsKey(self._arsenal.playerEquippedChips, action.chip):
+                            pChipItem = lw_get(self._arsenal.playerEquippedChips, action.chip)
+                            if mapContainsKey(pChipItem._effects, EFFECT_POISON):
+                                result.poisonTurnsQueued = lw_add(result.poisonTurnsQueued, lw_get(pChipItem._effects, EFFECT_POISON)._effectDuration)
+                    hpDeficit = lw_sub(simEnemyMaxHP, simEnemyCurrHP)
+                    uncappedNova = lw_get(breakdown, 'nova')
+                    cappedNova = uncappedNova
+                    if (hpDeficit < uncappedNova):
+                        cappedNova = hpDeficit
+                    currentNova = (result.novaDamageQueued if (result.novaDamageQueued != None) else 0)
+                    result.novaDamageQueued = lw_add(currentNova, cappedNova)
+                    novaShare = ((lw_div(cappedNova, uncappedNova)) if (uncappedNova > 0) else 0)
+                    result.novaDamageMin = lw_add(result.novaDamageMin, lw_mul(lw_get(breakdown, 'novaMin'), novaShare))
+                    result.novaDamageMax = lw_add(result.novaDamageMax, lw_mul(lw_get(breakdown, 'novaMax'), novaShare))
+                    simEnemyMaxHP = lw_num(simEnemyMaxHP) - lw_num(cappedNova)
+                    if (simEnemyMaxHP < simEnemyCurrHP):
+                        simEnemyMaxHP = simEnemyCurrHP
+                    result.tpSpent = lw_add(result.tpSpent, chipCost)
+                    simTP = lw_num(simTP) - lw_num(chipCost)
+                    if (action.type == Action.ACTION_DEBUFF):
+                        push(result.debuffsApplied, action.chip)
+                    chipItemObj = None
+                    if mapContainsKey(self._arsenal.playerEquippedChips, action.chip):
+                        chipItemObj = lw_get(self._arsenal.playerEquippedChips, action.chip)
+                    else:
+                        if mapContainsKey(self._arsenal.chipsList, action.chip):
+                            chipItemObj = lw_get(self._arsenal.chipsList, action.chip)
+                    if (chipItemObj != None):
+                        for eff in lw_values(mapKeys(chipItemObj._effects)):
+                            effInfo = lw_get(chipItemObj._effects, eff)
+                            effAvg = lw_div((lw_add(effInfo._minEffectAmount, effInfo._maxEffectAmount)), 2)
+                            effScaled = lw_mul(lw_mul(effAvg, (lw_add(1, lw_div(simMagic, 100.0)))), effInfo._effectDuration)
+                            if ((eff == EFFECT_SHACKLE_TP) or (eff == EFFECT_SHACKLE_MP)):
+                                result.denialApplied = lw_add(result.denialApplied, effScaled)
+                                if (eff == EFFECT_SHACKLE_MP):
+                                    result.mpDenialApplied = lw_add(result.mpDenialApplied, effScaled)
+                            else:
+                                if (eff == EFFECT_SHACKLE_STRENGTH):
+                                    result.strShackled = lw_add(result.strShackled, effScaled)
+                                else:
+                                    if (eff == EFFECT_SHACKLE_MAGIC):
+                                        result.magShackled = lw_add(result.magShackled, effScaled)
+                    result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                else:
+                    if (action.weaponId != (-1)):
+                        weaponObj = None
+                        if mapContainsKey(self._arsenal.playerEquippedWeapons, action.weaponId):
+                            weaponObj = lw_get(self._arsenal.playerEquippedWeapons, action.weaponId)
+                        if (weaponObj != None):
+                            currentUses = lw_get(simWeaponUses, action.weaponId)
+                            if (currentUses == None):
+                                currentUses = 0
+                            if (currentUses >= weaponObj._maxUse):
+                                continue
+                            swapCost = (1 if ((simWeapon != action.weaponId)) else 0)
+                            weaponCost = weaponObj._cost
+                            weaponDmg = (self._arsenal.getNetDamageAgainstTarget(simStrength, simMagic, simWisdom, simScience, action.weaponId, self._target) if ((self._target != None)) else 0)
+                            weaponBreakdown = getCachedDamageBreakdown(action.weaponId)
+                            if (weaponBreakdown == None):
+                                weaponBreakdown = self._arsenal.getDamageBreakdown(simStrength, simMagic, simWisdom, simScience, action.weaponId)
+                            rawDirect = lw_mul(lw_get(weaponBreakdown, 'direct'), expectedCritMult)
+                            rawDirectMin = lw_mul(lw_get(weaponBreakdown, 'directMin'), expectedCritMult)
+                            rawDirectMax = lw_mul(lw_get(weaponBreakdown, 'directMax'), expectedCritMult)
+                            directDmg = lw_sub(lw_mul(rawDirect, (lw_sub(1, simEnemyRelShield))), simEnemyAbsShield)
+                            if (directDmg < 0):
+                                directDmg = 0
+                            directDmgMin = lw_sub(lw_mul(rawDirectMin, (lw_sub(1, simEnemyRelShield))), simEnemyAbsShield)
+                            if (directDmgMin < 0):
+                                directDmgMin = 0
+                            directDmgMax = lw_sub(lw_mul(rawDirectMax, (lw_sub(1, simEnemyRelShield))), simEnemyAbsShield)
+                            if (directDmgMax < 0):
+                                directDmgMax = 0
+                            result.damageDealt = lw_add(result.damageDealt, directDmg)
+                            result.damageDealtMin = lw_add(result.damageDealtMin, directDmgMin)
+                            result.damageDealtMax = lw_add(result.damageDealtMax, directDmgMax)
+                            result.erosionDamage = lw_add(result.erosionDamage, lw_mul(directDmg, 0.05))
+                            simEnemyCurrHP = lw_num(simEnemyCurrHP) - lw_num(directDmg)
+                            if (simEnemyCurrHP < 0):
+                                simEnemyCurrHP = 0
+                            lifesteal = lw_div((lw_mul(directDmg, simWisdom)), 1000)
+                            result.lifestealHealing = lw_add(result.lifestealHealing, lifesteal)
+                            simPlayerHP = lw_add(simPlayerHP, lifesteal)
+                            if (action.weaponId == WEAPON_ENHANCED_LIGHTNINGER):
+                                result.lifestealHealing = lw_add(result.lifestealHealing, 100)
+                            if (action.weaponId == WEAPON_UNSTABLE_DESTROYER):
+                                agi = simAgility
+                                critChance = min(0.5, lw_div(agi, 2000.0))
+                                avgCritHeal = 100
+                                result.lifestealHealing = lw_add(result.lifestealHealing, lw_mul(critChance, avgCritHeal))
+                            if targetIsBulb:
+                                result.bulbDamage = lw_add(result.bulbDamage, directDmg)
+                            else:
+                                result.leekDamage = lw_add(result.leekDamage, directDmg)
+                            weaponDot = lw_mul(lw_get(weaponBreakdown, 'dot'), expectedCritMult)
+                            result.dotDamageQueued = lw_add(result.dotDamageQueued, weaponDot)
+                            result.dotDamageMin = lw_add(result.dotDamageMin, lw_mul(lw_get(weaponBreakdown, 'dotMin'), expectedCritMult))
+                            result.dotDamageMax = lw_add(result.dotDamageMax, lw_mul(lw_get(weaponBreakdown, 'dotMax'), expectedCritMult))
+                            result.erosionDamage = lw_add(result.erosionDamage, lw_mul(weaponDot, 0.10))
+                            if (weaponDot > 0):
+                                result.poisonSourcesUsed = lw_add(result.poisonSourcesUsed, 1)
+                                if mapContainsKey(weaponObj._effects, EFFECT_POISON):
+                                    result.poisonTurnsQueued = lw_add(result.poisonTurnsQueued, lw_get(weaponObj._effects, EFFECT_POISON)._effectDuration)
+                            hpDeficit = lw_sub(simEnemyMaxHP, simEnemyCurrHP)
+                            uncappedNova = lw_get(weaponBreakdown, 'nova')
+                            cappedNova = uncappedNova
+                            if (hpDeficit < uncappedNova):
+                                cappedNova = hpDeficit
+                            currentNova = (result.novaDamageQueued if (result.novaDamageQueued != None) else 0)
+                            result.novaDamageQueued = lw_add(currentNova, cappedNova)
+                            novaShare = ((lw_div(cappedNova, uncappedNova)) if (uncappedNova > 0) else 0)
+                            result.novaDamageMin = lw_add(result.novaDamageMin, lw_mul(lw_get(weaponBreakdown, 'novaMin'), novaShare))
+                            result.novaDamageMax = lw_add(result.novaDamageMax, lw_mul(lw_get(weaponBreakdown, 'novaMax'), novaShare))
+                            simEnemyMaxHP = lw_num(simEnemyMaxHP) - lw_num(cappedNova)
+                            if (simEnemyMaxHP < simEnemyCurrHP):
+                                simEnemyMaxHP = simEnemyCurrHP
+                            result.tpSpent = lw_add(result.tpSpent, lw_add(swapCost, weaponCost))
+                            simTP = lw_num(simTP) - lw_num(lw_add(swapCost, weaponCost))
+                            simWeapon = action.weaponId
+                            lw_put(simWeaponUses, action.weaponId, lw_add(currentUses, 1))
+                            if (action.weaponId == WEAPON_NEUTRINO):
+                                result.vulnerabilityApplied = lw_add(result.vulnerabilityApplied, 8)
+                                simEnemyRelShield = lw_num(simEnemyRelShield) - lw_num(0.08)
+                            else:
+                                if (action.weaponId == WEAPON_HEAVY_SWORD):
+                                    result.vulnerabilityApplied = lw_add(result.vulnerabilityApplied, 60)
+                                    simEnemyRelShield = lw_num(simEnemyRelShield) - lw_num(0.60)
+                            for wEff in lw_values(mapKeys(weaponObj._effects)):
+                                wEffInfo = lw_get(weaponObj._effects, wEff)
+                                wEffAvg = lw_div((lw_add(wEffInfo._minEffectAmount, wEffInfo._maxEffectAmount)), 2)
+                                wEffScaled = lw_mul(lw_mul(wEffAvg, (lw_add(1, lw_div(simMagic, 100.0)))), wEffInfo._effectDuration)
+                                if ((wEff == EFFECT_SHACKLE_TP) or (wEff == EFFECT_SHACKLE_MP)):
+                                    result.denialApplied = lw_add(result.denialApplied, wEffScaled)
+                                    if (wEff == EFFECT_SHACKLE_MP):
+                                        result.mpDenialApplied = lw_add(result.mpDenialApplied, wEffScaled)
+                                else:
+                                    if (wEff == EFFECT_SHACKLE_STRENGTH):
+                                        result.strShackled = lw_add(result.strShackled, wEffScaled)
+                                    else:
+                                        if (wEff == EFFECT_SHACKLE_MAGIC):
+                                            result.magShackled = lw_add(result.magShackled, wEffScaled)
+                            result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+            else:
+                if (action.type == Action.ACTION_BUFF):
+                    buffChipForMaxUse = None
+                    if ((action.chip != (-1)) and mapContainsKey(self._arsenal.playerEquippedChips, action.chip)):
+                        buffChipForMaxUse = lw_get(self._arsenal.playerEquippedChips, action.chip)
+                    if (buffChipForMaxUse != None):
+                        buffUseCount = lw_get(simChipUses, action.chip)
+                        if (buffUseCount == None):
+                            buffUseCount = 0
+                        if ((buffChipForMaxUse._maxUse > 0) and (buffUseCount >= buffChipForMaxUse._maxUse)):
+                            continue
+                        lw_put(simChipUses, action.chip, lw_add(buffUseCount, 1))
+                    buffCost = getChipCost(action.chip)
+                    result.tpSpent = lw_add(result.tpSpent, buffCost)
+                    simTP = lw_num(simTP) - lw_num(buffCost)
+                    buffAllyTarget = ((((action.targetEntity != None) and (action.targetEntity._id != self._player._id)) and (((self._target == None) or (action.targetEntity._id != self._target._id)))))
+                    if buffAllyTarget:
+                        if ((((((action.chip == CHIP_VACCINE) or (action.chip == CHIP_CURE)) or (action.chip == CHIP_DRIP)) or (action.chip == CHIP_BANDAGE)) or (action.chip == CHIP_REMISSION)) or (action.chip == CHIP_SERUM)):
+                            result.allyHpGained = lw_add(result.allyHpGained, self.estimateHealing(action.chip, simWisdom))
+                        else:
+                            if ((action.chip == CHIP_HELMET) or (action.chip == CHIP_SHIELD)):
+                                result.allyShieldsGained = lw_add(result.allyShieldsGained, self.estimateShieldAmount(action.chip, simWisdom))
+                            else:
+                                if (((((action.chip == CHIP_WALL) or (action.chip == CHIP_FORTRESS)) or (action.chip == CHIP_ARMOR)) or (action.chip == CHIP_PROTEIN)) or (action.chip == CHIP_SOLIDIFICATION)):
+                                    result.allyShieldsGained = lw_add(result.allyShieldsGained, 120)
+                                else:
+                                    result.allyBuffCount = lw_add(result.allyBuffCount, 1)
+                        result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                        continue
+                    push(result.buffsApplied, action.chip)
+                    if ((action.chip == CHIP_HELMET) or (action.chip == CHIP_SHIELD)):
+                        shieldAmount = self.estimateShieldAmount(action.chip, simWisdom)
+                        result.shieldsGained = lw_add(result.shieldsGained, shieldAmount)
+                    else:
+                        if ((action.chip == CHIP_WALL) or (action.chip == CHIP_FORTRESS)):
+                            relShieldPercent = self.estimateRelativeShield(action.chip)
+                            result.relativeShieldGained = lw_add(result.relativeShieldGained, relShieldPercent)
+                        else:
+                            if (action.chip == CHIP_PROTEIN):
+                                result.relativeShieldGained = lw_add(result.relativeShieldGained, self.estimateRelativeShield(action.chip))
+                            else:
+                                if (action.chip == CHIP_LEATHER_BOOTS):
+                                    simMP = lw_add(simMP, 2)
+                                else:
+                                    if (action.chip == CHIP_SEVEN_LEAGUE_BOOTS):
+                                        mpBuff = floor(lw_mul(0.45, (lw_add(1, lw_div(simScience, 100)))))
+                                        simMP = lw_add(simMP, mpBuff)
+                                    else:
+                                        if (action.chip == CHIP_RAGE):
+                                            tpBuff = floor(lw_mul(0.55, (lw_add(1, lw_div(simScience, 100)))))
+                                            simTP = lw_add(simTP, tpBuff)
+                                            result.tpRefunded = lw_add(result.tpRefunded, tpBuff)
+                                        else:
+                                            if (((((action.chip == CHIP_REGENERATION) or (action.chip == CHIP_REMISSION)) or (action.chip == CHIP_CURE)) or (action.chip == CHIP_DRIP)) or (action.chip == CHIP_VACCINE)):
+                                                result.hpGained = lw_add(result.hpGained, self.estimateHealing(action.chip, simWisdom))
+                                            else:
+                                                if (action.chip == CHIP_STEROID):
+                                                    simStrength = lw_add(simStrength, self.estimateStrengthBuff(action.chip))
+                                                else:
+                                                    if (action.chip == CHIP_DOPING):
+                                                        simStrength = lw_add(simStrength, self.estimateStrengthBuff(action.chip))
+                                                        dopingSelfDmg = lw_mul(lw_mul(32, (lw_add(1, lw_div(simScience, 100.0)))), 3)
+                                                        result.hpGained = lw_num(result.hpGained) - lw_num(dopingSelfDmg)
+                                                    else:
+                                                        if (action.chip == CHIP_PRISM):
+                                                            simStrength = lw_add(simStrength, 60)
+                                                            simMagic = lw_add(simMagic, 60)
+                                                            simWisdom = lw_add(simWisdom, 60)
+                                                            simScience = lw_add(simScience, 60)
+                                                            simAgility = lw_add(simAgility, 60)
+                                                            expectedCritMult = lw_add(1.0, lw_mul(min(0.5, lw_div(simAgility, 2000.0)), 0.3))
+                                                        else:
+                                                            if (action.chip == CHIP_WIZARDRY):
+                                                                simMagic = lw_add(simMagic, 160)
+                                                            else:
+                                                                if (action.chip == CHIP_KNOWLEDGE):
+                                                                    simWisdom = lw_add(simWisdom, 260)
+                                                                else:
+                                                                    if (action.chip == CHIP_ELEVATION):
+                                                                        result.hpGained = lw_add(result.hpGained, 80)
+                                                                    else:
+                                                                        if (action.chip == CHIP_WARM_UP):
+                                                                            simAgility = lw_add(simAgility, 180)
+                                                                            expectedCritMult = lw_add(1.0, lw_mul(min(0.5, lw_div(simAgility, 2000.0)), 0.3))
+                                                                        else:
+                                                                            if (action.chip == CHIP_ADRENALINE):
+                                                                                simTP = lw_add(simTP, 5)
+                                                                                result.tpRefunded = lw_add(result.tpRefunded, 5)
+                                                                            else:
+                                                                                if (action.chip == CHIP_ANTIDOTE):
+                                                                                    antidoteHeal = lw_mul(30, (lw_add(1, lw_div(simWisdom, 500.0))))
+                                                                                    result.hpGained = lw_add(result.hpGained, antidoteHeal)
+                                                                                else:
+                                                                                    if (action.chip == CHIP_MANUMISSION):
+                                                                                        simTP = lw_add(simTP, 2)
+                                                                                        result.tpRefunded = lw_add(result.tpRefunded, 2)
+                    result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                else:
+                    if (action.type == Action.ACTION_WEAPON_SWAP):
+                        if mapContainsKey(self._arsenal.playerEquippedWeapons, action.weaponId):
+                            swapCost = 1
+                            result.tpSpent = lw_add(result.tpSpent, swapCost)
+                            simTP = lw_num(simTP) - lw_num(swapCost)
+                            simWeapon = action.weaponId
+                            result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                    else:
+                        if ((((((((action.type == Action.MOVEMENT_APPROACH) or (action.type == Action.MOVEMENT_OFFENSIVE)) or (action.type == Action.MOVEMENT_DEFENSIVE)) or (action.type == Action.MOVEMENT_OTKO)) or (action.type == Action.MOVEMENT_DOT_OFFENSIVE)) or (action.type == Action.MOVEMENT_DEBUFF)) or (action.type == Action.MOVEMENT_HNS)) or (action.type == Action.MOVEMENT_PAB)):
+                            pathLength = getCachedPathLength(simPos, action.targetCell)
+                            if ((pathLength != None) and (pathLength <= simMP)):
+                                result.mpSpent = lw_add(result.mpSpent, pathLength)
+                                simMP = lw_num(simMP) - lw_num(pathLength)
+                                simPos = action.targetCell
+                                result.finalPosition = simPos
+                                result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                        else:
+                            if (action.type == Action.MOVEMENT_FLEE):
+                                estimatedMP = min(simMP, 3)
+                                result.mpSpent = lw_add(result.mpSpent, estimatedMP)
+                                simMP = lw_num(simMP) - lw_num(estimatedMP)
+                                result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                            else:
+                                if (action.type == Action.ACTION_TELEPORT):
+                                    teleChip = (action.chip if ((action.chip != None) and (action.chip != (-1))) else CHIP_TELEPORTATION)
+                                    tpCost = getChipCost(teleChip)
+                                    maxRange = getTeleportMaxRange(teleChip)
+                                    dist = getCellDistance(simPos, action.targetCell)
+                                    if ((((dist != None) and (dist >= 1)) and (dist <= maxRange)) and (simTP >= tpCost)):
+                                        result.tpSpent = lw_add(result.tpSpent, tpCost)
+                                        simTP = lw_num(simTP) - lw_num(tpCost)
+                                        simPos = action.targetCell
+                                        result.finalPosition = simPos
+                                        result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                                else:
+                                    if (action.type == Action.ACTION_SUMMON):
+                                        if (action.chip != (-1)):
+                                            summonCost = getChipCost(action.chip)
+                                            result.tpSpent = lw_add(result.tpSpent, summonCost)
+                                            simTP = lw_num(simTP) - lw_num(summonCost)
+                                            result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+                                    else:
+                                        if (action.type == Action.ACTION_CHECKPOINT):
+                                            result.actionsExecuted = lw_add(result.actionsExecuted, 1)
+        if (targetIsBulb and (result.bulbDamage > 0)):
+            result.bulbsHit = 1
+            totalDamageToTarget = lw_add(lw_add(result.damageDealt, result.dotDamageQueued), ((result.novaDamageQueued if (result.novaDamageQueued != None) else 0)))
+            if (totalDamageToTarget >= simEnemyCurrHP):
+                result.bulbKillsSecured = 1
+        if ((_isBossFight and (_bossPhase == "PUZZLE")) and (_bossTargetEID != None)):
+            simCX = _myCrystalX
+            simCY = _myCrystalY
+            gX = _graalX
+            gY = _graalY
+            initialDist = getDistanceToAxis(None)
+            for action in lw_values(actions):
+                if ((action.chip == CHIP_GRAPPLE) and (action.targetCell == _myCrystalCell)):
+                    pullDir = computePullDirection(simCX, simCY, simPos)
+                    simCX = lw_add(simCX, lw_get(pullDir, 0))
+                    simCY = lw_add(simCY, lw_get(pullDir, 1))
+                if ((action.chip == CHIP_BOXING_GLOVE) and (action.targetCell == _myCrystalCell)):
+                    pushDir = computePushDirection(simCX, simCY, simPos)
+                    simCX = lw_add(simCX, lw_get(pushDir, 0))
+                    simCY = lw_add(simCY, lw_get(pushDir, 1))
+            finalDist = computeAxisDist(simCX, simCY, gX, gY, _myCrystalGoalAxis)
+            result.crystalAxisReduction = lw_sub(initialDist, finalDist)
+            result.crystalSolved = checkOnAxis(simCX, simCY, gX, gY, _myCrystalGoalAxis)
+            result.damageDealt = 0
+            result.dotDamageQueued = 0
+            result.novaDamageQueued = 0
+        return result
+    
+    def canExecuteAction(self, action, simPos, simTP, simMP, simWeapon):
+        if ((((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)) or (action.type == Action.ACTION_BUFF)):
+            if (action.chip != (-1)):
+                cost = getChipCost(action.chip)
+                if (simTP < cost):
+                    return False
+                if mapContainsKey(self._arsenal.playerEquippedChips, action.chip):
+                    chipObj = lw_get(self._arsenal.playerEquippedChips, action.chip)
+                    tCell = action.targetCell
+                    if (((tCell == (-1)) and (action.targetEntity != None)) and (action.targetEntity != (-1))):
+                        tCell = action.targetEntity._cellPos
+                    if ((tCell != (-1)) and (tCell != simPos)):
+                        dist = getCellDistance(simPos, tCell)
+                        if (((dist == None) or (dist < chipObj._minRange)) or (dist > chipObj._maxRange)):
+                            return False
+                        if (((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)):
+                            if (not lineOfSight(simPos, tCell)):
+                                return False
+                            if (not isSimLaunchValid(chipObj._launchType, simPos, tCell)):
+                                return False
+                return True
+            else:
+                if (action.weaponId != (-1)):
+                    weaponCost = None
+                    weaponObj = None
+                    if mapContainsKey(self._arsenal.playerEquippedWeapons, action.weaponId):
+                        weaponObj = lw_get(self._arsenal.playerEquippedWeapons, action.weaponId)
+                        weaponCost = weaponObj._cost
+                    if (weaponCost == None):
+                        return False
+                    swapCost = (1 if ((simWeapon != action.weaponId)) else 0)
+                    if (simTP < lw_add(swapCost, weaponCost)):
+                        return False
+                    tCell = action.targetCell
+                    if (((tCell == (-1)) and (action.targetEntity != None)) and (action.targetEntity != (-1))):
+                        tCell = action.targetEntity._cellPos
+                    if ((tCell != (-1)) and (tCell != simPos)):
+                        dist = getCellDistance(simPos, tCell)
+                        if (((dist == None) or (dist < weaponObj._minRange)) or (dist > weaponObj._maxRange)):
+                            return False
+                        if (not lineOfSight(simPos, tCell)):
+                            return False
+                        if (not isSimLaunchValid(weaponObj._launchType, simPos, tCell)):
+                            return False
+                    return True
+        else:
+            if (action.type == Action.ACTION_WEAPON_SWAP):
+                if (not mapContainsKey(self._arsenal.playerEquippedWeapons, action.weaponId)):
+                    return False
+                return (simTP >= 1)
+            else:
+                if ((((((((action.type == Action.MOVEMENT_APPROACH) or (action.type == Action.MOVEMENT_OFFENSIVE)) or (action.type == Action.MOVEMENT_DEFENSIVE)) or (action.type == Action.MOVEMENT_OTKO)) or (action.type == Action.MOVEMENT_DOT_OFFENSIVE)) or (action.type == Action.MOVEMENT_DEBUFF)) or (action.type == Action.MOVEMENT_HNS)) or (action.type == Action.MOVEMENT_PAB)):
+                    pathLength = getCachedPathLength(simPos, action.targetCell)
+                    return ((pathLength != None) and (pathLength <= simMP))
+                else:
+                    if (action.type == Action.MOVEMENT_FLEE):
+                        return (simMP >= 1)
+                    else:
+                        if (action.type == Action.ACTION_SUMMON):
+                            if (action.chip == (-1)):
+                                return False
+                            summonCost = getChipCost(action.chip)
+                            return (simTP >= summonCost)
+                        else:
+                            if (action.type == Action.ACTION_TELEPORT):
+                                teleChip = (action.chip if ((action.chip != None) and (action.chip != (-1))) else CHIP_TELEPORTATION)
+                                tpCost = getChipCost(teleChip)
+                                return (simTP >= tpCost)
+        return True
+    
+    def estimateShieldAmount(self, chip, wisdom):
+        if (not isAbsoluteShieldChip(chip)):
+            return 0
+        if (chip == CHIP_HELMET):
+            return lw_add(50, lw_mul(wisdom, 0.5))
+        if (chip == CHIP_SHIELD):
+            return lw_add(100, lw_mul(wisdom, 1.0))
+        return 0
+    
+    def estimateRelativeShield(self, chip):
+        if (not isRelativeShieldChip(chip)):
+            return 0
+        resistance = self._player._resistance
+        scalingMultiplier = lw_add(1, (lw_div(resistance, 100.0)))
+        if (chip == CHIP_WALL):
+            basePercent = 4.5
+            return lw_mul(basePercent, scalingMultiplier)
+        if (chip == CHIP_FORTRESS):
+            basePercent = 7.5
+            return lw_mul(basePercent, scalingMultiplier)
+        if (chip == CHIP_PROTEIN):
+            return 10
+        return 0
+    
+    def estimateHealing(self, chip, wisdom):
+        if isHealingChip(chip):
+            return arsenal.getExpectedHeal(chip, wisdom)
+        return 0
+    
+    def estimateStrengthBuff(self, chip):
+        if (not isOffensiveBuff(chip)):
+            return 0
+        if (chip == CHIP_STEROID):
+            return 100
+        if (chip == CHIP_DOPING):
+            return 50
+        return 0
+    
+
+
+# ════════ ga_tunables.lk ════════
+GA_TUNE = {'killProbCoef': 3.0381183210680063, 'deathPenalty': 7054, 'dyingSoonPenalty': 1323, 'survivalMultLow': 51.092108551862765, 'survivalMultMid': 31.04915487017305, 'survivalMultHigh': 13.82705382327747, 'urgencyCap': 7.645344113845294, 'b5HoldPenalty': 302}
+
+# ════════ scenario_scorer.lk ════════
+# include: game_entity.lk (inlined by assembler)
+# include: cooldown_tracker.lk (inlined by assembler)
+# include: ga_tunables.lk (inlined by assembler)
+lw__inSurvivalMode = False
+lw__lastSurvivalHP = 0
+class ScenarioScorer:
+    def __init__(self, player, target, fieldMap, weights):
+        self._player = None
+        self._target = None
+        self._fieldMap = None
+        self._weights = None
+        self._enemyProfile = None
+        self._aliveEnemyIds = None
+        self._aliveEnemyCount = 0
+        self._cdTracker = None
+        self._envelopeOne = 0
+        self._envelopeTwo = 0
+        self._preContact = False
+        self._strikeWindowMitigation = 0
+        self._player = player
+        self._target = target
+        self._fieldMap = fieldMap
+        self._weights = (weights if (weights != None) else {})
+        self._enemyProfile = (getEnemyProfile(target._id) if ((target != None)) else None)
+        self._aliveEnemyIds = []
+        if (fieldMap != None):
+            eMap = fieldMap.getEnemySubMap()
+            for eid in lw_values(mapKeys(eMap)):
+                if (not isDead(eid)):
+                    push(self._aliveEnemyIds, eid)
+        self._aliveEnemyCount = count(self._aliveEnemyIds)
+        self._envelopeOne = 0
+        self._envelopeTwo = 0
+        if ((((self._enemyProfile != None) and (self._target != None)) and mapContainsKey(self._enemyProfile, 'maxReach')) and (lw_get(self._enemyProfile, 'maxReach') > 0)):
+            envMP = self._target._currMp
+            if ((envMP == None) or (envMP <= 0)):
+                envMP = 4
+            self._envelopeOne = lw_add(lw_get(self._enemyProfile, 'maxReach'), envMP)
+            self._envelopeTwo = lw_add(lw_get(self._enemyProfile, 'maxReach'), lw_mul(envMP, 2))
+        self._preContact = False
+        if (((((self._target != None) and (self._fieldMap != None)) and (not _isBossFight)) and (getTurn() <= 6)) and (not lw__timePressure)):
+            pcHit = False
+            for pcWid in lw_values(mapKeys(self._fieldMap.weaponHitmap)):
+                if (count(lw_get(self._fieldMap.weaponHitmap, pcWid)) > 0):
+                    pcHit = True
+                    break
+            if (not pcHit):
+                for pcCid in lw_values(mapKeys(self._fieldMap.chipHitmap)):
+                    if (count(lw_get(self._fieldMap.chipHitmap, pcCid)) > 0):
+                        pcHit = True
+                        break
+            if ((not pcHit) and (not predictEnemyCanAttackWithin(self._player._cellPos, self._target, 1))):
+                self._preContact = True
+        self._strikeWindowMitigation = 0
+        if ((self._target != None) and (not _isBossFight)):
+            b5Rel = getRelativeShield(self._target._id)
+            if ((b5Rel != None) and (b5Rel >= 25)):
+                b5RelRemain = self._target.getEffectRemaining(EFFECT_RELATIVE_SHIELD)
+                b5AbsRemain = self._target.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD)
+                if ((b5RelRemain <= 1) and (b5AbsRemain <= 1)):
+                    self._strikeWindowMitigation = b5Rel
+
+    def getWeight(self, key, defaultValue):
+        if mapContainsKey(self._weights, key):
+            return lw_get(self._weights, key)
+        return defaultValue
+    
+    def score(self, simResult, scenario):
+        if (_isBossFight and (_bossPhase == "PUZZLE")):
+            return self.scorePuzzle(simResult, scenario)
+        score = 0
+        enemyHP = self._target._currHealth
+        dotDmg = (simResult.dotDamageQueued if (simResult.dotDamageQueued != None) else 0)
+        novaDmg = (simResult.novaDamageQueued if (simResult.novaDamageQueued != None) else 0)
+        totalDamage = lw_add(lw_add(simResult.damageDealt, dotDmg), novaDmg)
+        meanRatio = lw_div(totalDamage, enemyHP)
+        killProbability = meanRatio
+        if (meanRatio >= 0.55):
+            burstMin = lw_add(simResult.damageDealtMin, simResult.novaDamageMin)
+            burstMax = lw_add(simResult.damageDealtMax, simResult.novaDamageMax)
+            burstMin = lw_add(burstMin, dotDmg)
+            burstMax = lw_add(burstMax, dotDmg)
+            if ((burstMax > burstMin) and (burstMax > 0)):
+                dmgMean = lw_div((lw_add(burstMin, burstMax)), 2.0)
+                dmgStd = lw_div((lw_sub(burstMax, burstMin)), 4.0)
+                if (dmgStd > 0.001):
+                    z = lw_div((lw_sub(enemyHP, dmgMean)), dmgStd)
+                    pKill = 0.5
+                    if (z <= (-2.0)):
+                        pKill = 0.98
+                    else:
+                        if (z <= (-1.28)):
+                            pKill = 0.90
+                        else:
+                            if (z <= (-0.84)):
+                                pKill = 0.80
+                            else:
+                                if (z <= (-0.52)):
+                                    pKill = 0.72
+                                else:
+                                    if (z <= (-0.25)):
+                                        pKill = 0.60
+                                    else:
+                                        if (z <= 0.0):
+                                            pKill = 0.50
+                                        else:
+                                            if (z <= 0.25):
+                                                pKill = 0.40
+                                            else:
+                                                if (z <= 0.52):
+                                                    pKill = 0.30
+                                                else:
+                                                    if (z <= 0.84):
+                                                        pKill = 0.20
+                                                    else:
+                                                        pKill = 0.10
+                    if (pKill > killProbability):
+                        killProbability = pKill
+        targetIsBulb = isBulb(self._target)
+        bulbType = (getBulbType(self._target) if targetIsBulb else BULB_TYPE_UNKNOWN)
+        isBattleRoyale = ((getFightType() == FIGHT_TYPE_BATTLE_ROYALE))
+        effectiveDamage = totalDamage
+        if (isBattleRoyale and (simResult.totalLobbyDamage > 0)):
+            effectiveDamage = simResult.totalLobbyDamage
+        bulbRaceState = "BULB_CLEAR"
+        if targetIsBulb:
+            enemies = self._fieldMap.getEnemySubMap()
+            summonerHP = 0
+            summonerEntity = None
+            for eid in lw_values(mapKeys(enemies)):
+                if ((not isDead(eid)) and (not isBulb(lw_get(enemies, eid)))):
+                    summonerHP = lw_get(enemies, eid)._currHealth
+                    summonerEntity = lw_get(enemies, eid)
+                    break
+            if (summonerHP > 0):
+                playerDPS = max(1, lw_add(self._player._strength, self._player._magic))
+                turnsToKill = lw_div(summonerHP, playerDPS)
+                playerPos = self._player._cellPos
+                enemyDPS = max(1, self._fieldMap.getThreatAtCell(playerPos))
+                bulbDamagePerTurn = 50
+                turnsTodie = lw_div(self._player._currHealth, (lw_add(enemyDPS, bulbDamagePerTurn)))
+                if (turnsToKill < turnsTodie):
+                    bulbRaceState = "RACE"
+                if ((bulbRaceState != "RACE") and (summonerEntity != None)):
+                    summonerDPT = lw_mul((lw_add(summonerEntity._strength, summonerEntity._magic)), 1.5)
+                    if (summonerDPT > lw_mul(enemyDPS, 0.5)):
+                        bulbRaceState = "RACE"
+        bulbDamageMultiplier = 1.0
+        if targetIsBulb:
+            if (bulbRaceState == "RACE"):
+                bulbDamageMultiplier = 0.3
+            else:
+                bulbDamageMultiplier = self.getWeight('bulbDamageMultiplier', 1.2)
+        damageWeight = self.getWeight('burstDamage', self.calculateDamageWeight())
+        enemyHasActiveReflect = self._target.hasDamageReturn()
+        enemyReflectTurns = self._target.getDamageReturnRemaining()
+        if ((enemyHasActiveReflect and (scenario != None)) and (count(scenario) > 0)):
+            attackActions = 0
+            for action in lw_values(scenario):
+                if (action.type == Action.ACTION_DIRECT):
+                    attackActions = lw_add(attackActions, 1)
+            if (attackActions > 0):
+                reflectPenalty = lw_mul(lw_mul(attackActions, damageWeight), 0.8)
+                score = lw_num(score) - lw_num(reflectPenalty)
+                if (enemyReflectTurns <= 1):
+                    score = lw_add(score, lw_mul(reflectPenalty, 0.5))
+        damageWeight = lw_num(damageWeight) * lw_num((lw_add(1.0, lw_mul(lw_mul(lw_get(GA_TUNE, 'killProbCoef'), killProbability), killProbability))))
+        if ((lw__playerBuildType != BUILD_MAGIC) and (lw__playerBuildType != BUILD_HYBRID)):
+            survivalHpPct = lw_div((lw_mul(self._player._currHealth, 100)), max(1, self._player._maxHealth))
+            enemyHPForRatio = max(1, self._target._currHealth)
+            dmgRatio = lw_div(lw_mul(effectiveDamage, 100), enemyHPForRatio)
+            finishingBurst = ((dmgRatio >= 35))
+            if (((not finishingBurst) and (survivalHpPct < 30)) and (killProbability < 0.30)):
+                damageWeight = lw_num(damageWeight) * lw_num(0.3)
+            else:
+                if (((not finishingBurst) and (survivalHpPct < 20)) and (killProbability < 0.50)):
+                    damageWeight = lw_num(damageWeight) * lw_num(0.2)
+        if ((((killProbability >= 0.85) and (killProbability < 1.1)) and (scenario != None)) and (count(scenario) > 0)):
+            buffCount = 0
+            attackCount = 0
+            for action in lw_values(scenario):
+                if (action.type == Action.ACTION_BUFF):
+                    buffCount = lw_add(buffCount, 1)
+                if ((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)):
+                    attackCount = lw_add(attackCount, 1)
+            if ((buffCount > 1) and (attackCount < 2)):
+                score = lw_num(score) - lw_num(lw_mul(800, buffCount))
+        damageScore = lw_mul(lw_mul(effectiveDamage, damageWeight), bulbDamageMultiplier)
+        score = lw_add(score, damageScore)
+        burstMin = lw_add(simResult.damageDealtMin, simResult.novaDamageMin)
+        burstMax = lw_add(simResult.damageDealtMax, simResult.novaDamageMax)
+        if ((burstMax > burstMin) and (burstMax > 0)):
+            hpPctRisk = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+            riskCoeff = 0.0
+            if (hpPctRisk < 40):
+                riskCoeff = 0.15
+            else:
+                if (hpPctRisk < 70):
+                    riskCoeff = 0.05
+            if (riskCoeff > 0):
+                burstMean = lw_div((lw_add(burstMin, burstMax)), 2.0)
+                if (burstMean > 0):
+                    varianceFrac = lw_div((lw_sub(burstMax, burstMin)), burstMean)
+                    variancePenalty = lw_mul(lw_mul(lw_mul(damageWeight, burstMean), varianceFrac), riskCoeff)
+                    score = lw_num(score) - lw_num(variancePenalty)
+        lifestealHealing = simResult.lifestealHealing
+        if (lifestealHealing > 0):
+            hpPercent = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+            lifestealMultiplier = 1.0
+            if (hpPercent < 50):
+                lifestealMultiplier = 2.0
+            else:
+                if (hpPercent < 70):
+                    lifestealMultiplier = 1.5
+            if ((((self._enemyProfile != None) and lw_get(self._enemyProfile, 'hasLifestealThreat')) and (self._target != None)) and (hpPercent < 70)):
+                lsFinalPos = simResult.finalPosition
+                if (lsFinalPos == (-1)):
+                    lsFinalPos = self._player._cellPos
+                lsDist = getCellDistance(lsFinalPos, self._target._cellPos)
+                if ((lsDist != None) and (lsDist <= 3)):
+                    lifestealMultiplier = 1.0
+            lifestealScore = lw_mul(lw_mul(lifestealHealing, lifestealMultiplier), 2.0)
+            score = lw_add(score, lifestealScore)
+        if (simResult.selfDamageHP > 0):
+            hpAfterSelf = lw_add(lw_sub(self._player._currHealth, simResult.selfDamageHP), simResult.lifestealHealing)
+            selfDmgPenalty = lw_mul(simResult.selfDamageHP, 3.0)
+            if (killProbability >= 0.95):
+                selfDmgPenalty = 0
+            else:
+                if (killProbability >= 0.85):
+                    selfDmgPenalty = lw_num(selfDmgPenalty) * lw_num(0.3)
+                else:
+                    selfDmgPenalty = lw_mul(simResult.selfDamageHP, 10.0)
+            if (hpAfterSelf <= 0):
+                selfDmgPenalty = lw_add(selfDmgPenalty, 50000)
+            else:
+                if (hpAfterSelf < lw_mul(self._player._maxHealth, 0.30)):
+                    selfDmgPenalty = lw_add(selfDmgPenalty, 5000)
+            score = lw_num(score) - lw_num(selfDmgPenalty)
+        bulbKillBonus = 0
+        if (targetIsBulb and (killProbability >= 0.70)):
+            if (bulbType == BULB_TYPE_HEALER):
+                bulbKillBonus = self.getWeight('bulbKillBonusHealer', 2500)
+            else:
+                if (bulbType == BULB_TYPE_BUFFER):
+                    bulbKillBonus = self.getWeight('bulbKillBonusBuffer', 1500)
+                else:
+                    if (bulbType == BULB_TYPE_ATTACKER):
+                        bulbKillBonus = self.getWeight('bulbKillBonusAttacker', 800)
+        score = lw_add(score, bulbKillBonus)
+        if (isBattleRoyale and (simResult.killsSecured > 0)):
+            lobbySizeBonus = lw_mul(simResult.killsSecured, 5000)
+            score = lw_add(score, lobbySizeBonus)
+        if (simResult.enemiesHit >= 2):
+            aoePerHit = (1000 if isBattleRoyale else self.getWeight('multiTargetBonus', 400))
+            aoeBonus = lw_mul((lw_sub(simResult.enemiesHit, 1)), aoePerHit)
+            score = lw_add(score, aoeBonus)
+        playerHPPercent = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+        if ((totalDamage == 0) and (playerHPPercent > 30)):
+            currentTurn = getTurn()
+            noDamagePenalty = self.getWeight('noDamagePenalty', (-2000))
+            earlyTurnSTRRelief = (((currentTurn <= 3) and (self._player._magic < 200)))
+            if (currentTurn >= 5):
+                t = lw_sub(currentTurn, 5)
+                turnScale = lw_add(1.0, lw_mul((lw_div(t, 8.0)), 1.5))
+                if (turnScale > 12.0):
+                    turnScale = 12.0
+                noDamagePenalty = lw_mul(noDamagePenalty, turnScale)
+            if (lw__zeroDamageStreak >= 2):
+                noDamagePenalty = lw_num(noDamagePenalty) - lw_num(5000)
+            hadReachableHit = False
+            for wid in lw_values(mapKeys(self._fieldMap.weaponHitmap)):
+                if (count(lw_get(self._fieldMap.weaponHitmap, wid)) > 0):
+                    hadReachableHit = True
+                    break
+            if (not hadReachableHit):
+                for cid in lw_values(mapKeys(self._fieldMap.chipHitmap)):
+                    if (count(lw_get(self._fieldMap.chipHitmap, cid)) > 0):
+                        hadReachableHit = True
+                        break
+            if hadReachableHit:
+                noDamagePenalty = lw_num(noDamagePenalty) * lw_num(3.0)
+                bestHitDamage = 0
+                for cellId in lw_values(mapKeys(self._fieldMap.damageMap)):
+                    cellObj = lw_get(self._fieldMap.damageMap, cellId)
+                    dmg = lw_add(cellObj._weaponDamage, cellObj._chipDamage)
+                    if (dmg > bestHitDamage):
+                        bestHitDamage = dmg
+                if (bestHitDamage > 500):
+                    noDamagePenalty = lw_num(noDamagePenalty) - lw_num(5000)
+                if ((self._target != None) and (getTurn() >= 3)):
+                    prTgtMag = self._target._magic
+                    prTgtStr = self._target._strength
+                    if (((((prTgtMag != None) and (prTgtStr != None)) and (prTgtMag >= 300)) and (prTgtStr < 150)) and (player._magic < 100)):
+                        noDamagePenalty = lw_num(noDamagePenalty) - lw_num(4000)
+            else:
+                if earlyTurnSTRRelief:
+                    buffTpRelief = 0
+                    if (simResult.buffsApplied != None):
+                        for bcR in lw_values(simResult.buffsApplied):
+                            buffTpRelief = lw_add(buffTpRelief, getCachedChipCost(bcR))
+                    if (buffTpRelief <= 8):
+                        noDamagePenalty = lw_div(noDamagePenalty, 4)
+            if ((((currentTurn <= 2) and (simResult.buffsApplied != None)) and (self._target != None)) and (self._player._magic < 200)):
+                buffTpFixB = 0
+                for bcFB in lw_values(simResult.buffsApplied):
+                    buffTpFixB = lw_add(buffTpFixB, getCachedChipCost(bcFB))
+                if (buffTpFixB >= 6):
+                    fixBCheckCell = simResult.finalPosition
+                    if (fixBCheckCell == (-1)):
+                        fixBCheckCell = self._player._cellPos
+                    fixBStartDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+                    fixBFinalDist = getCellDistance(fixBCheckCell, self._target._cellPos)
+                    fixBAdvanced = ((((fixBStartDist != None) and (fixBFinalDist != None)) and (fixBFinalDist < fixBStartDist)))
+                    if (fixBAdvanced and predictEnemyCanAttackWithin(fixBCheckCell, self._target, 2)):
+                        noDamagePenalty = lw_num(noDamagePenalty) - lw_num(lw_mul(1500, buffTpFixB))
+            finalPosNE = simResult.finalPosition
+            if (finalPosNE == (-1)):
+                finalPosNE = self._player._cellPos
+            distEndNE = getCellDistance(finalPosNE, self._target._cellPos)
+            if (distEndNE == None):
+                distEndNE = 99
+            maxWRNE = 0
+            for wIdNE in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                wObjNE = lw_get(arsenal.playerEquippedWeapons, wIdNE)
+                if ((wObjNE != None) and (wObjNE._maxRange > maxWRNE)):
+                    maxWRNE = wObjNE._maxRange
+            mpBudgetNE = getMP()
+            mpUsedNE = simResult.mpSpent
+            if ((distEndNE > lw_add(maxWRNE, mpBudgetNE)) and (mpUsedNE < lw_mul(mpBudgetNE, 0.6))):
+                noDamagePenalty = lw_num(noDamagePenalty) - lw_num(5000)
+            hasAttackAction = False
+            if (scenario != None):
+                for aSh in lw_values(scenario):
+                    if ((aSh.type == Action.ACTION_DIRECT) or (aSh.type == Action.ACTION_DOT)):
+                        hasAttackAction = True
+                        break
+                    if ((aSh.weaponId != (-1)) and (aSh.type != Action.ACTION_WEAPON_SWAP)):
+                        hasAttackAction = True
+                        break
+            if hasAttackAction:
+                noDamagePenalty = floor(lw_mul(noDamagePenalty, 0.25))
+                score = lw_add(score, 2000)
+            if (((currentTurn == 1) and (self._target != None)) and (simResult.buffsApplied != None)):
+                buffTpT1 = 0
+                for bcT1 in lw_values(simResult.buffsApplied):
+                    buffTpT1 = lw_add(buffTpT1, getCachedChipCost(bcT1))
+                if (buffTpT1 > 8):
+                    distT1 = getCellDistance(self._player._cellPos, self._target._cellPos)
+                    if (distT1 == None):
+                        distT1 = 99
+                    maxWRT1 = 0
+                    for wIdT1 in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                        wObjT1 = lw_get(arsenal.playerEquippedWeapons, wIdT1)
+                        if ((wObjT1 != None) and (wObjT1._maxRange > maxWRT1)):
+                            maxWRT1 = wObjT1._maxRange
+                    engageRangeT1 = lw_add(lw_add(maxWRT1, self._player._currMp), 2)
+                    if (distT1 <= engageRangeT1):
+                        noDamagePenalty = lw_num(noDamagePenalty) - lw_num(4000)
+            if ((self._target != None) and mapContainsKey(lw__engagementPlan, self._target._id)):
+                ePlanND = lw_get(lw__engagementPlan, self._target._id)
+                ePndFinal = simResult.finalPosition
+                if (ePndFinal == (-1)):
+                    ePndFinal = self._player._cellPos
+                ePndDist = getCellDistance(ePndFinal, self._target._cellPos)
+                if (((ePndDist != None) and (ePndDist >= lw_get(ePlanND, 'minDist'))) and (lw_get(ePlanND, 'mode') != 'rush_mage')):
+                    noDamagePenalty = floor(lw_mul(noDamagePenalty, 0.4))
+            if ((self._preContact and (lw__playerBuildType == BUILD_TANK_SCI)) and (self._target != None)):
+                b4Final = simResult.finalPosition
+                if (b4Final == (-1)):
+                    b4Final = self._player._cellPos
+                b4Start = getCellDistance(self._player._cellPos, self._target._cellPos)
+                b4End = getCellDistance(b4Final, self._target._cellPos)
+                if ((((b4Start != None) and (b4End != None)) and (b4End >= b4Start)) and (not predictEnemyCanAttackWithin(b4Final, self._target, 1))):
+                    noDamagePenalty = 0
+            score = lw_add(score, noDamagePenalty)
+        if (((((totalDamage > 0) and (self._target != None)) and (simResult.buffsApplied != None)) and (self._player._magic < 200)) and (playerHPPercent < 80)):
+            fixBLTurn = getTurn()
+            if ((fixBLTurn >= 3) and (fixBLTurn <= 5)):
+                buffTpFixBL = 0
+                for bcFBL in lw_values(simResult.buffsApplied):
+                    buffTpFixBL = lw_add(buffTpFixBL, getCachedChipCost(bcFBL))
+                if (buffTpFixBL >= 6):
+                    fixBLCheckCell = simResult.finalPosition
+                    if (fixBLCheckCell == (-1)):
+                        fixBLCheckCell = self._player._cellPos
+                    fixBLStartDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+                    fixBLFinalDist = getCellDistance(fixBLCheckCell, self._target._cellPos)
+                    fixBLHeld = ((((fixBLStartDist != None) and (fixBLFinalDist != None)) and (fixBLFinalDist <= fixBLStartDist)))
+                    if (fixBLHeld and predictEnemyCanAttackWithin(fixBLCheckCell, self._target, 1)):
+                        score = lw_num(score) - lw_num(lw_mul(500, buffTpFixBL))
+        planETurn = getTurn()
+        if (((((planETurn <= 2) and (self._target != None)) and (simResult.buffsApplied != None)) and mapContainsKey(lw__engagementPlan, self._target._id)) and (self._player._magic < 200)):
+            buffTpPlanE = 0
+            for bcPE in lw_values(simResult.buffsApplied):
+                buffTpPlanE = lw_add(buffTpPlanE, getCachedChipCost(bcPE))
+            if (buffTpPlanE >= 6):
+                extraBuffTp = lw_sub(buffTpPlanE, 4)
+                score = lw_num(score) - lw_num(lw_mul(1500, extraBuffTp))
+        if (((((planETurn >= 3) and (self._target != None)) and (simResult.buffsApplied != None)) and mapContainsKey(lw__engagementPlan, self._target._id)) and (self._player._magic < 200)):
+            tpDeferPenalty = 0
+            for bcDF in lw_values(simResult.buffsApplied):
+                if (((bcDF == 15) or (bcDF == 174)) or (bcDF == 34)):
+                    tpDeferPenalty = lw_add(tpDeferPenalty, 800)
+            if (tpDeferPenalty > 1600):
+                tpDeferPenalty = 1600
+            score = lw_num(score) - lw_num(tpDeferPenalty)
+        dotWeight = self.getWeight('dotEffects', self.calculateDotWeight())
+        antidoteMultiplier = self.calculateAntidoteMultiplier()
+        adjustedDotWeight = lw_mul(dotWeight, antidoteMultiplier)
+        dotScore = lw_mul(simResult.dotDamageQueued, adjustedDotWeight)
+        score = lw_add(score, dotScore)
+        if ((simResult.poisonTurnsQueued > 0) and (simResult.poisonSourcesUsed > 0)):
+            avgDuration = lw_div(simResult.poisonTurnsQueued, simResult.poisonSourcesUsed)
+            durationFactor = min(3.0, lw_div(avgDuration, 2.0))
+            lifetimeBonus = lw_mul(lw_mul(lw_mul(simResult.dotDamageQueued, adjustedDotWeight), 0.15), durationFactor)
+            score = lw_add(score, lifetimeBonus)
+        poisonStackWeight = self.getWeight('poisonStacks', 0)
+        if ((poisonStackWeight > 0) and (simResult.poisonSourcesUsed > 1)):
+            stackBonus = lw_mul(lw_mul((lw_sub(simResult.poisonSourcesUsed, 1)), poisonStackWeight), 0.5)
+            score = lw_add(score, stackBonus)
+        novaWeight = self.getWeight('novaEffects', lw_div((lw_add(dotWeight, damageWeight)), 2.0))
+        novaDamageQueued = (simResult.novaDamageQueued if (simResult.novaDamageQueued != None) else 0)
+        novaScore = lw_mul(novaDamageQueued, novaWeight)
+        score = lw_add(score, novaScore)
+        if (simResult.erosionDamage > 0):
+            currentTurnE = getTurn()
+            erosionWeight = lw_add(2.0, max(0, lw_mul((lw_sub(currentTurnE, 5)), 0.3)))
+            if (erosionWeight > 5.0):
+                erosionWeight = 5.0
+            if lw__timePressure:
+                erosionWeight = lw_num(erosionWeight) * lw_num(1.5)
+            targetProfile = self._enemyProfile
+            if ((targetProfile != None) and lw_get(targetProfile, 'isTank')):
+                erosionWeight = lw_num(erosionWeight) * lw_num(1.4)
+            score = lw_add(score, lw_mul(simResult.erosionDamage, erosionWeight))
+        if (lw__timePressure and (simResult.dotDamageQueued > 0)):
+            score = lw_add(score, lw_mul(simResult.dotDamageQueued, 0.5))
+        ehpWeight = self.calculateEhpWeight()
+        shieldValueWeight = self.getWeight('shieldValue', 0)
+        if (shieldValueWeight > 100):
+            ehpWeight = lw_num(ehpWeight) * lw_num((lw_add(1.0, lw_div((lw_sub(shieldValueWeight, 100)), 400.0))))
+        shieldScore = lw_mul(simResult.shieldsGained, ehpWeight)
+        relShieldScore = lw_mul(self.calculateRelativeShieldValue(simResult.relativeShieldGained), ehpWeight)
+        if (((self._enemyProfile != None) and lw_get(self._enemyProfile, 'isKiter')) and (lw_get(self._enemyProfile, 'kiterFlavor') == 'magic_poison')):
+            shieldScore = lw_num(shieldScore) * lw_num(0.1)
+            relShieldScore = lw_num(relShieldScore) * lw_num(0.1)
+        wisdom = self._player._wisdom
+        wisdomMultiplier = 1.0
+        if (wisdom < 200):
+            wisdomMultiplier = 0.5
+        else:
+            if (wisdom < 400):
+                wisdomMultiplier = 0.75
+        healScore = lw_mul(lw_mul(simResult.hpGained, ehpWeight), wisdomMultiplier)
+        currentHP = self._player._currHealth
+        maxHP = self._player._maxHealth
+        hpRatio = lw_div(currentHP, maxHP)
+        healingUrgencyBonus = 0
+        if (simResult.hpGained > 0):
+            if (hpRatio < 0.3):
+                healingUrgencyBonus = lw_mul(lw_mul(simResult.hpGained, 3.0), wisdomMultiplier)
+            else:
+                if (hpRatio < 0.5):
+                    healingUrgencyBonus = lw_mul(lw_mul(simResult.hpGained, 1.5), wisdomMultiplier)
+                else:
+                    if (hpRatio < 0.8):
+                        healingUrgencyBonus = lw_mul(lw_mul(simResult.hpGained, 0.5), wisdomMultiplier)
+        score = lw_add(score, lw_add(lw_add(lw_add(shieldScore, relShieldScore), healScore), healingUrgencyBonus))
+        allySupportWeight = self.getWeight('allySupport', 0)
+        if ((allySupportWeight > 0) and ((((simResult.allyHpGained > 0) or (simResult.allyShieldsGained > 0)) or (simResult.allyBuffCount > 0)))):
+            allyScore = lw_add(lw_add(lw_mul(simResult.allyHpGained, 1.2), lw_mul(simResult.allyShieldsGained, 1.0)), lw_mul(simResult.allyBuffCount, 150))
+            score = lw_add(score, lw_mul(allyScore, (lw_div(allySupportWeight, 100.0))))
+        positionWeight = self.calculatePositionWeight()
+        positionScore = lw_mul(self.evaluatePosition(simResult.finalPosition, simResult), positionWeight)
+        score = lw_add(score, positionScore)
+        if ((lw__nearestFireTurn >= 2) and (simResult.finalPosition != (-1))):
+            startDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+            finalDist = getCellDistance(simResult.finalPosition, self._target._cellPos)
+            if ((startDist != None) and (finalDist != None)):
+                closedCells = lw_sub(startDist, finalDist)
+                if (closedCells >= 1):
+                    closingBonus = min(600, lw_mul(closedCells, 150))
+                    score = lw_add(score, closingBonus)
+        score = lw_add(score, self.evaluateHerding(simResult.finalPosition))
+        score = lw_add(score, self.evaluateHideDenial(simResult.finalPosition))
+        adversarialThreat = 0
+        if lw__adversarialThreatCacheBuilt:
+            evalCell = simResult.finalPosition
+            if (evalCell == (-1)):
+                evalCell = self._player._cellPos
+            adversarialThreat = getAdversarialThreat(evalCell)
+        if (adversarialThreat > 0):
+            effectiveHP = lw_add(lw_add(self._player._currHealth, simResult.hpGained), simResult.shieldsGained)
+            relShieldReduction = lw_div(simResult.relativeShieldGained, 100.0)
+            effectiveEnemyDmg = lw_mul(adversarialThreat, (lw_sub(1.0, relShieldReduction)))
+            survivalAfterEnemy = lw_sub(effectiveHP, effectiveEnemyDmg)
+            dies = ((survivalAfterEnemy <= 0))
+            dyingSoon = ((survivalAfterEnemy < lw_mul(self._player._maxHealth, 0.25)))
+            deathPenalty = 0
+            if dies:
+                deathPenalty = lw_get(GA_TUNE, 'deathPenalty')
+            else:
+                if dyingSoon:
+                    deathPenalty = lw_get(GA_TUNE, 'dyingSoonPenalty')
+            phaseJHasAttack = False
+            if (scenario != None):
+                for aPJ in lw_values(scenario):
+                    if ((aPJ.type == Action.ACTION_DIRECT) or (aPJ.type == Action.ACTION_DOT)):
+                        phaseJHasAttack = True
+                        break
+                    if ((aPJ.weaponId != (-1)) and (aPJ.type != Action.ACTION_WEAPON_SWAP)):
+                        phaseJHasAttack = True
+                        break
+            if ((((deathPenalty > 0) and (self._enemyProfile != None)) and lw_get(self._enemyProfile, 'isKiter')) and ((((simResult.damageDealt > 0) or (simResult.dotDamageQueued > 0)) or phaseJHasAttack))):
+                pEffsK = getEffects(self._player._id)
+                pDoTK = 0
+                if (pEffsK != None):
+                    for peK in lw_values(pEffsK):
+                        if ((lw_get(peK, 0) == EFFECT_POISON) and (count(peK) >= 2)):
+                            dvK = lw_get(peK, 1)
+                            drK = (lw_get(peK, 3) if ((count(peK) >= 4)) else 1)
+                            pDoTK = lw_add(pDoTK, lw_mul(dvK, max(1, drK)))
+                if (pDoTK >= lw_mul(self._player._maxHealth, 0.10)):
+                    deathPenalty = floor(lw_mul(deathPenalty, 0.5))
+            score = lw_num(score) - lw_num(deathPenalty)
+            threatWeight = lw_div(self.getWeight('threatReduction', 40), 100.0)
+            score = lw_num(score) - lw_num(lw_mul(adversarialThreat, threatWeight))
+            if (adversarialThreat > 300):
+                score = lw_add(score, lw_mul((lw_add(simResult.hpGained, simResult.shieldsGained)), (lw_div(adversarialThreat, 1000.0))))
+        efficiencyWeight = self.getWeight('tpEfficiency', self.calculateEfficiencyWeight())
+        efficiencyScore = lw_mul(self.calculateEfficiency(simResult), efficiencyWeight)
+        score = lw_add(score, efficiencyScore)
+        if ((((self._strikeWindowMitigation > 0) and (scenario != None)) and (self._target != None)) and (simResult.damageDealt < lw_mul(self._target._currHealth, 0.5))):
+            b5ChipHolds = 0
+            for b5a in lw_values(scenario):
+                if (((b5a.chip != (-1)) and (b5a.weaponId == (-1))) and (((b5a.type == Action.ACTION_DIRECT) or (b5a.type == Action.ACTION_DOT)))):
+                    b5cd = getChipCooldown(b5a.chip)
+                    if ((b5cd != None) and (b5cd >= 2)):
+                        b5ChipHolds = lw_add(b5ChipHolds, 1)
+            if (b5ChipHolds > 0):
+                score = lw_num(score) - lw_num(lw_mul(lw_mul(b5ChipHolds, lw_get(GA_TUNE, 'b5HoldPenalty')), (lw_div(self._strikeWindowMitigation, 100.0))))
+        buffWeight = self.getWeight('buffs', self.calculateBuffWeight())
+        buffScore = lw_mul(self.evaluateBuffs(simResult.buffsApplied, simResult), buffWeight)
+        debuffScore = lw_mul(self.evaluateDebuffs(simResult.debuffsApplied), buffWeight)
+        score = lw_add(score, lw_add(buffScore, debuffScore))
+        if (simResult.denialApplied > 0):
+            enemyTP = max(1, self._target._currTp)
+            denialRatio = min(1.0, lw_div(simResult.denialApplied, enemyTP))
+            enemyBestDPT = lw_mul(max(1, lw_add(self._target._strength, self._target._magic)), 1.5)
+            denialValue = lw_mul(lw_mul(denialRatio, enemyBestDPT), 1.63)
+            if (denialRatio > 0.5):
+                denialValue = lw_num(denialValue) * lw_num(1.5)
+            denialWeight = self.getWeight('denialValue', 100)
+            denialValue = lw_num(denialValue) * lw_num((lw_div(denialWeight, 100.0)))
+            score = lw_add(score, denialValue)
+        mpTempoWeight = self.getWeight('mpDenialTempo', 0)
+        if (((mpTempoWeight > 0) and (simResult.mpDenialApplied > 0)) and (self._envelopeOne > 0)):
+            b3Pos = simResult.finalPosition
+            if (b3Pos == (-1)):
+                b3Pos = self._player._cellPos
+            b3Dist = getCellDistance(b3Pos, self._target._cellPos)
+            if ((b3Dist != None) and (b3Dist > lw_sub(self._envelopeOne, simResult.mpDenialApplied))):
+                b3EnemyMP = max(1, self._target._currMp)
+                b3Ratio = min(1.0, lw_div(simResult.mpDenialApplied, b3EnemyMP))
+                b3AvoidedDmg = lw_mul(max(1, lw_add(self._target._strength, self._target._magic)), 1.5)
+                b3Value = lw_mul(lw_mul(lw_mul(b3Ratio, b3AvoidedDmg), 1.2), (lw_div(mpTempoWeight, 100.0)))
+                if (b3Value > 2500):
+                    b3Value = 2500
+                score = lw_add(score, b3Value)
+        if (simResult.strShackled > 0):
+            enemyStr = max(1, self._target._strength)
+            reductionRatio = min(1.0, lw_div(simResult.strShackled, enemyStr))
+            enemyDPT = lw_mul(enemyStr, 1.5)
+            statReduceValue = lw_mul(lw_mul(reductionRatio, enemyDPT), 1.09)
+            score = lw_add(score, statReduceValue)
+        if (simResult.magShackled > 0):
+            enemyMag = max(1, self._target._magic)
+            reductionRatio = min(1.0, lw_div(simResult.magShackled, enemyMag))
+            enemyMagDPT = lw_mul(enemyMag, 1.5)
+            statReduceValue = lw_mul(lw_mul(reductionRatio, enemyMagDPT), 1.09)
+            score = lw_add(score, statReduceValue)
+        if (simResult.vulnerabilityApplied > 0):
+            vulnPercent = lw_div(simResult.vulnerabilityApplied, 100.0)
+            remainingTP = max(0, lw_sub(getTP(), simResult.tpSpent))
+            estimatedFutureDamage = lw_mul(remainingTP, 100)
+            vulnValue = lw_mul(lw_mul(estimatedFutureDamage, vulnPercent), 2.0)
+            targetProfile2 = self._enemyProfile
+            if ((targetProfile2 != None) and lw_get(targetProfile2, 'isTank')):
+                vulnValue = lw_num(vulnValue) * lw_num(2.0)
+            score = lw_add(score, lw_mul(vulnValue, (lw_div(self.getWeight('burstDamage', 200), 200.0))))
+        critBonus = self.calculateCritBonus(simResult.damageDealt, simResult.buffsApplied)
+        score = lw_add(score, critBonus)
+        otkoBonus = 0
+        finalPos = simResult.finalPosition
+        if ((finalPos != (-1)) and mapContainsKey(self._fieldMap.damageMap, finalPos)):
+            cell = lw_get(self._fieldMap.damageMap, finalPos)
+            if cell._isOTKOCell:
+                otkoBonus = self.getWeight('otkoBonus', 5000)
+        score = lw_add(score, otkoBonus)
+        checkpointBonus = 0
+        poisonDumpBonus = 0
+        if ((scenario != None) and (count(scenario) > 0)):
+            for action in lw_values(scenario):
+                if (action.type == 15):
+                    if (action.checkpointType == "POISON_DUMP"):
+                        poisonDumpBonus = 10000
+                    else:
+                        if (action.checkpointType == "POISON_BAIT"):
+                            checkpointBonus = 6000
+                        else:
+                            if (action.checkpointType == "BAIT_ANCHOR"):
+                                checkpointBonus = 6000
+                            else:
+                                checkpointBonus = self.getWeight('checkpointBonus', 2500)
+                    break
+        score = lw_add(score, lw_add(checkpointBonus, poisonDumpBonus))
+        synergyBonus = self.evaluateSynergyBonus(scenario)
+        score = lw_add(score, synergyBonus)
+        continuationScore = self.evaluateContinuationValue(simResult, scenario)
+        score = lw_add(score, continuationScore)
+        sFinalPos = simResult.finalPosition
+        if ((sFinalPos != (-1)) and (sFinalPos != self._player._cellPos)):
+            sEnemyProf = getEnemyProfile(self._target._id)
+            if ((sEnemyProf != None) and lw_get(sEnemyProf, 'isKiter')):
+                sFx = getCellX(sFinalPos)
+                sFy = getCellY(sFinalPos)
+                sWalk = 0
+                sN1 = getCellFromXY(lw_add(sFx, 1), sFy)
+                if (((sN1 != None) and (sN1 != (-1))) and (getCellContent(sN1) == CELL_EMPTY)):
+                    sWalk = lw_add(sWalk, 1)
+                sN2 = getCellFromXY(lw_sub(sFx, 1), sFy)
+                if (((sN2 != None) and (sN2 != (-1))) and (getCellContent(sN2) == CELL_EMPTY)):
+                    sWalk = lw_add(sWalk, 1)
+                sN3 = getCellFromXY(sFx, lw_add(sFy, 1))
+                if (((sN3 != None) and (sN3 != (-1))) and (getCellContent(sN3) == CELL_EMPTY)):
+                    sWalk = lw_add(sWalk, 1)
+                sN4 = getCellFromXY(sFx, lw_sub(sFy, 1))
+                if (((sN4 != None) and (sN4 != (-1))) and (getCellContent(sN4) == CELL_EMPTY)):
+                    sWalk = lw_add(sWalk, 1)
+                sIsMagicPoison = ((lw_get(sEnemyProf, 'kiterFlavor') == 'magic_poison'))
+                sPenalty = 0
+                if sIsMagicPoison:
+                    if (sWalk == 0):
+                        sPenalty = 45000
+                    else:
+                        if (sWalk == 1):
+                            sPenalty = 30000
+                        else:
+                            if (sWalk == 2):
+                                sPenalty = 22000
+                else:
+                    if (sWalk == 0):
+                        sPenalty = 12000
+                    else:
+                        if (sWalk == 1):
+                            sPenalty = 6000
+                        else:
+                            if (sWalk == 2):
+                                sPenalty = 2000
+                score = lw_num(score) - lw_num(sPenalty)
+        destroyerBonus = 0
+        if (((scenario != None) and (count(scenario) > 0)) and (self._target._strength > 150)):
+            destroyerUses = 0
+            for action in lw_values(scenario):
+                if (action.weaponId == WEAPON_DESTROYER):
+                    destroyerUses = lw_add(destroyerUses, 1)
+            if (destroyerUses > 0):
+                destroyerBonus = lw_mul(destroyerUses, 400)
+        score = lw_add(score, destroyerBonus)
+        centerPenalty = 0
+        if isBattleRoyale:
+            aliveEnemies = getAliveEnemies()
+            enemyCount = count(aliveEnemies)
+            if (enemyCount > 4):
+                centerCell = getCellFromXY(9, 9)
+                if ((centerCell != None) and (simResult.finalPosition != (-1))):
+                    currentDistToCenter = getCellDistance(self._player._cellPos, centerCell)
+                    finalDistToCenter = getCellDistance(simResult.finalPosition, centerCell)
+                    if ((finalDistToCenter != None) and (currentDistToCenter != None)):
+                        if (finalDistToCenter < currentDistToCenter):
+                            movementTowardCenter = lw_sub(currentDistToCenter, finalDistToCenter)
+                            centerPenalty = lw_mul(movementTowardCenter, 150)
+                score = lw_num(score) - lw_num(centerPenalty)
+        survivalMultiplier = 1.0
+        if (simResult.hpGained > 0):
+            playerPos = self._player._cellPos
+            threatAtPos = self._fieldMap.getThreatAtCell(playerPos)
+            hasShield = (self._player.hasEffect(EFFECT_ABSOLUTE_SHIELD) or self._player.hasEffect(EFFECT_RELATIVE_SHIELD))
+            if ((hpRatio < 0.45) and (((threatAtPos > 800) or (not hasShield)))):
+                if (hpRatio < 0.30):
+                    survivalMultiplier = lw_get(GA_TUNE, 'survivalMultLow')
+                else:
+                    if (hpRatio < 0.40):
+                        survivalMultiplier = lw_get(GA_TUNE, 'survivalMultMid')
+                    else:
+                        survivalMultiplier = lw_get(GA_TUNE, 'survivalMultHigh')
+        score = lw_num(score) * lw_num(survivalMultiplier)
+        if lw__timePressure:
+            currentTurn = getTurn()
+            turnsRemaining = lw_sub(64, currentTurn)
+            urgencyFactor = 1.0
+            if (currentTurn > 50):
+                urgencyFactor = lw_add(6.3, lw_mul((lw_sub(currentTurn, 50)), 0.15))
+                if (urgencyFactor > lw_get(GA_TUNE, 'urgencyCap')):
+                    urgencyFactor = lw_get(GA_TUNE, 'urgencyCap')
+            else:
+                if (currentTurn > 30):
+                    urgencyFactor = lw_add(3.3, lw_mul((lw_sub(currentTurn, 30)), 0.15))
+                else:
+                    if (currentTurn > 15):
+                        urgencyFactor = lw_add(1.8, lw_mul((lw_sub(currentTurn, 15)), 0.10))
+                    else:
+                        if (currentTurn > 5):
+                            urgencyFactor = lw_add(1.0, lw_mul((lw_sub(currentTurn, 5)), 0.12))
+            dotDmgTP = (simResult.dotDamageQueued if (simResult.dotDamageQueued != None) else 0)
+            novaDmgTP = (simResult.novaDamageQueued if (simResult.novaDamageQueued != None) else 0)
+            totalDmgTP = lw_add(lw_add(simResult.damageDealt, dotDmgTP), novaDmgTP)
+            score = lw_add(score, lw_mul(lw_mul(totalDmgTP, (lw_sub(urgencyFactor, 1.0))), damageWeight))
+            if ((currentTurn > 20) or (turnsRemaining < 30)):
+                if (novaDmgTP > 0):
+                    score = lw_add(score, lw_mul(novaDmgTP, 5.0))
+                if (simResult.denialApplied > 0):
+                    score = lw_add(score, 500)
+        return score
+    
+    def calculateDamageWeight(self):
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if ((str > mag) and (str > agi)):
+            return lw_add(3.0, (lw_div(str, 500.0)))
+        else:
+            if ((mag > str) and (mag > agi)):
+                return lw_add(1.6, (lw_div(mag, 1000.0)))
+            else:
+                if ((agi > str) and (agi > mag)):
+                    return lw_add(2.6, (lw_div(agi, 750.0)))
+        return 2.0
+    
+    def calculateDotWeight(self):
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if ((mag > str) and (mag > agi)):
+            return lw_add(2.0, (lw_div(mag, 1000.0)))
+        return 0.3
+    
+    def calculateAntidoteMultiplier(self):
+        enemyId = self._target._id
+        if (self._cdTracker == None):
+            self._cdTracker = CooldownTracker(self._target)
+        tracker = self._cdTracker
+        antidoteCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_ANTIDOTE_ID)
+        cureCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_CURE_ID)
+        remissionCd = tracker.getCooldownRemaining(enemyId, CooldownTracker.CHIP_REMISSION_ID)
+        if (antidoteCd < 0):
+            liveCd = getCooldown(CHIP_ANTIDOTE, enemyId)
+            if ((liveCd != None) and (liveCd >= 0)):
+                antidoteCd = liveCd
+        bestCleanseCd = antidoteCd
+        if ((cureCd >= 0) and (((bestCleanseCd < 0) or (cureCd < bestCleanseCd)))):
+            bestCleanseCd = cureCd
+        if ((remissionCd >= 0) and (((bestCleanseCd < 0) or (remissionCd < bestCleanseCd)))):
+            bestCleanseCd = remissionCd
+        if (bestCleanseCd == 0):
+            if (POISON_PHASE == "BAIT"):
+                return 0.7
+            if (POISON_PHASE == "DUMP"):
+                return 0.55
+            return 0.4
+        else:
+            if (bestCleanseCd == 1):
+                return 1.7
+            else:
+                if (bestCleanseCd == 2):
+                    return 1.9
+                else:
+                    if (bestCleanseCd >= 3):
+                        return lw_add(2.1, (lw_mul(bestCleanseCd, 0.2)))
+        return 1.0
+    
+    def calculateEhpWeight(self):
+        resistance = self._player._resistance
+        wisdom = self._player._wisdom
+        currentHP = self._player._currHealth
+        maxHP = self._player._maxHealth
+        hpRatio = lw_div(currentHP, maxHP)
+        urgencyMultiplier = 1.0
+        if (hpRatio < 0.3):
+            urgencyMultiplier = 5.0
+        else:
+            if (hpRatio < 0.5):
+                urgencyMultiplier = 3.5
+            else:
+                if (hpRatio < 0.7):
+                    urgencyMultiplier = 2.0
+                else:
+                    if (hpRatio < 0.8):
+                        urgencyMultiplier = 1.3
+        baseWeight = lw_add(lw_add(0.5, (lw_div(resistance, 500.0))), (lw_div(wisdom, 1000.0)))
+        knowledgeActive = ((getCooldown(CHIP_KNOWLEDGE, self._player._id) > 0))
+        elevationActive = ((getCooldown(CHIP_ELEVATION, self._player._id) > 0))
+        if (knowledgeActive or elevationActive):
+            baseWeight = lw_num(baseWeight) * lw_num(1.5)
+        playerPos = self._player._cellPos
+        threatAtPos = self._fieldMap.getThreatAtCell(playerPos)
+        if (threatAtPos > 200):
+            urgencyMultiplier = lw_num(urgencyMultiplier) * lw_num(1.5)
+        return lw_mul(baseWeight, urgencyMultiplier)
+    
+    def calculatePositionWeight(self):
+        agi = self._player._agility
+        str = self._player._strength
+        mag = self._player._magic
+        if ((agi > str) and (agi > mag)):
+            return lw_add(0.8, (lw_div(agi, 1000.0)))
+        else:
+            if ((mag > str) and (mag > agi)):
+                return lw_add(0.5, (lw_div(mag, 2000.0)))
+        return 0.2
+    
+    def calculateEfficiencyWeight(self):
+        currentHP = self._player._currHealth
+        maxHP = self._player._maxHealth
+        targetHP = self._target._currHealth
+        fightLengthEstimate = lw_div(targetHP, max(1, lw_add(self._player._strength, self._player._magic)))
+        return min(1.2, lw_add(0.15, lw_mul(fightLengthEstimate, 0.07)))
+    
+    def calculateBuffWeight(self):
+        return 2.0
+    
+    def evaluatePosition(self, finalPos, simResult=None):
+        if ((finalPos == (-1)) or (finalPos == self._player._cellPos)):
+            return 0
+        offensiveValue = 0
+        if mapContainsKey(self._fieldMap.damageMap, finalPos):
+            cellObj = lw_get(self._fieldMap.damageMap, finalPos)
+            offensiveValue = cellObj._totalDamage
+        if ((simResult != None) and (offensiveValue > 0)):
+            firedAnything = (((simResult.damageDealt > 0) or (simResult.dotDamageQueued > 0)))
+            if ((not firedAnything) and (self._target != None)):
+                startD = getCellDistance(self._player._cellPos, self._target._cellPos)
+                endD = getCellDistance(finalPos, self._target._cellPos)
+                if (((startD != None) and (endD != None)) and (endD < startD)):
+                    offensiveValue = 0
+        if ((((offensiveValue > 0) and (self._enemyProfile != None)) and lw_get(self._enemyProfile, 'hasLifestealThreat')) and (self._target != None)):
+            offDist = getCellDistance(finalPos, self._target._cellPos)
+            if ((offDist != None) and (offDist <= 3)):
+                offensiveValue = lw_mul(offensiveValue, 0.6)
+        distToTarget = getCellDistance(finalPos, self._target._cellPos)
+        kitingValue = 0
+        if (distToTarget != None):
+            outOfRange = ((count(mapKeys(self._fieldMap.damageMap)) == 0))
+            if outOfRange:
+                currentDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+                b4Defensive = ((lw__playerBuildType == BUILD_TANK_SCI))
+                b4Closer = (((self._enemyProfile != None) and ((lw_get(self._enemyProfile, 'isBurstBuild') or lw_get(self._enemyProfile, 'hasLifestealThreat')))))
+                if (((self._preContact and b4Defensive) and b4Closer) and (currentDist != None)):
+                    kitingValue = lw_mul((lw_sub(distToTarget, currentDist)), 60)
+                    if ((self._envelopeTwo > 0) and (distToTarget > self._envelopeTwo)):
+                        kitingValue = lw_add(kitingValue, 400)
+                else:
+                    if ((currentDist != None) and (distToTarget < currentDist)):
+                        kitingValue = lw_mul((lw_sub(currentDist, distToTarget)), 50)
+            else:
+                if (self._player._magic > self._player._strength):
+                    if (self._envelopeOne > 0):
+                        if (distToTarget > self._envelopeTwo):
+                            kitingValue = 900
+                        else:
+                            if (distToTarget > self._envelopeOne):
+                                kitingValue = lw_add(650, lw_mul((lw_sub(distToTarget, self._envelopeOne)), 30))
+                            else:
+                                kitingValue = lw_mul(distToTarget, 5)
+                    else:
+                        kitingValue = lw_mul(distToTarget, 10)
+                else:
+                    if ((((lw__playerBuildType == BUILD_TANK_SCI) and (self._enemyProfile != None)) and lw_get(self._enemyProfile, 'isBurstBuild')) and (self._envelopeOne > 0)):
+                        if (distToTarget > self._envelopeTwo):
+                            kitingValue = 700
+                        else:
+                            if (distToTarget > self._envelopeOne):
+                                kitingValue = lw_add(500, lw_mul((lw_sub(distToTarget, self._envelopeOne)), 20))
+                            else:
+                                kitingValue = lw_mul(distToTarget, 5)
+                    else:
+                        if ((self._enemyProfile != None) and lw_get(self._enemyProfile, 'hasLifestealThreat')):
+                            bruiserMag = 1.0
+                            if (self._target != None):
+                                brSum = lw_add(self._target._strength, self._target._wisdom)
+                                bruiserMag = max(1.0, min(2.5, lw_div(brSum, 500.0)))
+                            if ((distToTarget >= 6) and (distToTarget <= 9)):
+                                kitingValue = lw_mul(lw_mul(distToTarget, 60), bruiserMag)
+                            else:
+                                if (distToTarget >= 4):
+                                    kitingValue = lw_mul(lw_mul(distToTarget, 25), bruiserMag)
+                                else:
+                                    kitingValue = lw_mul(lw_mul((-300), bruiserMag), (lw_sub(4, distToTarget)))
+                        else:
+                            kitingValue = lw_mul(max(0, (lw_sub(10, distToTarget))), 10)
+        if (((self._target != None) and (distToTarget != None)) and mapContainsKey(lw__engagementPlan, self._target._id)):
+            ePlan = lw_get(lw__engagementPlan, self._target._id)
+            ePMinD = lw_get(ePlan, 'minDist')
+            ePMaxD = lw_get(ePlan, 'maxDist')
+            if ((distToTarget >= ePMinD) and (distToTarget <= ePMaxD)):
+                kitingValue = lw_add(kitingValue, 2500)
+            else:
+                if (distToTarget < ePMinD):
+                    gap = lw_sub(ePMinD, distToTarget)
+                    kitingValue = lw_num(kitingValue) - lw_num(lw_mul(1500, gap))
+                else:
+                    ePStartDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+                    if ((ePStartDist != None) and (ePStartDist > ePMaxD)):
+                        ePStartGap = lw_sub(ePStartDist, ePMaxD)
+                        ePFinalGap = lw_sub(distToTarget, ePMaxD)
+                        if (ePFinalGap < ePStartGap):
+                            ePGapClosed = lw_sub(ePStartGap, ePFinalGap)
+                            ePApproachBonus = min(1800, lw_mul(500, ePGapClosed))
+                            kitingValue = lw_add(kitingValue, ePApproachBonus)
+        threatPenalty = 0
+        threatAtPos = self._fieldMap.getThreatAtCell(finalPos)
+        hpPercent = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+        if (threatAtPos > 0):
+            threatPenalty = lw_mul((-lw_num(threatAtPos)), 0.5)
+            if (hpPercent < 50):
+                threatPenalty = lw_num(threatPenalty) * lw_num(2.0)
+            hasDamageReturn = self._player.hasDamageReturn()
+            if (hasDamageReturn and (self._player._agility > 400)):
+                threatPenalty = lw_num(threatPenalty) * lw_num(0.3)
+            if (((self._enemyProfile != None) and lw_get(self._enemyProfile, 'hasLifestealThreat')) and (self._target != None)):
+                sustDist = getCellDistance(finalPos, self._target._cellPos)
+                if ((sustDist != None) and (sustDist <= 4)):
+                    threatPenalty = lw_num(threatPenalty) * lw_num(1.6)
+        coverBonus = 0
+        enemies = self._fieldMap.getEnemySubMap()
+        exposureCount = 0
+        aliveIds = self._aliveEnemyIds
+        totalEnemies = self._aliveEnemyCount
+        eiIdx = 0
+        while (eiIdx < totalEnemies):
+            eid = lw_get(aliveIds, eiIdx)
+            enemyCell = lw_get(enemies, eid)._cellPos
+            if ((enemyCell != None) and getCachedLineOfSight(finalPos, enemyCell)):
+                exposureCount = lw_add(exposureCount, 1)
+            eiIdx = lw_add(eiIdx, 1)
+        if ((totalEnemies > 0) and (exposureCount < totalEnemies)):
+            coverRatio = lw_sub(1.0, (lw_div(exposureCount, totalEnemies)))
+            W1 = None
+            W2 = None
+            if (hpPercent < 40):
+                W1 = 3.0
+                W2 = 2.0
+            else:
+                if (hpPercent < 70):
+                    W1 = 2.0
+                    W2 = 1.5
+                else:
+                    W1 = 1.0
+                    W2 = 1.0
+            coverBonus = lw_add((lw_mul(lw_mul(coverRatio, W2), 200)), (lw_mul(lw_mul(lw_mul(max(0, threatAtPos), coverRatio), W1), 0.3)))
+        if ((exposureCount == 0) and (totalEnemies > 0)):
+            coverBonus = lw_add(coverBonus, 400)
+        totalScore = lw_add(lw_add(lw_add(offensiveValue, kitingValue), threatPenalty), coverBonus)
+        return totalScore
+    
+    def evaluateHerding(self, finalPos):
+        if ((finalPos == (-1)) or (finalPos == self._player._cellPos)):
+            return 0
+        if (self._target == None):
+            return 0
+        enemyMP = self._target._currMp
+        if ((enemyMP == None) or (enemyMP < 3)):
+            return 0
+        poisonDoT = 0
+        pEffs = getEffects(self._player._id)
+        if (pEffs != None):
+            for pe in lw_values(pEffs):
+                if ((lw_get(pe, 0) == EFFECT_POISON) and (count(pe) >= 2)):
+                    dv = lw_get(pe, 1)
+                    dr = (lw_get(pe, 3) if ((count(pe) >= 4)) else 1)
+                    poisonDoT = lw_add(poisonDoT, lw_mul(dv, max(1, dr)))
+        poisonRatio = lw_div(lw_mul(poisonDoT, 100), max(1, self._player._maxHealth))
+        herdScale = 1.0
+        if (poisonRatio >= 50):
+            return 0
+        else:
+            if (poisonRatio > 0):
+                herdScale = lw_sub(1.0, (lw_div(poisonRatio, 50.0)))
+        ax = getCellX(finalPos)
+        ay = getCellY(finalPos)
+        ex = getCellX(self._target._cellPos)
+        ey = getCellY(self._target._cellPos)
+        dx = lw_sub(ex, ax)
+        dy = lw_sub(ey, ay)
+        mag = max(1, lw_add(abs(dx), abs(dy)))
+        rx = lw_add(ex, lw_div((lw_mul(dx, enemyMP)), mag))
+        ry = lw_add(ey, lw_div((lw_mul(dy, enemyMP)), mag))
+        retreatCell = getCellFromXY(rx, ry)
+        if ((retreatCell == None) or isObstacle(retreatCell)):
+            retreatCell = self._target._cellPos
+        openCount = 0
+        rcx = getCellX(retreatCell)
+        rcy = getCellY(retreatCell)
+        ox = (-2)
+        while (ox <= 2):
+            oy = (-2)
+            while (oy <= 2):
+                if ((ox == 0) and (oy == 0)):
+                    oy = lw_add(oy, 1)
+                    continue
+                c = getCellFromXY(lw_add(rcx, ox), lw_add(rcy, oy))
+                if (c == None):
+                    oy = lw_add(oy, 1)
+                    continue
+                if (not isObstacle(c)):
+                    openCount = lw_add(openCount, 1)
+                oy = lw_add(oy, 1)
+            ox = lw_add(ox, 1)
+        openDelta = lw_sub(openCount, 22)
+        if (openDelta > 5):
+            openDelta = 5
+        if (openDelta < (-5)):
+            openDelta = (-5)
+        return floor(lw_mul(lw_mul(openDelta, 100), herdScale))
+    
+    def evaluateHideDenial(self, finalPos):
+        if ((finalPos == (-1)) or (finalPos == self._player._cellPos)):
+            return 0
+        if (self._target == None):
+            return 0
+        enemyMP = self._target._currMp
+        if ((enemyMP == None) or (enemyMP < 2)):
+            return 0
+        buildScale = 1.0
+        if (lw__playerBuildType == BUILD_TANK_SCI):
+            buildScale = 0.0
+        else:
+            if (lw__playerBuildType == BUILD_AGILITY):
+                buildScale = 0.3
+            else:
+                if (lw__playerBuildType == BUILD_MAGIC):
+                    buildScale = 0.0
+                else:
+                    if (lw__playerBuildType == BUILD_HYBRID):
+                        buildScale = 0.4
+        if (buildScale <= 0):
+            return 0
+        poisonDoT = 0
+        pEffs = getEffects(self._player._id)
+        if (pEffs != None):
+            for pe in lw_values(pEffs):
+                if ((lw_get(pe, 0) == EFFECT_POISON) and (count(pe) >= 2)):
+                    dv = lw_get(pe, 1)
+                    dr = (lw_get(pe, 3) if ((count(pe) >= 4)) else 1)
+                    poisonDoT = lw_add(poisonDoT, lw_mul(dv, max(1, dr)))
+        poisonRatio = lw_div(lw_mul(poisonDoT, 100), max(1, self._player._maxHealth))
+        hideScale = 1.0
+        if (poisonRatio >= 50):
+            return 0
+        else:
+            if (poisonRatio > 0):
+                hideScale = lw_sub(1.0, (lw_div(poisonRatio, 50.0)))
+        enemyCell = self._target._cellPos
+        ex = getCellX(enemyCell)
+        ey = getCellY(enemyCell)
+        dirs = [[0, (-1)], [1, (-1)], [1, 0], [1, 1], [0, 1], [(-1), 1], [(-1), 0], [(-1), (-1)]]
+        distMid = lw_div(enemyMP, 2)
+        if (distMid < 2):
+            distMid = 2
+        dists = [2, distMid, enemyMP]
+        hideOptions = 0
+        samples = 0
+        for d in lw_values(dists):
+            for dir in lw_values(dirs):
+                cx = lw_add(ex, lw_mul(lw_get(dir, 0), d))
+                cy = lw_add(ey, lw_mul(lw_get(dir, 1), d))
+                c = getCellFromXY(cx, cy)
+                if (c == None):
+                    continue
+                if isObstacle(c):
+                    continue
+                samples = lw_add(samples, 1)
+                if (not lineOfSight(c, finalPos)):
+                    hideOptions = lw_add(hideOptions, 1)
+        if (samples == 0):
+            return 0
+        hideRatio = lw_div(lw_mul(hideOptions, 1.0), samples)
+        mpScale = lw_div(enemyMP, 6.0)
+        if (mpScale > 1.0):
+            mpScale = 1.0
+        enemyMag = self._target._magic
+        enemyStr = self._target._strength
+        spamPotential = lw_add(lw_mul(enemyMag, 3), enemyStr)
+        if (spamPotential < 400):
+            spamPotential = 400
+        if (spamPotential > 2500):
+            spamPotential = 2500
+        return floor(lw_mul(lw_mul(lw_mul(lw_mul((-lw_num(spamPotential)), hideRatio), mpScale), buildScale), hideScale))
+    
+    def calculateEfficiency(self, simResult):
+        tpEfficiency = 0
+        mpEfficiency = 0
+        dotDmg = (simResult.dotDamageQueued if (simResult.dotDamageQueued != None) else 0)
+        novaDmg = (simResult.novaDamageQueued if (simResult.novaDamageQueued != None) else 0)
+        totalDamage = lw_add(lw_add(simResult.damageDealt, dotDmg), novaDmg)
+        healingTPCost = 0
+        for buff in lw_values(simResult.buffsApplied):
+            if isHealingChip(buff):
+                healingTPCost = lw_add(healingTPCost, getCachedChipCost(buff))
+        offensiveTPSpent = lw_sub(simResult.tpSpent, healingTPCost)
+        if (offensiveTPSpent < 0):
+            offensiveTPSpent = 0
+        if ((offensiveTPSpent > 0) and (totalDamage > 0)):
+            damagePerTP = lw_div(totalDamage, offensiveTPSpent)
+            tpEfficiency = lw_mul(damagePerTP, 10)
+        if ((simResult.mpSpent > 0) and (totalDamage > 0)):
+            damagePerMP = lw_div(totalDamage, simResult.mpSpent)
+            mpEfficiency = lw_mul(damagePerMP, 5)
+        return lw_add(tpEfficiency, mpEfficiency)
+    
+    def evaluateBuffs(self, buffsApplied, simResult):
+        value = 0
+        playerPos = (simResult.finalPosition if (simResult.finalPosition != (-1)) else self._player._cellPos)
+        expectedDamage = self._fieldMap.getThreatAtCell(playerPos)
+        if ((expectedDamage == None) or (expectedDamage < 0)):
+            expectedDamage = 0
+        enemyHP = self._target._currHealth
+        dotDmg = (simResult.dotDamageQueued if (simResult.dotDamageQueued != None) else 0)
+        novaDmg = (simResult.novaDamageQueued if (simResult.novaDamageQueued != None) else 0)
+        totalDamage = lw_add(lw_add(simResult.damageDealt, dotDmg), novaDmg)
+        killMargin = lw_div(totalDamage, enemyHP)
+        buffMultiplier = 1.0
+        if (killMargin >= 1.1):
+            buffMultiplier = 0.1
+        else:
+            if ((killMargin < 0.7) and (expectedDamage > 200)):
+                if (totalDamage <= 0):
+                    buffMultiplier = 1.0
+                else:
+                    if (self._player._magic > lw_add(self._player._strength, 100)):
+                        buffMultiplier = 1.3
+                    else:
+                        buffMultiplier = 3.0
+        effectiveAgi = self._player._agility
+        for bc in lw_values(buffsApplied):
+            if (bc == CHIP_WARM_UP):
+                effectiveAgi = lw_add(effectiveAgi, 180)
+            if (bc == CHIP_STRETCHING):
+                effectiveAgi = lw_add(effectiveAgi, 90)
+            if (bc == CHIP_PRISM):
+                effectiveAgi = lw_add(effectiveAgi, 60)
+        reflectExpectedDamage = expectedDamage
+        if ((lw__playerBuildType == BUILD_BRUISER_REFLECT) and (reflectExpectedDamage < 300)):
+            enemyStr = self._target._strength
+            reflectExpectedDamage = max(300, lw_mul(enemyStr, 2))
+        phaseOActive = ((((lw__nearestFireTurn >= 2) and (simResult.damageDealt == 0)) and (simResult.dotDamageQueued == 0)))
+        bvPoisonRaceMult = 1.0
+        if ((self._target != None) and (getTurn() >= 3)):
+            bvTgtMag = self._target._magic
+            bvTgtStr = self._target._strength
+            if (((((bvTgtMag != None) and (bvTgtStr != None)) and (bvTgtMag >= 300)) and (bvTgtStr < 150)) and (player._magic < 100)):
+                bvPoisonRaceMult = 0.5
+        bvShieldMult = 1.0
+        if (self._target != None):
+            tgtAbsShield = self._target._absShield
+            tgtRelShield = self._target._relShield
+            if ((((tgtAbsShield != None) and (tgtAbsShield >= 120))) or (((tgtRelShield != None) and (tgtRelShield >= 35)))):
+                bvShieldMult = 0.75
+        damageReturnWeight = self.getWeight('damageReturn', 100)
+        drScale = lw_div(damageReturnWeight, 100.0)
+        for buffChip in lw_values(buffsApplied):
+            bDur = 3
+            if ((buffChip == CHIP_KNOWLEDGE) or (buffChip == CHIP_ELEVATION)):
+                bDur = 2
+            if (buffChip == CHIP_RAGE):
+                bDur = 4
+            phaseODecay = 1.0
+            if phaseOActive:
+                if (bDur > lw__nearestFireTurn):
+                    phaseODecay = 1.0
+                else:
+                    if (bDur == lw__nearestFireTurn):
+                        phaseODecay = 0.5
+                    else:
+                        phaseODecay = 0.1
+            if (buffChip == CHIP_STEROID):
+                value = lw_add(value, lw_mul(lw_mul(lw_mul(200, phaseODecay), bvPoisonRaceMult), bvShieldMult))
+            if (buffChip == CHIP_DOPING):
+                dopDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+                if (dopDist == None):
+                    dopDist = 99
+                if (((not lw__dopingUsed) and (dopDist <= 8)) and (simResult.damageDealt > 0)):
+                    dopSci = self._player._science
+                    dopSelfDmg = lw_mul(lw_mul(32, (lw_add(1, lw_div(dopSci, 100.0)))), 3)
+                    if (self._player._currHealth > lw_add(dopSelfDmg, lw_mul(self._player._maxHealth, 0.3))):
+                        value = lw_add(value, 150)
+                    else:
+                        value = lw_num(value) - lw_num(300)
+                else:
+                    value = lw_num(value) - lw_num(500)
+            if (buffChip == CHIP_WARM_UP):
+                value = lw_add(value, lw_mul(200, phaseODecay))
+            if (buffChip == CHIP_WIZARDRY):
+                value = lw_add(value, lw_mul(lw_mul(lw_mul(200, phaseODecay), bvPoisonRaceMult), bvShieldMult))
+            if (buffChip == CHIP_KNOWLEDGE):
+                value = lw_add(value, lw_mul(150, phaseODecay))
+            if (buffChip == CHIP_ELEVATION):
+                value = lw_add(value, lw_mul(120, phaseODecay))
+            if (buffChip == CHIP_PRISM):
+                value = lw_add(value, lw_mul(lw_mul(lw_mul(180, phaseODecay), bvPoisonRaceMult), bvShieldMult))
+            if (buffChip == CHIP_ADRENALINE):
+                value = lw_add(value, 100)
+            if (buffChip == CHIP_RAGE):
+                value = lw_add(value, lw_mul(lw_mul(lw_mul(300, phaseODecay), bvPoisonRaceMult), bvShieldMult))
+            if (buffChip == CHIP_SEVEN_LEAGUE_BOOTS):
+                value = lw_add(value, 200)
+            bvMagicPoisonShieldMult = 1.0
+            if (((self._enemyProfile != None) and lw_get(self._enemyProfile, 'isKiter')) and (lw_get(self._enemyProfile, 'kiterFlavor') == 'magic_poison')):
+                bvMagicPoisonShieldMult = 0.1
+            if isAbsoluteShieldChip(buffChip):
+                value = lw_add(value, lw_mul(80, bvMagicPoisonShieldMult))
+            if (buffChip == CHIP_WALL):
+                resistance = self._player._resistance
+                reductionPercent = lw_mul(4.5, (lw_add(1, lw_div(resistance, 100.0))))
+                duration = 2
+                effectiveHP = lw_mul((lw_mul(expectedDamage, duration)), (lw_div(reductionPercent, 100.0)))
+                wallValue = lw_mul(effectiveHP, 0.5)
+                if (wallValue < 80):
+                    wallValue = 80
+                value = lw_add(value, lw_mul(wallValue, bvMagicPoisonShieldMult))
+            if (buffChip == CHIP_FORTRESS):
+                resistance = self._player._resistance
+                reductionPercent = lw_mul(7.5, (lw_add(1, lw_div(resistance, 100.0))))
+                duration = 3
+                effectiveHP = lw_mul((lw_mul(expectedDamage, duration)), (lw_div(reductionPercent, 100.0)))
+                fortressValue = lw_mul(effectiveHP, 0.5)
+                if (fortressValue < 150):
+                    fortressValue = 150
+                value = lw_add(value, lw_mul(fortressValue, bvMagicPoisonShieldMult))
+            if ((isRelativeShieldChip(buffChip) and (buffChip != CHIP_WALL)) and (buffChip != CHIP_FORTRESS)):
+                value = lw_add(value, lw_mul(100, bvMagicPoisonShieldMult))
+            if (buffChip == CHIP_REGENERATION):
+                value = lw_add(value, 80)
+                regenHpPct = lw_div(lw_mul(self._player._currHealth, 100), max(1, self._player._maxHealth))
+                if (regenHpPct < 50):
+                    value = lw_add(value, 400)
+                if (regenHpPct < 30):
+                    value = lw_add(value, 1200)
+                if (((regenHpPct < 20) and (lw__playerBuildType != BUILD_MAGIC)) and (lw__playerBuildType != BUILD_HYBRID)):
+                    value = lw_add(value, 2000)
+            if (buffChip == CHIP_CURE):
+                value = lw_add(value, 120)
+            if (buffChip == CHIP_DRIP):
+                value = lw_add(value, 100)
+            if (buffChip == CHIP_REMISSION):
+                value = lw_add(value, 100)
+            if (buffChip == CHIP_ANTIDOTE):
+                preventedValue = lw_add(50, lw_mul(self._player.getTotalPoisonDamage(), 1.2))
+                if ((lw__playerBuildType != BUILD_MAGIC) and (lw__playerBuildType != BUILD_HYBRID)):
+                    perTurnPoison = 0
+                    if (self._player._effectsActive != None):
+                        for pe in lw_values(self._player._effectsActive):
+                            if ((lw_get(pe, 0) == EFFECT_POISON) and (count(pe) >= 2)):
+                                perTurnPoison = lw_add(perTurnPoison, lw_get(pe, 1))
+                    if ((perTurnPoison > 0) and (self._player._maxHealth > 0)):
+                        pressure = lw_div(lw_mul(perTurnPoison, 100), self._player._maxHealth)
+                        if (pressure >= 5):
+                            preventedValue = lw_add(preventedValue, 600)
+                        if (pressure >= 10):
+                            preventedValue = lw_add(preventedValue, 800)
+                        if (pressure >= 15):
+                            preventedValue = lw_add(preventedValue, 1200)
+                    totalQueued = self._player.getTotalPoisonDamage()
+                    queuedPct = lw_div(lw_mul(totalQueued, 100), max(1, self._player._maxHealth))
+                    if (queuedPct >= 20):
+                        preventedValue = lw_add(preventedValue, 1500)
+                value = lw_add(value, preventedValue)
+            if (buffChip == CHIP_MANUMISSION):
+                manumissionValue = 40
+                shackleTPVal = self._player.getEffectValue(EFFECT_SHACKLE_TP)
+                shackleTPTurns = self._player.getEffectRemaining(EFFECT_SHACKLE_TP)
+                if (((shackleTPVal != None) and (shackleTPTurns != None)) and (shackleTPVal > 0)):
+                    manumissionValue = lw_add(manumissionValue, lw_mul(lw_mul(shackleTPVal, shackleTPTurns), 60))
+                shackleMPVal = self._player.getEffectValue(EFFECT_SHACKLE_MP)
+                shackleMPTurns = self._player.getEffectRemaining(EFFECT_SHACKLE_MP)
+                if (((shackleMPVal != None) and (shackleMPTurns != None)) and (shackleMPVal > 0)):
+                    manumissionValue = lw_add(manumissionValue, lw_mul(lw_mul(shackleMPVal, shackleMPTurns), 40))
+                shackleStrVal = self._player.getEffectValue(EFFECT_SHACKLE_STRENGTH)
+                shackleStrTurns = self._player.getEffectRemaining(EFFECT_SHACKLE_STRENGTH)
+                if (((shackleStrVal != None) and (shackleStrTurns != None)) and (shackleStrVal > 0)):
+                    manumissionValue = lw_add(manumissionValue, lw_mul(lw_mul(shackleStrVal, shackleStrTurns), 2))
+                shackleMagVal = self._player.getEffectValue(EFFECT_SHACKLE_MAGIC)
+                shackleMagTurns = self._player.getEffectRemaining(EFFECT_SHACKLE_MAGIC)
+                if (((shackleMagVal != None) and (shackleMagTurns != None)) and (shackleMagVal > 0)):
+                    manumissionValue = lw_add(manumissionValue, lw_mul(lw_mul(shackleMagVal, shackleMagTurns), 2))
+                value = lw_add(value, manumissionValue)
+            if (buffChip == CHIP_MIRROR):
+                agility = effectiveAgi
+                returnPercent = lw_mul(5.5, (lw_add(1, lw_div(agility, 100.0))))
+                duration = 3
+                returnDamage = lw_mul((lw_mul(reflectExpectedDamage, duration)), (lw_div(returnPercent, 100.0)))
+                mirrorValue = lw_mul(returnDamage, 0.8)
+                if (mirrorValue < 100):
+                    mirrorValue = 100
+                value = lw_add(value, lw_mul(mirrorValue, drScale))
+            if (buffChip == CHIP_THORN):
+                agility = effectiveAgi
+                returnPercent = lw_mul(3.5, (lw_add(1, lw_div(agility, 100.0))))
+                duration = 2
+                returnDamage = lw_mul((lw_mul(reflectExpectedDamage, duration)), (lw_div(returnPercent, 100.0)))
+                thornValue = lw_mul(returnDamage, 0.8)
+                if (thornValue < 80):
+                    thornValue = 80
+                value = lw_add(value, lw_mul(thornValue, drScale))
+            if (buffChip == CHIP_BRAMBLE):
+                agility = effectiveAgi
+                returnPercent = lw_mul(25.0, (lw_add(1, lw_div(agility, 100.0))))
+                duration = 1
+                returnDamage = lw_mul(reflectExpectedDamage, (lw_div(returnPercent, 100.0)))
+                brambleValue = 0
+                if (reflectExpectedDamage > 300):
+                    brambleValue = lw_mul(returnDamage, 1.5)
+                else:
+                    if (reflectExpectedDamage > 0):
+                        brambleValue = lw_mul(returnDamage, 0.5)
+                value = lw_add(value, lw_mul(brambleValue, drScale))
+        value = lw_num(value) * lw_num(buffMultiplier)
+        return value
+    
+    def evaluateDebuffs(self, debuffsApplied):
+        value = 0
+        for debuffChip in lw_values(debuffsApplied):
+            if isPoisonChip(debuffChip):
+                value = lw_add(value, 100)
+            if ((debuffChip == CHIP_STALACTITE) or (debuffChip == CHIP_ICEBERG)):
+                value = lw_add(value, 120)
+            if ((debuffChip == CHIP_ARMOR) or (debuffChip == CHIP_SOLIDIFICATION)):
+                value = lw_add(value, 150)
+            if ((debuffChip == CHIP_SLOW_DOWN) or (debuffChip == CHIP_BALL_AND_CHAIN)):
+                value = lw_add(value, 80)
+            if (debuffChip == CHIP_LIBERATION):
+                strippedValue = 0
+                if (self._target != None):
+                    strippedValue = lw_add(strippedValue, lw_mul(lw_mul(self._target._absShield, 0.4), 2.0))
+                    strippedValue = lw_add(strippedValue, lw_mul(lw_mul(self._target._relShield, 0.4), 5.0))
+                    if self._target.hasEffect(EFFECT_DAMAGE_RETURN):
+                        strippedValue = lw_add(strippedValue, 300)
+                    if self._target.hasEffect(EFFECT_BUFF_STRENGTH):
+                        libThreat = 0
+                        if (self._fieldMap != None):
+                            libThreat = self._fieldMap.getThreatAtCell(self._player._cellPos)
+                        if (libThreat == None):
+                            libThreat = 0
+                        strScaled = max(200, lw_mul(libThreat, 0.15))
+                        strippedValue = lw_add(strippedValue, strScaled)
+                    if self._target.hasEffect(EFFECT_BUFF_RESISTANCE):
+                        strippedValue = lw_add(strippedValue, 200)
+                    enemyPoisonDPT = self._target.getTotalPoisonPerTurn()
+                    if ((enemyPoisonDPT != None) and (enemyPoisonDPT > 0)):
+                        strippedValue = lw_num(strippedValue) - lw_num(lw_mul(lw_mul(enemyPoisonDPT, 0.4), 3.0))
+                if (strippedValue < 0):
+                    strippedValue = 0
+                value = lw_add(value, strippedValue)
+            if ((debuffChip == CHIP_INVERSION) and (not _isBossFight)):
+                value = lw_add(value, 600)
+        return value
+    
+    def calculateCritBonus(self, damageDealt, buffsApplied):
+        agi = self._player._agility
+        if (buffsApplied != None):
+            for b in lw_values(buffsApplied):
+                if (b == CHIP_WARM_UP):
+                    agi = lw_add(agi, 180)
+                if (b == CHIP_PRISM):
+                    agi = lw_add(agi, 60)
+        if (agi >= 300):
+            critChance = min(0.5, lw_div(agi, 2000.0))
+            critMultiplier = 1.3
+            expectedCritBonus = lw_mul(lw_mul(damageDealt, critChance), (lw_sub(critMultiplier, 1.0)))
+            return lw_mul(expectedCritBonus, 0.5)
+        return 0
+    
+    def calculateRelativeShieldValue(self, relativeShieldPercent):
+        maxHP = self._player._maxHealth
+        return lw_mul((lw_div(relativeShieldPercent, 100.0)), maxHP)
+    
+    def evaluateContinuationValue(self, simResult, scenario):
+        value = 0
+        finalPos = simResult.finalPosition
+        futureThreat = 0
+        if ((finalPos != (-1)) and (self._fieldMap != None)):
+            futureThreat = self._fieldMap.getThreatAtCell(finalPos)
+        stageMult = 1.0
+        if ((lw__nearestFireTurn >= 1) and (lw__nearestFireTurn <= 3)):
+            stageMult = lw_sub(1.5, lw_mul(lw__nearestFireTurn, 0.15))
+        poisonRaceMult = 1.0
+        if ((self._target != None) and (getTurn() >= 3)):
+            tgtMag = self._target._magic
+            tgtStr = self._target._strength
+            if (((((tgtMag != None) and (tgtStr != None)) and (tgtMag >= 300)) and (tgtStr < 150)) and (player._magic < 100)):
+                poisonRaceMult = 0.5
+        cvShieldMult = 1.0
+        if (self._target != None):
+            cvTgtAbs = self._target._absShield
+            cvTgtRel = self._target._relShield
+            if ((((cvTgtAbs != None) and (cvTgtAbs >= 120))) or (((cvTgtRel != None) and (cvTgtRel >= 35)))):
+                cvShieldMult = 0.75
+        for buff in lw_values(simResult.buffsApplied):
+            if (buff == CHIP_WIZARDRY):
+                value = lw_add(value, lw_mul(lw_mul(lw_mul(300, stageMult), poisonRaceMult), cvShieldMult))
+            else:
+                if (buff == CHIP_STEROID):
+                    value = lw_add(value, lw_mul(lw_mul(lw_mul(200, stageMult), poisonRaceMult), cvShieldMult))
+                else:
+                    if (buff == CHIP_PRISM):
+                        value = lw_add(value, lw_mul(lw_mul(lw_mul(250, stageMult), poisonRaceMult), cvShieldMult))
+                    else:
+                        if (buff == CHIP_FORTRESS):
+                            value = lw_add(value, 200)
+                        else:
+                            if (buff == CHIP_WALL):
+                                value = lw_add(value, 100)
+                            else:
+                                if (buff == CHIP_WARM_UP):
+                                    value = lw_add(value, lw_mul(200, stageMult))
+                                else:
+                                    if (((buff == CHIP_MIRROR) or (buff == CHIP_THORN)) or (buff == CHIP_BRAMBLE)):
+                                        if (futureThreat > 0):
+                                            value = lw_add(value, 250)
+                                    else:
+                                        if (buff == CHIP_KNOWLEDGE):
+                                            value = lw_add(value, lw_mul(200, stageMult))
+                                        else:
+                                            if (buff == CHIP_RAGE):
+                                                value = lw_add(value, lw_mul(lw_mul(lw_mul(300, stageMult), poisonRaceMult), cvShieldMult))
+                                            else:
+                                                if (buff == CHIP_SEVEN_LEAGUE_BOOTS):
+                                                    value = lw_add(value, 200)
+        if (simResult.dotDamageQueued > 0):
+            value = lw_add(value, lw_mul(simResult.dotDamageQueued, 0.5))
+        if ((finalPos != (-1)) and (self._target != None)):
+            dist = getCellDistance(finalPos, self._target._cellPos)
+            if (dist != None):
+                attackable = 0
+                for wid in lw_values(mapKeys(self._fieldMap.damageMap)):
+                    pass
+                for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                    wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+                    if ((dist >= wObj._minRange) and (dist <= wObj._maxRange)):
+                        attackable = lw_add(attackable, 1)
+                for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                    if ((((isHealingChip(cid) or isOffensiveBuff(cid)) or isShieldChip(cid)) or isDamageReturnChip(cid)) or isResourceChip(cid)):
+                        continue
+                    cObj = lw_get(arsenal.playerEquippedChips, cid)
+                    if ((dist >= cObj._minRange) and (dist <= cObj._maxRange)):
+                        attackable = lw_add(attackable, 1)
+                value = lw_add(value, lw_mul(attackable, 80))
+                if (dist <= 8):
+                    value = lw_add(value, lw_mul((lw_sub(8, dist)), 20))
+        novaDmg = (simResult.novaDamageQueued if (simResult.novaDamageQueued != None) else 0)
+        if ((novaDmg > 0) and (self._target != None)):
+            hpReductionRatio = lw_div(novaDmg, self._target._maxHealth)
+            value = lw_add(value, lw_mul(hpReductionRatio, 500))
+        unspentTP = lw_sub(self._player._currTp, simResult.tpSpent)
+        if (lw__playerBuildType == BUILD_TANK_SCI):
+            if (unspentTP > 7):
+                excessT = lw_sub(unspentTP, 6)
+                value = lw_num(value) - lw_num(lw_mul(lw_mul(excessT, (lw_sub(excessT, 1))), 4))
+            if ((unspentTP >= 6) and (not self._player.hasEffect(EFFECT_RELATIVE_SHIELD))):
+                value = lw_add(value, 100)
+        else:
+            if (unspentTP > 3):
+                excessN = lw_sub(unspentTP, 2)
+                value = lw_num(value) - lw_num(lw_mul(lw_mul(excessN, (lw_sub(excessN, 1))), 8))
+        return lw_mul(value, 0.35)
+    
+    def evaluateSynergyBonus(self, scenario):
+        if ((scenario == None) or (count(scenario) == 0)):
+            return 0
+        bonus = 0
+        hasGrapple = False
+        hasMelee = False
+        hasWizardry = False
+        hasPoison = False
+        hasTeleport = False
+        hasSteroid = False
+        hasNeutrino = False
+        hasPrism = False
+        hasNova = False
+        hasShield = False
+        hasDenial = False
+        hasDamageReturn = False
+        hasWarmUp = False
+        for action in lw_values(scenario):
+            if (action.chip == CHIP_GRAPPLE):
+                hasGrapple = True
+            if (action.chip == CHIP_WIZARDRY):
+                hasWizardry = True
+            if (action.chip == CHIP_STEROID):
+                hasSteroid = True
+            if ((action.chip == CHIP_TELEPORTATION) or (action.chip == CHIP_JUMP)):
+                hasTeleport = True
+            if (action.chip == CHIP_PRISM):
+                hasPrism = True
+            if ((action.chip == CHIP_FORTRESS) or (action.chip == CHIP_WALL)):
+                hasShield = True
+            if ((action.chip == CHIP_SOPORIFIC) or (action.chip == CHIP_BALL_AND_CHAIN)):
+                hasDenial = True
+            if (((action.chip == CHIP_MIRROR) or (action.chip == CHIP_THORN)) or (action.chip == CHIP_BRAMBLE)):
+                hasDamageReturn = True
+            if (action.chip == CHIP_WARM_UP):
+                hasWarmUp = True
+            if (action.weaponId == WEAPON_HEAVY_SWORD):
+                hasMelee = True
+            if (action.weaponId == WEAPON_NEUTRINO):
+                hasNeutrino = True
+            if ((action.chip != (-1)) and isPoisonChip(action.chip)):
+                hasPoison = True
+            if (action.type == Action.ACTION_DOT):
+                hasPoison = True
+        hasJump = False
+        for action in lw_values(scenario):
+            if (action.chip == CHIP_JUMP):
+                hasJump = True
+                break
+        if hasJump:
+            bonus = lw_add(bonus, 150)
+        if (hasGrapple and hasMelee):
+            bonus = lw_add(bonus, 300)
+        hasRangedClose = False
+        for actRC in lw_values(scenario):
+            if ((actRC.weaponId == WEAPON_MAGNUM) or (actRC.weaponId == WEAPON_DESTROYER)):
+                hasRangedClose = True
+                break
+        if (hasGrapple and hasRangedClose):
+            bonus = lw_add(bonus, 300)
+        if (hasWizardry and hasPoison):
+            bonus = lw_add(bonus, 400)
+        if (hasWizardry and hasDenial):
+            bonus = lw_add(bonus, 350)
+        if (hasSteroid and hasTeleport):
+            bonus = lw_add(bonus, 250)
+        if (hasGrapple and hasNeutrino):
+            bonus = lw_add(bonus, 200)
+        if (hasWizardry and hasNeutrino):
+            bonus = lw_add(bonus, 350)
+        if (hasPrism and hasShield):
+            bonus = lw_add(bonus, 300)
+        if (hasPoison and hasDenial):
+            bonus = lw_add(bonus, 300)
+        if (hasSteroid and hasDamageReturn):
+            bonus = lw_add(bonus, 350)
+        if (hasWarmUp and hasDamageReturn):
+            bonus = lw_add(bonus, 400)
+        if (hasSteroid and hasWarmUp):
+            bonus = lw_add(bonus, 300)
+        return bonus
+    
+    def project2ndTurnValue(self, simResult, scenario=None):
+        if (self._target == None):
+            return 0
+        value = 0
+        finalPos = simResult.finalPosition
+        if (finalPos == (-1)):
+            finalPos = self._player._cellPos
+        incomingDmg = 0
+        if lw__adversarialThreatCacheBuilt:
+            incomingDmg = getAdversarialThreat(finalPos)
+        projectedHP = lw_sub(lw_add(self._player._currHealth, simResult.hpGained), incomingDmg)
+        relShieldReduction = lw_div(simResult.relativeShieldGained, 100.0)
+        projectedHP = lw_add(projectedHP, lw_mul(incomingDmg, relShieldReduction))
+        projectedHP = lw_add(projectedHP, simResult.shieldsGained)
+        if (projectedHP <= 0):
+            return (-2000)
+        nextTurnTP = lw_add(max(0, lw_sub(self._player._currTp, simResult.tpSpent)), 10)
+        if (simResult.buffsApplied != None):
+            for bId in lw_values(simResult.buffsApplied):
+                if (bId == CHIP_MOTIVATION):
+                    nextTurnTP = lw_add(nextTurnTP, 2)
+                    break
+        if (nextTurnTP > 25):
+            nextTurnTP = 25
+        enemyProjectedHP = lw_sub(lw_sub(lw_sub(self._target._currHealth, simResult.damageDealt), simResult.dotDamageQueued), simResult.novaDamageQueued)
+        if (enemyProjectedHP < 0):
+            enemyProjectedHP = 0
+        enemyProjectedPos = self._target._cellPos
+        enemyToUs = getCellDistance(self._target._cellPos, finalPos)
+        if ((enemyToUs != None) and (enemyToUs > 4)):
+            enemyMP = (self._target._currMp if (self._target._currMp != None) else 4)
+            closeBy = min(enemyMP, floor(lw_div(enemyToUs, 2)))
+        chipsUsedThisTurn = {}
+        if (scenario != None):
+            for act in lw_values(scenario):
+                if ((act.chip != None) and (act.chip != (-1))):
+                    lw_put(chipsUsedThisTurn, act.chip, True)
+        vulnMult = lw_add(1.0, (lw_div(simResult.vulnerabilityApplied, 100.0)))
+        nextTurnDmg = 0
+        dist = getCellDistance(finalPos, enemyProjectedPos)
+        if (dist != None):
+            bestWeaponDmg = 0
+            for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+                if (((dist >= wObj._minRange) and (dist <= wObj._maxRange)) and (wObj._cost <= nextTurnTP)):
+                    bd = arsenal.getDamageBreakdown(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, wid)
+                    uses = min(wObj._maxUse, floor(lw_div(nextTurnTP, wObj._cost)))
+                    wDmg = lw_mul(lw_get(bd, 'total'), uses)
+                    if (wDmg > bestWeaponDmg):
+                        bestWeaponDmg = wDmg
+            nextTurnDmg = lw_add(nextTurnDmg, bestWeaponDmg)
+            remainingTPforChips = max(0, lw_sub(nextTurnTP, 7))
+            for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                if mapContainsKey(chipsUsedThisTurn, cid):
+                    continue
+                if ((((isHealingChip(cid) or isOffensiveBuff(cid)) or isShieldChip(cid)) or isDamageReturnChip(cid)) or isResourceChip(cid)):
+                    continue
+                cObj = lw_get(arsenal.playerEquippedChips, cid)
+                if (((dist >= cObj._minRange) and (dist <= cObj._maxRange)) and (cObj._cost <= remainingTPforChips)):
+                    cbd = arsenal.getDamageBreakdown(self._player._strength, self._player._magic, self._player._wisdom, self._player._science, cid)
+                    nextTurnDmg = lw_add(nextTurnDmg, lw_mul(lw_get(cbd, 'total'), 0.7))
+                    break
+            nextTurnDmg = lw_mul(nextTurnDmg, vulnMult)
+        if ((enemyProjectedHP > 0) and (nextTurnDmg > enemyProjectedHP)):
+            nextTurnDmg = lw_add(enemyProjectedHP, lw_mul((lw_sub(nextTurnDmg, enemyProjectedHP)), 0.1))
+        enemyProfileP = getEnemyProfile(self._target._id)
+        enemyHealEstimate = 200
+        if (enemyProfileP != None):
+            enemyHealEstimate = lw_add(lw_get(enemyProfileP, 'healPerTurn'), lw_get(enemyProfileP, 'shieldPerTurn'))
+        if ((incomingDmg > 0) and (self._target._wisdom > 0)):
+            enemyLifesteal = lw_div((lw_mul(incomingDmg, self._target._wisdom)), 1000)
+            enemyHealEstimate = lw_add(enemyHealEstimate, enemyLifesteal)
+        nextTurnDmg = max(0, lw_sub(nextTurnDmg, enemyHealEstimate))
+        if ((incomingDmg > 500) and (nextTurnDmg > 0)):
+            nextTurnDmg = floor(lw_mul(nextTurnDmg, 0.3))
+        value = lw_add(value, nextTurnDmg)
+        if ((((nextTurnDmg == 0) and (enemyProjectedHP > 0)) and (enemyProfileP != None)) and lw_get(enemyProfileP, 'isKiter')):
+            strScale = lw_add(1, (lw_div(self._player._strength, 100.0)))
+            perTurnProxy = min(500, lw_mul(80, strScale))
+            forfeitTurns = (4 if ((lw_get(enemyProfileP, 'kiterFlavor') == 'magic_poison')) else 3)
+            value = lw_num(value) - lw_num(lw_mul(perTurnProxy, forfeitTurns))
+        if ((simResult.dotDamageQueued > 0) and (simResult.poisonTurnsQueued > 0)):
+            avgDuration = lw_div(simResult.poisonTurnsQueued, max(1, simResult.poisonSourcesUsed))
+            remainingTicks = max(0, lw_sub(avgDuration, 1))
+            perTurnPoison = lw_div(simResult.dotDamageQueued, max(1, simResult.poisonTurnsQueued))
+            value = lw_add(value, lw_mul(lw_mul(perTurnPoison, remainingTicks), 1.3))
+        for buff in lw_values(simResult.buffsApplied):
+            if ((((((buff == CHIP_STEROID) or (buff == CHIP_WIZARDRY)) or (buff == CHIP_PRISM)) or (buff == CHIP_WARM_UP)) or (buff == CHIP_RAGE)) or (buff == CHIP_SEVEN_LEAGUE_BOOTS)):
+                value = lw_add(value, 150)
+        if ((simResult.vulnerabilityApplied > 0) and (enemyProjectedHP > 0)):
+            turn3HP = max(0, lw_sub(lw_sub(enemyProjectedHP, nextTurnDmg), enemyHealEstimate))
+            if (turn3HP > 0):
+                turn3Dmg = nextTurnDmg
+                turn3Dmg = min(turn3Dmg, lw_add(turn3HP, lw_mul((lw_sub(turn3Dmg, turn3HP)), 0.1)))
+                turn3Dmg = max(0, lw_sub(turn3Dmg, enemyHealEstimate))
+                value = lw_add(value, lw_mul(turn3Dmg, 0.25))
+        if ((((finalPos != (-1)) and (finalPos != self._player._cellPos)) and (enemyProfileP != None)) and lw_get(enemyProfileP, 'isKiter')):
+            bunkerFx = getCellX(finalPos)
+            bunkerFy = getCellY(finalPos)
+            bunkerWalkable = 0
+            bunkerNbrE = getCellFromXY(lw_add(bunkerFx, 1), bunkerFy)
+            if (((bunkerNbrE != None) and (bunkerNbrE != (-1))) and (getCellContent(bunkerNbrE) == CELL_EMPTY)):
+                bunkerWalkable = lw_add(bunkerWalkable, 1)
+            bunkerNbrW = getCellFromXY(lw_sub(bunkerFx, 1), bunkerFy)
+            if (((bunkerNbrW != None) and (bunkerNbrW != (-1))) and (getCellContent(bunkerNbrW) == CELL_EMPTY)):
+                bunkerWalkable = lw_add(bunkerWalkable, 1)
+            bunkerNbrN = getCellFromXY(bunkerFx, lw_add(bunkerFy, 1))
+            if (((bunkerNbrN != None) and (bunkerNbrN != (-1))) and (getCellContent(bunkerNbrN) == CELL_EMPTY)):
+                bunkerWalkable = lw_add(bunkerWalkable, 1)
+            bunkerNbrS = getCellFromXY(bunkerFx, lw_sub(bunkerFy, 1))
+            if (((bunkerNbrS != None) and (bunkerNbrS != (-1))) and (getCellContent(bunkerNbrS) == CELL_EMPTY)):
+                bunkerWalkable = lw_add(bunkerWalkable, 1)
+            bunkerMult = (1.5 if ((lw_get(enemyProfileP, 'kiterFlavor') == 'magic_poison')) else 1.0)
+            if (bunkerWalkable == 0):
+                value = lw_num(value) - lw_num(lw_mul(2000, bunkerMult))
+            else:
+                if (bunkerWalkable == 1):
+                    value = lw_num(value) - lw_num(lw_mul(700, bunkerMult))
+                else:
+                    if (bunkerWalkable == 2):
+                        value = lw_num(value) - lw_num(lw_mul(200, bunkerMult))
+        discount = 0.5
+        if (enemyProfileP != None):
+            if lw_get(enemyProfileP, 'hasLiberation'):
+                discount = lw_num(discount) - lw_num(0.05)
+            if (lw_get(enemyProfileP, 'hasTeleport') or (lw_get(enemyProfileP, 'mobilityMP') >= 6)):
+                discount = lw_num(discount) - lw_num(0.05)
+            if lw_get(enemyProfileP, 'hasAntidote'):
+                antidoteCD = getCooldown(CHIP_ANTIDOTE, self._target._id)
+                if (antidoteCD == 0):
+                    discount = lw_num(discount) - lw_num(0.05)
+            if ((not lw_get(enemyProfileP, 'hasHeal')) and (not lw_get(enemyProfileP, 'hasShield'))):
+                discount = lw_add(discount, 0.1)
+        discount = max(0.25, min(0.6, discount))
+        return lw_mul(value, discount)
+    
+    def scorePuzzle(self, simResult, scenario):
+        score = 0
+        score = lw_add(score, lw_mul(simResult.crystalAxisReduction, self.getWeight('axisAlignment', 2000)))
+        if simResult.crystalSolved:
+            score = lw_add(score, self.getWeight('crystalSolved', 5000))
+        if ((simResult.finalPosition != (-1)) and (_bossTargetEID != None)):
+            initialDist = getCellDistance(self._player._cellPos, _myCrystalCell)
+            finalDist = getCellDistance(simResult.finalPosition, _myCrystalCell)
+            if ((initialDist != None) and (finalDist != None)):
+                proximityGain = lw_sub(initialDist, finalDist)
+                score = lw_add(score, lw_mul(proximityGain, self.getWeight('crystalProximity', 800)))
+        score = lw_add(score, lw_mul(lw_mul(simResult.hpGained, self.getWeight('healValue', 50)), 0.1))
+        if (simResult.actionsExecuted == 0):
+            score = lw_num(score) - lw_num(500)
+        return score
+    
+
+
+# ════════ scenario_quick_scorer.lk ════════
+class ScenarioQuickScorer:
+    FAMILY_OFFENSIVE = "OFFENSIVE"
+    FAMILY_DEFENSIVE = "DEFENSIVE"
+    FAMILY_COMBO = "COMBO"
+    FAMILY_UTILITY = "UTILITY"
+    FAMILY_BULB = "BULB"
+    def __init__(self, player, target, fieldMap, arsenal):
+        self._player = None
+        self._target = None
+        self._fieldMap = None
+        self._arsenal = None
+        self._player = player
+        self._target = target
+        self._fieldMap = fieldMap
+        self._arsenal = arsenal
+
+    def quickScore(self, scenario):
+        if (_isBossFight and (_bossPhase == "PUZZLE")):
+            qs = 0
+            for a in lw_values(scenario):
+                if ((a.chip == CHIP_GRAPPLE) or (a.chip == CHIP_BOXING_GLOVE)):
+                    qs = lw_add(qs, 2000)
+                if (a.chip == CHIP_INVERSION):
+                    qs = lw_add(qs, 3000)
+                if ((a.type >= Action.MOVEMENT_APPROACH) and (a.type <= Action.MOVEMENT_PAB)):
+                    qs = lw_add(qs, 500)
+                if (a.type == Action.ACTION_BUFF):
+                    qs = lw_add(qs, 100)
+            return qs
+        score = 0
+        tpEstimate = 0
+        actionCount = 0
+        hasOffensiveBuff = False
+        hasDefensiveBuff = False
+        hasMotivation = False
+        hasHeal = False
+        hasTeleport = False
+        buffActionCount = 0
+        hasCheckpoint = False
+        finalPosition = (-1)
+        weaponActions = 0
+        chipDamageActions = 0
+        novaChipActions = 0
+        comboSignature = []
+        for action in lw_values(scenario):
+            actionCount = lw_add(actionCount, 1)
+            if (((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)):
+                if (action.weaponId != (-1)):
+                    weaponActions = lw_add(weaponActions, 1)
+                    if mapContainsKey(self._arsenal.playerEquippedWeapons, action.weaponId):
+                        weapon = lw_get(self._arsenal.playerEquippedWeapons, action.weaponId)
+                        tpEstimate = lw_add(tpEstimate, weapon._cost)
+                        if (action.weaponId == WEAPON_NEUTRINO):
+                            push(comboSignature, "NEUTRINO")
+                        if (action.weaponId == WEAPON_HEAVY_SWORD):
+                            push(comboSignature, "HEAVY_SWORD")
+                        if (action.weaponId == WEAPON_AXE):
+                            push(comboSignature, "AXE")
+                else:
+                    if (action.chip != (-1)):
+                        chipDamageActions = lw_add(chipDamageActions, 1)
+                        chipCost = getCachedChipCost(action.chip)
+                        tpEstimate = lw_add(tpEstimate, chipCost)
+                        if (action.chip == CHIP_GRAPPLE):
+                            push(comboSignature, "GRAPPLE")
+                        if ((action.chip == CHIP_INVERSION) and (not _isBossFight)):
+                            chipDamageActions = lw_add(chipDamageActions, 1)
+                            score = lw_add(score, 600)
+                        if isNovaChip(action.chip):
+                            novaChipActions = lw_add(novaChipActions, 1)
+            else:
+                if (action.type == Action.ACTION_BUFF):
+                    chipCost = getCachedChipCost(action.chip)
+                    tpEstimate = lw_add(tpEstimate, chipCost)
+                    buffActionCount = lw_add(buffActionCount, 1)
+                    if (((action.targetEntity != None) and (action.targetEntity._id != self._player._id)) and (((self._target == None) or (action.targetEntity._id != self._target._id)))):
+                        score = lw_add(score, 400)
+                    if (((((((action.chip == CHIP_STEROID) or (action.chip == CHIP_WARM_UP)) or (action.chip == CHIP_DOPING)) or (action.chip == CHIP_PRISM)) or (action.chip == CHIP_WIZARDRY)) or (action.chip == CHIP_KNOWLEDGE)) or (action.chip == CHIP_ELEVATION)):
+                        hasOffensiveBuff = True
+                        if (action.chip == CHIP_STEROID):
+                            push(comboSignature, "STEROID")
+                        if (action.chip == CHIP_PRISM):
+                            push(comboSignature, "PRISM")
+                    if (((action.chip == CHIP_WALL) or (action.chip == CHIP_FORTRESS)) or (action.chip == CHIP_PROTEIN)):
+                        hasDefensiveBuff = True
+                    if (((action.chip == CHIP_REMISSION) or (action.chip == CHIP_REGENERATION)) or (action.chip == CHIP_CURE)):
+                        hasHeal = True
+                    if (action.chip == CHIP_MOTIVATION):
+                        hasMotivation = True
+                else:
+                    if (action.type == Action.ACTION_TELEPORT):
+                        hasTeleport = True
+                        qsTeleChip = (action.chip if ((action.chip != None) and (action.chip != (-1))) else CHIP_TELEPORTATION)
+                        tpEstimate = lw_add(tpEstimate, getCachedChipCost(qsTeleChip))
+                        finalPosition = action.targetCell
+                    else:
+                        if ((((action.type == Action.MOVEMENT_OFFENSIVE) or (action.type == Action.MOVEMENT_OTKO)) or (action.type == Action.MOVEMENT_APPROACH)) or (action.type == Action.MOVEMENT_HNS)):
+                            finalPosition = action.targetCell
+                        else:
+                            if (action.type == Action.ACTION_CHECKPOINT):
+                                hasCheckpoint = True
+                            else:
+                                if (action.type == Action.ACTION_WEAPON_SWAP):
+                                    tpEstimate = lw_add(tpEstimate, 1)
+        str = self._player._strength
+        mag = self._player._magic
+        sci = self._player._science
+        weaponDmgEstimate = lw_mul(400, (lw_add(1, lw_div(str, 200.0))))
+        chipDmgEstimate = lw_mul(300, (lw_add(1, lw_div(mag, 200.0))))
+        damageEstimate = lw_add(lw_mul(weaponActions, weaponDmgEstimate), lw_mul(chipDamageActions, chipDmgEstimate))
+        if (novaChipActions > 0):
+            novaBase = lw_mul(19, (lw_add(1, lw_div(sci, 100.0))))
+            hpDeficit = lw_sub(self._target._maxHealth, self._target._currHealth)
+            perChipCap = lw_div(hpDeficit, novaChipActions)
+            perChipNova = novaBase
+            if (perChipNova > perChipCap):
+                perChipNova = perChipCap
+            if (perChipNova < 0):
+                perChipNova = 0
+            novaEstimate = lw_mul(perChipNova, novaChipActions)
+            damageEstimate = lw_add(damageEstimate, lw_mul(novaEstimate, 2.5))
+        if (tpEstimate > 0):
+            efficiency = lw_div(damageEstimate, max(1, tpEstimate))
+            score = lw_add(score, lw_mul(efficiency, 50))
+        score = lw_add(score, lw_mul(damageEstimate, 0.3))
+        qsBuffMult = 1.0
+        if ((buffActionCount >= 2) and (lw_add(weaponActions, chipDamageActions) == 0)):
+            qsMaxWR = 1
+            for qsWid in lw_values(mapKeys(self._arsenal.playerEquippedWeapons)):
+                qsW = lw_get(self._arsenal.playerEquippedWeapons, qsWid)
+                if (qsW._maxRange > qsMaxWR):
+                    qsMaxWR = qsW._maxRange
+            qsDist = getCellDistance(self._player._cellPos, self._target._cellPos)
+            if ((qsDist != None) and (qsDist > lw_add(lw_add(self._player._currMp, qsMaxWR), 3))):
+                qsBuffMult = 0.5
+        if hasOffensiveBuff:
+            score = lw_add(score, lw_mul(300, qsBuffMult))
+        if hasMotivation:
+            score = lw_add(score, 600)
+            if (lw_add(weaponActions, chipDamageActions) > 0):
+                score = lw_add(score, 200)
+        if hasDefensiveBuff:
+            hpPercent = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+            if (hpPercent < 50):
+                score = lw_add(score, lw_mul(400, qsBuffMult))
+            else:
+                score = lw_add(score, lw_mul(150, qsBuffMult))
+        if hasHeal:
+            hpPercent = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+            if (hpPercent < 40):
+                score = lw_add(score, 500)
+            else:
+                if (hpPercent < 60):
+                    score = lw_add(score, 250)
+                else:
+                    score = lw_add(score, 50)
+        comboBonus = self.detectCombo(comboSignature)
+        score = lw_add(score, comboBonus)
+        if hasCheckpoint:
+            hasAttack = ((lw_add(weaponActions, chipDamageActions) > 0))
+            qsHpPct = lw_div((lw_mul(self._player._currHealth, 100)), self._player._maxHealth)
+            if (hasAttack or (qsHpPct < 40)):
+                score = lw_add(score, 1500)
+            else:
+                score = lw_add(score, 500)
+        if ((finalPosition != (-1)) and mapContainsKey(self._fieldMap.damageMap, finalPosition)):
+            cellObj = lw_get(self._fieldMap.damageMap, finalPosition)
+            if cellObj._isOTKOCell:
+                score = lw_add(score, 3000)
+            else:
+                positionBonus = lw_mul(cellObj._totalDamage, 0.5)
+                hasAttackAction = ((lw_add(weaponActions, chipDamageActions)) > 0)
+                if (not hasAttackAction):
+                    mpBurned = ((self._player._currMp < self._player._maxMp))
+                    positionBonus = lw_num(positionBonus) * lw_num(((0.1 if mpBurned else 0.5)))
+                score = lw_add(score, positionBonus)
+        if hasTeleport:
+            enemyHP = self._target._currHealth
+            enemyMaxHP = self._target._maxHealth
+            enemyHPPercent = lw_div((lw_mul(enemyHP, 100)), enemyMaxHP)
+            if (enemyHPPercent < 40):
+                score = lw_add(score, 800)
+        actionDensity = lw_mul(min(actionCount, 5), 20)
+        score = lw_add(score, actionDensity)
+        if (lw__timePressure and (damageEstimate > 0)):
+            score = lw_add(score, lw_mul(damageEstimate, 0.5))
+        return score
+    
+    def getTPWeight(self):
+        str = self._player._strength
+        mag = self._player._magic
+        agi = self._player._agility
+        if ((str > mag) and (str > agi)):
+            return lw_add(40, (lw_div(str, 100.0)))
+        else:
+            if ((mag > str) and (mag > agi)):
+                return lw_add(25, (lw_div(mag, 150.0)))
+            else:
+                if ((agi > str) and (agi > mag)):
+                    return lw_add(35, (lw_div(agi, 120.0)))
+        return 30
+    
+    def detectCombo(self, signature):
+        sigStr = ""
+        i = 0
+        while (i < count(signature)):
+            sigStr = lw_add(sigStr, lw_add(lw_get(signature, i), "|"))
+            i = lw_add(i, 1)
+        if (self.contains(sigStr, "GRAPPLE") and self.contains(sigStr, "HEAVY_SWORD")):
+            return 1500
+        if (self.contains(sigStr, "GRAPPLE") and self.contains(sigStr, "AXE")):
+            return 1500
+        neutrinoCount = 0
+        for s in lw_values(signature):
+            if (s == "NEUTRINO"):
+                neutrinoCount = lw_add(neutrinoCount, 1)
+        if (neutrinoCount >= 2):
+            return 1200
+        if (self.contains(sigStr, "STEROID") and (count(signature) >= 4)):
+            return 1000
+        return 0
+    
+    def contains(self, str, substr):
+        return (indexOf(str, substr) != (-1))
+    
+    def scenarioHasHealAction(self, scenario):
+        for action in lw_values(scenario):
+            if ((((action.chip == CHIP_REMISSION) or (action.chip == CHIP_REGENERATION)) or (action.chip == CHIP_CURE)) or (action.chip == CHIP_VACCINE)):
+                return True
+        return False
+    
+    def classifyFamily(self, scenario):
+        hasAttack = False
+        hasBuff = False
+        hasHeal = False
+        hasTeleport = False
+        hasGrapple = False
+        hasPoison = False
+        hasHide = False
+        hasFlee = False
+        for action in lw_values(scenario):
+            if (action.type == Action.ACTION_DIRECT):
+                hasAttack = True
+            if (action.type == Action.ACTION_DOT):
+                hasAttack = True
+                hasPoison = True
+            if (action.type == Action.ACTION_BUFF):
+                hasBuff = True
+            if (action.type == Action.ACTION_TELEPORT):
+                hasTeleport = True
+            if (action.type == Action.MOVEMENT_HNS):
+                hasHide = True
+            if (action.type == Action.MOVEMENT_FLEE):
+                hasFlee = True
+            if (action.chip == CHIP_GRAPPLE):
+                hasGrapple = True
+            if ((((action.chip == CHIP_REMISSION) or (action.chip == CHIP_REGENERATION)) or (action.chip == CHIP_CURE)) or (action.chip == CHIP_VACCINE)):
+                hasHeal = True
+            if ((action.chip != (-1)) and isPoisonChip(action.chip)):
+                hasPoison = True
+        if (hasGrapple and hasAttack):
+            return ScenarioQuickScorer.FAMILY_COMBO
+        if (hasBuff and hasPoison):
+            return ScenarioQuickScorer.FAMILY_COMBO
+        if (hasTeleport and hasAttack):
+            return ScenarioQuickScorer.FAMILY_COMBO
+        if (hasHeal and (not hasAttack)):
+            return ScenarioQuickScorer.FAMILY_DEFENSIVE
+        if (hasFlee or hasHide):
+            return ScenarioQuickScorer.FAMILY_DEFENSIVE
+        if (hasTeleport and (not hasAttack)):
+            return ScenarioQuickScorer.FAMILY_UTILITY
+        if hasAttack:
+            return ScenarioQuickScorer.FAMILY_OFFENSIVE
+        if hasBuff:
+            return ScenarioQuickScorer.FAMILY_DEFENSIVE
+        return ScenarioQuickScorer.FAMILY_OFFENSIVE
+    
+
+
+# ════════ scenario_mutation.lk ════════
+# include: scenario_simulator.lk (inlined by assembler)
+# include: cache_manager.lk (inlined by assembler)
+class MutationDescriptor:
+    def __init__(self, actionIndex, field, newValue, description):
+        self.actionIndex = (-1)
+        self.field = ""
+        self.newValue = None
+        self.description = ""
+        self.actionIndex = actionIndex
+        self.field = field
+        self.newValue = newValue
+        self.description = description
+
+
+class MutationResult:
+    def __init__(self, scenario, mutationType, scoreImprovement, description):
+        self.scenario = None
+        self.mutationType = ""
+        self.scoreImprovement = 0
+        self.description = ""
+        self.score = 0
+        self.scenario = scenario
+        self.mutationType = mutationType
+        self.scoreImprovement = scoreImprovement
+        self.description = description
+        self.score = 0
+
+
+class ScenarioMutator:
+    def __init__(self, arsenal, player, target, fieldMap):
+        self._arsenal = None
+        self._player = None
+        self._target = None
+        self._fieldMap = None
+        self._arsenal = arsenal
+        self._player = player
+        self._target = target
+        self._fieldMap = fieldMap
+
+    def generateMutationDescriptors(self, scenario):
+        descriptors = []
+        insDescriptors = self.generateInsertionDescriptors(scenario)
+        for desc in lw_values(insDescriptors):
+            push(descriptors, desc)
+        subDescriptors = self.generateSubstitutionDescriptors(scenario)
+        for desc in lw_values(subDescriptors):
+            push(descriptors, desc)
+        swapDescriptors = self.generateSwapDescriptors(scenario)
+        for desc in lw_values(swapDescriptors):
+            push(descriptors, desc)
+        aimDescriptors = self.generateAimCellDescriptors(scenario)
+        for desc in lw_values(aimDescriptors):
+            push(descriptors, desc)
+        return descriptors
+    
+    def generateAimCellDescriptors(self, scenario):
+        descriptors = []
+        i = 0
+        while (i < count(scenario)):
+            action = lw_get(scenario, i)
+            if (not self.isAoEAction(action)):
+                i = lw_add(i, 1)
+                continue
+            currentAimCell = action.targetCell
+            if (currentAimCell == (-1)):
+                if (action.targetEntity != None):
+                    currentAimCell = action.targetEntity._cellPos
+            if (currentAimCell == (-1)):
+                i = lw_add(i, 1)
+                continue
+            adjacentCells = self.getAdjacentCells(currentAimCell)
+            for adjCell in lw_values(adjacentCells):
+                desc = MutationDescriptor(i, "targetCell", adjCell, lw_add(lw_add(lw_add("Aim shift: ", currentAimCell), " → "), adjCell))
+                push(descriptors, desc)
+            i = lw_add(i, 1)
+        return descriptors
+    
+    def generateSwapDescriptors(self, scenario):
+        descriptors = []
+        i = 0
+        while (i < lw_sub(count(scenario), 1)):
+            a = lw_get(scenario, i)
+            b = lw_get(scenario, lw_add(i, 1))
+            if (self.isChipOrWeaponAction(a) and self.isChipOrWeaponAction(b)):
+                if (((a.type == Action.ACTION_BUFF) and (b.chip != (-1))) and (((isHealingChip(b.chip) or (b.type == Action.ACTION_DIRECT)) or (b.type == Action.ACTION_DOT)))):
+                    i = lw_add(i, 1)
+                    continue
+                desc = MutationDescriptor(i, "swap", lw_add(i, 1), lw_add(lw_add(lw_add("Swap actions ", i), " <-> "), (lw_add(i, 1))))
+                push(descriptors, desc)
+            i = lw_add(i, 1)
+        return descriptors
+    
+    def generateSubstitutionDescriptors(self, scenario):
+        descriptors = []
+        usedChips = {}
+        for action in lw_values(scenario):
+            if (action.chip != (-1)):
+                lw_put(usedChips, action.chip, True)
+        i = 0
+        while (i < count(scenario)):
+            action = lw_get(scenario, i)
+            if (action.chip == (-1)):
+                i = lw_add(i, 1)
+                continue
+            if (not self.isChipOrWeaponAction(action)):
+                i = lw_add(i, 1)
+                continue
+            equippedChips = mapKeys(self._arsenal.playerEquippedChips)
+            for altChip in lw_values(equippedChips):
+                if (altChip == action.chip):
+                    continue
+                if mapContainsKey(usedChips, altChip):
+                    continue
+                if (getCooldown(altChip, self._player._id) != 0):
+                    continue
+                altType = self.classifyChipActionType(altChip)
+                curType = self.classifyChipActionType(action.chip)
+                if (altType != curType):
+                    continue
+                if ((curType == 0) or (altType == 0)):
+                    continue
+                desc = MutationDescriptor(i, "substituteChip", altChip, lw_add(lw_add(lw_add(lw_add(lw_add("Sub chip @", i), ": "), action.chip), " -> "), altChip))
+                push(descriptors, desc)
+            i = lw_add(i, 1)
+        return descriptors
+    
+    def generateInsertionDescriptors(self, scenario):
+        descriptors = []
+        usedChips = {}
+        for action in lw_values(scenario):
+            if (action.chip != (-1)):
+                lw_put(usedChips, action.chip, True)
+        candidates = []
+        curHP = self._player._currHealth
+        maxHP = self._player._maxHealth
+        hpRatio = ((lw_div(curHP, maxHP)) if ((maxHP > 0)) else 1.0)
+        equippedChips = mapKeys(self._arsenal.playerEquippedChips)
+        for chipId in lw_values(equippedChips):
+            if mapContainsKey(usedChips, chipId):
+                continue
+            if (getCooldown(chipId, self._player._id) != 0):
+                continue
+            if isHealingChip(chipId):
+                if (chipId == CHIP_REGENERATION):
+                    if (hpRatio >= 0.40):
+                        continue
+                else:
+                    if (hpRatio >= 0.70):
+                        continue
+            if isUtilityChip(chipId):
+                continue
+            if (self.classifyChipActionType(chipId) == 0):
+                continue
+            push(candidates, chipId)
+        insertPoints = [0]
+        if (count(scenario) > 0):
+            push(insertPoints, count(scenario))
+        i = 0
+        while (i < count(scenario)):
+            if ((lw_get(scenario, i).type >= Action.MOVEMENT_APPROACH) and (lw_get(scenario, i).type <= Action.MOVEMENT_PAB)):
+                push(insertPoints, lw_add(i, 1))
+                break
+            i = lw_add(i, 1)
+        for chipId in lw_values(candidates):
+            actionType = self.classifyChipActionType(chipId)
+            for pos in lw_values(insertPoints):
+                desc = MutationDescriptor(pos, "insertChip", chipId, lw_add(lw_add(lw_add("Insert chip ", chipId), " at pos "), pos))
+                push(descriptors, desc)
+        return descriptors
+    
+    def generateRemovalDescriptors(self, scenario):
+        descriptors = []
+        i = 0
+        while (i < count(scenario)):
+            action = lw_get(scenario, i)
+            if ((action.type == Action.ACTION_DIRECT) and (((action.weaponId != (-1)) or (action.chip != (-1))))):
+                desc = MutationDescriptor(i, "removeAction", None, lw_add("Remove action @", i))
+                push(descriptors, desc)
+            i = lw_add(i, 1)
+        return descriptors
+    
+    def classifyChipActionType(self, chipId):
+        if (isPoisonChip(chipId) or isDebuffChip(chipId)):
+            return 1
+        if isOffensiveBuff(chipId):
+            return 2
+        if isHealingChip(chipId):
+            return 3
+        if isShieldChip(chipId):
+            return 4
+        if isResourceChip(chipId):
+            return 5
+        if isUtilityChip(chipId):
+            return 6
+        if isDamageReturnChip(chipId):
+            return 7
+        return 0
+    
+    def isChipOrWeaponAction(self, action):
+        return ((((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)) or (action.type == Action.ACTION_BUFF))
+    
+    def applyMutation(self, scenario, descriptor):
+        originalValue = None
+        if (descriptor.field == "targetCell"):
+            action = lw_get(scenario, descriptor.actionIndex)
+            originalValue = action.targetCell
+            action.targetCell = descriptor.newValue
+        else:
+            if (descriptor.field == "swap"):
+                idxA = descriptor.actionIndex
+                idxB = descriptor.newValue
+                tmp = lw_get(scenario, idxA)
+                lw_put(scenario, idxA, lw_get(scenario, idxB))
+                lw_put(scenario, idxB, tmp)
+                originalValue = [idxA, idxB]
+            else:
+                if (descriptor.field == "substituteChip"):
+                    action = lw_get(scenario, descriptor.actionIndex)
+                    originalValue = action.chip
+                    action.chip = descriptor.newValue
+                else:
+                    if (descriptor.field == "insertChip"):
+                        chipId = descriptor.newValue
+                        chipType = self.classifyChipActionType(chipId)
+                        aType = Action.ACTION_BUFF
+                        if (chipType == 1):
+                            aType = Action.ACTION_DOT
+                        else:
+                            if (chipType == 3):
+                                aType = Action.ACTION_BUFF
+                            else:
+                                if (chipType == 4):
+                                    aType = Action.ACTION_BUFF
+                        targetEntity = (self._target if ((chipType == 1)) else self._player)
+                        targetCell = (self._target._cellPos if ((chipType == 1)) else self._player._cellPos)
+                        newAction = Action(aType, (-1), chipId, targetCell, targetEntity)
+                        insert(scenario, newAction, descriptor.actionIndex)
+                        originalValue = descriptor.actionIndex
+                    else:
+                        if (descriptor.field == "removeAction"):
+                            originalValue = lw_get(scenario, descriptor.actionIndex)
+                            remove(scenario, descriptor.actionIndex)
+        return originalValue
+    
+    def revertMutation(self, scenario, descriptor, originalValue):
+        if (descriptor.field == "targetCell"):
+            action = lw_get(scenario, descriptor.actionIndex)
+            action.targetCell = originalValue
+        else:
+            if (descriptor.field == "swap"):
+                idxA = lw_get(originalValue, 0)
+                idxB = lw_get(originalValue, 1)
+                tmp = lw_get(scenario, idxA)
+                lw_put(scenario, idxA, lw_get(scenario, idxB))
+                lw_put(scenario, idxB, tmp)
+            else:
+                if (descriptor.field == "substituteChip"):
+                    action = lw_get(scenario, descriptor.actionIndex)
+                    action.chip = originalValue
+                else:
+                    if (descriptor.field == "insertChip"):
+                        remove(scenario, originalValue)
+                    else:
+                        if (descriptor.field == "removeAction"):
+                            insert(scenario, originalValue, descriptor.actionIndex)
+    
+    def isAoEAction(self, action):
+        if (action.weaponId != (-1)):
+            if mapContainsKey(self._arsenal.playerEquippedWeapons, action.weaponId):
+                weaponObj = lw_get(self._arsenal.playerEquippedWeapons, action.weaponId)
+                if ((weaponObj != None) and (weaponObj._aoeType > 0)):
+                    return True
+        return False
+    
+    def isMovementAction(self, action):
+        return False
+    
+    def getAdjacentCells(self, cell):
+        adjacent = []
+        offsets = [[1, 0], [(-1), 0], [0, 1], [0, (-1)]]
+        cellX = getCellX(cell)
+        cellY = getCellY(cell)
+        for offset in lw_values(offsets):
+            newX = lw_add(cellX, lw_get(offset, 0))
+            newY = lw_add(cellY, lw_get(offset, 1))
+            newCell = getCellFromXY(newX, newY)
+            if (((newCell != None) and (newCell >= 0)) and (newCell < 613)):
+                push(adjacent, newCell)
+        return adjacent
+    
+    def cloneScenario(self, scenario):
+        cloned = []
+        i = 0
+        while (i < count(scenario)):
+            src = lw_get(scenario, i)
+            dst = Action(src.type, src.weaponId, src.chip, src.targetCell, src.targetEntity)
+            dst.isSplash = src.isSplash
+            dst.checkpointType = src.checkpointType
+            dst.continuationFn = src.continuationFn
+            dst.context = src.context
+            if (src.weapon != None):
+                dst.weapon = src.weapon
+            if (src.bulbAIFunc != None):
+                dst.bulbAIFunc = src.bulbAIFunc
+            push(cloned, dst)
+            i = lw_add(i, 1)
+        return cloned
+    
+
+class HybridMutationPlanner:
+    def __init__(self, arsenal, player, target, fieldMap, scorer):
+        self._arsenal = None
+        self._player = None
+        self._target = None
+        self._fieldMap = None
+        self._mutator = None
+        self._simulator = None
+        self._scorer = None
+        self._summonTPReserve = 0
+        self.MAX_MUTATIONS_PER_SEED = 80
+        self.MAX_SEEDS = 6
+        self.MAX_MUTATIONS_PER_SEED = _mutationMaxPerSeed
+        self.MAX_SEEDS = _mutationMaxSeeds
+        self._arsenal = arsenal
+        self._player = player
+        self._target = target
+        self._fieldMap = fieldMap
+        self._mutator = ScenarioMutator(arsenal, player, target, fieldMap)
+        self._simulator = ScenarioSimulator(arsenal, player, target, fieldMap)
+        self._scorer = scorer
+        self._summonTPReserve = 0
+        hasSavant = mapContainsKey(arsenal.playerEquippedChips, CHIP_SAVANT_BULB)
+        hasMetallic = mapContainsKey(arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
+        if (hasSavant or hasMetallic):
+            bulbChip = (CHIP_SAVANT_BULB if hasSavant else CHIP_METALLIC_BULB)
+            if (getCooldown(bulbChip, player._id) == 0):
+                self._summonTPReserve = getChipCost(bulbChip)
+
+    def planWithMutations(self, seedScenarios):
+        opsBefore = getOperations()
+        tpBudget = lw_sub(self._player._currTp, self._summonTPReserve)
+        topSeeds = self.selectTopSeeds(seedScenarios)
+        bestScenario = None
+        bestScore = (-999999)
+        mutationsEvaluated = 0
+        mutationScoreCache = {}
+        for seed in lw_values(topSeeds):
+            originalSimResult = self._simulator.simulate(seed)
+            originalHash = originalSimResult.getStateHash()
+            originalScore = None
+            if mapContainsKey(mutationScoreCache, originalHash):
+                originalScore = lw_get(mutationScoreCache, originalHash)
+            else:
+                originalScore = self._scorer.score(originalSimResult, seed)
+                lw_put(mutationScoreCache, originalHash, originalScore)
+            seedFeasible = ((lw_sub(originalSimResult.tpSpent, originalSimResult.tpRefunded) <= tpBudget))
+            if (seedFeasible and (originalScore > bestScore)):
+                bestScore = originalScore
+                bestScenario = seed
+            if (getOperations() > _ops86):
+                break
+            descriptors = self._mutator.generateMutationDescriptors(seed)
+            mutationLimit = min(count(descriptors), self.MAX_MUTATIONS_PER_SEED)
+            i = 0
+            while (i < mutationLimit):
+                if (getOperations() > _ops86):
+                    break
+                desc = lw_get(descriptors, i)
+                originalValue = self._mutator.applyMutation(seed, desc)
+                simResult = self._simulator.simulate(seed)
+                mutationsEvaluated = lw_add(mutationsEvaluated, 1)
+                if (lw_sub(simResult.tpSpent, simResult.tpRefunded) > tpBudget):
+                    self._mutator.revertMutation(seed, desc, originalValue)
+                    i = lw_add(i, 1)
+                    continue
+                mutHash = simResult.getStateHash()
+                score = None
+                if mapContainsKey(mutationScoreCache, mutHash):
+                    score = lw_get(mutationScoreCache, mutHash)
+                else:
+                    score = self._scorer.score(simResult, seed)
+                    lw_put(mutationScoreCache, mutHash, score)
+                if (score > bestScore):
+                    bestScore = score
+                    bestScenario = seed
+                else:
+                    self._mutator.revertMutation(seed, desc, originalValue)
+                i = lw_add(i, 1)
+        opsUsed = lw_sub(getOperations(), opsBefore)
+        return bestScenario
+    
+    def selectTopSeeds(self, scenarios):
+        limit = min(count(scenarios), self.MAX_SEEDS)
+        topSeeds = []
+        i = 0
+        while (i < limit):
+            push(topSeeds, self._mutator.cloneScenario(lw_get(scenarios, i)))
+            i = lw_add(i, 1)
+        return topSeeds
+    
+
+
+# ════════ base_strategy.lk ════════
+# include: action.lk (inlined by assembler)
+# include: ../scenario_generator.lk (inlined by assembler)
+# include: ../scenario_simulator.lk (inlined by assembler)
+# include: ../scenario_scorer.lk (inlined by assembler)
+# include: ../scenario_quick_scorer.lk (inlined by assembler)
+class Strategy:
+    def __init__(self):
+        self._actions = []
+        self._playerTP = (-1)
+        self._fieldMap = None
+        self._originalTP = (-1)
+        self._originalMP = (-1)
+        self._playerTP = getTP()
+
+    def shouldBuildDamageMap(self):
+        return True
+    
+    def inRangeAndLOS(self, fromCell, targetCell, minR, maxR):
+        dist = getCellDistance(fromCell, targetCell)
+        if ((dist < minR) or (dist > maxR)):
+            return False
+        if (not lineOfSight(fromCell, targetCell)):
+            return False
+        return True
+    
+    def isDiagonal(self, cell1, cell2):
+        x1 = getCellX(cell1)
+        y1 = getCellY(cell1)
+        x2 = getCellX(cell2)
+        y2 = getCellY(cell2)
+        return (abs(lw_sub(x2, x1)) == abs(lw_sub(y2, y1)))
+    
+    def checkAoESafety(self, chipId, targetCell):
+        return self.checkAoESafetyFromCell(chipId, targetCell, player._cellPos)
+    
+    def checkAoESafetyFromCell(self, chipId, targetCell, fromCell):
+        if (not mapContainsKey(arsenal.playerEquippedChips, chipId)):
+            return {'safe': False, 'needsRepositioning': False}
+        chip = lw_get(arsenal.playerEquippedChips, chipId)
+        if (chip._aoeType == AREA_POINT):
+            return {'safe': True, 'needsRepositioning': False}
+        if chip._selfImmune:
+            return {'safe': True, 'needsRepositioning': False}
+        if fieldMap.wouldAoEHitCell(targetCell, chip._aoeType, fromCell, fromCell):
+            return {'safe': False, 'needsRepositioning': True}
+        return {'safe': True, 'needsRepositioning': False}
+    
+    def checkAoEWeaponSafety(self, weaponId, targetCell, fromCell):
+        if (not mapContainsKey(arsenal.playerEquippedWeapons, weaponId)):
+            return {'safe': False, 'needsRepositioning': False}
+        weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+        if (weapon._aoeType == AREA_POINT):
+            return {'safe': True, 'needsRepositioning': False}
+        if weapon._selfImmune:
+            return {'safe': True, 'needsRepositioning': False}
+        if fieldMap.wouldAoEHitCell(targetCell, weapon._aoeType, fromCell, fromCell):
+            return {'safe': False, 'needsRepositioning': True}
+        return {'safe': True, 'needsRepositioning': False}
+    
+    def findAoEWeaponSplashCell(self, weaponId, enemyCell, fromCell):
+        if (not mapContainsKey(arsenal.playerEquippedWeapons, weaponId)):
+            return None
+        weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+        if (weapon._aoeType == AREA_POINT):
+            return None
+        bestCell = None
+        bestDist = 999
+        aoeRadius = 2
+        if (weapon._aoeType == AREA_CIRCLE_3):
+            aoeRadius = 3
+        dx = (-lw_num(aoeRadius))
+        while (dx <= aoeRadius):
+            dy = (-lw_num(aoeRadius))
+            while (dy <= aoeRadius):
+                if ((dx == 0) and (dy == 0)):
+                    dy = lw_add(dy, 1)
+                    continue
+                candidateX = lw_add(getCellX(enemyCell), dx)
+                candidateY = lw_add(getCellY(enemyCell), dy)
+                candidateCell = getCellFromXY(candidateX, candidateY)
+                if ((candidateCell == None) or isObstacle(candidateCell)):
+                    dy = lw_add(dy, 1)
+                    continue
+                dist = getCellDistance(fromCell, candidateCell)
+                if (((dist == None) or (dist < weapon._minRange)) or (dist > weapon._maxRange)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if (not lineOfSight(fromCell, candidateCell)):
+                    dy = lw_add(dy, 1)
+                    continue
+                aoeCells = fieldMap.getAoEAffectedCells(candidateCell, weapon._aoeType, fromCell)
+                hitsEnemy = False
+                i = 0
+                while (i < count(aoeCells)):
+                    if (lw_get(aoeCells, i) == enemyCell):
+                        hitsEnemy = True
+                        break
+                    i = lw_add(i, 1)
+                if (not hitsEnemy):
+                    dy = lw_add(dy, 1)
+                    continue
+                hitsPlayer = False
+                j = 0
+                while (j < count(aoeCells)):
+                    if (lw_get(aoeCells, j) == fromCell):
+                        hitsPlayer = True
+                        break
+                    j = lw_add(j, 1)
+                if ((not hitsPlayer) and (dist < bestDist)):
+                    bestDist = dist
+                    bestCell = candidateCell
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+        if (bestCell != None):
+            return {'cell': bestCell, 'safe': True}
+        return None
+    
+    def findAoESplashCell(self, chipId, enemyCell, fromCell):
+        if (not mapContainsKey(arsenal.playerEquippedChips, chipId)):
+            return None
+        chip = lw_get(arsenal.playerEquippedChips, chipId)
+        if (chip._aoeType == AREA_POINT):
+            return None
+        bestCell = None
+        bestDist = 999
+        aoeRadius = 2
+        if (chip._aoeType == AREA_CIRCLE_3):
+            aoeRadius = 3
+        dx = (-lw_num(aoeRadius))
+        while (dx <= aoeRadius):
+            dy = (-lw_num(aoeRadius))
+            while (dy <= aoeRadius):
+                if ((dx == 0) and (dy == 0)):
+                    dy = lw_add(dy, 1)
+                    continue
+                candidateX = lw_add(getCellX(enemyCell), dx)
+                candidateY = lw_add(getCellY(enemyCell), dy)
+                candidateCell = getCellFromXY(candidateX, candidateY)
+                if ((candidateCell == None) or isObstacle(candidateCell)):
+                    dy = lw_add(dy, 1)
+                    continue
+                dist = getCellDistance(fromCell, candidateCell)
+                if (((dist == None) or (dist < chip._minRange)) or (dist > chip._maxRange)):
+                    dy = lw_add(dy, 1)
+                    continue
+                if (not lineOfSight(fromCell, candidateCell)):
+                    dy = lw_add(dy, 1)
+                    continue
+                aoeCells = fieldMap.getAoEAffectedCells(candidateCell, chip._aoeType, fromCell)
+                hitsEnemy = False
+                i = 0
+                while (i < count(aoeCells)):
+                    if (lw_get(aoeCells, i) == enemyCell):
+                        hitsEnemy = True
+                        break
+                    i = lw_add(i, 1)
+                if (not hitsEnemy):
+                    dy = lw_add(dy, 1)
+                    continue
+                hitsPlayer = False
+                j = 0
+                while (j < count(aoeCells)):
+                    if (lw_get(aoeCells, j) == fromCell):
+                        hitsPlayer = True
+                        break
+                    j = lw_add(j, 1)
+                if ((not hitsPlayer) and (dist < bestDist)):
+                    bestDist = dist
+                    bestCell = candidateCell
+                dy = lw_add(dy, 1)
+            dx = lw_add(dx, 1)
+        if (bestCell != None):
+            return {'cell': bestCell, 'safe': True}
+        return None
+    
+    def findSafeCellForAoE(self, chipId, targetCell):
+        if (not mapContainsKey(arsenal.playerEquippedChips, chipId)):
+            return (-1)
+        chip = lw_get(arsenal.playerEquippedChips, chipId)
+        playerPos = player._cellPos
+        playerMP = player._currMp
+        bestCell = (-1)
+        bestDist = 99999
+        cellId = 0
+        while (cellId < 613):
+            if isObstacle(cellId):
+                cellId = lw_add(cellId, 1)
+                continue
+            pathLen = getCachedPathLength(playerPos, cellId)
+            if ((pathLen == None) or (pathLen > playerMP)):
+                cellId = lw_add(cellId, 1)
+                continue
+            if (not self.inRangeAndLOS(cellId, targetCell, chip._minRange, chip._maxRange)):
+                cellId = lw_add(cellId, 1)
+                continue
+            aoeCellsFromHere = fieldMap.getAoEAffectedCells(targetCell, chip._aoeType, cellId)
+            inAoE = False
+            a = 0
+            while (a < count(aoeCellsFromHere)):
+                if (lw_get(aoeCellsFromHere, a) == cellId):
+                    inAoE = True
+                    break
+                a = lw_add(a, 1)
+            if inAoE:
+                cellId = lw_add(cellId, 1)
+                continue
+            if (pathLen < bestDist):
+                bestDist = pathLen
+                bestCell = cellId
+            cellId = lw_add(cellId, 1)
+        return bestCell
+    
+    def validateActionRangeAndLOS(self, action, fromCell=(-1)):
+        if (fromCell == (-1)):
+            fromCell = player._cellPos
+        toCell = action.targetCell
+        if (((((action.type == Action.ACTION_BUFF) or (action.type == Action.ACTION_DEBUFF))) and (action.targetEntity != None)) and (action.targetEntity._id == player._id)):
+            toCell = fromCell
+        if (toCell == (-1)):
+            return True
+        minRange = 0
+        maxRange = 999
+        if (action.weaponId != (-1)):
+            weapon = lw_get(arsenal.playerEquippedWeapons, action.weaponId)
+            if (weapon == None):
+                return False
+            minRange = weapon._minRange
+            maxRange = weapon._maxRange
+        else:
+            if (action.chip != (-1)):
+                chip = lw_get(arsenal.playerEquippedChips, action.chip)
+                if (chip == None):
+                    return False
+                minRange = chip._minRange
+                maxRange = chip._maxRange
+        isPushPullChip = (((action.chip == CHIP_BOXING_GLOVE) or (action.chip == CHIP_GRAPPLE)))
+        if (isPushPullChip and (action.targetEntity != None)):
+            enemyPos = action.targetEntity._cellPos
+            dist = getCellDistance(fromCell, enemyPos)
+            if (dist == None):
+                return False
+            if ((dist < minRange) or (dist > maxRange)):
+                return False
+            if (not isOnSameLine(fromCell, enemyPos)):
+                return False
+            if (not lineOfSight(fromCell, enemyPos)):
+                return False
+            return True
+        dist = getCellDistance(fromCell, toCell)
+        if (dist == None):
+            return False
+        if ((dist < minRange) or (dist > maxRange)):
+            return False
+        if (isPushPullChip and (not isOnSameLine(fromCell, toCell))):
+            return False
+        if (not lineOfSight(fromCell, toCell)):
+            return False
+        return True
+    
+    def hasResourcesFor(self, action):
+        tpCost = 0
+        mpCost = 0
+        if (action.weaponId != (-1)):
+            weapon = lw_get(arsenal.playerEquippedWeapons, action.weaponId)
+            if (weapon != None):
+                tpCost = lw_add(tpCost, weapon._cost)
+        if (action.chip != (-1)):
+            tpCost = lw_add(tpCost, getChipCost(action.chip))
+        if (((action.type == Action.MOVEMENT_OFFENSIVE) or (action.type == Action.MOVEMENT_HNS)) or (action.type == Action.MOVEMENT_APPROACH)):
+            pathLen = getCachedPathLength(player._cellPos, action.targetCell)
+            if ((pathLen != None) and (pathLen > player._currMp)):
+                return False
+        return (player._currTp >= tpCost)
+    
+    def validateAttackGeometry(self, fromCell, targetCell, item):
+        dist = getCellDistance(fromCell, targetCell)
+        if (dist == None):
+            return {'valid': False, 'distance': (-1)}
+        if ((dist < item._minRange) or (dist > item._maxRange)):
+            return {'valid': False, 'distance': dist}
+        if (not lineOfSight(fromCell, targetCell)):
+            return {'valid': False, 'distance': dist}
+        return {'valid': True, 'distance': dist}
+    
+    def isChipAvailable(self, chipId, requiredTP=(-1)):
+        if (not mapContainsKey(arsenal.playerEquippedChips, chipId)):
+            return False
+        if (getCooldown(chipId, player._id) > 0):
+            return False
+        if ((requiredTP > 0) and (player._currTp < requiredTP)):
+            return False
+        return True
+    
+    def shouldUseLeatherBoots(self, targetCell, secondaryCell=(-1)):
+        hasMPBuff = player.hasEffect(EFFECT_BUFF_MP)
+        if hasMPBuff:
+            return False
+        playerMP = player._currMp
+        pathLen = getCachedPathLength(player._cellPos, targetCell)
+        if (pathLen == None):
+            return False
+        if (secondaryCell == (-1)):
+            if ((pathLen > playerMP) and (pathLen <= lw_add(playerMP, 2))):
+                return True
+        else:
+            pathToSecondary = getCachedPathLength(targetCell, secondaryCell)
+            if (pathToSecondary == None):
+                return False
+            totalNeeded = lw_add(pathLen, pathToSecondary)
+            if ((totalNeeded > playerMP) and (totalNeeded <= lw_add(playerMP, 2))):
+                return True
+        return False
+    
+    def shouldApplyStatBuff(self, chipId, buffEffectId, minTP, minTurnsRemaining=1):
+        if (not self.isChipAvailable(chipId)):
+            return False
+        playerTP = player._currTp
+        if (playerTP < minTP):
+            return False
+        if player.hasEffect(buffEffectId):
+            buffRemaining = player.getEffectRemaining(buffEffectId)
+            if (buffRemaining > minTurnsRemaining):
+                return False
+            return True
+        return True
+    
+    def calculateMinimumAttackTP(self):
+        playerPos = player._cellPos
+        minWeaponTP = 999
+        if mapContainsKey(fieldMap.damageMap, playerPos):
+            cellObj = lw_get(fieldMap.damageMap, playerPos)
+            if ((cellObj._weaponsList != None) and (count(cellObj._weaponsList) > 0)):
+                currentWeapon = getWeapon()
+                for w in lw_values(cellObj._weaponsList):
+                    swapCost = (1 if ((currentWeapon != w._id)) else 0)
+                    totalCost = lw_add(swapCost, w._cost)
+                    if (totalCost < minWeaponTP):
+                        minWeaponTP = totalCost
+        if (minWeaponTP == 999):
+            cheapestCost = 999
+            for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+                if (wObj._cost < cheapestCost):
+                    cheapestCost = wObj._cost
+            minWeaponTP = lw_add(1, cheapestCost)
+        return minWeaponTP
+    
+    def validateTPBudget(self, buffCost):
+        playerTP = player._currTp
+        minAttackTP = self.calculateMinimumAttackTP()
+        remainingTP = lw_sub(playerTP, buffCost)
+        if (remainingTP >= minAttackTP):
+            return True
+        return False
+    
+    def calculateOptimalKiteDistance(self, target):
+        enemyMaxRange = 0
+        playerMaxRange = 0
+        enemyWeapons = getWeapons(target._id)
+        if (enemyWeapons != None):
+            ew = 0
+            while (ew < count(enemyWeapons)):
+                ewRange = getWeaponMaxRange(lw_get(enemyWeapons, ew))
+                if (ewRange > enemyMaxRange):
+                    enemyMaxRange = ewRange
+                ew = lw_add(ew, 1)
+        for pw in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+            pwObj = lw_get(arsenal.playerEquippedWeapons, pw)
+            if (pwObj._maxRange > playerMaxRange):
+                playerMaxRange = pwObj._maxRange
+        minKite = lw_add(enemyMaxRange, 1)
+        maxKite = playerMaxRange
+        optimalKite = lw_add(minKite, 1)
+        return {'min': minKite, 'max': maxKite, 'optimal': optimalKite, 'enemyRange': enemyMaxRange, 'playerRange': playerMaxRange}
+    
+    def getStrategyName(self):
+        return "BASE"
+    
+    def debugStrategy(self, message):
+        pass
+    
+    def selectBestTarget(self):
+        enemies = fieldMap.getEnemySubMap()
+        best = None
+        bestScore = (-1)
+        for e in lw_values(enemies):
+            if isDead(e._id):
+                continue
+            score = 0
+            if ((self.getStrategyName() == "STR") or (self.getStrategyName() == "AGI")):
+                score = lw_sub(10000, e._currHealth)
+            else:
+                if (self.getStrategyName() == "MAGIC"):
+                    if (not e.hasEffect(EFFECT_POISON)):
+                        score = lw_add(score, 5000)
+                    score = lw_add(score, (lw_sub(10000, e._currHealth)))
+                else:
+                    score = lw_sub(10000, e._currHealth)
+            dist = getCellDistance(player._cellPos, e._cellPos)
+            if (dist != None):
+                score = lw_num(score) - lw_num(lw_mul(dist, 10))
+            if (score > bestScore):
+                bestScore = score
+                best = e
+        return best
+    
+    def selectBestHealingChip(self, hpPercent):
+        currentHP = getLife()
+        maxHP = getTotalLife()
+        missingHP = lw_sub(maxHP, currentHP)
+        currentTP = getTP()
+        if mapContainsKey(arsenal.playerEquippedChips, CHIP_REGENERATION):
+            regen = lw_get(arsenal.playerEquippedChips, CHIP_REGENERATION)
+            if ((getCooldown(CHIP_REGENERATION, getEntity()) == 0) and (currentTP >= regen._cost)):
+                if (hpPercent < 25):
+                    return {'chipId': CHIP_REGENERATION, 'name': "REGENERATION", 'priority': 1}
+        if mapContainsKey(arsenal.playerEquippedChips, CHIP_SERUM):
+            if ((getCooldown(CHIP_SERUM, getEntity()) == 0) and (currentTP >= 8)):
+                if ((hpPercent >= 25) and (hpPercent < 50)):
+                    return {'chipId': CHIP_SERUM, 'name': "SERUM", 'priority': 2}
+        if mapContainsKey(arsenal.playerEquippedChips, CHIP_REMISSION):
+            if ((getCooldown(CHIP_REMISSION, getEntity()) == 0) and (currentTP >= 5)):
+                if ((((hpPercent >= 50) and (hpPercent < 70))) or (missingHP < 150)):
+                    return {'chipId': CHIP_REMISSION, 'name': "REMISSION", 'priority': 3}
+        return None
+    
+    def findBestReachableDamageCell(self, maxMP):
+        playerPos = player._cellPos
+        bestCell = None
+        bestDamage = (-1)
+        bestDist = 99999
+        for c in lw_values(fieldMap.damageMap):
+            pathLen = getCachedPathLength(playerPos, c._id)
+            if ((pathLen == None) or (pathLen > maxMP)):
+                continue
+            if ((c._totalDamage > bestDamage) or (((c._totalDamage == bestDamage) and (pathLen < bestDist)))):
+                bestDamage = c._totalDamage
+                bestCell = c
+                bestDist = pathLen
+        return bestCell
+    
+    def projectTotalDamageOutput(self, includeBuffs=False, fromCell=(-1), availableTP=(-1), targetEntity=None):
+        if (fromCell == (-1)):
+            fromCell = player._cellPos
+        if (availableTP == (-1)):
+            availableTP = player._currTp
+        totalDamage = 0
+        playerTP = availableTP
+        buffBonus = 0
+        if includeBuffs:
+            if (self.getStrategyName() == "STR"):
+                if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID) and (getCooldown(CHIP_STEROID, player._id) == 0)) and (not player.hasEffect(EFFECT_BUFF_STRENGTH))):
+                    buffBonus = 160
+                    playerTP = lw_num(playerTP) - lw_num(7)
+            else:
+                if (self.getStrategyName() == "AGI"):
+                    if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP) and (getCooldown(CHIP_WARM_UP, player._id) == 0)) and (not player.hasEffect(EFFECT_BUFF_AGILITY))):
+                        buffBonus = 180
+                        playerTP = lw_num(playerTP) - lw_num(7)
+        if mapContainsKey(fieldMap.damageMap, fromCell):
+            cell = lw_get(fieldMap.damageMap, fromCell)
+            wIdx = 0
+            while (wIdx < count(cell._weaponsList)):
+                w = lw_get(cell._weaponsList, wIdx)
+                if (w == None):
+                    wIdx = lw_add(wIdx, 1)
+                    continue
+                if (targetEntity != None):
+                    dist = getCellDistance(fromCell, targetEntity._cellPos)
+                    if (((dist == None) or (dist < w._minRange)) or (dist > w._maxRange)):
+                        wIdx = lw_add(wIdx, 1)
+                        continue
+                    if (not lineOfSight(fromCell, targetEntity._cellPos)):
+                        wIdx = lw_add(wIdx, 1)
+                        continue
+                uses = min(w._maxUse, floor(lw_div(playerTP, w._cost)))
+                if (uses > 0):
+                    netDmg = (arsenal.getNetDamageAgainstTarget(lw_add(player._strength, buffBonus), player._magic, player._wisdom, player._science, w._id, targetEntity) if (targetEntity != None) else lw_get(arsenal.getDamageBreakdown(lw_add(player._strength, buffBonus), player._magic, player._wisdom, player._science, w._id), 'total'))
+                    totalDamage = lw_add(totalDamage, lw_mul(netDmg, uses))
+                    playerTP = lw_num(playerTP) - lw_num(lw_mul(w._cost, uses))
+                wIdx = lw_add(wIdx, 1)
+        for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+            c = lw_get(arsenal.playerEquippedChips, cid)
+            if (c == None):
+                continue
+            if (playerTP < c._cost):
+                continue
+            if (getCooldown(c._id, player._id) > 0):
+                continue
+            if ((not mapContainsKey(c._effects, EFFECT_DAMAGE)) and (not mapContainsKey(c._effects, EFFECT_POISON))):
+                continue
+            if (targetEntity != None):
+                distC = getCellDistance(fromCell, targetEntity._cellPos)
+                if (((distC == None) or (distC < c._minRange)) or (distC > c._maxRange)):
+                    continue
+                if (not lineOfSight(fromCell, targetEntity._cellPos)):
+                    continue
+            chipUses = min(c._maxUse, floor(lw_div(playerTP, c._cost)))
+            if (chipUses > 0):
+                netChipDmg = (arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, c._id, targetEntity) if (targetEntity != None) else lw_get(arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, c._id), 'total'))
+                totalDamage = lw_add(totalDamage, lw_mul(netChipDmg, chipUses))
+                playerTP = lw_num(playerTP) - lw_num(lw_mul(c._cost, chipUses))
+        return totalDamage
+    
+    def findBestDamageCellOnPath(self, targetCell, maxMP):
+        playerPos = player._cellPos
+        pathCells = getPath(playerPos, targetCell)
+        if ((pathCells == None) or (count(pathCells) == 0)):
+            return None
+        bestCell = None
+        bestDamage = (-1)
+        bestDist = 99999
+        i = 0
+        while (i < count(pathCells)):
+            cell = lw_get(pathCells, i)
+            if (cell == playerPos):
+                i = lw_add(i, 1)
+                continue
+            distToCell = getCachedPathLength(playerPos, cell)
+            if ((distToCell == None) or (distToCell > maxMP)):
+                i = lw_add(i, 1)
+                continue
+            if mapContainsKey(fieldMap.damageMap, cell):
+                cellObj = lw_get(fieldMap.damageMap, cell)
+                if ((cellObj._totalDamage > bestDamage) or (((cellObj._totalDamage == bestDamage) and (distToCell < bestDist)))):
+                    bestDamage = cellObj._totalDamage
+                    bestCell = cellObj
+                    bestDist = distToCell
+            i = lw_add(i, 1)
+        return bestCell
+    
+    def useApproachChipsFromCurrentPosition(self, target, availableTP, debugPrefix):
+        playerPos = player._cellPos
+        originalTP = availableTP
+        minTPReserve = 2
+        usableChips = []
+        for cid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+            chipObj = lw_get(arsenal.playerEquippedChips, cid)
+            if (chipObj == None):
+                continue
+            if (availableTP < lw_add(chipObj._cost, minTPReserve)):
+                continue
+            if (getCooldown(chipObj._id, player._id) > 0):
+                continue
+            if ((not mapContainsKey(chipObj._effects, EFFECT_DAMAGE)) and (not mapContainsKey(chipObj._effects, EFFECT_POISON))):
+                continue
+            distToTarget = getCellDistance(playerPos, target._cellPos)
+            if (((distToTarget == None) or (distToTarget < chipObj._minRange)) or (distToTarget > chipObj._maxRange)):
+                continue
+            if (not lineOfSight(playerPos, target._cellPos)):
+                continue
+            netDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, chipObj._id, target)
+            push(usableChips, {'chip': chipObj, 'damage': netDmg, 'id': chipObj._id})
+        i = 0
+        while (i < count(usableChips)):
+            bestIdx = i
+            j = lw_add(i, 1)
+            while (j < count(usableChips)):
+                if (lw_get(lw_get(usableChips, j), 'damage') > lw_get(lw_get(usableChips, bestIdx), 'damage')):
+                    bestIdx = j
+                j = lw_add(j, 1)
+            if (bestIdx != i):
+                tmp = lw_get(usableChips, i)
+                lw_put(usableChips, i, lw_get(usableChips, bestIdx))
+                lw_put(usableChips, bestIdx, tmp)
+            i = lw_add(i, 1)
+        chipsUsed = 0
+        ci = 0
+        while (ci < count(usableChips)):
+            chipRec = lw_get(usableChips, ci)
+            chip = lw_get(chipRec, 'chip')
+            if (availableTP < lw_add(chip._cost, minTPReserve)):
+                ci = lw_add(ci, 1)
+                continue
+            actualUses = 0
+            while ((actualUses < chip._maxUse) and (availableTP >= lw_add(chip._cost, minTPReserve))):
+                result = useChipOnCell(chip._id, target._cellPos)
+                if (result == USE_SUCCESS):
+                    availableTP = lw_num(availableTP) - lw_num(chip._cost)
+                    actualUses = lw_add(actualUses, 1)
+                    chipsUsed = lw_add(chipsUsed, 1)
+                else:
+                    break
+            if (availableTP <= minTPReserve):
+                break
+            ci = lw_add(ci, 1)
+        tpSpent = lw_sub(originalTP, availableTP)
+        if (chipsUsed > 0):
+            player.updateEntity()
+        return tpSpent
+    
+    def findNearbyDamageCellWithEscape(self, safeCell, maxMP):
+        playerPos = player._cellPos
+        bestCell = None
+        bestDamage = (-1)
+        bestDist = 99999
+        for cellObj in lw_values(fieldMap.damageMap):
+            if (cellObj._id == playerPos):
+                continue
+            distToCell = getCachedPathLength(playerPos, cellObj._id)
+            if (((distToCell == None) or (distToCell > maxMP)) or (distToCell == 0)):
+                continue
+            remainingMP = lw_sub(maxMP, distToCell)
+            distToSafeFromHere = getCachedPathLength(cellObj._id, safeCell)
+            if ((distToSafeFromHere != None) and (distToSafeFromHere <= remainingMP)):
+                if ((cellObj._totalDamage > bestDamage) or (((cellObj._totalDamage == bestDamage) and (distToCell < bestDist)))):
+                    bestDamage = cellObj._totalDamage
+                    bestCell = cellObj
+                    bestDist = distToCell
+        return bestCell
+    
+    def findDamageCellOnEscapeRoute(self, safeCell, maxMP):
+        playerPos = player._cellPos
+        pathToSafe = getPath(playerPos, safeCell)
+        if ((pathToSafe == None) or (count(pathToSafe) == 0)):
+            return None
+        bestCell = None
+        bestDamage = (-1)
+        bestDist = 99999
+        i = 0
+        while (i < count(pathToSafe)):
+            pathCell = lw_get(pathToSafe, i)
+            if (pathCell == playerPos):
+                i = lw_add(i, 1)
+                continue
+            distToCell = getCachedPathLength(playerPos, pathCell)
+            if ((distToCell == None) or (distToCell > maxMP)):
+                i = lw_add(i, 1)
+                continue
+            if mapContainsKey(fieldMap.damageMap, pathCell):
+                cellObj = lw_get(fieldMap.damageMap, pathCell)
+                remainingMP = lw_sub(maxMP, distToCell)
+                distToSafeFromHere = getCachedPathLength(pathCell, safeCell)
+                if ((distToSafeFromHere != None) and (distToSafeFromHere <= remainingMP)):
+                    if ((cellObj._totalDamage > bestDamage) or (((cellObj._totalDamage == bestDamage) and (distToCell < bestDist)))):
+                        bestDamage = cellObj._totalDamage
+                        bestCell = cellObj
+                        bestDist = distToCell
+            i = lw_add(i, 1)
+        return bestCell
+    
+    def detectFightType(self):
+        enemies = fieldMap.getEnemySubMap()
+        chests = fieldMap.getChestSubMap()
+        enemyList = []
+        for eid in lw_values(mapKeys(enemies)):
+            push(enemyList, lw_get(enemies, eid))
+        chestList = []
+        for cid in lw_values(mapKeys(chests)):
+            push(chestList, lw_get(chests, cid))
+        hasCrystals = False
+        hasGrail = False
+        i = 0
+        while (i < count(enemyList)):
+            e = lw_get(enemyList, i)
+            name = getName(e._id)
+            if ((name == "Crystal") or (name == "Cristal")):
+                hasCrystals = True
+            if ((name == "Grail") or (name == "Graal")):
+                hasGrail = True
+            i = lw_add(i, 1)
+        if (hasCrystals and hasGrail):
+            return "boss"
+        if ((count(enemyList) == 0) and (count(chestList) > 0)):
+            return "chest"
+        j = 0
+        while (j < count(enemyList)):
+            e2 = lw_get(enemyList, j)
+            entityType = getType(e2._id)
+            if (entityType == ENTITY_LEEK):
+                return "pvp"
+            j = lw_add(j, 1)
+        return "pve"
+    
+    def turnOneBuffs(self):
+        if (_isBossFight and (_bossPhase == "PUZZLE")):
+            if mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE):
+                useChip(CHIP_KNOWLEDGE, player._id)
+            if (getWeapon() == None):
+                setWeapon(arsenal.getHighestDamageWeapon())
+            return None
+        nearbyBurst = False
+        closestForBuff = fieldMap.getClosestEnemy()
+        if (closestForBuff != None):
+            burstProfile = getEnemyProfile(closestForBuff._id)
+            burstDist = getCellDistance(player._cellPos, closestForBuff._cellPos)
+            if (burstDist == None):
+                burstDist = 99999
+            if (((burstProfile != None) and lw_get(burstProfile, 'isBurstBuild')) and (burstDist <= 8)):
+                nearbyBurst = True
+        if nearbyBurst:
+            if mapContainsKey(arsenal.playerEquippedChips, CHIP_FORTRESS):
+                if (getCooldown(CHIP_FORTRESS, player._id) == 0):
+                    useChip(CHIP_FORTRESS, player._id)
+            if mapContainsKey(arsenal.playerEquippedChips, CHIP_WALL):
+                if (getCooldown(CHIP_WALL, player._id) == 0):
+                    useChip(CHIP_WALL, player._id)
+            if mapContainsKey(arsenal.playerEquippedChips, CHIP_RAMPART):
+                if (getCooldown(CHIP_RAMPART, player._id) == 0):
+                    useChip(CHIP_RAMPART, player._id)
+        isMagicBuild = ((player._magic > lw_add(player._strength, 100)) and (player._magic > lw_add(player._agility, 100)))
+        isBruiserReflect = (lw__playerBuildType == BUILD_BRUISER_REFLECT)
+        if isBruiserReflect:
+            pass
+        else:
+            if (not isMagicBuild):
+                if mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE):
+                    useChip(CHIP_KNOWLEDGE, player._id)
+                if (not nearbyBurst):
+                    if mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION):
+                        useChip(CHIP_ELEVATION, player._id)
+                    if mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING):
+                        useChip(CHIP_ARMORING, player._id)
+        fightType = self.detectFightType()
+        closestEnemy = fieldMap.getClosestEnemy()
+        distToEnemy = 99999
+        if (closestEnemy != None):
+            distToEnemy = getCellDistance(player._cellPos, closestEnemy._cellPos)
+            if (distToEnemy == None):
+                distToEnemy = 99999
+        if (fightType == "boss"):
+            if (getWeapon() == None):
+                setWeapon(arsenal.getHighestDamageWeapon())
+            return None
+        if (fightType == "chest"):
+            if (getWeapon() == None):
+                setWeapon(arsenal.getHighestDamageWeapon())
+            return None
+        if (distToEnemy > 10):
+            if ((player._strength >= player._agility) and (player._strength >= player._magic)):
+                if self.isChipAvailable(CHIP_FORTRESS, 12):
+                    useChip(CHIP_FORTRESS, player._id)
+        if (getWeapon() == None):
+            setWeapon(arsenal.getHighestDamageWeapon())
+    
+    def createMovementAction(self, type, targetHitCellID, target):
+        push(self._actions, Action(type, (-1), (-1), targetHitCellID, target))
+        targetName = (getName(target._id) if (target != None) else "none")
+    
+    def createAttackAction(self, type, target, weaponID=(-1), chipID=(-1), aimCell=(-1)):
+        targetCell = (aimCell if ((aimCell != (-1))) else target._cellPos)
+        push(self._actions, Action(type, weaponID, chipID, targetCell, target))
+    
+    def createOffensiveScenario(self, target, targetHitCell):
+        if (player._magic > player._strength):
+            weightedCell = fieldMap.getBestWeightedDamageCell(1.5, 1)
+            if (weightedCell != (-1)):
+                targetHitCell = weightedCell
+        hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
+        if (hnsApproach != None):
+            adopt = False
+            if (lw_get(hnsApproach, 'canAttack') or (targetHitCell == (-1))):
+                adopt = True
+            else:
+                if ((targetHitCell != (-1)) and (targetHitCell != None)):
+                    if (mapContainsKey(fieldMap.damageMap, lw_get(hnsApproach, 'cell')) and mapContainsKey(fieldMap.damageMap, targetHitCell._id)):
+                        hCellObj = lw_get(fieldMap.damageMap, lw_get(hnsApproach, 'cell'))
+                        if (hCellObj._totalDamage == targetHitCell._totalDamage):
+                            distCurrent = getCachedPathLength(player._cellPos, targetHitCell._id)
+                            distH = getCachedPathLength(player._cellPos, hCellObj._id)
+                            if (((distH != None) and (distCurrent != None)) and (distH < distCurrent)):
+                                adopt = True
+            if adopt:
+                if mapContainsKey(fieldMap.damageMap, lw_get(hnsApproach, 'cell')):
+                    targetHitCell = lw_get(fieldMap.damageMap, lw_get(hnsApproach, 'cell'))
+                else:
+                    targetHitCell = Cell(lw_get(hnsApproach, 'cell'), False, (-1), 0, 0, False, (-1), (-1))
+        playerPos = player._cellPos
+        playerMP = player._currMp
+        playerTP = player._currTp
+        pathLength = getCachedPathLength(playerPos, targetHitCell._id)
+        if (pathLength > playerMP):
+            self.createMovementAction(Action.MOVEMENT_APPROACH, targetHitCell._id, target)
+            return None
+        if (pathLength > 0):
+            self.createMovementAction(Action.MOVEMENT_OFFENSIVE, targetHitCell._id, target)
+        playerPos = targetHitCell._id
+        playerMP = lw_num(playerMP) - lw_num(pathLength)
+        if ((targetHitCell._bestType == 0) and (targetHitCell._highestDamageWeapon != (-1))):
+            if (getWeapon() != targetHitCell._highestDamageWeapon._id):
+                if (playerTP < lw_add(1, targetHitCell._highestDamageWeapon._cost)):
+                    pass
+                else:
+                    self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, targetHitCell._highestDamageWeapon._id, (-1))
+                    playerTP = lw_num(playerTP) - lw_num(1)
+            useCount = targetHitCell._highestDamageWeapon._maxUse
+            while ((playerTP >= targetHitCell._highestDamageWeapon._cost) and (useCount > 0)):
+                self.createAttackAction(Action.ACTION_DIRECT, target, targetHitCell._highestDamageWeapon._id, (-1))
+                playerTP = lw_num(playerTP) - lw_num(targetHitCell._highestDamageWeapon._cost)
+                useCount = lw_num(useCount) - lw_num(1)
+        else:
+            if ((targetHitCell._bestType == 1) and (targetHitCell._highestDamageChip != (-1))):
+                chipRef = targetHitCell._highestDamageChip
+                chipUses = chipRef._maxUse
+                while ((playerTP >= chipRef._cost) and (chipUses > 0)):
+                    self.createAttackAction(Action.ACTION_DIRECT, target, (-1), chipRef._id)
+                    playerTP = lw_num(playerTP) - lw_num(chipRef._cost)
+                    chipUses = lw_num(chipUses) - lw_num(1)
+        primaryWid = (-1)
+        if ((targetHitCell._highestDamageWeapon != (-1)) and (targetHitCell._highestDamageWeapon != None)):
+            primaryWid = targetHitCell._highestDamageWeapon._id
+        weaponIds = mapKeys(arsenal.playerEquippedWeapons)
+        wi = 0
+        while (wi < count(weaponIds)):
+            wid = lw_get(weaponIds, wi)
+            wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+            if (wObj == None):
+                wi = lw_add(wi, 1)
+                continue
+            if (wObj._id == primaryWid):
+                wi = lw_add(wi, 1)
+                continue
+            if (playerTP < lw_add(wObj._cost, 1)):
+                wi = lw_add(wi, 1)
+                continue
+            secondHitCell = fieldMap.getClosestHitCellForWeapon(wObj)
+            if (secondHitCell == (-1)):
+                wi = lw_add(wi, 1)
+                continue
+            secondPathLength = getCachedPathLength(playerPos, secondHitCell._id)
+            if ((secondPathLength != None) and (secondPathLength <= playerMP)):
+                if (secondPathLength > 0):
+                    self.createMovementAction(Action.MOVEMENT_OFFENSIVE, secondHitCell._id, target)
+                    playerMP = lw_num(playerMP) - lw_num(secondPathLength)
+                self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, (-1))
+                playerTP = lw_num(playerTP) - lw_num(1)
+                while (playerTP >= wObj._cost):
+                    self.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, (-1))
+                    playerTP = lw_num(playerTP) - lw_num(wObj._cost)
+            wi = lw_add(wi, 1)
+        if (playerTP > 0):
+            if (targetHitCell._bestType == 0):
+                for c in lw_values(arsenal.playerEquippedChips):
+                    if (playerTP < c._cost):
+                        continue
+                    if ((not mapContainsKey(c._effects, EFFECT_DAMAGE)) and (not mapContainsKey(c._effects, EFFECT_POISON))):
+                        continue
+                    self.createAttackAction(Action.ACTION_DIRECT, target, (-1), c._id)
+                    playerTP = lw_num(playerTP) - lw_num(c._cost)
+            else:
+                activeWeapon = getWeapon()
+                if ((activeWeapon != None) and mapContainsKey(arsenal.playerEquippedWeapons, activeWeapon)):
+                    aw = lw_get(arsenal.playerEquippedWeapons, activeWeapon)
+                    useCount2 = aw._maxUse
+                    while ((playerTP >= aw._cost) and (useCount2 > 0)):
+                        self.createAttackAction(Action.ACTION_DIRECT, target, aw._id, (-1))
+                        playerTP = lw_num(playerTP) - lw_num(aw._cost)
+                        useCount2 = lw_num(useCount2) - lw_num(1)
+        if (playerMP > 0):
+            hnsInfo = fieldMap.findHideAndSeekCell()
+            if (hnsInfo != None):
+                hideCellId = lw_get(hnsInfo, 'cell')
+                if (hideCellId != targetHitCell._id):
+                    legLen = getCachedPathLength(targetHitCell._id, hideCellId)
+                    if ((legLen != None) and (legLen <= playerMP)):
+                        self.createMovementAction(Action.MOVEMENT_HNS, hideCellId, target)
+                        playerMP = lw_num(playerMP) - lw_num(legLen)
+    
+    def executeWeaponFocusedOffensive(self, target, bestWeaponCell, playerPos, playerMP, playerTP, chipExclusionList, debugPrefix, skipHideAndSeek):
+        if (skipHideAndSeek == None):
+            skipHideAndSeek = False
+        hnsApproach = fieldMap.findHideAndSeekCell("approach", target)
+        if (((hnsApproach != None) and lw_get(hnsApproach, 'canAttack')) and mapContainsKey(fieldMap.damageMap, lw_get(hnsApproach, 'cell'))):
+            hCellObj = lw_get(fieldMap.damageMap, lw_get(hnsApproach, 'cell'))
+            if (hCellObj._highestDamageWeapon != (-1)):
+                distOrig = getCachedPathLength(playerPos, bestWeaponCell._id)
+                distH = getCachedPathLength(playerPos, hCellObj._id)
+                if ((((distH != None) and (distOrig != None)) and (hCellObj._weaponDamage >= bestWeaponCell._weaponDamage)) and (distH < distOrig)):
+                    bestWeaponCell = hCellObj
+        fieldMap.markChosenDestinationAndPath(player._cellPos, bestWeaponCell._id)
+        pathLen = getCachedPathLength(playerPos, bestWeaponCell._id)
+        if (pathLen == None):
+            pathLen = 99999
+        reachedWeaponCell = False
+        if (pathLen > playerMP):
+            reachableCell = self.findBestReachableDamageCell(playerMP)
+            if ((reachableCell != None) and (reachableCell._id != playerPos)):
+                self.createMovementAction(Action.MOVEMENT_APPROACH, reachableCell._id, target)
+                self.executeAndFlushActions()
+                playerPos = player._cellPos
+                playerMP = player._currMp
+                playerTP = player._currTp
+                if (playerPos == reachableCell._id):
+                    reachedWeaponCell = True
+                    bestWeaponCell = reachableCell
+            else:
+                usedLeatherBoots = False
+                if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_LEATHER_BOOTS) and (getCooldown(CHIP_LEATHER_BOOTS, player._id) == 0)) and (playerTP >= 3)):
+                    boostedMP = lw_add(playerMP, 2)
+                    wouldReachCell = self.findBestReachableDamageCell(boostedMP)
+                    if (wouldReachCell != None):
+                        useChip(CHIP_LEATHER_BOOTS, player._id)
+                        playerTP = lw_num(playerTP) - lw_num(3)
+                        player.updateEntity()
+                        playerMP = player._currMp
+                        usedLeatherBoots = True
+                        reachableCell = self.findBestReachableDamageCell(playerMP)
+                    if ((reachableCell != None) and (reachableCell._id != playerPos)):
+                        self.createMovementAction(Action.MOVEMENT_APPROACH, reachableCell._id, target)
+                        self.executeAndFlushActions()
+                        playerPos = player._cellPos
+                        playerMP = player._currMp
+                        playerTP = player._currTp
+                        if (playerPos == reachableCell._id):
+                            reachedWeaponCell = True
+                            bestWeaponCell = reachableCell
+                bsApproachTele = getAvailableTeleportChip(arsenal, player._id)
+                if (((((reachableCell == None) and (bsApproachTele != None)) and (playerTP >= getCachedChipCost(bsApproachTele))) and (bestWeaponCell != (-1))) and (bestWeaponCell != None)):
+                    tpTeleportApproach = getCachedChipCost(bsApproachTele)
+                    approachMaxRange = getTeleportMaxRange(bsApproachTele)
+                    teleportDist = getCellDistance(playerPos, bestWeaponCell._id)
+                    if (((teleportDist != None) and (teleportDist >= 1)) and (teleportDist <= approachMaxRange)):
+                        tpAfterTeleport = lw_sub(playerTP, tpTeleportApproach)
+                        primaryWeapon = bestWeaponCell._highestDamageWeapon
+                        canAffordPrimary = ((((primaryWeapon != (-1)) and (primaryWeapon != None)) and (tpAfterTeleport >= lw_add(primaryWeapon._cost, 1))))
+                        hasBackupAttacks = (((count(bestWeaponCell._weaponsList) > 1) or (count(bestWeaponCell._chipsList) > 0)))
+                        if ((not canAffordPrimary) and (not hasBackupAttacks)):
+                            pass
+                        else:
+                            teleportResult = useChipOnCell(bsApproachTele, bestWeaponCell._id)
+                            playerTP = lw_num(playerTP) - lw_num(tpTeleportApproach)
+                            if ((teleportResult == USE_SUCCESS) or (teleportResult == USE_CRITICAL)):
+                                player.updateEntity()
+                                playerPos = player._cellPos
+                                playerMP = player._currMp
+                                playerTP = player._currTp
+                                if (playerPos == bestWeaponCell._id):
+                                    reachedWeaponCell = True
+                if (((reachableCell == None) and (not reachedWeaponCell)) and (playerMP > 0)):
+                    cellOnPath = self.findBestDamageCellOnPath(bestWeaponCell._id, playerMP)
+                    if ((cellOnPath != None) and (cellOnPath._id != playerPos)):
+                        self.createMovementAction(Action.MOVEMENT_APPROACH, cellOnPath._id, target)
+                        self.executeAndFlushActions()
+                        playerPos = player._cellPos
+                        playerMP = player._currMp
+                        playerTP = player._currTp
+                        if (playerPos == cellOnPath._id):
+                            reachedWeaponCell = True
+                            bestWeaponCell = cellOnPath
+                    else:
+                        tpSpentOnChips = self.useApproachChipsFromCurrentPosition(target, playerTP, debugPrefix)
+                        if (tpSpentOnChips > 0):
+                            playerTP = lw_num(playerTP) - lw_num(tpSpentOnChips)
+                            player._currTp = playerTP
+                        if (playerMP > 0):
+                            moveResult = moveTowardCell(bestWeaponCell._id)
+                            player.updateEntity()
+                            playerPos = player._cellPos
+                            playerMP = player._currMp
+                            playerTP = player._currTp
+                            if mapContainsKey(fieldMap.damageMap, playerPos):
+                                reachedWeaponCell = True
+                                bestWeaponCell = lw_get(fieldMap.damageMap, playerPos)
+        else:
+            if (pathLen > 0):
+                self.createMovementAction(Action.MOVEMENT_OFFENSIVE, bestWeaponCell._id, target)
+                playerMP = lw_num(playerMP) - lw_num(pathLen)
+                playerPos = bestWeaponCell._id
+                reachedWeaponCell = True
+            else:
+                reachedWeaponCell = True
+        if ((not reachedWeaponCell) and (playerMP == 0)):
+            curCellCheck = (lw_get(fieldMap.damageMap, playerPos) if mapContainsKey(fieldMap.damageMap, playerPos) else None)
+            if ((curCellCheck == None) or (((count(curCellCheck._weaponsList) == 0) and (count(curCellCheck._chipsList) == 0)))):
+                pass
+        primaryWeapon = bestWeaponCell._highestDamageWeapon
+        currentWeaponId = getWeapon()
+        primaryWeaponReady = False
+        if ((reachedWeaponCell and (primaryWeapon != (-1))) and (primaryWeapon != None)):
+            if (currentWeaponId != primaryWeapon._id):
+                if (playerTP >= lw_add(1, primaryWeapon._cost)):
+                    self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, primaryWeapon._id, (-1))
+                    playerTP = lw_num(playerTP) - lw_num(1)
+                    primaryWeaponReady = True
+            else:
+                primaryWeaponReady = True
+            if primaryWeaponReady:
+                currentCellObj = (lw_get(fieldMap.damageMap, playerPos) if mapContainsKey(fieldMap.damageMap, playerPos) else None)
+                optimalAim = target._cellPos
+                if ((currentCellObj != None) and mapContainsKey(currentCellObj._weaponOptimalAims, primaryWeapon._id)):
+                    optimalAim = lw_get(currentCellObj._weaponOptimalAims, primaryWeapon._id)
+                uses = primaryWeapon._maxUse
+                while ((playerTP >= primaryWeapon._cost) and (uses > 0)):
+                    self.createAttackAction(Action.ACTION_DIRECT, target, primaryWeapon._id, (-1), optimalAim)
+                    playerTP = lw_num(playerTP) - lw_num(primaryWeapon._cost)
+                    uses = lw_num(uses) - lw_num(1)
+        primaryWid = (primaryWeapon._id if (((reachedWeaponCell and (primaryWeapon != (-1))) and (primaryWeapon != None))) else (-1))
+        curCellObj = None
+        if mapContainsKey(fieldMap.damageMap, playerPos):
+            curCellObj = lw_get(fieldMap.damageMap, playerPos)
+        if ((curCellObj != None) and (count(curCellObj._weaponsList) > 0)):
+            wL = 0
+            while (wL < count(curCellObj._weaponsList)):
+                wObj = lw_get(curCellObj._weaponsList, wL)
+                if (wObj == None):
+                    wL = lw_add(wL, 1)
+                    continue
+                if (wObj._id == primaryWid):
+                    wL = lw_add(wL, 1)
+                    continue
+                if (playerTP < wObj._cost):
+                    wL = lw_add(wL, 1)
+                    continue
+                currentWeapon = getWeapon()
+                if (currentWeapon != wObj._id):
+                    if (playerTP < 1):
+                        wL = lw_add(wL, 1)
+                        continue
+                    self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, wObj._id, (-1))
+                    playerTP = lw_num(playerTP) - lw_num(1)
+                wOptimalAim = target._cellPos
+                if mapContainsKey(curCellObj._weaponOptimalAims, wObj._id):
+                    wOptimalAim = lw_get(curCellObj._weaponOptimalAims, wObj._id)
+                uses2 = wObj._maxUse
+                while ((playerTP >= wObj._cost) and (uses2 > 0)):
+                    self.createAttackAction(Action.ACTION_DIRECT, target, wObj._id, (-1), wOptimalAim)
+                    playerTP = lw_num(playerTP) - lw_num(wObj._cost)
+                    uses2 = lw_num(uses2) - lw_num(1)
+                wL = lw_add(wL, 1)
+        else:
+            if ((curCellObj == None) and (playerTP > 0)):
+                fallbackWeapons = []
+                for fwid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                    fweaponObj = lw_get(arsenal.playerEquippedWeapons, fwid)
+                    if (fweaponObj == None):
+                        continue
+                    if (fweaponObj._id == primaryWid):
+                        continue
+                    if (playerTP < fweaponObj._cost):
+                        continue
+                    fwdist = getCellDistance(playerPos, target._cellPos)
+                    if (((fwdist == None) or (fwdist < fweaponObj._minRange)) or (fwdist > fweaponObj._maxRange)):
+                        continue
+                    if (not lineOfSight(playerPos, target._cellPos)):
+                        continue
+                    fwnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, fweaponObj._id, target)
+                    push(fallbackWeapons, {'weapon': fweaponObj, 'damage': fwnetDmg})
+                fwi = 0
+                while (fwi < count(fallbackWeapons)):
+                    fwbestIdx = fwi
+                    fwj = lw_add(fwi, 1)
+                    while (fwj < count(fallbackWeapons)):
+                        if (lw_get(lw_get(fallbackWeapons, fwj), 'damage') > lw_get(lw_get(fallbackWeapons, fwbestIdx), 'damage')):
+                            fwbestIdx = fwj
+                        fwj = lw_add(fwj, 1)
+                    if (fwbestIdx != fwi):
+                        fwtmp = lw_get(fallbackWeapons, fwi)
+                        lw_put(fallbackWeapons, fwi, lw_get(fallbackWeapons, fwbestIdx))
+                        lw_put(fallbackWeapons, fwbestIdx, fwtmp)
+                    fwi = lw_add(fwi, 1)
+                fwci = 0
+                while (fwci < count(fallbackWeapons)):
+                    fweaponRec = lw_get(fallbackWeapons, fwci)
+                    fweapon = lw_get(fweaponRec, 'weapon')
+                    fcurrentWeapon = getWeapon()
+                    if (fcurrentWeapon != fweapon._id):
+                        if (playerTP < 1):
+                            fwci = lw_add(fwci, 1)
+                            continue
+                        self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, fweapon._id, (-1))
+                        playerTP = lw_num(playerTP) - lw_num(1)
+                    fwuses = 0
+                    while ((fwuses < fweapon._maxUse) and (playerTP >= fweapon._cost)):
+                        self.createAttackAction(Action.ACTION_DIRECT, target, fweapon._id, (-1), target._cellPos)
+                        playerTP = lw_num(playerTP) - lw_num(fweapon._cost)
+                        fwuses = lw_add(fwuses, 1)
+                    if (playerTP <= 0):
+                        break
+                    fwci = lw_add(fwci, 1)
+                if (count(fallbackWeapons) == 0):
+                    pass
+        if (((playerTP > 0) and (curCellObj != None)) and (count(curCellObj._chipsList) > 0)):
+            dmgChips = []
+            cL = 0
+            while (cL < count(curCellObj._chipsList)):
+                chipObj = lw_get(curCellObj._chipsList, cL)
+                if (chipObj == None):
+                    cL = lw_add(cL, 1)
+                    continue
+                excluded = False
+                ex = 0
+                while (ex < count(chipExclusionList)):
+                    if (chipObj._id == lw_get(chipExclusionList, ex)):
+                        excluded = True
+                        break
+                    ex = lw_add(ex, 1)
+                if excluded:
+                    cL = lw_add(cL, 1)
+                    continue
+                if ((not mapContainsKey(chipObj._effects, EFFECT_DAMAGE)) and (not mapContainsKey(chipObj._effects, EFFECT_POISON))):
+                    cL = lw_add(cL, 1)
+                    continue
+                bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chipObj._id)
+                push(dmgChips, {'chip': chipObj, 'per': lw_get(bd, 'total')})
+                cL = lw_add(cL, 1)
+            i = 0
+            while (i < count(dmgChips)):
+                bestIdx = i
+                j = lw_add(i, 1)
+                while (j < count(dmgChips)):
+                    if (lw_get(lw_get(dmgChips, j), 'per') > lw_get(lw_get(dmgChips, bestIdx), 'per')):
+                        bestIdx = j
+                    j = lw_add(j, 1)
+                if (bestIdx != i):
+                    tmp = lw_get(dmgChips, i)
+                    lw_put(dmgChips, i, lw_get(dmgChips, bestIdx))
+                    lw_put(dmgChips, bestIdx, tmp)
+                i = lw_add(i, 1)
+            dc = 0
+            while (dc < count(dmgChips)):
+                rec = lw_get(dmgChips, dc)
+                chipUse = lw_get(rec, 'chip')
+                if (playerTP < chipUse._cost):
+                    dc = lw_add(dc, 1)
+                    continue
+                if (getCooldown(chipUse._id, player._id) > 0):
+                    dc = lw_add(dc, 1)
+                    continue
+                cOptimalAim = target._cellPos
+                if mapContainsKey(curCellObj._chipOptimalAims, chipUse._id):
+                    cOptimalAim = lw_get(curCellObj._chipOptimalAims, chipUse._id)
+                actualUsesC = 0
+                while ((actualUsesC < chipUse._maxUse) and (playerTP >= chipUse._cost)):
+                    self.createAttackAction(Action.ACTION_DIRECT, target, (-1), chipUse._id, cOptimalAim)
+                    playerTP = lw_num(playerTP) - lw_num(chipUse._cost)
+                    actualUsesC = lw_add(actualUsesC, 1)
+                if (playerTP <= 0):
+                    break
+                dc = lw_add(dc, 1)
+        else:
+            if ((playerTP > 0) and (curCellObj == None)):
+                fallbackChips = []
+                for fcid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                    fchipObj = lw_get(arsenal.playerEquippedChips, fcid)
+                    if (fchipObj == None):
+                        continue
+                    if (playerTP < fchipObj._cost):
+                        continue
+                    if (getCooldown(fchipObj._id, player._id) > 0):
+                        continue
+                    if ((not mapContainsKey(fchipObj._effects, EFFECT_DAMAGE)) and (not mapContainsKey(fchipObj._effects, EFFECT_POISON))):
+                        continue
+                    fexcluded = False
+                    fex = 0
+                    while (fex < count(chipExclusionList)):
+                        if (fchipObj._id == lw_get(chipExclusionList, fex)):
+                            fexcluded = True
+                            break
+                        fex = lw_add(fex, 1)
+                    if fexcluded:
+                        continue
+                    fdist = getCellDistance(playerPos, target._cellPos)
+                    if (((fdist == None) or (fdist < fchipObj._minRange)) or (fdist > fchipObj._maxRange)):
+                        continue
+                    if (not lineOfSight(playerPos, target._cellPos)):
+                        continue
+                    fnetDmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, fchipObj._id, target)
+                    push(fallbackChips, {'chip': fchipObj, 'damage': fnetDmg})
+                fi = 0
+                while (fi < count(fallbackChips)):
+                    fbestIdx = fi
+                    fj = lw_add(fi, 1)
+                    while (fj < count(fallbackChips)):
+                        if (lw_get(lw_get(fallbackChips, fj), 'damage') > lw_get(lw_get(fallbackChips, fbestIdx), 'damage')):
+                            fbestIdx = fj
+                        fj = lw_add(fj, 1)
+                    if (fbestIdx != fi):
+                        ftmp = lw_get(fallbackChips, fi)
+                        lw_put(fallbackChips, fi, lw_get(fallbackChips, fbestIdx))
+                        lw_put(fallbackChips, fbestIdx, ftmp)
+                    fi = lw_add(fi, 1)
+                fci = 0
+                while (fci < count(fallbackChips)):
+                    fchipRec = lw_get(fallbackChips, fci)
+                    fchip = lw_get(fchipRec, 'chip')
+                    factualUses = 0
+                    while ((factualUses < fchip._maxUse) and (playerTP >= fchip._cost)):
+                        self.createAttackAction(Action.ACTION_DIRECT, target, (-1), fchip._id, target._cellPos)
+                        playerTP = lw_num(playerTP) - lw_num(fchip._cost)
+                        factualUses = lw_add(factualUses, 1)
+                    if (playerTP <= 0):
+                        break
+                    fci = lw_add(fci, 1)
+                if (count(fallbackChips) == 0):
+                    pass
+        if ((not skipHideAndSeek) and (playerMP > 0)):
+            hnsInfo = fieldMap.findHideAndSeekCell()
+            if (hnsInfo != None):
+                hideCellId = lw_get(hnsInfo, 'cell')
+                if (hideCellId != playerPos):
+                    legLen = getCachedPathLength(playerPos, hideCellId)
+                    if ((legLen != None) and (legLen <= playerMP)):
+                        self.createMovementAction(Action.MOVEMENT_HNS, hideCellId, target)
+                        playerMP = lw_num(playerMP) - lw_num(legLen)
+        return {'playerMP': playerMP, 'playerTP': playerTP}
+    
+    def findBestWeaponAtPosition(self, position, target):
+        distToTarget = getCellDistance(position, target._cellPos)
+        if (distToTarget == None):
+            return None
+        bestWeapon = None
+        bestDamage = (-1)
+        if (not mapContainsKey(fieldMap.damageMap, position)):
+            return None
+        cell = lw_get(fieldMap.damageMap, position)
+        if (count(cell._weaponsList) == 0):
+            return None
+        wIdx = 0
+        while (wIdx < count(cell._weaponsList)):
+            weapon = lw_get(cell._weaponsList, wIdx)
+            if ((distToTarget >= weapon._minRange) and (distToTarget <= weapon._maxRange)):
+                if lineOfSight(position, target._cellPos):
+                    bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, weapon._id)
+                    dmg = lw_get(bd, 'total')
+                    if (dmg > bestDamage):
+                        bestDamage = dmg
+                        bestWeapon = weapon
+            wIdx = lw_add(wIdx, 1)
+        return bestWeapon
+    
+    def findBestAttackAtPosition(self, position, target):
+        distToTarget = getCellDistance(position, target._cellPos)
+        if (distToTarget == None):
+            return None
+        bestAttack = None
+        bestDamage = (-1)
+        if (not mapContainsKey(fieldMap.damageMap, position)):
+            return None
+        cell = lw_get(fieldMap.damageMap, position)
+        if (count(cell._weaponsList) > 0):
+            wIdx = 0
+            while (wIdx < count(cell._weaponsList)):
+                weapon = lw_get(cell._weaponsList, wIdx)
+                if ((distToTarget >= weapon._minRange) and (distToTarget <= weapon._maxRange)):
+                    if lineOfSight(position, target._cellPos):
+                        bd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, weapon._id)
+                        dmg = lw_get(bd, 'total')
+                        if (dmg > bestDamage):
+                            bestDamage = dmg
+                            bestAttack = {'type': 'weapon', 'id': weapon._id, 'cost': weapon._cost, 'damage': dmg, 'maxUse': weapon._maxUse}
+                wIdx = lw_add(wIdx, 1)
+        if (count(cell._chipsList) > 0):
+            cIdx = 0
+            while (cIdx < count(cell._chipsList)):
+                chip = lw_get(cell._chipsList, cIdx)
+                if ((not mapContainsKey(chip._effects, EFFECT_DAMAGE)) and (not mapContainsKey(chip._effects, EFFECT_POISON))):
+                    cIdx = lw_add(cIdx, 1)
+                    continue
+                if ((distToTarget >= chip._minRange) and (distToTarget <= chip._maxRange)):
+                    if lineOfSight(position, target._cellPos):
+                        if (getCooldown(chip._id, player._id) == 0):
+                            chipBd = arsenal.getDamageBreakdown(player._strength, player._magic, player._wisdom, player._science, chip._id)
+                            chipDmg = lw_get(chipBd, 'total')
+                            if (chipDmg > bestDamage):
+                                bestDamage = chipDmg
+                                bestAttack = {'type': 'chip', 'id': chip._id, 'cost': chip._cost, 'damage': chipDmg, 'maxUse': chip._maxUse}
+                cIdx = lw_add(cIdx, 1)
+        return bestAttack
+    
+    def createDefensiveScenario(self, target, targetHitCell):
+        playerTP = player._currTp
+        playerMP = player._currMp
+        if (getLife() < getTotalLife()):
+            hpPercent = lw_div((lw_mul(getLife(), 100)), getTotalLife())
+            healChip = self.selectBestHealingChip(hpPercent)
+            if (healChip != None):
+                self.createAttackAction(Action.ACTION_DIRECT, player, (-1), lw_get(healChip, 'chipId'))
+                playerTP = lw_num(playerTP) - lw_num(lw_get(healChip, 'cost'))
+        playerPos = player._cellPos
+        bestAttack = self.findBestAttackAtPosition(playerPos, target)
+        attackedFromCurrentPos = False
+        if ((bestAttack != None) and (playerTP >= lw_get(bestAttack, 'cost'))):
+            attackType = lw_get(bestAttack, 'type')
+            attackId = lw_get(bestAttack, 'id')
+            attackName = (getWeaponName(attackId) if ((attackType == 'weapon')) else getChipName(attackId))
+            fleeOptimalAim = target._cellPos
+            currPosObj = (lw_get(fieldMap.damageMap, playerPos) if mapContainsKey(fieldMap.damageMap, playerPos) else None)
+            if (attackType == 'weapon'):
+                if ((currPosObj != None) and mapContainsKey(currPosObj._weaponOptimalAims, attackId)):
+                    fleeOptimalAim = lw_get(currPosObj._weaponOptimalAims, attackId)
+                currentWeapon = getWeapon()
+                if ((currentWeapon != attackId) and (playerTP >= lw_add(1, lw_get(bestAttack, 'cost')))):
+                    self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, attackId, (-1))
+                    playerTP = lw_num(playerTP) - lw_num(1)
+                uses = lw_get(bestAttack, 'maxUse')
+                while ((playerTP >= lw_get(bestAttack, 'cost')) and (uses > 0)):
+                    self.createAttackAction(Action.ACTION_DIRECT, target, attackId, (-1), fleeOptimalAim)
+                    playerTP = lw_num(playerTP) - lw_num(lw_get(bestAttack, 'cost'))
+                    uses = lw_num(uses) - lw_num(1)
+            else:
+                if ((currPosObj != None) and mapContainsKey(currPosObj._chipOptimalAims, attackId)):
+                    fleeOptimalAim = lw_get(currPosObj._chipOptimalAims, attackId)
+                chipUses = lw_get(bestAttack, 'maxUse')
+                while ((playerTP >= lw_get(bestAttack, 'cost')) and (chipUses > 0)):
+                    self.createAttackAction(Action.ACTION_DIRECT, target, (-1), attackId, fleeOptimalAim)
+                    playerTP = lw_num(playerTP) - lw_num(lw_get(bestAttack, 'cost'))
+                    chipUses = lw_num(chipUses) - lw_num(1)
+            player._currTp = playerTP
+            attackedFromCurrentPos = True
+        hns = fieldMap.findHideAndSeekCell()
+        if (hns != None):
+            hCell = lw_get(hns, 'cell')
+            if (hCell != player._cellPos):
+                if ((not attackedFromCurrentPos) and (playerTP >= 6)):
+                    nearbyDamageCell = self.findNearbyDamageCellWithEscape(hCell, playerMP)
+                    damageCellOnPath = (nearbyDamageCell if (nearbyDamageCell != None) else self.findDamageCellOnEscapeRoute(hCell, playerMP))
+                    if (damageCellOnPath != None):
+                        self.createMovementAction(Action.MOVEMENT_HNS, damageCellOnPath._id, target)
+                        self.executeAndFlushActions()
+                        player.updateEntity()
+                        fieldMap.updateMapEntities()
+                        newPos = player._cellPos
+                        attackAtDamageCell = self.findBestAttackAtPosition(newPos, target)
+                        if ((attackAtDamageCell != None) and (playerTP >= lw_get(attackAtDamageCell, 'cost'))):
+                            escapeAttackType = lw_get(attackAtDamageCell, 'type')
+                            escapeAttackId = lw_get(attackAtDamageCell, 'id')
+                            escapeAttackName = (getWeaponName(escapeAttackId) if ((escapeAttackType == 'weapon')) else getChipName(escapeAttackId))
+                            newPosOptimalAim = target._cellPos
+                            newPosObj = (lw_get(fieldMap.damageMap, newPos) if mapContainsKey(fieldMap.damageMap, newPos) else None)
+                            if (escapeAttackType == 'weapon'):
+                                if ((newPosObj != None) and mapContainsKey(newPosObj._weaponOptimalAims, escapeAttackId)):
+                                    newPosOptimalAim = lw_get(newPosObj._weaponOptimalAims, escapeAttackId)
+                                currentWeapon2 = getWeapon()
+                                if ((currentWeapon2 != escapeAttackId) and (playerTP >= lw_add(1, lw_get(attackAtDamageCell, 'cost')))):
+                                    self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, escapeAttackId, (-1))
+                                    playerTP = lw_num(playerTP) - lw_num(1)
+                                uses2 = lw_get(attackAtDamageCell, 'maxUse')
+                                while ((playerTP >= lw_get(attackAtDamageCell, 'cost')) and (uses2 > 0)):
+                                    self.createAttackAction(Action.ACTION_DIRECT, target, escapeAttackId, (-1), newPosOptimalAim)
+                                    playerTP = lw_num(playerTP) - lw_num(lw_get(attackAtDamageCell, 'cost'))
+                                    uses2 = lw_num(uses2) - lw_num(1)
+                            else:
+                                if ((newPosObj != None) and mapContainsKey(newPosObj._chipOptimalAims, escapeAttackId)):
+                                    newPosOptimalAim = lw_get(newPosObj._chipOptimalAims, escapeAttackId)
+                                chipUses2 = lw_get(attackAtDamageCell, 'maxUse')
+                                while ((playerTP >= lw_get(attackAtDamageCell, 'cost')) and (chipUses2 > 0)):
+                                    self.createAttackAction(Action.ACTION_DIRECT, target, (-1), escapeAttackId, newPosOptimalAim)
+                                    playerTP = lw_num(playerTP) - lw_num(lw_get(attackAtDamageCell, 'cost'))
+                                    chipUses2 = lw_num(chipUses2) - lw_num(1)
+                            player._currTp = playerTP
+                        currentPos = player._cellPos
+                        if ((currentPos != hCell) and (player._currMp > 0)):
+                            distToSafe = getCachedPathLength(currentPos, hCell)
+                            if (((distToSafe != None) and (distToSafe > 0)) and (distToSafe <= player._currMp)):
+                                self.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
+                    else:
+                        self.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
+                else:
+                    self.createMovementAction(Action.MOVEMENT_HNS, hCell, target)
+        else:
+            usedMp = moveAwayFrom(target._id)
+    
+    def createAndExecuteDefensiveScenario(self, target):
+        arrayClear(self._actions)
+        self.createDefensiveScenario(target, (-1))
+        self.executeScenario()
+    
+    def hasLethalOpportunity(self, target):
+        if (target == None):
+            return False
+        enemyHP = getLife(target._id)
+        playerTP = player._currTp
+        if ((playerTP >= 20) and (enemyHP < 2000)):
+            return True
+        if ((playerTP >= 15) and (enemyHP < 1500)):
+            return True
+        if ((playerTP >= 10) and (enemyHP < 1000)):
+            return True
+        if ((playerTP >= 5) and (enemyHP < 600)):
+            return True
+        return False
+    
+    def shouldEnterEmergencyMode(self, target):
+        playerHP = getLife()
+        hpPercent = lw_div((lw_mul(playerHP, 100)), getTotalLife())
+        if (hpPercent < 20):
+            return True
+        if self.hasLethalOpportunity(target):
+            return False
+        currentThreat = fieldMap.getThreatAtCell(player._cellPos)
+        if (currentThreat >= playerHP):
+            return True
+        if (lw_mul(currentThreat, 2) > playerHP):
+            return True
+        maxHP = getTotalLife()
+        if ((currentThreat > lw_mul(maxHP, 0.3)) and (hpPercent < 50)):
+            return True
+        if (hpPercent < 35):
+            healChip = self.selectBestHealingChip(hpPercent)
+            if (healChip != None):
+                return True
+        return False
+    
+    def createEmergencyScenario(self, target, targetHitCell):
+        playerHP = getLife()
+        hpPercent = lw_div((lw_mul(playerHP, 100)), getTotalLife())
+        currentThreat = fieldMap.getThreatAtCell(player._cellPos)
+        playerTP = player._currTp
+        isCritical = (((hpPercent < 10) or (currentThreat >= playerHP)))
+        fleeTeleChip = getAvailableTeleportChip(arsenal, player._id)
+        if (isCritical and (fleeTeleChip != None)):
+            tpTeleportFlee = getCachedChipCost(fleeTeleChip)
+            fleeMaxRange = getTeleportMaxRange(fleeTeleChip)
+            if (playerTP >= tpTeleportFlee):
+                bestSafeCell = (-1)
+                bestSafeCellDist = (-1)
+                candidateCell = 0
+                while (candidateCell < 650):
+                    if (isObstacle(candidateCell) or isEntity(candidateCell)):
+                        candidateCell = lw_add(candidateCell, 1)
+                        continue
+                    distToCell = getCellDistance(player._cellPos, candidateCell)
+                    if (((distToCell == None) or (distToCell < 1)) or (distToCell > fleeMaxRange)):
+                        candidateCell = lw_add(candidateCell, 1)
+                        continue
+                    cellThreat = fieldMap.getThreatAtCell(candidateCell)
+                    if (cellThreat > 0):
+                        candidateCell = lw_add(candidateCell, 1)
+                        continue
+                    minDistToEnemies = 999
+                    enemies = getEnemies()
+                    eIdx = 0
+                    while (eIdx < count(enemies)):
+                        enemyCell = getCell(lw_get(enemies, eIdx))
+                        distToEnemy = getCellDistance(candidateCell, enemyCell)
+                        if ((distToEnemy != None) and (distToEnemy < minDistToEnemies)):
+                            minDistToEnemies = distToEnemy
+                        eIdx = lw_add(eIdx, 1)
+                    if (minDistToEnemies > bestSafeCellDist):
+                        bestSafeCellDist = minDistToEnemies
+                        bestSafeCell = candidateCell
+                    candidateCell = lw_add(candidateCell, 1)
+                if (bestSafeCell != (-1)):
+                    teleportAction = Action(Action.ACTION_TELEPORT, (-1), fleeTeleChip, bestSafeCell, target)
+                    push(self._actions, teleportAction)
+                    playerTP = lw_num(playerTP) - lw_num(tpTeleportFlee)
+                    attackAfterTeleport = self.findBestAttackAtPosition(bestSafeCell, target)
+                    if ((attackAfterTeleport != None) and (playerTP >= lw_get(attackAfterTeleport, 'cost'))):
+                        if (lw_get(attackAfterTeleport, 'type') == 'weapon'):
+                            currentWeapon = getWeapon()
+                            if ((currentWeapon != lw_get(attackAfterTeleport, 'id')) and (playerTP >= lw_add(1, lw_get(attackAfterTeleport, 'cost')))):
+                                self.createAttackAction(Action.ACTION_WEAPON_SWAP, target, lw_get(attackAfterTeleport, 'id'), (-1))
+                                playerTP = lw_num(playerTP) - lw_num(1)
+                            uses = lw_get(attackAfterTeleport, 'maxUse')
+                            while ((playerTP >= lw_get(attackAfterTeleport, 'cost')) and (uses > 0)):
+                                self.createAttackAction(Action.ACTION_DIRECT, target, lw_get(attackAfterTeleport, 'id'), (-1), target._cellPos)
+                                playerTP = lw_num(playerTP) - lw_num(lw_get(attackAfterTeleport, 'cost'))
+                                uses = lw_num(uses) - lw_num(1)
+                        else:
+                            chipUses = lw_get(attackAfterTeleport, 'maxUse')
+                            while ((playerTP >= lw_get(attackAfterTeleport, 'cost')) and (chipUses > 0)):
+                                self.createAttackAction(Action.ACTION_DIRECT, target, (-1), lw_get(attackAfterTeleport, 'id'), target._cellPos)
+                                playerTP = lw_num(playerTP) - lw_num(lw_get(attackAfterTeleport, 'cost'))
+                                chipUses = lw_num(chipUses) - lw_num(1)
+                    return None
+        self.createDefensiveScenario(target, targetHitCell)
+    
+    def createAndExecuteScenario(self, target, targetHitCell):
+        arrayClear(self._actions)
+        self._originalTP = player._currTp
+        self._originalMP = player._currMp
+        useMultiScenario = True
+        if useMultiScenario:
+            self.generateAndEvaluateBestScenario(target, targetHitCell)
+        else:
+            if self.shouldEnterEmergencyMode(target):
+                self.createEmergencyScenario(target, targetHitCell)
+            else:
+                self.createOffensiveScenario(target, targetHitCell)
+        self.executeScenario()
+    
+    def createOTKOScenario(self, target, targetHitCell):
+        return False
+    
+    def hasOTKOOpportunity(self, target):
+        if (target == None):
+            return False
+        enemyHP = target._currHealth
+        playerTP = player._currTp
+        playerPos = player._cellPos
+        if (playerTP < 10):
+            return False
+        burstFromCurrent = self.calculateBurstDamage(target, playerPos, playerTP)
+        killProbCurrent = lw_div(burstFromCurrent, enemyHP)
+        if (killProbCurrent >= 0.85):
+            return True
+        otkoTeleChip = getAvailableTeleportChip(arsenal, player._id)
+        if (otkoTeleChip != None):
+            tpTeleportOTKO = getCachedChipCost(otkoTeleChip)
+            if (playerTP >= lw_add(tpTeleportOTKO, 6)):
+                teleportInfo = fieldMap.findOptimalTeleportCell(target)
+                if (teleportInfo != None):
+                    projectedDamage = lw_get(teleportInfo, 'damage')
+                    killProbTeleport = lw_div(projectedDamage, enemyHP)
+                    if (killProbTeleport >= 0.85):
+                        return True
+        return False
+    
+    def calculateBurstDamage(self, target, fromPosition, availableTP):
+        totalDamage = 0
+        tpBudget = availableTP
+        str = player._strength
+        mag = player._magic
+        wis = player._wisdom
+        sci = player._science
+        if ((fromPosition != player._cellPos) and hasAnyTeleportChip(arsenal)):
+            calcTeleChip = getAvailableTeleportChip(arsenal, player._id)
+            if (calcTeleChip != None):
+                tpBudget = lw_num(tpBudget) - lw_num(getCachedChipCost(calcTeleChip))
+        for weaponId in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+            weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+            if (weapon == None):
+                continue
+            distToTarget = getCellDistance(fromPosition, target._cellPos)
+            if (distToTarget == None):
+                continue
+            if ((distToTarget < weapon._minRange) or (distToTarget > weapon._maxRange)):
+                continue
+            if (not lineOfSight(fromPosition, target._cellPos)):
+                continue
+            if (weapon._aoeType == AREA_LASER_LINE):
+                if (not fieldMap.isOnSameLine(fromPosition, target._cellPos)):
+                    continue
+            weaponDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, weaponId, target)
+            swapCost = (1 if ((getWeapon() != weaponId)) else 0)
+            if (tpBudget <= swapCost):
+                continue
+            maxUses = min(weapon._maxUse, floor(lw_div((lw_sub(tpBudget, swapCost)), weapon._cost)))
+            if (maxUses <= 0):
+                continue
+            totalDamage = lw_add(totalDamage, lw_mul(weaponDmg, maxUses))
+            tpBudget = lw_num(tpBudget) - lw_num((lw_add(swapCost, lw_mul(maxUses, weapon._cost))))
+        if (tpBudget > 0):
+            for chipId in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                chip = lw_get(arsenal.playerEquippedChips, chipId)
+                if (chip == None):
+                    continue
+                if (not mapContainsKey(chip._effects, EFFECT_DAMAGE)):
+                    continue
+                distChip = getCellDistance(fromPosition, target._cellPos)
+                if (distChip == None):
+                    continue
+                if ((distChip < chip._minRange) or (distChip > chip._maxRange)):
+                    continue
+                chipCost = chip._cost
+                if (tpBudget < chipCost):
+                    continue
+                chipDmg = arsenal.getNetDamageAgainstTarget(str, mag, wis, sci, chipId, target)
+                chipUses = min(chip._maxUse, floor(lw_div(tpBudget, chipCost)))
+                totalDamage = lw_add(totalDamage, lw_mul(chipDmg, chipUses))
+                tpBudget = lw_num(tpBudget) - lw_num((lw_mul(chipUses, chipCost)))
+        return totalDamage
+    
+    def generateAndEvaluateBestScenario(self, target, targetHitCell):
+        if self.hasOTKOOpportunity(target):
+            if self.createOTKOScenario(target, targetHitCell):
+                return None
+        if self.shouldEnterEmergencyMode(target):
+            self.createDefensiveScenario(target, targetHitCell)
+            return None
+        distToTarget = getCellDistance(player._cellPos, target._cellPos)
+        maxWeaponRange = 12
+        currentMP = getMP()
+        canAttackThisTurn = (((distToTarget != None) and (distToTarget <= lw_add(maxWeaponRange, currentMP))))
+        if (((not canAttackThisTurn) and (distToTarget != None)) and (distToTarget > 25)):
+            self.createMovementAction(Action.MOVEMENT_APPROACH, target._cellPos, target)
+            return None
+        generator = ScenarioGenerator(arsenal, player, target, fieldMap, self)
+        scenarios = generator.generateScenarios()
+        scenarioCount = count(scenarios)
+        if (count(scenarios) == 0):
+            self.createOffensiveScenario(target, targetHitCell)
+            return None
+        quickScorer = ScenarioQuickScorer(player, target, fieldMap, arsenal)
+        scenariosWithQuickScore = []
+        i = 0
+        while (i < count(scenarios)):
+            scenario = lw_get(scenarios, i)
+            if (count(scenario) == 0):
+                i = lw_add(i, 1)
+                continue
+            qScore = quickScorer.quickScore(scenario)
+            push(scenariosWithQuickScore, {'scenario': scenario, 'quickScore': qScore})
+            i = lw_add(i, 1)
+        def _lwfn1_1(a, b):
+            return lw_sub(lw_get(b, 'quickScore'), lw_get(a, 'quickScore'))
+        def _lwfn2_1(a, b):
+            return lw_sub(lw_get(b, 'quickScore'), lw_get(a, 'quickScore'))
+        arraySort(scenariosWithQuickScore, _lwfn2_1)
+        topK = 50
+        evaluateCount = min(topK, count(scenariosWithQuickScore))
+        simulator = ScenarioSimulator(arsenal, player, target, fieldMap)
+        scorer = ScenarioScorer(player, target, fieldMap, None)
+        bestScore = (-999999)
+        bestScenario = None
+        bestSimResult = None
+        scenarioResults = []
+        i = 0
+        while (i < evaluateCount):
+            scenarioData = lw_get(scenariosWithQuickScore, i)
+            scenario = lw_get(scenarioData, 'scenario')
+            qScore = lw_get(scenarioData, 'quickScore')
+            simResult = simulator.simulate(scenario)
+            score = scorer.score(simResult, scenario)
+            push(scenarioResults, {'scenario': scenario, 'simResult': simResult, 'score': score, 'quickScore': qScore})
+            if (score > bestScore):
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            i = lw_add(i, 1)
+        if ((count(scenarioResults) >= 1) and (getOperations() < _ops71)):
+            def _lwfn3_1(a, b):
+                return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+            def _lwfn4_1(a, b):
+                return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+            arraySort(scenarioResults, _lwfn4_1)
+            predictor = EnemyPredictor(fieldMap, arsenal, player, target)
+            lookaheadCount = min(1, count(scenarioResults))
+            i = 0
+            while (i < lookaheadCount):
+                scenarioData = lw_get(scenarioResults, i)
+                simResult = lw_get(scenarioData, 'simResult')
+                endState = {'endPosition': simResult.finalPosition, 'endHP': lw_add(player._currHealth, simResult.hpGained), 'endTP': lw_sub(player._currTp, simResult.tpSpent), 'score': lw_get(scenarioData, 'score')}
+                lookahead = predictor.evaluateScenarioWithLookahead(endState, 0.7)
+                lw_put(scenarioData, 'finalScore', lw_get(lookahead, 'finalScore'))
+                lw_put(scenarioData, 'enemyDamage', lw_get(lookahead, 'enemyDamage'))
+                i = lw_add(i, 1)
+            i = 0
+            while (i < lookaheadCount):
+                scenarioData = lw_get(scenarioResults, i)
+                if mapContainsKey(scenarioData, 'finalScore'):
+                    if (lw_get(scenarioData, 'finalScore') > bestScore):
+                        bestScore = lw_get(scenarioData, 'finalScore')
+                        bestScenario = lw_get(scenarioData, 'scenario')
+                        bestSimResult = lw_get(scenarioData, 'simResult')
+                i = lw_add(i, 1)
+        if (bestScenario == None):
+            self.createOffensiveScenario(target, targetHitCell)
+            return None
+        arrayClear(self._actions)
+        for action in lw_values(bestScenario):
+            push(self._actions, action)
+    
+    def executeScenario(self):
+        global PREV_ENEMY_POISON, _usedInversion, lw__dopingUsed
+        self.validateAndFilterActions()
+        if (count(self._actions) == 0):
+            return False
+        targetDied = False
+        consecutiveFailures = 0
+        maxConsecutiveFailures = 2
+        attacksAttempted = 0
+        attacksSucceeded = 0
+        hasMoved = False
+        weaponsDisabled = False
+        for a in lw_values(self._actions):
+            if ((((((a.type == Action.MOVEMENT_APPROACH) or (a.type == Action.MOVEMENT_OFFENSIVE)) or (a.type == Action.MOVEMENT_DEFENSIVE)) or (a.type == Action.MOVEMENT_OTKO)) or (a.type == Action.MOVEMENT_DOT_OFFENSIVE)) or (a.type == Action.MOVEMENT_DEBUFF)):
+                if (hasMoved and (attacksSucceeded == 0)):
+                    continue
+                posBefore = getCell()
+                moveTowardCell(a.targetCell)
+                posAfter = getCell()
+                hasMoved = True
+            else:
+                if (a.type == Action.MOVEMENT_FLEE):
+                    if (hasMoved and (attacksSucceeded == 0)):
+                        continue
+                    moveAwayFrom(a.targetEntity._id)
+                    hasMoved = True
+                else:
+                    if (a.type == Action.MOVEMENT_HNS):
+                        if (hasMoved and (attacksSucceeded == 0)):
+                            continue
+                        moveTowardCell(a.targetCell)
+                        hasMoved = True
+                    else:
+                        if (a.type == Action.ACTION_WEAPON_SWAP):
+                            setWeapon(a.weaponId)
+                        else:
+                            if (((a.type == Action.ACTION_DIRECT) or (a.type == Action.ACTION_DOT)) or (a.type == Action.ACTION_DEBUFF)):
+                                if ((a.targetEntity != None) and isDead(a.targetEntity._id)):
+                                    continue
+                                currentPos = getCell()
+                                currentWeap = getWeapon()
+                                targetPos = a.targetCell
+                                dist = getCellDistance(currentPos, targetPos)
+                                if (a.chip != (-1)):
+                                    if ((a.targetEntity != None) and (a.targetEntity._id != player._id)):
+                                        chipItem = None
+                                        if mapContainsKey(arsenal.playerEquippedChips, a.chip):
+                                            chipItem = lw_get(arsenal.playerEquippedChips, a.chip)
+                                        if (((chipItem != None) and (chipItem._aoeType != AREA_POINT)) and (not chipItem._selfImmune)):
+                                            if fieldMap.wouldAoEHitCell(targetPos, chipItem._aoeType, currentPos, currentPos):
+                                                if (getTurn() <= 20):
+                                                    debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_CHIPc"), a.chip), "_AOE_SELF_SKIP_fc"), currentPos), "_tc"), targetPos))
+                                                continue
+                                    _chipCdBefore = getCooldown(a.chip, getEntity())
+                                    _chipTpBefore = getTP()
+                                    _chipResult = useChipOnCell(a.chip, a.targetCell)
+                                    if (getTurn() <= 20):
+                                        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_CHIPc"), a.chip), "_t"), a.type), "_r"), _chipResult), "_cd"), _chipCdBefore), "_tp"), _chipTpBefore), ">"), getTP()), "_fc"), currentPos), "_tc"), a.targetCell), "_d"), dist))
+                                    if ((a.chip == CHIP_INVERSION) and _isBossFight):
+                                        _usedInversion = True
+                                    if ((((((a.chip == CHIP_GRAPPLE) or (a.chip == CHIP_BOXING_GLOVE)) or (a.chip == CHIP_INVERSION))) and (a.targetEntity != None)) and (not isDead(a.targetEntity._id))):
+                                        oldEnemyCell = a.targetEntity._cellPos
+                                        a.targetEntity._cellPos = getCell(a.targetEntity._id)
+                                        a.targetEntity.updateEntity()
+                                        newEnemyCell = a.targetEntity._cellPos
+                                        if (oldEnemyCell != newEnemyCell):
+                                            for futureAction in lw_values(self._actions):
+                                                if (futureAction.targetCell == oldEnemyCell):
+                                                    futureAction.targetCell = newEnemyCell
+                                    if ((a.targetEntity != None) and isDead(a.targetEntity._id)):
+                                        targetDied = True
+                                        break
+                                else:
+                                    if (a.weaponId != (-1)):
+                                        if weaponsDisabled:
+                                            continue
+                                        attacksAttempted = lw_add(attacksAttempted, 1)
+                                        if (dist == None):
+                                            continue
+                                        minRange = 0
+                                        maxRange = 0
+                                        launchType = 0
+                                        weaponFound = False
+                                        if mapContainsKey(arsenal.playerEquippedWeapons, a.weaponId):
+                                            weaponObj = lw_get(arsenal.playerEquippedWeapons, a.weaponId)
+                                            minRange = weaponObj._minRange
+                                            maxRange = weaponObj._maxRange
+                                            launchType = weaponObj._launchType
+                                            weaponFound = True
+                                        if (not weaponFound):
+                                            continue
+                                        if ((a.targetEntity != None) and (not isDead(a.targetEntity._id))):
+                                            liveTargetPos = getCell(a.targetEntity._id)
+                                            if ((liveTargetPos != None) and (liveTargetPos != targetPos)):
+                                                liveDist = getCellDistance(currentPos, liveTargetPos)
+                                                liveValid = ((((((liveDist != None) and (liveDist >= minRange)) and (liveDist <= maxRange)) and lineOfSight(currentPos, liveTargetPos)) and isSimLaunchValid(launchType, currentPos, liveTargetPos)))
+                                                if liveValid:
+                                                    if (getTurn() <= 20):
+                                                        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_DIRw"), a.weaponId), "_RETARGET_tc"), targetPos), ">"), liveTargetPos), "_d"), dist), ">"), liveDist), "_fc"), currentPos))
+                                                    targetPos = liveTargetPos
+                                                    a.targetCell = liveTargetPos
+                                                    dist = liveDist
+                                                else:
+                                                    if (getTurn() <= 20):
+                                                        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_DIRw"), a.weaponId), "_STALE_TARGET_SKIP_tc"), targetPos), "_live"), liveTargetPos), "_liveD"), liveDist), "_r"), minRange), "-"), maxRange), "_fc"), currentPos))
+                                                    continue
+                                        if ((dist < minRange) or (dist > maxRange)):
+                                            if (getTurn() <= 20):
+                                                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_DIRw"), a.weaponId), "_RANGE_FAIL_d"), dist), "_r"), minRange), "-"), maxRange), "_fc"), currentPos), "_tc"), targetPos))
+                                            consecutiveFailures = lw_add(consecutiveFailures, 1)
+                                            if (consecutiveFailures >= maxConsecutiveFailures):
+                                                weaponsDisabled = True
+                                                continue
+                                            continue
+                                        if (not lineOfSight(currentPos, targetPos)):
+                                            if (getTurn() <= 20):
+                                                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_DIRw"), a.weaponId), "_LOS_FAIL_d"), dist), "_fc"), currentPos), "_tc"), targetPos))
+                                            consecutiveFailures = lw_add(consecutiveFailures, 1)
+                                            if (consecutiveFailures >= maxConsecutiveFailures):
+                                                weaponsDisabled = True
+                                                continue
+                                            continue
+                                        weaponItem = lw_get(arsenal.playerEquippedWeapons, a.weaponId)
+                                        if (((weaponItem != None) and (weaponItem._aoeType != AREA_POINT)) and (not weaponItem._selfImmune)):
+                                            if fieldMap.wouldAoEHitCell(targetPos, weaponItem._aoeType, currentPos, currentPos):
+                                                if (getTurn() <= 20):
+                                                    debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_DIRw"), a.weaponId), "_AOE_SELF_HIT_fc"), currentPos), "_tc"), targetPos))
+                                                weaponsDisabled = True
+                                                continue
+                                        if (currentWeap != a.weaponId):
+                                            setWeapon(a.weaponId)
+                                            currentWeap = a.weaponId
+                                        tpBefore = getTP()
+                                        result = useWeaponOnCell(a.targetCell)
+                                        tpAfter = getTP()
+                                        if (getTurn() <= 20):
+                                            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_DIRw"), a.weaponId), "_FIRE_r"), result), "_d"), dist), "_tp"), tpBefore), ">"), tpAfter), "_fc"), currentPos), "_tc"), targetPos))
+                                        if ((result == USE_INVALID_TARGET) or (tpBefore == tpAfter)):
+                                            consecutiveFailures = lw_add(consecutiveFailures, 1)
+                                            if (consecutiveFailures >= maxConsecutiveFailures):
+                                                weaponsDisabled = True
+                                                continue
+                                            continue
+                                        consecutiveFailures = 0
+                                        attacksSucceeded = lw_add(attacksSucceeded, 1)
+                                        if ((a.targetEntity != None) and isDead(a.targetEntity._id)):
+                                            targetDied = True
+                                            break
+                            else:
+                                if (a.type == Action.ACTION_BUFF):
+                                    if (a.chip != (-1)):
+                                        if ((a.chip == CHIP_DOPING) and lw__dopingUsed):
+                                            continue
+                                        buffTargetId = (a.targetEntity._id if (((a.targetEntity != None) and (a.targetEntity != (-1)))) else getEntity())
+                                        if ((a.chip == CHIP_MANUMISSION) and (buffTargetId == player._id)):
+                                            if ((((not player.hasEffect(EFFECT_SHACKLE_TP)) and (not player.hasEffect(EFFECT_SHACKLE_MP))) and (not player.hasEffect(EFFECT_SHACKLE_STRENGTH))) and (not player.hasEffect(EFFECT_SHACKLE_MAGIC))):
+                                                if (getTurn() <= 20):
+                                                    debugW(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_MANU_SKIP_NO_SHACKLE_tp"), getTP()))
+                                                continue
+                                        _execCdBefore = getCooldown(a.chip, getEntity())
+                                        _execTpBefore = getTP()
+                                        _execChipRet = useChip(a.chip, buffTargetId)
+                                        if (getTurn() <= 20):
+                                            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_BUFFc"), a.chip), "_cd"), _execCdBefore), "_tp"), _execTpBefore), ">"), getTP()), ((lw_add(lw_add(lw_add("_ALLY", buffTargetId), "_ret"), _execChipRet) if (buffTargetId != player._id) else ""))))
+                                        if (a.chip == CHIP_DOPING):
+                                            lw__dopingUsed = True
+                                        if ((a.chip == CHIP_LEATHER_BOOTS) and (buffTargetId == player._id)):
+                                            player._currMp = getMP()
+                                        if ((a.chip == CHIP_ADRENALINE) and (buffTargetId == player._id)):
+                                            player._currTp = getTP()
+                                        if ((a.chip == CHIP_MANUMISSION) and (buffTargetId == player._id)):
+                                            player._currTp = getTP()
+                                else:
+                                    if (a.type == Action.ACTION_TELEPORT):
+                                        if ((a.chip == CHIP_TELEPORTATION) or (a.chip == CHIP_JUMP)):
+                                            cooldown = getCooldown(a.chip, getEntity())
+                                            tpCost = getChipCost(a.chip)
+                                            currentPos = getCell()
+                                            dist = getCellDistance(currentPos, a.targetCell)
+                                            maxRange = getTeleportMaxRange(a.chip)
+                                            isObst = isObstacle(a.targetCell)
+                                            isEnt = isEntity(a.targetCell)
+                                            if ((cooldown == 0) and (getTP() >= tpCost)):
+                                                if (isObst or isEnt):
+                                                    if (getTurn() <= 20):
+                                                        debugE(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_TELEc"), a.chip), "_BLOCKED_obst"), isObst), "_ent"), isEnt), "_fc"), currentPos), "_tc"), a.targetCell))
+                                                else:
+                                                    if (((dist == None) or (dist < 1)) or (dist > maxRange)):
+                                                        if (getTurn() <= 20):
+                                                            debugE(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_TELEc"), a.chip), "_RANGE_FAIL_d"), dist), "_r1-"), maxRange), "_fc"), currentPos), "_tc"), a.targetCell))
+                                                    else:
+                                                        _teleTpBefore = getTP()
+                                                        result = useChipOnCell(a.chip, a.targetCell)
+                                                        if (getTurn() <= 20):
+                                                            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_TELEc"), a.chip), "_r"), result), "_d"), dist), "_tp"), _teleTpBefore), ">"), getTP()), "_fc"), currentPos), ">"), getCell()), "_tc"), a.targetCell))
+                                            else:
+                                                if (getTurn() <= 20):
+                                                    debugE(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("EXEC_T", getTurn()), "_TELEc"), a.chip), "_GATE_FAIL_cd"), cooldown), "_tp"), getTP()), "_need"), tpCost))
+                                    else:
+                                        if (a.type == Action.ACTION_SUMMON):
+                                            if (((a.chip != (-1)) and (a.targetCell != (-1))) and (a.bulbAIFunc != None)):
+                                                cooldown = getCooldown(a.chip, getEntity())
+                                                cost = getChipCost(a.chip)
+                                                if ((((cooldown == 0) and (getTP() >= cost)) and (not isObstacle(a.targetCell))) and (not isEntity(a.targetCell))):
+                                                    summon(a.chip, a.targetCell, a.bulbAIFunc)
+                                        else:
+                                            if (a.type == Action.ACTION_CHECKPOINT):
+                                                player.updateEntity()
+                                                continuation = self.evaluateCheckpoint(a)
+                                                if ((continuation != None) and (count(continuation) > 0)):
+                                                    for contAction in lw_values(continuation):
+                                                        push(self._actions, contAction)
+        _summonGateTP = 16
+        _summonBulbSet = [CHIP_PUNY_BULB, CHIP_ROCKY_BULB, CHIP_ICED_BULB, CHIP_METALLIC_BULB, CHIP_SAVANT_BULB]
+        for _sgB in lw_values(_summonBulbSet):
+            if (not mapContainsKey(arsenal.playerEquippedChips, _sgB)):
+                continue
+            _sgCost = getChipCost(_sgB)
+            if ((_sgCost != None) and (_sgCost < _summonGateTP)):
+                _summonGateTP = _sgCost
+        if (getTP() >= _summonGateTP):
+            player.updateEntity()
+            _summonHelper = ScenarioHelpers(arsenal, player, player, self._fieldMap, self)
+            summonAction = _summonHelper.createSummonAction()
+            if (summonAction != None):
+                sChip = summonAction.chip
+                sCell = summonAction.targetCell
+                sAI = summonAction.bulbAIFunc
+                if (((sChip != (-1)) and (sCell != (-1))) and (sAI != None)):
+                    sCD = getCooldown(sChip, getEntity())
+                    sCost = getChipCost(sChip)
+                    if ((((sCD == 0) and (getTP() >= sCost)) and (not isObstacle(sCell))) and (not isEntity(sCell))):
+                        sResult = summon(sChip, sCell, sAI)
+        if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_RESURRECTION) and (getCooldown(CHIP_RESURRECTION, getEntity()) == 0)) and (getTP() >= getChipCost(CHIP_RESURRECTION))):
+            rezTarget = (-1)
+            rezDead = getDeadAllies()
+            if (rezDead != None):
+                for rzA in lw_values(rezDead):
+                    if (rzA == player._id):
+                        continue
+                    if (getType(rzA) == ENTITY_LEEK):
+                        rezTarget = rzA
+                        break
+                    if ((rezTarget == (-1)) and (getSummoner(rzA) == player._id)):
+                        rezTarget = rzA
+            if (rezTarget != (-1)):
+                player.updateEntity()
+                _rezHelper = ScenarioHelpers(arsenal, player, player, self._fieldMap, self)
+                rezCell = _rezHelper.findBulbSummonCell(player._cellPos, 2)
+                if (rezCell != (-1)):
+                    resurrect(rezTarget, rezCell)
+        poisonTrackTarget = None
+        for action in lw_values(self._actions):
+            if ((action.targetEntity != None) and (action.targetEntity._id != player._id)):
+                poisonTrackTarget = action.targetEntity
+                break
+        if (poisonTrackTarget != None):
+            poisonTrackTarget.updateEntity()
+            PREV_ENEMY_POISON = poisonTrackTarget.getPoisonStackCount()
+        return targetDied
+    
+    def executeAndFlushActions(self):
+        targetDied = self.executeScenario()
+        arrayClear(self._actions)
+        player.updateEntity()
+        return targetDied
+    
+    def evaluateCheckpoint(self, checkpoint):
+        if (checkpoint.checkpointType == "BUFF_RECHECK"):
+            return self.evaluateBuffRecheckContinuation(checkpoint.context)
+        else:
+            if (checkpoint.checkpointType == "VULNERABILITY_RECHECK"):
+                return self.evaluateVulnerabilityRecheckContinuation(checkpoint.context)
+            else:
+                if (checkpoint.checkpointType == "HEAL_RECHECK"):
+                    return self.evaluateHealRecheckContinuation(checkpoint.context)
+                else:
+                    return None
+    
+    def evaluateBuffRecheckContinuation(self, context):
+        target = lw_get(context, 'target')
+        if (target == None):
+            return None
+        currentTP = getTP()
+        currentPos = getCell()
+        enemyHP = target._currHealth
+        burstDamage = self.calculateBurstDamage(target, currentPos, currentTP)
+        killProb = lw_div(burstDamage, enemyHP)
+        if (killProb >= 0.85):
+            return self.generateOTKOBurstContinuation(target, currentTP)
+        else:
+            return self.generateNormalAttackContinuation(target, currentTP)
+    
+    def evaluateVulnerabilityRecheckContinuation(self, context):
+        target = lw_get(context, 'target')
+        vulnPercent = lw_get(context, 'vulnerabilityPercent')
+        if (target == None):
+            return None
+        currentTP = getTP()
+        enemyHP = target._currHealth
+        multiplier = lw_add(1.0, (lw_div(vulnPercent, 100.0)))
+        baseDamage = self.calculateBurstDamage(target, getCell(), currentTP)
+        amplifiedDamage = lw_mul(baseDamage, multiplier)
+        damageRatio = lw_div(amplifiedDamage, enemyHP)
+        if (damageRatio >= 0.7):
+            return self.generateAggressiveBurstContinuation(target, currentTP)
+        else:
+            return self.generateBalancedAttackContinuation(target, currentTP)
+    
+    def evaluateHealRecheckContinuation(self, context):
+        target = lw_get(context, 'target')
+        if (target == None):
+            return None
+        currentHP = player._currHealth
+        maxHP = player._maxHealth
+        hpPercent = lw_div((lw_mul(currentHP, 100)), maxHP)
+        currentTP = getTP()
+        if (hpPercent > 60):
+            return self.generateAggressiveBurstContinuation(target, currentTP)
+        else:
+            if (hpPercent > 40):
+                return self.generateBalancedAttackContinuation(target, currentTP)
+            else:
+                return self.generateDefensiveKiteContinuation(target, currentTP)
+    
+    def generateOTKOBurstContinuation(self, target, availableTP):
+        actions = []
+        burstTeleChip = getAvailableTeleportChip(arsenal, player._id)
+        if (burstTeleChip != None):
+            tpTeleportBurst = getCachedChipCost(burstTeleChip)
+            burstTeleMaxRange = getTeleportMaxRange(burstTeleChip)
+            if (availableTP >= lw_add(tpTeleportBurst, 3)):
+                bestOTKO = fieldMap.getBestOTKOCell()
+                if (bestOTKO != None):
+                    dist = getCellDistance(getCell(), bestOTKO._id)
+                    if (((dist != None) and (dist >= 1)) and (dist <= burstTeleMaxRange)):
+                        push(actions, Action(Action.ACTION_TELEPORT, (-1), burstTeleChip, bestOTKO._id, target))
+                        availableTP = lw_num(availableTP) - lw_num(tpTeleportBurst)
+        weaponActions = self.generateWeaponSpamActions(target, availableTP)
+        for wa in lw_values(weaponActions):
+            push(actions, wa)
+        return actions
+    
+    def generateNormalAttackContinuation(self, target, availableTP):
+        actions = []
+        tpForAttacks = floor(lw_mul(availableTP, 0.8))
+        weaponActions = self.generateWeaponSpamActions(target, tpForAttacks)
+        for wa in lw_values(weaponActions):
+            push(actions, wa)
+        if (count(weaponActions) == 0):
+            if (getMP() >= 2):
+                push(actions, Action(Action.MOVEMENT_APPROACH, (-1), (-1), target._cellPos, target))
+        else:
+            hideCell = fieldMap.getHideAndSeekCell()
+            if ((hideCell != None) and (getMP() >= 2)):
+                push(actions, Action(Action.MOVEMENT_HNS, (-1), (-1), hideCell, target))
+        return actions
+    
+    def generateAggressiveBurstContinuation(self, target, availableTP):
+        actions = []
+        weaponActions = self.generateWeaponSpamActions(target, availableTP)
+        for wa in lw_values(weaponActions):
+            push(actions, wa)
+        return actions
+    
+    def generateBalancedAttackContinuation(self, target, availableTP):
+        actions = []
+        tpForAttacks = floor(lw_mul(availableTP, 0.7))
+        weaponActions = self.generateWeaponSpamActions(target, tpForAttacks)
+        for wa in lw_values(weaponActions):
+            push(actions, wa)
+        hideCell = fieldMap.getHideAndSeekCell()
+        if ((hideCell != None) and (getMP() >= 2)):
+            push(actions, Action(Action.MOVEMENT_HNS, (-1), (-1), hideCell, target))
+        return actions
+    
+    def generateDefensiveKiteContinuation(self, target, availableTP):
+        actions = []
+        tpForAttacks = floor(lw_mul(availableTP, 0.3))
+        if (tpForAttacks >= 4):
+            weaponActions = self.generateWeaponSpamActions(target, tpForAttacks)
+            for wa in lw_values(weaponActions):
+                push(actions, wa)
+        if (getMP() >= 2):
+            push(actions, Action(Action.MOVEMENT_FLEE, (-1), (-1), (-1), target))
+        return actions
+    
+    def generateWeaponSpamActions(self, target, tpBudget):
+        actions = []
+        currentWeapon = getWeapon()
+        currentPos = getCell()
+        weaponDamages = []
+        for weaponId in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+            weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+            if (weapon == None):
+                continue
+            dist = getCellDistance(currentPos, target._cellPos)
+            if (dist == None):
+                continue
+            if ((dist < weapon._minRange) or (dist > weapon._maxRange)):
+                continue
+            if (not lineOfSight(currentPos, target._cellPos)):
+                continue
+            dmg = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, weaponId, target)
+            push(weaponDamages, {'weaponId': weaponId, 'damage': dmg})
+        i = 0
+        while (i < lw_sub(count(weaponDamages), 1)):
+            j = 0
+            while (j < lw_sub(lw_sub(count(weaponDamages), i), 1)):
+                if (lw_get(lw_get(weaponDamages, j), 'damage') < lw_get(lw_get(weaponDamages, lw_add(j, 1)), 'damage')):
+                    temp = lw_get(weaponDamages, j)
+                    lw_put(weaponDamages, j, lw_get(weaponDamages, lw_add(j, 1)))
+                    lw_put(weaponDamages, lw_add(j, 1), temp)
+                j = lw_add(j, 1)
+            i = lw_add(i, 1)
+        for wd in lw_values(weaponDamages):
+            weaponId = lw_get(wd, 'weaponId')
+            weapon = lw_get(arsenal.playerEquippedWeapons, weaponId)
+            weaponCost = weapon._cost
+            maxUses = weapon._maxUse
+            uses = 0
+            if ((currentWeapon != weaponId) and (tpBudget >= 1)):
+                push(actions, Action(Action.ACTION_WEAPON_SWAP, weaponId, (-1), (-1), target))
+                tpBudget = lw_num(tpBudget) - lw_num(1)
+                currentWeapon = weaponId
+            while ((uses < maxUses) and (tpBudget >= weaponCost)):
+                push(actions, Action(Action.ACTION_DIRECT, weaponId, (-1), target._cellPos, target))
+                tpBudget = lw_num(tpBudget) - lw_num(weaponCost)
+                uses = lw_add(uses, 1)
+        return actions
+    
+    def findAlternativeMovementCell(self, originalCell, maxMP):
+        bestAlt = self.findBestReachableDamageCell(maxMP)
+        if (bestAlt != None):
+            return bestAlt._id
+        path = getPath(player._cellPos, originalCell)
+        if ((path != None) and (count(path) > 0)):
+            i = lw_sub(count(path), 1)
+            while (i >= 0):
+                cell = lw_get(path, i)
+                if (cell == player._cellPos):
+                    i = lw_num(i) - lw_num(1)
+                    continue
+                dist = getCachedPathLength(player._cellPos, cell)
+                if ((dist != None) and (dist <= maxMP)):
+                    return cell
+                i = lw_num(i) - lw_num(1)
+        return (-1)
+    
+    def validateAndFilterActions(self):
+        validActions = []
+        initialActionCount = count(self._actions)
+        fallbacksAdded = 0
+        simulatedPos = player._cellPos
+        simulatedTP = self._originalTP
+        simulatedMP = self._originalMP
+        simulatedEquippedWeapon = getWeapon()
+        i = 0
+        while (i < initialActionCount):
+            action = lw_get(self._actions, i)
+            isValid = True
+            reason = ""
+            if ((((((((action.type == Action.MOVEMENT_APPROACH) or (action.type == Action.MOVEMENT_OFFENSIVE)) or (action.type == Action.MOVEMENT_DEFENSIVE)) or (action.type == Action.MOVEMENT_OTKO)) or (action.type == Action.MOVEMENT_DOT_OFFENSIVE)) or (action.type == Action.MOVEMENT_DEBUFF)) or (action.type == Action.MOVEMENT_FLEE)) or (action.type == Action.MOVEMENT_HNS)):
+                if ((action.targetCell != (-1)) and (simulatedPos == action.targetCell)):
+                    i = lw_add(i, 1)
+                    continue
+                path = getPath(simulatedPos, action.targetCell)
+                if ((path != None) and (count(path) > 0)):
+                    mpCost = lw_sub(count(path), 1)
+                    if (mpCost <= simulatedMP):
+                        push(validActions, action)
+                        simulatedPos = action.targetCell
+                        simulatedMP = lw_num(simulatedMP) - lw_num(mpCost)
+                    else:
+                        altCell = self.findAlternativeMovementCell(action.targetCell, simulatedMP)
+                        if (altCell != (-1)):
+                            action.targetCell = altCell
+                            push(validActions, action)
+                            altPath = getPath(simulatedPos, altCell)
+                            altMpCost = (lw_sub(count(altPath), 1) if (((altPath != None) and (count(altPath) > 0))) else 0)
+                            simulatedPos = altCell
+                            simulatedMP = lw_num(simulatedMP) - lw_num(altMpCost)
+                            fallbacksAdded = lw_add(fallbacksAdded, 1)
+                else:
+                    altCell2 = self.findAlternativeMovementCell(action.targetCell, simulatedMP)
+                    if (altCell2 != (-1)):
+                        action.targetCell = altCell2
+                        push(validActions, action)
+                        altPath2 = getPath(simulatedPos, altCell2)
+                        altMpCost2 = (lw_sub(count(altPath2), 1) if (((altPath2 != None) and (count(altPath2) > 0))) else 0)
+                        simulatedPos = altCell2
+                        simulatedMP = lw_num(simulatedMP) - lw_num(altMpCost2)
+                        fallbacksAdded = lw_add(fallbacksAdded, 1)
+                i = lw_add(i, 1)
+                continue
+            if (action.type == Action.ACTION_SUMMON):
+                if ((action.chip != (-1)) and (action.targetCell != (-1))):
+                    summonCost = getChipCost(action.chip)
+                    if ((((simulatedTP >= summonCost) and (getCooldown(action.chip, player._id) == 0)) and (not isObstacle(action.targetCell))) and (not isEntity(action.targetCell))):
+                        push(validActions, action)
+                        simulatedTP = lw_num(simulatedTP) - lw_num(summonCost)
+                i = lw_add(i, 1)
+                continue
+            if (action.type == Action.ACTION_TELEPORT):
+                teleMaxR = getTeleportMaxRange(action.chip)
+                distTele = getCellDistance(simulatedPos, action.targetCell)
+                teleTpCost = (getChipCost(action.chip) if ((action.chip != (-1))) else 0)
+                teleCdOk = (((action.chip == (-1)) or (getCooldown(action.chip, player._id) == 0)))
+                if (((((((distTele != None) and (distTele >= 1)) and (distTele <= teleMaxR)) and (not isObstacle(action.targetCell))) and (not isEntity(action.targetCell))) and (simulatedTP >= teleTpCost)) and teleCdOk):
+                    push(validActions, action)
+                    simulatedPos = action.targetCell
+                    simulatedTP = lw_num(simulatedTP) - lw_num(teleTpCost)
+                else:
+                    if (getTurn() <= 20):
+                        _teleWhy = "TELE filtered"
+                        if (simulatedTP < teleTpCost):
+                            _teleWhy = lw_add(lw_add(lw_add("Insufficient TP for teleport: need ", teleTpCost), ", have "), simulatedTP)
+                        else:
+                            if (not teleCdOk):
+                                _teleWhy = "Teleport on cooldown"
+                            else:
+                                if (((distTele == None) or (distTele < 1)) or (distTele > teleMaxR)):
+                                    _teleWhy = lw_add(lw_add(lw_add("Teleport range: d", distTele), " not in 1-"), teleMaxR)
+                                else:
+                                    _teleWhy = "Teleport target blocked"
+                        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("FLT_T", getTurn()), "_t"), action.type), "_w-1_c"), action.chip), "_fc"), simulatedPos), "_tc"), action.targetCell), "_d"), distTele), "_tp"), simulatedTP), "_why["), _teleWhy), "]"))
+                i = lw_add(i, 1)
+                continue
+            if ((action.targetEntity != None) and (not action.targetEntity._isAlive)):
+                isValid = False
+                reason = lw_add(lw_add("Target dead (ID: ", action.targetEntity._id), ")")
+            if (((isValid and (action.weaponId != (-1))) and (action.type != Action.ACTION_WEAPON_SWAP)) and (action.weaponId != simulatedEquippedWeapon)):
+                weapon = lw_get(arsenal.playerEquippedWeapons, action.weaponId)
+                if ((weapon != None) and (simulatedTP >= lw_add(1, weapon._cost))):
+                    swapAction = Action(Action.ACTION_WEAPON_SWAP, action.weaponId, (-1), (-1), action.targetEntity)
+                    push(validActions, swapAction)
+                    simulatedTP = lw_num(simulatedTP) - lw_num(1)
+                    simulatedEquippedWeapon = action.weaponId
+                    fallbacksAdded = lw_add(fallbacksAdded, 1)
+                else:
+                    if ((weapon != None) and (simulatedTP < lw_add(1, weapon._cost))):
+                        isValid = False
+                        reason = lw_add(lw_add(lw_add("Insufficient TP for weapon swap + attack: need ", (lw_add(1, weapon._cost))), ", have "), simulatedTP)
+            if ((isValid and (action.weaponId != (-1))) and (action.type != Action.ACTION_WEAPON_SWAP)):
+                weapon = lw_get(arsenal.playerEquippedWeapons, action.weaponId)
+                if (weapon == None):
+                    isValid = False
+                    reason = lw_add("Weapon not found: ", action.weaponId)
+                else:
+                    if (simulatedTP < weapon._cost):
+                        isValid = False
+                        reason = lw_add(lw_add(lw_add("Insufficient TP for weapon: need ", weapon._cost), ", have "), simulatedTP)
+            if (isValid and (action.type == Action.ACTION_WEAPON_SWAP)):
+                if (simulatedTP < 1):
+                    isValid = False
+                    reason = lw_add("Insufficient TP for weapon swap: need 1, have ", simulatedTP)
+            if (isValid and (action.chip != (-1))):
+                chipCost = getChipCost(action.chip)
+                if (simulatedTP < chipCost):
+                    isValid = False
+                    reason = lw_add(lw_add(lw_add("Insufficient TP for chip: need ", chipCost), ", have "), simulatedTP)
+                else:
+                    if (getCooldown(action.chip, player._id) > 0):
+                        isValid = False
+                        reason = lw_add("Chip on cooldown: ", getChipName(action.chip))
+            if (isValid and (((((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)) or (action.type == Action.ACTION_BUFF)))):
+                if (not self.validateActionRangeAndLOS(action, simulatedPos)):
+                    isValid = False
+                    reason = "Out of range/LOS"
+            if ((isValid and _isBossFight) and (_bossPhase == "PUZZLE")):
+                if ((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)):
+                    isValid = False
+                    reason = "PUZZLE: damage action blocked (Apocalypse risk)"
+                if (isValid and (action.type == Action.ACTION_DEBUFF)):
+                    if (((action.chip != CHIP_GRAPPLE) and (action.chip != CHIP_BOXING_GLOVE)) and (action.chip != CHIP_INVERSION)):
+                        isValid = False
+                        reason = "PUZZLE: non-crystal debuff blocked"
+            if (isValid and ((((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)))):
+                aoeItem = None
+                if ((action.chip != (-1)) and mapContainsKey(arsenal.playerEquippedChips, action.chip)):
+                    aoeItem = lw_get(arsenal.playerEquippedChips, action.chip)
+                else:
+                    if ((action.weaponId != (-1)) and mapContainsKey(arsenal.playerEquippedWeapons, action.weaponId)):
+                        aoeItem = lw_get(arsenal.playerEquippedWeapons, action.weaponId)
+                if ((aoeItem != None) and (aoeItem._aoeType != AREA_POINT)):
+                    aimCell = action.targetCell
+                    if (((aimCell != (-1)) and (aimCell != simulatedPos)) and (not aoeItem._selfImmune)):
+                        if fieldMap.wouldAoEHitCell(aimCell, aoeItem._aoeType, simulatedPos, simulatedPos):
+                            isValid = False
+                            reason = "AoE would hit caster"
+            if (((not isValid) and (getTurn() <= 20)) and ((((((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DOT)) or (action.type == Action.ACTION_DEBUFF)) or (action.type == Action.ACTION_BUFF)) or (action.type == Action.ACTION_WEAPON_SWAP)))):
+                _flD = (-1)
+                if (action.targetCell != (-1)):
+                    _flD = getCellDistance(simulatedPos, action.targetCell)
+                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("FLT_T", getTurn()), "_t"), action.type), "_w"), action.weaponId), "_c"), action.chip), "_fc"), simulatedPos), "_tc"), action.targetCell), "_d"), _flD), "_tp"), simulatedTP), "_why["), reason), "]"))
+            if isValid:
+                push(validActions, action)
+                tpBefore = simulatedTP
+                if (action.type == Action.ACTION_WEAPON_SWAP):
+                    simulatedTP = lw_num(simulatedTP) - lw_num(1)
+                    simulatedEquippedWeapon = action.weaponId
+                else:
+                    if (action.weaponId != (-1)):
+                        weapon = lw_get(arsenal.playerEquippedWeapons, action.weaponId)
+                        if (weapon != None):
+                            swapCost = (1 if ((simulatedEquippedWeapon != action.weaponId)) else 0)
+                            simulatedTP = lw_num(simulatedTP) - lw_num(lw_add(swapCost, weapon._cost))
+                            simulatedEquippedWeapon = action.weaponId
+                    else:
+                        if (action.chip != (-1)):
+                            chipCost = getChipCost(action.chip)
+                            simulatedTP = lw_num(simulatedTP) - lw_num(chipCost)
+                            chipTargetId = (action.targetEntity._id if (((action.targetEntity != None) and (action.targetEntity != (-1)))) else player._id)
+                            if ((action.chip == CHIP_LEATHER_BOOTS) and (chipTargetId == player._id)):
+                                mpBefore = simulatedMP
+                                simulatedMP = lw_add(simulatedMP, 2)
+                            if ((action.chip == CHIP_ADRENALINE) and (chipTargetId == player._id)):
+                                simulatedTP = lw_add(simulatedTP, 5)
+            i = lw_add(i, 1)
+        removedCount = lw_sub(initialActionCount, count(validActions))
+        prunedActions = []
+        pi = 0
+        while (pi < count(validActions)):
+            pAct = lw_get(validActions, pi)
+            isEnemyLib = (((((pAct.type == Action.ACTION_DEBUFF) and (pAct.chip == CHIP_LIBERATION)) and (pAct.targetEntity != None)) and (pAct.targetEntity._id != player._id)))
+            if isEnemyLib:
+                hasPayload = False
+                pj = lw_add(pi, 1)
+                while (pj < count(validActions)):
+                    if (lw_get(validActions, pj).type == Action.ACTION_DIRECT):
+                        hasPayload = True
+                        break
+                    pj = lw_add(pj, 1)
+                if (not hasPayload):
+                    if (getTurn() <= 20):
+                        debugW(lw_add(lw_add("PAIR_DROP_T", getTurn()), "_LIB_no_payload"))
+                    pi = lw_add(pi, 1)
+                    continue
+            push(prunedActions, pAct)
+            pi = lw_add(pi, 1)
+        validActions = prunedActions
+        hasDamageActions = False
+        for action in lw_values(validActions):
+            if ((action.type == Action.ACTION_DIRECT) or (action.type == Action.ACTION_DEBUFF)):
+                hasDamageActions = True
+                break
+        if (not hasDamageActions):
+            beforeCleanup = count(validActions)
+            cleanedActions = []
+            for action in lw_values(validActions):
+                if (action.type != Action.MOVEMENT_HNS):
+                    push(cleanedActions, action)
+            if (count(cleanedActions) < beforeCleanup):
+                validActions = cleanedActions
+        self._actions = validActions
+    
+    def shouldUseAdrenaline(self, requiredTP):
+        if (not self.isChipAvailable(CHIP_ADRENALINE)):
+            return False
+        playerTP = player._currTp
+        shortage = lw_sub(requiredTP, playerTP)
+        if ((shortage >= 1) and (shortage <= 4)):
+            return True
+        return False
+    
+
+
+# ════════ unified_strategy.lk ════════
+# include: action.lk (inlined by assembler)
+# include: ../weight_profiles.lk (inlined by assembler)
+# include: ../strategic_depth.lk (inlined by assembler)
+# include: ../scenario_mutation.lk (inlined by assembler)
+class UnifiedStrategy(Strategy):
+    def __init__(self, weights, playerEntity, targetEntity, arsenalObj, fieldMapObj):
+        self._weights = None
+        self._player = None
+        self._target = None
+        self._arsenal = None
+        self._turnContext = None
+        self._bestScore = (-999999)
+        self._bestScenario = None
+        self._bestSimResult = None
+        super().__init__()
+        self._weights = weights
+        self._player = playerEntity
+        self._target = targetEntity
+        self._arsenal = arsenalObj
+        self._fieldMap = fieldMapObj
+        self.initializeTurnContext()
+
+    def initializeTurnContext(self):
+        self._turnContext = {'poisonRemaining': [], 'antidoteUsed': False, 'lastShieldChip': None, 'baitMode': False, 'lastReturnChip': None, 'returnChipTurn': 0}
+    
+    def resetTurnContext(self):
+        self.initializeTurnContext()
+    
+    def createAndExecuteScenario(self, target, targetHitCell):
+        arrayClear(self._actions)
+        self._originalTP = player._currTp
+        self._originalMP = player._currMp
+        self.checkSelfAntidote()
+        self.generateAndEvaluateBestScenario(target, targetHitCell)
+        if (((self._bestScenario != None) and (target != None)) and (getOperations() < _ops50)):
+            altTarget = self._fieldMap.selectOptimalTarget({'prioritizeLowest': "hp", 'bonusForDebuffed': True}, target._id)
+            if ((altTarget != None) and (not isDead(altTarget._id))):
+                altResult = self.runScoringPipelineLight(altTarget)
+                if (altResult != None):
+                    threshold = max(200, floor(lw_mul(self._bestScore, 0.15)))
+                    altKillProb = estimateKillProbFromSim(lw_get(altResult, 'simResult'), altTarget)
+                    primaryKillProb = (estimateKillProbFromSim(self._bestSimResult, self._target) if ((self._bestSimResult != None)) else 0)
+                    altIsKill = (altKillProb >= 0.70)
+                    primaryIsKill = (primaryKillProb >= 0.70)
+                    killOverride = ((altIsKill and (not primaryIsKill)) and (lw_get(altResult, 'score') > lw_sub(self._bestScore, 1000)))
+                    if ((lw_get(altResult, 'score') > lw_add(self._bestScore, threshold)) or killOverride):
+                        target = altTarget
+                        self._target = altTarget
+                        self._actions = lw_get(altResult, 'scenario')
+                        self._bestScenario = lw_get(altResult, 'scenario')
+                        self._bestSimResult = lw_get(altResult, 'simResult')
+                        self._bestScore = lw_get(altResult, 'score')
+        targetDied = self.executeScenario()
+        if (((lw__playerBuildType == BUILD_SUPPORT) and (getTP() >= 2)) and (getOperations() < lw_sub(_opsBudget, 400000))):
+            supportAlliesPass()
+        tpBeforeRec = getTP()
+        opsBeforeRec = getOperations()
+        if ((((not targetDied) and (target != None)) and (not isDead(target._id))) and (opsBeforeRec < lw_sub(_opsBudget, 300000))):
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add("REC_T", getTurn()), "_TP"), tpBeforeRec), "_OPS"), opsBeforeRec))
+            recoverRemainingTP(target)
+        else:
+            if (tpBeforeRec >= 5):
+                debugE(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("REC_SKIP_T", getTurn()), "_TP"), tpBeforeRec), "_OPS"), opsBeforeRec), "_BUDGET"), _opsBudget))
+        if targetDied:
+            enemies = self._fieldMap.getEnemySubMap()
+            aliveEnemies = []
+            for eid in lw_values(mapKeys(enemies)):
+                if (not isDead(eid)):
+                    push(aliveEnemies, lw_get(enemies, eid))
+            if (count(aliveEnemies) > 0):
+                player.updateEntity()
+                newTarget = lw_get(aliveEnemies, 0)
+                i = 1
+                while (i < count(aliveEnemies)):
+                    e = lw_get(aliveEnemies, i)
+                    if (e._currHealth < newTarget._currHealth):
+                        newTarget = e
+                    i = lw_add(i, 1)
+                newTargetHitCell = newTarget._cellPos
+                arrayClear(self._actions)
+                self.generateAndEvaluateBestScenario(newTarget, newTargetHitCell)
+                retargetDied = self.executeScenario()
+                if (((not retargetDied) and (not isDead(newTarget._id))) and (getOperations() < _ops96)):
+                    recoverRemainingTP(newTarget)
+    
+    def generateAndEvaluateBestScenario(self, target, targetHitCell):
+        generator = ScenarioGenerator(arsenal, player, target, self._fieldMap, self)
+        scenarios = generator.generateScenarios()
+        if (count(scenarios) == 0):
+            self.createFallbackScenario(target, targetHitCell)
+            return None
+        quickScorer = ScenarioQuickScorer(player, target, self._fieldMap, arsenal)
+        scenariosWithQuickScore = []
+        for scenario in lw_values(scenarios):
+            qScore = quickScorer.quickScore(scenario)
+            family = quickScorer.classifyFamily(scenario)
+            hasHeal = quickScorer.scenarioHasHealAction(scenario)
+            push(scenariosWithQuickScore, {'scenario': scenario, 'quickScore': qScore, 'family': family, 'hasHeal': hasHeal})
+        def _lwfn1_1(a, b):
+            return lw_sub(lw_get(b, 'quickScore'), lw_get(a, 'quickScore'))
+        def _lwfn2_1(a, b):
+            return lw_sub(lw_get(b, 'quickScore'), lw_get(a, 'quickScore'))
+        arraySort(scenariosWithQuickScore, _lwfn2_1)
+        rawTopN = min(3, count(scenariosWithQuickScore))
+        rawPinned = {}
+        i = 0
+        while (i < rawTopN):
+            lw_put(rawPinned, i, True)
+            i = lw_add(i, 1)
+        familySeen = {}
+        diverseList = []
+        overflow = []
+        i = 0
+        while (i < count(scenariosWithQuickScore)):
+            if (not mapContainsKey(rawPinned, i)):
+                i = lw_add(i, 1)
+                continue
+            entry = lw_get(scenariosWithQuickScore, i)
+            push(diverseList, entry)
+            lw_put(familySeen, lw_get(entry, 'family'), True)
+            i = lw_add(i, 1)
+        i = 0
+        while (i < count(scenariosWithQuickScore)):
+            if mapContainsKey(rawPinned, i):
+                i = lw_add(i, 1)
+                continue
+            entry = lw_get(scenariosWithQuickScore, i)
+            fam = lw_get(entry, 'family')
+            if (not mapContainsKey(familySeen, fam)):
+                lw_put(familySeen, fam, True)
+                push(diverseList, entry)
+            else:
+                push(overflow, entry)
+            i = lw_add(i, 1)
+        scenariosWithQuickScore = []
+        for d in lw_values(diverseList):
+            push(scenariosWithQuickScore, d)
+        for o in lw_values(overflow):
+            push(scenariosWithQuickScore, o)
+        if ((target != None) and (not _isBossFight)):
+            sds_state = generator.determineStrategicState()
+            defensiveFloor = 0
+            if (sds_state == "FLEE"):
+                defensiveFloor = 5
+            else:
+                if (sds_state == "SUSTAIN"):
+                    defensiveFloor = 4
+            if (defensiveFloor > 0):
+                sds_defCount = 0
+                sds_headLimit = min(lw_add(defensiveFloor, 4), count(scenariosWithQuickScore))
+                sds_i = 0
+                while (sds_i < sds_headLimit):
+                    if (lw_get(lw_get(scenariosWithQuickScore, sds_i), 'family') == ScenarioQuickScorer.FAMILY_DEFENSIVE):
+                        sds_defCount = lw_add(sds_defCount, 1)
+                    sds_i = lw_add(sds_i, 1)
+                if (sds_defCount < defensiveFloor):
+                    sds_promoted = []
+                    sds_rest = []
+                    sds_need = lw_sub(defensiveFloor, sds_defCount)
+                    sds_j = sds_headLimit
+                    while (sds_j < count(scenariosWithQuickScore)):
+                        sds_entry = lw_get(scenariosWithQuickScore, sds_j)
+                        if ((sds_need > 0) and (lw_get(sds_entry, 'family') == ScenarioQuickScorer.FAMILY_DEFENSIVE)):
+                            push(sds_promoted, sds_entry)
+                            sds_need = lw_num(sds_need) - lw_num(1)
+                        else:
+                            push(sds_rest, sds_entry)
+                        sds_j = lw_add(sds_j, 1)
+                    if (count(sds_promoted) > 0):
+                        sds_new = []
+                        sds_k = 0
+                        while (sds_k < sds_headLimit):
+                            push(sds_new, lw_get(scenariosWithQuickScore, sds_k))
+                            sds_k = lw_add(sds_k, 1)
+                        for sds_p in lw_values(sds_promoted):
+                            push(sds_new, sds_p)
+                        for sds_r in lw_values(sds_rest):
+                            push(sds_new, sds_r)
+                        scenariosWithQuickScore = sds_new
+        if ((((target != None) and (not _isBossFight)) and (target._magic != None)) and (target._magic >= 300)):
+            magFloor = 2
+            magHealFloor = 1
+            magDefCount = 0
+            magHealCount = 0
+            magHeadLimit = min(lw_add(magFloor, 6), count(scenariosWithQuickScore))
+            mag_i = 0
+            while (mag_i < magHeadLimit):
+                if (lw_get(lw_get(scenariosWithQuickScore, mag_i), 'family') == ScenarioQuickScorer.FAMILY_DEFENSIVE):
+                    magDefCount = lw_add(magDefCount, 1)
+                if (lw_get(lw_get(scenariosWithQuickScore, mag_i), 'hasHeal') == True):
+                    magHealCount = lw_add(magHealCount, 1)
+                mag_i = lw_add(mag_i, 1)
+            if ((magDefCount < magFloor) or (magHealCount < magHealFloor)):
+                mag_promoted = []
+                mag_rest = []
+                mag_defNeed = lw_sub(magFloor, magDefCount)
+                mag_healNeed = lw_sub(magHealFloor, magHealCount)
+                mag_j1 = magHeadLimit
+                while (mag_j1 < count(scenariosWithQuickScore)):
+                    mag_entry1 = lw_get(scenariosWithQuickScore, mag_j1)
+                    if ((mag_healNeed > 0) and (lw_get(mag_entry1, 'hasHeal') == True)):
+                        push(mag_promoted, mag_entry1)
+                        mag_healNeed = lw_num(mag_healNeed) - lw_num(1)
+                        if (lw_get(mag_entry1, 'family') == ScenarioQuickScorer.FAMILY_DEFENSIVE):
+                            mag_defNeed = lw_num(mag_defNeed) - lw_num(1)
+                    else:
+                        push(mag_rest, mag_entry1)
+                    mag_j1 = lw_add(mag_j1, 1)
+                mag_rest2 = []
+                mag_j2 = 0
+                while (mag_j2 < count(mag_rest)):
+                    mag_entry2 = lw_get(mag_rest, mag_j2)
+                    if ((mag_defNeed > 0) and (lw_get(mag_entry2, 'family') == ScenarioQuickScorer.FAMILY_DEFENSIVE)):
+                        push(mag_promoted, mag_entry2)
+                        mag_defNeed = lw_num(mag_defNeed) - lw_num(1)
+                    else:
+                        push(mag_rest2, mag_entry2)
+                    mag_j2 = lw_add(mag_j2, 1)
+                if (count(mag_promoted) > 0):
+                    mag_new = []
+                    mag_k = 0
+                    while (mag_k < magHeadLimit):
+                        push(mag_new, lw_get(scenariosWithQuickScore, mag_k))
+                        mag_k = lw_add(mag_k, 1)
+                    for mag_p in lw_values(mag_promoted):
+                        push(mag_new, mag_p)
+                    for mag_r in lw_values(mag_rest2):
+                        push(mag_new, mag_r)
+                    scenariosWithQuickScore = mag_new
+        aliveEnemies = count(getAliveEnemies())
+        topK = None
+        if ((getTurn() < 5) or (aliveEnemies > 3)):
+            topK = 35
+        else:
+            if (aliveEnemies == 1):
+                topK = 80
+            else:
+                topK = 55
+        if (_opsBudget < 14000000):
+            topK = max(14, floor(lw_div(lw_mul(topK, _opsBudget), 14000000)))
+        if (getOperations() > _ops79):
+            topK = max(8, floor(lw_mul(topK, 0.5)))
+        evaluateCount = min(topK, count(scenariosWithQuickScore))
+        USE_MUTATIONS = True
+        mutationOpsLimit = _ops89
+        if (_isBossFight and (_bossPhase == "PUZZLE")):
+            USE_MUTATIONS = False
+        if ((USE_MUTATIONS and (getOperations() < mutationOpsLimit)) and (count(scenariosWithQuickScore) >= 1)):
+            if (getTurn() <= 20):
+                _preN = count(scenariosWithQuickScore)
+                _preTopQ = (lw_get(lw_get(scenariosWithQuickScore, 0), 'quickScore') if ((_preN > 0)) else 0)
+                _preFams = ""
+                _preSeedCount = min(6, _preN)
+                _pi = 0
+                while (_pi < _preSeedCount):
+                    if (_pi > 0):
+                        _preFams = lw_add(_preFams, ",")
+                    _preFams = lw_add(_preFams, lw_add(lw_add(lw_get(lw_get(scenariosWithQuickScore, _pi), 'family'), ":"), lw_get(lw_get(scenariosWithQuickScore, _pi), 'quickScore')))
+                    _pi = lw_add(_pi, 1)
+                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("PRE_T", getTurn()), "_n"), _preN), "_topQ"), _preTopQ), "_top6["), _preFams), "]"))
+            enemies = self._fieldMap.getEnemySubMap()
+            adaptedWeights = adaptWeightsToSituation(self._weights, player, enemies, self._fieldMap)
+            scorer = ScenarioScorer(player, target, self._fieldMap, adaptedWeights)
+            mutationSeeds = []
+            seedLimit = min(_mutationMaxSeeds, count(scenariosWithQuickScore))
+            i = 0
+            while (i < seedLimit):
+                push(mutationSeeds, lw_get(lw_get(scenariosWithQuickScore, i), 'scenario'))
+                i = lw_add(i, 1)
+            mutationPlanner = HybridMutationPlanner(arsenal, player, target, self._fieldMap, scorer)
+            bestMutatedScenario = mutationPlanner.planWithMutations(mutationSeeds)
+            if (((_opsBudget >= 18000000) and (getOperations() < _ops79)) and (bestMutatedScenario != None)):
+                refineSeeds = [bestMutatedScenario]
+                refinedWinner = mutationPlanner.planWithMutations(refineSeeds)
+                if (refinedWinner != None):
+                    bestMutatedScenario = refinedWinner
+            scenariosWithQuickScore = []
+            push(scenariosWithQuickScore, {'scenario': bestMutatedScenario, 'quickScore': 9999})
+            origLimit = seedLimit
+            i = 0
+            while (i < origLimit):
+                push(scenariosWithQuickScore, {'scenario': lw_get(mutationSeeds, i), 'quickScore': lw_sub(8000, lw_mul(i, 100))})
+                i = lw_add(i, 1)
+            evaluateCount = count(scenariosWithQuickScore)
+        enemies = self._fieldMap.getEnemySubMap()
+        adaptedWeights = adaptWeightsToSituation(self._weights, player, enemies, self._fieldMap)
+        simulator = ScenarioSimulator(arsenal, player, target, self._fieldMap)
+        scorer = ScenarioScorer(player, target, self._fieldMap, adaptedWeights)
+        bestScore = (-999999)
+        bestScenario = None
+        bestSimResult = None
+        scenarioResults = []
+        summonReserveTP = 0
+        _hasSavant = mapContainsKey(arsenal.playerEquippedChips, CHIP_SAVANT_BULB)
+        _hasMetallic = mapContainsKey(arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
+        if (_hasSavant or _hasMetallic):
+            _bulbChip = (CHIP_SAVANT_BULB if _hasSavant else CHIP_METALLIC_BULB)
+            _sumLeekAlly = False
+            _sumAllies = getAliveAllies()
+            if (_sumAllies != None):
+                for _suA in lw_values(_sumAllies):
+                    if (_suA == player._id):
+                        continue
+                    if ((getType(_suA) == ENTITY_LEEK) and (not isDead(_suA))):
+                        _sumLeekAlly = True
+                        break
+            if (((getCooldown(_bulbChip, player._id) == 0) and (countMyLivingSummons(player._id) < 2)) and ((_sumLeekAlly or (player._currTp >= lw_add(getChipCost(_bulbChip), 12))))):
+                summonReserveTP = getChipCost(_bulbChip)
+        tpBudget = lw_sub(player._currTp, summonReserveTP)
+        stateScoreCache = {}
+        i = 0
+        while (i < evaluateCount):
+            scenarioData = lw_get(scenariosWithQuickScore, i)
+            scenario = lw_get(scenarioData, 'scenario')
+            qScore = lw_get(scenarioData, 'quickScore')
+            simResult = simulator.simulate(scenario)
+            stateHash = simResult.getStateHash()
+            score = None
+            if mapContainsKey(stateScoreCache, stateHash):
+                score = lw_get(stateScoreCache, stateHash)
+            else:
+                score = scorer.score(simResult, scenario)
+                lw_put(stateScoreCache, stateHash, score)
+            netTP = lw_sub(simResult.tpSpent, simResult.tpRefunded)
+            feasible = (((netTP <= tpBudget) and (simResult.droppedActions == 0)))
+            push(scenarioResults, {'scenario': scenario, 'simResult': simResult, 'score': score, 'quickScore': qScore, 'netTP': netTP, 'feasible': feasible})
+            if (feasible and (score > bestScore)):
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            if (((i >= 10) and ((lw_sub(bestScore, score)) > 2000)) and (((_opsBudget >= 14000000) or (getOperations() > _ops50)))):
+                break
+            if (getOperations() > _ops93):
+                break
+            i = lw_add(i, 1)
+        if (getTurn() <= 20):
+            _genN = count(scenarioResults)
+            _genTopDmg = 0
+            _genTopDot = 0
+            _genDmgCount = 0
+            _genHealCount = 0
+            _gi = 0
+            while (_gi < _genN):
+                _gsim = lw_get(lw_get(scenarioResults, _gi), 'simResult')
+                if (_gsim.damageDealt > _genTopDmg):
+                    _genTopDmg = _gsim.damageDealt
+                if (_gsim.dotDamageQueued > _genTopDot):
+                    _genTopDot = _gsim.dotDamageQueued
+                if ((_gsim.damageDealt > 0) or (_gsim.dotDamageQueued > 0)):
+                    _genDmgCount = lw_add(_genDmgCount, 1)
+                if (_gsim.hpGained > 0):
+                    _genHealCount = lw_add(_genHealCount, 1)
+                _gi = lw_add(_gi, 1)
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("GEN_T", getTurn()), "_n"), _genN), "_topDmg"), _genTopDmg), "_topDot"), _genTopDot), "_dmgN"), _genDmgCount), "_healN"), _genHealCount))
+        if ((count(scenarioResults) >= 2) and (getOperations() < _ops79)):
+            def _lwfn3_1(a, b):
+                return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+            def _lwfn4_1(a, b):
+                return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+            arraySort(scenarioResults, _lwfn4_1)
+            twoplyCount = min(_twoplyTopK, count(scenarioResults))
+            i = 0
+            while (i < twoplyCount):
+                sd = lw_get(scenarioResults, i)
+                twoplyBonus = scorer.project2ndTurnValue(lw_get(sd, 'simResult'), lw_get(sd, 'scenario'))
+                lw_put(sd, 'score', lw_add(lw_get(sd, 'score'), twoplyBonus))
+                if (lw_get(sd, 'feasible') and (lw_get(sd, 'score') > bestScore)):
+                    bestScore = lw_get(sd, 'score')
+                    bestScenario = lw_get(sd, 'scenario')
+                    bestSimResult = lw_get(sd, 'simResult')
+                i = lw_add(i, 1)
+        if ((count(scenarioResults) >= 1) and (getOperations() < _ops89)):
+            def _lwfn5_1(a, b):
+                return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+            def _lwfn6_1(a, b):
+                return lw_sub(lw_get(b, 'score'), lw_get(a, 'score'))
+            arraySort(scenarioResults, _lwfn6_1)
+            predictor = EnemyPredictor(self._fieldMap, arsenal, player, target)
+            lookaheadCount = min(_enemyLookaheadTopK, count(scenarioResults))
+            i = 0
+            while (i < lookaheadCount):
+                scenarioData = lw_get(scenarioResults, i)
+                simResult = lw_get(scenarioData, 'simResult')
+                endState = {'endPosition': simResult.finalPosition, 'endHP': lw_add(player._currHealth, simResult.hpGained), 'endTP': lw_sub(player._currTp, simResult.tpSpent), 'score': lw_get(scenarioData, 'score'), 'shieldAbs': simResult.shieldsGained, 'shieldRel': simResult.relativeShieldGained}
+                lookahead = predictor.evaluateScenarioWithLookahead(endState, 0.7)
+                lw_put(scenarioData, 'finalScore', lw_get(lookahead, 'finalScore'))
+                lw_put(scenarioData, 'enemyDamage', lw_get(lookahead, 'enemyDamage'))
+                i = lw_add(i, 1)
+            i = 0
+            while (i < lookaheadCount):
+                scenarioData = lw_get(scenarioResults, i)
+                if mapContainsKey(scenarioData, 'finalScore'):
+                    if (lw_get(scenarioData, 'feasible') and (lw_get(scenarioData, 'finalScore') > bestScore)):
+                        bestScore = lw_get(scenarioData, 'finalScore')
+                        bestScenario = lw_get(scenarioData, 'scenario')
+                        bestSimResult = lw_get(scenarioData, 'simResult')
+                i = lw_add(i, 1)
+        if (((((bestScenario != None) and (bestSimResult != None)) and (not _isBossFight)) and (not ((lw__timePressure and (getTurn() > 40))))) and lw__adversarialThreatCacheBuilt):
+            b1Cell = bestSimResult.finalPosition
+            if (b1Cell == (-1)):
+                b1Cell = player._cellPos
+            b1Threat = getAdversarialThreat(b1Cell)
+            b1EHP = lw_add(lw_add(player._currHealth, bestSimResult.hpGained), bestSimResult.shieldsGained)
+            b1Lethal = ((lw_sub(b1EHP, lw_mul(b1Threat, (lw_sub(1.0, lw_div(bestSimResult.relativeShieldGained, 100.0)))))) <= 0)
+            b1Kills = (((target != None) and (bestSimResult.damageDealt >= target._currHealth)))
+            if (b1Lethal and (not b1Kills)):
+                b1SafeBest = None
+                b1SafeScore = (-999999)
+                b1i = 0
+                while (b1i < count(scenarioResults)):
+                    b1sd = lw_get(scenarioResults, b1i)
+                    if (not lw_get(b1sd, 'feasible')):
+                        b1i = lw_add(b1i, 1)
+                        continue
+                    b1sim = lw_get(b1sd, 'simResult')
+                    b1c = b1sim.finalPosition
+                    if (b1c == (-1)):
+                        b1c = player._cellPos
+                    b1t = getAdversarialThreat(b1c)
+                    b1e = lw_add(lw_add(player._currHealth, b1sim.hpGained), b1sim.shieldsGained)
+                    if (lw_sub(b1e, lw_mul(b1t, (lw_sub(1.0, lw_div(b1sim.relativeShieldGained, 100.0))))) <= 0):
+                        b1i = lw_add(b1i, 1)
+                        continue
+                    b1s = (lw_get(b1sd, 'finalScore') if mapContainsKey(b1sd, 'finalScore') else lw_get(b1sd, 'score'))
+                    if (b1s > b1SafeScore):
+                        b1SafeScore = b1s
+                        b1SafeBest = b1sd
+                    b1i = lw_add(b1i, 1)
+                if (b1SafeBest != None):
+                    debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("B1_GATE_T", getTurn()), "_sc"), floor(bestScore)), "to"), floor(b1SafeScore)), "_thr"), floor(b1Threat)))
+                    bestScenario = lw_get(b1SafeBest, 'scenario')
+                    bestSimResult = lw_get(b1SafeBest, 'simResult')
+                    bestScore = b1SafeScore
+        if (bestScenario != None):
+            isDamaging = ((bestSimResult.damageDealt > 0) or (bestSimResult.dotDamageQueued > 0))
+            isHealing = (bestSimResult.hpGained > 0)
+            isDefensive = (((bestSimResult.shieldsGained > 0) or (bestSimResult.relativeShieldGained > 0)) or (count(bestSimResult.buffsApplied) > 0))
+            usesResources = ((bestSimResult.tpSpent > 0) or (bestSimResult.mpSpent > 0))
+            isBaitAnchor = False
+            _bai = 0
+            while (_bai < count(bestScenario)):
+                _baAct = lw_get(bestScenario, _bai)
+                if ((_baAct.type == Action.ACTION_CHECKPOINT) and (_baAct.checkpointType == "BAIT_ANCHOR")):
+                    isBaitAnchor = True
+                    break
+                _bai = lw_add(_bai, 1)
+            if ((((((not isDamaging) and (not isHealing)) and (not isDefensive)) and usesResources) and (bestScore < 500)) and (not isBaitAnchor)):
+                if (getTurn() <= 20):
+                    debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("OVR_T", getTurn()), "_dmg"), bestSimResult.damageDealt), "_dot"), bestSimResult.dotDamageQueued), "_heal"), bestSimResult.hpGained), "_sh"), bestSimResult.shieldsGained), "_buf"), count(bestSimResult.buffsApplied)), "_sc"), bestScore))
+                self.createFallbackScenario(target, targetHitCell)
+            else:
+                self._actions = bestScenario
+        else:
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add("OVR_T", getTurn()), "_NULL_BEST"))
+            self.createFallbackScenario(target, targetHitCell)
+        self._bestScore = bestScore
+        self._bestScenario = bestScenario
+        self._bestSimResult = bestSimResult
+        if ((getTurn() <= 20) and (bestScenario != None)):
+            _obsSeq = ""
+            _obsCount = count(bestScenario)
+            _oi = 0
+            while (_oi < _obsCount):
+                _oa = lw_get(bestScenario, _oi)
+                if (_oi > 0):
+                    _obsSeq = lw_add(_obsSeq, "-")
+                _obsSeq = lw_add(_obsSeq, _oa.type)
+                if (_oa.weaponId != (-1)):
+                    _obsSeq = lw_add(_obsSeq, lw_add("w", _oa.weaponId))
+                if (_oa.chip != (-1)):
+                    _obsSeq = lw_add(_obsSeq, lw_add("c", _oa.chip))
+                if (_oa.targetCell != (-1)):
+                    _obsSeq = lw_add(_obsSeq, lw_add("@", _oa.targetCell))
+                _oi = lw_add(_oi, 1)
+            _obsFc = (bestSimResult.finalPosition if ((bestSimResult != None)) else (-1))
+            _obsDmg = (bestSimResult.damageDealt if ((bestSimResult != None)) else 0)
+            _obsDot = (bestSimResult.dotDamageQueued if ((bestSimResult != None)) else 0)
+            _obsHeal = (bestSimResult.hpGained if ((bestSimResult != None)) else 0)
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("OBS_BEST_T", getTurn()), "_sc"), bestScore), "_fc"), _obsFc), "_dmg"), _obsDmg), "_dot"), _obsDot), "_heal"), _obsHeal), "_n"), _obsCount), "_seq["), _obsSeq), "]"))
+    
+    def runScoringPipelineLight(self, altTarget):
+        generator = ScenarioGenerator(arsenal, player, altTarget, self._fieldMap, self)
+        scenarios = generator.generateScenarios()
+        if (count(scenarios) == 0):
+            return None
+        quickScorer = ScenarioQuickScorer(player, altTarget, self._fieldMap, arsenal)
+        scored = []
+        for scenario in lw_values(scenarios):
+            qScore = quickScorer.quickScore(scenario)
+            push(scored, {'scenario': scenario, 'quickScore': qScore})
+        def _lwfn1_1(a, b):
+            return lw_sub(lw_get(b, 'quickScore'), lw_get(a, 'quickScore'))
+        def _lwfn2_1(a, b):
+            return lw_sub(lw_get(b, 'quickScore'), lw_get(a, 'quickScore'))
+        arraySort(scored, _lwfn2_1)
+        enemies = self._fieldMap.getEnemySubMap()
+        adaptedWeights = adaptWeightsToSituation(self._weights, player, enemies, self._fieldMap)
+        simulator = ScenarioSimulator(arsenal, player, altTarget, self._fieldMap)
+        scorer = ScenarioScorer(player, altTarget, self._fieldMap, adaptedWeights)
+        evalCount = min(25, count(scored))
+        bestScore = (-999999)
+        bestScenario = None
+        bestSimResult = None
+        altScoreCache = {}
+        i = 0
+        while (i < evalCount):
+            if (getOperations() > _ops89):
+                break
+            scenario = lw_get(lw_get(scored, i), 'scenario')
+            simResult = simulator.simulate(scenario)
+            stateHash = simResult.getStateHash()
+            score = None
+            if mapContainsKey(altScoreCache, stateHash):
+                score = lw_get(altScoreCache, stateHash)
+            else:
+                score = scorer.score(simResult, scenario)
+                lw_put(altScoreCache, stateHash, score)
+            if (score > bestScore):
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            i = lw_add(i, 1)
+        if (bestScenario == None):
+            return None
+        return {'score': bestScore, 'scenario': bestScenario, 'simResult': bestSimResult}
+    
+    def createFallbackScenario(self, target, targetHitCell):
+        if (target == None):
+            if (((targetHitCell != None) and (targetHitCell != (-1))) and (player._currMp > 0)):
+                pathLen = getCachedPathLength(player._cellPos, targetHitCell)
+                if (((pathLen != None) and (pathLen > 0)) and (player._currMp >= pathLen)):
+                    act = Action(Action.MOVEMENT_APPROACH, (-1), (-1), targetHitCell, None)
+                    push(self._actions, act)
+                    player._currMp = lw_num(player._currMp) - lw_num(pathLen)
+            return None
+        weaponIds = mapKeys(arsenal.playerEquippedWeapons)
+        curDist = getCellDistance(player._cellPos, target._cellPos)
+        firingWeaponId = None
+        firingDPS = 0
+        fireFromCurrent = False
+        if ((curDist != None) and lineOfSight(player._cellPos, target._cellPos)):
+            for widCur in lw_values(weaponIds):
+                wCur = lw_get(arsenal.playerEquippedWeapons, widCur)
+                if (wCur._cost > player._currTp):
+                    continue
+                if ((curDist < wCur._minRange) or (curDist > wCur._maxRange)):
+                    continue
+                dmgCur = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, widCur, target)
+                if (dmgCur <= 0):
+                    continue
+                dpsCur = lw_div(dmgCur, wCur._cost)
+                if (dpsCur > firingDPS):
+                    firingDPS = dpsCur
+                    firingWeaponId = widCur
+                    fireFromCurrent = True
+        fireCellMove = (-1)
+        fireMovePathLen = 0
+        if ((not fireFromCurrent) and (player._currMp > 0)):
+            reach = self._fieldMap.getReachableCellsWithinMP(player._cellPos, player._currMp)
+            for rCell in lw_values(reach):
+                if (rCell == player._cellPos):
+                    continue
+                rDist = getCellDistance(rCell, target._cellPos)
+                if (rDist == None):
+                    continue
+                pathR = getCachedPathLength(player._cellPos, rCell)
+                if ((pathR == None) or (pathR > player._currMp)):
+                    continue
+                hasLoS = (-1)
+                for widF in lw_values(weaponIds):
+                    wF = lw_get(arsenal.playerEquippedWeapons, widF)
+                    if (wF._cost > player._currTp):
+                        continue
+                    if ((rDist < wF._minRange) or (rDist > wF._maxRange)):
+                        continue
+                    if (hasLoS == (-1)):
+                        hasLoS = (1 if lineOfSight(rCell, target._cellPos) else 0)
+                    if (hasLoS == 0):
+                        break
+                    dmgF = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, widF, target)
+                    if (dmgF <= 0):
+                        continue
+                    dpsF = lw_div(dmgF, wF._cost)
+                    if (dpsF > firingDPS):
+                        firingDPS = dpsF
+                        firingWeaponId = widF
+                        fireCellMove = rCell
+                        fireMovePathLen = pathR
+        if ((((not fireFromCurrent) and (fireCellMove == (-1))) and (targetHitCell != None)) and (targetHitCell != (-1))):
+            thcPath = getCachedPathLength(player._cellPos, targetHitCell)
+            if (((thcPath != None) and (thcPath > 0)) and (player._currMp >= thcPath)):
+                thcDist = getCellDistance(targetHitCell, target._cellPos)
+                thcLoS = lineOfSight(targetHitCell, target._cellPos)
+                for widT in lw_values(weaponIds):
+                    wT = lw_get(arsenal.playerEquippedWeapons, widT)
+                    if (wT._cost > player._currTp):
+                        continue
+                    if (((thcDist == None) or (thcDist < wT._minRange)) or (thcDist > wT._maxRange)):
+                        continue
+                    if (not thcLoS):
+                        continue
+                    dmgT = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, widT, target)
+                    if (dmgT <= 0):
+                        continue
+                    dpsT = lw_div(dmgT, wT._cost)
+                    if (dpsT > firingDPS):
+                        firingDPS = dpsT
+                        firingWeaponId = widT
+                        fireCellMove = targetHitCell
+                        fireMovePathLen = thcPath
+        jumpFireCell = (-1)
+        jumpFireWeaponId = None
+        jumpFireDPS = 0
+        jumpCost = 0
+        canJump = ((((not fireFromCurrent) and (fireCellMove == (-1))) and mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP)) and (getCooldown(CHIP_JUMP, player._id) == 0))
+        if canJump:
+            jChipObj = lw_get(arsenal.playerEquippedChips, CHIP_JUMP)
+            jumpCost = jChipObj._cost
+            if (jumpCost <= lw_sub(player._currTp, 1)):
+                pX = getCellX(player._cellPos)
+                pY = getCellY(player._cellPos)
+                jdx = (-3)
+                while (jdx <= 3):
+                    jdy = (-3)
+                    while (jdy <= 3):
+                        if ((jdx == 0) and (jdy == 0)):
+                            jdy = lw_add(jdy, 1)
+                            continue
+                        if (lw_add(abs(jdx), abs(jdy)) > 3):
+                            jdy = lw_add(jdy, 1)
+                            continue
+                        jCell = getCellFromXY(lw_add(pX, jdx), lw_add(pY, jdy))
+                        if ((jCell == None) or (jCell < 0)):
+                            jdy = lw_add(jdy, 1)
+                            continue
+                        if (isObstacle(jCell) or isEntity(jCell)):
+                            jdy = lw_add(jdy, 1)
+                            continue
+                        jD = getCellDistance(jCell, target._cellPos)
+                        if (jD == None):
+                            jdy = lw_add(jdy, 1)
+                            continue
+                        jLoS = (-1)
+                        for widJ in lw_values(weaponIds):
+                            wJ = lw_get(arsenal.playerEquippedWeapons, widJ)
+                            if (wJ._cost > lw_sub(player._currTp, jumpCost)):
+                                continue
+                            if ((jD < wJ._minRange) or (jD > wJ._maxRange)):
+                                continue
+                            if (jLoS == (-1)):
+                                jLoS = (1 if lineOfSight(jCell, target._cellPos) else 0)
+                            if (jLoS == 0):
+                                break
+                            dmgJ = arsenal.getNetDamageAgainstTarget(player._strength, player._magic, player._wisdom, player._science, widJ, target)
+                            if (dmgJ <= 0):
+                                continue
+                            dpsJ = lw_div(dmgJ, wJ._cost)
+                            if (dpsJ > jumpFireDPS):
+                                jumpFireDPS = dpsJ
+                                jumpFireWeaponId = widJ
+                                jumpFireCell = jCell
+                        jdy = lw_add(jdy, 1)
+                    jdx = lw_add(jdx, 1)
+        if fireFromCurrent:
+            pass
+        else:
+            if ((fireCellMove != (-1)) and (firingWeaponId != None)):
+                moveAct = Action(Action.MOVEMENT_OFFENSIVE, (-1), (-1), fireCellMove, None)
+                push(self._actions, moveAct)
+                player._currMp = lw_num(player._currMp) - lw_num(fireMovePathLen)
+            else:
+                if ((jumpFireCell != (-1)) and (jumpFireWeaponId != None)):
+                    jumpAct = Action(Action.ACTION_TELEPORT, (-1), CHIP_JUMP, jumpFireCell, target)
+                    push(self._actions, jumpAct)
+                    player._currTp = lw_num(player._currTp) - lw_num(jumpCost)
+                    firingWeaponId = jumpFireWeaponId
+                else:
+                    if (player._currMp > 0):
+                        fallTo = (targetHitCell if (((targetHitCell != None) and (targetHitCell != (-1)))) else target._cellPos)
+                        fallAct = Action(Action.MOVEMENT_APPROACH, (-1), (-1), fallTo, None)
+                        push(self._actions, fallAct)
+        if (getTurn() <= 20):
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("FBK_L_T", getTurn()), "_cd"), curDist), "_fc"), fireFromCurrent), "_fm"), fireCellMove), "_jfc"), jumpFireCell), "_fw"), firingWeaponId), "_thc"), targetHitCell))
+        if (firingWeaponId != None):
+            weapon = lw_get(arsenal.playerEquippedWeapons, firingWeaponId)
+            uses = 0
+            while ((weapon._cost <= player._currTp) and (uses < weapon._maxUse)):
+                action = Action(Action.ACTION_DIRECT, firingWeaponId, (-1), target._cellPos, None)
+                push(self._actions, action)
+                player._currTp = lw_num(player._currTp) - lw_num(weapon._cost)
+                uses = lw_add(uses, 1)
+        else:
+            if (player._currTp >= 3):
+                chipIds = mapKeys(arsenal.playerEquippedChips)
+                hurt = (player._currHealth < lw_sub(player._maxHealth, 100))
+                fbVisited = {}
+                attempts = 0
+                while ((player._currTp >= 3) and (attempts < 6)):
+                    attempts = lw_add(attempts, 1)
+                    pickId = None
+                    pickCost = 99
+                    for cid in lw_values(chipIds):
+                        if mapContainsKey(fbVisited, cid):
+                            continue
+                        if (getCooldown(cid, player._id) > 0):
+                            continue
+                        cChip = lw_get(arsenal.playerEquippedChips, cid)
+                        if (cChip._cost > player._currTp):
+                            continue
+                        eligible = False
+                        if (hurt and isHealingChip(cid)):
+                            eligible = True
+                        else:
+                            if isShieldChip(cid):
+                                eligible = True
+                            else:
+                                if isOffensiveBuff(cid):
+                                    eligible = True
+                                else:
+                                    if isResourceChip(cid):
+                                        eligible = True
+                                    else:
+                                        if isDamageReturnChip(cid):
+                                            eligible = True
+                        if (not eligible):
+                            continue
+                        if (cChip._cost < pickCost):
+                            pickCost = cChip._cost
+                            pickId = cid
+                    if (pickId == None):
+                        break
+                    defAction = Action(Action.ACTION_BUFF, (-1), pickId, player._cellPos, None)
+                    push(self._actions, defAction)
+                    player._currTp = lw_num(player._currTp) - lw_num(pickCost)
+                    lw_put(fbVisited, pickId, True)
+        if (getTurn() <= 20):
+            _fbSeq = ""
+            _fbN = count(self._actions)
+            _fi = 0
+            while (_fi < _fbN):
+                _fa = lw_get(self._actions, _fi)
+                if (_fi > 0):
+                    _fbSeq = lw_add(_fbSeq, "-")
+                _fbSeq = lw_add(_fbSeq, _fa.type)
+                if (_fa.weaponId != (-1)):
+                    _fbSeq = lw_add(_fbSeq, lw_add("w", _fa.weaponId))
+                if (_fa.chip != (-1)):
+                    _fbSeq = lw_add(_fbSeq, lw_add("c", _fa.chip))
+                if (_fa.targetCell != (-1)):
+                    _fbSeq = lw_add(_fbSeq, lw_add("@", _fa.targetCell))
+                _fi = lw_add(_fi, 1)
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("FBK_T", getTurn()), "_fw"), firingWeaponId), "_n"), _fbN), "_seq["), _fbSeq), "]"))
+    
+    def turnOneBuffs(self):
+        super().turnOneBuffs()
+    
+    def checkSelfAntidote(self):
+        pass
+    
+    def shouldBuildDamageMap(self):
+        return True
+    
+
+def recoverRemainingTP(target):
+    global lw__dopingUsed
+    if ((((target != None) and (not isDead(target._id))) and (getCooldown(CHIP_JUMP, getEntity()) == 0)) and mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP)):
+        jumpChipR = lw_get(arsenal.playerEquippedChips, CHIP_JUMP)
+        if ((jumpChipR != None) and (jumpChipR._cost <= getTP())):
+            jPos = getCell()
+            jEnemy = target._cellPos
+            jOrigDist = getCellDistance(jPos, jEnemy)
+            if (jOrigDist == None):
+                jOrigDist = 99
+            maxWRRec = 0
+            for wIdRec in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                wObjRec = lw_get(arsenal.playerEquippedWeapons, wIdRec)
+                if ((wObjRec != None) and (wObjRec._maxRange > maxWRRec)):
+                    maxWRRec = wObjRec._maxRange
+            poisonDoT = 0
+            pEffs = getEffects(getEntity())
+            if (pEffs != None):
+                for pe in lw_values(pEffs):
+                    if (lw_get(pe, 0) == EFFECT_POISON):
+                        poisonDoT = lw_add(poisonDoT, lw_get(pe, 1))
+            poisonRatio = lw_div(lw_mul(poisonDoT, 100), max(1, player._maxHealth))
+            deniedRec = (((player.hasEffect(EFFECT_SHACKLE_TP) or player.hasEffect(EFFECT_SHACKLE_STRENGTH)) or player.hasEffect(EFFECT_SHACKLE_MAGIC)) or player.hasEffect(EFFECT_SHACKLE_MP))
+            lowHPRec = ((lw_div(lw_mul(getLife(), 100), max(1, getTotalLife()))) < 60)
+            poisonHeavyRec = (poisonRatio > 25)
+            enemyProfRec = getEnemyProfile(target._id)
+            preferHideRec = ((((enemyProfRec != None) and lw_get(enemyProfRec, 'isKiter')) and (lw_get(enemyProfRec, 'kiterFlavor') == 'magic_poison')))
+            enemyMPRec = target._currMp
+            if (enemyMPRec == None):
+                enemyMPRec = 5
+            kiteHorizonRec = lw_add(maxWRRec, enemyMPRec)
+            bestTierRec = 5
+            bestMetricRec = 99999
+            jumpTargetRec = (-1)
+            rX = getCellX(jPos)
+            rY = getCellY(jPos)
+            jdx = (-3)
+            while (jdx <= 3):
+                jdy = (-3)
+                while (jdy <= 3):
+                    if ((jdx == 0) and (jdy == 0)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    if (lw_add(abs(jdx), abs(jdy)) > 3):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    jCand = getCellFromXY(lw_add(rX, jdx), lw_add(rY, jdy))
+                    if ((jCand == None) or (jCand < 0)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    if (isObstacle(jCand) or isEntity(jCand)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    jReach = getCellDistance(jPos, jCand)
+                    if (((jReach == None) or (jReach < 1)) or (jReach > 3)):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    dToE = getCellDistance(jCand, jEnemy)
+                    if (dToE == None):
+                        jdy = lw_add(jdy, 1)
+                        continue
+                    losR = lineOfSight(jCand, jEnemy)
+                    tierR = 4
+                    metricR = dToE
+                    if preferHideRec:
+                        if (((not losR) and (dToE >= max(2, lw_sub(maxWRRec, 3)))) and (dToE <= lw_add(maxWRRec, 2))):
+                            tierR = 1
+                            metricR = lw_add(abs(lw_sub(dToE, max(2, lw_sub(maxWRRec, 1)))), lw_div(getAdversarialThreat(jCand), 100.0))
+                        else:
+                            if ((losR and (dToE >= 1)) and (dToE <= maxWRRec)):
+                                tierR = 2
+                                metricR = lw_add(dToE, lw_div(getAdversarialThreat(jCand), 100.0))
+                            else:
+                                if ((lw_sub(jOrigDist, dToE) >= 2) and (dToE <= kiteHorizonRec)):
+                                    tierR = 3
+                                    metricR = lw_add(dToE, lw_div(getAdversarialThreat(jCand), 100.0))
+                    else:
+                        if ((losR and (dToE >= 1)) and (dToE <= maxWRRec)):
+                            tierR = 1
+                            metricR = lw_add(dToE, lw_div(getAdversarialThreat(jCand), 100.0))
+                        else:
+                            if ((((deniedRec or lowHPRec) or poisonHeavyRec)) and (not losR)):
+                                tierR = 2
+                                metricR = abs(lw_sub(dToE, max(2, lw_sub(maxWRRec, 2))))
+                            else:
+                                if ((lw_sub(jOrigDist, dToE) >= 2) and (dToE <= kiteHorizonRec)):
+                                    tierR = 3
+                                    metricR = lw_add(dToE, lw_div(getAdversarialThreat(jCand), 100.0))
+                    if ((tierR < bestTierRec) or (((tierR == bestTierRec) and (metricR < bestMetricRec)))):
+                        bestTierRec = tierR
+                        bestMetricRec = metricR
+                        jumpTargetRec = jCand
+                    jdy = lw_add(jdy, 1)
+                jdx = lw_add(jdx, 1)
+            if ((jumpTargetRec != (-1)) and (bestTierRec <= 3)):
+                useChipOnCell(CHIP_JUMP, jumpTargetRec)
+    maxAttempts = 10
+    attempts = 0
+    weaponUsesThisTurn = 0
+    currentWeapon = getWeapon()
+    weaponMaxUses = 0
+    failedWeapons = {}
+    if ((currentWeapon != None) and (currentWeapon != (-1))):
+        weaponMaxUses = getWeaponMaxUses(currentWeapon)
+        if ((weaponMaxUses == None) or (weaponMaxUses <= 0)):
+            weaponMaxUses = 1
+    while ((getTP() >= 2) and (attempts < maxAttempts)):
+        attempts = lw_add(attempts, 1)
+        tpBefore = getTP()
+        bestAction = None
+        bestValue = (-1)
+        for chipId in lw_values(mapKeys(arsenal.playerEquippedChips)):
+            if (chipId == CHIP_PUNISHMENT):
+                continue
+            chipObj = lw_get(arsenal.playerEquippedChips, chipId)
+            if (chipObj._cost > getTP()):
+                continue
+            if (getCooldown(chipId, getEntity()) > 0):
+                continue
+            targetCell = None
+            value = 0
+            if ((((isHealingChip(chipId) or isOffensiveBuff(chipId)) or isShieldChip(chipId)) or isDamageReturnChip(chipId)) or isResourceChip(chipId)):
+                if (chipId == CHIP_DOPING):
+                    dopRecDist = getCellDistance(getCell(), target._cellPos)
+                    if ((dopRecDist == None) or (dopRecDist > 8)):
+                        continue
+                if (chipId == CHIP_REGENERATION):
+                    hpPctRec = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+                    if (hpPctRec > 70):
+                        continue
+                targetCell = getCell()
+                value = quickRecoveryChipValue(chipId, 'self')
+            else:
+                if isUtilityChip(chipId):
+                    if (chipId == CHIP_ANTIDOTE):
+                        if (not player.hasEffect(EFFECT_POISON)):
+                            continue
+                        targetCell = getCell()
+                        totalPoisonR = player.getTotalPoisonDamage()
+                        if (totalPoisonR <= 0):
+                            continue
+                        value = floor(lw_add(50, lw_mul(totalPoisonR, 1.5)))
+                    else:
+                        if (chipId == CHIP_LIBERATION):
+                            hasNeg = ((((player.hasEffect(EFFECT_POISON) or player.hasEffect(EFFECT_SHACKLE_TP)) or player.hasEffect(EFFECT_SHACKLE_STRENGTH)) or player.hasEffect(EFFECT_SHACKLE_MAGIC)) or player.hasEffect(EFFECT_SHACKLE_MP))
+                            if (not hasNeg):
+                                continue
+                            targetCell = getCell()
+                            value = 200
+                        else:
+                            if (chipId == CHIP_MANUMISSION):
+                                if ((((not player.hasEffect(EFFECT_SHACKLE_TP)) and (not player.hasEffect(EFFECT_SHACKLE_STRENGTH))) and (not player.hasEffect(EFFECT_SHACKLE_MAGIC))) and (not player.hasEffect(EFFECT_SHACKLE_MP))):
+                                    continue
+                                targetCell = getCell()
+                                value = 300
+                            else:
+                                continue
+                else:
+                    targetCell = target._cellPos
+                    dist = getCellDistance(getCell(), targetCell)
+                    if (dist == None):
+                        continue
+                    if ((dist < chipObj._minRange) or (dist > chipObj._maxRange)):
+                        continue
+                    if (not lineOfSight(getCell(), targetCell)):
+                        continue
+                    if (((chipObj._aoeType != AREA_POINT) and (not chipObj._selfImmune)) and fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())):
+                        continue
+                    value = quickRecoveryChipValue(chipId, 'enemy')
+                    b5RecCd = getChipCooldown(chipId)
+                    if ((b5RecCd != None) and (b5RecCd >= 2)):
+                        b5RecRel = getRelativeShield(target._id)
+                        if ((((b5RecRel != None) and (b5RecRel >= 25)) and (target.getEffectRemaining(EFFECT_RELATIVE_SHIELD) <= 1)) and (target.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD) <= 1)):
+                            value = floor(lw_mul(value, 0.3))
+            if (value > bestValue):
+                bestValue = value
+                bestAction = {'type': 'chip', 'id': chipId, 'cell': targetCell}
+        if (((((currentWeapon != None) and (currentWeapon != (-1))) and (weaponUsesThisTurn < weaponMaxUses)) and (not mapContainsKey(failedWeapons, currentWeapon))) and mapContainsKey(arsenal.playerEquippedWeapons, currentWeapon)):
+            weaponObj = lw_get(arsenal.playerEquippedWeapons, currentWeapon)
+            if (weaponObj._cost <= getTP()):
+                dist = getCellDistance(getCell(), target._cellPos)
+                if (((dist != None) and (dist >= weaponObj._minRange)) and (dist <= weaponObj._maxRange)):
+                    if ((weaponObj._launchType == LAUNCH_TYPE_LINE) and (not fieldMap.isOnSameLine(getCell(), target._cellPos))):
+                        pass
+                    else:
+                        if lineOfSight(getCell(), target._cellPos):
+                            if (((weaponObj._aoeType == AREA_POINT) or weaponObj._selfImmune) or (not fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell()))):
+                                value = quickRecoveryWeaponValue(currentWeapon)
+                                if (value > bestValue):
+                                    bestValue = value
+                                    bestAction = {'type': 'weapon', 'cell': target._cellPos}
+        myPos = getCell()
+        distToTarget = getCellDistance(myPos, target._cellPos)
+        hasLos = (lineOfSight(myPos, target._cellPos) if ((distToTarget != None)) else False)
+        if (hasLos and (distToTarget != None)):
+            for wid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                if (wid == currentWeapon):
+                    continue
+                if mapContainsKey(failedWeapons, wid):
+                    continue
+                wObj = lw_get(arsenal.playerEquippedWeapons, wid)
+                totalCost = lw_add(1, wObj._cost)
+                if (totalCost > getTP()):
+                    continue
+                if ((distToTarget < wObj._minRange) or (distToTarget > wObj._maxRange)):
+                    continue
+                if ((wObj._launchType == LAUNCH_TYPE_LINE) and (not fieldMap.isOnSameLine(myPos, target._cellPos))):
+                    continue
+                if (((wObj._aoeType != AREA_POINT) and (not wObj._selfImmune)) and fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)):
+                    continue
+                wValue = quickRecoveryWeaponValue(wid)
+                if (wValue > bestValue):
+                    bestValue = wValue
+                    bestAction = {'type': 'weaponSwap', 'id': wid, 'cell': target._cellPos}
+        tpLeft = getTP()
+        dynMin = max(8, floor(lw_mul(tpLeft, 0.6)))
+        if (dynMin > 18):
+            dynMin = 18
+        if ((bestAction == None) or (bestValue < dynMin)):
+            break
+        if (lw_get(bestAction, 'type') == 'chip'):
+            if ((lw_get(bestAction, 'id') == CHIP_DOPING) and lw__dopingUsed):
+                continue
+            useChipOnCell(lw_get(bestAction, 'id'), lw_get(bestAction, 'cell'))
+            if (lw_get(bestAction, 'id') == CHIP_DOPING):
+                lw__dopingUsed = True
+            if ((getTP() >= tpBefore) and (bestValue <= 0)):
+                break
+        else:
+            if (lw_get(bestAction, 'type') == 'weaponSwap'):
+                setWeapon(lw_get(bestAction, 'id'))
+                currentWeapon = lw_get(bestAction, 'id')
+                weaponMaxUses = getWeaponMaxUses(currentWeapon)
+                if ((weaponMaxUses == None) or (weaponMaxUses <= 0)):
+                    weaponMaxUses = 1
+                weaponUsesThisTurn = 0
+                tpAfterSwap = getTP()
+                useWeaponOnCell(lw_get(bestAction, 'cell'))
+                if (getTP() == tpAfterSwap):
+                    lw_put(failedWeapons, lw_get(bestAction, 'id'), True)
+                    continue
+                if ((getTP() >= tpBefore) and (bestValue <= 0)):
+                    break
+                weaponUsesThisTurn = lw_add(weaponUsesThisTurn, 1)
+            else:
+                tpBeforeAtk = getTP()
+                useWeaponOnCell(lw_get(bestAction, 'cell'))
+                if (getTP() == tpBeforeAtk):
+                    lw_put(failedWeapons, currentWeapon, True)
+                    continue
+                if ((getTP() >= tpBefore) and (bestValue <= 0)):
+                    break
+                weaponUsesThisTurn = lw_add(weaponUsesThisTurn, 1)
+        if isDead(target._id):
+            break
+    floorAttempts = 0
+    while ((getTP() >= 5) and (floorAttempts < 5)):
+        floorAttempts = lw_add(floorAttempts, 1)
+        floorBest = None
+        floorBestValue = (-999)
+        floorBestCell = getCell()
+        floorTpBefore = getTP()
+        floorMyPos = getCell()
+        floorDistToTarget = getCellDistance(floorMyPos, target._cellPos)
+        floorHasLos = (lineOfSight(floorMyPos, target._cellPos) if ((floorDistToTarget != None)) else False)
+        for chipIdF in lw_values(mapKeys(arsenal.playerEquippedChips)):
+            if (chipIdF == CHIP_PUNISHMENT):
+                continue
+            if ((chipIdF == CHIP_DOPING) and lw__dopingUsed):
+                continue
+            chipObjF = lw_get(arsenal.playerEquippedChips, chipIdF)
+            if (chipObjF._cost > getTP()):
+                continue
+            if (getCooldown(chipIdF, getEntity()) > 0):
+                continue
+            selfEligible = (((isOffensiveBuff(chipIdF) or isShieldChip(chipIdF)) or isDamageReturnChip(chipIdF)) or isResourceChip(chipIdF))
+            if (((not selfEligible) and isHealingChip(chipIdF)) and (player._currHealth < player._maxHealth)):
+                selfEligible = True
+            if selfEligible:
+                if (chipIdF == CHIP_DOPING):
+                    dopFDist = getCellDistance(floorMyPos, target._cellPos)
+                    if ((dopFDist == None) or (dopFDist > 8)):
+                        continue
+                if (chipIdF == CHIP_REGENERATION):
+                    hpPctF = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+                    if (hpPctF > 70):
+                        continue
+                fvSelf = quickRecoveryChipValue(chipIdF, 'self')
+                if (fvSelf > floorBestValue):
+                    floorBestValue = fvSelf
+                    floorBest = chipIdF
+                    floorBestCell = floorMyPos
+                continue
+            if isPoisonChip(chipIdF):
+                continue
+            if isDebuffChip(chipIdF):
+                continue
+            if ((floorDistToTarget == None) or (not floorHasLos)):
+                continue
+            if ((floorDistToTarget < chipObjF._minRange) or (floorDistToTarget > chipObjF._maxRange)):
+                continue
+            if (((chipObjF._aoeType != AREA_POINT) and (not chipObjF._selfImmune)) and fieldMap.wouldAoEHitCell(target._cellPos, chipObjF._aoeType, floorMyPos, floorMyPos)):
+                continue
+            fvDmg = quickRecoveryChipValue(chipIdF, 'enemy')
+            if (fvDmg > floorBestValue):
+                floorBestValue = fvDmg
+                floorBest = chipIdF
+                floorBestCell = target._cellPos
+        if (floorBest == None):
+            if ((getTurn() <= 20) and (getTP() >= 5)):
+                hadCapGap = False
+                for chipIdC in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                    if (chipIdC == CHIP_PUNISHMENT):
+                        continue
+                    if ((chipIdC == CHIP_DOPING) and lw__dopingUsed):
+                        continue
+                    cObj = lw_get(arsenal.playerEquippedChips, chipIdC)
+                    if (cObj._cost > getTP()):
+                        continue
+                    if (getCooldown(chipIdC, getEntity()) > 0):
+                        continue
+                    cSelfElig = (((isOffensiveBuff(chipIdC) or isShieldChip(chipIdC)) or isDamageReturnChip(chipIdC)) or isResourceChip(chipIdC))
+                    if (((not cSelfElig) and isHealingChip(chipIdC)) and (player._currHealth < player._maxHealth)):
+                        cSelfElig = True
+                    if cSelfElig:
+                        hadCapGap = True
+                        break
+                    if (isPoisonChip(chipIdC) or isDebuffChip(chipIdC)):
+                        continue
+                    if ((((floorDistToTarget != None) and floorHasLos) and (floorDistToTarget >= cObj._minRange)) and (floorDistToTarget <= cObj._maxRange)):
+                        hadCapGap = True
+                        break
+                if hadCapGap:
+                    debugE(lw_add(lw_add(lw_add("FLR_STUCK_T", getTurn()), "_TP"), getTP()))
+                else:
+                    debugW(lw_add(lw_add(lw_add("FLR_CD_SAT_T", getTurn()), "_TP"), getTP()))
+            break
+        if (getTurn() <= 20):
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("FLR_T", getTurn()), "_c"), floorBest), "_v"), floorBestValue), "_tp"), getTP()), "_at"), floorBestCell))
+        useChipOnCell(floorBest, floorBestCell)
+        if (floorBest == CHIP_DOPING):
+            lw__dopingUsed = True
+        if (getTP() >= floorTpBefore):
+            break
+
+def quickRecoveryChipValue(chipId, mode):
+    bd = getCachedDamageBreakdown(chipId)
+    value = 0
+    if (bd != None):
+        if (mode == 'enemy'):
+            value = lw_add(value, lw_mul(lw_get(bd, 'direct'), 2.0))
+            value = lw_add(value, lw_mul(lw_get(bd, 'dot'), 1.5))
+            value = lw_add(value, lw_mul(lw_get(bd, 'nova'), 2.5))
+    if (mode == 'self'):
+        if isHealingChip(chipId):
+            if (chipId == CHIP_SERUM):
+                return (-1)
+            hpMissing = lw_sub(player._maxHealth, player._currHealth)
+            if (hpMissing > 0):
+                healEst = min(hpMissing, beamEstimateHeal(chipId, player._wisdom))
+                hpPct = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+                lateGameMult = 1.5
+                if (hpPct < 40):
+                    lateGameMult = 3.0
+                else:
+                    if (hpPct < 60):
+                        lateGameMult = 2.0
+                if ((getTurn() > 30) and (hpPct < 80)):
+                    lateGameMult = lw_add(lateGameMult, 0.5)
+                value = lw_add(value, lw_mul(healEst, lateGameMult))
+            else:
+                return (-1)
+        else:
+            if isShieldChip(chipId):
+                value = lw_add(value, 100)
+                hpPct2 = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+                if (hpPct2 < 40):
+                    value = lw_add(value, 200)
+                else:
+                    if (hpPct2 < 60):
+                        value = lw_add(value, 100)
+            else:
+                if isDamageReturnChip(chipId):
+                    value = lw_add(value, 150)
+                else:
+                    if isOffensiveBuff(chipId):
+                        turnsLeft = lw_sub(64, getTurn())
+                        if (turnsLeft > 3):
+                            if (chipId == CHIP_STEROID):
+                                value = lw_add(value, 350)
+                            else:
+                                if (chipId == CHIP_WARM_UP):
+                                    value = lw_add(value, 300)
+                                else:
+                                    if (chipId == CHIP_PRISM):
+                                        value = lw_add(value, 300)
+                                    else:
+                                        if (chipId == CHIP_WIZARDRY):
+                                            value = lw_add(value, 250)
+                                        else:
+                                            if (chipId == CHIP_DOPING):
+                                                if ((not lw__dopingUsed) and (player._currHealth > lw_mul(player._maxHealth, 0.5))):
+                                                    value = lw_add(value, 100)
+                                                else:
+                                                    value = lw_num(value) - lw_num(300)
+                                            else:
+                                                value = lw_add(value, 120)
+                        else:
+                            value = lw_add(value, 50)
+                        if ((player._maxTp == None) or (player._maxTp >= 18)):
+                            upActive = False
+                            for upE in lw_values(player._effectsActive):
+                                if ((count(upE) >= 6) and (lw_get(upE, 5) == chipId)):
+                                    upActive = True
+                                    break
+                            if (not upActive):
+                                value = floor(lw_mul(value, 2.0))
+                            else:
+                                value = floor(lw_mul(value, 0.6))
+                        if ((chipId == CHIP_KNOWLEDGE) or (chipId == CHIP_PRISM)):
+                            hpMissing = lw_sub(player._maxHealth, player._currHealth)
+                            if (hpMissing > 50):
+                                wisBoost = (260 if ((chipId == CHIP_KNOWLEDGE)) else 60)
+                                baseHealEst = min(hpMissing, 300)
+                                amplification = lw_div(lw_mul(baseHealEst, wisBoost), (lw_add(100, player._wisdom)))
+                                value = lw_add(value, lw_mul(amplification, 1.5))
+                    else:
+                        if isResourceChip(chipId):
+                            if (chipId == CHIP_ADRENALINE):
+                                value = lw_add(value, 500)
+                            else:
+                                value = lw_add(value, 50)
+    if ((((chipId == CHIP_SOPORIFIC) or (chipId == CHIP_BALL_AND_CHAIN)) or (chipId == CHIP_TRANQUILIZER)) or (chipId == CHIP_SLOW_DOWN)):
+        value = lw_add(value, lw_mul(200, (lw_add(1, lw_div(player._magic, 500)))))
+    return value
+
+def quickRecoveryWeaponValue(weaponId):
+    bd = getCachedDamageBreakdown(weaponId)
+    if (bd == None):
+        return 0
+    return lw_add(lw_add(lw_mul(lw_get(bd, 'direct'), 2.0), lw_mul(lw_get(bd, 'dot'), 1.5)), lw_mul(lw_get(bd, 'nova'), 2.5))
+
+def estimateKillProbFromSim(simResult, t):
+    if ((simResult == None) or (t == None)):
+        return 0
+    hp = t._currHealth
+    if ((hp == None) or (hp <= 0)):
+        return 1.0
+    direct = (simResult.damageDealt if (simResult.damageDealt != None) else 0)
+    dot = (simResult.dotDamageQueued if (simResult.dotDamageQueued != None) else 0)
+    nova = (simResult.novaDamageQueued if (simResult.novaDamageQueued != None) else 0)
+    total = lw_add(lw_add(direct, dot), nova)
+    ratio = lw_div(lw_mul(total, 1.0), hp)
+    if (ratio >= 1.0):
+        return 1.0
+    if (ratio < 0):
+        return 0
+    return ratio
+
+def supportAlliesPass():
+    supAllies = getAliveAllies()
+    if ((supAllies == None) or (count(supAllies) == 0)):
+        return None
+    supMyId = getEntity()
+    supMyCell = getCell(supMyId)
+    supWeakId = (-1)
+    supWeakRatio = 1.1
+    supStrongId = (-1)
+    supStrongOff = (-1)
+    for supAid in lw_values(supAllies):
+        if (supAid == supMyId):
+            continue
+        if isDead(supAid):
+            continue
+        supLife = getLife(supAid)
+        supMax = getTotalLife(supAid)
+        if (((supLife == None) or (supMax == None)) or (supMax <= 0)):
+            continue
+        supRatio = lw_div(supLife, supMax)
+        if (supRatio < supWeakRatio):
+            supWeakRatio = supRatio
+            supWeakId = supAid
+        supOff = lw_add(getStrength(supAid), getMagic(supAid))
+        if ((supOff != None) and (supOff > supStrongOff)):
+            supStrongOff = supOff
+            supStrongId = supAid
+    if (supWeakId == (-1)):
+        return None
+    if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_ANTIDOTE) and (getCooldown(CHIP_ANTIDOTE, supMyId) == 0)) and (getTP() >= getCachedChipCost(CHIP_ANTIDOTE))):
+        supPoisonId = (-1)
+        supPoisonWorst = 0
+        for supPa in lw_values(supAllies):
+            if (supPa == supMyId):
+                continue
+            if isDead(supPa):
+                continue
+            supPaEffs = getEffects(supPa)
+            if (supPaEffs == None):
+                continue
+            supPaDot = 0
+            for supPe in lw_values(supPaEffs):
+                if (lw_get(supPe, 0) == EFFECT_POISON):
+                    supPaDot = lw_add(supPaDot, lw_get(supPe, 1))
+            supPaMax = getTotalLife(supPa)
+            if ((supPaMax == None) or (supPaMax <= 0)):
+                continue
+            if ((supPaDot > lw_mul(supPaMax, 0.12)) and (supPaDot > supPoisonWorst)):
+                supPaDist = getCellDistance(supMyCell, getCell(supPa))
+                if ((supPaDist != None) and (supPaDist <= getChipMaxRange(CHIP_ANTIDOTE))):
+                    supPoisonWorst = supPaDot
+                    supPoisonId = supPa
+        if (supPoisonId != (-1)):
+            supPr = useChip(CHIP_ANTIDOTE, supPoisonId)
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("SUPPASS_T", getTurn()), "_cleanse_ally"), supPoisonId), "_dot"), floor(supPoisonWorst)), "_ret"), supPr))
+    if (supWeakRatio < 0.85):
+        supHealChips = [CHIP_SERUM, CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
+        for supHc in lw_values(supHealChips):
+            if (not mapContainsKey(arsenal.playerEquippedChips, supHc)):
+                continue
+            if (getCooldown(supHc, supMyId) > 0):
+                continue
+            if (getTP() < getCachedChipCost(supHc)):
+                continue
+            supHd = getCellDistance(supMyCell, getCell(supWeakId))
+            if ((supHd == None) or (supHd > getChipMaxRange(supHc))):
+                continue
+            supHr = useChip(supHc, supWeakId)
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("SUPPASS_T", getTurn()), "_heal"), supHc), "_ally"), supWeakId), "_ret"), supHr))
+            break
+    supShieldWorth = False
+    supWeakCell = getCell(supWeakId)
+    if ((supWeakCell != None) and (fieldMap != None)):
+        supEnemyMap = fieldMap.getEnemySubMap()
+        for supEid in lw_values(mapKeys(supEnemyMap)):
+            if isDead(supEid):
+                continue
+            if predictEnemyCanAttackWithin(supWeakCell, lw_get(supEnemyMap, supEid), 1):
+                supShieldWorth = True
+                break
+    supShieldChips = [CHIP_SHIELD, CHIP_HELMET, CHIP_WALL, CHIP_FORTRESS, CHIP_ARMOR, CHIP_SOLIDIFICATION]
+    if (not supShieldWorth):
+        supShieldChips = []
+    for supSc in lw_values(supShieldChips):
+        if (not mapContainsKey(arsenal.playerEquippedChips, supSc)):
+            continue
+        if (getCooldown(supSc, supMyId) > 0):
+            continue
+        if (getTP() < getCachedChipCost(supSc)):
+            continue
+        supSd = getCellDistance(supMyCell, getCell(supWeakId))
+        if ((supSd == None) or (supSd > getChipMaxRange(supSc))):
+            continue
+        supSr = useChip(supSc, supWeakId)
+        if (getTurn() <= 20):
+            debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("SUPPASS_T", getTurn()), "_shield"), supSc), "_ally"), supWeakId), "_ret"), supSr))
+        break
+    if (supStrongId != (-1)):
+        supBuffChips = [CHIP_MOTIVATION, CHIP_PROTEIN, CHIP_PRISM, CHIP_STEROID]
+        for supBc in lw_values(supBuffChips):
+            if (not mapContainsKey(arsenal.playerEquippedChips, supBc)):
+                continue
+            if (getCooldown(supBc, supMyId) > 0):
+                continue
+            if (getTP() < getCachedChipCost(supBc)):
+                continue
+            supBd = getCellDistance(supMyCell, getCell(supStrongId))
+            if ((supBd == None) or (supBd > getChipMaxRange(supBc))):
+                continue
+            supBr = useChip(supBc, supStrongId)
+            if (getTurn() <= 20):
+                debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("SUPPASS_T", getTurn()), "_buff"), supBc), "_ally"), supStrongId), "_ret"), supBr))
+            break
+
+
+# ════════ main.lk ════════
+_init = False
+fieldMap = None
+arsenal = None
+player = None
+strategy = None
+lw__avgDamageRate = 0
+lw__lastEnemyHP = (-1)
+lw__timePressure = False
+lw__dopingUsed = False
+lw__lastTurnWeaponId = None
+_showCoverHeatmap = True
+lw__nearestFireTurn = 0
+_opsBudget = 14000000
+_ops50 = 7000000
+_ops64 = 9000000
+_ops71 = 10000000
+_ops79 = 11000000
+_ops82 = 11500000
+_ops86 = 12000000
+_ops89 = 12500000
+_ops93 = 13000000
+_ops96 = 13500000
+_beamWidth = 20
+_beamMaxDepth = 10
+_mutationMaxSeeds = 6
+_mutationMaxPerSeed = 80
+_twoplyTopK = 5
+_enemyLookaheadTopK = 8
+_beamMaxDepthBase = 10
+_mutationMaxSeedsBase = 6
+_mutationMaxPerSeedBase = 80
+_beamWidthBase = 20
+# include: game_entity.lk (inlined by assembler)
+# include: field_map_tactical.lk (inlined by assembler)
+# include: item.lk (inlined by assembler)
+# include: item_roles.lk (inlined by assembler)
+# include: game_context.lk (inlined by assembler)
+# include: kill_planning.lk (inlined by assembler)
+# include: cooldown_tracker.lk (inlined by assembler)
+# include: enemy_predictor.lk (inlined by assembler)
+# include: reachable_graph.lk (inlined by assembler)
+# include: performance_infra.lk (inlined by assembler)
+# include: cache_manager.lk (inlined by assembler)
+# include: tactical_awareness.lk (inlined by assembler)
+# include: weight_profiles.lk (inlined by assembler)
+# include: enemy_intelligence.lk (inlined by assembler)
+# include: race_model.lk (inlined by assembler)
+# include: strategic_depth.lk (inlined by assembler)
+# include: boss_context.lk (inlined by assembler)
+# include: strategy/action.lk (inlined by assembler)
+# include: bulb_ai.lk (inlined by assembler)
+# include: beam_search.lk (inlined by assembler)
+# include: scenario_generator.lk (inlined by assembler)
+# include: scenario_simulator.lk (inlined by assembler)
+# include: scenario_scorer.lk (inlined by assembler)
+# include: scenario_quick_scorer.lk (inlined by assembler)
+# include: scenario_mutation.lk (inlined by assembler)
+# include: strategy/base_strategy.lk (inlined by assembler)
+# include: strategy/unified_strategy.lk (inlined by assembler)
+def init():
+    global _beamMaxDepth, _beamMaxDepthBase, _beamWidth, _beamWidthBase, _enemyLookaheadTopK, _mutationMaxPerSeed, _mutationMaxPerSeedBase, _mutationMaxSeeds, _mutationMaxSeedsBase, _ops50, _ops64, _ops71, _ops79, _ops82, _ops86, _ops89, _ops93, _ops96, _opsBudget, _twoplyTopK, arsenal, fieldMap, lw__playerBuildType, player, strategy
+    initializeItemRoles()
+    player = Player(getCell())
+    _opsBudget = lw_mul(player._cores, 1000000)
+    _ops50 = floor(lw_mul(_opsBudget, 0.50))
+    _ops64 = floor(lw_mul(_opsBudget, 0.64))
+    _ops71 = floor(lw_mul(_opsBudget, 0.71))
+    _ops79 = floor(lw_mul(_opsBudget, 0.79))
+    _ops82 = floor(lw_mul(_opsBudget, 0.82))
+    _ops86 = floor(lw_mul(_opsBudget, 0.86))
+    _ops89 = floor(lw_mul(_opsBudget, 0.89))
+    _ops93 = floor(lw_mul(_opsBudget, 0.93))
+    _ops96 = floor(lw_mul(_opsBudget, 0.96))
+    if (_opsBudget < 7000000):
+        _beamWidth = 8
+        _beamMaxDepth = 5
+        _mutationMaxSeeds = 2
+        _mutationMaxPerSeed = 20
+    else:
+        if (_opsBudget < 10000000):
+            _beamWidth = 12
+            _beamMaxDepth = 7
+            _mutationMaxSeeds = 3
+            _mutationMaxPerSeed = 40
+        else:
+            if (_opsBudget < 14000000):
+                _beamWidth = 16
+                _beamMaxDepth = 8
+                _mutationMaxSeeds = 4
+                _mutationMaxPerSeed = 60
+            else:
+                if (_opsBudget >= 18000000):
+                    _beamWidth = 28
+                    _beamMaxDepth = 12
+                    _mutationMaxSeeds = 10
+                    _mutationMaxPerSeed = 120
+                    _twoplyTopK = 8
+                    _enemyLookaheadTopK = 5
+    _beamWidthBase = _beamWidth
+    _beamMaxDepthBase = _beamMaxDepth
+    _mutationMaxSeedsBase = _mutationMaxSeeds
+    _mutationMaxPerSeedBase = _mutationMaxPerSeed
+    arsenal = Arsenal()
+    fieldMap = FieldMap()
+    initGameContext(player, arsenal, fieldMap)
+    if detectBossFight():
+        initBossContext()
+    buildType = detectBuildType(player)
+    lw__playerBuildType = buildType
+    weights = getWeightsForBuild(buildType, player)
+    if (_isBossFight and (_bossPhase == "PUZZLE")):
+        weights = BOSS_PUZZLE_WEIGHTS
+    profileAllEnemies(fieldMap)
+    strategy = UnifiedStrategy(weights, player, None, arsenal, fieldMap)
+    strategy.resetTurnContext()
+    strategy.turnOneBuffs()
+
+def resetTurnState():
+    clearCaches()
+    clearPerformanceInfra()
+
+def main():
+    global lw__lastTurnWeaponId, lw__nearestFireTurn
+    resetTurnState()
+    if (getTurn() == 1):
+        initializeAdjacency()
+        warmLosCacheFromCell(getCell(), _ops89)
+    player.updateEntity()
+    fieldMap.updateMapEntities()
+    if (getTurn() <= 20):
+        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("OBS_ENTER_T", getTurn()), "_c"), getCell()), "_tp"), getTP()), "_mp"), getMP()), "_hp"), getLife()), "_ops"), getOperations()), "_bud"), _opsBudget))
+    profileAllEnemies(fieldMap)
+    observeEnemyBehavior(fieldMap)
+    if _isBossFight:
+        updateBossContext()
+    if _isBossFight:
+        bossDiag(getCell())
+    if (_isBossFight and (_bossPhase == "PUZZLE")):
+        if executePuzzleTurn():
+            return None
+    target = None
+    if (_isBossFight and (_bossPhase == "PUZZLE")):
+        target = getBossPuzzleTarget(fieldMap)
+    else:
+        if (_isBossFight and (_bossPhase == "COMBAT")):
+            target = selectCombatTarget(fieldMap)
+    if (target == None):
+        target = fieldMap.selectOptimalTarget({'prioritizeLowest': "hp", 'bonusForDebuffed': True})
+    if (target == None):
+        target = fieldMap.getClosestEnemy()
+    if ((getTurn() <= 20) and (target != None)):
+        _obsTd = getCellDistance(getCell(), target._cellPos)
+        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("OBS_TGT_T", getTurn()), "_id"), target._id), "_c"), target._cellPos), "_hp"), target._currHealth), "_d"), _obsTd))
+    updateGameContext(player, target, fieldMap)
+    computeRaceModel(player, target, fieldMap)
+    if (target != None):
+        cooldownTracker = CooldownTracker(target)
+        enemies = getAliveEnemies()
+        for enemyId in lw_values(enemies):
+            cooldownTracker.updateCooldowns(enemyId)
+        killPlanner = KillPlanner(arsenal, player, target)
+        killPlanner.updateGlobalKillPlan()
+    buildReachableGraph(player._cellPos, player._currMp, player, target, arsenal)
+    initializeCaches(player, target, arsenal)
+    fieldMap.buildEnemyThreatMap()
+    if ((target != None) and (getOperations() < _ops64)):
+        buildAdversarialThreatCache(player, fieldMap.getEnemySubMap(), arsenal)
+    fieldMap.paintCoverHeatmap()
+    if ((target != None) and (getOperations() < _ops71)):
+        lw__nearestFireTurn = estimateNearestFireTurn(player, target, arsenal)
+    else:
+        lw__nearestFireTurn = 0
+    if (getTurn() <= 20):
+        debugW(lw_add(lw_add(lw_add("FIRETURN_T", getTurn()), "_"), lw__nearestFireTurn))
+    targetHitCell = None
+    skipHitMap = False
+    if (((target != None) and (_opsBudget < 14000000)) and isBulb(target)):
+        bulbDist = getCellDistance(getCell(), target._cellPos)
+        if ((bulbDist > 7) or (target._currHealth > 200)):
+            skipHitMap = True
+    if ((((target != None) and (not skipHitMap)) and (getOperations() < _ops89)) and strategy.shouldBuildDamageMap()):
+        fieldMap.buildHitMap(target._cellPos)
+        targetHitCell = fieldMap.getBestWeaponOrChipCell()
+    if (getOperations() > _ops93):
+        debugW(lw_add("FALLBACK_T", getTurn()))
+        if (target != None):
+            fbHpPct = lw_div((lw_mul(player._currHealth, 100)), player._maxHealth)
+            if (fbHpPct < 50):
+                bestRecoveryChipId = (-1)
+                bestRecoveryVal = 0
+                for rcid in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                    rchip = lw_get(arsenal.playerEquippedChips, rcid)
+                    if (((not isHealingChip(rcid)) and (not isShieldChip(rcid))) and (not isDamageReturnChip(rcid))):
+                        continue
+                    if (getCooldown(rcid, player._id) > 0):
+                        continue
+                    if (getTP() < rchip._cost):
+                        continue
+                    rval = quickRecoveryChipValue(rcid, 'self')
+                    if (rval > bestRecoveryVal):
+                        bestRecoveryVal = rval
+                        bestRecoveryChipId = rcid
+                if (bestRecoveryChipId != (-1)):
+                    useChip(bestRecoveryChipId, player._id)
+                    debugW(lw_add(lw_add(lw_add(lw_add(lw_add("FALLBACK_DEF_T", getTurn()), "_chip"), bestRecoveryChipId), "_val"), bestRecoveryVal))
+            fbStart = getCell()
+            fbTargetCell = target._cellPos
+            fbMaxR = 0
+            fbMinR = 99
+            for fbwid in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                fbw = lw_get(arsenal.playerEquippedWeapons, fbwid)
+                if (fbw._maxRange > fbMaxR):
+                    fbMaxR = fbw._maxRange
+                if (fbw._minRange < fbMinR):
+                    fbMinR = fbw._minRange
+            fbHasLoS = lineOfSight(fbStart, fbTargetCell)
+            fbDist = getCellDistance(fbStart, fbTargetCell)
+            if (((not fbHasLoS) or (fbDist > fbMaxR)) or (fbDist < fbMinR)):
+                moveToward(target._id)
+            firePos = getCell()
+            fireDist = getCellDistance(firePos, fbTargetCell)
+            if lineOfSight(firePos, fbTargetCell):
+                for fbwid2 in lw_values(mapKeys(arsenal.playerEquippedWeapons)):
+                    fbw2 = lw_get(arsenal.playerEquippedWeapons, fbwid2)
+                    if ((fireDist < fbw2._minRange) or (fireDist > fbw2._maxRange)):
+                        continue
+                    if (getTP() < fbw2._cost):
+                        continue
+                    setWeapon(fbw2._id)
+                    useWeaponOnCell(fbTargetCell)
+                    if ((fbw2._maxUse >= 2) and (getTP() >= fbw2._cost)):
+                        useWeaponOnCell(fbTargetCell)
+        return None
+    if _isBossFight:
+        strategy._weights = (BOSS_PUZZLE_WEIGHTS if ((_bossPhase == "PUZZLE")) else BOSS_COMBAT_WEIGHTS)
+    strategy.createAndExecuteScenario(target, targetHitCell)
+    if (getOperations() < _ops89):
+        losCenters = [getCell()]
+        if (target != None):
+            push(losCenters, target._cellPos)
+        extendLosCache(losCenters, _ops93)
+    if (getTurn() <= 20):
+        debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("OBS_END_T", getTurn()), "_c"), getCell()), "_tp"), getTP()), "_mp"), getMP()), "_hp"), getLife()), "_ops"), getOperations()))
+    lw__lastTurnWeaponId = getWeapon()
+
+
+
+def turn():
+    global _init
+    try:
+        if (not _init):
+            init()
+            _init = True
+        main()
+    except Exception as e:
+        tb = e.__traceback__
+        trace = []
+        while tb is not None:
+            trace.append(tb.tb_frame.f_code.co_name + ':' + str(tb.tb_lineno))
+            tb = tb.tb_next
+        debugE('PYERR ' + type(e).__name__ + ': ' + str(e)[:300] + ' @ ' + ' > '.join(trace[-10:]))

@@ -50,7 +50,7 @@ AI_PATH = "V8_modules/main.lk"
 DO_NOTHING_AI = "test/ai/do_nothing.lk"
 BOSS_TEMPLATE = SCRIPT_DIR / "boss_scenario_template.json"
 BOSS_MAP_DATA = SCRIPT_DIR / "boss_map_data.json"
-JAVA_HOME = "/usr/lib/jvm/java-24-openjdk-amd64"
+JAVA_HOME = "/usr/lib/jvm/java-25-openjdk-amd64"
 
 # Puzzle chips that must be equipped for boss fights
 CHIP_GRAPPLE_ID = 162
@@ -308,7 +308,16 @@ def run_fight(scenario, fight_index=0, verbose=False):
         env["JAVA_HOME"] = JAVA_HOME
 
         java_bin = os.path.join(JAVA_HOME, "bin", "java")
-        cmd = [java_bin, "-jar", str(GENERATOR_JAR), scenario_path]
+        # Prefer the unflattened classpath (runtime_classpath.txt, produced by the gradle
+        # printRuntimeClasspath init script): the fat generator.jar flattens the GraalVM
+        # isolate resource jars, which breaks polyglot (JS/TS/Python) AIs. LeekScript AIs
+        # run identically on both paths.
+        classpath_file = GENERATOR_DIR / "runtime_classpath.txt"
+        if classpath_file.exists():
+            cmd = [java_bin, "-cp", classpath_file.read_text().strip(),
+                   "com.leekwars.Main", scenario_path]
+        else:
+            cmd = [java_bin, "-jar", str(GENERATOR_JAR), scenario_path]
 
         result = subprocess.run(
             cmd,
@@ -533,6 +542,9 @@ def main():
     parser.add_argument("--seed", type=int, default=None, help="Random seed for deterministic replay")
     parser.add_argument("--verbose", action="store_true", help="Save per-fight logs and stderr")
     parser.add_argument("--save", action="store_true", help="Save results JSON to file")
+    parser.add_argument("--ai", default=None,
+                        help="Override OUR leek's AI path relative to the generator dir "
+                             "(e.g. V8_python/main.py to run the Python port)")
 
     args = parser.parse_args()
 
@@ -591,6 +603,8 @@ def main():
             scenario = build_boss_scenario(configs, seed=seed)
         else:
             scenario = build_scenario(leek_cfg, opponent_cfg, seed=seed, opponent_ai=opponent_ai)
+            if args.ai:
+                scenario["entities"][0][0]["ai"] = args.ai
         scenarios.append((scenario, i, args.verbose))
 
     # Run fights
