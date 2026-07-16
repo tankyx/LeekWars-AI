@@ -981,12 +981,52 @@ def main():
     for gnames, stmt in tr.toplevel_stmts:
         turn_globals.update(gnames)
         turn_body.extend(stmt)
-    turn_lines = ["def turn():"]
+    # GraalPy JIT warmup guard: on the server, turns 2-5 execute while the
+    # pipeline is hot-but-uncompiled and JIT bursts can cross the 5s/turn
+    # wall-clock (observed: 1 killed turn in 3 of 4 test fights, always
+    # T2-T4, never T1). Halving the ops gates on those turns keeps the
+    # statement count — and thus wall time — under the watchdog until the
+    # code is compiled. Python-port-only tuning; LS is unaffected.
+    throttle = [
+        "def _lw_set_ops_gates(budget):",
+        "    global _opsBudget, _ops50, _ops64, _ops71, _ops79, _ops82, _ops86, _ops89, _ops93, _ops96",
+        "    _opsBudget = budget",
+        "    _ops50 = floor(budget * 0.50)",
+        "    _ops64 = floor(budget * 0.64)",
+        "    _ops71 = floor(budget * 0.71)",
+        "    _ops79 = floor(budget * 0.79)",
+        "    _ops82 = floor(budget * 0.82)",
+        "    _ops86 = floor(budget * 0.86)",
+        "    _ops89 = floor(budget * 0.89)",
+        "    _ops93 = floor(budget * 0.93)",
+        "    _ops96 = floor(budget * 0.96)",
+        "",
+        "_lw_full_budget = None",
+        "",
+    ]
+    turn_lines = throttle + ["def turn():"]
     inner = []
-    if turn_globals:
-        inner.append("global " + ", ".join(sorted(turn_globals)))
+    turn_globals.add("_lw_full_budget")
+    inner.append("global " + ", ".join(sorted(turn_globals)))
     inner.append("try:")
-    inner += ["    " + ln for ln in (turn_body or ["pass"])]
+    body = list(turn_body or ["pass"])
+    # splice the throttle between init-once and main(): main() is the last
+    # top-level per-turn call emitted from main.lk
+    main_idx = None
+    for i, ln in enumerate(body):
+        if ln.strip() == "main()":
+            main_idx = i
+    if main_idx is not None:
+        body[main_idx:main_idx] = [
+            "if _lw_full_budget is None:",
+            "    _lw_full_budget = _opsBudget",
+            "_lw_t = getTurn()",
+            "if _lw_t <= 8:",
+            "    _lw_set_ops_gates(floor(_lw_full_budget * lw_get([0.4, 0.5, 0.5, 0.6, 0.6, 0.7, 0.8, 0.9], _lw_t - 1)))",
+            "elif _opsBudget != _lw_full_budget:",
+            "    _lw_set_ops_gates(_lw_full_budget)",
+        ]
+    inner += ["    " + ln for ln in body]
     # no stdlib imports here: importing traceback inside the sandbox can
     # itself fail and mask the real error — walk __traceback__ by hand
     inner.append("except Exception as e:")

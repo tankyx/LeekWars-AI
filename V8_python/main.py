@@ -19154,12 +19154,34 @@ def main():
 
 
 
+def _lw_set_ops_gates(budget):
+    global _opsBudget, _ops50, _ops64, _ops71, _ops79, _ops82, _ops86, _ops89, _ops93, _ops96
+    _opsBudget = budget
+    _ops50 = floor(budget * 0.50)
+    _ops64 = floor(budget * 0.64)
+    _ops71 = floor(budget * 0.71)
+    _ops79 = floor(budget * 0.79)
+    _ops82 = floor(budget * 0.82)
+    _ops86 = floor(budget * 0.86)
+    _ops89 = floor(budget * 0.89)
+    _ops93 = floor(budget * 0.93)
+    _ops96 = floor(budget * 0.96)
+
+_lw_full_budget = None
+
 def turn():
-    global _init
+    global _init, _lw_full_budget
     try:
         if (not _init):
             init()
             _init = True
+        if _lw_full_budget is None:
+            _lw_full_budget = _opsBudget
+        _lw_t = getTurn()
+        if _lw_t <= 8:
+            _lw_set_ops_gates(floor(_lw_full_budget * lw_get([0.4, 0.5, 0.5, 0.6, 0.6, 0.7, 0.8, 0.9], _lw_t - 1)))
+        elif _opsBudget != _lw_full_budget:
+            _lw_set_ops_gates(_lw_full_budget)
         main()
     except Exception as e:
         tb = e.__traceback__
