@@ -19179,7 +19179,7 @@ def turn():
             _lw_full_budget = _opsBudget
         _lw_t = getTurn()
         if _lw_t <= 8:
-            _lw_set_ops_gates(floor(_lw_full_budget * lw_get([0.4, 0.5, 0.5, 0.6, 0.6, 0.7, 0.8, 0.9], _lw_t - 1)))
+            _lw_set_ops_gates(floor(_lw_full_budget * lw_get([0.25, 0.45, 0.5, 0.6, 0.6, 0.7, 0.8, 0.9], _lw_t - 1)))
         elif _opsBudget != _lw_full_budget:
             _lw_set_ops_gates(_lw_full_budget)
         main()
