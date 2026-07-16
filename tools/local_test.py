@@ -323,7 +323,7 @@ def run_fight(scenario, fight_index=0, verbose=False):
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=600,  # Python-AI fights run minutes, not seconds
             cwd=str(GENERATOR_DIR),
             env=env,
         )
