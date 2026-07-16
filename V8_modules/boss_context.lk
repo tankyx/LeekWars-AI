@@ -1227,17 +1227,27 @@ function executeBossCombatPoke() {
         return false
     }
 
-    // Pass 1: everything castable from where we stand (no MP spent)
+    // Pass 1: everything castable from where we stand (no MP spent).
+    // minCluster 1 everywhere: fight 52978442 — the >= 2 cluster requirement
+    // meant a spread-out chasing army only ever ate venom. A lone plague on
+    // the king is ~1100 damage; never skip it.
     var casted = 0
-    if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, false)) casted++
-    if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, false)) casted++
+    // COVID first: PROPAGATION 2 — it re-infects everything within 2 cells
+    // every turn, and the infections keep spreading (Entity.java:806). One
+    // point-blank cast on a chasing knight can chain through the whole army
+    // (~3400/unit at MAG 600). Cast-from-here only: never dive for it.
+    if (tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, false)) casted++
+    if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, false)) casted++
+    if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, false)) casted++
     if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, false)) casted++
+    if (tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, false)) casted++
 
-    // STR carry strikes: plasma on clusters (MULTIPLIED_BY_TARGETS) + double
-    // enhanced lightninger from the 6-10 orbit band
+    // Weapon strikes for both carry types (STR guns / MAG poison weapons)
+    casted += tryWeaponStrike(myID)
+
+    // STR carry: plasma on clusters (MULTIPLIED_BY_TARGETS)
     if (getStrength() >= 300) {
         if (tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, false)) casted++
-        casted += tryWeaponStrike(myID)
     }
 
     // Pass 2: nothing reached — ONE committed approach, longest range first
@@ -1245,13 +1255,13 @@ function executeBossCombatPoke() {
     // per-chip movement races starved each other every turn)
     if (casted == 0) {
         if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, true)) casted++
-        else if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, true)) casted++
-        else if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, true)) casted++
+        else if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, true)) casted++
+        else if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, true)) casted++
         else if (getStrength() >= 300 && tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, true)) casted++
         if (casted > 0) {
-            if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, false)) casted++
-            if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, false)) casted++
-            if (getStrength() >= 300) casted += tryWeaponStrike(myID)
+            if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, false)) casted++
+            if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, false)) casted++
+            casted += tryWeaponStrike(myID)
         }
     }
     if (casted > 0) {
@@ -1284,59 +1294,68 @@ function executeBossCombatPoke() {
     return true
 }
 
-// Double ranged strike from the orbit band. Free-launch ranged weapons only
-// (line weapons need alignment); pick the longest-range one equipped.
-// Crystals included as targets — they must die to win.
+// Ranged strikes from the orbit. Stat-aware weapon table: STR carriers use
+// direct-damage guns, MAG carriers use their poison weapons — fight 52978442:
+// MH never fired GAZOR (pure poison, CIRCLE_3, ~570/target at MAG 600, 2/turn)
+// because the strike only knew STR weapons. Line-launch weapons fire when
+// aligned. Crystals included as targets — they must die to win.
 function tryWeaponStrike(myID) {
-    // [weapon, minRange, maxRange, tpCost, aoeRadius]
-    var table = [
-        [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1],
-        [WEAPON_RIFLE, 7, 9, 7, 0],
-        [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2],
-        [WEAPON_MAGNUM, 1, 8, 5, 0],
-        [WEAPON_DESTROYER, 1, 6, 6, 0]
+    // [weapon, minRange, maxRange, tpCost, aoeAllyVetoRadius, needsLine]
+    var strTable = [
+        [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, false],
+        [WEAPON_RIFLE, 7, 9, 7, 0, false],
+        [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, false],
+        [WEAPON_MAGNUM, 1, 8, 5, 0, false],
+        [WEAPON_DESTROYER, 1, 6, 6, 0, false]
     ]
+    var magTable = [
+        [WEAPON_GAZOR, 2, 7, 8, 3, true],
+        [WEAPON_FLAME_THROWER, 2, 8, 6, 2, true],
+        [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, false]
+    ]
+    var table = getStrength() >= 300 ? strTable : magTable
     var weps = getWeapons()
     if (weps == null) { return 0 }
-    var pick = null
-    for (var row in table) {
-        if (inArray(weps, row[0])) { pick = row; break }
-    }
-    if (pick == null) { return 0 }
-    var wId = pick[0]
-    var minR = pick[1]
-    var maxR = pick[2]
-    var wCost = pick[3]
-    var aoeR = pick[4]
 
-    if (getWeapon() != wId) {
-        if (getTP() < wCost + 1) { return 0 }
-        setWeapon(wId)
-    }
     var allies = getAliveAllies()
-    var n = 0
-    while (getTP() >= wCost && n < 2) {
-        var myCell = getCell()
-        var enemies = getAliveEnemies()
-        var best = null
+    var myCell = getCell()
+    var enemies = getAliveEnemies()
+
+    // Pick the first equipped weapon that has a valid target RIGHT NOW
+    var pick = null
+    var pickTarget = null
+    for (var row in table) {
+        if (pick != null) break
+        if (!inArray(weps, row[0])) continue
         var bestD = 999
         for (var eid in enemies) {
             if (getName(eid) == "graal") continue
             var ec = getCell(eid)
             if (ec == null || ec < 0) continue
             var dd = getCellDistance(myCell, ec)
-            if (dd == null || dd < minR || dd > maxR) continue
+            if (dd == null || dd < row[1] || dd > row[2]) continue
+            if (row[5] && !isOnSameLine(myCell, ec)) continue
             if (!lineOfSight(myCell, ec)) continue
             var allyNear = false
             for (var aid in allies) {
                 var dA = getCellDistance(ec, getCell(aid))
-                if (dA != null && dA <= aoeR) allyNear = true
+                if (dA != null && dA <= row[4]) allyNear = true
             }
             if (allyNear) continue
-            if (dd < bestD) { bestD = dd; best = eid }
+            if (dd < bestD) { bestD = dd; pick = row; pickTarget = eid }
         }
-        if (best == null) { break }
-        if (useWeapon(best) < 1) { break }
+    }
+    if (pick == null) { return 0 }
+
+    var wCost = pick[3]
+    if (getWeapon() != pick[0]) {
+        if (getTP() < wCost + 1) { return 0 }
+        setWeapon(pick[0])
+    }
+    var n = 0
+    while (getTP() >= wCost && n < 3) {
+        if (pickTarget == null || !isAlive(pickTarget)) break
+        if (useWeapon(pickTarget) < 1) break
         n++
     }
     return n
