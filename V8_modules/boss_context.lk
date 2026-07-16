@@ -1,6 +1,8 @@
 
 global _bossPhase = null
 global _graalEntity = null
+global _graalID = -1
+global _bossCombatLatched = false
 global _crystalMap = [:]
 global _myAssignedCrystal = null
 global _bossTargetEID = null
@@ -78,14 +80,18 @@ function updateBossContext() {
         var cellId = getCell(eid)
 
         if (entityType == "graal") {
+            _graalID = eid
             // Fight 52976869: after the graal self-destructs (puzzle success!)
             // it can linger in the alive list with no cell — treating it as
             // alive kept us in PUZZLE pushing crystals toward getCellFromXY(0,-1)
             // while the now-vulnerable army killed us. Only a graal with a real
-            // cell and life counts.
+            // cell and life counts. Fight 52978013: it passed BOTH checks and
+            // we puzzled for 6 dead-graal turns — isAlive() is checked below
+            // and the COMBAT latch makes the transition one-way.
             if (cellId == null || cellId < 0) { continue }
             var gLife = getLife(eid)
             if (gLife == null || gLife <= 0) { continue }
+            if (!isAlive(eid)) { continue }
             _graalEntity = [
                 'id': eid,
                 'cell': cellId,
@@ -113,10 +119,37 @@ function updateBossContext() {
         }
     }
 
-    if (_graalEntity != null) {
+    // Direct-id recheck: the alive-enemies enumeration can keep serving the
+    // dead graal (name+cell+life all "valid") — trust isAlive on the tracked id
+    if (_graalEntity != null && _graalID != -1) {
+        if (!isAlive(_graalID)) {
+            _graalEntity = null
+            _graalCell = -1
+            _graalX = 0
+            _graalY = 0
+        }
+    }
+
+    // Mechanic-level truth (fight 52978013: every entity query lied for 6
+    // turns): Divine Protection = ADD_STATE effect (type 59) on the army,
+    // cast by the graal, gone the moment it dies. No protection => COMBAT.
+    if (!_bossCombatLatched && _graalEntity != null && getTurn() > 1) {
+        if (!armyHasDivineProtection()) {
+            _graalEntity = null
+            _graalCell = -1
+            _graalX = 0
+            _graalY = 0
+        }
+    }
+
+    if (_bossCombatLatched) {
+        _bossPhase = "COMBAT"
+    } else if (_graalEntity != null) {
         _bossPhase = "PUZZLE"
     } else {
         _bossPhase = "COMBAT"
+        // One-way: a graal that was seen alive and is now gone never comes back
+        if (_graalID != -1) { _bossCombatLatched = true }
     }
 
     if (_bossPhase == "PUZZLE") {
@@ -139,6 +172,24 @@ function updateBossContext() {
 
 function getBossPhase() {
     return _bossPhase
+}
+
+function armyHasDivineProtection() {
+    var enemies = getAliveEnemies()
+    var armySeen = false
+    for (var eid in enemies) {
+        var n = getName(eid)
+        if (n == "graal" || indexOf(n, "crystal") != -1) continue
+        armySeen = true
+        var effs = getEffects(eid)
+        if (effs == null) continue
+        for (var e in effs) {
+            if (e[0] == 59) { return true }
+        }
+    }
+    // No army at all (local template) — no evidence the graal died
+    if (!armySeen) { return true }
+    return false
 }
 
 function syncCrystalScalars(crystal) {
@@ -670,7 +721,11 @@ function isCrystalEntity(eid) {
 
 
 function bossDiag(myCell) {
-    say("B1 PH=" + _bossPhase + " R=" + _puzzleRole + " SID=" + _puzzleSolverID + " EID=" + _bossTargetEID + " me=" + myCell)
+    var g = "none"
+    if (_graalID != -1) {
+        g = _graalID + "/" + isAlive(_graalID) + "/" + getLife(_graalID) + "/" + getCell(_graalID)
+    }
+    say("B1 PH=" + _bossPhase + " R=" + _puzzleRole + " SID=" + _puzzleSolverID + " EID=" + _bossTargetEID + " me=" + myCell + " G=" + g)
 }
 
 function hasEntityBlockingLine(fromCell, toCell) {

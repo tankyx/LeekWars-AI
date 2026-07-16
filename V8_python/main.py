@@ -5475,6 +5475,8 @@ def shouldPrioritizeAggression(player, target):
 # ════════ boss_context.lk ════════
 _bossPhase = None
 _graalEntity = None
+_graalID = (-1)
+_bossCombatLatched = False
 _crystalMap = {}
 _myAssignedCrystal = None
 _bossTargetEID = None
@@ -5517,7 +5519,7 @@ def initBossContext():
     updateBossContext()
 
 def updateBossContext():
-    global _bossPhase, _bossTargetEID, _crystalMap, _graalCell, _graalEntity, _graalX, _graalY, _myAssignedCrystal, _puzzleRole, _puzzleSolverID
+    global _bossCombatLatched, _bossPhase, _bossTargetEID, _crystalMap, _graalCell, _graalEntity, _graalID, _graalX, _graalY, _myAssignedCrystal, _puzzleRole, _puzzleSolverID
     if (not _isBossFight):
         return None
     _graalEntity = None
@@ -5536,10 +5538,13 @@ def updateBossContext():
         entityType = getName(eid)
         cellId = getCell(eid)
         if (entityType == "graal"):
+            _graalID = eid
             if ((cellId == None) or (cellId < 0)):
                 continue
             gLife = getLife(eid)
             if ((gLife == None) or (gLife <= 0)):
+                continue
+            if (not isAlive(eid)):
                 continue
             _graalEntity = {'id': eid, 'cell': cellId, 'x': getCellX(cellId), 'y': getCellY(cellId)}
             _graalCell = cellId
@@ -5550,10 +5555,27 @@ def updateBossContext():
                 color = substring(entityType, 0, indexOf(entityType, "_"))
                 goalAxis = getGoalAxis(color)
                 lw_put(_crystalMap, eid, {'id': eid, 'color': color, 'goalAxis': goalAxis, 'cell': cellId, 'x': getCellX(cellId), 'y': getCellY(cellId), 'solved': False})
-    if (_graalEntity != None):
-        _bossPhase = "PUZZLE"
-    else:
+    if ((_graalEntity != None) and (_graalID != (-1))):
+        if (not isAlive(_graalID)):
+            _graalEntity = None
+            _graalCell = (-1)
+            _graalX = 0
+            _graalY = 0
+    if (((not _bossCombatLatched) and (_graalEntity != None)) and (getTurn() > 1)):
+        if (not armyHasDivineProtection()):
+            _graalEntity = None
+            _graalCell = (-1)
+            _graalX = 0
+            _graalY = 0
+    if _bossCombatLatched:
         _bossPhase = "COMBAT"
+    else:
+        if (_graalEntity != None):
+            _bossPhase = "PUZZLE"
+        else:
+            _bossPhase = "COMBAT"
+            if (_graalID != (-1)):
+                _bossCombatLatched = True
     if (_bossPhase == "PUZZLE"):
         assignPuzzleRoles()
         if (_puzzleRole == "SOLVER"):
@@ -5571,6 +5593,24 @@ def updateBossContext():
 
 def getBossPhase():
     return _bossPhase
+
+def armyHasDivineProtection():
+    enemies = getAliveEnemies()
+    armySeen = False
+    for eid in lw_values(enemies):
+        n = getName(eid)
+        if ((n == "graal") or (indexOf(n, "crystal") != (-1))):
+            continue
+        armySeen = True
+        effs = getEffects(eid)
+        if (effs == None):
+            continue
+        for e in lw_values(effs):
+            if (lw_get(e, 0) == 59):
+                return True
+    if (not armySeen):
+        return True
+    return False
 
 def syncCrystalScalars(crystal):
     global _myCrystalCell, _myCrystalColor, _myCrystalGoalAxis, _myCrystalSolved, _myCrystalX, _myCrystalY
@@ -6072,7 +6112,10 @@ def isCrystalEntity(eid):
     return mapContainsKey(_crystalMap, eid)
 
 def bossDiag(myCell):
-    say(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("B1 PH=", _bossPhase), " R="), _puzzleRole), " SID="), _puzzleSolverID), " EID="), _bossTargetEID), " me="), myCell))
+    g = "none"
+    if (_graalID != (-1)):
+        g = lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(_graalID, "/"), isAlive(_graalID)), "/"), getLife(_graalID)), "/"), getCell(_graalID))
+    say(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("B1 PH=", _bossPhase), " R="), _puzzleRole), " SID="), _puzzleSolverID), " EID="), _bossTargetEID), " me="), myCell), " G="), g))
 
 def hasEntityBlockingLine(fromCell, toCell):
     dTotal = getCellDistance(fromCell, toCell)
