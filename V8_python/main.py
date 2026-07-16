@@ -6644,15 +6644,15 @@ def solverSurvival(slMyID):
         if ((rcd != None) and (rcd == 0)):
             if (useChip(CHIP_REGENERATION, slMyID) >= 1):
                 say("PZ SOLVER: emergency regen")
-    if (((pct < 75) and (getTP() >= 6)) and allyHasChip(slMyID, CHIP_FORTRESS)):
+    if ((getTP() >= 6) and allyHasChip(slMyID, CHIP_FORTRESS)):
         fcd = getCooldown(CHIP_FORTRESS, slMyID)
         if ((fcd != None) and (fcd == 0)):
             useChip(CHIP_FORTRESS, slMyID)
-    if (((pct < 75) and (getTP() >= 6)) and allyHasChip(slMyID, CHIP_ARMOR)):
+    if ((getTP() >= 6) and allyHasChip(slMyID, CHIP_ARMOR)):
         acd = getCooldown(CHIP_ARMOR, slMyID)
         if ((acd != None) and (acd == 0)):
             useChip(CHIP_ARMOR, slMyID)
-    if (((pct < 55) and (getTP() >= 3)) and allyHasChip(slMyID, CHIP_WALL)):
+    if (((pct < 70) and (getTP() >= 3)) and allyHasChip(slMyID, CHIP_WALL)):
         wcd = getCooldown(CHIP_WALL, slMyID)
         if ((wcd != None) and (wcd == 0)):
             useChip(CHIP_WALL, slMyID)

@@ -1240,6 +1240,10 @@ function solverSelfBuff(slMyID) {
 
 // Survival comes before puzzle progress: called at the start of every solving
 // turn. A dead solver ends the fight — nobody else carries GRAPPLE/BOXING_GLOVE.
+// Shields are PROACTIVE: army fire during the puzzle is guaranteed, and fight
+// 52977544 showed reactive thresholds lag the bursts (Ada took a naked 976
+// before the first fortress; KG ate a 3045 volley). ~2.7 TP/turn of insurance
+// beats one more push.
 function solverSurvival(slMyID) {
     var pct = entityHPPercent(slMyID)
     if (pct < 40 && getTP() >= 8 && allyHasChip(slMyID, CHIP_REGENERATION)) {
@@ -1248,15 +1252,15 @@ function solverSurvival(slMyID) {
             if (useChip(CHIP_REGENERATION, slMyID) >= 1) say("PZ SOLVER: emergency regen")
         }
     }
-    if (pct < 75 && getTP() >= 6 && allyHasChip(slMyID, CHIP_FORTRESS)) {
+    if (getTP() >= 6 && allyHasChip(slMyID, CHIP_FORTRESS)) {
         var fcd = getCooldown(CHIP_FORTRESS, slMyID)
         if (fcd != null && fcd == 0) useChip(CHIP_FORTRESS, slMyID)
     }
-    if (pct < 75 && getTP() >= 6 && allyHasChip(slMyID, CHIP_ARMOR)) {
+    if (getTP() >= 6 && allyHasChip(slMyID, CHIP_ARMOR)) {
         var acd = getCooldown(CHIP_ARMOR, slMyID)
         if (acd != null && acd == 0) useChip(CHIP_ARMOR, slMyID)
     }
-    if (pct < 55 && getTP() >= 3 && allyHasChip(slMyID, CHIP_WALL)) {
+    if (pct < 70 && getTP() >= 3 && allyHasChip(slMyID, CHIP_WALL)) {
         var wcd = getCooldown(CHIP_WALL, slMyID)
         if (wcd != null && wcd == 0) useChip(CHIP_WALL, slMyID)
     }
