@@ -6669,16 +6669,29 @@ def executeBossCombatPoke():
     return True
 
 def tryWeaponStrike(myID):
+    table = [[WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1], [WEAPON_RIFLE, 7, 9, 7, 0], [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2], [WEAPON_MAGNUM, 1, 8, 5, 0], [WEAPON_DESTROYER, 1, 6, 6, 0]]
     weps = getWeapons()
-    if ((weps == None) or (not inArray(weps, WEAPON_ENHANCED_LIGHTNINGER))):
+    if (weps == None):
         return 0
-    if (getWeapon() != WEAPON_ENHANCED_LIGHTNINGER):
-        if (getTP() < 10):
+    pick = None
+    for row in lw_values(table):
+        if inArray(weps, lw_get(row, 0)):
+            pick = row
+            break
+    if (pick == None):
+        return 0
+    wId = lw_get(pick, 0)
+    minR = lw_get(pick, 1)
+    maxR = lw_get(pick, 2)
+    wCost = lw_get(pick, 3)
+    aoeR = lw_get(pick, 4)
+    if (getWeapon() != wId):
+        if (getTP() < lw_add(wCost, 1)):
             return 0
-        setWeapon(WEAPON_ENHANCED_LIGHTNINGER)
+        setWeapon(wId)
     allies = getAliveAllies()
     n = 0
-    while ((getTP() >= 9) and (n < 2)):
+    while ((getTP() >= wCost) and (n < 2)):
         myCell = getCell()
         enemies = getAliveEnemies()
         best = None
@@ -6690,14 +6703,14 @@ def tryWeaponStrike(myID):
             if ((ec == None) or (ec < 0)):
                 continue
             dd = getCellDistance(myCell, ec)
-            if (((dd == None) or (dd < 6)) or (dd > 10)):
+            if (((dd == None) or (dd < minR)) or (dd > maxR)):
                 continue
             if (not lineOfSight(myCell, ec)):
                 continue
             allyNear = False
             for aid in lw_values(allies):
                 dA = getCellDistance(ec, getCell(aid))
-                if ((dA != None) and (dA <= 1)):
+                if ((dA != None) and (dA <= aoeR)):
                     allyNear = True
             if allyNear:
                 continue
