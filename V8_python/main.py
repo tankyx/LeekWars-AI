@@ -6745,6 +6745,58 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
             return False
     return (useChipOnCell(chip, bestAim) >= 1)
 
+def executeBossCombatPlasma():
+    myID = getEntity()
+    if (getStrength() < 300):
+        return False
+    if (not allyHasChip(myID, CHIP_PLASMA)):
+        return False
+    if (getTP() < 9):
+        return False
+    pcd = getCooldown(CHIP_PLASMA, myID)
+    if ((pcd == None) or (pcd > 0)):
+        return False
+    armyCells = puzzleArmyCells()
+    if (count(armyCells) == 0):
+        return False
+    allies = getAliveAllies()
+    myCell = getCell()
+    bestAim = (-1)
+    bestScore = 0
+    for aim in lw_values(armyCells):
+        dMe = getCellDistance(myCell, aim)
+        if ((dMe == None) or (dMe > 6)):
+            continue
+        cluster = 0
+        for ac in lw_values(armyCells):
+            d2 = getCellDistance(aim, ac)
+            if ((d2 != None) and (d2 <= 2)):
+                cluster = lw_add(cluster, 1)
+        if (cluster < 2):
+            continue
+        allyHit = False
+        for aid in lw_values(allies):
+            dA = getCellDistance(aim, getCell(aid))
+            if ((dA != None) and (dA <= 2)):
+                allyHit = True
+        dSelf = getCellDistance(aim, myCell)
+        if ((dSelf != None) and (dSelf <= 2)):
+            allyHit = True
+        if allyHit:
+            continue
+        if (not lineOfSight(myCell, aim)):
+            continue
+        sc = lw_sub(lw_mul(cluster, 100), dMe)
+        if (sc > bestScore):
+            bestScore = sc
+            bestAim = aim
+    if (bestAim == (-1)):
+        return False
+    if (useChipOnCell(CHIP_PLASMA, bestAim) >= 1):
+        say("PZ PLASMA")
+        return True
+    return False
+
 def executeBossCombatPeel():
     myID = getEntity()
     if (getStrength() >= 150):
@@ -19853,6 +19905,7 @@ def main():
         if executePuzzleTurn():
             return None
     if (_isBossFight and (_bossPhase == "COMBAT")):
+        executeBossCombatPlasma()
         if executeBossCombatPoke():
             return None
         if executeBossCombatPeel():

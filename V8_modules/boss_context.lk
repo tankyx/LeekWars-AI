@@ -1342,6 +1342,53 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
     return useChipOnCell(chip, bestAim) >= 1
 }
 
+// ============ Phase 2: plasma pre-cast (STR carries) ============
+// PLASMA is MULTIPLIED_BY_TARGETS and STR-scaled: at 410 STR a 3-cluster takes
+// ~1500-1700 total. Cast it before the normal pipeline runs (which handles
+// weapons/movement) — never consumes the turn, only TP.
+function executeBossCombatPlasma() {
+    var myID = getEntity()
+    if (getStrength() < 300) { return false }
+    if (!allyHasChip(myID, CHIP_PLASMA)) { return false }
+    if (getTP() < 9) { return false }
+    var pcd = getCooldown(CHIP_PLASMA, myID)
+    if (pcd == null || pcd > 0) { return false }
+
+    var armyCells = puzzleArmyCells()
+    if (count(armyCells) == 0) { return false }
+    var allies = getAliveAllies()
+    var myCell = getCell()
+    var bestAim = -1
+    var bestScore = 0
+    for (var aim in armyCells) {
+        var dMe = getCellDistance(myCell, aim)
+        if (dMe == null || dMe > 6) continue
+        var cluster = 0
+        for (var ac in armyCells) {
+            var d2 = getCellDistance(aim, ac)
+            if (d2 != null && d2 <= 2) cluster++
+        }
+        if (cluster < 2) continue
+        var allyHit = false
+        for (var aid in allies) {
+            var dA = getCellDistance(aim, getCell(aid))
+            if (dA != null && dA <= 2) allyHit = true
+        }
+        var dSelf = getCellDistance(aim, myCell)
+        if (dSelf != null && dSelf <= 2) allyHit = true
+        if (allyHit) continue
+        if (!lineOfSight(myCell, aim)) continue
+        var sc = cluster * 100 - dMe
+        if (sc > bestScore) { bestScore = sc; bestAim = aim }
+    }
+    if (bestAim == -1) { return false }
+    if (useChipOnCell(CHIP_PLASMA, bestAim) >= 1) {
+        say("PZ PLASMA")
+        return true
+    }
+    return false
+}
+
 // ============ Phase 2: peelers ============
 // The respec'd solver-tanks (STR ~0) deal nothing in COMBAT, but BOXING_GLOVE
 // has NO cooldown and grapple/boxing are pure displacement — a 25-TP tank can
