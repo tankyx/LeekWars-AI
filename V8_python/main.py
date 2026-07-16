@@ -6567,7 +6567,7 @@ def executeBufferPuzzleTurn():
     myID = getEntity()
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
         say("PZ BUFFER: no solver")
-        puzzleSelfPreserve(myID)
+        puzzleSelfPreserve(myID, False)
         return True
     bufSolverCell = getCell(_puzzleSolverID)
     bufDist = getCellDistance(getCell(), bufSolverCell)
@@ -6576,7 +6576,7 @@ def executeBufferPuzzleTurn():
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_RAGE, 8, 4, "rage"], [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
     puzzleSustainSolver(myID)
-    puzzleSelfPreserve(myID)
+    puzzleSelfPreserve(myID, (getTurn() <= 3))
     return True
 
 def hasPendingSolverHPBuff(myID):
@@ -6659,7 +6659,7 @@ def isPuzzleWorkZone(cell):
             return True
     return False
 
-def puzzleSelfPreserve(myID):
+def puzzleSelfPreserve(myID, leashed):
     selfShields = [[CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_WALL, 3]]
     for sh in lw_values(selfShields):
         chip = lw_get(sh, 0)
@@ -6678,7 +6678,7 @@ def puzzleSelfPreserve(myID):
     solverAlive = ((_puzzleSolverID != (-1)) and isAlive(_puzzleSolverID))
     anchorCell = (getCell(_puzzleSolverID) if solverAlive else getCell())
     distToSolver = getCellDistance(getCell(), anchorCell)
-    if (solverAlive and (distToSolver > 8)):
+    if ((leashed and solverAlive) and (distToSolver > 8)):
         tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (((tpCd != None) and (tpCd == 0)) and (getTP() >= 9)):
             tc = findEmptyCellNear(anchorCell, getCell(), 12, 2)
@@ -6688,7 +6688,7 @@ def puzzleSelfPreserve(myID):
         if ((followDist != None) and (followDist > 2)):
             moveTowardCell(anchorCell, min(getMP(), lw_sub(followDist, 2)))
         return None
-    best = choosePuzzleSustainCell(myID, anchorCell, solverAlive)
+    best = choosePuzzleSustainCell(myID, anchorCell, (leashed and solverAlive))
     if ((best != (-1)) and (best != getCell())):
         moveTowardCell(best)
 
@@ -6740,7 +6740,7 @@ def executeSupportPuzzleTurn():
     myID = getEntity()
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
         say("PZ SUPPORT: no solver")
-        puzzleSelfPreserve(myID)
+        puzzleSelfPreserve(myID, False)
         return True
     solverCell = getCell(_puzzleSolverID)
     dist = getCellDistance(getCell(), solverCell)
@@ -6749,7 +6749,7 @@ def executeSupportPuzzleTurn():
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
     puzzleSustainSolver(myID)
-    puzzleSelfPreserve(myID)
+    puzzleSelfPreserve(myID, (getTurn() <= 3))
     return True
 
 def executeSolverPuzzleTurn():

@@ -1137,7 +1137,7 @@ function executeBufferPuzzleTurn() {
 
     if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
         say("PZ BUFFER: no solver")
-        puzzleSelfPreserve(myID)
+        puzzleSelfPreserve(myID, false)
         return true
     }
 
@@ -1159,7 +1159,9 @@ function executeBufferPuzzleTurn() {
     ]
     castBuffsOnSolver(myID, buffs)
     puzzleSustainSolver(myID)
-    puzzleSelfPreserve(myID)
+    // Leash only during the delivery window — armoring/adren cooldowns expiring
+    // mid-fight must NOT pull allies back into army range for a top-up
+    puzzleSelfPreserve(myID, getTurn() <= 3)
     return true
 }
 
@@ -1259,10 +1261,13 @@ function isPuzzleWorkZone(cell) {
     return false
 }
 
-// Ally end-of-turn during PUZZLE: shield self with leftover TP, then reposition —
-// follow the solver (teleport if she jumped into the castle), keep spacing from
-// other allies (the army AoEs punish stacking), and maximize distance to the army.
-function puzzleSelfPreserve(myID) {
+// Ally end-of-turn during PUZZLE: shield self with leftover TP, then reposition.
+// While leashed (buff delivery window) stay in the 2-3 escort band; afterwards
+// SCATTER — fight 52976969: the army deals ~2500/turn focused and killed the
+// whole escort by T5. Allies can't out-sustain that (one regen each); they can
+// out-RUN it (7-10 MP vs the army's less). Post-delivery the best help is
+// staying alive, splitting the army's attention, far from the AoEs.
+function puzzleSelfPreserve(myID, leashed) {
     var selfShields = [
         [CHIP_FORTRESS, 6],
         [CHIP_ARMOR, 6],
@@ -1285,8 +1290,8 @@ function puzzleSelfPreserve(myID) {
     var anchorCell = solverAlive ? getCell(_puzzleSolverID) : getCell()
     var distToSolver = getCellDistance(getCell(), anchorCell)
 
-    // Follow the solver when she outruns us (teleport into the castle behind her)
-    if (solverAlive && distToSolver > 8) {
+    // Follow the solver only while we still owe her buffs
+    if (leashed && solverAlive && distToSolver > 8) {
         var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (tpCd != null && tpCd == 0 && getTP() >= 9) {
             var tc = findEmptyCellNear(anchorCell, getCell(), 12, 2)
@@ -1299,7 +1304,7 @@ function puzzleSelfPreserve(myID) {
         return
     }
 
-    var best = choosePuzzleSustainCell(myID, anchorCell, solverAlive)
+    var best = choosePuzzleSustainCell(myID, anchorCell, leashed && solverAlive)
     if (best != -1 && best != getCell()) moveTowardCell(best)
 }
 
@@ -1343,7 +1348,7 @@ function executeSupportPuzzleTurn() {
 
     if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
         say("PZ SUPPORT: no solver")
-        puzzleSelfPreserve(myID)
+        puzzleSelfPreserve(myID, false)
         return true
     }
 
@@ -1365,7 +1370,7 @@ function executeSupportPuzzleTurn() {
     ]
     castBuffsOnSolver(myID, buffs)
     puzzleSustainSolver(myID)
-    puzzleSelfPreserve(myID)
+    puzzleSelfPreserve(myID, getTurn() <= 3)
     return true
 }
 
