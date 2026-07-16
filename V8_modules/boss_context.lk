@@ -1344,6 +1344,15 @@ function executeBossCombatPoke() {
     return true
 }
 
+// Fight 52978553: the scribe healed 1763 and the king 668 — together they
+// undid our entire output (2592). Kill the healer first; the king (10k) last.
+function bossTargetPriority(name) {
+    if (name == "fennel_scribe") { return 60 }
+    if (name == "fennel_squire") { return 25 }
+    if (name == "fennel_king") { return -15 }
+    return 0
+}
+
 function pokeChipReady(myID, chip) {
     if (!allyHasChip(myID, chip)) { return false }
     var cd = getCooldown(chip, myID)
@@ -1413,14 +1422,16 @@ function tryWeaponStrike(myID) {
     var enemies = getAliveEnemies()
 
     // Pick the first equipped weapon that has a valid target RIGHT NOW
+    // (targets scored: healer first, king last)
     var pick = null
     var pickTarget = null
     for (var row in table) {
         if (pick != null) break
         if (!inArray(weps, row[0])) continue
-        var bestD = 999
+        var bestSc = -9999
         for (var eid in enemies) {
-            if (getName(eid) == "graal") continue
+            var nm = getName(eid)
+            if (nm == "graal") continue
             var ec = getCell(eid)
             if (ec == null || ec < 0) continue
             var dd = getCellDistance(myCell, ec)
@@ -1433,7 +1444,8 @@ function tryWeaponStrike(myID) {
                 if (dA != null && dA <= row[4]) allyNear = true
             }
             if (allyNear) continue
-            if (dd < bestD) { bestD = dd; pick = row; pickTarget = eid }
+            var tsc = bossTargetPriority(nm) * 2 - dd
+            if (tsc > bestSc) { bestSc = tsc; pick = row; pickTarget = eid }
         }
     }
     if (pick == null) { return 0 }
@@ -1487,6 +1499,8 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
             if (!lineOfSight(myCell, aim)) continue
         }
         var sc = cluster * 100 - dMe2
+        var aimEnt = getEntityOnCell(aim)
+        if (aimEnt != null && aimEnt != -1) { sc += bossTargetPriority(getName(aimEnt)) }
         if (sc > bestScore) { bestScore = sc; bestAim = aim }
     }
     if (bestAim == -1) { return false }

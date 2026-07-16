@@ -6723,6 +6723,15 @@ def executeBossCombatPoke():
             moveTowardCell(kite)
     return True
 
+def bossTargetPriority(name):
+    if (name == "fennel_scribe"):
+        return 60
+    if (name == "fennel_squire"):
+        return 25
+    if (name == "fennel_king"):
+        return (-15)
+    return 0
+
 def pokeChipReady(myID, chip):
     if (not allyHasChip(myID, chip)):
         return False
@@ -6787,9 +6796,10 @@ def tryWeaponStrike(myID):
             break
         if (not inArray(weps, lw_get(row, 0))):
             continue
-        bestD = 999
+        bestSc = (-9999)
         for eid in lw_values(enemies):
-            if (getName(eid) == "graal"):
+            nm = getName(eid)
+            if (nm == "graal"):
                 continue
             ec = getCell(eid)
             if ((ec == None) or (ec < 0)):
@@ -6808,8 +6818,9 @@ def tryWeaponStrike(myID):
                     allyNear = True
             if allyNear:
                 continue
-            if (dd < bestD):
-                bestD = dd
+            tsc = lw_sub(lw_mul(bossTargetPriority(nm), 2), dd)
+            if (tsc > bestSc):
+                bestSc = tsc
                 pick = row
                 pickTarget = eid
     if (pick == None):
@@ -6864,6 +6875,9 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
             if (not lineOfSight(myCell, aim)):
                 continue
         sc = lw_sub(lw_mul(cluster, 100), dMe2)
+        aimEnt = getEntityOnCell(aim)
+        if ((aimEnt != None) and (aimEnt != (-1))):
+            sc = lw_add(sc, bossTargetPriority(getName(aimEnt)))
         if (sc > bestScore):
             bestScore = sc
             bestAim = aim
