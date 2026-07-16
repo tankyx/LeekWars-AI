@@ -72,6 +72,14 @@ function updateBossContext() {
         var cellId = getCell(eid)
 
         if (entityType == "graal") {
+            // Fight 52976869: after the graal self-destructs (puzzle success!)
+            // it can linger in the alive list with no cell — treating it as
+            // alive kept us in PUZZLE pushing crystals toward getCellFromXY(0,-1)
+            // while the now-vulnerable army killed us. Only a graal with a real
+            // cell and life counts.
+            if (cellId == null || cellId < 0) { continue }
+            var gLife = getLife(eid)
+            if (gLife == null || gLife <= 0) { continue }
             _graalEntity = [
                 'id': eid,
                 'cell': cellId,
@@ -1013,6 +1021,9 @@ function logMapLayout() {
 }
 
 function executePuzzleTurn() {
+    // Hard gate: no live graal with a real cell means the puzzle is over —
+    // fall through to normal combat (the army just became vulnerable)
+    if (_bossPhase != "PUZZLE" || _graalCell == null || _graalCell < 0) { return false }
     if (_puzzleRole == "SOLVER") return executeSolverPuzzleTurn()
     if (_puzzleRole == "BUFFER") return executeBufferPuzzleTurn()
     if (_puzzleRole == "SUPPORT") return executeSupportPuzzleTurn()

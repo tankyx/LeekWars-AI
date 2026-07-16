@@ -5532,6 +5532,11 @@ def updateBossContext():
         entityType = getName(eid)
         cellId = getCell(eid)
         if (entityType == "graal"):
+            if ((cellId == None) or (cellId < 0)):
+                continue
+            gLife = getLife(eid)
+            if ((gLife == None) or (gLife <= 0)):
+                continue
             _graalEntity = {'id': eid, 'cell': cellId, 'x': getCellX(cellId), 'y': getCellY(cellId)}
             _graalCell = cellId
             _graalX = getCellX(cellId)
@@ -6468,6 +6473,8 @@ def logMapLayout():
         row = lw_add(row, 1)
 
 def executePuzzleTurn():
+    if (((_bossPhase != "PUZZLE") or (_graalCell == None)) or (_graalCell < 0)):
+        return False
     if (_puzzleRole == "SOLVER"):
         return executeSolverPuzzleTurn()
     if (_puzzleRole == "BUFFER"):
