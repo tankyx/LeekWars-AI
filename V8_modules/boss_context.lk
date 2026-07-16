@@ -23,6 +23,8 @@ global _pzRouteTarget = -1
 global _pzFocusEID = null
 global _pzSolverEverSeen = false
 global _pzPartnerSolverID = -1
+global _pzPartnerClaimEID = null
+global PZ_MSG_FOCUS = 901
 
 global _graalCell = -1
 global _graalX = 0
@@ -305,22 +307,50 @@ function nearestUnsolvedCrystalTo(cell, excludeEID) {
     return best
 }
 
+// Read the partner solver's announced crystal claim from the message queue.
+// The claim is cached globally: getMessages may drain, and the partner only
+// re-announces on its own turns.
+function readPartnerClaim() {
+    if (_pzPartnerSolverID == -1) {
+        _pzPartnerClaimEID = null
+        return
+    }
+    var msgs = getMessages()
+    for (var m in msgs) {
+        if (getMessageAuthor(m) != _pzPartnerSolverID) continue
+        if (getMessageType(m) != MESSAGE_CUSTOM) continue
+        var p = getMessageParams(m)
+        if (p != null && count(p) == 2 && p[0] == PZ_MSG_FOCUS) {
+            _pzPartnerClaimEID = p[1]
+        }
+    }
+}
+
+function announceFocus(eid) {
+    if (_pzPartnerSolverID != -1 && eid != null) {
+        sendAll(MESSAGE_CUSTOM, [PZ_MSG_FOCUS, eid])
+    }
+}
+
 function pickFocusCrystal(myCell) {
     var myID = getEntity()
     var partner = _pzPartnerSolverID
     var partnerAlive = partner != -1 && isAlive(partner)
 
-    // Dual solvers: deterministic partition both leeks compute identically —
-    // the lower entity id claims its nearest unsolved crystal, the other takes
-    // its nearest among the rest. Never both on one crystal (except the last).
+    // Dual solvers coordinate via messages: exclude the partner's ANNOUNCED
+    // claim (fight 52977482: modelling the partner by "its nearest crystal"
+    // diverged from its sticky focus and both solvers ground the same crystal).
     var partnerPick = null
     if (partnerAlive) {
-        var firstID = min(myID, partner)
-        var firstPick = nearestUnsolvedCrystalTo(getCell(firstID), null)
-        if (myID == firstID) {
-            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), firstPick)
-        } else {
-            partnerPick = firstPick
+        readPartnerClaim()
+        if (_pzPartnerClaimEID != null) {
+            var pc = _crystalMap[_pzPartnerClaimEID]
+            if (pc != null && !isCrystalSolved(pc)) partnerPick = _pzPartnerClaimEID
+        }
+        if (partnerPick == null) {
+            // No claim yet (partner hasn't solved this fight) — positional guess
+            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), null)
+            if (partnerPick == _pzFocusEID) partnerPick = null
         }
     }
 
@@ -328,7 +358,10 @@ function pickFocusCrystal(myCell) {
     // by the partner — retarget flapping thrashes routes
     if (_pzFocusEID != null && _pzFocusEID != partnerPick) {
         var fc = _crystalMap[_pzFocusEID]
-        if (fc != null && !isCrystalSolved(fc)) { return _pzFocusEID }
+        if (fc != null && !isCrystalSolved(fc)) {
+            announceFocus(_pzFocusEID)
+            return _pzFocusEID
+        }
     }
 
     var mine = nearestUnsolvedCrystalTo(myCell, partnerPick)
@@ -337,6 +370,7 @@ function pickFocusCrystal(myCell) {
         mine = partnerPick
     }
     _pzFocusEID = mine
+    announceFocus(mine)
     return _pzFocusEID
 }
 

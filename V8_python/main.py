@@ -5492,6 +5492,8 @@ _pzRouteTarget = (-1)
 _pzFocusEID = None
 _pzSolverEverSeen = False
 _pzPartnerSolverID = (-1)
+_pzPartnerClaimEID = None
+PZ_MSG_FOCUS = 901
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -5716,6 +5718,25 @@ def nearestUnsolvedCrystalTo(cell, excludeEID):
             best = eid
     return best
 
+def readPartnerClaim():
+    global _pzPartnerClaimEID
+    if (_pzPartnerSolverID == (-1)):
+        _pzPartnerClaimEID = None
+        return None
+    msgs = getMessages()
+    for m in lw_values(msgs):
+        if (getMessageAuthor(m) != _pzPartnerSolverID):
+            continue
+        if (getMessageType(m) != MESSAGE_CUSTOM):
+            continue
+        p = getMessageParams(m)
+        if (((p != None) and (count(p) == 2)) and (lw_get(p, 0) == PZ_MSG_FOCUS)):
+            _pzPartnerClaimEID = lw_get(p, 1)
+
+def announceFocus(eid):
+    if ((_pzPartnerSolverID != (-1)) and (eid != None)):
+        sendAll(MESSAGE_CUSTOM, [PZ_MSG_FOCUS, eid])
+
 def pickFocusCrystal(myCell):
     global _pzFocusEID
     myID = getEntity()
@@ -5723,20 +5744,25 @@ def pickFocusCrystal(myCell):
     partnerAlive = ((partner != (-1)) and isAlive(partner))
     partnerPick = None
     if partnerAlive:
-        firstID = min(myID, partner)
-        firstPick = nearestUnsolvedCrystalTo(getCell(firstID), None)
-        if (myID == firstID):
-            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), firstPick)
-        else:
-            partnerPick = firstPick
+        readPartnerClaim()
+        if (_pzPartnerClaimEID != None):
+            pc = lw_get(_crystalMap, _pzPartnerClaimEID)
+            if ((pc != None) and (not isCrystalSolved(pc))):
+                partnerPick = _pzPartnerClaimEID
+        if (partnerPick == None):
+            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), None)
+            if (partnerPick == _pzFocusEID):
+                partnerPick = None
     if ((_pzFocusEID != None) and (_pzFocusEID != partnerPick)):
         fc = lw_get(_crystalMap, _pzFocusEID)
         if ((fc != None) and (not isCrystalSolved(fc))):
+            announceFocus(_pzFocusEID)
             return _pzFocusEID
     mine = nearestUnsolvedCrystalTo(myCell, partnerPick)
     if ((mine == None) and (partnerPick != None)):
         mine = partnerPick
     _pzFocusEID = mine
+    announceFocus(mine)
     return _pzFocusEID
 
 def pickNearestUnsolvedCrystal(myCell):
