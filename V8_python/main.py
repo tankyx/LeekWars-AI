@@ -6570,9 +6570,9 @@ def executeBossCombatPoke():
     if (getMagic() < 300):
         return False
     solverSurvival(myID)
-    swatCrystals(myID)
     armyCells = puzzleArmyCells()
     if (count(armyCells) == 0):
+        swatCrystals(myID)
         return False
     casted = 0
     if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells):
@@ -6583,7 +6583,8 @@ def executeBossCombatPoke():
         casted = lw_add(casted, 1)
     if (casted > 0):
         say(lw_add("PZ POKE x", casted))
-    kite = choosePuzzleSustainCell(myID, getCell(), False)
+    swatCrystals(myID)
+    kite = choosePuzzleSustainCellCapped(myID, getCell(), False, 9)
     if ((kite != (-1)) and (kite != getCell())):
         moveTowardCell(kite)
     return True
@@ -7075,6 +7076,9 @@ def puzzleSelfPreserve(myID, leashed):
         moveTowardCell(best)
 
 def choosePuzzleSustainCell(myID, anchorCell, leashed):
+    return choosePuzzleSustainCellCapped(myID, anchorCell, leashed, 12)
+
+def choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap):
     mp = getMP()
     if (mp <= 0):
         return (-1)
@@ -7097,7 +7101,7 @@ def choosePuzzleSustainCell(myID, anchorCell, leashed):
             if ((pl == None) or (pl > mp)):
                 c = lw_add(c, 1)
                 continue
-        score = lw_mul(min(nearestArmyDistFrom(c, armyCells), 12), 14)
+        score = lw_mul(min(nearestArmyDistFrom(c, armyCells), armyCap), 14)
         if isPuzzleWorkZone(c):
             score = lw_num(score) - lw_num(80)
         if leashed:

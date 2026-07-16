@@ -1160,10 +1160,12 @@ function executeBossCombatPoke() {
     if (getMagic() < 300) { return false }
 
     solverSurvival(myID)
-    swatCrystals(myID)
 
     var armyCells = puzzleArmyCells()
-    if (count(armyCells) == 0) { return false }
+    if (count(armyCells) == 0) {
+        swatCrystals(myID)
+        return false
+    }
 
     var casted = 0
     if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells)) casted++
@@ -1171,7 +1173,12 @@ function executeBossCombatPoke() {
     if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells)) casted++
     if (casted > 0) say("PZ POKE x" + casted)
 
-    var kite = choosePuzzleSustainCell(myID, getCell(), false)
+    // Swat AFTER poking — venom (cd 1) doubles as the crystal swat and the
+    // swat was eating the poke's cooldown
+    swatCrystals(myID)
+
+    // Orbit at cast range, don't flee to the horizon
+    var kite = choosePuzzleSustainCellCapped(myID, getCell(), false, 9)
     if (kite != -1 && kite != getCell()) moveTowardCell(kite)
     return true
 }
@@ -1726,6 +1733,14 @@ function puzzleSelfPreserve(myID, leashed) {
 }
 
 function choosePuzzleSustainCell(myID, anchorCell, leashed) {
+    return choosePuzzleSustainCellCapped(myID, anchorCell, leashed, 12)
+}
+
+// armyCap bounds the value of running: past that distance more space scores
+// nothing. The poke carry caps at ~9 (venom range 10) so she orbits at cast
+// range instead of fleeing to the horizon — fight 52977803: unbounded retreat
+// meant every approach exceeded MP and phase 2 never fired a single poke.
+function choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap) {
     var mp = getMP()
     if (mp <= 0) { return -1 }
     var myCell = getCell()
@@ -1743,7 +1758,7 @@ function choosePuzzleSustainCell(myID, anchorCell, leashed) {
         }
         // Army distance dominates: fight 52977548 — ED never escaped the zone
         // and died T6 with ~4700 absorbed; every cell of distance matters
-        var score = min(nearestArmyDistFrom(c, armyCells), 12) * 14
+        var score = min(nearestArmyDistFrom(c, armyCells), armyCap) * 14
         if (isPuzzleWorkZone(c)) score -= 80
         if (leashed) {
             var dS = getCellDistance(c, anchorCell)
