@@ -5650,8 +5650,10 @@ def allAliveEntities():
     return ids
 
 def allyHasChip(eid, chipId):
-    cd = getCooldown(chipId, eid)
-    return (cd != None)
+    chips = getChips(eid)
+    if (chips == None):
+        return False
+    return inArray(chips, chipId)
 
 def isNamedSolver(name):
     return ((name == "AdaLovelace") or (name == "KurtGodel"))

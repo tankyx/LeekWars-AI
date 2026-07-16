@@ -230,8 +230,13 @@ function allAliveEntities() {
 }
 
 function allyHasChip(eid, chipId) {
-    var cd = getCooldown(chipId, eid)
-    return cd != null
+    // getChips is the truth. getCooldown(chip) on the SERVER returns a value
+    // even for unequipped chips (fight 52978546: 432 warnings of every leek
+    // attempting the full generic chip list; local generator returns null so
+    // the sandbox never caught it).
+    var chips = getChips(eid)
+    if (chips == null) { return false }
+    return inArray(chips, chipId)
 }
 
 // Named solvers carry the puzzle chips (grapple/boxing/inversion). Two solvers
