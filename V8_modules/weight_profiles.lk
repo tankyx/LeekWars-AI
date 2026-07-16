@@ -187,14 +187,17 @@ global BOSS_PUZZLE_WEIGHTS = [
     'multiTargetBonus': 0
 ]
 
+// Phase 2 is an attrition war vs 36k army HP (fight 52977665: we dealt ~2.5k
+// total). Poison is the carry weapon: it sticks while kiting, AoE covers the
+// clustered army, and nobody there cures. Kite hard, poison everything.
 global BOSS_COMBAT_WEIGHTS = [
     'burstDamage': 163,
     'weaponUses': 100,
     'tpEfficiency': 50,
-    'dotEffects': 109,
-    'kiteDistance': 0,
+    'dotEffects': 420,
+    'kiteDistance': 80,
     'damageReturn': 0,
-    'poisonStacks': 54,
+    'poisonStacks': 260,
     'shieldValue': 200,
     'healValue': 150,
     'distanceToTarget': -20,
@@ -204,7 +207,7 @@ global BOSS_COMBAT_WEIGHTS = [
     'checkpointBonus': 2500,
     'noDamagePenalty': -2000,
     'antidoteUrgency': 500,
-    'multiTargetBonus': 300
+    'multiTargetBonus': 800
 ]
 
 // Team-support profile (e.g. DuskHope: STR 200 / WIS 300 / RES 300, TP 12).

@@ -4632,7 +4632,7 @@ TANK_SCI_WEIGHTS = {'burstDamage': 50, 'weaponUses': 60, 'tpEfficiency': 50, 'do
 HYBRID_WEIGHTS = {'burstDamage': 109, 'weaponUses': 60, 'tpEfficiency': 50, 'dotEffects': 136, 'kiteDistance': 50, 'damageReturn': 0, 'poisonStacks': 109, 'denialValue': 136, 'shieldValue': 100, 'healValue': 70, 'distanceToTarget': 0, 'threatReduction': 60, 'otkoBonus': 4000, 'checkpointBonus': 2500, 'novaEffects': 109, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2800, 'bulbKillBonusBuffer': 1600, 'bulbKillBonusAttacker': 900, 'multiTargetBonus': 500}
 BRUISER_REFLECT_WEIGHTS = {'burstDamage': 100, 'weaponUses': 65, 'tpEfficiency': 100, 'dotEffects': (-96), 'kiteDistance': (-30), 'damageReturn': 449, 'poisonStacks': 0, 'shieldValue': 200, 'healValue': 4, 'distanceToTarget': (-10), 'threatReduction': 50, 'otkoBonus': 6789, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 741}
 BOSS_PUZZLE_WEIGHTS = {'burstDamage': 0, 'weaponUses': 0, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 0, 'healValue': 50, 'distanceToTarget': (-100), 'threatReduction': 0, 'novaEffects': 0, 'otkoBonus': 0, 'checkpointBonus': 0, 'noDamagePenalty': 0, 'axisAlignment': 2000, 'crystalProximity': 800, 'crystalSolved': 5000, 'multiTargetBonus': 0}
-BOSS_COMBAT_WEIGHTS = {'burstDamage': 163, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': 109, 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 54, 'shieldValue': 200, 'healValue': 150, 'distanceToTarget': (-20), 'threatReduction': 100, 'novaEffects': 109, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'noDamagePenalty': (-2000), 'antidoteUrgency': 500, 'multiTargetBonus': 300}
+BOSS_COMBAT_WEIGHTS = {'burstDamage': 163, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': 420, 'kiteDistance': 80, 'damageReturn': 0, 'poisonStacks': 260, 'shieldValue': 200, 'healValue': 150, 'distanceToTarget': (-20), 'threatReduction': 100, 'novaEffects': 109, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'noDamagePenalty': (-2000), 'antidoteUrgency': 500, 'multiTargetBonus': 800}
 SUPPORT_WEIGHTS = {'burstDamage': 100, 'weaponUses': 80, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 60, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 280, 'healValue': 240, 'distanceToTarget': 0, 'threatReduction': 180, 'otkoBonus': 3000, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 400, 'noDamagePenalty': (-1500), 'allySupport': 350}
 def getWeightsForBuild(buildType, player):
     if (buildType == BUILD_STRENGTH):
@@ -6561,6 +6561,113 @@ def logMapLayout():
             col = lw_add(col, 1)
         debug(line)
         row = lw_add(row, 1)
+
+def executeBossCombatPeel():
+    myID = getEntity()
+    if (getStrength() >= 150):
+        return False
+    if (not allyHasChip(myID, CHIP_BOXING_GLOVE)):
+        return False
+    solverSurvival(myID)
+    carry = (-1)
+    bestPow = (-1)
+    allies = getAliveAllies()
+    for aid in lw_values(allies):
+        p = lw_add(getStrength(aid), getMagic(aid))
+        if (p > bestPow):
+            bestPow = p
+            carry = aid
+    carryCell = (getCell(carry) if (carry != (-1)) else getCell())
+    if ((((carry != (-1)) and (entityHPPercent(carry) < 55)) and (getCellDistance(getCell(), carryCell) <= 3)) and (getTP() >= 8)):
+        rcd = getCooldown(CHIP_REGENERATION, myID)
+        if ((rcd != None) and (rcd == 0)):
+            useChip(CHIP_REGENERATION, carry)
+    swatCrystals(myID)
+    casts = 0
+    while ((getTP() >= 3) and (casts < 8)):
+        if (not peelPushOnce(myID, carryCell)):
+            break
+        casts = lw_add(casts, 1)
+    if (casts > 0):
+        say(lw_add("PZ PEEL x", casts))
+    kite = choosePuzzleSustainCell(myID, carryCell, (carry != (-1)))
+    if ((kite != (-1)) and (kite != getCell())):
+        moveTowardCell(kite)
+    return True
+
+def swatCrystals(myID):
+    dmgChips = [CHIP_LIGHTNING, CHIP_ROCKFALL, CHIP_SPARK, CHIP_PEBBLE]
+    enemies = getAliveEnemies()
+    for eid in lw_values(enemies):
+        if (indexOf(getName(eid), "crystal") == (-1)):
+            continue
+        for chip in lw_values(dmgChips):
+            if (not allyHasChip(myID, chip)):
+                continue
+            cd = getCooldown(chip, myID)
+            if ((cd == None) or (cd > 0)):
+                continue
+            if (getTP() < 5):
+                continue
+            if (useChip(chip, eid) >= 1):
+                break
+
+def peelPushOnce(myID, carryCell):
+    myCell = getCell()
+    enemies = getAliveEnemies()
+    bestTarget = (-1)
+    bestScore = (-9999)
+    for eid in lw_values(enemies):
+        n = getName(eid)
+        if ((n == "graal") or (indexOf(n, "crystal") != (-1))):
+            continue
+        ec = getCell(eid)
+        if ((ec == None) or (ec < 0)):
+            continue
+        if (not isOnSameLine(myCell, ec)):
+            continue
+        dMe = getCellDistance(myCell, ec)
+        if (((dMe == None) or (dMe < 2)) or (dMe > 7)):
+            continue
+        if (not lineOfSight(myCell, ec)):
+            continue
+        dCarry = getCellDistance(ec, carryCell)
+        score = lw_sub(100, lw_mul(((dCarry if (dCarry != None) else 20)), 5))
+        if (score > bestScore):
+            bestScore = score
+            bestTarget = eid
+    if (bestTarget == (-1)):
+        return False
+    ec2 = getCell(bestTarget)
+    step = lineStepFromTo(myCell, ec2)
+    if (step == 0):
+        return False
+    dest = ec2
+    pos = ec2
+    while True:
+        nx = diagNext(pos, step)
+        if (nx == (-1)):
+            break
+        if (isObstacle(nx) or isEntity(nx)):
+            break
+        if (getCellDistance(myCell, nx) > 8):
+            break
+        pos = nx
+        dest = pos
+    if (dest == ec2):
+        return False
+    return (useChipOnCell(CHIP_BOXING_GLOVE, dest) >= 1)
+
+def lineStepFromTo(fromCell, toCell):
+    fx = getCellX(fromCell)
+    fy = getCellY(fromCell)
+    tx = getCellX(toCell)
+    ty = getCellY(toCell)
+    if ((fy == ty) and (tx != fx)):
+        return (18 if (tx > fx) else (-18))
+    if ((fx == tx) and (ty != fy)):
+        return (17 if (ty > fy) else (-17))
+    return 0
 
 def executePuzzleTurn():
     if (((_bossPhase != "PUZZLE") or (_graalCell == None)) or (_graalCell < 0)):
@@ -19473,6 +19580,9 @@ def main():
         bossDiag(getCell())
     if (_isBossFight and (_bossPhase == "PUZZLE")):
         if executePuzzleTurn():
+            return None
+    if (_isBossFight and (_bossPhase == "COMBAT")):
+        if executeBossCombatPeel():
             return None
     target = None
     if (_isBossFight and (_bossPhase == "PUZZLE")):

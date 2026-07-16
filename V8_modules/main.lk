@@ -184,6 +184,9 @@ function main() {
     if (_isBossFight && _bossPhase == "PUZZLE") {
         if (executePuzzleTurn()) return
     }
+    if (_isBossFight && _bossPhase == "COMBAT") {
+        if (executeBossCombatPeel()) return
+    }
 
     var target = null
     if (_isBossFight && _bossPhase == "PUZZLE") {

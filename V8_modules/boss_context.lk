@@ -1141,6 +1141,114 @@ function logMapLayout() {
     }
 }
 
+// ============ Phase 2: peelers ============
+// The respec'd solver-tanks (STR ~0) deal nothing in COMBAT, but BOXING_GLOVE
+// has NO cooldown and grapple/boxing are pure displacement — a 25-TP tank can
+// shove the melee army back ~6 times per turn while the carry (MH poison /
+// ED) does the killing. Full-turn override: shields, peel pushes, heal the
+// carry, bodyguard positioning. Crystals (1 HP, must die to win) get swatted
+// with any damage chip first.
+function executeBossCombatPeel() {
+    var myID = getEntity()
+    if (getStrength() >= 150) { return false }
+    if (!allyHasChip(myID, CHIP_BOXING_GLOVE)) { return false }
+
+    solverSurvival(myID)
+
+    // Carry = strongest alive damage dealer
+    var carry = -1
+    var bestPow = -1
+    var allies = getAliveAllies()
+    for (var aid in allies) {
+        var p = getStrength(aid) + getMagic(aid)
+        if (p > bestPow) { bestPow = p; carry = aid }
+    }
+    var carryCell = carry != -1 ? getCell(carry) : getCell()
+
+    // Emergency heal on the carry
+    if (carry != -1 && entityHPPercent(carry) < 55 && getCellDistance(getCell(), carryCell) <= 3 && getTP() >= 8) {
+        var rcd = getCooldown(CHIP_REGENERATION, myID)
+        if (rcd != null && rcd == 0) useChip(CHIP_REGENERATION, carry)
+    }
+
+    swatCrystals(myID)
+
+    var casts = 0
+    while (getTP() >= 3 && casts < 8) {
+        if (!peelPushOnce(myID, carryCell)) break
+        casts++
+    }
+    if (casts > 0) say("PZ PEEL x" + casts)
+
+    var kite = choosePuzzleSustainCell(myID, carryCell, carry != -1)
+    if (kite != -1 && kite != getCell()) moveTowardCell(kite)
+    return true
+}
+
+// 1-HP crystals die to any damage chip (boxing does NO damage — its secondary
+// effects are caster self-buffs)
+function swatCrystals(myID) {
+    var dmgChips = [CHIP_LIGHTNING, CHIP_ROCKFALL, CHIP_SPARK, CHIP_PEBBLE]
+    var enemies = getAliveEnemies()
+    for (var eid in enemies) {
+        if (indexOf(getName(eid), "crystal") == -1) continue
+        for (var chip in dmgChips) {
+            if (!allyHasChip(myID, chip)) continue
+            var cd = getCooldown(chip, myID)
+            if (cd == null || cd > 0) continue
+            if (getTP() < 5) continue
+            if (useChip(chip, eid) >= 1) break
+        }
+    }
+}
+
+function peelPushOnce(myID, carryCell) {
+    var myCell = getCell()
+    var enemies = getAliveEnemies()
+    var bestTarget = -1
+    var bestScore = -9999
+    for (var eid in enemies) {
+        var n = getName(eid)
+        if (n == "graal" || indexOf(n, "crystal") != -1) continue
+        var ec = getCell(eid)
+        if (ec == null || ec < 0) continue
+        if (!isOnSameLine(myCell, ec)) continue
+        var dMe = getCellDistance(myCell, ec)
+        if (dMe == null || dMe < 2 || dMe > 7) continue
+        if (!lineOfSight(myCell, ec)) continue
+        var dCarry = getCellDistance(ec, carryCell)
+        var score = 100 - (dCarry != null ? dCarry : 20) * 5
+        if (score > bestScore) { bestScore = score; bestTarget = eid }
+    }
+    if (bestTarget == -1) { return false }
+
+    var ec2 = getCell(bestTarget)
+    var step = lineStepFromTo(myCell, ec2)
+    if (step == 0) { return false }
+    var dest = ec2
+    var pos = ec2
+    while (true) {
+        var nx = diagNext(pos, step)
+        if (nx == -1) break
+        if (isObstacle(nx) || isEntity(nx)) break
+        if (getCellDistance(myCell, nx) > 8) break
+        pos = nx
+        dest = pos
+    }
+    if (dest == ec2) { return false }
+    return useChipOnCell(CHIP_BOXING_GLOVE, dest) >= 1
+}
+
+function lineStepFromTo(fromCell, toCell) {
+    var fx = getCellX(fromCell)
+    var fy = getCellY(fromCell)
+    var tx = getCellX(toCell)
+    var ty = getCellY(toCell)
+    if (fy == ty && tx != fx) { return tx > fx ? 18 : -18 }
+    if (fx == tx && ty != fy) { return ty > fy ? 17 : -17 }
+    return 0
+}
+
 function executePuzzleTurn() {
     // Hard gate: no live graal with a real cell means the puzzle is over —
     // fall through to normal combat (the army just became vulnerable)
