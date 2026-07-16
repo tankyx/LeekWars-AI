@@ -138,7 +138,19 @@ function isCellSolvedForAxis(cell, goalAxis) {
     if (_graalCell == -1 || cell == null || cell < 0) return false
     var cx = getCellX(cell)
     var cy = getCellY(cell)
-    return checkOnAxis(cx, cy, _graalX, _graalY, goalAxis) && lineOfSight(cell, _graalCell)
+    if (!checkOnAxis(cx, cy, _graalX, _graalY, goalAxis)) return false
+    // The crystal ray passes through entities, only obstacles block it
+    // (encyclopedia). lineOfSight() is entity-blocked, so ignore everyone alive.
+    return lineOfSight(cell, _graalCell, allAliveEntities())
+}
+
+function allAliveEntities() {
+    var ids = [getEntity()]
+    var enemies = getAliveEnemies()
+    for (var e in enemies) push(ids, e)
+    var allies = getAliveAllies()
+    for (var a in allies) push(ids, a)
+    return ids
 }
 
 function allyHasChip(eid, chipId) {
@@ -261,7 +273,7 @@ function isOnGoalAxis(crystal) {
 
 function hasLOSToGraal(crystal) {
     if (_graalCell == -1) return false
-    return lineOfSight(crystal['cell'], _graalCell)
+    return lineOfSight(crystal['cell'], _graalCell, allAliveEntities())
 }
 
 function isCrystalSolved(crystal) {
@@ -334,7 +346,7 @@ function getTargetAxisCell(ignoredCrystal) {
         else if (axis == "west") sx = gx - d
 
         var scanCell = getCellFromXY(sx, sy)
-        if (scanCell != null && !isObstacle(scanCell) && lineOfSight(scanCell, _graalCell)) {
+        if (scanCell != null && !isObstacle(scanCell) && lineOfSight(scanCell, _graalCell, allAliveEntities())) {
             return scanCell
         }
     }
@@ -909,22 +921,47 @@ function castBuffsOnSolver(myID, buffList) {
 }
 
 function solverSelfBuff(slMyID) {
-    // Self-buff: HP buffs first (turn 1), then recurring TP/MP buffs
+    // Self-buff: HP buffs first (turn 1), then recurring TP/MP buffs, then
+    // rolling shields/heal-over-time — the army fires at us during the puzzle
     var selfBuffs = [
         [CHIP_KNOWLEDGE, 5],
         [CHIP_ELEVATION, 6],
         [CHIP_ARMORING, 5],
         [CHIP_LEATHER_BOOTS, 3],
-        [CHIP_ADRENALINE, 1]
+        [CHIP_ADRENALINE, 1],
+        [CHIP_FORTRESS, 6],
+        [CHIP_WALL, 3],
+        [CHIP_VACCINE, 6]
     ]
     for (var buff in selfBuffs) {
         var chip = buff[0]
         var cost = buff[1]
         if (getTP() < cost) continue
+        if (!allyHasChip(slMyID, chip)) continue
         var cd = getCooldown(chip, slMyID)
         if (cd != null && cd == 0) {
             useChip(chip, slMyID)
         }
+    }
+}
+
+// Survival comes before puzzle progress: called at the start of every solving
+// turn. A dead solver ends the fight — nobody else carries GRAPPLE/BOXING_GLOVE.
+function solverSurvival(slMyID) {
+    var pct = entityHPPercent(slMyID)
+    if (pct < 40 && getTP() >= 8 && allyHasChip(slMyID, CHIP_REGENERATION)) {
+        var rcd = getCooldown(CHIP_REGENERATION, slMyID)
+        if (rcd != null && rcd == 0) {
+            if (useChip(CHIP_REGENERATION, slMyID) >= 1) say("PZ SOLVER: emergency regen")
+        }
+    }
+    if (pct < 75 && getTP() >= 6 && allyHasChip(slMyID, CHIP_FORTRESS)) {
+        var fcd = getCooldown(CHIP_FORTRESS, slMyID)
+        if (fcd != null && fcd == 0) useChip(CHIP_FORTRESS, slMyID)
+    }
+    if (pct < 55 && getTP() >= 3 && allyHasChip(slMyID, CHIP_WALL)) {
+        var wcd = getCooldown(CHIP_WALL, slMyID)
+        if (wcd != null && wcd == 0) useChip(CHIP_WALL, slMyID)
     }
 }
 
@@ -933,6 +970,7 @@ function executeBufferPuzzleTurn() {
 
     if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
         say("PZ BUFFER: no solver")
+        puzzleSelfPreserve(myID)
         return true
     }
 
@@ -953,6 +991,8 @@ function executeBufferPuzzleTurn() {
         [CHIP_ADRENALINE, 3, 1, "adren"]
     ]
     castBuffsOnSolver(myID, buffs)
+    puzzleSustainSolver(myID)
+    puzzleSelfPreserve(myID)
     return true
 }
 
@@ -968,11 +1008,149 @@ function hasPendingSolverHPBuff(myID) {
     return false
 }
 
+// The fennel army: alive enemies that are neither graal nor crystals. During
+// PUZZLE they are invulnerable (Divine Protection) but attack freely — the
+// only counterplay is sustain and spacing.
+function puzzleArmyCells() {
+    var cells = []
+    var enemies = getAliveEnemies()
+    for (var eid in enemies) {
+        var n = getName(eid)
+        if (n == "graal") continue
+        if (indexOf(n, "crystal") != -1) continue
+        push(cells, getCell(eid))
+    }
+    return cells
+}
+
+function nearestArmyDistFrom(cell, armyCells) {
+    var best = 99
+    for (var ac in armyCells) {
+        var d = getCellDistance(cell, ac)
+        if (d != null && d < best) best = d
+    }
+    return best
+}
+
+function entityHPPercent(eid) {
+    var tot = getTotalLife(eid)
+    if (tot == null || tot <= 0) { return 100 }
+    return getLife(eid) * 100 / tot
+}
+
+// Rolling heal + shields on the solver — the actual answer to "solver doesn't
+// tank". Every ally holds REGENERATION (wisdom-scaled ~2000 HP) + shields.
+function puzzleSustainSolver(myID) {
+    if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) { return }
+    var dist = getCellDistance(getCell(), getCell(_puzzleSolverID))
+    var sPct = entityHPPercent(_puzzleSolverID)
+
+    // Emergency heal (once per fight per ally — only under real pressure)
+    if (sPct < 55 && dist <= 3 && allyHasChip(myID, CHIP_REGENERATION)) {
+        var cd = getCooldown(CHIP_REGENERATION, myID)
+        if (cd != null && cd == 0 && getTP() >= 8) {
+            if (useChip(CHIP_REGENERATION, _puzzleSolverID) >= 1) say("PZ HEAL regen -> solver")
+        }
+    }
+
+    // Shields on cooldown while the army is shooting at the solver
+    var shields = [
+        [CHIP_FORTRESS, 3, 6, "fortress"],
+        [CHIP_ARMOR, 4, 6, "armorshield"],
+        [CHIP_RAMPART, 7, 5, "rampart"]
+    ]
+    for (var sh in shields) {
+        var chip = sh[0]
+        var rng = sh[1]
+        var cost = sh[2]
+        var label = sh[3]
+        if (!allyHasChip(myID, chip)) continue
+        if (chip == CHIP_RAMPART && dist < 2) continue
+        var scd = getCooldown(chip, myID)
+        if (scd != null && scd == 0 && getTP() >= cost && dist <= rng) {
+            if (useChip(chip, _puzzleSolverID) >= 1) say("PZ SHIELD " + label + " -> solver")
+        }
+    }
+}
+
+// Ally end-of-turn during PUZZLE: shield self with leftover TP, then reposition —
+// follow the solver (teleport if she jumped into the castle), keep spacing from
+// other allies (the army AoEs punish stacking), and maximize distance to the army.
+function puzzleSelfPreserve(myID) {
+    var selfShields = [
+        [CHIP_FORTRESS, 6],
+        [CHIP_ARMOR, 6],
+        [CHIP_WALL, 3]
+    ]
+    for (var sh in selfShields) {
+        var chip = sh[0]
+        var cost = sh[1]
+        if (!allyHasChip(myID, chip)) continue
+        if (getTP() < cost) continue
+        var cd = getCooldown(chip, myID)
+        if (cd != null && cd == 0) useChip(chip, myID)
+    }
+    if (entityHPPercent(myID) < 40 && allyHasChip(myID, CHIP_REGENERATION) && getTP() >= 8) {
+        var rcd = getCooldown(CHIP_REGENERATION, myID)
+        if (rcd != null && rcd == 0) useChip(CHIP_REGENERATION, myID)
+    }
+
+    var solverAlive = _puzzleSolverID != -1 && isAlive(_puzzleSolverID)
+    var anchorCell = solverAlive ? getCell(_puzzleSolverID) : getCell()
+    var distToSolver = getCellDistance(getCell(), anchorCell)
+
+    // Follow the solver when she outruns us (teleport into the castle behind her)
+    if (solverAlive && distToSolver > 8) {
+        var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
+        if (tpCd != null && tpCd == 0 && getTP() >= 9) {
+            var tc = findEmptyCellNear(anchorCell, getCell(), 12)
+            if (tc != -1) useChipOnCell(CHIP_TELEPORTATION, tc)
+        }
+        moveTowardCell(anchorCell)
+        return
+    }
+
+    var best = choosePuzzleSustainCell(myID, anchorCell, solverAlive)
+    if (best != -1 && best != getCell()) moveTowardCell(best)
+}
+
+function choosePuzzleSustainCell(myID, anchorCell, leashed) {
+    var mp = getMP()
+    if (mp <= 0) { return -1 }
+    var myCell = getCell()
+    var armyCells = puzzleArmyCells()
+    var allies = getAliveAllies()
+    var best = -1
+    var bestScore = -99999
+    for (var c = 0; c < 613; c++) {
+        var dMe = getCellDistance(myCell, c)
+        if (dMe == null || dMe > mp) continue
+        if (c != myCell && (isObstacle(c) || isEntity(c))) continue
+        if (c != myCell) {
+            var pl = getPathLength(myCell, c)
+            if (pl == null || pl > mp) continue
+        }
+        var score = min(nearestArmyDistFrom(c, armyCells), 9) * 10
+        if (leashed) {
+            var dS = getCellDistance(c, anchorCell)
+            if (dS != null && dS > 4) score -= (dS - 4) * 12
+        }
+        for (var aid in allies) {
+            if (aid == _puzzleSolverID) continue
+            var dA = getCellDistance(c, getCell(aid))
+            if (dA != null && dA < 2) score -= 25
+        }
+        if (score > bestScore) { bestScore = score; best = c }
+    }
+    return best
+}
+
 function executeSupportPuzzleTurn() {
     var myID = getEntity()
 
     if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
         say("PZ SUPPORT: no solver")
+        puzzleSelfPreserve(myID)
         return true
     }
 
@@ -980,7 +1158,7 @@ function executeSupportPuzzleTurn() {
     var dist = getCellDistance(getCell(), solverCell)
 
     // Support needs range 3 for ARMORING — close on the solver while it still
-    // has undelivered HP buffs, then stay put
+    // has undelivered HP buffs
     if (getTurn() <= 3 && dist > 3 && hasPendingSolverHPBuff(myID)) {
         puzzleGatherMove(myID, solverCell)
     }
@@ -993,6 +1171,8 @@ function executeSupportPuzzleTurn() {
         [CHIP_ADRENALINE, 3, 1, "adren"]
     ]
     castBuffsOnSolver(myID, buffs)
+    puzzleSustainSolver(myID)
+    puzzleSelfPreserve(myID)
     return true
 }
 
@@ -1023,6 +1203,9 @@ function executeSolverPuzzleTurn() {
     }
     // One-way gate: a late buff landing mid-solve must not pull us back into waiting
     _pzGatherDone = true
+
+    // Under fire from the invulnerable army: shield/heal before spending TP on pushes
+    solverSurvival(myID)
 
     // Pick first crystal target for teleportation
     var firstEID = pickNearestUnsolvedCrystal(myCell)
@@ -1142,7 +1325,7 @@ function executeSolverPuzzleTurn() {
                     else if (axis == "west") ax = _graalX - d
                     var axCell = getCellFromXY(ax, ay)
                     if (axCell == null || isObstacle(axCell)) continue
-                    if (!lineOfSight(axCell, _graalCell)) continue
+                    if (!lineOfSight(axCell, _graalCell, allAliveEntities())) continue
                     if (!isOnSameLine(axCell, crystalCell)) continue
                     var invDist = getCellDistance(axCell, crystalCell)
                     if (invDist == null || invDist < 1 || invDist > 14) continue

@@ -5580,7 +5580,19 @@ def isCellSolvedForAxis(cell, goalAxis):
         return False
     cx = getCellX(cell)
     cy = getCellY(cell)
-    return (checkOnAxis(cx, cy, _graalX, _graalY, goalAxis) and lineOfSight(cell, _graalCell))
+    if (not checkOnAxis(cx, cy, _graalX, _graalY, goalAxis)):
+        return False
+    return lineOfSight(cell, _graalCell, allAliveEntities())
+
+def allAliveEntities():
+    ids = [getEntity()]
+    enemies = getAliveEnemies()
+    for e in lw_values(enemies):
+        push(ids, e)
+    allies = getAliveAllies()
+    for a in lw_values(allies):
+        push(ids, a)
+    return ids
 
 def allyHasChip(eid, chipId):
     cd = getCooldown(chipId, eid)
@@ -5692,7 +5704,7 @@ def isOnGoalAxis(crystal):
 def hasLOSToGraal(crystal):
     if (_graalCell == (-1)):
         return False
-    return lineOfSight(lw_get(crystal, 'cell'), _graalCell)
+    return lineOfSight(lw_get(crystal, 'cell'), _graalCell, allAliveEntities())
 
 def isCrystalSolved(crystal):
     return isCellSolvedForAxis(lw_get(crystal, 'cell'), lw_get(crystal, 'goalAxis'))
@@ -5776,7 +5788,7 @@ def getTargetAxisCell(ignoredCrystal):
                     if (axis == "west"):
                         sx = lw_sub(gx, d)
         scanCell = getCellFromXY(sx, sy)
-        if (((scanCell != None) and (not isObstacle(scanCell))) and lineOfSight(scanCell, _graalCell)):
+        if (((scanCell != None) and (not isObstacle(scanCell))) and lineOfSight(scanCell, _graalCell, allAliveEntities())):
             return scanCell
         d = lw_add(d, 1)
     return (-1)
@@ -6379,20 +6391,39 @@ def castBuffsOnSolver(myID, buffList):
                 say(lw_add(lw_add("PZ BUFF ", label), " -> solver"))
 
 def solverSelfBuff(slMyID):
-    selfBuffs = [[CHIP_KNOWLEDGE, 5], [CHIP_ELEVATION, 6], [CHIP_ARMORING, 5], [CHIP_LEATHER_BOOTS, 3], [CHIP_ADRENALINE, 1]]
+    selfBuffs = [[CHIP_KNOWLEDGE, 5], [CHIP_ELEVATION, 6], [CHIP_ARMORING, 5], [CHIP_LEATHER_BOOTS, 3], [CHIP_ADRENALINE, 1], [CHIP_FORTRESS, 6], [CHIP_WALL, 3], [CHIP_VACCINE, 6]]
     for buff in lw_values(selfBuffs):
         chip = lw_get(buff, 0)
         cost = lw_get(buff, 1)
         if (getTP() < cost):
             continue
+        if (not allyHasChip(slMyID, chip)):
+            continue
         cd = getCooldown(chip, slMyID)
         if ((cd != None) and (cd == 0)):
             useChip(chip, slMyID)
+
+def solverSurvival(slMyID):
+    pct = entityHPPercent(slMyID)
+    if (((pct < 40) and (getTP() >= 8)) and allyHasChip(slMyID, CHIP_REGENERATION)):
+        rcd = getCooldown(CHIP_REGENERATION, slMyID)
+        if ((rcd != None) and (rcd == 0)):
+            if (useChip(CHIP_REGENERATION, slMyID) >= 1):
+                say("PZ SOLVER: emergency regen")
+    if (((pct < 75) and (getTP() >= 6)) and allyHasChip(slMyID, CHIP_FORTRESS)):
+        fcd = getCooldown(CHIP_FORTRESS, slMyID)
+        if ((fcd != None) and (fcd == 0)):
+            useChip(CHIP_FORTRESS, slMyID)
+    if (((pct < 55) and (getTP() >= 3)) and allyHasChip(slMyID, CHIP_WALL)):
+        wcd = getCooldown(CHIP_WALL, slMyID)
+        if ((wcd != None) and (wcd == 0)):
+            useChip(CHIP_WALL, slMyID)
 
 def executeBufferPuzzleTurn():
     myID = getEntity()
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
         say("PZ BUFFER: no solver")
+        puzzleSelfPreserve(myID)
         return True
     bufSolverCell = getCell(_puzzleSolverID)
     bufDist = getCellDistance(getCell(), bufSolverCell)
@@ -6400,6 +6431,8 @@ def executeBufferPuzzleTurn():
         puzzleGatherMove(myID, bufSolverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_RAGE, 8, 4, "rage"], [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
+    puzzleSustainSolver(myID)
+    puzzleSelfPreserve(myID)
     return True
 
 def hasPendingSolverHPBuff(myID):
@@ -6412,10 +6445,133 @@ def hasPendingSolverHPBuff(myID):
             return True
     return False
 
+def puzzleArmyCells():
+    cells = []
+    enemies = getAliveEnemies()
+    for eid in lw_values(enemies):
+        n = getName(eid)
+        if (n == "graal"):
+            continue
+        if (indexOf(n, "crystal") != (-1)):
+            continue
+        push(cells, getCell(eid))
+    return cells
+
+def nearestArmyDistFrom(cell, armyCells):
+    best = 99
+    for ac in lw_values(armyCells):
+        d = getCellDistance(cell, ac)
+        if ((d != None) and (d < best)):
+            best = d
+    return best
+
+def entityHPPercent(eid):
+    tot = getTotalLife(eid)
+    if ((tot == None) or (tot <= 0)):
+        return 100
+    return lw_div(lw_mul(getLife(eid), 100), tot)
+
+def puzzleSustainSolver(myID):
+    if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
+        return None
+    dist = getCellDistance(getCell(), getCell(_puzzleSolverID))
+    sPct = entityHPPercent(_puzzleSolverID)
+    if (((sPct < 55) and (dist <= 3)) and allyHasChip(myID, CHIP_REGENERATION)):
+        cd = getCooldown(CHIP_REGENERATION, myID)
+        if (((cd != None) and (cd == 0)) and (getTP() >= 8)):
+            if (useChip(CHIP_REGENERATION, _puzzleSolverID) >= 1):
+                say("PZ HEAL regen -> solver")
+    shields = [[CHIP_FORTRESS, 3, 6, "fortress"], [CHIP_ARMOR, 4, 6, "armorshield"], [CHIP_RAMPART, 7, 5, "rampart"]]
+    for sh in lw_values(shields):
+        chip = lw_get(sh, 0)
+        rng = lw_get(sh, 1)
+        cost = lw_get(sh, 2)
+        label = lw_get(sh, 3)
+        if (not allyHasChip(myID, chip)):
+            continue
+        if ((chip == CHIP_RAMPART) and (dist < 2)):
+            continue
+        scd = getCooldown(chip, myID)
+        if ((((scd != None) and (scd == 0)) and (getTP() >= cost)) and (dist <= rng)):
+            if (useChip(chip, _puzzleSolverID) >= 1):
+                say(lw_add(lw_add("PZ SHIELD ", label), " -> solver"))
+
+def puzzleSelfPreserve(myID):
+    selfShields = [[CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_WALL, 3]]
+    for sh in lw_values(selfShields):
+        chip = lw_get(sh, 0)
+        cost = lw_get(sh, 1)
+        if (not allyHasChip(myID, chip)):
+            continue
+        if (getTP() < cost):
+            continue
+        cd = getCooldown(chip, myID)
+        if ((cd != None) and (cd == 0)):
+            useChip(chip, myID)
+    if (((entityHPPercent(myID) < 40) and allyHasChip(myID, CHIP_REGENERATION)) and (getTP() >= 8)):
+        rcd = getCooldown(CHIP_REGENERATION, myID)
+        if ((rcd != None) and (rcd == 0)):
+            useChip(CHIP_REGENERATION, myID)
+    solverAlive = ((_puzzleSolverID != (-1)) and isAlive(_puzzleSolverID))
+    anchorCell = (getCell(_puzzleSolverID) if solverAlive else getCell())
+    distToSolver = getCellDistance(getCell(), anchorCell)
+    if (solverAlive and (distToSolver > 8)):
+        tpCd = getCooldown(CHIP_TELEPORTATION, myID)
+        if (((tpCd != None) and (tpCd == 0)) and (getTP() >= 9)):
+            tc = findEmptyCellNear(anchorCell, getCell(), 12)
+            if (tc != (-1)):
+                useChipOnCell(CHIP_TELEPORTATION, tc)
+        moveTowardCell(anchorCell)
+        return None
+    best = choosePuzzleSustainCell(myID, anchorCell, solverAlive)
+    if ((best != (-1)) and (best != getCell())):
+        moveTowardCell(best)
+
+def choosePuzzleSustainCell(myID, anchorCell, leashed):
+    mp = getMP()
+    if (mp <= 0):
+        return (-1)
+    myCell = getCell()
+    armyCells = puzzleArmyCells()
+    allies = getAliveAllies()
+    best = (-1)
+    bestScore = (-99999)
+    c = 0
+    while (c < 613):
+        dMe = getCellDistance(myCell, c)
+        if ((dMe == None) or (dMe > mp)):
+            c = lw_add(c, 1)
+            continue
+        if ((c != myCell) and ((isObstacle(c) or isEntity(c)))):
+            c = lw_add(c, 1)
+            continue
+        if (c != myCell):
+            pl = getPathLength(myCell, c)
+            if ((pl == None) or (pl > mp)):
+                c = lw_add(c, 1)
+                continue
+        score = lw_mul(min(nearestArmyDistFrom(c, armyCells), 9), 10)
+        if leashed:
+            dS = getCellDistance(c, anchorCell)
+            if ((dS != None) and (dS > 4)):
+                score = lw_num(score) - lw_num(lw_mul((lw_sub(dS, 4)), 12))
+        for aid in lw_values(allies):
+            if (aid == _puzzleSolverID):
+                continue
+            dA = getCellDistance(c, getCell(aid))
+            if ((dA != None) and (dA < 2)):
+                score = lw_num(score) - lw_num(25)
+        if (score > bestScore):
+            bestScore = score
+            best = c
+        c = lw_add(c, 1)
+    return best
+
 def executeSupportPuzzleTurn():
     myID = getEntity()
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
         say("PZ SUPPORT: no solver")
+        puzzleSelfPreserve(myID)
         return True
     solverCell = getCell(_puzzleSolverID)
     dist = getCellDistance(getCell(), solverCell)
@@ -6423,6 +6579,8 @@ def executeSupportPuzzleTurn():
         puzzleGatherMove(myID, solverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
+    puzzleSustainSolver(myID)
+    puzzleSelfPreserve(myID)
     return True
 
 def executeSolverPuzzleTurn():
@@ -6446,6 +6604,7 @@ def executeSolverPuzzleTurn():
         _pzSolverMaxLifeSnapshot = getTotalLife(myID)
         return True
     _pzGatherDone = True
+    solverSurvival(myID)
     firstEID = pickNearestUnsolvedCrystal(myCell)
     if (firstEID == None):
         say("PZ SOLVER: all done")
@@ -6538,7 +6697,7 @@ def executeSolverPuzzleTurn():
                     if ((axCell == None) or isObstacle(axCell)):
                         d = lw_add(d, 1)
                         continue
-                    if (not lineOfSight(axCell, _graalCell)):
+                    if (not lineOfSight(axCell, _graalCell, allAliveEntities())):
                         d = lw_add(d, 1)
                         continue
                     if (not isOnSameLine(axCell, crystalCell)):
