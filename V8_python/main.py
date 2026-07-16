@@ -6650,8 +6650,9 @@ def executeBossCombatPoke():
         if ((pd != None) and (pd < nearestPath)):
             nearestPath = pd
             nearestC = ac
-    if ((nearestC != (-1)) and (nearestPath > 9)):
-        moveTowardCell(nearestC, min(getMP(), lw_sub(nearestPath, 8)))
+    approachGate = (9 if (casted > 0) else 6)
+    if ((nearestC != (-1)) and (nearestPath > approachGate)):
+        moveTowardCell(nearestC, min(getMP(), lw_sub(nearestPath, (lw_sub(approachGate, 1)))))
     else:
         kite = choosePuzzleSustainCellCapped(myID, getCell(), False, 9)
         if ((kite != (-1)) and (kite != getCell())):
@@ -7206,6 +7207,9 @@ def choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap):
 
 def executeSupportPuzzleTurn():
     myID = getEntity()
+    if (getStrength() >= 300):
+        puzzleSelfPreserve(myID, False)
+        return True
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
         say("PZ SUPPORT: no solver")
         puzzleSelfPreserve(myID, False)

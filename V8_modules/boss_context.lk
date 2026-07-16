@@ -1253,16 +1253,18 @@ function executeBossCombatPoke() {
     swatCrystals(myID)
 
     // Orbit movement. Manhattan distance LIES around the castle walls (sandbox:
-    // "d=10" needed a 14-cell walk), so gate on PATH length: approach when the
-    // army is out of poke reach, retreat only when genuinely close.
+    // "d=10" needed a 14-cell walk), so gate on PATH length. If nothing was
+    // cast this turn, close in even from the 6-9 band — sitting at
+    // wall-blocked distance 8-10 pokes zero forever (fight 52978134 T7-T10).
     var nearestC = -1
     var nearestPath = 9999
     for (var ac in armyCells) {
         var pd = getPathLength(getCell(), ac)
         if (pd != null && pd < nearestPath) { nearestPath = pd; nearestC = ac }
     }
-    if (nearestC != -1 && nearestPath > 9) {
-        moveTowardCell(nearestC, min(getMP(), nearestPath - 8))
+    var approachGate = casted > 0 ? 9 : 6
+    if (nearestC != -1 && nearestPath > approachGate) {
+        moveTowardCell(nearestC, min(getMP(), nearestPath - (approachGate - 1)))
     } else {
         var kite = choosePuzzleSustainCellCapped(myID, getCell(), false, 9)
         if (kite != -1 && kite != getCell()) moveTowardCell(kite)
@@ -1880,6 +1882,14 @@ function choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap) {
 
 function executeSupportPuzzleTurn() {
     var myID = getEntity()
+
+    // Phase-2 carries (high STR) are worth more alive than their buffs: ED ate
+    // a ~2000 alpha at T2 during delivery in 6 of 8 fights and phase 2 started
+    // without its only damage dealer. Scatter from turn 1, deliver nothing.
+    if (getStrength() >= 300) {
+        puzzleSelfPreserve(myID, false)
+        return true
+    }
 
     if (_puzzleSolverID == -1 || !isAlive(_puzzleSolverID)) {
         say("PZ SUPPORT: no solver")
