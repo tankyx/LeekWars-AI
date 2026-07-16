@@ -6565,6 +6565,102 @@ def logMapLayout():
         debug(line)
         row = lw_add(row, 1)
 
+def executeBossCombatPoke():
+    myID = getEntity()
+    if (getMagic() < 300):
+        return False
+    solverSurvival(myID)
+    swatCrystals(myID)
+    armyCells = puzzleArmyCells()
+    if (count(armyCells) == 0):
+        return False
+    casted = 0
+    if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells):
+        casted = lw_add(casted, 1)
+    if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells):
+        casted = lw_add(casted, 1)
+    if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells):
+        casted = lw_add(casted, 1)
+    if (casted > 0):
+        say(lw_add("PZ POKE x", casted))
+    kite = choosePuzzleSustainCell(myID, getCell(), False)
+    if ((kite != (-1)) and (kite != getCell())):
+        moveTowardCell(kite)
+    return True
+
+def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells):
+    if (not allyHasChip(myID, chip)):
+        return False
+    if (getTP() < cost):
+        return False
+    cd = getCooldown(chip, myID)
+    if ((cd == None) or (cd > 0)):
+        return False
+    allies = getAliveAllies()
+    bestAim = (-1)
+    bestCluster = 0
+    for aim in lw_values(armyCells):
+        cluster = 0
+        for ac in lw_values(armyCells):
+            d = getCellDistance(aim, ac)
+            if ((d != None) and (d <= radius)):
+                cluster = lw_add(cluster, 1)
+        if (cluster < minCluster):
+            continue
+        allyHit = False
+        for aid in lw_values(allies):
+            dA = getCellDistance(aim, getCell(aid))
+            if ((dA != None) and (dA <= radius)):
+                allyHit = True
+        if allyHit:
+            continue
+        if (cluster > bestCluster):
+            bestCluster = cluster
+            bestAim = aim
+    if (bestAim == (-1)):
+        return False
+    myCell = getCell()
+    dAim = getCellDistance(myCell, bestAim)
+    if (dAim == None):
+        return False
+    if ((dAim > rng) or (not lineOfSight(myCell, bestAim))):
+        mp = getMP()
+        if (mp <= 0):
+            return False
+        bestStand = (-1)
+        bestScore = (-9999)
+        c = 0
+        while (c < 613):
+            dMe = getCellDistance(myCell, c)
+            if ((dMe == None) or (dMe > mp)):
+                c = lw_add(c, 1)
+                continue
+            if ((c != myCell) and ((isObstacle(c) or isEntity(c)))):
+                c = lw_add(c, 1)
+                continue
+            dC = getCellDistance(c, bestAim)
+            if (((dC == None) or (dC < 1)) or (dC > rng)):
+                c = lw_add(c, 1)
+                continue
+            pl = getPathLength(myCell, c)
+            if ((pl == None) or (pl > mp)):
+                c = lw_add(c, 1)
+                continue
+            if (not lineOfSight(c, bestAim)):
+                c = lw_add(c, 1)
+                continue
+            sc = lw_sub(lw_mul(nearestArmyDistFrom(c, armyCells), 3), pl)
+            if (sc > bestScore):
+                bestScore = sc
+                bestStand = c
+            c = lw_add(c, 1)
+        if (bestStand == (-1)):
+            return False
+        moveTowardCell(bestStand)
+        if (getCell() != bestStand):
+            return False
+    return (useChipOnCell(chip, bestAim) >= 1)
+
 def executeBossCombatPeel():
     myID = getEntity()
     if (getStrength() >= 150):
@@ -6589,6 +6685,11 @@ def executeBossCombatPeel():
     casts = 0
     while ((getTP() >= 3) and (casts < 8)):
         if (not peelPushOnce(myID, carryCell)):
+            if ((casts == 0) and peelAlignMove(myID, carryCell)):
+                if (not peelPushOnce(myID, carryCell)):
+                    break
+                casts = lw_add(casts, 1)
+                continue
             break
         casts = lw_add(casts, 1)
     if (casts > 0):
@@ -6598,8 +6699,72 @@ def executeBossCombatPeel():
         moveTowardCell(kite)
     return True
 
+def peelAlignMove(myID, carryCell):
+    mp = getMP()
+    if (mp <= 0):
+        return False
+    myCell = getCell()
+    enemies = getAliveEnemies()
+    targets = []
+    for eid in lw_values(enemies):
+        n = getName(eid)
+        if ((n == "graal") or (indexOf(n, "crystal") != (-1))):
+            continue
+        ec = getCell(eid)
+        if ((ec == None) or (ec < 0)):
+            continue
+        dC = getCellDistance(ec, carryCell)
+        push(targets, [(dC if (dC != None) else 99), ec])
+    if (count(targets) == 0):
+        return False
+    used = {}
+    nChecked = 0
+    while (nChecked < 3):
+        bi = (-1)
+        bd = 9999
+        i = 0
+        while (i < count(targets)):
+            if mapContainsKey(used, i):
+                i = lw_add(i, 1)
+                continue
+            if (lw_get(lw_get(targets, i), 0) < bd):
+                bd = lw_get(lw_get(targets, i), 0)
+                bi = i
+            i = lw_add(i, 1)
+        if (bi == (-1)):
+            break
+        lw_put(used, bi, True)
+        nChecked = lw_add(nChecked, 1)
+        ec2 = lw_get(lw_get(targets, bi), 1)
+        ex = getCellX(ec2)
+        ey = getCellY(ec2)
+        bestCell = (-1)
+        bestPl = 999
+        k = 2
+        while (k <= 7):
+            cands = [getCellFromXY(lw_add(ex, k), ey), getCellFromXY(lw_sub(ex, k), ey), getCellFromXY(ex, lw_add(ey, k)), getCellFromXY(ex, lw_sub(ey, k))]
+            for c in lw_values(cands):
+                if ((c == None) or (c < 0)):
+                    continue
+                if ((c != myCell) and ((isObstacle(c) or isEntity(c)))):
+                    continue
+                pl = getPathLength(myCell, c)
+                if (((pl == None) or (pl > mp)) or (pl >= bestPl)):
+                    continue
+                if (not lineOfSight(c, ec2)):
+                    continue
+                bestPl = pl
+                bestCell = c
+            k = lw_add(k, 1)
+        if (bestCell != (-1)):
+            if (bestCell == myCell):
+                return True
+            moveTowardCell(bestCell)
+            return (getCell() == bestCell)
+    return False
+
 def swatCrystals(myID):
-    dmgChips = [CHIP_LIGHTNING, CHIP_ROCKFALL, CHIP_SPARK, CHIP_PEBBLE]
+    dmgChips = [CHIP_LIGHTNING, CHIP_ROCKFALL, CHIP_SPARK, CHIP_PEBBLE, CHIP_VENOM]
     enemies = getAliveEnemies()
     for eid in lw_values(enemies):
         if (indexOf(getName(eid), "crystal") == (-1)):
@@ -19598,6 +19763,8 @@ def main():
         if executePuzzleTurn():
             return None
     if (_isBossFight and (_bossPhase == "COMBAT")):
+        if executeBossCombatPoke():
+            return None
         if executeBossCombatPeel():
             return None
     target = None

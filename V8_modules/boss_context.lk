@@ -1149,6 +1149,89 @@ function logMapLayout() {
     }
 }
 
+// ============ Phase 2: poison poke (the carry) ============
+// The scenario pipeline's death-prediction vs 8 enemies keeps the MAG carry
+// permanently out of cast range (fight 52977750: ~300 poison damage in 8
+// turns). Scripted poke-and-run: shields/antidote, step into range, dump
+// AoE poisons on the army cluster, retreat with leftover MP. Poison keeps
+// ticking while kiting and the army carries no cure.
+function executeBossCombatPoke() {
+    var myID = getEntity()
+    if (getMagic() < 300) { return false }
+
+    solverSurvival(myID)
+    swatCrystals(myID)
+
+    var armyCells = puzzleArmyCells()
+    if (count(armyCells) == 0) { return false }
+
+    var casted = 0
+    if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells)) casted++
+    if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells)) casted++
+    if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells)) casted++
+    if (casted > 0) say("PZ POKE x" + casted)
+
+    var kite = choosePuzzleSustainCell(myID, getCell(), false)
+    if (kite != -1 && kite != getCell()) moveTowardCell(kite)
+    return true
+}
+
+// Pick the aim cell with the biggest army cluster (no ally in the blast),
+// walk into cast range if needed, fire.
+function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells) {
+    if (!allyHasChip(myID, chip)) { return false }
+    if (getTP() < cost) { return false }
+    var cd = getCooldown(chip, myID)
+    if (cd == null || cd > 0) { return false }
+
+    var allies = getAliveAllies()
+    var bestAim = -1
+    var bestCluster = 0
+    for (var aim in armyCells) {
+        var cluster = 0
+        for (var ac in armyCells) {
+            var d = getCellDistance(aim, ac)
+            if (d != null && d <= radius) cluster++
+        }
+        if (cluster < minCluster) continue
+        var allyHit = false
+        for (var aid in allies) {
+            var dA = getCellDistance(aim, getCell(aid))
+            if (dA != null && dA <= radius) allyHit = true
+        }
+        if (allyHit) continue
+        if (cluster > bestCluster) { bestCluster = cluster; bestAim = aim }
+    }
+    if (bestAim == -1) { return false }
+
+    var myCell = getCell()
+    var dAim = getCellDistance(myCell, bestAim)
+    if (dAim == null) { return false }
+    if (dAim > rng || !lineOfSight(myCell, bestAim)) {
+        // Approach: cheapest reachable cell that can cast on the aim
+        var mp = getMP()
+        if (mp <= 0) { return false }
+        var bestStand = -1
+        var bestScore = -9999
+        for (var c = 0; c < 613; c++) {
+            var dMe = getCellDistance(myCell, c)
+            if (dMe == null || dMe > mp) continue
+            if (c != myCell && (isObstacle(c) || isEntity(c))) continue
+            var dC = getCellDistance(c, bestAim)
+            if (dC == null || dC < 1 || dC > rng) continue
+            var pl = getPathLength(myCell, c)
+            if (pl == null || pl > mp) continue
+            if (!lineOfSight(c, bestAim)) continue
+            var sc = nearestArmyDistFrom(c, armyCells) * 3 - pl
+            if (sc > bestScore) { bestScore = sc; bestStand = c }
+        }
+        if (bestStand == -1) { return false }
+        moveTowardCell(bestStand)
+        if (getCell() != bestStand) { return false }
+    }
+    return useChipOnCell(chip, bestAim) >= 1
+}
+
 // ============ Phase 2: peelers ============
 // The respec'd solver-tanks (STR ~0) deal nothing in COMBAT, but BOXING_GLOVE
 // has NO cooldown and grapple/boxing are pure displacement — a 25-TP tank can
@@ -1183,7 +1266,17 @@ function executeBossCombatPeel() {
 
     var casts = 0
     while (getTP() >= 3 && casts < 8) {
-        if (!peelPushOnce(myID, carryCell)) break
+        if (!peelPushOnce(myID, carryCell)) {
+            // No aligned target — spend MP to line up with the enemy nearest
+            // the carry (fight 52977750: zero peels all fight, alignment never
+            // happened by chance)
+            if (casts == 0 && peelAlignMove(myID, carryCell)) {
+                if (!peelPushOnce(myID, carryCell)) break
+                casts++
+                continue
+            }
+            break
+        }
         casts++
     }
     if (casts > 0) say("PZ PEEL x" + casts)
@@ -1193,10 +1286,69 @@ function executeBossCombatPeel() {
     return true
 }
 
+// Move onto the row/column of the army unit closest to the carry, at push
+// distance 2-7 with clear LoS
+function peelAlignMove(myID, carryCell) {
+    var mp = getMP()
+    if (mp <= 0) { return false }
+    var myCell = getCell()
+    var enemies = getAliveEnemies()
+    var targets = []
+    for (var eid in enemies) {
+        var n = getName(eid)
+        if (n == "graal" || indexOf(n, "crystal") != -1) continue
+        var ec = getCell(eid)
+        if (ec == null || ec < 0) continue
+        var dC = getCellDistance(ec, carryCell)
+        push(targets, [dC != null ? dC : 99, ec])
+    }
+    if (count(targets) == 0) { return false }
+
+    // Up to 3 nearest to the carry, manual selection (sort() on nested arrays
+    // has unreliable semantics in LS)
+    var used = [:]
+    var nChecked = 0
+    while (nChecked < 3) {
+        var bi = -1
+        var bd = 9999
+        for (var i = 0; i < count(targets); i++) {
+            if (mapContainsKey(used, i)) continue
+            if (targets[i][0] < bd) { bd = targets[i][0]; bi = i }
+        }
+        if (bi == -1) break
+        used[bi] = true
+        nChecked++
+        var ec2 = targets[bi][1]
+        var ex = getCellX(ec2)
+        var ey = getCellY(ec2)
+        var bestCell = -1
+        var bestPl = 999
+        for (var k = 2; k <= 7; k++) {
+            var cands = [getCellFromXY(ex + k, ey), getCellFromXY(ex - k, ey), getCellFromXY(ex, ey + k), getCellFromXY(ex, ey - k)]
+            for (var c in cands) {
+                if (c == null || c < 0) continue
+                if (c != myCell && (isObstacle(c) || isEntity(c))) continue
+                var pl = getPathLength(myCell, c)
+                if (pl == null || pl > mp || pl >= bestPl) continue
+                if (!lineOfSight(c, ec2)) continue
+                bestPl = pl
+                bestCell = c
+            }
+        }
+        if (bestCell != -1) {
+            if (bestCell == myCell) { return true }
+            moveTowardCell(bestCell)
+            return getCell() == bestCell
+        }
+    }
+    return false
+}
+
 // 1-HP crystals die to any damage chip (boxing does NO damage — its secondary
 // effects are caster self-buffs)
 function swatCrystals(myID) {
-    var dmgChips = [CHIP_LIGHTNING, CHIP_ROCKFALL, CHIP_SPARK, CHIP_PEBBLE]
+    // Venom included: a poison tick kills a 1-HP crystal on its next turn
+    var dmgChips = [CHIP_LIGHTNING, CHIP_ROCKFALL, CHIP_SPARK, CHIP_PEBBLE, CHIP_VENOM]
     var enemies = getAliveEnemies()
     for (var eid in enemies) {
         if (indexOf(getName(eid), "crystal") == -1) continue
