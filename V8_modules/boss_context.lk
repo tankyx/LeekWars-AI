@@ -1214,7 +1214,10 @@ function logMapLayout() {
 // ticking while kiting and the army carries no cure.
 function executeBossCombatPoke() {
     var myID = getEntity()
-    if (getMagic() < 300) { return false }
+    // MAG carries poke poison; STR carries poke plasma + ranged weapon.
+    // Fight 52978166: ED's normal pipeline ENGAGED at T8 (959 damage) and he
+    // was dead at T9 — one turn of damage for a life. Orbit strikes sustain.
+    if (getMagic() < 300 && getStrength() < 300) { return false }
 
     solverSurvival(myID)
 
@@ -1230,6 +1233,13 @@ function executeBossCombatPoke() {
     if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, false)) casted++
     if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, false)) casted++
 
+    // STR carry strikes: plasma on clusters (MULTIPLIED_BY_TARGETS) + double
+    // enhanced lightninger from the 6-10 orbit band
+    if (getStrength() >= 300) {
+        if (tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, false)) casted++
+        casted += tryWeaponStrike(myID)
+    }
+
     // Pass 2: nothing reached — ONE committed approach, longest range first
     // (fight 52978075: plague's deep approach burned the MP venom needed;
     // per-chip movement races starved each other every turn)
@@ -1237,9 +1247,11 @@ function executeBossCombatPoke() {
         if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, true)) casted++
         else if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, true)) casted++
         else if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, true)) casted++
+        else if (getStrength() >= 300 && tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, true)) casted++
         if (casted > 0) {
             if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, false)) casted++
             if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, false)) casted++
+            if (getStrength() >= 300) casted += tryWeaponStrike(myID)
         }
     }
     if (casted > 0) {
@@ -1270,6 +1282,44 @@ function executeBossCombatPoke() {
         if (kite != -1 && kite != getCell()) moveTowardCell(kite)
     }
     return true
+}
+
+// Double Enhanced Lightninger from the 6-10 band (square-1 AoE: skip targets
+// with an ally adjacent). Crystals included — they must die to win.
+function tryWeaponStrike(myID) {
+    var weps = getWeapons()
+    if (weps == null || !inArray(weps, WEAPON_ENHANCED_LIGHTNINGER)) { return 0 }
+    if (getWeapon() != WEAPON_ENHANCED_LIGHTNINGER) {
+        if (getTP() < 10) { return 0 }
+        setWeapon(WEAPON_ENHANCED_LIGHTNINGER)
+    }
+    var allies = getAliveAllies()
+    var n = 0
+    while (getTP() >= 9 && n < 2) {
+        var myCell = getCell()
+        var enemies = getAliveEnemies()
+        var best = null
+        var bestD = 999
+        for (var eid in enemies) {
+            if (getName(eid) == "graal") continue
+            var ec = getCell(eid)
+            if (ec == null || ec < 0) continue
+            var dd = getCellDistance(myCell, ec)
+            if (dd == null || dd < 6 || dd > 10) continue
+            if (!lineOfSight(myCell, ec)) continue
+            var allyNear = false
+            for (var aid in allies) {
+                var dA = getCellDistance(ec, getCell(aid))
+                if (dA != null && dA <= 1) allyNear = true
+            }
+            if (allyNear) continue
+            if (dd < bestD) { bestD = dd; best = eid }
+        }
+        if (best == null) { break }
+        if (useWeapon(best) < 1) { break }
+        n++
+    }
+    return n
 }
 
 // Pick the aim cell with the biggest army cluster (no ally in the blast),

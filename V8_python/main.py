@@ -6610,7 +6610,7 @@ def logMapLayout():
 
 def executeBossCombatPoke():
     myID = getEntity()
-    if (getMagic() < 300):
+    if ((getMagic() < 300) and (getStrength() < 300)):
         return False
     solverSurvival(myID)
     armyCells = puzzleArmyCells()
@@ -6624,6 +6624,10 @@ def executeBossCombatPoke():
         casted = lw_add(casted, 1)
     if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, False):
         casted = lw_add(casted, 1)
+    if (getStrength() >= 300):
+        if tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, False):
+            casted = lw_add(casted, 1)
+        casted = lw_add(casted, tryWeaponStrike(myID))
     if (casted == 0):
         if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, True):
             casted = lw_add(casted, 1)
@@ -6633,11 +6637,16 @@ def executeBossCombatPoke():
             else:
                 if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, True):
                     casted = lw_add(casted, 1)
+                else:
+                    if ((getStrength() >= 300) and tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, True)):
+                        casted = lw_add(casted, 1)
         if (casted > 0):
             if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, False):
                 casted = lw_add(casted, 1)
             if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, False):
                 casted = lw_add(casted, 1)
+            if (getStrength() >= 300):
+                casted = lw_add(casted, tryWeaponStrike(myID))
     if (casted > 0):
         say(lw_add("PZ POKE x", casted))
     else:
@@ -6658,6 +6667,49 @@ def executeBossCombatPoke():
         if ((kite != (-1)) and (kite != getCell())):
             moveTowardCell(kite)
     return True
+
+def tryWeaponStrike(myID):
+    weps = getWeapons()
+    if ((weps == None) or (not inArray(weps, WEAPON_ENHANCED_LIGHTNINGER))):
+        return 0
+    if (getWeapon() != WEAPON_ENHANCED_LIGHTNINGER):
+        if (getTP() < 10):
+            return 0
+        setWeapon(WEAPON_ENHANCED_LIGHTNINGER)
+    allies = getAliveAllies()
+    n = 0
+    while ((getTP() >= 9) and (n < 2)):
+        myCell = getCell()
+        enemies = getAliveEnemies()
+        best = None
+        bestD = 999
+        for eid in lw_values(enemies):
+            if (getName(eid) == "graal"):
+                continue
+            ec = getCell(eid)
+            if ((ec == None) or (ec < 0)):
+                continue
+            dd = getCellDistance(myCell, ec)
+            if (((dd == None) or (dd < 6)) or (dd > 10)):
+                continue
+            if (not lineOfSight(myCell, ec)):
+                continue
+            allyNear = False
+            for aid in lw_values(allies):
+                dA = getCellDistance(ec, getCell(aid))
+                if ((dA != None) and (dA <= 1)):
+                    allyNear = True
+            if allyNear:
+                continue
+            if (dd < bestD):
+                bestD = dd
+                best = eid
+        if (best == None):
+            break
+        if (useWeapon(best) < 1):
+            break
+        n = lw_add(n, 1)
+    return n
 
 def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMove):
     if (not allyHasChip(myID, chip)):
@@ -19905,7 +19957,6 @@ def main():
         if executePuzzleTurn():
             return None
     if (_isBossFight and (_bossPhase == "COMBAT")):
-        executeBossCombatPlasma()
         if executeBossCombatPoke():
             return None
         if executeBossCombatPeel():

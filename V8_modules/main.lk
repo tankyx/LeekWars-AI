@@ -185,7 +185,6 @@ function main() {
         if (executePuzzleTurn()) return
     }
     if (_isBossFight && _bossPhase == "COMBAT") {
-        executeBossCombatPlasma()
         if (executeBossCombatPoke()) { return }
         if (executeBossCombatPeel()) { return }
     }
