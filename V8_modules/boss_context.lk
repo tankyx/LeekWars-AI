@@ -1224,10 +1224,24 @@ function executeBossCombatPoke() {
         return false
     }
 
+    // Pass 1: everything castable from where we stand (no MP spent)
     var casted = 0
-    if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells)) casted++
-    if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells)) casted++
-    if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells)) casted++
+    if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, false)) casted++
+    if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, false)) casted++
+    if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, false)) casted++
+
+    // Pass 2: nothing reached — ONE committed approach, longest range first
+    // (fight 52978075: plague's deep approach burned the MP venom needed;
+    // per-chip movement races starved each other every turn)
+    if (casted == 0) {
+        if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, true)) casted++
+        else if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, true)) casted++
+        else if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, true)) casted++
+        if (casted > 0) {
+            if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, false)) casted++
+            if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, false)) casted++
+        }
+    }
     if (casted > 0) {
         say("PZ POKE x" + casted)
     } else {
@@ -1257,8 +1271,8 @@ function executeBossCombatPoke() {
 }
 
 // Pick the aim cell with the biggest army cluster (no ally in the blast),
-// walk into cast range if needed, fire.
-function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells) {
+// walk into cast range if allowed and needed, fire.
+function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMove) {
     if (!allyHasChip(myID, chip)) { return false }
     if (getTP() < cost) { return false }
     var cd = getCooldown(chip, myID)
@@ -1288,6 +1302,7 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells) {
     var dAim = getCellDistance(myCell, bestAim)
     if (dAim == null) { return false }
     if (dAim > rng || !lineOfSight(myCell, bestAim)) {
+        if (!allowMove) { return false }
         // Approach: cheapest reachable cell that can cast on the aim
         var mp = getMP()
         if (mp <= 0) { return false }
@@ -1307,7 +1322,10 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells) {
         }
         if (bestStand == -1) { return false }
         moveTowardCell(bestStand)
-        if (getCell() != bestStand) { return false }
+        // Partial move (blocked path) — cast anyway if the aim is now in reach
+        var here = getCell()
+        var dNow = getCellDistance(here, bestAim)
+        if (dNow == null || dNow > rng || !lineOfSight(here, bestAim)) { return false }
     }
     return useChipOnCell(chip, bestAim) >= 1
 }

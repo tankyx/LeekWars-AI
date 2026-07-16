@@ -6618,12 +6618,26 @@ def executeBossCombatPoke():
         swatCrystals(myID)
         return False
     casted = 0
-    if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells):
+    if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, False):
         casted = lw_add(casted, 1)
-    if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells):
+    if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, False):
         casted = lw_add(casted, 1)
-    if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells):
+    if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, False):
         casted = lw_add(casted, 1)
+    if (casted == 0):
+        if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, True):
+            casted = lw_add(casted, 1)
+        else:
+            if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, True):
+                casted = lw_add(casted, 1)
+            else:
+                if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, True):
+                    casted = lw_add(casted, 1)
+        if (casted > 0):
+            if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells, False):
+                casted = lw_add(casted, 1)
+            if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells, False):
+                casted = lw_add(casted, 1)
     if (casted > 0):
         say(lw_add("PZ POKE x", casted))
     else:
@@ -6644,7 +6658,7 @@ def executeBossCombatPoke():
             moveTowardCell(kite)
     return True
 
-def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells):
+def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMove):
     if (not allyHasChip(myID, chip)):
         return False
     if (getTP() < cost):
@@ -6680,6 +6694,8 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells):
     if (dAim == None):
         return False
     if ((dAim > rng) or (not lineOfSight(myCell, bestAim))):
+        if (not allowMove):
+            return False
         mp = getMP()
         if (mp <= 0):
             return False
@@ -6713,7 +6729,9 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells):
         if (bestStand == (-1)):
             return False
         moveTowardCell(bestStand)
-        if (getCell() != bestStand):
+        here = getCell()
+        dNow = getCellDistance(here, bestAim)
+        if (((dNow == None) or (dNow > rng)) or (not lineOfSight(here, bestAim))):
             return False
     return (useChipOnCell(chip, bestAim) >= 1)
 
