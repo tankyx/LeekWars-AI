@@ -22,6 +22,7 @@ global _pzRouteTarget = -1
 // flips as she walks and the retargeting thrash wastes whole turns
 global _pzFocusEID = null
 global _pzSolverEverSeen = false
+global _pzPartnerSolverID = -1
 
 global _graalCell = -1
 global _graalX = 0
@@ -178,10 +179,17 @@ function allyHasChip(eid, chipId) {
     return cd != null
 }
 
+// Named solvers carry the puzzle chips (grapple/boxing/inversion). Two solvers
+// roughly halve the solve clock — the army's ~2500/turn makes time the enemy.
+function isNamedSolver(name) {
+    return name == "AdaLovelace" || name == "KurtGodel"
+}
+
 function assignPuzzleRoles() {
     if (_bossPhase != "PUZZLE") {
         _puzzleRole = null
         _puzzleSolverID = -1
+        _pzPartnerSolverID = -1
         return
     }
 
@@ -193,36 +201,67 @@ function assignPuzzleRoles() {
     if (count(allAllies) <= 1) {
         _puzzleRole = "SOLVER"
         _puzzleSolverID = myID
+        _pzPartnerSolverID = -1
         return
     }
 
-    // Identify roles by name — getCooldown is unreliable for cross-entity chip detection
-    var solverID = -1
-    var bufferID = -1
+    // Alive named solvers (cross-entity chip detection is unreliable, so trust
+    // the roster; MY OWN role additionally requires a self-verified puzzle chip)
+    var solverIDs = []
     for (var aid in allAllies) {
-        var name = getName(aid)
-        if (name == "AdaLovelace") solverID = aid
-        else if (name == "KurtGodel") bufferID = aid
+        if (isNamedSolver(getName(aid))) push(solverIDs, aid)
     }
+    if (count(solverIDs) > 0) { _pzSolverEverSeen = true }
 
-    if (solverID != -1) { _pzSolverEverSeen = true }
-
-    // Fallback to first ally ONLY when the named solver never existed (non-Ada
-    // team). If she was here and DIED, nobody else has grapple/boxing — a
+    // Fallback to first ally ONLY when no named solver ever existed (non-Ada
+    // team). If they were here and DIED, nobody else has the chips — a
     // chipless "solver" walks into the castle and dies for nothing (fight
-    // 52977149: ED+MH). No solver -> everyone scatters and survives; KurtGodel
-    // kited the army for 56 turns to a draw that way.
-    if (solverID == -1 && !_pzSolverEverSeen) solverID = allAllies[0]
+    // 52977149: ED+MH). No solver -> everyone scatters; a kited draw beats a wipe.
+    if (count(solverIDs) == 0 && !_pzSolverEverSeen) push(solverIDs, allAllies[0])
 
-    _puzzleSolverID = solverID
-
-    if (myID == bufferID) {
-        _puzzleRole = "BUFFER"
-    } else if (myID == solverID) {
-        _puzzleRole = "SOLVER"
-    } else {
-        _puzzleRole = "SUPPORT"
+    var iAmListed = false
+    for (var sid in solverIDs) {
+        if (sid == myID) iAmListed = true
     }
+    var iHaveChips = allyHasChip(myID, CHIP_GRAPPLE) || allyHasChip(myID, CHIP_BOXING_GLOVE) || allyHasChip(myID, CHIP_INVERSION)
+
+    if (iAmListed && (iHaveChips || count(allAllies) == 1)) {
+        _puzzleRole = "SOLVER"
+        _puzzleSolverID = myID
+        _pzPartnerSolverID = -1
+        for (var sid2 in solverIDs) {
+            if (sid2 != myID) _pzPartnerSolverID = sid2
+        }
+        return
+    }
+
+    _pzPartnerSolverID = -1
+    if (count(solverIDs) == 0) {
+        // No solver alive: scatter and survive
+        _puzzleRole = "SUPPORT"
+        _puzzleSolverID = -1
+        return
+    }
+
+    // Escort: pair supports to solvers deterministically so both solvers get
+    // buffed (support[i] -> solver[i % nSolvers], both sides sorted by id —
+    // every leek computes the same pairing independently)
+    var supports = []
+    for (var aid2 in allAllies) {
+        var isSol = false
+        for (var sid3 in solverIDs) {
+            if (sid3 == aid2) isSol = true
+        }
+        if (!isSol) push(supports, aid2)
+    }
+    sort(supports)
+    sort(solverIDs)
+    var myIdx = 0
+    for (var i = 0; i < count(supports); i++) {
+        if (supports[i] == myID) myIdx = i
+    }
+    _puzzleSolverID = solverIDs[myIdx % count(solverIDs)]
+    _puzzleRole = getName(myID) == "KurtGodel" ? "BUFFER" : "SUPPORT"
 }
 
 function assignSolverCrystal() {
@@ -251,12 +290,53 @@ function assignSolverCrystal() {
     }
 }
 
+function nearestUnsolvedCrystalTo(cell, excludeEID) {
+    var best = null
+    var bestD = 9999
+    for (var eid in mapKeys(_crystalMap)) {
+        if (eid == excludeEID) continue
+        var cData = _crystalMap[eid]
+        if (isCrystalSolved(cData)) continue
+        var cc = getCell(eid)
+        if (cc == null || cc < 0) continue
+        var d = getCellDistance(cell, cc)
+        if (d != null && d < bestD) { bestD = d; best = eid }
+    }
+    return best
+}
+
 function pickFocusCrystal(myCell) {
-    if (_pzFocusEID != null) {
+    var myID = getEntity()
+    var partner = _pzPartnerSolverID
+    var partnerAlive = partner != -1 && isAlive(partner)
+
+    // Dual solvers: deterministic partition both leeks compute identically —
+    // the lower entity id claims its nearest unsolved crystal, the other takes
+    // its nearest among the rest. Never both on one crystal (except the last).
+    var partnerPick = null
+    if (partnerAlive) {
+        var firstID = min(myID, partner)
+        var firstPick = nearestUnsolvedCrystalTo(getCell(firstID), null)
+        if (myID == firstID) {
+            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), firstPick)
+        } else {
+            partnerPick = firstPick
+        }
+    }
+
+    // Stickiness: keep the current focus while it's unsolved and not claimed
+    // by the partner — retarget flapping thrashes routes
+    if (_pzFocusEID != null && _pzFocusEID != partnerPick) {
         var fc = _crystalMap[_pzFocusEID]
         if (fc != null && !isCrystalSolved(fc)) { return _pzFocusEID }
     }
-    _pzFocusEID = pickNearestUnsolvedCrystal(myCell)
+
+    var mine = nearestUnsolvedCrystalTo(myCell, partnerPick)
+    if (mine == null && partnerPick != null) {
+        // Only the partner's crystal remains — converge on it together
+        mine = partnerPick
+    }
+    _pzFocusEID = mine
     return _pzFocusEID
 }
 
@@ -1103,8 +1183,13 @@ function solverSelfBuff(slMyID) {
         [CHIP_ARMORING, 5],
         [CHIP_LEATHER_BOOTS, 3],
         [CHIP_ADRENALINE, 1],
+        [CHIP_MOTIVATION, 4],
+        [CHIP_RAGE, 4],
+        [CHIP_SEVEN_LEAGUE_BOOTS, 4],
         [CHIP_FORTRESS, 6],
         [CHIP_WALL, 3],
+        [CHIP_ARMOR, 6],
+        [CHIP_PRISM, 6],
         [CHIP_VACCINE, 6]
     ]
     for (var buff in selfBuffs) {
@@ -1132,6 +1217,10 @@ function solverSurvival(slMyID) {
     if (pct < 75 && getTP() >= 6 && allyHasChip(slMyID, CHIP_FORTRESS)) {
         var fcd = getCooldown(CHIP_FORTRESS, slMyID)
         if (fcd != null && fcd == 0) useChip(CHIP_FORTRESS, slMyID)
+    }
+    if (pct < 75 && getTP() >= 6 && allyHasChip(slMyID, CHIP_ARMOR)) {
+        var acd = getCooldown(CHIP_ARMOR, slMyID)
+        if (acd != null && acd == 0) useChip(CHIP_ARMOR, slMyID)
     }
     if (pct < 55 && getTP() >= 3 && allyHasChip(slMyID, CHIP_WALL)) {
         var wcd = getCooldown(CHIP_WALL, slMyID)

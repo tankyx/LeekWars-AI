@@ -5491,6 +5491,7 @@ _pzRouteChip = None
 _pzRouteTarget = (-1)
 _pzFocusEID = None
 _pzSolverEverSeen = False
+_pzPartnerSolverID = (-1)
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -5610,11 +5611,15 @@ def allyHasChip(eid, chipId):
     cd = getCooldown(chipId, eid)
     return (cd != None)
 
+def isNamedSolver(name):
+    return ((name == "AdaLovelace") or (name == "KurtGodel"))
+
 def assignPuzzleRoles():
-    global _puzzleRole, _puzzleSolverID, _pzSolverEverSeen
+    global _puzzleRole, _puzzleSolverID, _pzPartnerSolverID, _pzSolverEverSeen
     if (_bossPhase != "PUZZLE"):
         _puzzleRole = None
         _puzzleSolverID = (-1)
+        _pzPartnerSolverID = (-1)
         return None
     myID = getEntity()
     allAllies = [myID]
@@ -5624,28 +5629,52 @@ def assignPuzzleRoles():
     if (count(allAllies) <= 1):
         _puzzleRole = "SOLVER"
         _puzzleSolverID = myID
+        _pzPartnerSolverID = (-1)
         return None
-    solverID = (-1)
-    bufferID = (-1)
+    solverIDs = []
     for aid in lw_values(allAllies):
-        name = getName(aid)
-        if (name == "AdaLovelace"):
-            solverID = aid
-        else:
-            if (name == "KurtGodel"):
-                bufferID = aid
-    if (solverID != (-1)):
+        if isNamedSolver(getName(aid)):
+            push(solverIDs, aid)
+    if (count(solverIDs) > 0):
         _pzSolverEverSeen = True
-    if ((solverID == (-1)) and (not _pzSolverEverSeen)):
-        solverID = lw_get(allAllies, 0)
-    _puzzleSolverID = solverID
-    if (myID == bufferID):
-        _puzzleRole = "BUFFER"
-    else:
-        if (myID == solverID):
-            _puzzleRole = "SOLVER"
-        else:
-            _puzzleRole = "SUPPORT"
+    if ((count(solverIDs) == 0) and (not _pzSolverEverSeen)):
+        push(solverIDs, lw_get(allAllies, 0))
+    iAmListed = False
+    for sid in lw_values(solverIDs):
+        if (sid == myID):
+            iAmListed = True
+    iHaveChips = ((allyHasChip(myID, CHIP_GRAPPLE) or allyHasChip(myID, CHIP_BOXING_GLOVE)) or allyHasChip(myID, CHIP_INVERSION))
+    if (iAmListed and ((iHaveChips or (count(allAllies) == 1)))):
+        _puzzleRole = "SOLVER"
+        _puzzleSolverID = myID
+        _pzPartnerSolverID = (-1)
+        for sid2 in lw_values(solverIDs):
+            if (sid2 != myID):
+                _pzPartnerSolverID = sid2
+        return None
+    _pzPartnerSolverID = (-1)
+    if (count(solverIDs) == 0):
+        _puzzleRole = "SUPPORT"
+        _puzzleSolverID = (-1)
+        return None
+    supports = []
+    for aid2 in lw_values(allAllies):
+        isSol = False
+        for sid3 in lw_values(solverIDs):
+            if (sid3 == aid2):
+                isSol = True
+        if (not isSol):
+            push(supports, aid2)
+    sort(supports)
+    sort(solverIDs)
+    myIdx = 0
+    i = 0
+    while (i < count(supports)):
+        if (lw_get(supports, i) == myID):
+            myIdx = i
+        i = lw_add(i, 1)
+    _puzzleSolverID = lw_get(solverIDs, lw_mod(myIdx, count(solverIDs)))
+    _puzzleRole = ("BUFFER" if (getName(myID) == "KurtGodel") else "SUPPORT")
 
 def assignSolverCrystal():
     global _bossTargetEID, _myAssignedCrystal
@@ -5669,13 +5698,45 @@ def assignSolverCrystal():
         _bossTargetEID = None
         clearCrystalScalars()
 
+def nearestUnsolvedCrystalTo(cell, excludeEID):
+    best = None
+    bestD = 9999
+    for eid in lw_values(mapKeys(_crystalMap)):
+        if (eid == excludeEID):
+            continue
+        cData = lw_get(_crystalMap, eid)
+        if isCrystalSolved(cData):
+            continue
+        cc = getCell(eid)
+        if ((cc == None) or (cc < 0)):
+            continue
+        d = getCellDistance(cell, cc)
+        if ((d != None) and (d < bestD)):
+            bestD = d
+            best = eid
+    return best
+
 def pickFocusCrystal(myCell):
     global _pzFocusEID
-    if (_pzFocusEID != None):
+    myID = getEntity()
+    partner = _pzPartnerSolverID
+    partnerAlive = ((partner != (-1)) and isAlive(partner))
+    partnerPick = None
+    if partnerAlive:
+        firstID = min(myID, partner)
+        firstPick = nearestUnsolvedCrystalTo(getCell(firstID), None)
+        if (myID == firstID):
+            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), firstPick)
+        else:
+            partnerPick = firstPick
+    if ((_pzFocusEID != None) and (_pzFocusEID != partnerPick)):
         fc = lw_get(_crystalMap, _pzFocusEID)
         if ((fc != None) and (not isCrystalSolved(fc))):
             return _pzFocusEID
-    _pzFocusEID = pickNearestUnsolvedCrystal(myCell)
+    mine = nearestUnsolvedCrystalTo(myCell, partnerPick)
+    if ((mine == None) and (partnerPick != None)):
+        mine = partnerPick
+    _pzFocusEID = mine
     return _pzFocusEID
 
 def pickNearestUnsolvedCrystal(myCell):
@@ -6538,7 +6599,7 @@ def castBuffsOnSolver(myID, buffList):
                 say(lw_add(lw_add("PZ BUFF ", label), " -> solver"))
 
 def solverSelfBuff(slMyID):
-    selfBuffs = [[CHIP_KNOWLEDGE, 5], [CHIP_ELEVATION, 6], [CHIP_ARMORING, 5], [CHIP_LEATHER_BOOTS, 3], [CHIP_ADRENALINE, 1], [CHIP_FORTRESS, 6], [CHIP_WALL, 3], [CHIP_VACCINE, 6]]
+    selfBuffs = [[CHIP_KNOWLEDGE, 5], [CHIP_ELEVATION, 6], [CHIP_ARMORING, 5], [CHIP_LEATHER_BOOTS, 3], [CHIP_ADRENALINE, 1], [CHIP_MOTIVATION, 4], [CHIP_RAGE, 4], [CHIP_SEVEN_LEAGUE_BOOTS, 4], [CHIP_FORTRESS, 6], [CHIP_WALL, 3], [CHIP_ARMOR, 6], [CHIP_PRISM, 6], [CHIP_VACCINE, 6]]
     for buff in lw_values(selfBuffs):
         chip = lw_get(buff, 0)
         cost = lw_get(buff, 1)
@@ -6561,6 +6622,10 @@ def solverSurvival(slMyID):
         fcd = getCooldown(CHIP_FORTRESS, slMyID)
         if ((fcd != None) and (fcd == 0)):
             useChip(CHIP_FORTRESS, slMyID)
+    if (((pct < 75) and (getTP() >= 6)) and allyHasChip(slMyID, CHIP_ARMOR)):
+        acd = getCooldown(CHIP_ARMOR, slMyID)
+        if ((acd != None) and (acd == 0)):
+            useChip(CHIP_ARMOR, slMyID)
     if (((pct < 55) and (getTP() >= 3)) and allyHasChip(slMyID, CHIP_WALL)):
         wcd = getCooldown(CHIP_WALL, slMyID)
         if ((wcd != None) and (wcd == 0)):

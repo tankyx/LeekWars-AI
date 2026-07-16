@@ -55,6 +55,7 @@ JAVA_HOME = "/usr/lib/jvm/java-25-openjdk-amd64"
 # Puzzle chips that must be equipped for boss fights
 CHIP_GRAPPLE_ID = 162
 CHIP_BOXING_GLOVE_ID = 163
+CHIP_INVERSION_ID = 68
 
 # Add tools dir to path for FightActionParser import
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -193,13 +194,12 @@ def build_boss_scenario(configs, seed=None):
         entity_id = i + 1
         farmers.append({"id": farmer_id, "name": leek_name, "country": "fr"})
 
-        # Ensure puzzle chips are equipped (only AdaLovelace has both on the real server)
+        # Ensure puzzle chips are equipped (dual solvers: AdaLovelace + KurtGodel)
         chips = list(cfg.get("chips", []))
-        if leek_name == "AdaLovelace":
-            if CHIP_GRAPPLE_ID not in chips:
-                chips.append(CHIP_GRAPPLE_ID)
-            if CHIP_BOXING_GLOVE_ID not in chips:
-                chips.append(CHIP_BOXING_GLOVE_ID)
+        if leek_name in ("AdaLovelace", "KurtGodel"):
+            for pc in (CHIP_GRAPPLE_ID, CHIP_BOXING_GLOVE_ID, CHIP_INVERSION_ID):
+                if pc not in chips:
+                    chips.append(pc)
 
         entity = {
             "id": entity_id,
