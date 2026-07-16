@@ -6343,8 +6343,8 @@ def executePuzzleTurn():
         return executeSupportPuzzleTurn()
     return False
 
-def findEmptyCellNear(targetCell, fromCell, maxRange):
-    offsets = [0, 17, (-17), 18, (-18), 34, (-34), 35, (-35), 36, (-36), 1, (-1)]
+def findEmptyCellNear(targetCell, fromCell, maxRange, minDistToTarget):
+    offsets = [0, 17, (-17), 18, (-18), 34, (-34), 35, (-35), 36, (-36), 1, (-1), 16, (-16), 19, (-19), 51, (-51), 52, (-52), 53, (-53), 54, (-54)]
     bestCell = (-1)
     bestDist = 999
     for off in lw_values(offsets):
@@ -6359,19 +6359,23 @@ def findEmptyCellNear(targetCell, fromCell, maxRange):
         if (((dFrom == None) or (dFrom < 1)) or (dFrom > maxRange)):
             continue
         dTo = getCellDistance(cell, targetCell)
+        if ((dTo == None) or (dTo < minDistToTarget)):
+            continue
         if (dTo < bestDist):
             bestDist = dTo
             bestCell = cell
     return bestCell
 
 def puzzleGatherMove(gathererID, targetSolverCell):
-    moveTowardCell(targetSolverCell)
+    walkDist = getCellDistance(getCell(), targetSolverCell)
+    if ((walkDist != None) and (walkDist > 2)):
+        moveTowardCell(targetSolverCell, min(getMP(), lw_sub(walkDist, 2)))
     gatherCell = getCell()
     gatherDist = getCellDistance(gatherCell, targetSolverCell)
     if ((gatherDist > 5) and (getTurn() >= 2)):
         gTpCd = getCooldown(CHIP_TELEPORTATION, gathererID)
         if (((gTpCd != None) and (gTpCd == 0)) and (getTP() >= 9)):
-            tpCell = findEmptyCellNear(targetSolverCell, gatherCell, 12)
+            tpCell = findEmptyCellNear(targetSolverCell, gatherCell, 12, 2)
             if (tpCell != (-1)):
                 useChipOnCell(CHIP_TELEPORTATION, tpCell)
 
@@ -6518,10 +6522,12 @@ def puzzleSelfPreserve(myID):
     if (solverAlive and (distToSolver > 8)):
         tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (((tpCd != None) and (tpCd == 0)) and (getTP() >= 9)):
-            tc = findEmptyCellNear(anchorCell, getCell(), 12)
+            tc = findEmptyCellNear(anchorCell, getCell(), 12, 2)
             if (tc != (-1)):
                 useChipOnCell(CHIP_TELEPORTATION, tc)
-        moveTowardCell(anchorCell)
+        followDist = getCellDistance(getCell(), anchorCell)
+        if ((followDist != None) and (followDist > 2)):
+            moveTowardCell(anchorCell, min(getMP(), lw_sub(followDist, 2)))
         return None
     best = choosePuzzleSustainCell(myID, anchorCell, solverAlive)
     if ((best != (-1)) and (best != getCell())):
@@ -6553,8 +6559,10 @@ def choosePuzzleSustainCell(myID, anchorCell, leashed):
         score = lw_mul(min(nearestArmyDistFrom(c, armyCells), 9), 10)
         if leashed:
             dS = getCellDistance(c, anchorCell)
-            if ((dS != None) and (dS > 4)):
-                score = lw_num(score) - lw_num(lw_mul((lw_sub(dS, 4)), 12))
+            if ((dS != None) and (dS > 3)):
+                score = lw_num(score) - lw_num(lw_mul((lw_sub(dS, 3)), 12))
+            if ((dS != None) and (dS < 2)):
+                score = lw_num(score) - lw_num(40)
         for aid in lw_values(allies):
             if (aid == _puzzleSolverID):
                 continue

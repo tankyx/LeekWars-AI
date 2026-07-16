@@ -872,8 +872,10 @@ function executePuzzleTurn() {
     return false
 }
 
-function findEmptyCellNear(targetCell, fromCell, maxRange) {
-    var offsets = [0, 17, -17, 18, -18, 34, -34, 35, -35, 36, -36, 1, -1]
+function findEmptyCellNear(targetCell, fromCell, maxRange, minDistToTarget) {
+    // Ring offsets: dist 1 (±17/18), dist 2 (±1/34/35/36), dist 3 (±16/19/51-54)
+    var offsets = [0, 17, -17, 18, -18, 34, -34, 35, -35, 36, -36, 1, -1,
+                   16, -16, 19, -19, 51, -51, 52, -52, 53, -53, 54, -54]
     var bestCell = -1
     var bestDist = 999
     for (var off in offsets) {
@@ -884,19 +886,26 @@ function findEmptyCellNear(targetCell, fromCell, maxRange) {
         var dFrom = getCellDistance(fromCell, cell)
         if (dFrom == null || dFrom < 1 || dFrom > maxRange) continue
         var dTo = getCellDistance(cell, targetCell)
+        if (dTo == null || dTo < minDistToTarget) continue
         if (dTo < bestDist) { bestDist = dTo; bestCell = cell }
     }
     return bestCell
 }
 
 function puzzleGatherMove(gathererID, targetSolverCell) {
-    moveTowardCell(targetSolverCell)
+    // Approach to the 2-3 escort band, never adjacent — an ally standing next
+    // to the solver blocks her pathing (enclave entrances are narrow).
+    // Capping MP at dist-2 guarantees we can't end closer than 2.
+    var walkDist = getCellDistance(getCell(), targetSolverCell)
+    if (walkDist != null && walkDist > 2) {
+        moveTowardCell(targetSolverCell, min(getMP(), walkDist - 2))
+    }
     var gatherCell = getCell()
     var gatherDist = getCellDistance(gatherCell, targetSolverCell)
     if (gatherDist > 5 && getTurn() >= 2) {
         var gTpCd = getCooldown(CHIP_TELEPORTATION, gathererID)
         if (gTpCd != null && gTpCd == 0 && getTP() >= 9) {
-            var tpCell = findEmptyCellNear(targetSolverCell, gatherCell, 12)
+            var tpCell = findEmptyCellNear(targetSolverCell, gatherCell, 12, 2)
             if (tpCell != -1) useChipOnCell(CHIP_TELEPORTATION, tpCell)
         }
     }
@@ -1103,10 +1112,13 @@ function puzzleSelfPreserve(myID) {
     if (solverAlive && distToSolver > 8) {
         var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         if (tpCd != null && tpCd == 0 && getTP() >= 9) {
-            var tc = findEmptyCellNear(anchorCell, getCell(), 12)
+            var tc = findEmptyCellNear(anchorCell, getCell(), 12, 2)
             if (tc != -1) useChipOnCell(CHIP_TELEPORTATION, tc)
         }
-        moveTowardCell(anchorCell)
+        var followDist = getCellDistance(getCell(), anchorCell)
+        if (followDist != null && followDist > 2) {
+            moveTowardCell(anchorCell, min(getMP(), followDist - 2))
+        }
         return
     }
 
@@ -1133,7 +1145,10 @@ function choosePuzzleSustainCell(myID, anchorCell, leashed) {
         var score = min(nearestArmyDistFrom(c, armyCells), 9) * 10
         if (leashed) {
             var dS = getCellDistance(c, anchorCell)
-            if (dS != null && dS > 4) score -= (dS - 4) * 12
+            // Escort band 2-3: inside range 3 for armoring/regen/fortress/adren,
+            // never adjacent (blocks the solver's pathing around crystals)
+            if (dS != null && dS > 3) score -= (dS - 3) * 12
+            if (dS != null && dS < 2) score -= 40
         }
         for (var aid in allies) {
             if (aid == _puzzleSolverID) continue
