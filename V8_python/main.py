@@ -6667,8 +6667,9 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
     if ((cd == None) or (cd > 0)):
         return False
     allies = getAliveAllies()
+    myCell = getCell()
     bestAim = (-1)
-    bestCluster = 0
+    bestScore = (-99999)
     for aim in lw_values(armyCells):
         cluster = 0
         for ac in lw_values(armyCells):
@@ -6684,12 +6685,20 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
                 allyHit = True
         if allyHit:
             continue
-        if (cluster > bestCluster):
-            bestCluster = cluster
+        dMe2 = getCellDistance(myCell, aim)
+        if (dMe2 == None):
+            continue
+        if (not allowMove):
+            if (dMe2 > rng):
+                continue
+            if (not lineOfSight(myCell, aim)):
+                continue
+        sc = lw_sub(lw_mul(cluster, 100), dMe2)
+        if (sc > bestScore):
+            bestScore = sc
             bestAim = aim
     if (bestAim == (-1)):
         return False
-    myCell = getCell()
     dAim = getCellDistance(myCell, bestAim)
     if (dAim == None):
         return False
@@ -6700,7 +6709,7 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
         if (mp <= 0):
             return False
         bestStand = (-1)
-        bestScore = (-9999)
+        bestStandScore = (-9999)
         c = 0
         while (c < 613):
             dMe = getCellDistance(myCell, c)
@@ -6721,9 +6730,9 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
             if (not lineOfSight(c, bestAim)):
                 c = lw_add(c, 1)
                 continue
-            sc = lw_sub(lw_mul(nearestArmyDistFrom(c, armyCells), 3), pl)
-            if (sc > bestScore):
-                bestScore = sc
+            sc2 = lw_sub(lw_mul(nearestArmyDistFrom(c, armyCells), 3), pl)
+            if (sc2 > bestStandScore):
+                bestStandScore = sc2
                 bestStand = c
             c = lw_add(c, 1)
         if (bestStand == (-1)):

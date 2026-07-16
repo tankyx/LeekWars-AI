@@ -1279,8 +1279,9 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
     if (cd == null || cd > 0) { return false }
 
     var allies = getAliveAllies()
+    var myCell = getCell()
     var bestAim = -1
-    var bestCluster = 0
+    var bestScore = -99999
     for (var aim in armyCells) {
         var cluster = 0
         for (var ac in armyCells) {
@@ -1294,11 +1295,20 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
             if (dA != null && dA <= radius) allyHit = true
         }
         if (allyHit) continue
-        if (cluster > bestCluster) { bestCluster = cluster; bestAim = aim }
+        var dMe2 = getCellDistance(myCell, aim)
+        if (dMe2 == null) continue
+        // Without movement only in-range, visible aims count — fight 52978097:
+        // venom aims all tie at cluster 1 and the arbitrary pick ignored the
+        // knight standing ADJACENT (POKE none at d=1, tp=25)
+        if (!allowMove) {
+            if (dMe2 > rng) continue
+            if (!lineOfSight(myCell, aim)) continue
+        }
+        var sc = cluster * 100 - dMe2
+        if (sc > bestScore) { bestScore = sc; bestAim = aim }
     }
     if (bestAim == -1) { return false }
 
-    var myCell = getCell()
     var dAim = getCellDistance(myCell, bestAim)
     if (dAim == null) { return false }
     if (dAim > rng || !lineOfSight(myCell, bestAim)) {
@@ -1307,7 +1317,7 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
         var mp = getMP()
         if (mp <= 0) { return false }
         var bestStand = -1
-        var bestScore = -9999
+        var bestStandScore = -9999
         for (var c = 0; c < 613; c++) {
             var dMe = getCellDistance(myCell, c)
             if (dMe == null || dMe > mp) continue
@@ -1317,8 +1327,8 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
             var pl = getPathLength(myCell, c)
             if (pl == null || pl > mp) continue
             if (!lineOfSight(c, bestAim)) continue
-            var sc = nearestArmyDistFrom(c, armyCells) * 3 - pl
-            if (sc > bestScore) { bestScore = sc; bestStand = c }
+            var sc2 = nearestArmyDistFrom(c, armyCells) * 3 - pl
+            if (sc2 > bestStandScore) { bestStandScore = sc2; bestStand = c }
         }
         if (bestStand == -1) { return false }
         moveTowardCell(bestStand)
