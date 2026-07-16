@@ -1021,10 +1021,15 @@ def main():
             "if _lw_full_budget is None:",
             "    _lw_full_budget = _opsBudget",
             "_lw_t = getTurn()",
-            "if _lw_t <= 8:",
-            "    _lw_set_ops_gates(floor(_lw_full_budget * lw_get([0.25, 0.45, 0.5, 0.6, 0.6, 0.7, 0.8, 0.9], _lw_t - 1)))",
-            "elif _opsBudget != _lw_full_budget:",
-            "    _lw_set_ops_gates(_lw_full_budget)",
+            "if _lw_t <= 4:",
+            "    _lw_set_ops_gates(min(floor(_lw_full_budget * lw_get([0.25, 0.45, 0.5, 0.55], _lw_t - 1)), 8000000))",
+            "elif _opsBudget != min(_lw_full_budget, 8000000):",
+            "    # permanent ceiling: ladder fights showed full-budget turns",
+            "    # (13-18M statements) crossing the 5s wall-clock mid-game on",
+            "    # loaded workers (KG crashed 7/7 fights). ~8M statements is",
+            "    # ~2-2.5s warm — 2x headroom. A dead turn costs more than",
+            "    # search depth.",
+            "    _lw_set_ops_gates(min(_lw_full_budget, 8000000))",
         ]
     inner += ["    " + ln for ln in body]
     # no stdlib imports here: importing traceback inside the sandbox can
