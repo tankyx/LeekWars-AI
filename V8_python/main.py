@@ -5482,6 +5482,8 @@ _usedInversion = False
 _isBossFight = False
 _puzzleRole = None
 _puzzleSolverID = (-1)
+_pzSolverMaxLifeSnapshot = (-1)
+_pzGatherDone = False
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -6373,7 +6375,7 @@ def castBuffsOnSolver(myID, buffList):
             continue
         cd = getCooldown(chip, myID)
         if ((((cd != None) and (cd == 0)) and (getTP() >= cost)) and (dist <= range)):
-            if (useChip(chip, _puzzleSolverID) == 1):
+            if (useChip(chip, _puzzleSolverID) >= 1):
                 say(lw_add(lw_add("PZ BUFF ", label), " -> solver"))
 
 def solverSelfBuff(slMyID):
@@ -6392,9 +6394,23 @@ def executeBufferPuzzleTurn():
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
         say("PZ BUFFER: no solver")
         return True
+    bufSolverCell = getCell(_puzzleSolverID)
+    bufDist = getCellDistance(getCell(), bufSolverCell)
+    if (((getTurn() <= 3) and (bufDist > 3)) and hasPendingSolverHPBuff(myID)):
+        puzzleGatherMove(myID, bufSolverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_RAGE, 8, 4, "rage"], [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
     return True
+
+def hasPendingSolverHPBuff(myID):
+    pending = [CHIP_ELEVATION, CHIP_ARMORING, CHIP_ADRENALINE]
+    for chip in lw_values(pending):
+        if (not allyHasChip(myID, chip)):
+            continue
+        cd = getCooldown(chip, myID)
+        if ((cd != None) and (cd == 0)):
+            return True
+    return False
 
 def executeSupportPuzzleTurn():
     myID = getEntity()
@@ -6403,14 +6419,14 @@ def executeSupportPuzzleTurn():
         return True
     solverCell = getCell(_puzzleSolverID)
     dist = getCellDistance(getCell(), solverCell)
-    if ((getTurn() <= 2) and (dist > 3)):
+    if (((getTurn() <= 3) and (dist > 3)) and hasPendingSolverHPBuff(myID)):
         puzzleGatherMove(myID, solverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
     return True
 
 def executeSolverPuzzleTurn():
-    global _bossTargetEID, _myAssignedCrystal
+    global _bossTargetEID, _myAssignedCrystal, _pzGatherDone, _pzSolverMaxLifeSnapshot
     if (getTurn() == 1):
         allA = []
         push(allA, getEntity())
@@ -6422,10 +6438,14 @@ def executeSolverPuzzleTurn():
             logMapLayout()
     myCell = getCell()
     myID = getEntity()
-    if (getTurn() <= 2):
-        say(lw_add(lw_add("PZ SOLVER: waiting for allies (turn ", getTurn()), ")"))
+    maxLifeNow = getTotalLife(myID)
+    buffsFlowing = ((_pzSolverMaxLifeSnapshot == (-1)) or (maxLifeNow > _pzSolverMaxLifeSnapshot))
+    if ((not _pzGatherDone) and (((getTurn() <= 2) or (((getTurn() <= 4) and buffsFlowing))))):
+        say(lw_add(lw_add(lw_add(lw_add("PZ SOLVER: waiting for ally buffs (turn ", getTurn()), ", maxHP "), maxLifeNow), ")"))
         solverSelfBuff(myID)
+        _pzSolverMaxLifeSnapshot = getTotalLife(myID)
         return True
+    _pzGatherDone = True
     firstEID = pickNearestUnsolvedCrystal(myCell)
     if (firstEID == None):
         say("PZ SOLVER: all done")

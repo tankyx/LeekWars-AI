@@ -8,6 +8,8 @@ global _usedInversion = false
 global _isBossFight = false
 global _puzzleRole = null
 global _puzzleSolverID = -1
+global _pzSolverMaxLifeSnapshot = -1
+global _pzGatherDone = false
 
 global _graalCell = -1
 global _graalX = 0
@@ -900,7 +902,8 @@ function castBuffsOnSolver(myID, buffList) {
         if (!allyHasChip(myID, chip)) continue
         var cd = getCooldown(chip, myID)
         if (cd != null && cd == 0 && getTP() >= cost && dist <= range) {
-            if (useChip(chip, _puzzleSolverID) == 1) say("PZ BUFF " + label + " -> solver")
+            // useChip returns 2 on critical cast — both count as success
+            if (useChip(chip, _puzzleSolverID) >= 1) say("PZ BUFF " + label + " -> solver")
         }
     }
 }
@@ -933,8 +936,14 @@ function executeBufferPuzzleTurn() {
         return true
     }
 
-    // Buffer (KurtGodel) stays put — RAGE/SLB have range 8, cast when solver is in range
-    // Don't move into the enclave or the solver's path
+    // Buffer (KurtGodel) closes to range 3 during the gather window so ARMORING
+    // and ADRENALINE reach the solver (RAGE/SLB have range 8 and land anyway)
+    var bufSolverCell = getCell(_puzzleSolverID)
+    var bufDist = getCellDistance(getCell(), bufSolverCell)
+    if (getTurn() <= 3 && bufDist > 3 && hasPendingSolverHPBuff(myID)) {
+        puzzleGatherMove(myID, bufSolverCell)
+    }
+
     var buffs = [
         [CHIP_ELEVATION, 5, 6, "elev"],
         [CHIP_ARMORING, 3, 5, "armor"],
@@ -945,6 +954,18 @@ function executeBufferPuzzleTurn() {
     ]
     castBuffsOnSolver(myID, buffs)
     return true
+}
+
+// True while this ally still has an undelivered solver buff ready (self-cooldown
+// checks only — cross-entity getCooldown is unreliable)
+function hasPendingSolverHPBuff(myID) {
+    var pending = [CHIP_ELEVATION, CHIP_ARMORING, CHIP_ADRENALINE]
+    for (var chip in pending) {
+        if (!allyHasChip(myID, chip)) continue
+        var cd = getCooldown(chip, myID)
+        if (cd != null && cd == 0) return true
+    }
+    return false
 }
 
 function executeSupportPuzzleTurn() {
@@ -958,8 +979,9 @@ function executeSupportPuzzleTurn() {
     var solverCell = getCell(_puzzleSolverID)
     var dist = getCellDistance(getCell(), solverCell)
 
-    // Support needs range 3 for ARMORING — move close on early turns, then stay put
-    if (getTurn() <= 2 && dist > 3) {
+    // Support needs range 3 for ARMORING — close on the solver while it still
+    // has undelivered HP buffs, then stay put
+    if (getTurn() <= 3 && dist > 3 && hasPendingSolverHPBuff(myID)) {
         puzzleGatherMove(myID, solverCell)
     }
 
@@ -987,13 +1009,20 @@ function executeSolverPuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
-    // Gather phase: turns 1-2, wait for allies to arrive and buff us
-    // Self-buff with leftover TP while waiting
-    if (getTurn() <= 2) {
-        say("PZ SOLVER: waiting for allies (turn " + getTurn() + ")")
+    // Gather phase: hold position until allies' HP buffs stop flowing in.
+    // Elevation/armoring are permanent effects (turns=0) invisible to getEffects,
+    // so detect them via max-life growth between our turns. Snapshot is taken
+    // AFTER self-buffs, so growth seen next turn can only come from ally casts.
+    var maxLifeNow = getTotalLife(myID)
+    var buffsFlowing = _pzSolverMaxLifeSnapshot == -1 || maxLifeNow > _pzSolverMaxLifeSnapshot
+    if (!_pzGatherDone && (getTurn() <= 2 || (getTurn() <= 4 && buffsFlowing))) {
+        say("PZ SOLVER: waiting for ally buffs (turn " + getTurn() + ", maxHP " + maxLifeNow + ")")
         solverSelfBuff(myID)
+        _pzSolverMaxLifeSnapshot = getTotalLife(myID)
         return true
     }
+    // One-way gate: a late buff landing mid-solve must not pull us back into waiting
+    _pzGatherDone = true
 
     // Pick first crystal target for teleportation
     var firstEID = pickNearestUnsolvedCrystal(myCell)
