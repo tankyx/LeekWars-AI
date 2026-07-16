@@ -7312,6 +7312,9 @@ def choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap):
 def executeSupportPuzzleTurn():
     myID = getEntity()
     if (getStrength() >= 300):
+        if (((getTurn() == 1) and (_puzzleSolverID != (-1))) and isAlive(_puzzleSolverID)):
+            farBuffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"]]
+            castBuffsOnSolver(myID, farBuffs)
         puzzleSelfPreserve(myID, False)
         return True
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
@@ -7346,6 +7349,11 @@ def executeSolverPuzzleTurn():
     if ((not _pzGatherDone) and (((getTurn() <= 2) or (((getTurn() <= 3) and (lifeGain >= 400)))))):
         say(lw_add(lw_add(lw_add(lw_add("PZ SOLVER: waiting for ally buffs (turn ", getTurn()), ", maxHP "), maxLifeNow), ")"))
         solverSelfBuff(myID)
+        waitArmy = puzzleArmyCells()
+        if ((count(waitArmy) > 0) and (nearestArmyDistFrom(getCell(), waitArmy) <= 12)):
+            waitKite = choosePuzzleSustainCellCapped(myID, getCell(), False, 12)
+            if ((waitKite != (-1)) and (waitKite != getCell())):
+                moveTowardCell(waitKite, min(getMP(), 3))
         _pzSolverMaxLifeSnapshot = getTotalLife(myID)
         return True
     _pzGatherDone = True

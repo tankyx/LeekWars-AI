@@ -1981,9 +1981,19 @@ function executeSupportPuzzleTurn() {
     var myID = getEntity()
 
     // Phase-2 carries (high STR) are worth more alive than their buffs: ED ate
-    // a ~2000 alpha at T2 during delivery in 6 of 8 fights and phase 2 started
-    // without its only damage dealer. Scatter from turn 1, deliver nothing.
+    // a ~2000 alpha at T2 during delivery in 6 of 8 fights. BUT fight 52978172
+    // showed full withdrawal guts the solvers (KG entered at 3755 maxHP, dead
+    // T5, puzzle failed). Compromise: on T1 cast the range-5 buffs from the
+    // SPAWN — solvers are in range, zero movement, zero added exposure — then
+    // scatter forever.
     if (getStrength() >= 300) {
+        if (getTurn() == 1 && _puzzleSolverID != -1 && isAlive(_puzzleSolverID)) {
+            var farBuffs = [
+                [CHIP_ELEVATION, 5, 6, "elev"],
+                [CHIP_LEATHER_BOOTS, 5, 3, "boots"]
+            ]
+            castBuffsOnSolver(myID, farBuffs)
+        }
         puzzleSelfPreserve(myID, false)
         return true
     }
@@ -2042,6 +2052,14 @@ function executeSolverPuzzleTurn() {
     if (!_pzGatherDone && (getTurn() <= 2 || (getTurn() <= 3 && lifeGain >= 400))) {
         say("PZ SOLVER: waiting for ally buffs (turn " + getTurn() + ", maxHP " + maxLifeNow + ")")
         solverSelfBuff(myID)
+        // Don't idle on spawn while the army closes — drift away a few cells,
+        // but only under actual pressure (drifting without an army nearby just
+        // adds crystal travel)
+        var waitArmy = puzzleArmyCells()
+        if (count(waitArmy) > 0 && nearestArmyDistFrom(getCell(), waitArmy) <= 12) {
+            var waitKite = choosePuzzleSustainCellCapped(myID, getCell(), false, 12)
+            if (waitKite != -1 && waitKite != getCell()) moveTowardCell(waitKite, min(getMP(), 3))
+        }
         _pzSolverMaxLifeSnapshot = getTotalLife(myID)
         return true
     }
