@@ -5490,6 +5490,7 @@ _pzRouteStand = (-1)
 _pzRouteChip = None
 _pzRouteTarget = (-1)
 _pzFocusEID = None
+_pzSolverEverSeen = False
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -5610,7 +5611,7 @@ def allyHasChip(eid, chipId):
     return (cd != None)
 
 def assignPuzzleRoles():
-    global _puzzleRole, _puzzleSolverID
+    global _puzzleRole, _puzzleSolverID, _pzSolverEverSeen
     if (_bossPhase != "PUZZLE"):
         _puzzleRole = None
         _puzzleSolverID = (-1)
@@ -5633,7 +5634,9 @@ def assignPuzzleRoles():
         else:
             if (name == "KurtGodel"):
                 bufferID = aid
-    if (solverID == (-1)):
+    if (solverID != (-1)):
+        _pzSolverEverSeen = True
+    if ((solverID == (-1)) and (not _pzSolverEverSeen)):
         solverID = lw_get(allAllies, 0)
     _puzzleSolverID = solverID
     if (myID == bufferID):
@@ -6766,8 +6769,8 @@ def executeSolverPuzzleTurn():
     myCell = getCell()
     myID = getEntity()
     maxLifeNow = getTotalLife(myID)
-    buffsFlowing = ((_pzSolverMaxLifeSnapshot == (-1)) or (maxLifeNow > _pzSolverMaxLifeSnapshot))
-    if ((not _pzGatherDone) and (((getTurn() <= 2) or (((getTurn() <= 4) and buffsFlowing))))):
+    lifeGain = (maxLifeNow if (_pzSolverMaxLifeSnapshot == (-1)) else lw_sub(maxLifeNow, _pzSolverMaxLifeSnapshot))
+    if ((not _pzGatherDone) and (((getTurn() <= 2) or (((getTurn() <= 3) and (lifeGain >= 400)))))):
         say(lw_add(lw_add(lw_add(lw_add("PZ SOLVER: waiting for ally buffs (turn ", getTurn()), ", maxHP "), maxLifeNow), ")"))
         solverSelfBuff(myID)
         _pzSolverMaxLifeSnapshot = getTotalLife(myID)

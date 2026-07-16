@@ -21,6 +21,7 @@ global _pzRouteTarget = -1
 // Focus crystal: solver sticks to one crystal until solved — "nearest unsolved"
 // flips as she walks and the retargeting thrash wastes whole turns
 global _pzFocusEID = null
+global _pzSolverEverSeen = false
 
 global _graalCell = -1
 global _graalX = 0
@@ -204,8 +205,14 @@ function assignPuzzleRoles() {
         else if (name == "KurtGodel") bufferID = aid
     }
 
-    // Fallback if named leeks not found
-    if (solverID == -1) solverID = allAllies[0]
+    if (solverID != -1) { _pzSolverEverSeen = true }
+
+    // Fallback to first ally ONLY when the named solver never existed (non-Ada
+    // team). If she was here and DIED, nobody else has grapple/boxing — a
+    // chipless "solver" walks into the castle and dies for nothing (fight
+    // 52977149: ED+MH). No solver -> everyone scatters and survives; KurtGodel
+    // kited the army for 56 turns to a draw that way.
+    if (solverID == -1 && !_pzSolverEverSeen) solverID = allAllies[0]
 
     _puzzleSolverID = solverID
 
@@ -1392,8 +1399,12 @@ function executeSolverPuzzleTurn() {
     // so detect them via max-life growth between our turns. Snapshot is taken
     // AFTER self-buffs, so growth seen next turn can only come from ally casts.
     var maxLifeNow = getTotalLife(myID)
-    var buffsFlowing = _pzSolverMaxLifeSnapshot == -1 || maxLifeNow > _pzSolverMaxLifeSnapshot
-    if (!_pzGatherDone && (getTurn() <= 2 || (getTurn() <= 4 && buffsFlowing))) {
+    var lifeGain = _pzSolverMaxLifeSnapshot == -1 ? maxLifeNow : maxLifeNow - _pzSolverMaxLifeSnapshot
+    // Wait T1-2 (bulk of the buffs), extend to T3 only for a SUBSTANTIAL gain
+    // still flowing. Fight 52977149: +534/+113 trickles extended the wait to T4
+    // and the two lost tempo turns cost the fight — the army clock (~2500/turn)
+    // outprices any marginal buff.
+    if (!_pzGatherDone && (getTurn() <= 2 || (getTurn() <= 3 && lifeGain >= 400))) {
         say("PZ SOLVER: waiting for ally buffs (turn " + getTurn() + ", maxHP " + maxLifeNow + ")")
         solverSelfBuff(myID)
         _pzSolverMaxLifeSnapshot = getTotalLife(myID)
