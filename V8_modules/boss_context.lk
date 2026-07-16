@@ -1277,16 +1277,24 @@ function executeBossCombatPoke() {
             }
             if (np > getMP() + 4) {
                 var bestA = -1
-                var bestC2 = 1
+                var bestC2 = 99
                 for (var aim2 in armyCells) {
                     var dT2 = getCellDistance(getCell(), aim2)
                     if (dT2 == null || dT2 > 14) continue
                     var cl2 = 0
+                    var pri2 = 0
                     for (var ac3 in armyCells) {
                         var dd3 = getCellDistance(aim2, ac3)
-                        if (dd3 != null && dd3 <= 2) cl2++
+                        if (dd3 != null && dd3 <= 2) {
+                            cl2++
+                            var e3 = getEntityOnCell(ac3)
+                            if (e3 != null && e3 != -1) pri2 += bossTargetPriority(getName(e3))
+                        }
                     }
-                    if (cl2 > bestC2) { bestC2 = cl2; bestA = aim2 }
+                    if (cl2 < 2) continue
+                    // Dive at the SCRIBE's cluster when possible (priority sum)
+                    var dsc = cl2 * 20 + pri2
+                    if (bestA == -1 || dsc > bestC2) { bestC2 = dsc; bestA = aim2 }
                 }
                 if (bestA != -1) {
                     var land = findEmptyCellNear(bestA, getCell(), 12, 2)
@@ -1330,7 +1338,13 @@ function executeBossCombatPoke() {
     // wall-blocked distance 8-10 pokes zero forever (fight 52978134 T7-T10).
     var nearestC = -1
     var nearestPath = 9999
+    var manyAlive = count(armyCells) > 1
     for (var ac in armyCells) {
+        // Don't walk toward the king — poking him is vetoed anyway
+        if (manyAlive) {
+            var acEnt = getEntityOnCell(ac)
+            if (acEnt != null && acEnt != -1 && getName(acEnt) == "fennel_king") continue
+        }
         var pd = getPathLength(getCell(), ac)
         if (pd != null && pd < nearestPath) { nearestPath = pd; nearestC = ac }
     }
@@ -1349,8 +1363,22 @@ function executeBossCombatPoke() {
 function bossTargetPriority(name) {
     if (name == "fennel_scribe") { return 60 }
     if (name == "fennel_squire") { return 25 }
-    if (name == "fennel_king") { return -15 }
+    // -125 ranks the king below EVERY possible non-king aim but above "no
+    // target at all": he healed back 82% of what we poked into him, but a
+    // vetoed poke is 100% wasted when he's the only one in reach
+    if (name == "fennel_king") { return -125 }
     return 0
+}
+
+function armyCountAlive() {
+    var n = 0
+    var enemies = getAliveEnemies()
+    for (var eid in enemies) {
+        var nm = getName(eid)
+        if (nm == "graal" || indexOf(nm, "crystal") != -1) continue
+        n++
+    }
+    return n
 }
 
 function pokeChipReady(myID, chip) {

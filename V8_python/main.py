@@ -6653,18 +6653,25 @@ def executeBossCombatPoke():
                     np = p2
             if (np > lw_add(getMP(), 4)):
                 bestA = (-1)
-                bestC2 = 1
+                bestC2 = 99
                 for aim2 in lw_values(armyCells):
                     dT2 = getCellDistance(getCell(), aim2)
                     if ((dT2 == None) or (dT2 > 14)):
                         continue
                     cl2 = 0
+                    pri2 = 0
                     for ac3 in lw_values(armyCells):
                         dd3 = getCellDistance(aim2, ac3)
                         if ((dd3 != None) and (dd3 <= 2)):
                             cl2 = lw_add(cl2, 1)
-                    if (cl2 > bestC2):
-                        bestC2 = cl2
+                            e3 = getEntityOnCell(ac3)
+                            if ((e3 != None) and (e3 != (-1))):
+                                pri2 = lw_add(pri2, bossTargetPriority(getName(e3)))
+                    if (cl2 < 2):
+                        continue
+                    dsc = lw_add(lw_mul(cl2, 20), pri2)
+                    if ((bestA == (-1)) or (dsc > bestC2)):
+                        bestC2 = dsc
                         bestA = aim2
                 if (bestA != (-1)):
                     land = findEmptyCellNear(bestA, getCell(), 12, 2)
@@ -6709,7 +6716,12 @@ def executeBossCombatPoke():
     swatCrystals(myID)
     nearestC = (-1)
     nearestPath = 9999
+    manyAlive = (count(armyCells) > 1)
     for ac in lw_values(armyCells):
+        if manyAlive:
+            acEnt = getEntityOnCell(ac)
+            if (((acEnt != None) and (acEnt != (-1))) and (getName(acEnt) == "fennel_king")):
+                continue
         pd = getPathLength(getCell(), ac)
         if ((pd != None) and (pd < nearestPath)):
             nearestPath = pd
@@ -6729,8 +6741,18 @@ def bossTargetPriority(name):
     if (name == "fennel_squire"):
         return 25
     if (name == "fennel_king"):
-        return (-15)
+        return (-125)
     return 0
+
+def armyCountAlive():
+    n = 0
+    enemies = getAliveEnemies()
+    for eid in lw_values(enemies):
+        nm = getName(eid)
+        if ((nm == "graal") or (indexOf(nm, "crystal") != (-1))):
+            continue
+        n = lw_add(n, 1)
+    return n
 
 def pokeChipReady(myID, chip):
     if (not allyHasChip(myID, chip)):
