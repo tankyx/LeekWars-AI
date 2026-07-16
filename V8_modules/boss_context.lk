@@ -1253,7 +1253,57 @@ function executeBossCombatPoke() {
     // Pass 2: nothing reached — ONE committed approach, longest range first
     // (fight 52978075: plague's deep approach burned the MP venom needed;
     // per-chip movement races starved each other every turn)
-    if (casted == 0) {
+    // DUMP posture (user doctrine: "dump poison then sustain"): with 2+ big
+    // poison cooldowns up, DIVE — approach in descending range order so one
+    // walk unlocks the whole kit (plague 5 -> arsenic 4 -> covid 2), unload,
+    // then the sustain turns kite hard while it all ticks.
+    var bigReady = 0
+    if (pokeChipReady(myID, CHIP_COVID)) bigReady++
+    if (pokeChipReady(myID, CHIP_PLAGUE)) bigReady++
+    if (pokeChipReady(myID, CHIP_TOXIN)) bigReady++
+    if (pokeChipReady(myID, CHIP_ARSENIC)) bigReady++
+    var dumping = getMagic() >= 300 && bigReady >= 2
+
+    if (dumping) {
+        // Teleport INTO the enclave when the cluster is beyond walking reach
+        // and the payload justifies it (covid up, or the whole kit ready)
+        var diveTpCd = getCooldown(CHIP_TELEPORTATION, myID)
+        var payload = pokeChipReady(myID, CHIP_COVID) || bigReady >= 3
+        if (payload && diveTpCd != null && diveTpCd == 0 && getTP() >= 20) {
+            var np = 9999
+            for (var ac2 in armyCells) {
+                var p2 = getPathLength(getCell(), ac2)
+                if (p2 != null && p2 < np) np = p2
+            }
+            if (np > getMP() + 4) {
+                var bestA = -1
+                var bestC2 = 1
+                for (var aim2 in armyCells) {
+                    var dT2 = getCellDistance(getCell(), aim2)
+                    if (dT2 == null || dT2 > 14) continue
+                    var cl2 = 0
+                    for (var ac3 in armyCells) {
+                        var dd3 = getCellDistance(aim2, ac3)
+                        if (dd3 != null && dd3 <= 2) cl2++
+                    }
+                    if (cl2 > bestC2) { bestC2 = cl2; bestA = aim2 }
+                }
+                if (bestA != -1) {
+                    var land = findEmptyCellNear(bestA, getCell(), 12, 2)
+                    if (land != -1 && useChipOnCell(CHIP_TELEPORTATION, land) >= 1) {
+                        say("PZ DIVE c" + bestC2)
+                    }
+                }
+            }
+        }
+        if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, true)) casted++
+        if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, false)) casted++
+        if (tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, true)) casted++
+        if (tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, true)) casted++
+        if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, false)) casted++
+        casted += tryWeaponStrike(myID)
+        if (casted > 0) say("PZ DUMP x" + casted)
+    } else if (casted == 0) {
         if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, true)) casted++
         else if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, true)) casted++
         else if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, true)) casted++
@@ -1288,10 +1338,51 @@ function executeBossCombatPoke() {
     if (nearestC != -1 && nearestPath > approachGate) {
         moveTowardCell(nearestC, min(getMP(), nearestPath - (approachGate - 1)))
     } else {
-        var kite = choosePuzzleSustainCellCapped(myID, getCell(), false, 9)
+        var kite = pokeOrbitalCell(myID, armyCells)
         if (kite != -1 && kite != getCell()) moveTowardCell(kite)
     }
     return true
+}
+
+function pokeChipReady(myID, chip) {
+    if (!allyHasChip(myID, chip)) { return false }
+    var cd = getCooldown(chip, myID)
+    return cd != null && cd == 0
+}
+
+// Retreat cell for the poke orbit: like the escort kite but with a big bonus
+// for FIRING POSITIONS — cells with real LoS to an army unit within 10.
+// Fight 52978479: carriers parked in wall-shadow pockets ("none d=3" through
+// a wall) and 32 of 34 poke turns fired nothing.
+function pokeOrbitalCell(myID, armyCells) {
+    var mp = getMP()
+    if (mp <= 0) { return -1 }
+    var myCell = getCell()
+    var allies = getAliveAllies()
+    var best = -1
+    var bestScore = -99999
+    for (var c = 0; c < 613; c++) {
+        var dMe = getCellDistance(myCell, c)
+        if (dMe == null || dMe > mp) continue
+        if (c != myCell && (isObstacle(c) || isEntity(c))) continue
+        if (c != myCell) {
+            var pl = getPathLength(myCell, c)
+            if (pl == null || pl > mp) continue
+        }
+        var score = min(nearestArmyDistFrom(c, armyCells), 9) * 14
+        var canFire = false
+        for (var ac in armyCells) {
+            var dT = getCellDistance(c, ac)
+            if (dT != null && dT >= 2 && dT <= 10 && lineOfSight(c, ac)) { canFire = true; break }
+        }
+        if (canFire) score += 70
+        for (var aid in allies) {
+            var dA = getCellDistance(c, getCell(aid))
+            if (dA != null && dA < 2) score -= 25
+        }
+        if (score > bestScore) { bestScore = score; best = c }
+    }
+    return best
 }
 
 // Ranged strikes from the orbit. Stat-aware weapon table: STR carriers use

@@ -6632,24 +6632,76 @@ def executeBossCombatPoke():
     if (getStrength() >= 300):
         if tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, False):
             casted = lw_add(casted, 1)
-    if (casted == 0):
-        if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, True):
+    bigReady = 0
+    if pokeChipReady(myID, CHIP_COVID):
+        bigReady = lw_add(bigReady, 1)
+    if pokeChipReady(myID, CHIP_PLAGUE):
+        bigReady = lw_add(bigReady, 1)
+    if pokeChipReady(myID, CHIP_TOXIN):
+        bigReady = lw_add(bigReady, 1)
+    if pokeChipReady(myID, CHIP_ARSENIC):
+        bigReady = lw_add(bigReady, 1)
+    dumping = ((getMagic() >= 300) and (bigReady >= 2))
+    if dumping:
+        diveTpCd = getCooldown(CHIP_TELEPORTATION, myID)
+        payload = (pokeChipReady(myID, CHIP_COVID) or (bigReady >= 3))
+        if (((payload and (diveTpCd != None)) and (diveTpCd == 0)) and (getTP() >= 20)):
+            np = 9999
+            for ac2 in lw_values(armyCells):
+                p2 = getPathLength(getCell(), ac2)
+                if ((p2 != None) and (p2 < np)):
+                    np = p2
+            if (np > lw_add(getMP(), 4)):
+                bestA = (-1)
+                bestC2 = 1
+                for aim2 in lw_values(armyCells):
+                    dT2 = getCellDistance(getCell(), aim2)
+                    if ((dT2 == None) or (dT2 > 14)):
+                        continue
+                    cl2 = 0
+                    for ac3 in lw_values(armyCells):
+                        dd3 = getCellDistance(aim2, ac3)
+                        if ((dd3 != None) and (dd3 <= 2)):
+                            cl2 = lw_add(cl2, 1)
+                    if (cl2 > bestC2):
+                        bestC2 = cl2
+                        bestA = aim2
+                if (bestA != (-1)):
+                    land = findEmptyCellNear(bestA, getCell(), 12, 2)
+                    if ((land != (-1)) and (useChipOnCell(CHIP_TELEPORTATION, land) >= 1)):
+                        say(lw_add("PZ DIVE c", bestC2))
+        if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, True):
             casted = lw_add(casted, 1)
-        else:
-            if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, True):
+        if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
+            casted = lw_add(casted, 1)
+        if tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, True):
+            casted = lw_add(casted, 1)
+        if tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, True):
+            casted = lw_add(casted, 1)
+        if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, False):
+            casted = lw_add(casted, 1)
+        casted = lw_add(casted, tryWeaponStrike(myID))
+        if (casted > 0):
+            say(lw_add("PZ DUMP x", casted))
+    else:
+        if (casted == 0):
+            if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, True):
                 casted = lw_add(casted, 1)
             else:
-                if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, True):
+                if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, True):
                     casted = lw_add(casted, 1)
                 else:
-                    if ((getStrength() >= 300) and tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, True)):
+                    if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, True):
                         casted = lw_add(casted, 1)
-        if (casted > 0):
-            if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
-                casted = lw_add(casted, 1)
-            if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, False):
-                casted = lw_add(casted, 1)
-            casted = lw_add(casted, tryWeaponStrike(myID))
+                    else:
+                        if ((getStrength() >= 300) and tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, True)):
+                            casted = lw_add(casted, 1)
+            if (casted > 0):
+                if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
+                    casted = lw_add(casted, 1)
+                if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, False):
+                    casted = lw_add(casted, 1)
+                casted = lw_add(casted, tryWeaponStrike(myID))
     if (casted > 0):
         say(lw_add("PZ POKE x", casted))
     else:
@@ -6666,10 +6718,57 @@ def executeBossCombatPoke():
     if ((nearestC != (-1)) and (nearestPath > approachGate)):
         moveTowardCell(nearestC, min(getMP(), lw_sub(nearestPath, (lw_sub(approachGate, 1)))))
     else:
-        kite = choosePuzzleSustainCellCapped(myID, getCell(), False, 9)
+        kite = pokeOrbitalCell(myID, armyCells)
         if ((kite != (-1)) and (kite != getCell())):
             moveTowardCell(kite)
     return True
+
+def pokeChipReady(myID, chip):
+    if (not allyHasChip(myID, chip)):
+        return False
+    cd = getCooldown(chip, myID)
+    return ((cd != None) and (cd == 0))
+
+def pokeOrbitalCell(myID, armyCells):
+    mp = getMP()
+    if (mp <= 0):
+        return (-1)
+    myCell = getCell()
+    allies = getAliveAllies()
+    best = (-1)
+    bestScore = (-99999)
+    c = 0
+    while (c < 613):
+        dMe = getCellDistance(myCell, c)
+        if ((dMe == None) or (dMe > mp)):
+            c = lw_add(c, 1)
+            continue
+        if ((c != myCell) and ((isObstacle(c) or isEntity(c)))):
+            c = lw_add(c, 1)
+            continue
+        if (c != myCell):
+            pl = getPathLength(myCell, c)
+            if ((pl == None) or (pl > mp)):
+                c = lw_add(c, 1)
+                continue
+        score = lw_mul(min(nearestArmyDistFrom(c, armyCells), 9), 14)
+        canFire = False
+        for ac in lw_values(armyCells):
+            dT = getCellDistance(c, ac)
+            if ((((dT != None) and (dT >= 2)) and (dT <= 10)) and lineOfSight(c, ac)):
+                canFire = True
+                break
+        if canFire:
+            score = lw_add(score, 70)
+        for aid in lw_values(allies):
+            dA = getCellDistance(c, getCell(aid))
+            if ((dA != None) and (dA < 2)):
+                score = lw_num(score) - lw_num(25)
+        if (score > bestScore):
+            bestScore = score
+            best = c
+        c = lw_add(c, 1)
+    return best
 
 def tryWeaponStrike(myID):
     strTable = [[WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, False], [WEAPON_RIFLE, 7, 9, 7, 0, False], [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, False], [WEAPON_MAGNUM, 1, 8, 5, 0, False], [WEAPON_DESTROYER, 1, 6, 6, 0, False]]
