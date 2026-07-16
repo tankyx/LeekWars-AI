@@ -6665,12 +6665,12 @@ def executeBufferPuzzleTurn():
         return True
     bufSolverCell = getCell(_puzzleSolverID)
     bufDist = getCellDistance(getCell(), bufSolverCell)
-    if (((getTurn() <= 3) and (bufDist > 3)) and hasPendingSolverHPBuff(myID)):
+    if (((getTurn() <= 2) and (bufDist > 3)) and hasPendingSolverHPBuff(myID)):
         puzzleGatherMove(myID, bufSolverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_RAGE, 8, 4, "rage"], [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
     puzzleSustainSolver(myID)
-    puzzleSelfPreserve(myID, (getTurn() <= 3))
+    puzzleSelfPreserve(myID, (getTurn() <= 2))
     return True
 
 def hasPendingSolverHPBuff(myID):
@@ -6809,7 +6809,7 @@ def choosePuzzleSustainCell(myID, anchorCell, leashed):
             if ((pl == None) or (pl > mp)):
                 c = lw_add(c, 1)
                 continue
-        score = lw_mul(min(nearestArmyDistFrom(c, armyCells), 9), 10)
+        score = lw_mul(min(nearestArmyDistFrom(c, armyCells), 12), 14)
         if isPuzzleWorkZone(c):
             score = lw_num(score) - lw_num(80)
         if leashed:
@@ -6838,12 +6838,12 @@ def executeSupportPuzzleTurn():
         return True
     solverCell = getCell(_puzzleSolverID)
     dist = getCellDistance(getCell(), solverCell)
-    if (((getTurn() <= 3) and (dist > 3)) and hasPendingSolverHPBuff(myID)):
+    if (((getTurn() <= 2) and (dist > 3)) and hasPendingSolverHPBuff(myID)):
         puzzleGatherMove(myID, solverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
     puzzleSustainSolver(myID)
-    puzzleSelfPreserve(myID, (getTurn() <= 3))
+    puzzleSelfPreserve(myID, (getTurn() <= 2))
     return True
 
 def executeSolverPuzzleTurn():

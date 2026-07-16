@@ -1279,7 +1279,7 @@ function executeBufferPuzzleTurn() {
     // and ADRENALINE reach the solver (RAGE/SLB have range 8 and land anyway)
     var bufSolverCell = getCell(_puzzleSolverID)
     var bufDist = getCellDistance(getCell(), bufSolverCell)
-    if (getTurn() <= 3 && bufDist > 3 && hasPendingSolverHPBuff(myID)) {
+    if (getTurn() <= 2 && bufDist > 3 && hasPendingSolverHPBuff(myID)) {
         puzzleGatherMove(myID, bufSolverCell)
     }
 
@@ -1295,7 +1295,7 @@ function executeBufferPuzzleTurn() {
     puzzleSustainSolver(myID)
     // Leash only during the delivery window — armoring/adren cooldowns expiring
     // mid-fight must NOT pull allies back into army range for a top-up
-    puzzleSelfPreserve(myID, getTurn() <= 3)
+    puzzleSelfPreserve(myID, getTurn() <= 2)
     return true
 }
 
@@ -1458,7 +1458,9 @@ function choosePuzzleSustainCell(myID, anchorCell, leashed) {
             var pl = getPathLength(myCell, c)
             if (pl == null || pl > mp) continue
         }
-        var score = min(nearestArmyDistFrom(c, armyCells), 9) * 10
+        // Army distance dominates: fight 52977548 — ED never escaped the zone
+        // and died T6 with ~4700 absorbed; every cell of distance matters
+        var score = min(nearestArmyDistFrom(c, armyCells), 12) * 14
         if (isPuzzleWorkZone(c)) score -= 80
         if (leashed) {
             var dS = getCellDistance(c, anchorCell)
@@ -1491,7 +1493,7 @@ function executeSupportPuzzleTurn() {
 
     // Support needs range 3 for ARMORING — close on the solver while it still
     // has undelivered HP buffs
-    if (getTurn() <= 3 && dist > 3 && hasPendingSolverHPBuff(myID)) {
+    if (getTurn() <= 2 && dist > 3 && hasPendingSolverHPBuff(myID)) {
         puzzleGatherMove(myID, solverCell)
     }
 
@@ -1504,7 +1506,7 @@ function executeSupportPuzzleTurn() {
     ]
     castBuffsOnSolver(myID, buffs)
     puzzleSustainSolver(myID)
-    puzzleSelfPreserve(myID, getTurn() <= 3)
+    puzzleSelfPreserve(myID, getTurn() <= 2)
     return true
 }
 
