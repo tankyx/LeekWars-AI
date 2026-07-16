@@ -40,7 +40,9 @@ function detectBossFight() {
     var entities = getAliveEnemies()
     for (var eid in entities) {
         var entityType = getName(eid)
-        if (entityType == "graal") {
+        // fennel_king too: lets a graal-less scenario start directly in
+        // COMBAT phase (local phase-2 sandbox); real fights have both
+        if (entityType == "graal" || entityType == "fennel_king") {
             return true
         }
     }
@@ -1171,15 +1173,31 @@ function executeBossCombatPoke() {
     if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 2, armyCells)) casted++
     if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 2, armyCells)) casted++
     if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells)) casted++
-    if (casted > 0) say("PZ POKE x" + casted)
+    if (casted > 0) {
+        say("PZ POKE x" + casted)
+    } else {
+        say("PZ POKE none d=" + nearestArmyDistFrom(getCell(), armyCells) + " tp=" + getTP() + " mp=" + getMP())
+    }
 
     // Swat AFTER poking — venom (cd 1) doubles as the crystal swat and the
     // swat was eating the poke's cooldown
     swatCrystals(myID)
 
-    // Orbit at cast range, don't flee to the horizon
-    var kite = choosePuzzleSustainCellCapped(myID, getCell(), false, 9)
-    if (kite != -1 && kite != getCell()) moveTowardCell(kite)
+    // Orbit movement. Manhattan distance LIES around the castle walls (sandbox:
+    // "d=10" needed a 14-cell walk), so gate on PATH length: approach when the
+    // army is out of poke reach, retreat only when genuinely close.
+    var nearestC = -1
+    var nearestPath = 9999
+    for (var ac in armyCells) {
+        var pd = getPathLength(getCell(), ac)
+        if (pd != null && pd < nearestPath) { nearestPath = pd; nearestC = ac }
+    }
+    if (nearestC != -1 && nearestPath > 9) {
+        moveTowardCell(nearestC, min(getMP(), nearestPath - 8))
+    } else {
+        var kite = choosePuzzleSustainCellCapped(myID, getCell(), false, 9)
+        if (kite != -1 && kite != getCell()) moveTowardCell(kite)
+    }
     return true
 }
 

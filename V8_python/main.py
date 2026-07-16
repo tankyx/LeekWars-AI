@@ -5507,7 +5507,7 @@ def detectBossFight():
     entities = getAliveEnemies()
     for eid in lw_values(entities):
         entityType = getName(eid)
-        if (entityType == "graal"):
+        if ((entityType == "graal") or (entityType == "fennel_king")):
             return True
     return False
 
@@ -6583,10 +6583,22 @@ def executeBossCombatPoke():
         casted = lw_add(casted, 1)
     if (casted > 0):
         say(lw_add("PZ POKE x", casted))
+    else:
+        say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ POKE none d=", nearestArmyDistFrom(getCell(), armyCells)), " tp="), getTP()), " mp="), getMP()))
     swatCrystals(myID)
-    kite = choosePuzzleSustainCellCapped(myID, getCell(), False, 9)
-    if ((kite != (-1)) and (kite != getCell())):
-        moveTowardCell(kite)
+    nearestC = (-1)
+    nearestPath = 9999
+    for ac in lw_values(armyCells):
+        pd = getPathLength(getCell(), ac)
+        if ((pd != None) and (pd < nearestPath)):
+            nearestPath = pd
+            nearestC = ac
+    if ((nearestC != (-1)) and (nearestPath > 9)):
+        moveTowardCell(nearestC, min(getMP(), lw_sub(nearestPath, 8)))
+    else:
+        kite = choosePuzzleSustainCellCapped(myID, getCell(), False, 9)
+        if ((kite != (-1)) and (kite != getCell())):
+            moveTowardCell(kite)
     return True
 
 def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells):
