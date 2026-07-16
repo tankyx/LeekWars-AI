@@ -7180,6 +7180,8 @@ def puzzleGatherMove(gathererID, targetSolverCell):
     walkDist = getCellDistance(getCell(), targetSolverCell)
     if ((walkDist != None) and (walkDist > 2)):
         moveTowardCell(targetSolverCell, min(getMP(), lw_sub(walkDist, 2)))
+    if (getMagic() >= 300):
+        return None
     gatherCell = getCell()
     gatherDist = getCellDistance(gatherCell, targetSolverCell)
     if ((gatherDist > 5) and (getTurn() >= 2)):

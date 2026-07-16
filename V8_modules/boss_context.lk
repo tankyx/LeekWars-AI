@@ -1784,6 +1784,9 @@ function puzzleGatherMove(gathererID, targetSolverCell) {
     if (walkDist != null && walkDist > 2) {
         moveTowardCell(targetSolverCell, min(getMP(), walkDist - 2))
     }
+    // MAG carriers keep teleportation for the phase-2 poison dive — fight
+    // 52978546: MH burned it gathering and her first dump slipped to T14
+    if (getMagic() >= 300) { return }
     var gatherCell = getCell()
     var gatherDist = getCellDistance(gatherCell, targetSolverCell)
     if (gatherDist > 5 && getTurn() >= 2) {
