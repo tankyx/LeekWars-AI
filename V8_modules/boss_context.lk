@@ -2114,6 +2114,36 @@ function isPoisoned(eid) {
 // 52977544 showed reactive thresholds lag the bursts (Ada took a naked 976
 // before the first fortress; KG ate a 3045 volley). ~2.7 TP/turn of insurance
 // beats one more push.
+// Walk toward a crystal. moveTowardCell to the crystal's OWN cell can fail
+// silently — the destination is occupied by the crystal entity, so pathing
+// may return zero movement (fight 52984811: Ada stalled at d=20 for six
+// turns, KG at d=24 for thirty, zero crystals solved all fight). Fall back
+// to the reachable cell that minimizes remaining distance.
+function solverWalkToward(targetCell) {
+    var swMoved = moveTowardCell(targetCell)
+    if (swMoved != null && swMoved > 0) { return true }
+    var mp = getMP()
+    if (mp <= 0) { return false }
+    var myC = getCell()
+    var best = -1
+    var bestD = getCellDistance(myC, targetCell)
+    if (bestD == null) { bestD = 999 }
+    for (var c = 0; c < 613; c++) {
+        var dm = getCellDistance(myC, c)
+        if (dm == null || dm > mp) continue
+        if (isObstacle(c) || isEntity(c)) continue
+        var pl = getPathLength(myC, c)
+        if (pl == null || pl > mp) continue
+        var dt = getCellDistance(c, targetCell)
+        if (dt != null && dt < bestD) { bestD = dt; best = c }
+    }
+    if (best != -1) {
+        moveTowardCell(best)
+        return true
+    }
+    return false
+}
+
 function solverSurvival(slMyID) {
     // Excalibur (the king) applies heavy poison — cure it, don't tank it
     // (fight 52977742: KG died with only ~1.6k direct damage logged)
@@ -2630,15 +2660,17 @@ function executeSolverPuzzleTurn() {
                 }
             }
             if (!tpDone) {
-                var nearest = findNearestEnclaveCell(myCell)
-                if (nearest != -1) {
-                    moveTowardCell(nearest)
-                    myCell = getCell()
-                    var tpTarget2 = findTeleportTarget(crystalCell0, myCell)
-                    if (tpTarget2 != -1 && (count(tpArmy) == 0 || nearestArmyDistFrom(tpTarget2, tpArmy) > 10)) {
-                        if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1) {
-                            myCell = getCell()
-                        }
+                // All teleport stands hot (or none found): close on foot.
+                // Fight 52984811: this branch used to walk to the enclave
+                // edge and return SILENTLY every turn — KG looped in it for
+                // 24 turns without a single say or crystal.
+                say("PZ SOLVER: closing on c=" + firstEID + " hot d=" + getCellDistance(myCell, crystalCell0))
+                solverWalkToward(crystalCell0)
+                myCell = getCell()
+                var tpTarget2 = findTeleportTarget(crystalCell0, myCell)
+                if (tpTarget2 != -1 && (count(tpArmy) == 0 || nearestArmyDistFrom(tpTarget2, tpArmy) > 10)) {
+                    if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1) {
+                        myCell = getCell()
                     }
                 }
                 solverSelfBuff(myID)
@@ -2651,7 +2683,7 @@ function executeSolverPuzzleTurn() {
                 // Never stand still — that stranded the solver to death in
                 // fight 52975331.
                 say("PZ SOLVER: closing on c=" + firstEID + " d=" + dToCrystal)
-                moveTowardCell(crystalCell0)
+                solverWalkToward(crystalCell0)
                 solverSelfBuff(myID)
                 return true
             }

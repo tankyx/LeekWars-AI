@@ -7395,6 +7395,41 @@ def isPoisoned(eid):
             return True
     return False
 
+def solverWalkToward(targetCell):
+    swMoved = moveTowardCell(targetCell)
+    if ((swMoved != None) and (swMoved > 0)):
+        return True
+    mp = getMP()
+    if (mp <= 0):
+        return False
+    myC = getCell()
+    best = (-1)
+    bestD = getCellDistance(myC, targetCell)
+    if (bestD == None):
+        bestD = 999
+    c = 0
+    while (c < 613):
+        dm = getCellDistance(myC, c)
+        if ((dm == None) or (dm > mp)):
+            c = lw_add(c, 1)
+            continue
+        if (isObstacle(c) or isEntity(c)):
+            c = lw_add(c, 1)
+            continue
+        pl = getPathLength(myC, c)
+        if ((pl == None) or (pl > mp)):
+            c = lw_add(c, 1)
+            continue
+        dt = getCellDistance(c, targetCell)
+        if ((dt != None) and (dt < bestD)):
+            bestD = dt
+            best = c
+        c = lw_add(c, 1)
+    if (best != (-1)):
+        moveTowardCell(best)
+        return True
+    return False
+
 def solverSurvival(slMyID):
     if (((getTP() >= 3) and allyHasChip(slMyID, CHIP_ANTIDOTE)) and isPoisoned(slMyID)):
         pcd = getCooldown(CHIP_ANTIDOTE, slMyID)
@@ -7764,14 +7799,13 @@ def executeSolverPuzzleTurn():
                         myCell = getCell()
                         tpDone = True
             if (not tpDone):
-                nearest = findNearestEnclaveCell(myCell)
-                if (nearest != (-1)):
-                    moveTowardCell(nearest)
-                    myCell = getCell()
-                    tpTarget2 = findTeleportTarget(crystalCell0, myCell)
-                    if ((tpTarget2 != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget2, tpArmy) > 10)))):
-                        if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1):
-                            myCell = getCell()
+                say(lw_add(lw_add(lw_add("PZ SOLVER: closing on c=", firstEID), " hot d="), getCellDistance(myCell, crystalCell0)))
+                solverWalkToward(crystalCell0)
+                myCell = getCell()
+                tpTarget2 = findTeleportTarget(crystalCell0, myCell)
+                if ((tpTarget2 != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget2, tpArmy) > 10)))):
+                    if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1):
+                        myCell = getCell()
                 solverSelfBuff(myID)
                 return True
         else:
@@ -7779,7 +7813,7 @@ def executeSolverPuzzleTurn():
                 dToCrystal = getCellDistance(myCell, crystalCell0)
                 if (dToCrystal > 10):
                     say(lw_add(lw_add(lw_add("PZ SOLVER: closing on c=", firstEID), " d="), dToCrystal))
-                    moveTowardCell(crystalCell0)
+                    solverWalkToward(crystalCell0)
                     solverSelfBuff(myID)
                     return True
     bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
