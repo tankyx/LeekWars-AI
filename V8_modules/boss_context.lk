@@ -2283,7 +2283,11 @@ function puzzleEmergencyBlink(myID) {
         if (bad != null && bad <= 9) blinkReach++
     }
     if (blinkReach == 0) { return false }
-    if (getLife() >= 900 * blinkReach && entityHPPercent(myID) >= 45) { return false }
+    // 3+ units in reach = a sustained ~2,600/turn envelope moving faster
+    // than we do — already lethal at any HP (fights 52984415/442: the
+    // solvers were "healthy" at their T3 turns by the damage projection and
+    // dead inside the envelope by T4-6). Jump immediately.
+    if (blinkReach < 3 && getLife() >= 900 * blinkReach && entityHPPercent(myID) >= 45) { return false }
     var bestB = -1
     var bestBS = -1
     for (var bc = 0; bc < 613; bc++) {
@@ -2545,13 +2549,14 @@ function executeSolverPuzzleTurn() {
     // One-way gate: a late buff landing mid-solve must not pull us back into waiting
     _pzGatherDone = true
 
+    // Solver escape BEFORE the shield rotation — solverSurvival can spend
+    // up to 18 TP and starve the 9-TP blink. Ada died T4-T7 as solver in
+    // 8 of 10 fights on 2026-07-17 — solving keeps her among the crystals
+    // where the army hunts. A blinked solver loses a turn of route; a dead
+    // one loses the fight. Route commitment re-paths from the landing cell.
+    puzzleEmergencyBlink(myID)
     // Under fire from the invulnerable army: shield/heal before spending TP on pushes
     solverSurvival(myID)
-    // Solver escape: Ada died T4-T7 as solver in 8 of 10 fights on
-    // 2026-07-17 — solving keeps her among the crystals where the army
-    // hunts. A blinked solver loses a turn of route; a dead one loses the
-    // fight. Route commitment re-paths from the landing cell.
-    puzzleEmergencyBlink(myID)
 
     // Pick first crystal target for teleportation
     var firstEID = pickFocusCrystal(myCell)

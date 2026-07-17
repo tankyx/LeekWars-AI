@@ -7523,7 +7523,7 @@ def puzzleEmergencyBlink(myID):
             blinkReach = lw_add(blinkReach, 1)
     if (blinkReach == 0):
         return False
-    if ((getLife() >= lw_mul(900, blinkReach)) and (entityHPPercent(myID) >= 45)):
+    if (((blinkReach < 3) and (getLife() >= lw_mul(900, blinkReach))) and (entityHPPercent(myID) >= 45)):
         return False
     bestB = (-1)
     bestBS = (-1)
@@ -7719,8 +7719,8 @@ def executeSolverPuzzleTurn():
         say(lw_add("PZ SOLVER: skip wait, army d=", waitArmyD))
         solverSelfBuff(myID)
     _pzGatherDone = True
-    solverSurvival(myID)
     puzzleEmergencyBlink(myID)
+    solverSurvival(myID)
     firstEID = pickFocusCrystal(myCell)
     if (firstEID == None):
         say("PZ SOLVER: all done")
