@@ -5498,6 +5498,8 @@ _pzPartnerClaimEID = None
 PZ_MSG_FOCUS = 901
 PZ_MSG_READY = 903
 _pzReadyBy = {}
+_pokeCommitCell = (-1)
+_pokeCommitTurn = (-99)
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -6613,6 +6615,7 @@ def logMapLayout():
         row = lw_add(row, 1)
 
 def executeBossCombatPoke():
+    global _pokeCommitCell, _pokeCommitTurn
     myID = getEntity()
     if ((getMagic() < 300) and (getStrength() < 300)):
         return False
@@ -6767,6 +6770,25 @@ def executeBossCombatPoke():
             bestKey = key
             nearestPath = pd
             nearestC = ac
+    if ((_pokeCommitCell != (-1)) and (lw_sub(getTurn(), _pokeCommitTurn) > 2)):
+        _pokeCommitCell = (-1)
+    if (_pokeCommitCell != (-1)):
+        commitHeld = False
+        for ac5 in lw_values(armyCells):
+            dC5 = getCellDistance(ac5, _pokeCommitCell)
+            if ((dC5 != None) and (dC5 <= 3)):
+                commitHeld = True
+                break
+        if (not commitHeld):
+            _pokeCommitCell = (-1)
+    if (_pokeCommitCell != (-1)):
+        nearestC = _pokeCommitCell
+        cpd = getPathLength(getCell(), nearestC)
+        nearestPath = (cpd if (cpd != None) else 9999)
+    else:
+        if (nearestC != (-1)):
+            _pokeCommitCell = nearestC
+            _pokeCommitTurn = getTurn()
     approachGate = (9 if (casted > 0) else 6)
     if ((nearestC != (-1)) and (nearestPath > approachGate)):
         moveTowardCell(nearestC, min(getMP(), lw_sub(nearestPath, (lw_sub(approachGate, 1)))))
@@ -6843,8 +6865,8 @@ def pokeOrbitalCell(myID, armyCells):
     return best
 
 def tryWeaponStrike(myID):
-    strTable = [[WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, False], [WEAPON_RIFLE, 7, 9, 7, 0, False], [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, False], [WEAPON_MAGNUM, 1, 8, 5, 0, False], [WEAPON_DESTROYER, 1, 6, 6, 0, False]]
-    magTable = [[WEAPON_GAZOR, 2, 7, 8, 3, True], [WEAPON_FLAME_THROWER, 2, 8, 6, 2, True], [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, False]]
+    strTable = [[WEAPON_M_LASER, 5, 12, 8, 2, 1], [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, 0], [WEAPON_QUANTUM_RIFLE, 5, 10, 10, 0, 0], [WEAPON_LIGHTNINGER, 6, 10, 9, 1, 2], [WEAPON_LASER, 2, 9, 6, 2, 1], [WEAPON_RIFLE, 7, 9, 7, 0, 0], [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, 0], [WEAPON_ILLICIT_GRENADE_LAUNCHER, 4, 7, 6, 2, 0], [WEAPON_MAGNUM, 1, 8, 5, 0, 0], [WEAPON_DESTROYER, 1, 6, 6, 0, 0], [WEAPON_UNSTABLE_DESTROYER, 1, 6, 6, 0, 0], [WEAPON_RHINO, 2, 4, 5, 0, 0]]
+    magTable = [[WEAPON_GAZOR, 2, 7, 8, 3, 1], [WEAPON_FLAME_THROWER, 2, 8, 6, 2, 1], [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, 0]]
     table = (strTable if (getStrength() >= 300) else magTable)
     weps = getWeapons()
     if (weps == None):
@@ -6870,7 +6892,9 @@ def tryWeaponStrike(myID):
             dd = getCellDistance(myCell, ec)
             if (((dd == None) or (dd < lw_get(row, 1))) or (dd > lw_get(row, 2))):
                 continue
-            if (lw_get(row, 5) and (not isOnSameLine(myCell, ec))):
+            if ((lw_get(row, 5) == 1) and (not isOnSameLine(myCell, ec))):
+                continue
+            if ((lw_get(row, 5) == 2) and (not isOnLineOrDiag(myCell, ec))):
                 continue
             if (not lineOfSight(myCell, ec)):
                 continue
@@ -7043,6 +7067,14 @@ def executeBossCombatPlasma():
         return True
     return False
 
+def guardCast(myID, chip, target):
+    if (not allyHasChip(myID, chip)):
+        return False
+    cd = getCooldown(chip, myID)
+    if ((cd == None) or (cd > 0)):
+        return False
+    return (useChip(chip, target) >= 1)
+
 def executeBossCombatPeel():
     myID = getEntity()
     if (getStrength() >= 150):
@@ -7059,10 +7091,27 @@ def executeBossCombatPeel():
             bestPow = p
             carry = aid
     carryCell = (getCell(carry) if (carry != (-1)) else getCell())
-    if ((((carry != (-1)) and (entityHPPercent(carry) < 55)) and (getCellDistance(getCell(), carryCell) <= 3)) and (getTP() >= 8)):
-        rcd = getCooldown(CHIP_REGENERATION, myID)
-        if ((rcd != None) and (rcd == 0)):
-            useChip(CHIP_REGENERATION, carry)
+    if (carry != (-1)):
+        dCarry = getCellDistance(getCell(), carryCell)
+        if (dCarry == None):
+            dCarry = 99
+        carryPct = entityHPPercent(carry)
+        if ((isPoisoned(carry) and (dCarry <= 4)) and (getTP() >= 3)):
+            if guardCast(myID, CHIP_ANTIDOTE, carry):
+                say("PZ GUARD antidote")
+        if (carryPct < 60):
+            if ((dCarry <= 3) and (getTP() >= 8)):
+                if guardCast(myID, CHIP_REGENERATION, carry):
+                    say("PZ GUARD regen")
+            if ((dCarry <= 6) and (getTP() >= 6)):
+                if guardCast(myID, CHIP_VACCINE, carry):
+                    say("PZ GUARD vaccine")
+        if ((((carryPct < 85) and (dCarry >= 1)) and (dCarry <= 5)) and (getTP() >= 14)):
+            if guardCast(myID, CHIP_THERAPY, carry):
+                say("PZ GUARD therapy")
+        if ((dCarry <= 3) and (getTP() >= 16)):
+            guardCast(myID, CHIP_WALL, carry)
+            guardCast(myID, CHIP_ARMORING, carry)
     swatCrystals(myID)
     casts = 0
     while ((getTP() >= 3) and (casts < 8)):
@@ -7206,6 +7255,10 @@ def peelPushOnce(myID, carryCell):
         dest = pos
     if (dest == ec2):
         return False
+    dBefore = getCellDistance(ec2, carryCell)
+    dAfter = getCellDistance(dest, carryCell)
+    if (((dBefore != None) and (dAfter != None)) and (dAfter < dBefore)):
+        return False
     return (useChipOnCell(CHIP_BOXING_GLOVE, dest) >= 1)
 
 def lineStepFromTo(fromCell, toCell):
@@ -7218,6 +7271,15 @@ def lineStepFromTo(fromCell, toCell):
     if ((fx == tx) and (ty != fy)):
         return (17 if (ty > fy) else (-17))
     return 0
+
+def isOnLineOrDiag(c1, c2):
+    if isOnSameLine(c1, c2):
+        return True
+    fx = getCellX(c1)
+    fy = getCellY(c1)
+    tx = getCellX(c2)
+    ty = getCellY(c2)
+    return (((lw_sub(fx, fy)) == (lw_sub(tx, ty))) or ((lw_add(fx, fy)) == (lw_add(tx, ty))))
 
 def executePuzzleTurn():
     if (((_bossPhase != "PUZZLE") or (_graalCell == None)) or (_graalCell < 0)):
@@ -7505,6 +7567,27 @@ def choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap):
         c = lw_add(c, 1)
     return best
 
+def puzzleHardHide(myID):
+    selfShields = [[CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_WALL, 3]]
+    for sh in lw_values(selfShields):
+        chip = lw_get(sh, 0)
+        cost = lw_get(sh, 1)
+        if (not allyHasChip(myID, chip)):
+            continue
+        if (getTP() < cost):
+            continue
+        cd = getCooldown(chip, myID)
+        if ((cd != None) and (cd == 0)):
+            useChip(chip, myID)
+    if (((entityHPPercent(myID) < 40) and allyHasChip(myID, CHIP_REGENERATION)) and (getTP() >= 8)):
+        rcd = getCooldown(CHIP_REGENERATION, myID)
+        if ((rcd != None) and (rcd == 0)):
+            useChip(CHIP_REGENERATION, myID)
+    hide = choosePuzzleSustainCellCapped(myID, getCell(), False, 18)
+    if ((hide != (-1)) and (hide != getCell())):
+        moveTowardCell(hide)
+        say(lw_add("PZ HIDE d=", nearestArmyDistFrom(getCell(), puzzleArmyCells())))
+
 def executeSupportPuzzleTurn():
     global _puzzleSolverID
     myID = getEntity()
@@ -7525,6 +7608,9 @@ def executeSupportPuzzleTurn():
                 farBuffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"]]
                 castBuffsOnSolver(myID, farBuffs)
         puzzleSelfPreserve(myID, False)
+        return True
+    if (getTotalLife() < 2200):
+        puzzleHardHide(myID)
         return True
     if ((_puzzleSolverID == (-1)) or (not isAlive(_puzzleSolverID))):
         say("PZ SUPPORT: no solver")

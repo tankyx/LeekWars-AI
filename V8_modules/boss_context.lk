@@ -29,6 +29,11 @@ global _pzPartnerClaimEID = null
 global PZ_MSG_FOCUS = 901
 global PZ_MSG_READY = 903
 global _pzReadyBy = [:]
+// Combat approach commitment: the engagement-weighted argmin re-flips as the
+// army shuffles and the striker zigzags without ever closing (fight 52980384:
+// ED 5 turns at d=11-13, zero shots). Stick to one approach cell ~3 turns.
+global _pokeCommitCell = -1
+global _pokeCommitTurn = -99
 
 global _graalCell = -1
 global _graalX = 0
@@ -1401,6 +1406,25 @@ function executeBossCombatPoke() {
         var key = engage * 100 + min(pd, 99)
         if (key < bestKey) { bestKey = key; nearestPath = pd; nearestC = ac }
     }
+    // Reuse the committed approach cell while some army unit is still near it
+    // (and the commitment is fresh) — otherwise re-target freely
+    if (_pokeCommitCell != -1 && getTurn() - _pokeCommitTurn > 2) { _pokeCommitCell = -1 }
+    if (_pokeCommitCell != -1) {
+        var commitHeld = false
+        for (var ac5 in armyCells) {
+            var dC5 = getCellDistance(ac5, _pokeCommitCell)
+            if (dC5 != null && dC5 <= 3) { commitHeld = true; break }
+        }
+        if (!commitHeld) { _pokeCommitCell = -1 }
+    }
+    if (_pokeCommitCell != -1) {
+        nearestC = _pokeCommitCell
+        var cpd = getPathLength(getCell(), nearestC)
+        nearestPath = cpd != null ? cpd : 9999
+    } else if (nearestC != -1) {
+        _pokeCommitCell = nearestC
+        _pokeCommitTurn = getTurn()
+    }
     var approachGate = casted > 0 ? 9 : 6
     if (nearestC != -1 && nearestPath > approachGate) {
         moveTowardCell(nearestC, min(getMP(), nearestPath - (approachGate - 1)))
@@ -1481,18 +1505,31 @@ function pokeOrbitalCell(myID, armyCells) {
 // because the strike only knew STR weapons. Line-launch weapons fire when
 // aligned. Crystals included as targets — they must die to win.
 function tryWeaponStrike(myID) {
-    // [weapon, minRange, maxRange, tpCost, aoeAllyVetoRadius, needsLine]
+    // [weapon, minRange, maxRange, tpCost, aoeAllyVetoRadius, alignMode]
+    // alignMode: 0 = any cell in range (CIRCLE launch), 1 = same line (LINE),
+    // 2 = line or diagonal (STAR — the plain lightninger).
+    // The table must cover the ACTUAL equipped variants — fight 52980384: KG
+    // held illicit_grenade_launcher/lightninger/quantum_rifle/rhino, NONE of
+    // which were in the table, so he ended 9 of 10 turns with "POKE none" and
+    // a full TP bank. Skip a variant and its carrier is a spectator.
     var strTable = [
-        [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, false],
-        [WEAPON_RIFLE, 7, 9, 7, 0, false],
-        [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, false],
-        [WEAPON_MAGNUM, 1, 8, 5, 0, false],
-        [WEAPON_DESTROYER, 1, 6, 6, 0, false]
+        [WEAPON_M_LASER, 5, 12, 8, 2, 1],
+        [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, 0],
+        [WEAPON_QUANTUM_RIFLE, 5, 10, 10, 0, 0],
+        [WEAPON_LIGHTNINGER, 6, 10, 9, 1, 2],
+        [WEAPON_LASER, 2, 9, 6, 2, 1],
+        [WEAPON_RIFLE, 7, 9, 7, 0, 0],
+        [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, 0],
+        [WEAPON_ILLICIT_GRENADE_LAUNCHER, 4, 7, 6, 2, 0],
+        [WEAPON_MAGNUM, 1, 8, 5, 0, 0],
+        [WEAPON_DESTROYER, 1, 6, 6, 0, 0],
+        [WEAPON_UNSTABLE_DESTROYER, 1, 6, 6, 0, 0],
+        [WEAPON_RHINO, 2, 4, 5, 0, 0]
     ]
     var magTable = [
-        [WEAPON_GAZOR, 2, 7, 8, 3, true],
-        [WEAPON_FLAME_THROWER, 2, 8, 6, 2, true],
-        [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, false]
+        [WEAPON_GAZOR, 2, 7, 8, 3, 1],
+        [WEAPON_FLAME_THROWER, 2, 8, 6, 2, 1],
+        [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, 0]
     ]
     var table = getStrength() >= 300 ? strTable : magTable
     var weps = getWeapons()
@@ -1517,7 +1554,8 @@ function tryWeaponStrike(myID) {
             if (ec == null || ec < 0) continue
             var dd = getCellDistance(myCell, ec)
             if (dd == null || dd < row[1] || dd > row[2]) continue
-            if (row[5] && !isOnSameLine(myCell, ec)) continue
+            if (row[5] == 1 && !isOnSameLine(myCell, ec)) continue
+            if (row[5] == 2 && !isOnLineOrDiag(myCell, ec)) continue
             if (!lineOfSight(myCell, ec)) continue
             var allyNear = false
             for (var aid in allies) {
@@ -1666,13 +1704,21 @@ function executeBossCombatPlasma() {
     return false
 }
 
-// ============ Phase 2: peelers ============
+// ============ Phase 2: peelers / guardians ============
 // The respec'd solver-tanks (STR ~0) deal nothing in COMBAT, but BOXING_GLOVE
 // has NO cooldown and grapple/boxing are pure displacement — a 25-TP tank can
 // shove the melee army back ~6 times per turn while the carry (MH poison /
-// ED) does the killing. Full-turn override: shields, peel pushes, heal the
-// carry, bodyguard positioning. Crystals (1 HP, must die to win) get swatted
-// with any damage chip first.
+// ED) does the killing. Full-turn override: guard the carry (cleanse/heals/
+// shields — WIS/RES 500 makes them her real contribution), peel pushes,
+// bodyguard positioning. Crystals (1 HP, must die to win) get swatted with
+// any damage chip first.
+function guardCast(myID, chip, target) {
+    if (!allyHasChip(myID, chip)) { return false }
+    var cd = getCooldown(chip, myID)
+    if (cd == null || cd > 0) { return false }
+    return useChip(chip, target) >= 1
+}
+
 function executeBossCombatPeel() {
     var myID = getEntity()
     if (getStrength() >= 150) { return false }
@@ -1690,10 +1736,37 @@ function executeBossCombatPeel() {
     }
     var carryCell = carry != -1 ? getCell(carry) : getCell()
 
-    // Emergency heal on the carry
-    if (carry != -1 && entityHPPercent(carry) < 55 && getCellDistance(getCell(), carryCell) <= 3 && getTP() >= 8) {
-        var rcd = getCooldown(CHIP_REGENERATION, myID)
-        if (rcd != null && rcd == 0) useChip(CHIP_REGENERATION, carry)
+    // GUARDIAN (fight 52980384: Ada hovered next to MH doing 1 peel/turn while
+    // an 811x2 Excalibur poison ate her — MH was dead T15 with Ada's antidote
+    // unused). The respec'd tank (WIS/RES 500) is a healer/shielder: guarding
+    // the carry is worth more than her (zero) damage output. TP floors keep a
+    // peel reserve (~6) below.
+    if (carry != -1) {
+        var dCarry = getCellDistance(getCell(), carryCell)
+        if (dCarry == null) dCarry = 99
+        var carryPct = entityHPPercent(carry)
+        // Excalibur poison is the carry-killer — cleanse before it ticks
+        if (isPoisoned(carry) && dCarry <= 4 && getTP() >= 3) {
+            if (guardCast(myID, CHIP_ANTIDOTE, carry)) say("PZ GUARD antidote")
+        }
+        // Big emergency heals
+        if (carryPct < 60) {
+            if (dCarry <= 3 && getTP() >= 8) {
+                if (guardCast(myID, CHIP_REGENERATION, carry)) say("PZ GUARD regen")
+            }
+            if (dCarry <= 6 && getTP() >= 6) {
+                if (guardCast(myID, CHIP_VACCINE, carry)) say("PZ GUARD vaccine")
+            }
+        }
+        // Sustained heal (cd 2, WIS-scaled AoE) — luxury, only with TP to spare
+        if (carryPct < 85 && dCarry >= 1 && dCarry <= 5 && getTP() >= 14) {
+            if (guardCast(myID, CHIP_THERAPY, carry)) say("PZ GUARD therapy")
+        }
+        // Shields on cooldown (RES 500 makes them real) — luxury
+        if (dCarry <= 3 && getTP() >= 16) {
+            guardCast(myID, CHIP_WALL, carry)
+            guardCast(myID, CHIP_ARMORING, carry)
+        }
     }
 
     swatCrystals(myID)
@@ -1830,6 +1903,11 @@ function peelPushOnce(myID, carryCell) {
         dest = pos
     }
     if (dest == ec2) { return false }
+    // Never shove the target TOWARD the carry — standing between her and the
+    // enemy would otherwise push it straight onto her
+    var dBefore = getCellDistance(ec2, carryCell)
+    var dAfter = getCellDistance(dest, carryCell)
+    if (dBefore != null && dAfter != null && dAfter < dBefore) { return false }
     return useChipOnCell(CHIP_BOXING_GLOVE, dest) >= 1
 }
 
@@ -1841,6 +1919,16 @@ function lineStepFromTo(fromCell, toCell) {
     if (fy == ty && tx != fx) { return tx > fx ? 18 : -18 }
     if (fx == tx && ty != fy) { return ty > fy ? 17 : -17 }
     return 0
+}
+
+// STAR-launch weapons (the plain lightninger) hit rows, columns AND diagonals
+function isOnLineOrDiag(c1, c2) {
+    if (isOnSameLine(c1, c2)) { return true }
+    var fx = getCellX(c1)
+    var fy = getCellY(c1)
+    var tx = getCellX(c2)
+    var ty = getCellY(c2)
+    return (fx - fy) == (tx - ty) || (fx + fy) == (tx + ty)
 }
 
 function executePuzzleTurn() {
@@ -2207,6 +2295,35 @@ function choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap) {
     return best
 }
 
+// Fragile support survival: self-buff, then flee to maximum army distance
+// (cap 18 — the army reaches ~10, so past it every extra cell is safety).
+// Recomputed every turn: when the army crosses the map for them, they slip
+// along the far edge and keep buying the solvers turns.
+function puzzleHardHide(myID) {
+    var selfShields = [
+        [CHIP_FORTRESS, 6],
+        [CHIP_ARMOR, 6],
+        [CHIP_WALL, 3]
+    ]
+    for (var sh in selfShields) {
+        var chip = sh[0]
+        var cost = sh[1]
+        if (!allyHasChip(myID, chip)) continue
+        if (getTP() < cost) continue
+        var cd = getCooldown(chip, myID)
+        if (cd != null && cd == 0) useChip(chip, myID)
+    }
+    if (entityHPPercent(myID) < 40 && allyHasChip(myID, CHIP_REGENERATION) && getTP() >= 8) {
+        var rcd = getCooldown(CHIP_REGENERATION, myID)
+        if (rcd != null && rcd == 0) useChip(CHIP_REGENERATION, myID)
+    }
+    var hide = choosePuzzleSustainCellCapped(myID, getCell(), false, 18)
+    if (hide != -1 && hide != getCell()) {
+        moveTowardCell(hide)
+        say("PZ HIDE d=" + nearestArmyDistFrom(getCell(), puzzleArmyCells()))
+    }
+}
+
 function executeSupportPuzzleTurn() {
     var myID = getEntity()
 
@@ -2239,6 +2356,16 @@ function executeSupportPuzzleTurn() {
             }
         }
         puzzleSelfPreserve(myID, false)
+        return true
+    }
+
+    // Fragile supports (< 2200 HP: the cure leeks) are the army's preferred
+    // focus victims and their buff delivery never justifies the exposure —
+    // fight 52980384: all three dead by T8 delivering nothing, and they ARE
+    // the phase-2 strike quorum. Their only puzzle job is staying alive:
+    // hard-hide far from the army from T1 (no gather, no delivery).
+    if (getTotalLife() < 2200) {
+        puzzleHardHide(myID)
         return true
     }
 
