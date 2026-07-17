@@ -7744,8 +7744,7 @@ def executeSolverPuzzleTurn():
     if ((crystalCell0 != None) and (crystalCell0 >= 0)):
         tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         tpArmy = puzzleArmyCells()
-        tpReserved = ((count(tpArmy) > 0) and (nearestArmyDistFrom(myCell, tpArmy) <= 15))
-        if (((((tpCd != None) and (tpCd == 0)) and (not tpReserved)) and (getTP() >= 12)) and (firstDest != None)):
+        if ((((tpCd != None) and (tpCd == 0)) and (getTP() >= 12)) and (firstDest != None)):
             tpDone = False
             preMove = planCrystalRoute(crystalCell0, _myCrystalGoalAxis, myCell, False)
             if (preMove == None):
@@ -7753,13 +7752,14 @@ def executeSolverPuzzleTurn():
             if (preMove != None):
                 preStand = lw_get(preMove, 'stand')
                 dToStand = getCellDistance(myCell, preStand)
-                if ((dToStand >= 1) and (dToStand <= 12)):
+                standCold = ((count(tpArmy) == 0) or (nearestArmyDistFrom(preStand, tpArmy) > 10))
+                if ((standCold and (dToStand >= 1)) and (dToStand <= 12)):
                     if (useChipOnCell(CHIP_TELEPORTATION, preStand) == 1):
                         myCell = getCell()
                         tpDone = True
             if (not tpDone):
                 tpTarget = findTeleportTarget(crystalCell0, myCell)
-                if (tpTarget != (-1)):
+                if ((tpTarget != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget, tpArmy) > 10)))):
                     if (useChipOnCell(CHIP_TELEPORTATION, tpTarget) == 1):
                         myCell = getCell()
                         tpDone = True
@@ -7769,13 +7769,13 @@ def executeSolverPuzzleTurn():
                     moveTowardCell(nearest)
                     myCell = getCell()
                     tpTarget2 = findTeleportTarget(crystalCell0, myCell)
-                    if (tpTarget2 != (-1)):
+                    if ((tpTarget2 != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget2, tpArmy) > 10)))):
                         if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1):
                             myCell = getCell()
                 solverSelfBuff(myID)
                 return True
         else:
-            if ((tpCd != None) and (((tpCd > 0) or tpReserved))):
+            if ((tpCd != None) and (tpCd > 0)):
                 dToCrystal = getCellDistance(myCell, crystalCell0)
                 if (dToCrystal > 10):
                     say(lw_add(lw_add(lw_add("PZ SOLVER: closing on c=", firstEID), " d="), dToCrystal))
