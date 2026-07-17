@@ -2271,11 +2271,22 @@ function puzzleSelfPreserve(myID, leashed) {
     // saving it for never happened and phase 2 had no poison carry. A dive
     // delayed by the cooldown beats no dive. Only blink for a real gain
     // (+3 army distance) so we don't burn it hopping inside the kill zone.
-    if (entityHPPercent(myID) < 45 && allyHasChip(myID, CHIP_TELEPORTATION) && getTP() >= 9) {
+    // PREEMPTIVE trigger: the alpha target never sees itself under 45% on
+    // its own turn (fights 52984275/279: Ada at 63-77% HP on T3, dead
+    // before her T4 — a current-HP gate can never fire). Project the focus
+    // instead: ~850 per army unit in next-turn reach (measured alphas
+    // 2,300-2,700 from ~3 units).
+    if (allyHasChip(myID, CHIP_TELEPORTATION) && getTP() >= 9) {
         var blinkArmy = puzzleArmyCells()
         var blinkD = count(blinkArmy) > 0 ? nearestArmyDistFrom(getCell(), blinkArmy) : 99
+        var blinkReach = 0
+        for (var bac in blinkArmy) {
+            var bad = getCellDistance(getCell(), bac)
+            if (bad != null && bad <= 9) blinkReach++
+        }
+        var blinkThreat = blinkReach > 0 && (getLife() < 900 * blinkReach || entityHPPercent(myID) < 45)
         var blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
-        if (blinkD <= 8 && blinkCd != null && blinkCd == 0) {
+        if (blinkThreat && blinkD <= 9 && blinkCd != null && blinkCd == 0) {
             var bestB = -1
             var bestBS = -1
             for (var bc = 0; bc < 613; bc++) {

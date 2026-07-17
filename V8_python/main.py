@@ -7514,11 +7514,17 @@ def puzzleSelfPreserve(myID, leashed):
         rcd = getCooldown(CHIP_REGENERATION, myID)
         if ((rcd != None) and (rcd == 0)):
             useChip(CHIP_REGENERATION, myID)
-    if (((entityHPPercent(myID) < 45) and allyHasChip(myID, CHIP_TELEPORTATION)) and (getTP() >= 9)):
+    if (allyHasChip(myID, CHIP_TELEPORTATION) and (getTP() >= 9)):
         blinkArmy = puzzleArmyCells()
         blinkD = (nearestArmyDistFrom(getCell(), blinkArmy) if (count(blinkArmy) > 0) else 99)
+        blinkReach = 0
+        for bac in lw_values(blinkArmy):
+            bad = getCellDistance(getCell(), bac)
+            if ((bad != None) and (bad <= 9)):
+                blinkReach = lw_add(blinkReach, 1)
+        blinkThreat = ((blinkReach > 0) and (((getLife() < lw_mul(900, blinkReach)) or (entityHPPercent(myID) < 45))))
         blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
-        if (((blinkD <= 8) and (blinkCd != None)) and (blinkCd == 0)):
+        if (((blinkThreat and (blinkD <= 9)) and (blinkCd != None)) and (blinkCd == 0)):
             bestB = (-1)
             bestBS = (-1)
             bc = 0
