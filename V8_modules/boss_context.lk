@@ -2458,19 +2458,31 @@ function executeSolverPuzzleTurn() {
     // still flowing. Fight 52977149: +534/+113 trickles extended the wait to T4
     // and the two lost tempo turns cost the fight — the army clock (~2500/turn)
     // outprices any marginal buff.
-    if (!_pzGatherDone && (getTurn() <= 2 || (getTurn() <= 3 && lifeGain >= 400))) {
+    // EXPOSED-SPAWN BYPASS: if the army can engage within ~2 turns, waiting
+    // is fatal — fights 52984011/012/073/090: Ada (spawn 566, in the army's
+    // approach corridor) held for buffs T1-2 and took the full alpha
+    // (~4,700 by T5) in ALL FOUR fights, dying T4-5 every time. The buff
+    // wave adds ~900-1,100 maxHP; one focused army turn is 2,300-2,700.
+    // Mobility protects better: KG solved on the move and survived to
+    // solo-finish twice. Buffs still land opportunistically — escorts chase.
+    var waitArmy = puzzleArmyCells()
+    var waitArmyD = count(waitArmy) > 0 ? nearestArmyDistFrom(getCell(), waitArmy) : 99
+    if (!_pzGatherDone && waitArmyD > 15 && (getTurn() <= 2 || (getTurn() <= 3 && lifeGain >= 400))) {
         say("PZ SOLVER: waiting for ally buffs (turn " + getTurn() + ", maxHP " + maxLifeNow + ")")
         solverSelfBuff(myID)
         // Don't idle on spawn while the army closes — drift away a few cells,
         // but only under actual pressure (drifting without an army nearby just
         // adds crystal travel)
-        var waitArmy = puzzleArmyCells()
-        if (count(waitArmy) > 0 && nearestArmyDistFrom(getCell(), waitArmy) <= 12) {
+        if (waitArmyD <= 18) {
             var waitKite = choosePuzzleSustainCellCapped(myID, getCell(), false, 12)
             if (waitKite != -1 && waitKite != getCell()) moveTowardCell(waitKite, min(getMP(), 3))
         }
         _pzSolverMaxLifeSnapshot = getTotalLife(myID)
         return true
+    }
+    if (!_pzGatherDone && waitArmyD <= 15 && getTurn() <= 3) {
+        say("PZ SOLVER: skip wait, army d=" + waitArmyD)
+        solverSelfBuff(myID)
     }
     // One-way gate: a late buff landing mid-solve must not pull us back into waiting
     _pzGatherDone = true

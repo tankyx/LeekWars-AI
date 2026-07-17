@@ -7652,16 +7652,20 @@ def executeSolverPuzzleTurn():
     myID = getEntity()
     maxLifeNow = getTotalLife(myID)
     lifeGain = (maxLifeNow if (_pzSolverMaxLifeSnapshot == (-1)) else lw_sub(maxLifeNow, _pzSolverMaxLifeSnapshot))
-    if ((not _pzGatherDone) and (((getTurn() <= 2) or (((getTurn() <= 3) and (lifeGain >= 400)))))):
+    waitArmy = puzzleArmyCells()
+    waitArmyD = (nearestArmyDistFrom(getCell(), waitArmy) if (count(waitArmy) > 0) else 99)
+    if (((not _pzGatherDone) and (waitArmyD > 15)) and (((getTurn() <= 2) or (((getTurn() <= 3) and (lifeGain >= 400)))))):
         say(lw_add(lw_add(lw_add(lw_add("PZ SOLVER: waiting for ally buffs (turn ", getTurn()), ", maxHP "), maxLifeNow), ")"))
         solverSelfBuff(myID)
-        waitArmy = puzzleArmyCells()
-        if ((count(waitArmy) > 0) and (nearestArmyDistFrom(getCell(), waitArmy) <= 12)):
+        if (waitArmyD <= 18):
             waitKite = choosePuzzleSustainCellCapped(myID, getCell(), False, 12)
             if ((waitKite != (-1)) and (waitKite != getCell())):
                 moveTowardCell(waitKite, min(getMP(), 3))
         _pzSolverMaxLifeSnapshot = getTotalLife(myID)
         return True
+    if (((not _pzGatherDone) and (waitArmyD <= 15)) and (getTurn() <= 3)):
+        say(lw_add("PZ SOLVER: skip wait, army d=", waitArmyD))
+        solverSelfBuff(myID)
     _pzGatherDone = True
     solverSurvival(myID)
     firstEID = pickFocusCrystal(myCell)
