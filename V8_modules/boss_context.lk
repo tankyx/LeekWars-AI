@@ -27,6 +27,8 @@ global _pzSolverEverSeen = false
 global _pzPartnerSolverID = -1
 global _pzPartnerClaimEID = null
 global PZ_MSG_FOCUS = 901
+global PZ_MSG_READY = 903
+global _pzReadyBy = [:]
 
 global _graalCell = -1
 global _graalX = 0
@@ -1232,20 +1234,63 @@ function executeBossCombatPoke() {
         return false
     }
 
-    // Pass 1: everything castable from where we stand (no MP spent).
-    // minCluster 1 everywhere: fight 52978442 — the >= 2 cluster requirement
-    // meant a spread-out chasing army only ever ate venom. A lone plague on
-    // the king is ~1100 damage; never skip it.
+    // DUMP posture (user doctrine: "dump poison then sustain") gated by the
+    // COORDINATED STRIKE quorum: one dumper is at heal-parity with the scribe
+    // (fights 52980206/52980270: ~4k poison in, ~3.7k healed back). Carriers
+    // announce readiness and HOLD the big cooldowns until 2+ are ready, then
+    // strike in overlapping turns the healer can't out-repair.
+    var bigReady = 0
+    if (pokeChipReady(myID, CHIP_COVID)) bigReady++
+    if (pokeChipReady(myID, CHIP_PLAGUE)) bigReady++
+    if (pokeChipReady(myID, CHIP_TOXIN)) bigReady++
+    if (pokeChipReady(myID, CHIP_ARSENIC)) bigReady++
+    // Ready when the kit you actually OWN is up (LeekRain/DawnFall only have
+    // toxin from the big four — requiring 2 would lock them out forever)
+    var bigEquipped = 0
+    if (allyHasChip(myID, CHIP_COVID)) bigEquipped++
+    if (allyHasChip(myID, CHIP_PLAGUE)) bigEquipped++
+    if (allyHasChip(myID, CHIP_TOXIN)) bigEquipped++
+    if (allyHasChip(myID, CHIP_ARSENIC)) bigEquipped++
+    var selfReady = getMagic() >= 300 && bigEquipped > 0 && bigReady >= min(2, bigEquipped)
+
+    var msgs2 = getMessages()
+    for (var m2 in msgs2) {
+        if (getMessageType(m2) != MESSAGE_CUSTOM) continue
+        var p2m = getMessageParams(m2)
+        if (p2m != null && count(p2m) == 2 && p2m[0] == PZ_MSG_READY) {
+            _pzReadyBy[getMessageAuthor(m2)] = p2m[1]
+        }
+    }
+    if (selfReady) { sendAll(MESSAGE_CUSTOM, [PZ_MSG_READY, getTurn()]) }
+    // Quorum counts MAG carriers only — STR carriers can never be "ready"
+    // (a lone MH would otherwise wait forever for a second dumper)
+    var magAlive = getMagic() >= 300 ? 1 : 0
+    var readyCount = selfReady ? 1 : 0
+    var cAllies = getAliveAllies()
+    for (var ca in cAllies) {
+        // getAliveAllies INCLUDES SELF — skip it (we counted ourselves once
+        // already); summons excluded (MH's bulb inherits MAG 300+)
+        if (ca == myID) continue
+        if (getMagic(ca) >= 300 && !isSummon(ca)) magAlive++
+        var rTurn = _pzReadyBy[ca]
+        if (rTurn != null && getTurn() - rTurn <= 2 && isAlive(ca)) readyCount++
+    }
+    var strikeQuorum = min(2, magAlive)
+    var dumping = selfReady && readyCount >= strikeQuorum
+    debug("PZQ mag=" + getMagic() + " big=" + bigReady + " sr=" + selfReady + " rc=" + readyCount + " q=" + strikeQuorum + " dump=" + dumping)
+
+    // Pass 1: castable from where we stand (no MP spent). The BIG chips
+    // (covid/plague/toxin/arsenic) only fire in strike mode — while holding
+    // for the quorum they stay banked so the strike lands together. Venom
+    // (cd 1) and weapons are the sustain pokes.
     var casted = 0
-    // COVID first: PROPAGATION 2 — it re-infects everything within 2 cells
-    // every turn, and the infections keep spreading (Entity.java:806). One
-    // point-blank cast on a chasing knight can chain through the whole army
-    // (~3400/unit at MAG 600). Cast-from-here only: never dive for it.
-    if (tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, false)) casted++
-    if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, false)) casted++
-    if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, false)) casted++
+    if (dumping) {
+        if (tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, false)) casted++
+        if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, false)) casted++
+        if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, false)) casted++
+        if (tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, false)) casted++
+    }
     if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, false)) casted++
-    if (tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, false)) casted++
 
     // Weapon strikes for both carry types (STR guns / MAG poison weapons)
     casted += tryWeaponStrike(myID)
@@ -1254,20 +1299,6 @@ function executeBossCombatPoke() {
     if (getStrength() >= 300) {
         if (tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, false)) casted++
     }
-
-    // Pass 2: nothing reached — ONE committed approach, longest range first
-    // (fight 52978075: plague's deep approach burned the MP venom needed;
-    // per-chip movement races starved each other every turn)
-    // DUMP posture (user doctrine: "dump poison then sustain"): with 2+ big
-    // poison cooldowns up, DIVE — approach in descending range order so one
-    // walk unlocks the whole kit (plague 5 -> arsenic 4 -> covid 2), unload,
-    // then the sustain turns kite hard while it all ticks.
-    var bigReady = 0
-    if (pokeChipReady(myID, CHIP_COVID)) bigReady++
-    if (pokeChipReady(myID, CHIP_PLAGUE)) bigReady++
-    if (pokeChipReady(myID, CHIP_TOXIN)) bigReady++
-    if (pokeChipReady(myID, CHIP_ARSENIC)) bigReady++
-    var dumping = getMagic() >= 300 && bigReady >= 2
 
     if (dumping) {
         // Teleport INTO the enclave when the cluster is beyond walking reach
@@ -1322,13 +1353,12 @@ function executeBossCombatPoke() {
         casted += tryWeaponStrike(myID)
         if (casted > 0) say("PZ DUMP x" + casted)
     } else if (casted == 0) {
+        // Sustain approach: venom/plasma only — the big chips stay banked for
+        // the coordinated strike (casting the lone ready one would reset its
+        // cooldown and the quorum would never form)
         if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, true)) casted++
-        else if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, true)) casted++
-        else if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, true)) casted++
         else if (getStrength() >= 300 && tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, true)) casted++
         if (casted > 0) {
-            if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, false)) casted++
-            if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, false)) casted++
             casted += tryWeaponStrike(myID)
         }
     }

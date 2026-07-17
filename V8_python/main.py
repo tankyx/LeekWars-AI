@@ -5496,6 +5496,8 @@ _pzSolverEverSeen = False
 _pzPartnerSolverID = (-1)
 _pzPartnerClaimEID = None
 PZ_MSG_FOCUS = 901
+PZ_MSG_READY = 903
+_pzReadyBy = {}
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -6619,21 +6621,6 @@ def executeBossCombatPoke():
     if (count(armyCells) == 0):
         swatCrystals(myID)
         return False
-    casted = 0
-    if tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, False):
-        casted = lw_add(casted, 1)
-    if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, False):
-        casted = lw_add(casted, 1)
-    if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
-        casted = lw_add(casted, 1)
-    if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, False):
-        casted = lw_add(casted, 1)
-    if tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, False):
-        casted = lw_add(casted, 1)
-    casted = lw_add(casted, tryWeaponStrike(myID))
-    if (getStrength() >= 300):
-        if tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, False):
-            casted = lw_add(casted, 1)
     bigReady = 0
     if pokeChipReady(myID, CHIP_COVID):
         bigReady = lw_add(bigReady, 1)
@@ -6643,7 +6630,55 @@ def executeBossCombatPoke():
         bigReady = lw_add(bigReady, 1)
     if pokeChipReady(myID, CHIP_ARSENIC):
         bigReady = lw_add(bigReady, 1)
-    dumping = ((getMagic() >= 300) and (bigReady >= 2))
+    bigEquipped = 0
+    if allyHasChip(myID, CHIP_COVID):
+        bigEquipped = lw_add(bigEquipped, 1)
+    if allyHasChip(myID, CHIP_PLAGUE):
+        bigEquipped = lw_add(bigEquipped, 1)
+    if allyHasChip(myID, CHIP_TOXIN):
+        bigEquipped = lw_add(bigEquipped, 1)
+    if allyHasChip(myID, CHIP_ARSENIC):
+        bigEquipped = lw_add(bigEquipped, 1)
+    selfReady = (((getMagic() >= 300) and (bigEquipped > 0)) and (bigReady >= min(2, bigEquipped)))
+    msgs2 = getMessages()
+    for m2 in lw_values(msgs2):
+        if (getMessageType(m2) != MESSAGE_CUSTOM):
+            continue
+        p2m = getMessageParams(m2)
+        if (((p2m != None) and (count(p2m) == 2)) and (lw_get(p2m, 0) == PZ_MSG_READY)):
+            lw_put(_pzReadyBy, getMessageAuthor(m2), lw_get(p2m, 1))
+    if selfReady:
+        sendAll(MESSAGE_CUSTOM, [PZ_MSG_READY, getTurn()])
+    magAlive = (1 if (getMagic() >= 300) else 0)
+    readyCount = (1 if selfReady else 0)
+    cAllies = getAliveAllies()
+    for ca in lw_values(cAllies):
+        if (ca == myID):
+            continue
+        if ((getMagic(ca) >= 300) and (not isSummon(ca))):
+            magAlive = lw_add(magAlive, 1)
+        rTurn = lw_get(_pzReadyBy, ca)
+        if (((rTurn != None) and (lw_sub(getTurn(), rTurn) <= 2)) and isAlive(ca)):
+            readyCount = lw_add(readyCount, 1)
+    strikeQuorum = min(2, magAlive)
+    dumping = (selfReady and (readyCount >= strikeQuorum))
+    debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("PZQ mag=", getMagic()), " big="), bigReady), " sr="), selfReady), " rc="), readyCount), " q="), strikeQuorum), " dump="), dumping))
+    casted = 0
+    if dumping:
+        if tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, False):
+            casted = lw_add(casted, 1)
+        if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, False):
+            casted = lw_add(casted, 1)
+        if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
+            casted = lw_add(casted, 1)
+        if tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, False):
+            casted = lw_add(casted, 1)
+    if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, False):
+        casted = lw_add(casted, 1)
+    casted = lw_add(casted, tryWeaponStrike(myID))
+    if (getStrength() >= 300):
+        if tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, False):
+            casted = lw_add(casted, 1)
     if dumping:
         diveTpCd = getCooldown(CHIP_TELEPORTATION, myID)
         payload = (pokeChipReady(myID, CHIP_COVID) or (bigReady >= 3))
@@ -6700,19 +6735,9 @@ def executeBossCombatPoke():
             if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, True):
                 casted = lw_add(casted, 1)
             else:
-                if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, True):
+                if ((getStrength() >= 300) and tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, True)):
                     casted = lw_add(casted, 1)
-                else:
-                    if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, True):
-                        casted = lw_add(casted, 1)
-                    else:
-                        if ((getStrength() >= 300) and tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, armyCells, True)):
-                            casted = lw_add(casted, 1)
             if (casted > 0):
-                if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
-                    casted = lw_add(casted, 1)
-                if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, False):
-                    casted = lw_add(casted, 1)
                 casted = lw_add(casted, tryWeaponStrike(myID))
     if (casted > 0):
         say(lw_add("PZ POKE x", casted))
