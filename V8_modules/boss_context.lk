@@ -1618,10 +1618,18 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
             if (!lineOfSight(myCell, aim)) continue
         }
         // cluster*60 + priority*2: a lone scribe (60+120) now outranks a
-        // scribe-less pair (120) — he's the healer, kill-priority is real
+        // scribe-less pair (120) — he's the healer, kill-priority is real.
+        // COVID ignores the king veto: propagation makes the target a mere
+        // vector, and the most-escorted unit is the best epidemic entry point
+        // (fight 52983195: MH dove at a king cluster and the veto then refused
+        // every aim around her — teleport spent, zero payload).
         var sc = cluster * 60 - dMe2
         var aimEnt = getEntityOnCell(aim)
-        if (aimEnt != null && aimEnt != -1) { sc += bossTargetPriority(getName(aimEnt)) * 2 }
+        if (aimEnt != null && aimEnt != -1) {
+            var pAim = bossTargetPriority(getName(aimEnt))
+            if (chip == CHIP_COVID && pAim < 0) { pAim = 10 }
+            sc += pAim * 2
+        }
         if (sc > bestScore) { bestScore = sc; bestAim = aim }
     }
     if (bestAim == -1) { return false }

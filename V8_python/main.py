@@ -6964,7 +6964,10 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
         sc = lw_sub(lw_mul(cluster, 60), dMe2)
         aimEnt = getEntityOnCell(aim)
         if ((aimEnt != None) and (aimEnt != (-1))):
-            sc = lw_add(sc, lw_mul(bossTargetPriority(getName(aimEnt)), 2))
+            pAim = bossTargetPriority(getName(aimEnt))
+            if ((chip == CHIP_COVID) and (pAim < 0)):
+                pAim = 10
+            sc = lw_add(sc, lw_mul(pAim, 2))
         if (sc > bestScore):
             bestScore = sc
             bestAim = aim
