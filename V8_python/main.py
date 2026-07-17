@@ -6797,6 +6797,17 @@ def executeBossCombatPoke():
         if (nearestC != (-1)):
             _pokeCommitCell = nearestC
             _pokeCommitTurn = getTurn()
+    sprintEnemies = getAliveEnemies()
+    for se in lw_values(sprintEnemies):
+        if ((getName(se) == "fennel_scribe") and (entityHPPercent(se) < 45)):
+            sc2 = getCell(se)
+            spd = getPathLength(getCell(), sc2)
+            if (((sc2 != None) and (sc2 >= 0)) and (spd != None)):
+                nearestC = sc2
+                nearestPath = spd
+                _pokeCommitCell = sc2
+                _pokeCommitTurn = getTurn()
+            break
     approachGate = (9 if (casted > 0) else 6)
     if ((nearestC != (-1)) and (nearestPath > approachGate)):
         moveTowardCell(nearestC, min(getMP(), lw_sub(nearestPath, (lw_sub(approachGate, 1)))))

@@ -1448,6 +1448,24 @@ function executeBossCombatPoke() {
         _pokeCommitCell = nearestC
         _pokeCommitTurn = getTurn()
     }
+    // SCRIBE-KILL SPRINT: fight 52984546 — the scribe ended at ~2,650 of
+    // 6,000 (he out-healed 70% of our input) with the team dead around him.
+    // Once he's wounded past 45%, converge on HIM: his death permanently
+    // breaks the heal treadmill and is worth two turns of orbit caution.
+    var sprintEnemies = getAliveEnemies()
+    for (var se in sprintEnemies) {
+        if (getName(se) == "fennel_scribe" && entityHPPercent(se) < 45) {
+            var sc2 = getCell(se)
+            var spd = getPathLength(getCell(), sc2)
+            if (sc2 != null && sc2 >= 0 && spd != null) {
+                nearestC = sc2
+                nearestPath = spd
+                _pokeCommitCell = sc2
+                _pokeCommitTurn = getTurn()
+            }
+            break
+        }
+    }
     var approachGate = casted > 0 ? 9 : 6
     if (nearestC != -1 && nearestPath > approachGate) {
         moveTowardCell(nearestC, min(getMP(), nearestPath - (approachGate - 1)))
