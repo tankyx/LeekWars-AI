@@ -2266,6 +2266,32 @@ function puzzleSelfPreserve(myID, leashed) {
         if (rcd != null && rcd == 0) useChip(CHIP_REGENERATION, myID)
     }
 
+    // EMERGENCY BLINK: about to be run down — spend the banked teleport to
+    // live. Fight 52984207: MH died T4 with teleport unused; the dive she was
+    // saving it for never happened and phase 2 had no poison carry. A dive
+    // delayed by the cooldown beats no dive. Only blink for a real gain
+    // (+3 army distance) so we don't burn it hopping inside the kill zone.
+    if (entityHPPercent(myID) < 45 && allyHasChip(myID, CHIP_TELEPORTATION) && getTP() >= 9) {
+        var blinkArmy = puzzleArmyCells()
+        var blinkD = count(blinkArmy) > 0 ? nearestArmyDistFrom(getCell(), blinkArmy) : 99
+        var blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
+        if (blinkD <= 8 && blinkCd != null && blinkCd == 0) {
+            var bestB = -1
+            var bestBS = -1
+            for (var bc = 0; bc < 613; bc++) {
+                var dB = getCellDistance(getCell(), bc)
+                if (dB == null || dB > 12) continue
+                if (isObstacle(bc) || isEntity(bc)) continue
+                var sB = min(nearestArmyDistFrom(bc, blinkArmy), 18)
+                if (isPuzzleWorkZone(bc)) sB -= 6
+                if (sB > bestBS) { bestBS = sB; bestB = bc }
+            }
+            if (bestB != -1 && bestBS >= blinkD + 3) {
+                if (useChipOnCell(CHIP_TELEPORTATION, bestB) >= 1) say("PZ BLINK d" + bestBS)
+            }
+        }
+    }
+
     var solverAlive = _puzzleSolverID != -1 && isAlive(_puzzleSolverID)
     var anchorCell = solverAlive ? getCell(_puzzleSolverID) : getCell()
     var distToSolver = getCellDistance(getCell(), anchorCell)

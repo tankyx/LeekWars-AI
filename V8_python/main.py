@@ -7514,6 +7514,32 @@ def puzzleSelfPreserve(myID, leashed):
         rcd = getCooldown(CHIP_REGENERATION, myID)
         if ((rcd != None) and (rcd == 0)):
             useChip(CHIP_REGENERATION, myID)
+    if (((entityHPPercent(myID) < 45) and allyHasChip(myID, CHIP_TELEPORTATION)) and (getTP() >= 9)):
+        blinkArmy = puzzleArmyCells()
+        blinkD = (nearestArmyDistFrom(getCell(), blinkArmy) if (count(blinkArmy) > 0) else 99)
+        blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
+        if (((blinkD <= 8) and (blinkCd != None)) and (blinkCd == 0)):
+            bestB = (-1)
+            bestBS = (-1)
+            bc = 0
+            while (bc < 613):
+                dB = getCellDistance(getCell(), bc)
+                if ((dB == None) or (dB > 12)):
+                    bc = lw_add(bc, 1)
+                    continue
+                if (isObstacle(bc) or isEntity(bc)):
+                    bc = lw_add(bc, 1)
+                    continue
+                sB = min(nearestArmyDistFrom(bc, blinkArmy), 18)
+                if isPuzzleWorkZone(bc):
+                    sB = lw_num(sB) - lw_num(6)
+                if (sB > bestBS):
+                    bestBS = sB
+                    bestB = bc
+                bc = lw_add(bc, 1)
+            if ((bestB != (-1)) and (bestBS >= lw_add(blinkD, 3))):
+                if (useChipOnCell(CHIP_TELEPORTATION, bestB) >= 1):
+                    say(lw_add("PZ BLINK d", bestBS))
     solverAlive = ((_puzzleSolverID != (-1)) and isAlive(_puzzleSolverID))
     anchorCell = (getCell(_puzzleSolverID) if solverAlive else getCell())
     distToSolver = getCellDistance(getCell(), anchorCell)
