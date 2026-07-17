@@ -6749,6 +6749,12 @@ def executeBossCombatPoke():
     else:
         say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ POKE none d=", nearestArmyDistFrom(getCell(), armyCells)), " tp="), getTP()), " mp="), getMP()))
     swatCrystals(myID)
+    if (((getMagic() >= 300) and (bigEquipped > 0)) and (bigReady == 0)):
+        puzzleEmergencyBlink(myID)
+        recCell = choosePuzzleSustainCellCapped(myID, getCell(), False, 18)
+        if ((recCell != (-1)) and (recCell != getCell())):
+            moveTowardCell(recCell)
+        return True
     nearestC = (-1)
     nearestPath = 9999
     bestKey = 999999
@@ -7498,6 +7504,51 @@ def isPuzzleWorkZone(cell):
             return True
     return False
 
+def puzzleEmergencyBlink(myID):
+    if ((not allyHasChip(myID, CHIP_TELEPORTATION)) or (getTP() < 9)):
+        return False
+    blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
+    if ((blinkCd == None) or (blinkCd > 0)):
+        return False
+    blinkArmy = puzzleArmyCells()
+    if (count(blinkArmy) == 0):
+        return False
+    blinkD = nearestArmyDistFrom(getCell(), blinkArmy)
+    if (blinkD > 9):
+        return False
+    blinkReach = 0
+    for bac in lw_values(blinkArmy):
+        bad = getCellDistance(getCell(), bac)
+        if ((bad != None) and (bad <= 9)):
+            blinkReach = lw_add(blinkReach, 1)
+    if (blinkReach == 0):
+        return False
+    if ((getLife() >= lw_mul(900, blinkReach)) and (entityHPPercent(myID) >= 45)):
+        return False
+    bestB = (-1)
+    bestBS = (-1)
+    bc = 0
+    while (bc < 613):
+        dB = getCellDistance(getCell(), bc)
+        if ((dB == None) or (dB > 12)):
+            bc = lw_add(bc, 1)
+            continue
+        if (isObstacle(bc) or isEntity(bc)):
+            bc = lw_add(bc, 1)
+            continue
+        sB = min(nearestArmyDistFrom(bc, blinkArmy), 18)
+        if isPuzzleWorkZone(bc):
+            sB = lw_num(sB) - lw_num(6)
+        if (sB > bestBS):
+            bestBS = sB
+            bestB = bc
+        bc = lw_add(bc, 1)
+    if ((bestB != (-1)) and (bestBS >= lw_add(blinkD, 3))):
+        if (useChipOnCell(CHIP_TELEPORTATION, bestB) >= 1):
+            say(lw_add("PZ BLINK d", bestBS))
+            return True
+    return False
+
 def puzzleSelfPreserve(myID, leashed):
     selfShields = [[CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_WALL, 3]]
     for sh in lw_values(selfShields):
@@ -7514,38 +7565,7 @@ def puzzleSelfPreserve(myID, leashed):
         rcd = getCooldown(CHIP_REGENERATION, myID)
         if ((rcd != None) and (rcd == 0)):
             useChip(CHIP_REGENERATION, myID)
-    if (allyHasChip(myID, CHIP_TELEPORTATION) and (getTP() >= 9)):
-        blinkArmy = puzzleArmyCells()
-        blinkD = (nearestArmyDistFrom(getCell(), blinkArmy) if (count(blinkArmy) > 0) else 99)
-        blinkReach = 0
-        for bac in lw_values(blinkArmy):
-            bad = getCellDistance(getCell(), bac)
-            if ((bad != None) and (bad <= 9)):
-                blinkReach = lw_add(blinkReach, 1)
-        blinkThreat = ((blinkReach > 0) and (((getLife() < lw_mul(900, blinkReach)) or (entityHPPercent(myID) < 45))))
-        blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
-        if (((blinkThreat and (blinkD <= 9)) and (blinkCd != None)) and (blinkCd == 0)):
-            bestB = (-1)
-            bestBS = (-1)
-            bc = 0
-            while (bc < 613):
-                dB = getCellDistance(getCell(), bc)
-                if ((dB == None) or (dB > 12)):
-                    bc = lw_add(bc, 1)
-                    continue
-                if (isObstacle(bc) or isEntity(bc)):
-                    bc = lw_add(bc, 1)
-                    continue
-                sB = min(nearestArmyDistFrom(bc, blinkArmy), 18)
-                if isPuzzleWorkZone(bc):
-                    sB = lw_num(sB) - lw_num(6)
-                if (sB > bestBS):
-                    bestBS = sB
-                    bestB = bc
-                bc = lw_add(bc, 1)
-            if ((bestB != (-1)) and (bestBS >= lw_add(blinkD, 3))):
-                if (useChipOnCell(CHIP_TELEPORTATION, bestB) >= 1):
-                    say(lw_add("PZ BLINK d", bestBS))
+    puzzleEmergencyBlink(myID)
     solverAlive = ((_puzzleSolverID != (-1)) and isAlive(_puzzleSolverID))
     anchorCell = (getCell(_puzzleSolverID) if solverAlive else getCell())
     distToSolver = getCellDistance(getCell(), anchorCell)
@@ -7700,6 +7720,7 @@ def executeSolverPuzzleTurn():
         solverSelfBuff(myID)
     _pzGatherDone = True
     solverSurvival(myID)
+    puzzleEmergencyBlink(myID)
     firstEID = pickFocusCrystal(myCell)
     if (firstEID == None):
         say("PZ SOLVER: all done")

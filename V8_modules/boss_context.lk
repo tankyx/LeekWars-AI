@@ -1388,6 +1388,18 @@ function executeBossCombatPoke() {
     // swat was eating the poke's cooldown
     swatCrystals(myID)
 
+    // RECOVERY RETREAT: the MAG carrier's big kit is entirely on cooldown —
+    // post-strike there is nothing worth standing in the army's reach for
+    // (fights 52984301/305: MH died T18/T19 the turn after her dumps,
+    // orbiting at venom range while everything cooled down). Run to 18,
+    // blink if focused, come back when the kit is up.
+    if (getMagic() >= 300 && bigEquipped > 0 && bigReady == 0) {
+        puzzleEmergencyBlink(myID)
+        var recCell = choosePuzzleSustainCellCapped(myID, getCell(), false, 18)
+        if (recCell != -1 && recCell != getCell()) moveTowardCell(recCell)
+        return true
+    }
+
     // Orbit movement. Manhattan distance LIES around the castle walls (sandbox:
     // "d=10" needed a 14-cell walk), so gate on PATH length. If nothing was
     // cast this turn, close in even from the 6-9 band — sitting at
@@ -2247,6 +2259,50 @@ function isPuzzleWorkZone(cell) {
 // whole escort by T5. Allies can't out-sustain that (one regen each); they can
 // out-RUN it (7-10 MP vs the army's less). Post-delivery the best help is
 // staying alive, splitting the army's attention, far from the AoEs.
+// EMERGENCY BLINK: about to be run down — spend the banked teleport to
+// live. Fight 52984207: MH died T4 with teleport unused; the dive she was
+// saving it for never happened and phase 2 had no poison carry. A dive
+// delayed by the cooldown beats no dive. Only blink for a real gain
+// (+3 army distance) so we don't burn it hopping inside the kill zone.
+// PREEMPTIVE trigger: the alpha target never sees itself under 45% on its
+// own turn (fights 52984275/279: Ada at 63-77% HP on T3, dead before her
+// T4 — a current-HP gate can never fire). Project the focus instead:
+// ~900 per army unit in next-turn reach (measured alphas 2,300-2,700
+// from ~3 units). Returns true if the blink fired.
+function puzzleEmergencyBlink(myID) {
+    if (!allyHasChip(myID, CHIP_TELEPORTATION) || getTP() < 9) { return false }
+    var blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
+    if (blinkCd == null || blinkCd > 0) { return false }
+    var blinkArmy = puzzleArmyCells()
+    if (count(blinkArmy) == 0) { return false }
+    var blinkD = nearestArmyDistFrom(getCell(), blinkArmy)
+    if (blinkD > 9) { return false }
+    var blinkReach = 0
+    for (var bac in blinkArmy) {
+        var bad = getCellDistance(getCell(), bac)
+        if (bad != null && bad <= 9) blinkReach++
+    }
+    if (blinkReach == 0) { return false }
+    if (getLife() >= 900 * blinkReach && entityHPPercent(myID) >= 45) { return false }
+    var bestB = -1
+    var bestBS = -1
+    for (var bc = 0; bc < 613; bc++) {
+        var dB = getCellDistance(getCell(), bc)
+        if (dB == null || dB > 12) continue
+        if (isObstacle(bc) || isEntity(bc)) continue
+        var sB = min(nearestArmyDistFrom(bc, blinkArmy), 18)
+        if (isPuzzleWorkZone(bc)) sB -= 6
+        if (sB > bestBS) { bestBS = sB; bestB = bc }
+    }
+    if (bestB != -1 && bestBS >= blinkD + 3) {
+        if (useChipOnCell(CHIP_TELEPORTATION, bestB) >= 1) {
+            say("PZ BLINK d" + bestBS)
+            return true
+        }
+    }
+    return false
+}
+
 function puzzleSelfPreserve(myID, leashed) {
     var selfShields = [
         [CHIP_FORTRESS, 6],
@@ -2266,42 +2322,7 @@ function puzzleSelfPreserve(myID, leashed) {
         if (rcd != null && rcd == 0) useChip(CHIP_REGENERATION, myID)
     }
 
-    // EMERGENCY BLINK: about to be run down — spend the banked teleport to
-    // live. Fight 52984207: MH died T4 with teleport unused; the dive she was
-    // saving it for never happened and phase 2 had no poison carry. A dive
-    // delayed by the cooldown beats no dive. Only blink for a real gain
-    // (+3 army distance) so we don't burn it hopping inside the kill zone.
-    // PREEMPTIVE trigger: the alpha target never sees itself under 45% on
-    // its own turn (fights 52984275/279: Ada at 63-77% HP on T3, dead
-    // before her T4 — a current-HP gate can never fire). Project the focus
-    // instead: ~850 per army unit in next-turn reach (measured alphas
-    // 2,300-2,700 from ~3 units).
-    if (allyHasChip(myID, CHIP_TELEPORTATION) && getTP() >= 9) {
-        var blinkArmy = puzzleArmyCells()
-        var blinkD = count(blinkArmy) > 0 ? nearestArmyDistFrom(getCell(), blinkArmy) : 99
-        var blinkReach = 0
-        for (var bac in blinkArmy) {
-            var bad = getCellDistance(getCell(), bac)
-            if (bad != null && bad <= 9) blinkReach++
-        }
-        var blinkThreat = blinkReach > 0 && (getLife() < 900 * blinkReach || entityHPPercent(myID) < 45)
-        var blinkCd = getCooldown(CHIP_TELEPORTATION, myID)
-        if (blinkThreat && blinkD <= 9 && blinkCd != null && blinkCd == 0) {
-            var bestB = -1
-            var bestBS = -1
-            for (var bc = 0; bc < 613; bc++) {
-                var dB = getCellDistance(getCell(), bc)
-                if (dB == null || dB > 12) continue
-                if (isObstacle(bc) || isEntity(bc)) continue
-                var sB = min(nearestArmyDistFrom(bc, blinkArmy), 18)
-                if (isPuzzleWorkZone(bc)) sB -= 6
-                if (sB > bestBS) { bestBS = sB; bestB = bc }
-            }
-            if (bestB != -1 && bestBS >= blinkD + 3) {
-                if (useChipOnCell(CHIP_TELEPORTATION, bestB) >= 1) say("PZ BLINK d" + bestBS)
-            }
-        }
-    }
+    puzzleEmergencyBlink(myID)
 
     var solverAlive = _puzzleSolverID != -1 && isAlive(_puzzleSolverID)
     var anchorCell = solverAlive ? getCell(_puzzleSolverID) : getCell()
@@ -2526,6 +2547,11 @@ function executeSolverPuzzleTurn() {
 
     // Under fire from the invulnerable army: shield/heal before spending TP on pushes
     solverSurvival(myID)
+    // Solver escape: Ada died T4-T7 as solver in 8 of 10 fights on
+    // 2026-07-17 — solving keeps her among the crystals where the army
+    // hunts. A blinked solver loses a turn of route; a dead one loses the
+    // fight. Route commitment re-paths from the landing cell.
+    puzzleEmergencyBlink(myID)
 
     // Pick first crystal target for teleportation
     var firstEID = pickFocusCrystal(myCell)
