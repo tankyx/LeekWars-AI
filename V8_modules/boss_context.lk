@@ -1343,7 +1343,10 @@ function executeBossCombatPoke() {
                     if (bestA == -1 || dsc > bestC2) { bestC2 = dsc; bestA = aim2 }
                 }
                 if (bestA != -1) {
-                    var land = findEmptyCellNear(bestA, getCell(), 12, 2)
+                    // Land ADJACENT (ring 1): at ring 2 the single intervening
+                    // cell of a packed cluster blocks covid's LoS — fights
+                    // 52983195/52983238: dive, then zero casts
+                    var land = findEmptyCellNear(bestA, getCell(), 12, 1)
                     if (land != -1 && useChipOnCell(CHIP_TELEPORTATION, land) >= 1) {
                         say("PZ DIVE c" + bestC2)
                     }

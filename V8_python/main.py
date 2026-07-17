@@ -6717,7 +6717,7 @@ def executeBossCombatPoke():
                         bestC2 = dsc
                         bestA = aim2
                 if (bestA != (-1)):
-                    land = findEmptyCellNear(bestA, getCell(), 12, 2)
+                    land = findEmptyCellNear(bestA, getCell(), 12, 1)
                     if ((land != (-1)) and (useChipOnCell(CHIP_TELEPORTATION, land) >= 1)):
                         say(lw_add("PZ DIVE c", bestC2))
         if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, True):
