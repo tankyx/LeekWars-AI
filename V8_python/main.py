@@ -6718,14 +6718,25 @@ def executeBossCombatPoke():
     swatCrystals(myID)
     nearestC = (-1)
     nearestPath = 9999
+    bestKey = 999999
     manyAlive = (count(armyCells) > 1)
+    engAllies = getAliveAllies()
     for ac in lw_values(armyCells):
         if manyAlive:
             acEnt = getEntityOnCell(ac)
             if (((acEnt != None) and (acEnt != (-1))) and (getName(acEnt) == "fennel_king")):
                 continue
         pd = getPathLength(getCell(), ac)
-        if ((pd != None) and (pd < nearestPath)):
+        if (pd == None):
+            continue
+        engage = 99
+        for al in lw_values(engAllies):
+            dAl = getCellDistance(ac, getCell(al))
+            if ((dAl != None) and (dAl < engage)):
+                engage = dAl
+        key = lw_add(lw_mul(engage, 100), min(pd, 99))
+        if (key < bestKey):
+            bestKey = key
             nearestPath = pd
             nearestC = ac
     approachGate = (9 if (casted > 0) else 6)

@@ -1341,9 +1341,15 @@ function executeBossCombatPoke() {
     // "d=10" needed a 14-cell walk), so gate on PATH length. If nothing was
     // cast this turn, close in even from the 6-9 band — sitting at
     // wall-blocked distance 8-10 pokes zero forever (fight 52978134 T7-T10).
+    // Approach the ENGAGEMENT, not the horizon: our own scatter drags the army
+    // around faster than carriers can chase (fight 52980206: 32/51 nones at
+    // d>=12 across ten turns). Army units hunting an ally are committed and
+    // reachable — position near the fight.
     var nearestC = -1
     var nearestPath = 9999
+    var bestKey = 999999
     var manyAlive = count(armyCells) > 1
+    var engAllies = getAliveAllies()
     for (var ac in armyCells) {
         // Don't walk toward the king — poking him is vetoed anyway
         if (manyAlive) {
@@ -1351,7 +1357,14 @@ function executeBossCombatPoke() {
             if (acEnt != null && acEnt != -1 && getName(acEnt) == "fennel_king") continue
         }
         var pd = getPathLength(getCell(), ac)
-        if (pd != null && pd < nearestPath) { nearestPath = pd; nearestC = ac }
+        if (pd == null) continue
+        var engage = 99
+        for (var al in engAllies) {
+            var dAl = getCellDistance(ac, getCell(al))
+            if (dAl != null && dAl < engage) engage = dAl
+        }
+        var key = engage * 100 + min(pd, 99)
+        if (key < bestKey) { bestKey = key; nearestPath = pd; nearestC = ac }
     }
     var approachGate = casted > 0 ? 9 : 6
     if (nearestC != -1 && nearestPath > approachGate) {
