@@ -1528,7 +1528,11 @@ function tryWeaponStrike(myID) {
         [WEAPON_MAGNUM, 1, 8, 5, 0, 0],
         [WEAPON_DESTROYER, 1, 6, 6, 0, 0],
         [WEAPON_UNSTABLE_DESTROYER, 1, 6, 6, 0, 0],
-        [WEAPON_RHINO, 2, 4, 5, 0, 0]
+        [WEAPON_RHINO, 2, 4, 5, 0, 0],
+        // Last resort: 15 TP but ~640 at STR 290, and it's guardian-Ada's
+        // ONLY sub-range-5 option — without it she idles TP when the army
+        // stands on top of her (real-build sandbox: 0 GUARDSHOT all fight)
+        [WEAPON_HEAVY_SWORD, 1, 1, 15, 0, 0]
     ]
     var magTable = [
         [WEAPON_GAZOR, 2, 7, 8, 3, 1],
