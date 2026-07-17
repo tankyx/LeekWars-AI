@@ -7743,7 +7743,9 @@ def executeSolverPuzzleTurn():
     crystalCell0 = getCell(firstEID)
     if ((crystalCell0 != None) and (crystalCell0 >= 0)):
         tpCd = getCooldown(CHIP_TELEPORTATION, myID)
-        if ((((tpCd != None) and (tpCd == 0)) and (getTP() >= 12)) and (firstDest != None)):
+        tpArmy = puzzleArmyCells()
+        tpReserved = ((count(tpArmy) > 0) and (nearestArmyDistFrom(myCell, tpArmy) <= 15))
+        if (((((tpCd != None) and (tpCd == 0)) and (not tpReserved)) and (getTP() >= 12)) and (firstDest != None)):
             tpDone = False
             preMove = planCrystalRoute(crystalCell0, _myCrystalGoalAxis, myCell, False)
             if (preMove == None):
@@ -7773,7 +7775,7 @@ def executeSolverPuzzleTurn():
                 solverSelfBuff(myID)
                 return True
         else:
-            if ((tpCd != None) and (tpCd > 0)):
+            if ((tpCd != None) and (((tpCd > 0) or tpReserved))):
                 dToCrystal = getCellDistance(myCell, crystalCell0)
                 if (dToCrystal > 10):
                     say(lw_add(lw_add(lw_add("PZ SOLVER: closing on c=", firstEID), " d="), dToCrystal))

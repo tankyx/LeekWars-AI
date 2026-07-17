@@ -2593,7 +2593,14 @@ function executeSolverPuzzleTurn() {
     var crystalCell0 = getCell(firstEID)
     if (crystalCell0 != null && crystalCell0 >= 0) {
         var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
-        if (tpCd != null && tpCd == 0 && getTP() >= 12 && firstDest != null) {
+        // RESERVE the teleport while the army can hunt us — it is the blink.
+        // Fight 52984720: BOTH solvers route-teleported at T2; the kill
+        // envelope closed T3-7 with the escape chip on cooldown (KG took
+        // 7,067 over six turns and died T7, Ada died T8). Walking costs ~2
+        // turns of tempo; a banked blink can buy the entire solve.
+        var tpArmy = puzzleArmyCells()
+        var tpReserved = count(tpArmy) > 0 && nearestArmyDistFrom(myCell, tpArmy) <= 15
+        if (tpCd != null && tpCd == 0 && !tpReserved && getTP() >= 12 && firstDest != null) {
             var tpDone = false
             // Teleport straight onto the BFS route's stand when one exists
             var preMove = planCrystalRoute(crystalCell0, _myCrystalGoalAxis, myCell, false)
@@ -2634,11 +2641,12 @@ function executeSolverPuzzleTurn() {
                 solverSelfBuff(myID)
                 return true
             }
-        } else if (tpCd != null && tpCd > 0) {
+        } else if (tpCd != null && (tpCd > 0 || tpReserved)) {
             var dToCrystal = getCellDistance(myCell, crystalCell0)
             if (dToCrystal > 10) {
-                // Teleport down and crystal far: WALK toward it. Never stand
-                // still — that stranded the solver to death in fight 52975331.
+                // Teleport down or reserved and crystal far: WALK toward it.
+                // Never stand still — that stranded the solver to death in
+                // fight 52975331.
                 say("PZ SOLVER: closing on c=" + firstEID + " d=" + dToCrystal)
                 moveTowardCell(crystalCell0)
                 solverSelfBuff(myID)
