@@ -1345,18 +1345,26 @@ function executeBossCombatPoke() {
                 if (bestA != -1) {
                     // Land ADJACENT (ring 1): at ring 2 the single intervening
                     // cell of a packed cluster blocks covid's LoS — fights
-                    // 52983195/52983238: dive, then zero casts
+                    // 52983195/52983238: dive, then zero casts. Ring-2
+                    // FALLBACK when ring 1 is beyond teleport reach: fight
+                    // 52984012 MH orbited at 13-14 for three full-TP turns
+                    // ("POKE none") because ring 1 sat just past range 12.
                     var land = findEmptyCellNear(bestA, getCell(), 12, 1)
+                    if (land == -1) { land = findEmptyCellNear(bestA, getCell(), 12, 2) }
                     if (land != -1 && useChipOnCell(CHIP_TELEPORTATION, land) >= 1) {
                         say("PZ DIVE c" + bestC2)
                     }
                 }
             }
         }
+        // COVID FIRST — value order, not range order. Fight 52984012: with
+        // plague/toxin cast first, the 9-TP teleport left covid (8 TP) and
+        // arsenic (8 TP) unaffordable; the dive landed 430 of one-shot poison
+        // and skipped the ~3,400/unit propagating payload it existed for.
+        if (tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, true)) casted++
+        if (tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, true)) casted++
         if (tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, true)) casted++
         if (tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, false)) casted++
-        if (tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, true)) casted++
-        if (tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, true)) casted++
         if (tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, false)) casted++
         casted += tryWeaponStrike(myID)
         if (casted > 0) say("PZ DUMP x" + casted)

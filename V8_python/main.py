@@ -6718,15 +6718,17 @@ def executeBossCombatPoke():
                         bestA = aim2
                 if (bestA != (-1)):
                     land = findEmptyCellNear(bestA, getCell(), 12, 1)
+                    if (land == (-1)):
+                        land = findEmptyCellNear(bestA, getCell(), 12, 2)
                     if ((land != (-1)) and (useChipOnCell(CHIP_TELEPORTATION, land) >= 1)):
                         say(lw_add("PZ DIVE c", bestC2))
-        if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, True):
-            casted = lw_add(casted, 1)
-        if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
+        if tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, True):
             casted = lw_add(casted, 1)
         if tryPoisonCast(myID, CHIP_ARSENIC, 4, 0, 8, 1, armyCells, True):
             casted = lw_add(casted, 1)
-        if tryPoisonCast(myID, CHIP_COVID, 2, 0, 8, 1, armyCells, True):
+        if tryPoisonCast(myID, CHIP_PLAGUE, 5, 3, 6, 1, armyCells, True):
+            casted = lw_add(casted, 1)
+        if tryPoisonCast(myID, CHIP_TOXIN, 7, 2, 5, 1, armyCells, False):
             casted = lw_add(casted, 1)
         if tryPoisonCast(myID, CHIP_VENOM, 10, 0, 4, 1, armyCells, False):
             casted = lw_add(casted, 1)
