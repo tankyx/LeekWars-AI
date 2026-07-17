@@ -70,7 +70,9 @@
 
 **Server-proven**: puzzle completion under fire (graal died T7–T10 in 5 fights), dual + solo solving, phase flip, crystal cleanup, scatter survival (multiple 40–64-turn runs), dive→dump (4,201 poison into the scribe in one fight), peels, scribe-focused casting.
 
-**The remaining gate**: solver survival in T3–T7 (~50% per fight — decided by army alpha-target choice and crystal layout). When the puzzle completes, phase 2 now has the coordinated strike — **not yet observed live** (built after the last completed-puzzle fight).
+**The remaining gate**: solver survival in T3–T7 (~50% per fight — decided by army alpha-target choice and crystal layout).
+
+**Fight 52983075 (2026-07-17) — the milestone**: puzzle T7, coordinated strike ran live: dive T10 + five dump turns → **scribe DEAD T14** (9,079 in vs 2,599 healed — treadmill broken), **22,041 total into the army** (~10× any prior fight, >60% of its pool), sustained 1,000–2,700/turn through T22. Loss at T27 with ~14k army HP left — ran out of bodies one phase early. The system is win-capable; a modestly better focus-RNG run of the same fight closes it.
 
 **Win path**: puzzle completes (~50%) → banked quorum strike kills the scribe (~6k HP vs 2,500–3,500/turn overlapping dumps) → permanent poison attrition on a cureless army → squires/knights → king last.
 
