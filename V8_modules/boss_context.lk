@@ -1288,16 +1288,21 @@ function executeBossCombatPoke() {
                     if (dT2 == null || dT2 > 14) continue
                     var cl2 = 0
                     var pri2 = 0
+                    var hasScribe = false
                     for (var ac3 in armyCells) {
                         var dd3 = getCellDistance(aim2, ac3)
                         if (dd3 != null && dd3 <= 2) {
                             cl2++
                             var e3 = getEntityOnCell(ac3)
-                            if (e3 != null && e3 != -1) pri2 += bossTargetPriority(getName(e3))
+                            if (e3 != null && e3 != -1) {
+                                pri2 += bossTargetPriority(getName(e3))
+                                if (getName(e3) == "fennel_scribe") hasScribe = true
+                            }
                         }
                     }
-                    if (cl2 < 2) continue
-                    // Dive at the SCRIBE's cluster when possible (priority sum)
+                    // Dive at the SCRIBE even alone (the healer must die);
+                    // otherwise require a 2+ cluster to justify the jump
+                    if (cl2 < 2 && !hasScribe) continue
                     var dsc = cl2 * 20 + pri2
                     if (bestA == -1 || dsc > bestC2) { bestC2 = dsc; bestA = aim2 }
                 }
@@ -1544,9 +1549,11 @@ function tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, all
             if (dMe2 > rng) continue
             if (!lineOfSight(myCell, aim)) continue
         }
-        var sc = cluster * 100 - dMe2
+        // cluster*60 + priority*2: a lone scribe (60+120) now outranks a
+        // scribe-less pair (120) — he's the healer, kill-priority is real
+        var sc = cluster * 60 - dMe2
         var aimEnt = getEntityOnCell(aim)
-        if (aimEnt != null && aimEnt != -1) { sc += bossTargetPriority(getName(aimEnt)) }
+        if (aimEnt != null && aimEnt != -1) { sc += bossTargetPriority(getName(aimEnt)) * 2 }
         if (sc > bestScore) { bestScore = sc; bestAim = aim }
     }
     if (bestAim == -1) { return false }

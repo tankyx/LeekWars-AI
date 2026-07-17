@@ -6662,6 +6662,7 @@ def executeBossCombatPoke():
                         continue
                     cl2 = 0
                     pri2 = 0
+                    hasScribe = False
                     for ac3 in lw_values(armyCells):
                         dd3 = getCellDistance(aim2, ac3)
                         if ((dd3 != None) and (dd3 <= 2)):
@@ -6669,7 +6670,9 @@ def executeBossCombatPoke():
                             e3 = getEntityOnCell(ac3)
                             if ((e3 != None) and (e3 != (-1))):
                                 pri2 = lw_add(pri2, bossTargetPriority(getName(e3)))
-                    if (cl2 < 2):
+                                if (getName(e3) == "fennel_scribe"):
+                                    hasScribe = True
+                    if ((cl2 < 2) and (not hasScribe)):
                         continue
                     dsc = lw_add(lw_mul(cl2, 20), pri2)
                     if ((bestA == (-1)) or (dsc > bestC2)):
@@ -6909,10 +6912,10 @@ def tryPoisonCast(myID, chip, rng, radius, cost, minCluster, armyCells, allowMov
                 continue
             if (not lineOfSight(myCell, aim)):
                 continue
-        sc = lw_sub(lw_mul(cluster, 100), dMe2)
+        sc = lw_sub(lw_mul(cluster, 60), dMe2)
         aimEnt = getEntityOnCell(aim)
         if ((aimEnt != None) and (aimEnt != (-1))):
-            sc = lw_add(sc, bossTargetPriority(getName(aimEnt)))
+            sc = lw_add(sc, lw_mul(bossTargetPriority(getName(aimEnt)), 2))
         if (sc > bestScore):
             bestScore = sc
             bestAim = aim
