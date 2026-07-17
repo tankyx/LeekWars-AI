@@ -1788,6 +1788,12 @@ function executeBossCombatPeel() {
     // Guardian with teeth: after guard duties, shoot (bazooka CIRCLE_3 from
     // 8-12 at STR 270 ≈ 1300-1700 into a cluster; lightninger otherwise).
     // Weapons before peels — damage beats displacement when both are possible.
+    // Plasma first: each target takes dmg × targets hit, so a 3-cluster at
+    // STR 270 is ~1,250 for 9 TP — better than the bazooka. No chasing:
+    // the guardian only casts if the cluster is already in range (the army
+    // comes to the carry anyway).
+    var gArmy = puzzleArmyCells()
+    if (tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, gArmy, false)) say("PZ GUARD plasma")
     var shots = tryWeaponStrike(myID)
     if (shots > 0) say("PZ GUARDSHOT x" + shots)
 

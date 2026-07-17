@@ -7116,6 +7116,9 @@ def executeBossCombatPeel():
             guardCast(myID, CHIP_WALL, carry)
             guardCast(myID, CHIP_ARMORING, carry)
     swatCrystals(myID)
+    gArmy = puzzleArmyCells()
+    if tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, gArmy, False):
+        say("PZ GUARD plasma")
     shots = tryWeaponStrike(myID)
     if (shots > 0):
         say(lw_add("PZ GUARDSHOT x", shots))
