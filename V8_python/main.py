@@ -6865,9 +6865,9 @@ def pokeOrbitalCell(myID, armyCells):
     return best
 
 def tryWeaponStrike(myID):
-    strTable = [[WEAPON_M_LASER, 5, 12, 8, 2, 1], [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, 0], [WEAPON_QUANTUM_RIFLE, 5, 10, 10, 0, 0], [WEAPON_LIGHTNINGER, 6, 10, 9, 1, 2], [WEAPON_LASER, 2, 9, 6, 2, 1], [WEAPON_RIFLE, 7, 9, 7, 0, 0], [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, 0], [WEAPON_ILLICIT_GRENADE_LAUNCHER, 4, 7, 6, 2, 0], [WEAPON_MAGNUM, 1, 8, 5, 0, 0], [WEAPON_DESTROYER, 1, 6, 6, 0, 0], [WEAPON_UNSTABLE_DESTROYER, 1, 6, 6, 0, 0], [WEAPON_RHINO, 2, 4, 5, 0, 0]]
+    strTable = [[WEAPON_M_LASER, 5, 12, 8, 2, 1], [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, 0], [WEAPON_BAZOOKA, 8, 12, 11, 3, 1], [WEAPON_QUANTUM_RIFLE, 5, 10, 10, 0, 0], [WEAPON_LIGHTNINGER, 6, 10, 9, 1, 2], [WEAPON_LASER, 2, 9, 6, 2, 1], [WEAPON_RIFLE, 7, 9, 7, 0, 0], [WEAPON_GRENADE_LAUNCHER, 4, 7, 6, 2, 0], [WEAPON_ILLICIT_GRENADE_LAUNCHER, 4, 7, 6, 2, 0], [WEAPON_MAGNUM, 1, 8, 5, 0, 0], [WEAPON_DESTROYER, 1, 6, 6, 0, 0], [WEAPON_UNSTABLE_DESTROYER, 1, 6, 6, 0, 0], [WEAPON_RHINO, 2, 4, 5, 0, 0]]
     magTable = [[WEAPON_GAZOR, 2, 7, 8, 3, 1], [WEAPON_FLAME_THROWER, 2, 8, 6, 2, 1], [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, 0]]
-    table = (strTable if (getStrength() >= 300) else magTable)
+    table = (strTable if (getStrength() >= getMagic()) else magTable)
     weps = getWeapons()
     if (weps == None):
         return 0
@@ -7080,7 +7080,7 @@ def guardCast(myID, chip, target):
 
 def executeBossCombatPeel():
     myID = getEntity()
-    if (getStrength() >= 150):
+    if (getStrength() >= 300):
         return False
     if (not allyHasChip(myID, CHIP_BOXING_GLOVE)):
         return False
@@ -7116,6 +7116,9 @@ def executeBossCombatPeel():
             guardCast(myID, CHIP_WALL, carry)
             guardCast(myID, CHIP_ARMORING, carry)
     swatCrystals(myID)
+    shots = tryWeaponStrike(myID)
+    if (shots > 0):
+        say(lw_add("PZ GUARDSHOT x", shots))
     casts = 0
     while ((getTP() >= 3) and (casts < 8)):
         if (not peelPushOnce(myID, carryCell)):

@@ -1518,6 +1518,7 @@ function tryWeaponStrike(myID) {
     var strTable = [
         [WEAPON_M_LASER, 5, 12, 8, 2, 1],
         [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, 0],
+        [WEAPON_BAZOOKA, 8, 12, 11, 3, 1],
         [WEAPON_QUANTUM_RIFLE, 5, 10, 10, 0, 0],
         [WEAPON_LIGHTNINGER, 6, 10, 9, 1, 2],
         [WEAPON_LASER, 2, 9, 6, 2, 1],
@@ -1534,7 +1535,7 @@ function tryWeaponStrike(myID) {
         [WEAPON_FLAME_THROWER, 2, 8, 6, 2, 1],
         [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, 0]
     ]
-    var table = getStrength() >= 300 ? strTable : magTable
+    var table = getStrength() >= getMagic() ? strTable : magTable
     var weps = getWeapons()
     if (weps == null) { return 0 }
 
@@ -1732,7 +1733,9 @@ function guardCast(myID, chip, target) {
 
 function executeBossCombatPeel() {
     var myID = getEntity()
-    if (getStrength() >= 150) { return false }
+    // < 300: full strikers use the poke orbit; guardians (tank-Ada, even with
+    // her cheap-tier STR + bazooka) guard AND shoot from here
+    if (getStrength() >= 300) { return false }
     if (!allyHasChip(myID, CHIP_BOXING_GLOVE)) { return false }
 
     solverSurvival(myID)
@@ -1781,6 +1784,12 @@ function executeBossCombatPeel() {
     }
 
     swatCrystals(myID)
+
+    // Guardian with teeth: after guard duties, shoot (bazooka CIRCLE_3 from
+    // 8-12 at STR 270 ≈ 1300-1700 into a cluster; lightninger otherwise).
+    // Weapons before peels — damage beats displacement when both are possible.
+    var shots = tryWeaponStrike(myID)
+    if (shots > 0) say("PZ GUARDSHOT x" + shots)
 
     var casts = 0
     while (getTP() >= 3 && casts < 8) {
