@@ -280,3 +280,44 @@ shields. Open: swap-solve has never fired live (geometry instrumented);
 re-killed revived crystals re-arm the Apocalypse (need the 4-solve inside
 a ~3-round window); combat phase untested with the new builds (weapon
 table now covers scythe/odachi/sun_spear as item ids).
+
+## 9. Campaign status (2026-08-19 late, ~245 boss fights, 0 wins, 22 graal deaths)
+
+**All mechanics work; the attrition race is unwinnable at our resources with
+the current formulas.** Honest root-cause after ~25 doctrine variants and 6
+build overhauls (bruiser / shield-bot / tanky MH+ADA / reflect-solo ED /
+WIS-max ED / decoy+intercept+shadow+kite anchors):
+
+- **The solve works**: 2 kill+resurrect (spark + resurrect(), engine
+  pre-flight) + 1 inversion swap-solve + slides. 4 crystals solved in ~15%
+  of fights (53374779, 53375804, 53375853). First graal suicides: 53370125,
+  53370313, and 16 more since.
+- **The attrition is the wall**: the army focus-fires the NEAREST leek for
+  ~1600-2000/turn (king Excalibur ~800 + poison, knights, scribe nuke).
+  A lone solver dies in 2-3 turns regardless of shields. The graal falls
+  ~R10-15 with 1-2 leeks left; the 36k army then mops up.
+- **KG's sustain is proven**: RES 500-675 + remission + shields + kite — he
+  solo-kited the army 23+ rounds post-graal (53374357). The sustain exists
+  for ONE leek; capital (1780) can't give it to four.
+- **The winners' edges we can't match**: 4 resurrection chips (we own 2,
+  `purchasable:false`); TP 27-29 remission spam (we have 19-22); the
+  temakisushi formation needs a clustered spawn (ours is scattered
+  228/458/491/563).
+- **Bugs found & fixed along the way**: resurrect() is the only working call
+  (useChip=-1); engine pre-flight mandatory (mid-cell entities block attack
+  LoS); core3 = +10M ops budget (BFS blew 1M); a duplicated TRANQ block broke
+  boss_context.lk braces (NO_BLOC_TO_CLOSE, masked the solve for 4 batches);
+  `getWeapons()` returns ITEM ids on the server.
+
+**The remaining options** (need user decision):
+1. **More resurrection chips** (need 2 more — loot-only, from boss/chest
+  drops). With 4, the Legumatore formula (4 instant solves at R2, graal R3,
+  combat at 4v8) is directly achievable.
+2. **Grind favorable spawns** (crystals within ~12 of spawn → teleport-solve
+   R2-4 before the army engages). ~5-10% of spawns. Needs the combat phase
+   to hold with 3-4 alive (untested — flip-time escape under-fires at
+   graal death; survivors get executed mid-zone R12).
+3. **Out-stat the sustain race**: the army's 2500/turn vs our ~1300-1800
+   sustain. Winners out-sustain (TP 27-29, RES 450-510). We can't at 1780.
+4. Accept the boss-2 wall for now; the builds + mechanics are banked and
+   winnable with 1-2 more resurrection chips.
