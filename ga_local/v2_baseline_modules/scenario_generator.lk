@@ -1,0 +1,770 @@
+include('scenario_combos.lk')
+
+class ScenarioGenerator extends ScenarioCombos {
+
+    constructor(arsenal, player, target, fieldMap, strategy) {
+        super(arsenal, player, target, fieldMap, strategy)
+    }
+
+    generateScenarios() {
+        if (this._target != null) {
+            this._target.updateEntity()
+        }
+
+        if (this._target != null && this.hasPoisonCapability()) {
+            // Use stack count (not single-stack remaining) — antidote drops
+            // all stacks to 0, which is the cleanest cleanse signal.
+            var currentPoison = this._target.getPoisonStackCount()
+            var tracker = new CooldownTracker(this._target)
+            tracker.detectAntidoteUse(this._target._id, PREV_ENEMY_POISON, currentPoison)
+
+            if (POISON_PHASE == "BAIT") {
+                var enemyChips = this._target._chips
+                var enemyHasAntidote = false
+                for (var chipId in enemyChips) {
+                    if (chipId == CHIP_ANTIDOTE) { enemyHasAntidote = true; break }
+                }
+                if (!enemyHasAntidote) {
+                    POISON_PHASE = "DUMP"
+                }
+            }
+
+            var currentTurn = getTurn()
+
+            if (POISON_PHASE == "SUSTAIN") {
+                var antidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+
+                if (antidoteCD == 0 && (currentTurn - LAST_POISON_DUMP_TURN) >= 3) {
+                    POISON_PHASE = "BAIT"
+                    BAIT_START_TURN = currentTurn
+                }
+            }
+
+            // Transition BAIT→DUMP adaptively. Old logic was fixed 5 turns;
+            // but enemy antidote CD is only 2-3, so a 5-turn BAIT let them
+            // cleanse every stack before DUMP. New rule:
+            //  • DUMP early (after ≥2 stacks applied) if antidote is on CD
+            //    for 2+ turns — exploit the real cleanse gap.
+            //  • Extend BAIT to 8 turns otherwise (from 5) so we actually
+            //    force Antidote uses instead of timing out mid-rotation.
+            //  • Phase 1.2: if enemy has used antidote ≥2× within 12 turns,
+            //    treat them as a DOUBLE_ANTIDOTE_CARRIER — stay in BAIT
+            //    indefinitely (cap stacks, never commit the DUMP we can't
+            //    win). Poison weight pivot handled downstream in scorer.
+            if (POISON_PHASE == "BAIT") {
+                var baitAntidoteCD = tracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
+                var elapsed = currentTurn - BAIT_START_TURN
+                var antidoteUses = tracker.getAntidoteUseCount(this._target._id)
+                var isDoubleCarrier = (antidoteUses >= 2 && (currentTurn - BAIT_START_TURN) < 12)
+                if (isDoubleCarrier) {
+                    // Hold BAIT — refuse DUMP transition. Light pressure only.
+                } else if (baitAntidoteCD >= 2 && elapsed >= 2) {
+                    POISON_PHASE = "DUMP"
+                } else if (elapsed >= 8) {
+                    POISON_PHASE = "DUMP"
+                }
+            }
+        }
+
+        var scenarios = []
+        var availableTP = getTP()
+        var availableMP = getMP()
+
+        var state = this.determineStrategicState()
+        if (getTurn() <= 20) debugW("GEN_STATE_T" + getTurn() + "_" + state)
+
+        // Phase 4a: dynamic beam/mutation scaling.
+        // Reset to baselines first (in case we boosted last turn).
+        _beamMaxDepth = _beamMaxDepthBase
+        _mutationMaxSeeds = _mutationMaxSeedsBase
+        _mutationMaxPerSeed = _mutationMaxPerSeedBase
+        // Boost search when we're losing the damage race in early/mid game and
+        // ops budget has headroom (Phase 1 freed ~1M ops). Skip in PUZZLE/FLEE
+        // and during boss combat where weights/templates already drive behavior.
+        var curT = getTurn()
+        if (state != "PUZZLE" && state != "FLEE" && !_isBossFight) {
+            var weakDamageRate = (curT > 5 && __avgDamageRate > 0 && __avgDamageRate < 100)
+            var earlyStalemate = (curT < 25 && __timePressure)
+            if ((weakDamageRate || earlyStalemate) && getOperations() < _ops64) {
+                _beamMaxDepth = min(12, _beamMaxDepthBase + 2)
+                _mutationMaxSeeds = min(10, _mutationMaxSeedsBase + 4)
+                _mutationMaxPerSeed = min(120, _mutationMaxPerSeedBase + 40)
+            }
+        }
+
+        if (state == "PUZZLE") {
+            this.buildPuzzleScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "KILL") {
+            this.buildKillScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "CLEANUP") {
+            // Phase 3.1: CLEANUP routes to kill scenarios — already focuses on
+            // direct damage / OTKO / finishing combos and avoids the heavy
+            // buff-stacking that ATTRITION does. Cheap and reuses tested code.
+            this.buildKillScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "AGGRO") {
+            this.buildAggroScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "ATTRITION") {
+            this.buildAttritionScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "SUSTAIN") {
+            this.buildSustainScenarios(scenarios, availableTP, availableMP)
+        }
+        else if (state == "FLEE") {
+            this.buildFleeScenarios(scenarios, availableTP, availableMP)
+        }
+
+        if (state != "PUZZLE" && state != "FLEE" && getOperations() < _ops64) {
+            var beamScenarios = beamSearchScenarios(this._player, this._target, this._arsenal, this._fieldMap)
+            for (var bs in beamScenarios) {
+                push(scenarios, bs)
+            }
+        }
+
+        // Support template: for BUILD_SUPPORT with living teammates, in every
+        // combat state. The state machine is 1v1-target-centric; team support
+        // is orthogonal to it — the scenario competes on the allySupport
+        // dimension against the regular offensive/defensive candidates.
+        if (state != "PUZZLE" && __playerBuildType == BUILD_SUPPORT) {
+            var teamSupport = this.createTeamSupportScenario(availableTP, availableMP)
+            if (teamSupport != null && count(teamSupport) > 0) {
+                push(scenarios, teamSupport)
+            }
+        }
+
+        return scenarios
+    }
+
+    buildKillScenarios(scenarios, availableTP, availableMP) {
+
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            push(scenarios, bruiserReflect)
+        }
+
+        var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != null) {
+            push(scenarios, poisonBait)
+        }
+
+        var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != null) {
+            push(scenarios, poisonDump)
+        }
+
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            push(scenarios, grappleCovid)
+        }
+
+        var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != null) {
+            push(scenarios, shieldRotation)
+        }
+
+        var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != null) {
+            push(scenarios, damageReturnCycling)
+        }
+
+        var neutrinoOTKO = this.createNeutrinoOTKOScenario(availableTP, availableMP)
+        if (neutrinoOTKO != null) {
+            push(scenarios, neutrinoOTKO)
+        }
+
+        var bestOTKO = this._fieldMap.getBestOTKOCell()
+        var killTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+
+        if (bestOTKO != null && killTeleChip != null) {
+            var teleportCost = getCachedChipCost(killTeleChip)
+            if (availableTP >= teleportCost + 10) {
+                var distToOTKO = getCellDistance(this._player._cellPos, bestOTKO._id)
+                var maxRange = getTeleportMaxRange(killTeleChip)
+                if (distToOTKO != null && distToOTKO >= 1 && distToOTKO <= maxRange) {
+                    push(scenarios, this.createOTKOTeleportScenario(bestOTKO._id, availableTP, availableMP))
+                }
+            }
+        }
+
+        var jumpAttackKill = this.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackKill != null) {
+            push(scenarios, jumpAttackKill)
+        }
+
+        // Phase P: dedicated JUMP-to-fire (narrower than JumpAttack, no bunker
+        // filter, survives shackled MP). See createJumpToFireScenario for why.
+        var jumpToFireKill = this.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireKill != null) {
+            push(scenarios, jumpToFireKill)
+        }
+
+        // BAIT_ANCHOR safety net: when estimateMaxDamageThisTurn over-estimates
+        // and trips KILL state without a viable kill path (e.g. dist=10, mr=7,
+        // no actual shot lands), every offensive template scores ~0 and the
+        // override fires into a fallback wander. BAIT_ANCHOR at +6000 checkpoint
+        // catches this collapse. When KILL is genuine (real kill path exists),
+        // a real KILL scenario scores tens of thousands and easily wins.
+        var baitAnchorKill = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorKill != null) {
+            push(scenarios, baitAnchorKill)
+        }
+
+        push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "otko"), availableTP, availableMP))
+        push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "stand"), availableTP, availableMP))
+
+        push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
+    }
+
+    buildAggroScenarios(scenarios, availableTP, availableMP) {
+
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            push(scenarios, bruiserReflect)
+        }
+
+        var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != null) {
+            push(scenarios, novaAttrition)
+        }
+
+        var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
+        if (grappleHS != null) {
+            push(scenarios, grappleHS)
+        }
+
+        var grappleAxe = this.createGrappleAxeScenario(availableTP, availableMP)
+        if (grappleAxe != null) {
+            push(scenarios, grappleAxe)
+        }
+
+        var grappleRanged = this.createGrappleRangedScenario(availableTP, availableMP)
+        if (grappleRanged != null) {
+            push(scenarios, grappleRanged)
+        }
+
+        var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
+        if (neutrinoStack != null) {
+            push(scenarios, neutrinoStack)
+        }
+
+        var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
+        if (steroidOTKO != null) {
+            push(scenarios, steroidOTKO)
+        }
+
+        var dualBuff = this.createDualBuffAttackScenario(availableTP, availableMP)
+        if (dualBuff != null) {
+            push(scenarios, dualBuff)
+        }
+
+        var steroidRecheck = this.createSteroidRecheckScenario(availableTP, availableMP)
+        if (steroidRecheck != null) {
+            push(scenarios, steroidRecheck)
+        }
+
+        var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != null) {
+            push(scenarios, poisonBait)
+        }
+
+        var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != null) {
+            push(scenarios, poisonDump)
+        }
+
+        var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != null) {
+            push(scenarios, shieldRotation)
+        }
+
+        var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != null) {
+            push(scenarios, damageReturnCycling)
+        }
+
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            push(scenarios, grappleCovid)
+        }
+
+        if (getAvailableTeleportChip(this._arsenal, this._player._id) != null) {
+            var emergencyApproach = this.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproach != null) {
+                push(scenarios, emergencyApproach)
+            }
+        }
+
+        // Part C: BAIT_ANCHOR — early-game/AGGRO is where the blind-rush-vs-kiter
+        // problem actually lives (turns 1-4 default into AGGRO before time
+        // pressure kicks in). Without this dispatch the BAIT_ANCHOR template
+        // never runs against koe2 / fennel etc. since the state never escalates
+        // to ATTRITION while we're still healthy.
+        var baitAnchorAggro = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorAggro != null) {
+            push(scenarios, baitAnchorAggro)
+        }
+
+        var jumpAttackAggro = this.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackAggro != null) {
+            push(scenarios, jumpAttackAggro)
+        }
+
+        // Phase P: dedicated JUMP-to-fire (narrower than JumpAttack).
+        var jumpToFireAggro = this.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireAggro != null) {
+            push(scenarios, jumpToFireAggro)
+        }
+
+        var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != null) {
+            push(scenarios, buffApproach)
+        }
+
+        // Phase 2: MOTIVATION setup combo template. Fires when out of attack
+        // range with combat horizon ahead — converts "wasted approach TP"
+        // into a 2-3 turn TP-pump plan.
+        var motivationSetup = this.createMotivationSetupScenario(availableTP, availableMP)
+        if (motivationSetup != null) {
+            push(scenarios, motivationSetup)
+        }
+
+        // Option B: BUFF_STAGE template (no MOTIVATION required). Stacks
+        // duration-matched buffs when FIRETURN in [2,3].
+        var buffStage = this.createBuffStageScenario(availableTP, availableMP)
+        if (buffStage != null) {
+            push(scenarios, buffStage)
+        }
+
+        push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
+        push(scenarios, this.createParametricScenario(new ScenarioParams(1, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
+        push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
+
+        push(scenarios, this.createParametricScenario(new ScenarioParams(2, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
+
+        if (__timePressure) {
+            var timePressureScenario = this.createTimePressureScenario(availableTP, availableMP)
+            if (timePressureScenario != null && count(timePressureScenario) > 0) {
+                push(scenarios, timePressureScenario)
+            }
+        }
+
+        push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
+    }
+
+    buildAttritionScenarios(scenarios, availableTP, availableMP) {
+
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            push(scenarios, bruiserReflect)
+        }
+
+        var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != null) {
+            push(scenarios, novaAttrition)
+        }
+
+        var playerHP = this._player._currHealth
+        var enemyHP = this._target._currHealth
+        var losingHPRace = (playerHP < enemyHP)
+
+        if (losingHPRace) {
+            push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.7, 0.7, "hide"), availableTP, availableMP))
+            push(scenarios, this.createParametricScenario(new ScenarioParams(3, 0.5, 0.8, 0.8, "hide"), availableTP, availableMP))
+        }
+
+        var grappleHS = this.createGrappleHeavySwordScenario(availableTP, availableMP)
+        if (grappleHS != null) {
+            push(scenarios, grappleHS)
+        }
+
+        var grappleAxe = this.createGrappleAxeScenario(availableTP, availableMP)
+        if (grappleAxe != null) {
+            push(scenarios, grappleAxe)
+        }
+
+        var grappleRanged = this.createGrappleRangedScenario(availableTP, availableMP)
+        if (grappleRanged != null) {
+            push(scenarios, grappleRanged)
+        }
+
+        var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
+        if (neutrinoStack != null) {
+            push(scenarios, neutrinoStack)
+        }
+
+        var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
+        if (steroidOTKO != null) {
+            push(scenarios, steroidOTKO)
+        }
+
+        var dualBuffAttr = this.createDualBuffAttackScenario(availableTP, availableMP)
+        if (dualBuffAttr != null) {
+            push(scenarios, dualBuffAttr)
+        }
+
+        var neutrinoRecheck = this.createNeutrinoRecheckScenario(availableTP, availableMP)
+        if (neutrinoRecheck != null) {
+            push(scenarios, neutrinoRecheck)
+        }
+
+        var grappleHSRecheck = this.createGrappleHSRecheckScenario(availableTP, availableMP)
+        if (grappleHSRecheck != null) {
+            push(scenarios, grappleHSRecheck)
+        }
+
+        var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != null) {
+            push(scenarios, poisonBait)
+        }
+
+        var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != null) {
+            push(scenarios, poisonDump)
+        }
+
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            push(scenarios, grappleCovid)
+        }
+
+        var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != null) {
+            push(scenarios, shieldRotation)
+        }
+
+        var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != null) {
+            push(scenarios, damageReturnCycling)
+        }
+
+        var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != null) {
+            push(scenarios, buffApproach)
+        }
+
+        // Phase 2: MOTIVATION setup combo template (ATTRITION variant).
+        var motivationSetupAttr = this.createMotivationSetupScenario(availableTP, availableMP)
+        if (motivationSetupAttr != null) {
+            push(scenarios, motivationSetupAttr)
+        }
+
+        // Option B: BUFF_STAGE template (ATTRITION variant).
+        var buffStageAttr = this.createBuffStageScenario(availableTP, availableMP)
+        if (buffStageAttr != null) {
+            push(scenarios, buffStageAttr)
+        }
+
+        // Teleport-to-attack against kiters: in ATTRITION, if enemy has moved
+        // beyond our MP range, standard move+attack yields 0 damage. Emergency
+        // approach uses Teleportation (range 12) to land in a weapon-range cell.
+        if (getAvailableTeleportChip(this._arsenal, this._player._id) != null) {
+            var emergencyApproachAttr = this.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproachAttr != null) {
+                push(scenarios, emergencyApproachAttr)
+            }
+        }
+
+        // Part C: BAIT_ANCHOR — when teleport is unavailable or doesn't reach,
+        // and the enemy is a confirmed kiter, anchor in cover and force them
+        // to step into our weapon arc.
+        var baitAnchorAttr = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorAttr != null) {
+            push(scenarios, baitAnchorAttr)
+        }
+
+        push(scenarios, this.createParametricScenario(new ScenarioParams(4, -1, 0.8, 0.8, "hide"), availableTP, availableMP))
+        push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.8, 0.8, "hide"), availableTP, availableMP))
+        push(scenarios, this.createParametricScenario(new ScenarioParams(0, -1, 1.0, 1.0, "hide"), availableTP, availableMP))
+
+        if (__timePressure) {
+            var timePressureScenario = this.createTimePressureScenario(availableTP, availableMP)
+            if (timePressureScenario != null && count(timePressureScenario) > 0) {
+                push(scenarios, timePressureScenario)
+            }
+        }
+
+        push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
+    }
+
+    buildSustainScenarios(scenarios, availableTP, availableMP) {
+
+        var bruiserReflect = this.createBruiserReflectScenario(availableTP, availableMP)
+        if (bruiserReflect != null) {
+            push(scenarios, bruiserReflect)
+        }
+
+        var novaAttrition = this.createNovaAttritionScenario(availableTP, availableMP)
+        if (novaAttrition != null) {
+            push(scenarios, novaAttrition)
+        }
+
+        var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != null) {
+            push(scenarios, poisonBait)
+        }
+
+        var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != null) {
+            push(scenarios, poisonDump)
+        }
+
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            push(scenarios, grappleCovid)
+        }
+
+        var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != null) {
+            push(scenarios, shieldRotation)
+        }
+
+        var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != null) {
+            push(scenarios, damageReturnCycling)
+        }
+
+        var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
+        if (healRecheck != null) {
+            push(scenarios, healRecheck)
+        }
+
+        var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != null) {
+            push(scenarios, buffApproach)
+        }
+
+        // Teleport-close in SUSTAIN too — kiters that out-heal us need pressure
+        // even when we're not actively attriting HP.
+        if (getAvailableTeleportChip(this._arsenal, this._player._id) != null) {
+            var emergencyApproachSus = this.createEmergencyApproachScenario(availableTP, availableMP)
+            if (emergencyApproachSus != null) {
+                push(scenarios, emergencyApproachSus)
+            }
+        }
+
+        // Part C: BAIT_ANCHOR in SUSTAIN — also relevant when we're outranged
+        // and can't break through. Lets us reset positioning before the next
+        // attack window.
+        var baitAnchorSus = this.createBaitAnchorScenario(availableTP, availableMP)
+        if (baitAnchorSus != null) {
+            push(scenarios, baitAnchorSus)
+        }
+
+        push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.6, 0.6, "hide"), availableTP, availableMP))
+        push(scenarios, this.createParametricScenario(new ScenarioParams(4, 0.7, 0.6, 0.6, "kite"), availableTP, availableMP))
+        push(scenarios, this.createParametricScenario(new ScenarioParams(3, -1, 0.6, 0.6, "hide"), availableTP, availableMP))
+
+        push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
+    }
+
+    buildFleeScenarios(scenarios, availableTP, availableMP) {
+
+        var poisonBait = this.createPoisonBaitScenario(availableTP, availableMP)
+        if (poisonBait != null) {
+            push(scenarios, poisonBait)
+        }
+
+        var poisonDump = this.createPoisonDumpScenario(availableTP, availableMP)
+        if (poisonDump != null) {
+            push(scenarios, poisonDump)
+        }
+
+        var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
+        if (grappleCovid != null) {
+            push(scenarios, grappleCovid)
+        }
+
+        var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
+        if (shieldRotation != null) {
+            push(scenarios, shieldRotation)
+        }
+
+        var damageReturnCycling = this.createDamageReturnCyclingScenario(availableTP, availableMP)
+        if (damageReturnCycling != null) {
+            push(scenarios, damageReturnCycling)
+        }
+
+        var fleeTeleChip = getAvailableTeleportChip(this._arsenal, this._player._id)
+
+        if (fleeTeleChip != null) {
+            var currentThreat = this._fieldMap.getThreatAtCell(this._player._cellPos)
+            if (currentThreat > 200) {
+                var escapeScenario = this.createTeleportEscapeScenario(availableTP, availableMP)
+                if (escapeScenario != null) {
+                    push(scenarios, escapeScenario)
+                }
+            }
+        }
+
+        var jumpAttackAttr = this.createJumpAttackScenario(availableTP, availableMP)
+        if (jumpAttackAttr != null) {
+            push(scenarios, jumpAttackAttr)
+        }
+
+        // Phase P: dedicated JUMP-to-fire (narrower than JumpAttack).
+        var jumpToFireAttr = this.createJumpToFireScenario(availableTP, availableMP)
+        if (jumpToFireAttr != null) {
+            push(scenarios, jumpToFireAttr)
+        }
+
+        var healRecheck = this.createHealRecheckScenario(availableTP, availableMP)
+        if (healRecheck != null) {
+            push(scenarios, healRecheck)
+        }
+
+        var buffApproach = this.createBuffApproachScenario(availableTP, availableMP)
+        if (buffApproach != null) {
+            push(scenarios, buffApproach)
+        }
+
+        var hasRegen = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_REGENERATION)
+        var regenAvailable = hasRegen && getCooldown(CHIP_REGENERATION, this._player._id) == 0
+
+        if (regenAvailable) {
+            push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.2, 0.2, "hide"), availableTP, availableMP))
+            push(scenarios, this.createParametricScenario(new ScenarioParams(2, 1.0, 0.3, 0.2, "hide"), availableTP, availableMP))
+        } else {
+            push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.7, 0.5, 1.0, "kite"), availableTP, availableMP))
+            push(scenarios, this.createParametricScenario(new ScenarioParams(2, 0.5, 0.3, 1.0, "kite"), availableTP, availableMP))
+        }
+
+        push(scenarios, this.createSimpleOffensiveScenario(availableTP, availableMP))
+        push(scenarios, this.createStaticAttackScenario(availableTP, availableMP))
+    }
+
+    buildPuzzleScenarios(scenarios, availableTP, availableMP) {
+        var crystalInfo = "null"
+        if (_bossTargetEID != null) {
+            crystalInfo = _myCrystalColor + " cell=" + _myCrystalCell + " solved=" + _myCrystalSolved
+        }
+
+        var slide = this.createCrystalSlideScenario(availableTP, availableMP)
+        if (slide != null) {
+            push(scenarios, slide)
+        }
+
+        var multiSlide = this.createMultiSlideScenario(availableTP, availableMP)
+        if (multiSlide != null) {
+            push(scenarios, multiSlide)
+        }
+
+        var inversion = this.createCrystalInversionScenario(availableTP, availableMP)
+        if (inversion != null) {
+            push(scenarios, inversion)
+        }
+
+        var approach = this.createCrystalApproachScenario(availableTP, availableMP)
+        if (approach != null) {
+            push(scenarios, approach)
+        }
+
+        var defense = this.createPuzzleDefenseScenario(availableTP, availableMP)
+        if (defense != null) {
+            push(scenarios, defense)
+        }
+    }
+
+    // Team-support template (BUILD_SUPPORT only). Heal the most wounded
+    // ally, shield them, and put an offensive buff on the strongest attacker
+    // in range. Casts require the ally to be inside chip range from our
+    // CURRENT cell (v1: no dedicated support movement — team maps are dense
+    // enough that range-5..8 chips usually find a target; the executor's
+    // runtime useChip validates range/LoS anyway). Scored via the
+    // allySupport dimension.
+    createTeamSupportScenario(availableTP, availableMP) {
+        var allies = this._fieldMap.getAlliesSubMap()
+        var allyIds = mapKeys(allies)
+        if (count(allyIds) == 0) return null
+
+        var myCell = this._player._cellPos
+        var actions = []
+        var tpBudget = availableTP
+
+        // Most wounded living ally, and strongest attacker ally, in one pass.
+        var weakest = null
+        var weakestRatio = 1.1
+        var strongest = null
+        var strongestOffense = -1
+        for (var aid in allyIds) {
+            if (isDead(aid)) continue
+            var ally = allies[aid]
+            var lifeNow = getLife(aid)
+            var lifeMax = getTotalLife(aid)
+            if (lifeNow == null || lifeMax == null || lifeMax <= 0) continue
+            var ratio = lifeNow / lifeMax
+            if (ratio < weakestRatio) {
+                weakestRatio = ratio
+                weakest = ally
+            }
+            var offense = getStrength(aid) + getMagic(aid)
+            if (offense != null && offense > strongestOffense) {
+                strongestOffense = offense
+                strongest = ally
+            }
+        }
+        if (weakest == null) return null
+
+        // 1. Heal the weakest ally when meaningfully wounded.
+        if (weakestRatio < 0.85) {
+            var supHealChips = [CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
+            for (var shc in supHealChips) {
+                if (!mapContainsKey(this._arsenal.playerEquippedChips, shc)) continue
+                if (getCooldown(shc, this._player._id) > 0) continue
+                var shcCost = getCachedChipCost(shc)
+                if (tpBudget < shcCost) continue
+                var shcDist = getCellDistance(myCell, weakest._cellPos)
+                if (shcDist == null || shcDist > getChipMaxRange(shc)) continue
+                push(actions, new Action(Action.ACTION_BUFF, -1, shc, -1, weakest))
+                tpBudget -= shcCost
+                break
+            }
+        }
+
+        // 2. Shield the weakest ally (poison bypasses shields, but team
+        // fights are burst-dominated — shields on the focus target matter).
+        var supShieldChips = [CHIP_SHIELD, CHIP_HELMET, CHIP_WALL, CHIP_FORTRESS, CHIP_ARMOR, CHIP_SOLIDIFICATION]
+        for (var ssc in supShieldChips) {
+            if (!mapContainsKey(this._arsenal.playerEquippedChips, ssc)) continue
+            if (getCooldown(ssc, this._player._id) > 0) continue
+            var sscCost = getCachedChipCost(ssc)
+            if (tpBudget < sscCost) continue
+            var sscDist = getCellDistance(myCell, weakest._cellPos)
+            if (sscDist == null || sscDist > getChipMaxRange(ssc)) continue
+            push(actions, new Action(Action.ACTION_BUFF, -1, ssc, -1, weakest))
+            tpBudget -= sscCost
+            break
+        }
+
+        // 3. Offensive buff on the strongest attacker in range.
+        if (strongest != null) {
+            var supBuffChips = [CHIP_MOTIVATION, CHIP_PROTEIN, CHIP_PRISM, CHIP_STEROID]
+            for (var sbc in supBuffChips) {
+                if (!mapContainsKey(this._arsenal.playerEquippedChips, sbc)) continue
+                if (getCooldown(sbc, this._player._id) > 0) continue
+                var sbcCost = getCachedChipCost(sbc)
+                if (tpBudget < sbcCost) continue
+                var sbcDist = getCellDistance(myCell, strongest._cellPos)
+                if (sbcDist == null || sbcDist > getChipMaxRange(sbc)) continue
+                push(actions, new Action(Action.ACTION_BUFF, -1, sbc, -1, strongest))
+                tpBudget -= sbcCost
+                break
+            }
+        }
+
+        if (count(actions) == 0) return null
+
+        // No attack tail appended: a partial-TP static attack routinely
+        // produces simulator-dropped actions, and droppedActions > 0 makes
+        // the WHOLE scenario infeasible at the pick site (Fix #1B) — that
+        // silently disqualified every support scenario. Leftover TP is spent
+        // by the executor's TP-recovery pass instead.
+        return actions
+    }
+}

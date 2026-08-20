@@ -859,7 +859,21 @@ class FieldMapCore:
                 for wObjMR in lw_values(arsenal.playerEquippedWeapons):
                     if (wObjMR._maxRange > maxWeaponRange):
                         maxWeaponRange = wObjMR._maxRange
-                bulbReach = lw_add(getMP(), maxWeaponRange)
+                maxOffRange = maxWeaponRange
+                for cidMR in lw_values(mapKeys(arsenal.playerEquippedChips)):
+                    if (((((isHealingChip(cidMR) or isOffensiveBuff(cidMR)) or isShieldChip(cidMR)) or isDamageReturnChip(cidMR)) or isResourceChip(cidMR)) or isUtilityChip(cidMR)):
+                        continue
+                    cObjMR = lw_get(arsenal.playerEquippedChips, cidMR)
+                    if (cObjMR._maxRange > maxOffRange):
+                        maxOffRange = cObjMR._maxRange
+                bulbReach = lw_add(getMP(), maxOffRange)
+                bulbSummoner = getSummoner(e._id)
+                if (((bulbSummoner != None) and (bulbSummoner > 0)) and (not isDead(bulbSummoner))):
+                    bsCell = getCell(bulbSummoner)
+                    if (bsCell != None):
+                        bsDist = getCellDistance(playerPos, bsCell)
+                        if (((bsDist != None) and (bsDist <= bulbReach)) and lineOfSight(playerPos, bsCell)):
+                            score = lw_num(score) - lw_num(400)
                 if (dist > bulbReach):
                     score = lw_num(score) - lw_num(100)
                 else:
@@ -894,7 +908,7 @@ class FieldMapCore:
                 effsBuff = getEffects(e._id)
                 if (effsBuff != None):
                     for effB in lw_values(effsBuff):
-                        if (lw_get(effB, 0) == EFFECT_BUFF_STRENGTH):
+                        if (lw_get(effB, 0) == EFFECT_RAW_BUFF_STRENGTH):
                             score = lw_num(score) - lw_num(20)
                         if (lw_get(effB, 0) == EFFECT_DAMAGE_RETURN):
                             score = lw_num(score) - lw_num(15)
@@ -3100,6 +3114,7 @@ def initializeItemRoles():
     lw_put(ROLE_HEALING, CHIP_SERUM, True)
     lw_put(ROLE_HEALING, CHIP_BANDAGE, True)
     lw_put(ROLE_HEALING, CHIP_VACCINE, True)
+    lw_put(ROLE_HEALING, CHIP_ELEVATION, True)
     lw_put(ROLE_POISON, CHIP_VENOM, True)
     lw_put(ROLE_POISON, CHIP_TOXIN, True)
     lw_put(ROLE_POISON, CHIP_PLAGUE, True)
@@ -3121,7 +3136,6 @@ def initializeItemRoles():
     lw_put(ROLE_OFFENSIVE_BUFF, CHIP_RAGE, True)
     lw_put(ROLE_OFFENSIVE_BUFF, CHIP_FEROCITY, True)
     lw_put(ROLE_OFFENSIVE_BUFF, CHIP_KNOWLEDGE, True)
-    lw_put(ROLE_OFFENSIVE_BUFF, CHIP_ELEVATION, True)
     lw_put(ROLE_OFFENSIVE_BUFF, CHIP_ARMORING, True)
     lw_put(ROLE_OFFENSIVE_BUFF, CHIP_PRISM, True)
     lw_put(ROLE_DAMAGE_RETURN, CHIP_MIRROR, True)
@@ -4625,12 +4639,12 @@ BUILD_BRUISER_REFLECT = 7
 BUILD_SUPPORT = 8
 lw__playerBuildType = 0
 STRENGTH_WEIGHTS = {'burstDamage': 163, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': (-50), 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 80, 'healValue': 60, 'distanceToTarget': (-20), 'threatReduction': 40, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 500, 'noDamagePenalty': (-4000)}
-MAGIC_WEIGHTS = {'burstDamage': 54, 'weaponUses': 0, 'tpEfficiency': 50, 'dotEffects': 272, 'kiteDistance': 200, 'damageReturn': 0, 'poisonStacks': 217, 'denialValue': 230, 'shieldValue': 100, 'healValue': 80, 'distanceToTarget': 30, 'threatReduction': 80, 'otkoBonus': 3000, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 3000, 'bulbKillBonusBuffer': 1800, 'bulbKillBonusAttacker': 1000, 'multiTargetBonus': 400}
+MAGIC_WEIGHTS = {'burstDamage': 38, 'weaponUses': 16, 'tpEfficiency': 74, 'dotEffects': 224, 'kiteDistance': 145, 'damageReturn': 0, 'poisonStacks': 164, 'denialValue': 317, 'shieldValue': 88, 'healValue': 17, 'distanceToTarget': 39, 'threatReduction': 43, 'otkoBonus': 2011, 'checkpointBonus': 3653, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 3000, 'bulbKillBonusBuffer': 1800, 'bulbKillBonusAttacker': 1000, 'multiTargetBonus': 623}
 AGILITY_WEIGHTS = {'burstDamage': 136, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 50, 'damageReturn': 300, 'poisonStacks': 0, 'shieldValue': 80, 'healValue': 60, 'distanceToTarget': (-10), 'threatReduction': 50, 'otkoBonus': 4500, 'checkpointBonus': 2500, 'novaEffects': 200, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2700, 'bulbKillBonusBuffer': 1600, 'bulbKillBonusAttacker': 900, 'multiTargetBonus': 550}
-STRENGTH_SCIENCE_WEIGHTS = {'burstDamage': 136, 'weaponUses': 80, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 80, 'healValue': 60, 'distanceToTarget': (-15), 'threatReduction': 40, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'novaEffects': 326, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 500, 'noDamagePenalty': (-4000)}
+STRENGTH_SCIENCE_WEIGHTS = {'burstDamage': 304, 'weaponUses': 80, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 138, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 80, 'healValue': 60, 'distanceToTarget': (-15), 'threatReduction': 40, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'novaEffects': 324, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 500, 'noDamagePenalty': (-4000)}
 TANK_SCI_WEIGHTS = {'burstDamage': 50, 'weaponUses': 60, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 20, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 400, 'healValue': 280, 'distanceToTarget': (-10), 'threatReduction': 300, 'otkoBonus': 3500, 'checkpointBonus': 2500, 'novaEffects': 450, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 3000, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 500}
 HYBRID_WEIGHTS = {'burstDamage': 109, 'weaponUses': 60, 'tpEfficiency': 50, 'dotEffects': 136, 'kiteDistance': 50, 'damageReturn': 0, 'poisonStacks': 109, 'denialValue': 136, 'shieldValue': 100, 'healValue': 70, 'distanceToTarget': 0, 'threatReduction': 60, 'otkoBonus': 4000, 'checkpointBonus': 2500, 'novaEffects': 109, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2800, 'bulbKillBonusBuffer': 1600, 'bulbKillBonusAttacker': 900, 'multiTargetBonus': 500}
-BRUISER_REFLECT_WEIGHTS = {'burstDamage': 100, 'weaponUses': 65, 'tpEfficiency': 100, 'dotEffects': (-96), 'kiteDistance': (-30), 'damageReturn': 449, 'poisonStacks': 0, 'shieldValue': 200, 'healValue': 4, 'distanceToTarget': (-10), 'threatReduction': 50, 'otkoBonus': 6789, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 741}
+BRUISER_REFLECT_WEIGHTS = {'burstDamage': 0, 'weaponUses': 73, 'tpEfficiency': 90, 'dotEffects': (-10), 'kiteDistance': (-100), 'damageReturn': 256, 'poisonStacks': 165, 'shieldValue': 114, 'healValue': 41, 'distanceToTarget': (-39), 'threatReduction': 43, 'otkoBonus': 5417, 'checkpointBonus': 2048, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 831}
 BOSS_PUZZLE_WEIGHTS = {'burstDamage': 0, 'weaponUses': 0, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 0, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 0, 'healValue': 50, 'distanceToTarget': (-100), 'threatReduction': 0, 'novaEffects': 0, 'otkoBonus': 0, 'checkpointBonus': 0, 'noDamagePenalty': 0, 'axisAlignment': 2000, 'crystalProximity': 800, 'crystalSolved': 5000, 'multiTargetBonus': 0}
 BOSS_COMBAT_WEIGHTS = {'burstDamage': 163, 'weaponUses': 100, 'tpEfficiency': 50, 'dotEffects': 420, 'kiteDistance': 80, 'damageReturn': 0, 'poisonStacks': 260, 'shieldValue': 200, 'healValue': 150, 'distanceToTarget': (-20), 'threatReduction': 100, 'novaEffects': 109, 'otkoBonus': 5000, 'checkpointBonus': 2500, 'noDamagePenalty': (-2000), 'antidoteUrgency': 500, 'multiTargetBonus': 800}
 SUPPORT_WEIGHTS = {'burstDamage': 100, 'weaponUses': 80, 'tpEfficiency': 50, 'dotEffects': 0, 'kiteDistance': 60, 'damageReturn': 0, 'poisonStacks': 0, 'shieldValue': 280, 'healValue': 240, 'distanceToTarget': 0, 'threatReduction': 180, 'otkoBonus': 3000, 'checkpointBonus': 2500, 'bulbDamageMultiplier': 1.2, 'bulbKillBonusHealer': 2500, 'bulbKillBonusBuffer': 1500, 'bulbKillBonusAttacker': 800, 'multiTargetBonus': 400, 'noDamagePenalty': (-1500), 'allySupport': 350}
@@ -5477,6 +5491,7 @@ _bossPhase = None
 _graalEntity = None
 _graalID = (-1)
 _bossCombatLatched = False
+_combatLatchTurn = (-99)
 _crystalMap = {}
 _myAssignedCrystal = None
 _bossTargetEID = None
@@ -5487,6 +5502,8 @@ _puzzleSolverID = (-1)
 _pzSolverMaxLifeSnapshot = (-1)
 _pzGatherDone = False
 _pzRouteEID = None
+_pzRouteWhy = ""
+_pzPinTurns = 0
 _pzRouteCrystalCell = (-1)
 _pzRouteStand = (-1)
 _pzRouteChip = None
@@ -5497,9 +5514,16 @@ _pzPartnerSolverID = (-1)
 _pzPartnerClaimEID = None
 PZ_MSG_FOCUS = 901
 PZ_MSG_READY = 903
+PZ_MSG_BULB = 905
+PZ_MSG_BULB_CLAIM = 906
+_pzBulbClaims = {}
 _pzReadyBy = {}
 _pokeCommitCell = (-1)
 _pokeCommitTurn = (-99)
+_walkVisited = {}
+_hotNoProg = 0
+_hotLastD = (-1)
+_hotBestD = 999
 _graalCell = (-1)
 _graalX = 0
 _graalY = 0
@@ -5523,7 +5547,7 @@ def initBossContext():
     updateBossContext()
 
 def updateBossContext():
-    global _bossCombatLatched, _bossPhase, _bossTargetEID, _crystalMap, _graalCell, _graalEntity, _graalID, _graalX, _graalY, _myAssignedCrystal, _puzzleRole, _puzzleSolverID
+    global _bossCombatLatched, _bossPhase, _bossTargetEID, _combatLatchTurn, _crystalMap, _graalCell, _graalEntity, _graalID, _graalX, _graalY, _myAssignedCrystal, _puzzleRole, _puzzleSolverID
     if (not _isBossFight):
         return None
     _graalEntity = None
@@ -5580,6 +5604,7 @@ def updateBossContext():
             _bossPhase = "COMBAT"
             if (_graalID != (-1)):
                 _bossCombatLatched = True
+                _combatLatchTurn = getTurn()
     if (_bossPhase == "PUZZLE"):
         assignPuzzleRoles()
         if (_puzzleRole == "SOLVER"):
@@ -5746,12 +5771,25 @@ def assignSolverCrystal():
         _bossTargetEID = None
         clearCrystalScalars()
 
-def nearestUnsolvedCrystalTo(cell, excludeEID):
+_focusMinD = 999
+_focusNoBeat = 0
+_pzFocusBanEID = None
+_pzFocusBanTurn = (-99)
+_focusBeatEvalTurn = (-1)
+def nearestUnsolvedCrystalTo(cell, excludeEID, honorBulbClaims):
+    if (honorBulbClaims == None):
+        honorBulbClaims = True
     best = None
     bestD = 9999
     for eid in lw_values(mapKeys(_crystalMap)):
         if (eid == excludeEID):
             continue
+        if ((eid == _pzFocusBanEID) and (lw_sub(getTurn(), _pzFocusBanTurn) < 10)):
+            continue
+        if honorBulbClaims:
+            bcTurn = lw_get(_pzBulbClaims, eid)
+            if ((bcTurn != None) and (lw_sub(getTurn(), bcTurn) <= 3)):
+                continue
         cData = lw_get(_crystalMap, eid)
         if isCrystalSolved(cData):
             continue
@@ -5766,28 +5804,49 @@ def nearestUnsolvedCrystalTo(cell, excludeEID):
 
 def readPartnerClaim():
     global _pzPartnerClaimEID
-    if (_pzPartnerSolverID == (-1)):
-        _pzPartnerClaimEID = None
-        return None
     msgs = getMessages()
     for m in lw_values(msgs):
-        if (getMessageAuthor(m) != _pzPartnerSolverID):
-            continue
-        if (getMessageType(m) != MESSAGE_CUSTOM):
+        mType = getMessageType(m)
+        if (mType != MESSAGE_CUSTOM):
             continue
         p = getMessageParams(m)
-        if (((p != None) and (count(p) == 2)) and (lw_get(p, 0) == PZ_MSG_FOCUS)):
+        if ((p == None) or (count(p) != 2)):
+            continue
+        if (((lw_get(p, 0) == PZ_MSG_FOCUS) and (_pzPartnerSolverID != (-1))) and (getMessageAuthor(m) == _pzPartnerSolverID)):
             _pzPartnerClaimEID = lw_get(p, 1)
+        if (lw_get(p, 0) == PZ_MSG_BULB_CLAIM):
+            lw_put(_pzBulbClaims, lw_get(p, 1), getTurn())
 
 def announceFocus(eid):
     if ((_pzPartnerSolverID != (-1)) and (eid != None)):
         sendAll(MESSAGE_CUSTOM, [PZ_MSG_FOCUS, eid])
 
 def pickFocusCrystal(myCell):
-    global _pzFocusEID
+    global _focusBeatEvalTurn, _focusMinD, _focusNoBeat, _hotBestD, _hotNoProg, _pzFocusBanEID, _pzFocusBanTurn, _pzFocusEID
     myID = getEntity()
     partner = _pzPartnerSolverID
     partnerAlive = ((partner != (-1)) and isAlive(partner))
+    if ((_pzFocusBanEID != None) and (lw_sub(getTurn(), _pzFocusBanTurn) >= 10)):
+        _pzFocusBanEID = None
+    if ((_pzFocusEID != None) and (_focusBeatEvalTurn != getTurn())):
+        _focusBeatEvalTurn = getTurn()
+        fb = lw_get(_crystalMap, _pzFocusEID)
+        if ((fb != None) and (not isCrystalSolved(fb))):
+            fbCell = getCell(_pzFocusEID)
+            fbD = (getCellDistance(myCell, fbCell) if (((fbCell != None) and (fbCell >= 0))) else None)
+            if (fbD != None):
+                if (fbD < _focusMinD):
+                    _focusMinD = fbD
+                    _focusNoBeat = 0
+                else:
+                    _focusNoBeat = lw_add(_focusNoBeat, 1)
+            if ((_focusNoBeat >= 8) and (_focusMinD >= 10)):
+                say(lw_add(lw_add(lw_add(lw_add("PZ RETARGET c=", _pzFocusEID), " (best d="), _focusMinD), ", 8t no progress)"))
+                _pzFocusBanEID = _pzFocusEID
+                _pzFocusBanTurn = getTurn()
+                _pzFocusEID = None
+                _focusMinD = 999
+                _focusNoBeat = 0
     partnerPick = None
     if partnerAlive:
         readPartnerClaim()
@@ -5796,7 +5855,7 @@ def pickFocusCrystal(myCell):
             if ((pc != None) and (not isCrystalSolved(pc))):
                 partnerPick = _pzPartnerClaimEID
         if (partnerPick == None):
-            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), None)
+            partnerPick = nearestUnsolvedCrystalTo(getCell(partner), None, True)
             if (partnerPick == _pzFocusEID):
                 partnerPick = None
     if ((_pzFocusEID != None) and (_pzFocusEID != partnerPick)):
@@ -5804,9 +5863,14 @@ def pickFocusCrystal(myCell):
         if ((fc != None) and (not isCrystalSolved(fc))):
             announceFocus(_pzFocusEID)
             return _pzFocusEID
-    mine = nearestUnsolvedCrystalTo(myCell, partnerPick)
+    mine = nearestUnsolvedCrystalTo(myCell, partnerPick, True)
     if ((mine == None) and (partnerPick != None)):
         mine = partnerPick
+    if (mine != _pzFocusEID):
+        _focusMinD = 999
+        _focusNoBeat = 0
+        _hotBestD = 999
+        _hotNoProg = 0
     _pzFocusEID = mine
     announceFocus(mine)
     return _pzFocusEID
@@ -6094,7 +6158,8 @@ def selectCombatTarget(fieldMapObj):
     enemies = getAliveEnemies()
     if (count(enemies) == 0):
         return None
-    priority = ["fennel_king", "fennel_knight", "fennel_scribe", "fennel_squire"]
+    armyAlive = (armyCountAlive() > 0)
+    priority = ["fennel_scribe", "fennel_squire", "fennel_knight", "fennel_king"]
     for pName in lw_values(priority):
         for eid in lw_values(enemies):
             if (getName(eid) == pName):
@@ -6104,6 +6169,8 @@ def selectCombatTarget(fieldMapObj):
     bestTarget = None
     bestHP = 999999
     for eid in lw_values(enemies):
+        if (armyAlive and (indexOf(getName(eid), "crystal") != (-1))):
+            continue
         hp = getLife(eid)
         if (hp < bestHP):
             bestHP = hp
@@ -6569,17 +6636,35 @@ def findNearestEnclaveCell(myCell):
             bestCell = cell
     return bestCell
 
+def walkPathDistanceTo(fromCell, crystalCell):
+    best = 9999
+    p = getPathLength(fromCell, crystalCell)
+    if (p != None):
+        best = p
+    cx = getCellX(crystalCell)
+    cy = getCellY(crystalCell)
+    around = [getCellFromXY(lw_add(cx, 1), cy), getCellFromXY(lw_sub(cx, 1), cy), getCellFromXY(cx, lw_add(cy, 1)), getCellFromXY(cx, lw_sub(cy, 1))]
+    for c in lw_values(around):
+        if ((c == None) or (c < 0)):
+            continue
+        if (isObstacle(c) or isEntity(c)):
+            continue
+        p2 = getPathLength(fromCell, c)
+        if ((p2 != None) and (p2 < best)):
+            best = p2
+    return best
+
 def findTeleportTarget(crystalCell, myCell):
     queue = getEnclaveCells()
     bestCell = (-1)
-    bestDist = 999
+    bestDist = 9999
     for cell in lw_values(queue):
         if isEntity(cell):
             continue
         dFromMe = getCellDistance(myCell, cell)
         if ((dFromMe < 1) or (dFromMe > 12)):
             continue
-        dFromCrystal = getCellDistance(crystalCell, cell)
+        dFromCrystal = walkPathDistanceTo(cell, crystalCell)
         if (dFromCrystal < bestDist):
             bestDist = dFromCrystal
             bestCell = cell
@@ -6748,7 +6833,8 @@ def executeBossCombatPoke():
         say(lw_add("PZ POKE x", casted))
     else:
         say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ POKE none d=", nearestArmyDistFrom(getCell(), armyCells)), " tp="), getTP()), " mp="), getMP()))
-    swatCrystals(myID)
+    if (count(armyCells) == 0):
+        swatCrystals(myID)
     if (((getMagic() >= 300) and (bigEquipped > 0)) and (bigReady == 0)):
         puzzleEmergencyBlink(myID)
         recCell = choosePuzzleSustainCellCapped(myID, getCell(), False, 18)
@@ -6819,7 +6905,7 @@ def executeBossCombatPoke():
 
 def bossTargetPriority(name):
     if (name == "fennel_scribe"):
-        return 60
+        return 200
     if (name == "fennel_squire"):
         return 25
     if (name == "fennel_king"):
@@ -6893,6 +6979,7 @@ def tryWeaponStrike(myID):
     allies = getAliveAllies()
     myCell = getCell()
     enemies = getAliveEnemies()
+    wArmyAlive = (armyCountAlive() > 0)
     pick = None
     pickTarget = None
     for row in lw_values(table):
@@ -6904,6 +6991,8 @@ def tryWeaponStrike(myID):
         for eid in lw_values(enemies):
             nm = getName(eid)
             if (nm == "graal"):
+                continue
+            if (wArmyAlive and (indexOf(nm, "crystal") != (-1))):
                 continue
             ec = getCell(eid)
             if ((ec == None) or (ec < 0)):
@@ -7134,7 +7223,8 @@ def executeBossCombatPeel():
         if ((dCarry <= 3) and (getTP() >= 16)):
             guardCast(myID, CHIP_WALL, carry)
             guardCast(myID, CHIP_ARMORING, carry)
-    swatCrystals(myID)
+    if (armyCountAlive() == 0):
+        swatCrystals(myID)
     gArmy = puzzleArmyCells()
     if tryPoisonCast(myID, CHIP_PLASMA, 6, 2, 9, 2, gArmy, False):
         say("PZ GUARD plasma")
@@ -7403,28 +7493,84 @@ def solverWalkToward(targetCell):
     if (mp <= 0):
         return False
     myC = getCell()
+    lw_put(_walkVisited, myC, getTurn())
+    proxy = targetCell
+    if (isObstacle(proxy) or isEntity(proxy)):
+        tx = getCellX(targetCell)
+        ty = getCellY(targetCell)
+        neighs = [getCellFromXY(lw_add(tx, 1), ty), getCellFromXY(lw_sub(tx, 1), ty), getCellFromXY(tx, lw_add(ty, 1)), getCellFromXY(tx, lw_sub(ty, 1))]
+        bestProxyD = 999
+        for nc in lw_values(neighs):
+            if ((nc == None) or (nc < 0)):
+                continue
+            if (isObstacle(nc) or isEntity(nc)):
+                continue
+            pd0 = getPathLength(myC, nc)
+            if (pd0 == None):
+                continue
+            if (pd0 < bestProxyD):
+                bestProxyD = pd0
+                proxy = nc
+        if (proxy == targetCell):
+            proxy = (-1)
     best = (-1)
-    bestD = getCellDistance(myC, targetCell)
-    if (bestD == None):
-        bestD = 999
-    c = 0
-    while (c < 613):
-        dm = getCellDistance(myC, c)
-        if ((dm == None) or (dm > mp)):
+    bestScore = 999999
+    if (proxy != (-1)):
+        c = 0
+        while (c < 613):
+            dm = getCellDistance(myC, c)
+            if ((dm == None) or (dm > mp)):
+                c = lw_add(c, 1)
+                continue
+            if (isObstacle(c) or isEntity(c)):
+                c = lw_add(c, 1)
+                continue
+            pl = getPathLength(myC, c)
+            if ((pl == None) or (pl > mp)):
+                c = lw_add(c, 1)
+                continue
+            dt = getPathLength(c, proxy)
+            if (dt == None):
+                c = lw_add(c, 1)
+                continue
+            man = getCellDistance(c, targetCell)
+            if (man == None):
+                man = 999
+            vt = lw_get(_walkVisited, c)
+            if ((vt != None) and (lw_sub(getTurn(), vt) <= 6)):
+                man = lw_add(man, 300)
+            sc = lw_add(lw_mul(dt, 100), man)
+            if (sc < bestScore):
+                bestScore = sc
+                best = c
             c = lw_add(c, 1)
-            continue
-        if (isObstacle(c) or isEntity(c)):
-            c = lw_add(c, 1)
-            continue
-        pl = getPathLength(myC, c)
-        if ((pl == None) or (pl > mp)):
-            c = lw_add(c, 1)
-            continue
-        dt = getCellDistance(c, targetCell)
-        if ((dt != None) and (dt < bestD)):
-            bestD = dt
-            best = c
-        c = lw_add(c, 1)
+    else:
+        c2 = 0
+        while (c2 < 613):
+            dm2 = getCellDistance(myC, c2)
+            if (((dm2 == None) or (dm2 > mp)) or (dm2 < 1)):
+                c2 = lw_add(c2, 1)
+                continue
+            if (isObstacle(c2) or isEntity(c2)):
+                c2 = lw_add(c2, 1)
+                continue
+            pl2 = getPathLength(myC, c2)
+            if ((pl2 == None) or (pl2 > mp)):
+                c2 = lw_add(c2, 1)
+                continue
+            man2 = getCellDistance(c2, targetCell)
+            if (man2 == None):
+                c2 = lw_add(c2, 1)
+                continue
+            vt2 = lw_get(_walkVisited, c2)
+            pen2 = 0
+            if ((vt2 != None) and (lw_sub(getTurn(), vt2) <= 6)):
+                pen2 = 1000
+            sc2 = lw_add(lw_sub(lw_mul(man2, 100), pl2), pen2)
+            if (sc2 < bestScore):
+                bestScore = sc2
+                best = c2
+            c2 = lw_add(c2, 1)
     if (best != (-1)):
         moveTowardCell(best)
         return True
@@ -7466,6 +7612,9 @@ def executeBufferPuzzleTurn():
         puzzleGatherMove(myID, bufSolverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_RAGE, 8, 4, "rage"], [CHIP_SEVEN_LEAGUE_BOOTS, 8, 4, "slb"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
+    maybeCastTacticianBulb(myID)
+    maybeCastDecoyBulb(myID)
+    runBulbCoach(myID)
     puzzleSustainSolver(myID)
     puzzleSelfPreserve(myID, (getTurn() <= 2))
     return True
@@ -7595,6 +7744,46 @@ def puzzleEmergencyBlink(myID):
             return True
     return False
 
+def puzzleInversionEscape(myID):
+    if ((not allyHasChip(myID, CHIP_INVERSION)) or (getTP() < 4)):
+        return False
+    invCd = getCooldown(CHIP_INVERSION, myID)
+    if ((invCd == None) or (invCd > 0)):
+        return False
+    invArmy = puzzleArmyCells()
+    if (count(invArmy) == 0):
+        return False
+    myCell2 = getCell()
+    invD = nearestArmyDistFrom(myCell2, invArmy)
+    if (invD > 9):
+        return False
+    invReach = 0
+    for iac in lw_values(invArmy):
+        iad = getCellDistance(myCell2, iac)
+        if ((iad != None) and (iad <= 9)):
+            invReach = lw_add(invReach, 1)
+    if (invReach == 0):
+        return False
+    if (((invReach < 2) and (getLife() >= 2200)) and (entityHPPercent(myID) >= 45)):
+        return False
+    invEID = _pzFocusEID
+    if (invEID == None):
+        invEID = pickFocusCrystal(myCell2)
+    if ((invEID == None) or (not isAlive(invEID))):
+        return False
+    crCell2 = getCell(invEID)
+    if ((crCell2 == None) or (crCell2 < 0)):
+        return False
+    invDist = getCellDistance(myCell2, crCell2)
+    if ((invDist == None) or (invDist > 14)):
+        return False
+    if (nearestArmyDistFrom(crCell2, invArmy) < lw_add(invD, 4)):
+        return False
+    if (useChip(CHIP_INVERSION, invEID) >= 1):
+        say(lw_add("PZ INV-ESC d", nearestArmyDistFrom(getCell(), invArmy)))
+        return True
+    return False
+
 def puzzleSelfPreserve(myID, leashed):
     selfShields = [[CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_WALL, 3]]
     for sh in lw_values(selfShields):
@@ -7677,6 +7866,7 @@ def choosePuzzleSustainCellCapped(myID, anchorCell, leashed, armyCap):
     return best
 
 def puzzleHardHide(myID):
+    maybeCastDecoyBulb(myID)
     selfShields = [[CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_WALL, 3]]
     for sh in lw_values(selfShields):
         chip = lw_get(sh, 0)
@@ -7716,6 +7906,9 @@ def executeSupportPuzzleTurn():
                 _puzzleSolverID = nearS
                 farBuffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"]]
                 castBuffsOnSolver(myID, farBuffs)
+        maybeCastTacticianBulb(myID)
+        maybeCastDecoyBulb(myID)
+        runBulbCoach(myID)
         puzzleSelfPreserve(myID, False)
         return True
     if (getTotalLife() < 2200):
@@ -7731,12 +7924,228 @@ def executeSupportPuzzleTurn():
         puzzleGatherMove(myID, solverCell)
     buffs = [[CHIP_ELEVATION, 5, 6, "elev"], [CHIP_ARMORING, 3, 5, "armor"], [CHIP_LEATHER_BOOTS, 5, 3, "boots"], [CHIP_ADRENALINE, 3, 1, "adren"]]
     castBuffsOnSolver(myID, buffs)
+    maybeCastTacticianBulb(myID)
+    maybeCastDecoyBulb(myID)
+    runBulbCoach(myID)
     puzzleSustainSolver(myID)
     puzzleSelfPreserve(myID, (getTurn() <= 2))
     return True
 
+def maybeCastDecoyBulb(myID):
+    if (getTurn() < 2):
+        return False
+    dbChip = (-1)
+    for dbc in lw_values([CHIP_ROCKY_BULB, CHIP_ICED_BULB, CHIP_PUNY_BULB]):
+        if (not allyHasChip(myID, dbc)):
+            continue
+        dbCd = getCooldown(dbc, myID)
+        if ((dbCd == None) or (dbCd > 0)):
+            continue
+        if (getTP() < getChipCost(dbc)):
+            continue
+        dbChip = dbc
+        break
+    if (dbChip == (-1)):
+        return False
+    dbArmy = puzzleArmyCells()
+    myC = getCell()
+    goalC = _graalCell
+    if ((goalC == None) or (goalC < 0)):
+        goalC = myC
+    if (count(dbArmy) > 0):
+        dbBest = 999
+        for dac in lw_values(dbArmy):
+            dd0 = getCellDistance(myC, dac)
+            if ((dd0 != None) and (dd0 < dbBest)):
+                dbBest = dd0
+                goalC = dac
+    bestC = (-1)
+    bestD = 9999
+    c = 0
+    while (c < 613):
+        dm = getCellDistance(myC, c)
+        if (((dm == None) or (dm < 1)) or (dm > 2)):
+            c = lw_add(c, 1)
+            continue
+        if (isObstacle(c) or isEntity(c)):
+            c = lw_add(c, 1)
+            continue
+        dg = getCellDistance(c, goalC)
+        if ((dg != None) and (dg < bestD)):
+            bestD = dg
+            bestC = c
+        c = lw_add(c, 1)
+    if (bestC == (-1)):
+        return False
+    if (summon(dbChip, bestC, decoyBulbAI) >= 1):
+        say(lw_add("PZ DECOY cast @", bestC))
+        return True
+    return False
+
+def maybeCastTacticianBulb(myID):
+    if (getTurn() < 2):
+        return False
+    if (not allyHasChip(myID, CHIP_TACTICIAN_BULB)):
+        return False
+    tbCd = getCooldown(CHIP_TACTICIAN_BULB, myID)
+    if ((tbCd == None) or (tbCd > 0)):
+        return False
+    if (getTP() < 16):
+        return False
+    tbAllies = getAliveAllies()
+    for ta in lw_values(tbAllies):
+        if (isSummon(ta) and allyHasChip(ta, CHIP_GRAPPLE)):
+            return False
+    myC = getCell()
+    goalC = _graalCell
+    if ((goalC == None) or (goalC < 0)):
+        goalC = myC
+    bestTC = (-1)
+    bestTD = 9999
+    tc = 0
+    while (tc < 613):
+        if (getCellDistance(myC, tc) != 3):
+            tc = lw_add(tc, 1)
+            continue
+        if (isObstacle(tc) or isEntity(tc)):
+            tc = lw_add(tc, 1)
+            continue
+        if (not lineOfSight(myC, tc)):
+            tc = lw_add(tc, 1)
+            continue
+        dg = getCellDistance(tc, goalC)
+        if ((dg != None) and (dg < bestTD)):
+            bestTD = dg
+            bestTC = tc
+        tc = lw_add(tc, 1)
+    if (bestTC == (-1)):
+        return False
+    newBulb = summon(CHIP_TACTICIAN_BULB, bestTC, tacticianBulbAI)
+    if (newBulb >= 1):
+        say(lw_add("PZ BULB cast @", bestTC))
+        return True
+    return False
+
+def runBulbCoach(myID):
+    global _bossTargetEID
+    bcAllies = getAliveAllies()
+    bulbID = (-1)
+    for bca in lw_values(bcAllies):
+        if ((isSummon(bca) and (getSummoner(bca) == myID)) and (getName(bca) == "tactician_bulb")):
+            bulbID = bca
+            break
+    if (bulbID == (-1)):
+        return False
+    bCell = getCell(bulbID)
+    if (((_bulbCmdStand != (-9)) and isAlive(_bulbCmdEID)) and (getCell(_bulbCmdEID) == _bulbCmdCr)):
+        return True
+    if ((bCell == None) or (bCell < 0)):
+        return False
+    bcEID = None
+    bcD = 9999
+    solverClaims = {}
+    bcMsgs = getMessages()
+    for bcm in lw_values(bcMsgs):
+        if (getMessageType(bcm) != MESSAGE_CUSTOM):
+            continue
+        bcp = getMessageParams(bcm)
+        if (((bcp != None) and (count(bcp) == 2)) and (lw_get(bcp, 0) == PZ_MSG_FOCUS)):
+            lw_put(solverClaims, lw_get(bcp, 1), True)
+    for eid in lw_values(mapKeys(_crystalMap)):
+        if mapContainsKey(solverClaims, eid):
+            continue
+        cd = lw_get(_crystalMap, eid)
+        if isCrystalSolved(cd):
+            continue
+        cc = getCell(eid)
+        if ((cc == None) or (cc < 0)):
+            continue
+        taken = False
+        for aid in lw_values(bcAllies):
+            if isSummon(aid):
+                continue
+            ad = getCellDistance(getCell(aid), cc)
+            if ((ad != None) and (ad <= 4)):
+                taken = True
+                break
+        if taken:
+            continue
+        dd = getCellDistance(bCell, cc)
+        if ((dd != None) and (dd < bcD)):
+            bcD = dd
+            bcEID = eid
+    if (bcEID == None):
+        bcEID = nearestUnsolvedCrystalTo(bCell, None, False)
+    if (bcEID == None):
+        return False
+    sendAll(MESSAGE_CUSTOM, [PZ_MSG_BULB_CLAIM, bcEID])
+    crCell = getCell(bcEID)
+    _bossTargetEID = bcEID
+    syncCrystalScalars(lw_get(_crystalMap, bcEID))
+    bDest = computeCrystalFinalDest()
+    if (bDest == None):
+        return False
+    move = findBestChipMove(crCell, bDest, bCell, 0, 0, 0)
+    if (move == None):
+        sendAll(MESSAGE_CUSTOM, [PZ_MSG_BULB, bcEID, crCell, (-1), 0, 0])
+    else:
+        sendAll(MESSAGE_CUSTOM, [PZ_MSG_BULB, bcEID, crCell, lw_get(move, 'stand'), lw_get(move, 'chip'), lw_get(move, 'target')])
+    return True
+
+def puzzleEnemySwapApproach(myID, crystalCell0, tpArmy):
+    if ((not allyHasChip(myID, CHIP_INVERSION)) or (getTP() < 4)):
+        return False
+    esInvCd = getCooldown(CHIP_INVERSION, myID)
+    if ((esInvCd == None) or (esInvCd > 0)):
+        return False
+    if ((crystalCell0 == None) or (crystalCell0 < 0)):
+        return False
+    myCell = getCell()
+    myD = getCellDistance(myCell, crystalCell0)
+    if ((myD == None) or (myD <= 5)):
+        return False
+    bestEID = (-1)
+    bestGain = 4
+    enemies = getAliveEnemies()
+    for eid in lw_values(enemies):
+        en = getName(eid)
+        if ((en == "graal") or (indexOf(en, "crystal") != (-1))):
+            continue
+        ec = getCell(eid)
+        if ((ec == None) or (ec < 0)):
+            continue
+        eD = getCellDistance(myCell, ec)
+        if ((eD == None) or (eD > 14)):
+            continue
+        if (not lineOfSight(myCell, ec)):
+            continue
+        eCrD = getCellDistance(ec, crystalCell0)
+        if (eCrD == None):
+            continue
+        gain = lw_sub(myD, eCrD)
+        if (gain < 5):
+            continue
+        pack = 0
+        for ac in lw_values(tpArmy):
+            if (ac == ec):
+                continue
+            pd = getCellDistance(ec, ac)
+            if ((pd != None) and (pd <= 3)):
+                pack = lw_add(pack, 1)
+        if (pack >= 2):
+            continue
+        if (gain > bestGain):
+            bestGain = gain
+            bestEID = eid
+    if (bestEID == (-1)):
+        return False
+    if (useChip(CHIP_INVERSION, bestEID) >= 1):
+        say(lw_add("PZ INV-TAXI g=", bestGain))
+        return True
+    return False
+
 def executeSolverPuzzleTurn():
-    global _bossTargetEID, _myAssignedCrystal, _pzGatherDone, _pzRouteChip, _pzRouteCrystalCell, _pzRouteEID, _pzRouteStand, _pzRouteTarget, _pzSolverMaxLifeSnapshot
+    global _bossTargetEID, _hotBestD, _hotLastD, _hotNoProg, _myAssignedCrystal, _pzGatherDone, _pzPinTurns, _pzRouteChip, _pzRouteCrystalCell, _pzRouteEID, _pzRouteStand, _pzRouteTarget, _pzRouteWhy, _pzSolverMaxLifeSnapshot
     if (getTurn() == 1):
         allA = []
         push(allA, getEntity())
@@ -7765,7 +8174,8 @@ def executeSolverPuzzleTurn():
         say(lw_add("PZ SOLVER: skip wait, army d=", waitArmyD))
         solverSelfBuff(myID)
     _pzGatherDone = True
-    puzzleEmergencyBlink(myID)
+    if (not puzzleEmergencyBlink(myID)):
+        puzzleInversionEscape(myID)
     solverSurvival(myID)
     firstEID = pickFocusCrystal(myCell)
     if (firstEID == None):
@@ -7779,6 +8189,9 @@ def executeSolverPuzzleTurn():
     if ((crystalCell0 != None) and (crystalCell0 >= 0)):
         tpCd = getCooldown(CHIP_TELEPORTATION, myID)
         tpArmy = puzzleArmyCells()
+        coldTh = 10
+        if ((_hotNoProg >= 3) or (getTurn() >= 4)):
+            coldTh = 5
         if ((((tpCd != None) and (tpCd == 0)) and (getTP() >= 12)) and (firstDest != None)):
             tpDone = False
             preMove = planCrystalRoute(crystalCell0, _myCrystalGoalAxis, myCell, False)
@@ -7787,27 +8200,52 @@ def executeSolverPuzzleTurn():
             if (preMove != None):
                 preStand = lw_get(preMove, 'stand')
                 dToStand = getCellDistance(myCell, preStand)
-                standCold = ((count(tpArmy) == 0) or (nearestArmyDistFrom(preStand, tpArmy) > 10))
+                standCold = ((count(tpArmy) == 0) or (nearestArmyDistFrom(preStand, tpArmy) > coldTh))
                 if ((standCold and (dToStand >= 1)) and (dToStand <= 12)):
                     if (useChipOnCell(CHIP_TELEPORTATION, preStand) == 1):
                         myCell = getCell()
                         tpDone = True
             if (not tpDone):
                 tpTarget = findTeleportTarget(crystalCell0, myCell)
-                if ((tpTarget != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget, tpArmy) > 10)))):
+                if ((tpTarget != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget, tpArmy) > coldTh)))):
                     if (useChipOnCell(CHIP_TELEPORTATION, tpTarget) == 1):
                         myCell = getCell()
                         tpDone = True
             if (not tpDone):
-                say(lw_add(lw_add(lw_add("PZ SOLVER: closing on c=", firstEID), " hot d="), getCellDistance(myCell, crystalCell0)))
+                hotD0 = getCellDistance(myCell, crystalCell0)
+                if (hotD0 != None):
+                    if (hotD0 < _hotBestD):
+                        _hotBestD = hotD0
+                        _hotNoProg = 0
+                    else:
+                        _hotNoProg = lw_add(_hotNoProg, 1)
+                    _hotLastD = hotD0
+                say(lw_add(lw_add(lw_add("PZ SOLVER: closing on c=", firstEID), " hot d="), hotD0))
                 solverWalkToward(crystalCell0)
                 myCell = getCell()
                 tpTarget2 = findTeleportTarget(crystalCell0, myCell)
-                if ((tpTarget2 != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget2, tpArmy) > 10)))):
+                if ((tpTarget2 != (-1)) and (((count(tpArmy) == 0) or (nearestArmyDistFrom(tpTarget2, tpArmy) > coldTh)))):
                     if (useChipOnCell(CHIP_TELEPORTATION, tpTarget2) == 1):
                         myCell = getCell()
+                        tpDone = True
+                if (not tpDone):
+                    tpDone = puzzleEnemySwapApproach(myID, crystalCell0, tpArmy)
+                if (((not tpDone) and (getTP() >= 4)) and allyHasChip(myID, CHIP_INVERSION)):
+                    apInvCd = getCooldown(CHIP_INVERSION, myID)
+                    if ((apInvCd != None) and (apInvCd == 0)):
+                        apD = getCellDistance(myCell, crystalCell0)
+                        apSafe = ((count(tpArmy) == 0) or (nearestArmyDistFrom(crystalCell0, tpArmy) >= 6))
+                        if ((((apD != None) and (apD <= 14)) and lineOfSight(myCell, crystalCell0)) and (((_hotNoProg >= 3) or apSafe))):
+                            if (useChip(CHIP_INVERSION, firstEID) >= 1):
+                                say(lw_add("PZ INV-APPROACH c=", firstEID))
+                                myCell = getCell()
+                                _hotNoProg = 0
+                                _hotBestD = 999
                 solverSelfBuff(myID)
                 return True
+            _hotNoProg = 0
+            _hotLastD = (-1)
+            _hotBestD = 999
         else:
             if ((tpCd != None) and (tpCd > 0)):
                 dToCrystal = getCellDistance(myCell, crystalCell0)
@@ -7823,6 +8261,7 @@ def executeSolverPuzzleTurn():
     if (((adrenCd != None) and (adrenCd == 0)) and (getTP() >= 1)):
         useChip(CHIP_ADRENALINE, myID)
     totalChipsFired = 0
+    _pzRouteWhy = "NONE"
     crystalsSolved = 0
     while (getTP() >= 3):
         myCell = getCell()
@@ -7870,6 +8309,7 @@ def executeSolverPuzzleTurn():
                     if (move != None):
                         detourCount = lw_add(detourCount, 1)
             if (move == None):
+                _pzRouteWhy = "NOPLAN"
                 break
             _pzRouteEID = _bossTargetEID
             _pzRouteCrystalCell = crystalCell
@@ -7896,13 +8336,36 @@ def executeSolverPuzzleTurn():
                                 myCell = getCell()
                                 if (myCell == stand):
                                     continue
+                    _pzRouteWhy = "PIN"
+                    _pzPinTurns = lw_add(_pzPinTurns, 1)
+                    if (((chip != CHIP_INVERSION) and allyHasChip(myID, CHIP_INVERSION)) and (getTP() >= 4)):
+                        pinInvCd = getCooldown(CHIP_INVERSION, myID)
+                        if ((pinInvCd != None) and (pinInvCd == 0)):
+                            pinD = getCellDistance(myCell, crystalCell)
+                            if (((pinD != None) and (pinD <= 14)) and lineOfSight(myCell, crystalCell)):
+                                if (getCellDistance(myCell, finalDest) < getCellDistance(crystalCell, finalDest)):
+                                    if (useChip(CHIP_INVERSION, _bossTargetEID) >= 1):
+                                        myCell = getCell()
+                                        chipsFired = lw_add(chipsFired, 1)
+                                        totalChipsFired = lw_add(totalChipsFired, 1)
+                                        say(lw_add("PZ INV-PUSH c=", _bossTargetEID))
+                                        continue
+                    if ((_pzPinTurns >= 2) and (getMP() > 0)):
+                        backArmy = puzzleArmyCells()
+                        if (count(backArmy) > 0):
+                            backCell = choosePuzzleSustainCellCapped(myID, myCell, False, 14)
+                            if ((backCell != (-1)) and (backCell != myCell)):
+                                moveTowardCell(backCell)
+                                say(lw_add("PZ BACKOFF d=", nearestArmyDistFrom(getCell(), backArmy)))
                     _pzRouteEID = None
                     break
                 if (myCell != stand):
+                    _pzRouteWhy = "WALK"
                     break
             if (chip == CHIP_INVERSION):
                 invR = useChip(CHIP_INVERSION, _bossTargetEID)
                 if (invR < 1):
+                    _pzRouteWhy = lw_add("INV", invR)
                     debug(lw_add(lw_add(lw_add(lw_add(lw_add("PZDBG inv fail r=", invR), " me="), myCell), " cr="), crystalCell))
                     _pzRouteEID = None
                     break
@@ -7912,11 +8375,13 @@ def executeSolverPuzzleTurn():
                 say(lw_add("PZ INV c=", _bossTargetEID))
                 continue
             if (not lineOfSight(myCell, crystalCell)):
+                _pzRouteWhy = "LOS"
                 debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("PZDBG los-block me=", myCell), " cr="), crystalCell), " chip="), chip), " tgt="), target))
                 _pzRouteEID = None
                 break
             r = useChipOnCell(chip, target)
             if (r < 1):
+                _pzRouteWhy = lw_add("CAST", r)
                 debug(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("PZDBG cast fail r=", r), " chip="), chip), " me="), myCell), " tgt="), target), " cr="), crystalCell))
                 _pzRouteEID = None
                 break
@@ -7933,12 +8398,17 @@ def executeSolverPuzzleTurn():
         solved = isCellSolvedForAxis(crCell, _myCrystalGoalAxis)
         if solved:
             crystalsSolved = lw_add(crystalsSolved, 1)
+            _pzPinTurns = 0
             say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ DONE c=", _bossTargetEID), " f="), chipsFired), " total="), crystalsSolved))
             continue
         else:
-            say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ f=", chipsFired), " cr="), crCell), " dst="), finalDest))
+            if (chipsFired == 0):
+                say(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("PZ f=0 cr=", crCell), " dst="), finalDest), " me="), getCell()), " mp="), getMP()), " why="), _pzRouteWhy))
+            else:
+                _pzPinTurns = 0
+                say(lw_add(lw_add(lw_add(lw_add(lw_add("PZ f=", chipsFired), " cr="), crCell), " dst="), finalDest))
             if (((chipsFired > 0) and (crCell != None)) and (crCell >= 0)):
-                moveTowardCell(crCell)
+                solverWalkToward(crCell)
             else:
                 if (chipsFired == 0):
                     crystalNow = getCell(_bossTargetEID)
@@ -7946,7 +8416,7 @@ def executeSolverPuzzleTurn():
                         moveTowardCell(finalDest)
                     else:
                         if ((crystalNow != None) and (crystalNow >= 0)):
-                            moveTowardCell(crystalNow)
+                            solverWalkToward(crystalNow)
             break
     solverSelfBuff(myID)
     return True
@@ -8152,14 +8622,431 @@ def attackerBulbAI():
             continue
         useChip(abC, abBest)
 
+_bulbCmdEID = None
+_bulbCmdCr = (-1)
+_bulbCmdStand = (-9)
+_bulbCmdChip = 0
+_bulbCmdTarget = (-1)
+_bulbCmdTurn = (-99)
+def tacticianBulbAI():
+    global _bossTargetEID, _bulbCmdChip, _bulbCmdCr, _bulbCmdEID, _bulbCmdStand, _bulbCmdTarget, _bulbCmdTurn
+    if (not _isBossFight):
+        moveToward(getSummoner())
+        return None
+    bID = getEntity()
+    if (_bossPhase != "PUZZLE"):
+        bAlly = getAliveAllies()
+        bNear = (-1)
+        bND = 9999
+        for ba in lw_values(bAlly):
+            if isSummon(ba):
+                continue
+            bd0 = getCellDistance(getCell(), getCell(ba))
+            if ((bd0 != None) and (bd0 < bND)):
+                bND = bd0
+                bNear = ba
+        if ((bNear != (-1)) and (bND > 3)):
+            moveToward(bNear)
+        return None
+    cmd = None
+    bMsgs = getMessages()
+    for bm in lw_values(bMsgs):
+        if (getMessageType(bm) != MESSAGE_CUSTOM):
+            continue
+        pm = getMessageParams(bm)
+        if (((pm != None) and (count(pm) == 6)) and (lw_get(pm, 0) == PZ_MSG_BULB)):
+            cmd = pm
+    if (_bulbCmdStand != (-9)):
+        if (lw_sub(getTurn(), _bulbCmdTurn) > 3):
+            _bulbCmdStand = (-9)
+        else:
+            if (isAlive(_bulbCmdEID) and (getCell(_bulbCmdEID) == _bulbCmdCr)):
+                cmd = [PZ_MSG_BULB, _bulbCmdEID, _bulbCmdCr, _bulbCmdStand, _bulbCmdChip, _bulbCmdTarget]
+            else:
+                _bulbCmdStand = (-9)
+    if (cmd != None):
+        cEID = lw_get(cmd, 1)
+        cCr = lw_get(cmd, 2)
+        cStand = lw_get(cmd, 3)
+        cChip = lw_get(cmd, 4)
+        cTarget = lw_get(cmd, 5)
+        if (not isAlive(cEID)):
+            cmd = None
+        else:
+            nowCr = getCell(cEID)
+            if (nowCr != cCr):
+                _bulbCmdStand = (-9)
+                moveTowardCell(nowCr)
+                return None
+            if ((getTP() >= 9) and allyHasChip(bID, CHIP_TELEPORTATION)):
+                aTpCd = getCooldown(CHIP_TELEPORTATION, bID)
+                if ((aTpCd != None) and (aTpCd == 0)):
+                    aDist = getCellDistance(getCell(), cCr)
+                    if ((aDist != None) and (aDist > 8)):
+                        aLand = findEmptyCellNear(cCr, getCell(), 12, 1)
+                        if ((aLand != (-1)) and (useChipOnCell(CHIP_TELEPORTATION, aLand) >= 1)):
+                            say(lw_add("PZ BULB TEL @", aLand))
+            if (cStand == (-1)):
+                cmd = None
+            else:
+                _bulbCmdEID = cEID
+                _bulbCmdCr = cCr
+                _bulbCmdStand = cStand
+                _bulbCmdChip = cChip
+                _bulbCmdTarget = cTarget
+                _bulbCmdTurn = getTurn()
+                mCell = getCell()
+                if (mCell != cStand):
+                    prevB = mCell
+                    moveTowardCell(cStand)
+                    mCell = getCell()
+                    if (mCell == prevB):
+                        _bulbCmdStand = (-9)
+                if ((mCell == cStand) and (getTP() >= 3)):
+                    if (cChip == CHIP_INVERSION):
+                        if (useChip(CHIP_INVERSION, cEID) >= 1):
+                            say(lw_add("PZ BULB INV c=", cEID))
+                        _bulbCmdStand = (-9)
+                    else:
+                        if lineOfSight(mCell, cCr):
+                            if (useChipOnCell(cChip, cTarget) >= 1):
+                                say(lw_add("PZ BULB PUSH c=", cEID))
+                            _bulbCmdStand = (-9)
+                        else:
+                            _bulbCmdStand = (-9)
+                return None
+    bCell = getCell()
+    bEID = None
+    bD = 9999
+    bAllies = getAliveAllies()
+    bClaims = {}
+    for bm2 in lw_values(bMsgs):
+        if (getMessageType(bm2) != MESSAGE_CUSTOM):
+            continue
+        bp2 = getMessageParams(bm2)
+        if (((bp2 != None) and (count(bp2) == 2)) and (lw_get(bp2, 0) == PZ_MSG_FOCUS)):
+            lw_put(bClaims, lw_get(bp2, 1), True)
+    for eid in lw_values(mapKeys(_crystalMap)):
+        if mapContainsKey(bClaims, eid):
+            continue
+        cd = lw_get(_crystalMap, eid)
+        if isCrystalSolved(cd):
+            continue
+        cc = getCell(eid)
+        if ((cc == None) or (cc < 0)):
+            continue
+        taken = False
+        for aid in lw_values(bAllies):
+            if isSummon(aid):
+                continue
+            ad = getCellDistance(getCell(aid), cc)
+            if ((ad != None) and (ad <= 4)):
+                taken = True
+                break
+        if taken:
+            continue
+        dd = getCellDistance(bCell, cc)
+        if ((dd != None) and (dd < bD)):
+            bD = dd
+            bEID = eid
+    if (bEID == None):
+        bEID = nearestUnsolvedCrystalTo(bCell, None, False)
+    if (bEID == None):
+        return None
+    crCell = getCell(bEID)
+    _bossTargetEID = bEID
+    syncCrystalScalars(lw_get(_crystalMap, bEID))
+    bDest = computeCrystalFinalDest()
+    if (bDest == None):
+        return None
+    crX = getCellX(crCell)
+    crY = getCellY(crCell)
+    deX = getCellX(bDest)
+    deY = getCellY(bDest)
+    stepX = 0
+    stepY = 0
+    if (abs(lw_sub(deX, crX)) >= abs(lw_sub(deY, crY))):
+        if (deX > crX):
+            stepX = 1
+        else:
+            if (deX < crX):
+                stepX = (-1)
+    else:
+        if (deY > crY):
+            stepY = 1
+        else:
+            if (deY < crY):
+                stepY = (-1)
+    behindStand = getCellFromXY(lw_sub(crX, stepX), lw_sub(crY, stepY))
+    bDist = getCellDistance(bCell, crCell)
+    if ((((bDist != None) and (bDist > 8)) and (getTP() >= 9)) and allyHasChip(bID, CHIP_TELEPORTATION)):
+        bTpCd = getCooldown(CHIP_TELEPORTATION, bID)
+        if ((bTpCd != None) and (bTpCd == 0)):
+            bLand = findEmptyCellNear(crCell, bCell, 12, 1)
+            if ((bLand != (-1)) and (useChipOnCell(CHIP_TELEPORTATION, bLand) >= 1)):
+                bCell = getCell()
+                bDist = getCellDistance(bCell, crCell)
+                say(lw_add("PZ BULB TEL @", bLand))
+    if ((((bDist != None) and (bDist > 4)) and (getTP() >= 4)) and allyHasChip(bID, CHIP_JUMP)):
+        bJumpCd = getCooldown(CHIP_JUMP, bID)
+        if ((bJumpCd != None) and (bJumpCd == 0)):
+            jOffs = [17, (-17), 18, (-18), 1, (-1), 34, (-34), 35, (-35), 36, (-36), 16, (-16), 19, (-19), 51, (-51), 52, (-52), 53, (-53), 54, (-54)]
+            bestJC = (-1)
+            bestJD = bDist
+            for jo in lw_values(jOffs):
+                jc = lw_add(bCell, jo)
+                if ((jc < 0) or (jc > 612)):
+                    continue
+                if (isObstacle(jc) or isEntity(jc)):
+                    continue
+                djc = getCellDistance(bCell, jc)
+                if (((djc == None) or (djc < 1)) or (djc > 3)):
+                    continue
+                dcr = getCellDistance(jc, crCell)
+                if ((dcr != None) and (dcr < bestJD)):
+                    bestJD = dcr
+                    bestJC = jc
+            if ((bestJC != (-1)) and (useChipOnCell(CHIP_JUMP, bestJC) >= 1)):
+                bCell = getCell()
+                say(lw_add("PZ BULB JUMP @", bestJC))
+    myX = getCellX(bCell)
+    myY = getCellY(bCell)
+    myPos = lw_add(lw_mul((lw_sub(myX, crX)), stepX), lw_mul((lw_sub(myY, crY)), stepY))
+    onPushLine = ((((stepX != 0) and (myY == crY))) or (((stepY != 0) and (myX == crX))))
+    if (((onPushLine and (myPos > 0)) and (getTP() >= 4)) and allyHasChip(bID, CHIP_INVERSION)):
+        invCd2 = getCooldown(CHIP_INVERSION, bID)
+        if ((((invCd2 != None) and (invCd2 == 0)) and isOnSameLine(bCell, crCell)) and lineOfSight(bCell, crCell)):
+            if (getCellDistance(bCell, bDest) < getCellDistance(crCell, bDest)):
+                if (useChip(CHIP_INVERSION, bEID) >= 1):
+                    say(lw_add("PZ BULB INV c=", bEID))
+                    return None
+    slides = 0
+    while ((getTP() >= 3) and (slides < 2)):
+        bCell = getCell()
+        myX = getCellX(bCell)
+        myY = getCellY(bCell)
+        myPos = lw_add(lw_mul((lw_sub(myX, crX)), stepX), lw_mul((lw_sub(myY, crY)), stepY))
+        onPushLine = ((((stepX != 0) and (myY == crY))) or (((stepY != 0) and (myX == crX))))
+        if ((not onPushLine) or (myPos >= 0)):
+            if ((((behindStand != None) and (behindStand >= 0)) and (not isObstacle(behindStand))) and (not isEntity(behindStand))):
+                preB = bCell
+                moveTowardCell(behindStand)
+                if (getCell() == preB):
+                    moveTowardCell(crCell)
+            else:
+                moveTowardCell(crCell)
+            break
+        if (not lineOfSight(bCell, crCell)):
+            break
+        slideCell = (-1)
+        k = 1
+        while (k <= 8):
+            sc0 = getCellFromXY(lw_add(crX, lw_mul(stepX, k)), lw_add(crY, lw_mul(stepY, k)))
+            if ((sc0 == None) or (sc0 < 0)):
+                break
+            if (isObstacle(sc0) or isEntity(sc0)):
+                break
+            dS = getCellDistance(bCell, sc0)
+            if ((dS == None) or (dS > 8)):
+                break
+            slideCell = sc0
+            k = lw_add(k, 1)
+        if (slideCell == (-1)):
+            break
+        slideD = getCellDistance(bCell, slideCell)
+        slideChip = CHIP_BOXING_GLOVE
+        if ((slideD != None) and (slideD < 2)):
+            slideChip = CHIP_GRAPPLE
+        if (useChipOnCell(slideChip, slideCell) >= 1):
+            slides = lw_add(slides, 1)
+            say(lw_add("PZ BULB PUSH c=", bEID))
+            crCell = getCell(bEID)
+            crX = getCellX(crCell)
+            crY = getCellY(crCell)
+            behindStand = getCellFromXY(lw_sub(crX, stepX), lw_sub(crY, stepY))
+            continue
+        break
+
+def decoyBulbAI():
+    if (not _isBossFight):
+        moveToward(getSummoner())
+        return None
+    if (_bossPhase != "PUZZLE"):
+        attackerBulbAI()
+        return None
+    dbArmy = puzzleArmyCells()
+    if (count(dbArmy) == 0):
+        return None
+    dbCell = getCell()
+    dbNear = 999
+    dbNearCell = (-1)
+    for dac in lw_values(dbArmy):
+        dd = getCellDistance(dbCell, dac)
+        if ((dd != None) and (dd < dbNear)):
+            dbNear = dd
+            dbNearCell = dac
+    if ((dbNearCell != (-1)) and (dbNear > 6)):
+        moveTowardCell(dbNearCell)
+
 
 # ════════ beam_search.lk ════════
 # include: item_roles.lk (inlined by assembler)
 # include: cache_manager.lk (inlined by assembler)
 # include: reachable_graph.lk (inlined by assembler)
+_rotPhaseTurn = (-1)
+_rotPhaseTarget = (-1)
+_rotPhaseCache = "NONE"
+_beamBulbOwnerHittable = False
+_libEffsTurn = (-1)
+_libEffsTarget = (-1)
+_libBuffVal = 0
+_libDotCost = 0
+def beamEffectiveDirect(rawDirect, targetObj, cumDamage):
+    if (rawDirect <= 0):
+        return 0
+    absS = targetObj._absShield
+    relS = targetObj._relShield
+    if (absS == None):
+        absS = 0
+    if (relS == None):
+        relS = 0
+    if (relS > 90):
+        relS = 90
+    afterRel = lw_mul(rawDirect, (lw_sub(1, lw_div(relS, 100))))
+    remShield = lw_sub(absS, cumDamage)
+    if (remShield < 0):
+        remShield = 0
+    eff = lw_sub(afterRel, remShield)
+    if (eff < 0):
+        eff = 0
+    return eff
+
+def beamNovaHitCount(targetCell, excludeId, fieldMapObj):
+    if (fieldMapObj == None):
+        return 1
+    hits = 1
+    enemies = fieldMapObj.getEnemySubMap()
+    for eid in lw_values(mapKeys(enemies)):
+        if (eid == excludeId):
+            continue
+        if isDead(eid):
+            continue
+        eCell = lw_get(enemies, eid)._cellPos
+        if ((eCell != None) and (eCell != targetCell)):
+            eDist = getCellDistance(targetCell, eCell)
+            if ((eDist != None) and (eDist <= 2)):
+                hits = lw_add(hits, 1)
+    return hits
+
+def beamEstimateOurDPT(partial, arsenalObj):
+    best = 0
+    for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+        bd = arsenalObj.getDamageBreakdown(lw_get(partial, 'simStr'), lw_get(partial, 'simMag'), lw_get(partial, 'simWis'), lw_get(partial, 'simSci'), wid)
+        if ((bd != None) and (lw_get(bd, 'direct') > best)):
+            best = lw_get(bd, 'direct')
+    for cid in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        cbd = arsenalObj.getDamageBreakdown(lw_get(partial, 'simStr'), lw_get(partial, 'simMag'), lw_get(partial, 'simWis'), lw_get(partial, 'simSci'), cid)
+        if (cbd == None):
+            continue
+        chipDpt = lw_add(lw_add(lw_get(cbd, 'direct'), lw_div(lw_get(cbd, 'dot'), 3)), lw_get(cbd, 'nova'))
+        if (chipDpt > best):
+            best = chipDpt
+    return best
+
+def beamBulbOwnerHittableCheck(fromPos, targetObj, arsenalObj):
+    if (not isBulb(targetObj)):
+        return False
+    ownerId = getSummoner(targetObj._id)
+    if (((ownerId == None) or (ownerId <= 0)) or isDead(ownerId)):
+        return False
+    ownerCell = getCell(ownerId)
+    if (ownerCell == None):
+        return False
+    d = getCellDistance(fromPos, ownerCell)
+    if (d == None):
+        return False
+    if (not getCachedLineOfSight(fromPos, ownerCell)):
+        return False
+    for wid in lw_values(mapKeys(arsenalObj.playerEquippedWeapons)):
+        wObj = lw_get(arsenalObj.playerEquippedWeapons, wid)
+        if ((d >= wObj._minRange) and (d <= wObj._maxRange)):
+            return True
+    for cidB in lw_values(mapKeys(arsenalObj.playerEquippedChips)):
+        if (((((isHealingChip(cidB) or isOffensiveBuff(cidB)) or isShieldChip(cidB)) or isDamageReturnChip(cidB)) or isResourceChip(cidB)) or isUtilityChip(cidB)):
+            continue
+        cObjB = lw_get(arsenalObj.playerEquippedChips, cidB)
+        if ((d >= cObjB._minRange) and (d <= cObjB._maxRange)):
+            return True
+    return False
+
+def getRotationPhase(targetObj):
+    global _rotPhaseCache, _rotPhaseTarget, _rotPhaseTurn
+    if (_isBossFight or (targetObj == None)):
+        return "NONE"
+    tid = targetObj._id
+    if ((tid == None) or (tid < 0)):
+        return "NONE"
+    if ((_rotPhaseTurn == getTurn()) and (_rotPhaseTarget == tid)):
+        return _rotPhaseCache
+    denied = 0
+    poisoned = 0
+    rotBuffed = 0
+    effs = getEffects(tid)
+    if (effs != None):
+        for e in lw_values(effs):
+            if ((lw_get(e, 0) == 17) or (lw_get(e, 0) == 18)):
+                denied = lw_add(denied, 1)
+            if (lw_get(e, 0) == 13):
+                poisoned = lw_add(poisoned, 1)
+            if (((((lw_get(e, 0) == 38) or (lw_get(e, 0) == 41)) or (lw_get(e, 0) == 39)) or (lw_get(e, 0) == 3)) or (lw_get(e, 0) == 4)):
+                rotBuffed = lw_add(rotBuffed, 1)
+    ph = "SUSTAIN"
+    if (denied == 0):
+        ph = "DENY"
+    else:
+        if (poisoned == 0):
+            ph = "DUMP"
+    rotDist = getCellDistance(getCell(), targetObj._cellPos)
+    if ((ph == "DENY") and (rotBuffed > 0)):
+        if ((rotDist != None) and (rotDist <= 6)):
+            ph = "DUMP"
+    debugW(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add(lw_add("ROT_T", getTurn()), "_"), ph), "_den"), denied), "_poi"), poisoned), "_buf"), rotBuffed), "_d"), rotDist))
+    _rotPhaseTurn = getTurn()
+    _rotPhaseTarget = tid
+    _rotPhaseCache = ph
+    return ph
+
+def rotationMult(phase, kind):
+    if (phase == "DENY"):
+        if (kind == "denial"):
+            return 2.5
+        if (kind == "poison"):
+            return 0.6
+        if (kind == "sustain"):
+            return 0.8
+    else:
+        if (phase == "DUMP"):
+            if (kind == "denial"):
+                return 0.4
+            if (kind == "poison"):
+                return 2.5
+            if (kind == "sustain"):
+                return 0.7
+        else:
+            if (phase == "SUSTAIN"):
+                if (kind == "denial"):
+                    return 0.8
+                if (kind == "poison"):
+                    return 0.8
+                if (kind == "sustain"):
+                    return 2.0
+    return 1.0
+
 def beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj):
+    global _beamBulbOwnerHittable
     if (targetObj == None):
         return []
+    _beamBulbOwnerHittable = beamBulbOwnerHittableCheck(playerObj._cellPos, targetObj, arsenalObj)
     beamWidth = _beamWidth
     maxDepth = _beamMaxDepth
     playerPos = playerObj._cellPos
@@ -8396,6 +9283,7 @@ def beamGetMoveCells(simPos, targetPos, simMP, arsenalObj, partial):
     return cells
 
 def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fieldMapObj):
+    global _libBuffVal, _libDotCost, _libEffsTarget, _libEffsTurn
     value = 0
     simStr = lw_get(partial, 'simStr')
     simMag = lw_get(partial, 'simMag')
@@ -8407,24 +9295,14 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
         chipId = lw_get(actionInfo, 'id')
         if (lw_get(actionInfo, 'actionType') == Action.ACTION_DIRECT):
             bd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
-            dmg = lw_add(lw_get(bd, 'direct'), lw_get(bd, 'nova'))
+            dmg = lw_add(beamEffectiveDirect(lw_get(bd, 'direct'), targetObj, cumDamage), lw_get(bd, 'nova'))
             value = lw_add(value, lw_mul(dmg, 2.0))
-            if ((chipId == CHIP_PLASMA) and (fieldMapObj != None)):
-                plasmaTargetCell = lw_get(actionInfo, 'targetCell')
-                plasmaHitCount = 1
-                enemies = fieldMapObj.getEnemySubMap()
-                for eid in lw_values(mapKeys(enemies)):
-                    if (eid == targetObj._id):
-                        continue
-                    if isDead(eid):
-                        continue
-                    eCell = lw_get(enemies, eid)._cellPos
-                    if ((eCell != None) and (eCell != plasmaTargetCell)):
-                        eDist = getCellDistance(plasmaTargetCell, eCell)
-                        if ((eDist != None) and (eDist <= 2)):
-                            plasmaHitCount = lw_add(plasmaHitCount, 1)
-                if (plasmaHitCount > 1):
-                    value = lw_num(value) * lw_num(plasmaHitCount)
+            if ((lw_get(bd, 'nova') > 0) and (fieldMapObj != None)):
+                novaHits = beamNovaHitCount(lw_get(actionInfo, 'targetCell'), targetObj._id, fieldMapObj)
+                if (novaHits > 1):
+                    value = lw_add(value, lw_mul(lw_mul(lw_get(bd, 'nova'), 2.0), (lw_sub(novaHits, 1))))
+                    if (chipId == CHIP_PLASMA):
+                        value = lw_num(value) * lw_num(novaHits)
             if (lw_get(bd, 'nova') > 0):
                 value = lw_add(value, lw_mul(lw_get(bd, 'nova'), 1.5))
             if (chipId == CHIP_PUNISHMENT):
@@ -8432,11 +9310,14 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                     return (-999999)
             if ((enemyHP > 0) and (lw_div((lw_add(cumDamage, dmg)), enemyHP) > 0.7)):
                 value = lw_num(value) * lw_num(3.0)
+            if (_beamBulbOwnerHittable and ((lw_add(cumDamage, dmg)) < enemyHP)):
+                value = lw_num(value) * lw_num(0.25)
         else:
             if isPoisonChip(chipId):
                 bd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
                 dot = lw_get(bd, 'dot')
                 value = lw_add(value, lw_mul(dot, 1.5))
+                value = lw_mul(value, rotationMult(getRotationPhase(targetObj), "poison"))
                 poisonCount = 0
                 for a in lw_values(lw_get(partial, 'actions')):
                     if (a.type == Action.ACTION_DOT):
@@ -8453,6 +9334,20 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                         value = lw_num(value) * lw_num(0.3)
             else:
                 if isOffensiveBuff(chipId):
+                    recastEff = (-1)
+                    if (((chipId == CHIP_STEROID) or (chipId == CHIP_DOPING)) or (chipId == CHIP_PRISM)):
+                        recastEff = EFFECT_RAW_BUFF_STRENGTH
+                    else:
+                        if (chipId == CHIP_WARM_UP):
+                            recastEff = EFFECT_RAW_BUFF_AGILITY
+                        else:
+                            if (chipId == CHIP_KNOWLEDGE):
+                                recastEff = EFFECT_RAW_BUFF_WISDOM
+                            else:
+                                if (chipId == CHIP_WIZARDRY):
+                                    recastEff = EFFECT_RAW_BUFF_MAGIC
+                    if ((((recastEff != (-1)) and playerObj.hasEffect(recastEff)) and (playerObj.getEffectRemaining(recastEff) >= 2)) and (beamCountAttacksFromPos(lw_get(partial, 'simPos'), targetObj._cellPos, arsenalObj, partial) > 0)):
+                        return (-1)
                     if (chipId == CHIP_WIZARDRY):
                         value = lw_add(value, 200)
                         unusedPoison = beamCountUnusedPoisonChips(partial, arsenalObj)
@@ -8509,10 +9404,7 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                                                 if (chipId == CHIP_ARMORING):
                                                     value = lw_add(value, 120)
                                                 else:
-                                                    if (chipId == CHIP_ELEVATION):
-                                                        value = lw_add(value, 150)
-                                                    else:
-                                                        value = lw_add(value, 100)
+                                                    value = lw_add(value, 100)
                 else:
                     if isHealingChip(chipId):
                         hpMissing = lw_sub(playerObj._maxHealth, playerObj._currHealth)
@@ -8525,6 +9417,7 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                             if (effectiveHeal < lw_mul(healEstimate, healEffFloor)):
                                 return (-1)
                             value = lw_add(value, lw_mul(effectiveHeal, 1.5))
+                            value = lw_mul(value, rotationMult(getRotationPhase(targetObj), "sustain"))
                             hpRatio = lw_div(playerObj._currHealth, playerObj._maxHealth)
                             if (hpRatio < 0.3):
                                 value = lw_num(value) * lw_num(3.0)
@@ -8536,6 +9429,7 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                     else:
                         if isShieldChip(chipId):
                             value = lw_add(value, 150)
+                            value = lw_mul(value, rotationMult(getRotationPhase(targetObj), "sustain"))
                             threat = 0
                             if (fieldMapObj != None):
                                 threat = fieldMapObj.getThreatAtCell(lw_get(partial, 'simPos'))
@@ -8556,7 +9450,14 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                             else:
                                 if isDebuffChip(chipId):
                                     if ((((chipId == CHIP_SOPORIFIC) or (chipId == CHIP_BALL_AND_CHAIN)) or (chipId == CHIP_TRANQUILIZER)) or (chipId == CHIP_SLOW_DOWN)):
+                                        denialSoFar = 0
+                                        for a in lw_values(lw_get(partial, 'actions')):
+                                            if (a.type == Action.ACTION_DEBUFF):
+                                                denialSoFar = lw_add(denialSoFar, 1)
+                                        if ((denialSoFar >= 2) and (beamCountUnusedPoisonChips(partial, arsenalObj) > 0)):
+                                            return (-1)
                                         value = lw_add(value, lw_mul(200, (lw_add(1, lw_div(simMag, 500)))))
+                                        value = lw_mul(value, rotationMult(getRotationPhase(targetObj), "denial"))
                                         hasPoison = False
                                         for a in lw_values(lw_get(partial, 'actions')):
                                             if (a.type == Action.ACTION_DOT):
@@ -8566,7 +9467,43 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                                             value = lw_add(value, 150)
                                     else:
                                         if (chipId == CHIP_LIBERATION):
-                                            value = lw_add(value, 120)
+                                            libAbs = targetObj._absShield
+                                            libRel = targetObj._relShield
+                                            if (libAbs == None):
+                                                libAbs = 0
+                                            if (libRel == None):
+                                                libRel = 0
+                                            stripVal = lw_add(lw_mul(libAbs, 0.4), lw_mul(libRel, 8))
+                                            if (((((libAbs > 0) or (libRel > 0))) and (targetObj.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD) <= 1)) and (targetObj.getEffectRemaining(EFFECT_RELATIVE_SHIELD) <= 1)):
+                                                stripVal = lw_num(stripVal) * lw_num(0.3)
+                                            if ((_libEffsTurn != getTurn()) or (_libEffsTarget != targetObj._id)):
+                                                _libBuffVal = 0
+                                                _libDotCost = 0
+                                                libEffs = getEffects(targetObj._id)
+                                                if (libEffs != None):
+                                                    for le in lw_values(libEffs):
+                                                        lt = lw_get(le, 0)
+                                                        if (((lt == 38) or (lt == 41)) or (lt == 39)):
+                                                            _libBuffVal = lw_add(_libBuffVal, lw_mul(lw_mul(lw_get(le, 1), 0.4), 1.5))
+                                                        else:
+                                                            if (((lt == 44) or (lt == 40)) or (lt == 42)):
+                                                                _libBuffVal = lw_add(_libBuffVal, lw_mul(lw_mul(lw_get(le, 1), 0.4), 0.5))
+                                                            else:
+                                                                if (lt == 20):
+                                                                    _libBuffVal = lw_add(_libBuffVal, 120)
+                                                                else:
+                                                                    if (lt == 13):
+                                                                        lTurns = (lw_get(le, 3) if ((count(le) >= 4)) else 1)
+                                                                        _libDotCost = lw_add(_libDotCost, lw_mul(lw_mul(lw_get(le, 1), 0.4), max(1, min(3, lTurns))))
+                                                _libEffsTurn = getTurn()
+                                                _libEffsTarget = targetObj._id
+                                            if ((_libDotCost > 100) and (_libDotCost > lw_add(stripVal, _libBuffVal))):
+                                                return (-1)
+                                            value = lw_add(value, lw_sub(lw_add(lw_add(60, stripVal), _libBuffVal), _libDotCost))
+                                            if (stripVal > 80):
+                                                libUnusedW = beamCountUnusedWeapons(partial, arsenalObj)
+                                                if (libUnusedW > 0):
+                                                    value = lw_add(value, lw_mul(100, libUnusedW))
                                         else:
                                             cBd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
                                             if (lw_get(cBd, 'statReduce') > 0):
@@ -8612,12 +9549,16 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
         if (lw_get(actionInfo, 'type') == 'weapon'):
             wid = lw_get(actionInfo, 'id')
             bd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, wid)
-            directDmg = lw_get(bd, 'direct')
+            directDmg = beamEffectiveDirect(lw_get(bd, 'direct'), targetObj, cumDamage)
             dotDmg = lw_get(bd, 'dot')
             novaDmg = lw_get(bd, 'nova')
             value = lw_add(value, lw_mul(directDmg, 2.0))
             value = lw_add(value, lw_mul(dotDmg, 1.5))
             value = lw_add(value, lw_mul(novaDmg, 2.5))
+            if ((novaDmg > 0) and (fieldMapObj != None)):
+                wNovaHits = beamNovaHitCount(lw_get(actionInfo, 'targetCell'), targetObj._id, fieldMapObj)
+                if (wNovaHits > 1):
+                    value = lw_add(value, lw_mul(lw_mul(novaDmg, 2.5), (lw_sub(wNovaHits, 1))))
             if (dotDmg > 0):
                 antidoteCd = 0
                 tracker = CooldownTracker(targetObj)
@@ -8635,6 +9576,10 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                 value = lw_add(value, 80)
             if lw_get(actionInfo, 'needsSwap'):
                 value = lw_num(value) - lw_num(50)
+            if (((directDmg <= 0) and (dotDmg <= 0)) and (novaDmg <= 0)):
+                return (-1)
+            if (_beamBulbOwnerHittable and ((lw_add(lw_add(lw_add(cumDamage, directDmg), dotDmg), novaDmg)) < enemyHP)):
+                value = lw_num(value) * lw_num(0.25)
         else:
             if (lw_get(actionInfo, 'type') == 'move'):
                 moveTargetPos = lw_get(actionInfo, 'targetCell')
@@ -8663,6 +9608,25 @@ def beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerObj, fi
                                         exposureOld = lw_add(exposureOld, 1)
                         if (exposureNew < exposureOld):
                             value = lw_add(value, lw_mul((lw_sub(exposureOld, exposureNew)), 100))
+                    if playerObj.hasDamageReturn():
+                        refOurDpt = beamEstimateOurDPT(partial, arsenalObj)
+                        refTheirDpt = (fieldMapObj.getThreatAtCell(moveTargetPos) if ((fieldMapObj != None)) else 0)
+                        if (refTheirDpt < lw_mul(refOurDpt, 1.5)):
+                            if (newDist <= 5):
+                                value = lw_add(value, 120)
+                            else:
+                                if (newDist > 7):
+                                    value = lw_num(value) - lw_num(100)
+                        else:
+                            value = lw_num(value) - lw_num(lw_mul(newAttacks, 60))
+                            value = lw_add(value, lw_mul((lw_sub(newDist, oldDist)), 30))
+                    else:
+                        if (fieldMapObj != None):
+                            ourDpt = beamEstimateOurDPT(partial, arsenalObj)
+                            theirDpt = fieldMapObj.getThreatAtCell(moveTargetPos)
+                            if ((theirDpt > lw_mul(ourDpt, 1.5)) and (theirDpt > 300)):
+                                value = lw_num(value) - lw_num(lw_mul(newAttacks, 60))
+                                value = lw_add(value, lw_mul((lw_sub(newDist, oldDist)), 30))
     return value
 
 def beamExtendCandidate(partial, actionInfo, value, targetObj, arsenalObj):
@@ -8839,6 +9803,8 @@ def beamCountAttacksFromPos(fromPos, targetPos, arsenalObj, partial):
 def beamEstimateHeal(chipId, wisdom):
     if (chipId == CHIP_REGENERATION):
         return lw_mul(500, (lw_add(1, lw_div(wisdom, 100))))
+    if (chipId == CHIP_ELEVATION):
+        return lw_mul(80, (lw_add(1, lw_div(wisdom, 100))))
     if (chipId == CHIP_REMISSION):
         return lw_mul(71.5, (lw_add(1, lw_div(wisdom, 100))))
     if (chipId == CHIP_CURE):
@@ -9811,7 +10777,7 @@ class ScenarioHelpers:
         poisonPressure = ((((not antidoteAvailable) and (ownPoisonStacks >= 2)) and (lw_mul(ownPoisonDPT, 100) > lw_mul(hp, 15))))
         multiDenial = (underShackle and (ownPoisonStacks >= 1))
         if (poisonPressure or multiDenial):
-            freshSteroid = (self._player.hasEffect(EFFECT_BUFF_STRENGTH) and (self._player.getEffectRemaining(EFFECT_BUFF_STRENGTH) >= 2))
+            freshSteroid = (self._player.hasEffect(EFFECT_RAW_BUFF_STRENGTH) and (self._player.getEffectRemaining(EFFECT_RAW_BUFF_STRENGTH) >= 2))
             if ((not freshSteroid) or (hpPct < 35)):
                 return Action(Action.ACTION_DEBUFF, (-1), CHIP_LIBERATION, self._player._cellPos, self._player)
         dist = getCellDistance(self._player._cellPos, self._target._cellPos)
@@ -10948,7 +11914,7 @@ class ScenarioCombos(ScenarioHelpers):
                 tpBudget = lw_num(tpBudget) - lw_num(tpAdrenaline)
                 tpBudget = lw_add(tpBudget, 5)
         didJump = False
-        if (((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_JUMP))) and (not self._player.hasEffect(EFFECT_BUFF_AGILITY))):
+        if (((mapContainsKey(self._arsenal.playerEquippedChips, CHIP_JUMP) and (getCooldown(CHIP_JUMP, self._player._id) == 0)) and (tpBudget >= getCachedChipCost(CHIP_JUMP))) and (not self._player.hasEffect(EFFECT_RAW_BUFF_AGILITY))):
             jumpCostP = getCachedChipCost(CHIP_JUMP)
             jumpTarget = (-1)
             targetPos = self._target._cellPos
@@ -15542,7 +16508,7 @@ class ScenarioScorer:
                     strippedValue = lw_add(strippedValue, lw_mul(lw_mul(self._target._relShield, 0.4), 5.0))
                     if self._target.hasEffect(EFFECT_DAMAGE_RETURN):
                         strippedValue = lw_add(strippedValue, 300)
-                    if self._target.hasEffect(EFFECT_BUFF_STRENGTH):
+                    if self._target.hasEffect(EFFECT_RAW_BUFF_STRENGTH):
                         libThreat = 0
                         if (self._fieldMap != None):
                             libThreat = self._fieldMap.getThreatAtCell(self._player._cellPos)
@@ -15550,7 +16516,7 @@ class ScenarioScorer:
                             libThreat = 0
                         strScaled = max(200, lw_mul(libThreat, 0.15))
                         strippedValue = lw_add(strippedValue, strScaled)
-                    if self._target.hasEffect(EFFECT_BUFF_RESISTANCE):
+                    if self._target.hasEffect(EFFECT_RAW_BUFF_RESISTANCE):
                         strippedValue = lw_add(strippedValue, 200)
                     enemyPoisonDPT = self._target.getTotalPoisonPerTurn()
                     if ((enemyPoisonDPT != None) and (enemyPoisonDPT > 0)):
@@ -17043,12 +18009,12 @@ class Strategy:
         buffBonus = 0
         if includeBuffs:
             if (self.getStrategyName() == "STR"):
-                if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID) and (getCooldown(CHIP_STEROID, player._id) == 0)) and (not player.hasEffect(EFFECT_BUFF_STRENGTH))):
+                if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_STEROID) and (getCooldown(CHIP_STEROID, player._id) == 0)) and (not player.hasEffect(EFFECT_RAW_BUFF_STRENGTH))):
                     buffBonus = 160
                     playerTP = lw_num(playerTP) - lw_num(7)
             else:
                 if (self.getStrategyName() == "AGI"):
-                    if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP) and (getCooldown(CHIP_WARM_UP, player._id) == 0)) and (not player.hasEffect(EFFECT_BUFF_AGILITY))):
+                    if ((mapContainsKey(arsenal.playerEquippedChips, CHIP_WARM_UP) and (getCooldown(CHIP_WARM_UP, player._id) == 0)) and (not player.hasEffect(EFFECT_RAW_BUFF_AGILITY))):
                         buffBonus = 180
                         playerTP = lw_num(playerTP) - lw_num(7)
         if mapContainsKey(fieldMap.damageMap, fromCell):
@@ -17305,6 +18271,11 @@ class Strategy:
                         useChip(CHIP_ELEVATION, player._id)
                     if mapContainsKey(arsenal.playerEquippedChips, CHIP_ARMORING):
                         useChip(CHIP_ARMORING, player._id)
+            else:
+                if mapContainsKey(arsenal.playerEquippedChips, CHIP_KNOWLEDGE):
+                    useChip(CHIP_KNOWLEDGE, player._id)
+                if ((not nearbyBurst) and mapContainsKey(arsenal.playerEquippedChips, CHIP_ELEVATION)):
+                    useChip(CHIP_ELEVATION, player._id)
         fightType = self.detectFightType()
         closestEnemy = fieldMap.getClosestEnemy()
         distToEnemy = 99999
@@ -19835,7 +20806,44 @@ def recoverRemainingTP(target):
                         continue
                     if (((chipObj._aoeType != AREA_POINT) and (not chipObj._selfImmune)) and fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())):
                         continue
-                    value = quickRecoveryChipValue(chipId, 'enemy')
+                    if ((((chipId == CHIP_SLOW_DOWN) or (chipId == CHIP_TRANQUILIZER)) or (chipId == CHIP_SOPORIFIC)) or (chipId == CHIP_BALL_AND_CHAIN)):
+                        recShackled = False
+                        recTargetEffs = getEffects(target._id)
+                        if (recTargetEffs != None):
+                            for rse in lw_values(recTargetEffs):
+                                if ((lw_get(rse, 0) == 17) or (lw_get(rse, 0) == 18)):
+                                    recShackled = True
+                                    break
+                        if recShackled:
+                            continue
+                    if (chipId == CHIP_LIBERATION):
+                        recLibAbs = target._absShield
+                        recLibRel = target._relShield
+                        if (recLibAbs == None):
+                            recLibAbs = 0
+                        if (recLibRel == None):
+                            recLibRel = 0
+                        if ((recLibAbs < 100) and (recLibRel < 15)):
+                            continue
+                        recDotCost = 0
+                        recEffs = getEffects(target._id)
+                        if (recEffs != None):
+                            for rle in lw_values(recEffs):
+                                if (lw_get(rle, 0) == 13):
+                                    rlTurns = (lw_get(rle, 3) if ((count(rle) >= 4)) else 1)
+                                    recDotCost = lw_add(recDotCost, lw_mul(lw_mul(lw_get(rle, 1), 0.4), max(1, min(3, rlTurns))))
+                        recStripVal = lw_add(lw_add(150, floor(lw_mul(recLibAbs, 0.4))), lw_mul(recLibRel, 8))
+                        if ((recDotCost > 100) and (recDotCost > recStripVal)):
+                            continue
+                        value = lw_sub(recStripVal, floor(recDotCost))
+                    else:
+                        value = quickRecoveryChipValue(chipId, 'enemy')
+                        recBd = getCachedDamageBreakdown(chipId)
+                        if ((recBd != None) and (lw_get(recBd, 'direct') > 0)):
+                            recFrac = recoveryEffectiveFraction(target, lw_get(recBd, 'direct'))
+                            if (recFrac <= 0.1):
+                                continue
+                            value = floor(lw_mul(value, recFrac))
                     b5RecCd = getChipCooldown(chipId)
                     if ((b5RecCd != None) and (b5RecCd >= 2)):
                         b5RecRel = getRelativeShield(target._id)
@@ -19854,7 +20862,8 @@ def recoverRemainingTP(target):
                     else:
                         if lineOfSight(getCell(), target._cellPos):
                             if (((weaponObj._aoeType == AREA_POINT) or weaponObj._selfImmune) or (not fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell()))):
-                                value = quickRecoveryWeaponValue(currentWeapon)
+                                recWFrac = recoveryEffectiveFraction(target, lw_get(getCachedDamageBreakdown(currentWeapon), 'direct'))
+                                value = (0 if ((recWFrac <= 0.1)) else floor(lw_mul(quickRecoveryWeaponValue(currentWeapon), recWFrac)))
                                 if (value > bestValue):
                                     bestValue = value
                                     bestAction = {'type': 'weapon', 'cell': target._cellPos}
@@ -19876,6 +20885,9 @@ def recoverRemainingTP(target):
                 if ((wObj._launchType == LAUNCH_TYPE_LINE) and (not fieldMap.isOnSameLine(myPos, target._cellPos))):
                     continue
                 if (((wObj._aoeType != AREA_POINT) and (not wObj._selfImmune)) and fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)):
+                    continue
+                swapBd = getCachedDamageBreakdown(wid)
+                if ((swapBd != None) and (recoveryEffectiveFraction(target, lw_get(swapBd, 'direct')) <= 0.1)):
                     continue
                 wValue = quickRecoveryWeaponValue(wid)
                 if (wValue > bestValue):
@@ -20108,6 +21120,24 @@ def quickRecoveryWeaponValue(weaponId):
     if (bd == None):
         return 0
     return lw_add(lw_add(lw_mul(lw_get(bd, 'direct'), 2.0), lw_mul(lw_get(bd, 'dot'), 1.5)), lw_mul(lw_get(bd, 'nova'), 2.5))
+
+def recoveryEffectiveFraction(target, directEstimate):
+    if (directEstimate <= 0):
+        return 1.0
+    absS = target._absShield
+    relS = target._relShield
+    if (absS == None):
+        absS = 0
+    if (relS == None):
+        relS = 0
+    if (relS > 90):
+        relS = 90
+    if ((absS <= 0) and (relS <= 0)):
+        return 1.0
+    eff = lw_sub(lw_mul(directEstimate, (lw_sub(1, lw_div(relS, 100)))), absS)
+    if (eff < 0):
+        eff = 0
+    return lw_div(eff, directEstimate)
 
 def estimateKillProbFromSim(simResult, t):
     if ((simResult == None) or (t == None)):
@@ -20385,6 +21415,13 @@ def main():
         if executePuzzleTurn():
             return None
     if (_isBossFight and (_bossPhase == "COMBAT")):
+        if (lw_sub(getTurn(), _combatLatchTurn) <= 1):
+            flipArmy = puzzleArmyCells()
+            if ((count(flipArmy) > 0) and (nearestArmyDistFrom(getCell(), flipArmy) < 6)):
+                if puzzleEmergencyBlink(getEntity()):
+                    return None
+                if puzzleInversionEscape(getEntity()):
+                    return None
         if executeBossCombatPoke():
             return None
         if executeBossCombatPeel():

@@ -1,0 +1,386 @@
+
+class ScenarioQuickScorer {
+    _player = null
+    _target = null
+    _fieldMap = null
+    _arsenal = null
+
+    constructor(player, target, fieldMap, arsenal) {
+        this._player = player
+        this._target = target
+        this._fieldMap = fieldMap
+        this._arsenal = arsenal
+    }
+
+    quickScore(scenario) {
+        if (_isBossFight && _bossPhase == "PUZZLE") {
+            var qs = 0
+            for (var a in scenario) {
+                if (a.chip == CHIP_GRAPPLE || a.chip == CHIP_BOXING_GLOVE) qs += 2000
+                if (a.chip == CHIP_INVERSION) qs += 3000
+                if (a.type >= Action.MOVEMENT_APPROACH && a.type <= Action.MOVEMENT_PAB) qs += 500
+                if (a.type == Action.ACTION_BUFF) qs += 100
+            }
+            return qs
+        }
+
+        var score = 0
+
+        var tpEstimate = 0
+        var actionCount = 0
+        var hasOffensiveBuff = false
+        var hasDefensiveBuff = false
+        var hasMotivation = false
+        var hasHeal = false
+        var hasTeleport = false
+        var buffActionCount = 0
+        var hasCheckpoint = false
+        var finalPosition = -1
+        var weaponActions = 0
+        var chipDamageActions = 0
+        var novaChipActions = 0
+
+        var comboSignature = []
+
+        for (var action in scenario) {
+            actionCount++
+
+            if (action.type == Action.ACTION_DIRECT || action.type == Action.ACTION_DOT || action.type == Action.ACTION_DEBUFF) {
+                if (action.weaponId != -1) {
+                    weaponActions++
+                    if (mapContainsKey(this._arsenal.playerEquippedWeapons, action.weaponId)) {
+                        var weapon = this._arsenal.playerEquippedWeapons[action.weaponId]
+                        tpEstimate += weapon._cost
+
+                        if (action.weaponId == WEAPON_NEUTRINO) push(comboSignature, "NEUTRINO")
+                        if (action.weaponId == WEAPON_HEAVY_SWORD) push(comboSignature, "HEAVY_SWORD")
+                        if (action.weaponId == WEAPON_AXE) push(comboSignature, "AXE")
+                    }
+                } else if (action.chip != -1) {
+                    chipDamageActions++
+                    var chipCost = getCachedChipCost(action.chip)
+                    tpEstimate += chipCost
+
+                    if (action.chip == CHIP_GRAPPLE) push(comboSignature, "GRAPPLE")
+                    if (action.chip == CHIP_INVERSION && !_isBossFight) {
+                        chipDamageActions++
+                        score += 600
+                    }
+                    // Nova chips (ALTERATION, MUTATION) reduce enemy maxHP,
+                    // SCI-scaled. They have no role classification path
+                    // elsewhere and a plain MAG-based chipDmgEstimate
+                    // undervalues them (their value scales with SCI, not MAG).
+                    // Without explicit handling, beam-search-produced nova
+                    // scenarios get pruned before reaching the full scorer
+                    // that would credit them properly.
+                    if (isNovaChip(action.chip)) {
+                        novaChipActions++
+                    }
+                }
+            }
+            else if (action.type == Action.ACTION_BUFF) {
+                var chipCost = getCachedChipCost(action.chip)
+                tpEstimate += chipCost
+                buffActionCount++
+
+                // Support: ally-targeted casts have zero damage estimate and
+                // would be pruned before the full scorer can credit the
+                // allySupport dimension. Flat credit per ally cast keeps
+                // support scenarios in the top-K (only BUILD_SUPPORT
+                // generates these actions).
+                if (action.targetEntity != null
+                    && action.targetEntity._id != this._player._id
+                    && (this._target == null || action.targetEntity._id != this._target._id)) {
+                    score += 400
+                }
+
+                if (action.chip == CHIP_STEROID || action.chip == CHIP_WARM_UP || action.chip == CHIP_DOPING || action.chip == CHIP_PRISM || action.chip == CHIP_WIZARDRY || action.chip == CHIP_KNOWLEDGE || action.chip == CHIP_ELEVATION) {
+                    hasOffensiveBuff = true
+                    if (action.chip == CHIP_STEROID) push(comboSignature, "STEROID")
+                    if (action.chip == CHIP_PRISM) push(comboSignature, "PRISM")
+                }
+                if (action.chip == CHIP_WALL || action.chip == CHIP_FORTRESS || action.chip == CHIP_PROTEIN) {
+                    hasDefensiveBuff = true
+                }
+                if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION || action.chip == CHIP_CURE) {
+                    hasHeal = true
+                }
+                if (action.chip == CHIP_MOTIVATION) {
+                    hasMotivation = true
+                }
+            }
+            else if (action.type == Action.ACTION_TELEPORT) {
+                hasTeleport = true
+                var qsTeleChip = action.chip != null && action.chip != -1 ? action.chip : CHIP_TELEPORTATION
+                tpEstimate += getCachedChipCost(qsTeleChip)
+                finalPosition = action.targetCell
+            }
+            else if (action.type == Action.MOVEMENT_OFFENSIVE || action.type == Action.MOVEMENT_OTKO ||
+                     action.type == Action.MOVEMENT_APPROACH || action.type == Action.MOVEMENT_HNS) {
+                finalPosition = action.targetCell
+            }
+            else if (action.type == Action.ACTION_CHECKPOINT) {
+                hasCheckpoint = true
+            }
+            else if (action.type == Action.ACTION_WEAPON_SWAP) {
+                tpEstimate += 1
+            }
+        }
+
+        var str = this._player._strength
+        var mag = this._player._magic
+        var sci = this._player._science
+        var weaponDmgEstimate = 400 * (1 + str / 200.0)
+        var chipDmgEstimate = 300 * (1 + mag / 200.0)
+        var damageEstimate = weaponActions * weaponDmgEstimate + chipDamageActions * chipDmgEstimate
+
+        // Nova damage estimate (SCI-scaled). ALTERATION base ~19, MUTATION
+        // base ~17; both scale roughly +1 per 5 SCI. Cap at hpDeficit
+        // (maxHP - currHP) — nova cannot reduce maxHP below currHP, so at
+        // full enemy HP a nova chip contributes 0. Mirrors the simulator
+        // cap at scenario_simulator.lk:339-352. Treat each nova action as
+        // SCI-scaled, capped per-action by hpDeficit / max(1, novaChipActions)
+        // to avoid double-counting when multiple nova chips chain.
+        if (novaChipActions > 0) {
+            var novaBase = 19 * (1 + sci / 100.0)
+            var hpDeficit = this._target._maxHealth - this._target._currHealth
+            var perChipCap = hpDeficit / novaChipActions
+            var perChipNova = novaBase
+            if (perChipNova > perChipCap) perChipNova = perChipCap
+            if (perChipNova < 0) perChipNova = 0
+            var novaEstimate = perChipNova * novaChipActions
+            // Full scorer weighs novaEffects heavily (Tank/SCI: 400, STR/SCI:
+            // 326). Quick scorer just needs to keep nova-bearing scenarios
+            // alive through pruning, so credit at ~3x damageEstimate
+            // contribution to ensure they survive top-K selection when
+            // hpDeficit is non-trivial.
+            damageEstimate += novaEstimate * 2.5
+        }
+
+        if (tpEstimate > 0) {
+            var efficiency = damageEstimate / max(1, tpEstimate)
+            score += efficiency * 50
+        }
+        score += damageEstimate * 0.3
+
+        // Distance-gated buff stacking penalty: at d > MP + maxWR + 3 we can't
+        // possibly fire this turn, so stacking 2+ buffs burns 3+ turns of
+        // pre-combat duration before contact. Cap combined buff bonus to a
+        // single-buff value (LeekRain T2: BUFF c14 + BUFF c110 + TELE at d20
+        // burned 12 TP for 0 future damage benefit).
+        var qsBuffMult = 1.0
+        if (buffActionCount >= 2 && weaponActions + chipDamageActions == 0) {
+            var qsMaxWR = 1
+            for (var qsWid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var qsW = this._arsenal.playerEquippedWeapons[qsWid]
+                if (qsW._maxRange > qsMaxWR) qsMaxWR = qsW._maxRange
+            }
+            var qsDist = getCellDistance(this._player._cellPos, this._target._cellPos)
+            if (qsDist != null && qsDist > this._player._currMp + qsMaxWR + 3) {
+                qsBuffMult = 0.5
+            }
+        }
+        if (hasOffensiveBuff) score += 300 * qsBuffMult
+        // MOTIVATION is an economy chip, not in the offensive-buff list above
+        // (would falsely chain STEROID combo bonuses). It returns 6 TP across
+        // 3 turns at cost 4: net +2 TP, but more importantly enables 16-TP
+        // combo windows. Worth ~2 weapon shots downstream. Add chained-attack
+        // bonus when this scenario already plans to attack (setup synergy).
+        // MOTIVATION exempt from distance penalty — its value pays off over
+        // 3 turns regardless of current engagement range.
+        if (hasMotivation) {
+            score += 600
+            if (weaponActions + chipDamageActions > 0) score += 200
+        }
+        if (hasDefensiveBuff) {
+            var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+            if (hpPercent < 50) score += 400 * qsBuffMult
+            else score += 150 * qsBuffMult
+        }
+        if (hasHeal) {
+            var hpPercent = (this._player._currHealth * 100) / this._player._maxHealth
+            if (hpPercent < 40) score += 500
+            else if (hpPercent < 60) score += 250
+            else score += 50
+        }
+
+        var comboBonus = this.detectCombo(comboSignature)
+        score += comboBonus
+
+        if (hasCheckpoint) {
+            // Checkpoint bonus reflects "this scenario passed a strategic
+            // milestone" — but defensive checkpoints with no attack and HP
+            // not critical were dominating offensive options at HP 50-70%
+            // (LeekRain T6: defensive checkpoint scored +1500 over a viable
+            // press at HP 55%/d10/mp3). Full bonus for attack-bearing or
+            // critical-HP checkpoints, half for stand-alone defensive prep.
+            var hasAttack = (weaponActions + chipDamageActions > 0)
+            var qsHpPct = (this._player._currHealth * 100) / this._player._maxHealth
+            if (hasAttack || qsHpPct < 40) {
+                score += 1500
+            } else {
+                score += 500
+            }
+        }
+
+        if (finalPosition != -1 && mapContainsKey(this._fieldMap.damageMap, finalPosition)) {
+            var cellObj = this._fieldMap.damageMap[finalPosition]
+            if (cellObj._isOTKOCell) {
+                score += 3000
+            } else {
+                // B2: Buff-only scenarios were getting credited the full
+                // _totalDamage * 0.5 finalPosition bonus despite not actually
+                // firing those weapons. Combined with active MP-burn from
+                // poison kiters (koe2), this trapped the bot in buff-loops:
+                // it kept picking "land on a damage cell" plans that never
+                // fired because the next turn MP-burn re-pinned us.
+                //   - No attack actions:        50% of bonus
+                //   - No attack + MP-burned:    10% of bonus (effectively 0)
+                //   - Has attack:               full bonus
+                var positionBonus = cellObj._totalDamage * 0.5
+                var hasAttackAction = (weaponActions + chipDamageActions) > 0
+                if (!hasAttackAction) {
+                    var mpBurned = (this._player._currMp < this._player._maxMp)
+                    positionBonus *= (mpBurned ? 0.1 : 0.5)
+                }
+                score += positionBonus
+            }
+        }
+
+        if (hasTeleport) {
+            var enemyHP = this._target._currHealth
+            var enemyMaxHP = this._target._maxHealth
+            var enemyHPPercent = (enemyHP * 100) / enemyMaxHP
+            if (enemyHPPercent < 40) {
+                score += 800
+            }
+        }
+
+        var actionDensity = min(actionCount, 5) * 20
+        score += actionDensity
+
+        // Boost damage scenarios under time pressure
+        if (__timePressure && damageEstimate > 0) {
+            score += damageEstimate * 0.5
+        }
+
+        return score
+    }
+
+    getTPWeight() {
+        var str = this._player._strength
+        var mag = this._player._magic
+        var agi = this._player._agility
+
+        if (str > mag && str > agi) {
+            return 40 + (str / 100.0)
+        }
+        else if (mag > str && mag > agi) {
+            return 25 + (mag / 150.0)
+        }
+        else if (agi > str && agi > mag) {
+            return 35 + (agi / 120.0)
+        }
+
+        return 30
+    }
+
+    detectCombo(signature) {
+        var sigStr = ""
+        for (var i = 0; i < count(signature); i++) {
+            sigStr += signature[i] + "|"
+        }
+
+        if (this.contains(sigStr, "GRAPPLE") && this.contains(sigStr, "HEAVY_SWORD")) {
+            return 1500
+        }
+
+        // Grapple + Axe: classic close-and-burst combo. Grapple pulls the
+        // enemy adjacent, then Axe×2 dumps the full TP burst at melee. Same
+        // template as the Heavy Sword combo, just a different finisher.
+        if (this.contains(sigStr, "GRAPPLE") && this.contains(sigStr, "AXE")) {
+            return 1500
+        }
+
+        var neutrinoCount = 0
+        for (var s in signature) {
+            if (s == "NEUTRINO") neutrinoCount++
+        }
+        if (neutrinoCount >= 2) {
+            return 1200
+        }
+
+        if (this.contains(sigStr, "STEROID") && count(signature) >= 4) {
+            return 1000
+        }
+
+        return 0
+    }
+
+    contains(str, substr) {
+        return indexOf(str, substr) != -1
+    }
+
+    static FAMILY_OFFENSIVE = "OFFENSIVE"
+    static FAMILY_DEFENSIVE = "DEFENSIVE"
+    static FAMILY_COMBO = "COMBO"
+    static FAMILY_UTILITY = "UTILITY"
+    static FAMILY_BULB = "BULB"
+
+    // True only when the scenario fires a chip that restores HP. Used by
+    // the MAG-opponent defensive-floor injection in unified_strategy to
+    // prefer real heals over cleanse/buff entries also classified DEFENSIVE.
+    scenarioHasHealAction(scenario) {
+        for (var action in scenario) {
+            if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION ||
+                action.chip == CHIP_CURE || action.chip == CHIP_VACCINE) {
+                return true
+            }
+        }
+        return false
+    }
+
+    classifyFamily(scenario) {
+        var hasAttack = false
+        var hasBuff = false
+        var hasHeal = false
+        var hasTeleport = false
+        var hasGrapple = false
+        var hasPoison = false
+        var hasHide = false
+        var hasFlee = false
+
+        for (var action in scenario) {
+            if (action.type == Action.ACTION_DIRECT) hasAttack = true
+            if (action.type == Action.ACTION_DOT) { hasAttack = true; hasPoison = true }
+            if (action.type == Action.ACTION_BUFF) hasBuff = true
+            if (action.type == Action.ACTION_TELEPORT) hasTeleport = true
+            if (action.type == Action.MOVEMENT_HNS) hasHide = true
+            if (action.type == Action.MOVEMENT_FLEE) hasFlee = true
+            if (action.chip == CHIP_GRAPPLE) hasGrapple = true
+            // Heal = chips that actually restore HP. Antidote is cleanse-only
+            // (removes poison) and does NOT belong here — classified as
+            // DEFENSIVE via hasBuff path instead. Conflating them in the
+            // MAG-opponent injection floor caused F52582973 T5 to promote
+            // antidote+manumission over cure when both were available.
+            if (action.chip == CHIP_REMISSION || action.chip == CHIP_REGENERATION ||
+                action.chip == CHIP_CURE || action.chip == CHIP_VACCINE) hasHeal = true
+            if (action.chip != -1 && isPoisonChip(action.chip)) hasPoison = true
+        }
+
+        if (hasGrapple && hasAttack) return ScenarioQuickScorer.FAMILY_COMBO
+        if (hasBuff && hasPoison) return ScenarioQuickScorer.FAMILY_COMBO
+        if (hasTeleport && hasAttack) return ScenarioQuickScorer.FAMILY_COMBO
+
+        if (hasHeal && !hasAttack) return ScenarioQuickScorer.FAMILY_DEFENSIVE
+        if (hasFlee || hasHide) return ScenarioQuickScorer.FAMILY_DEFENSIVE
+
+        if (hasTeleport && !hasAttack) return ScenarioQuickScorer.FAMILY_UTILITY
+
+        if (hasAttack) return ScenarioQuickScorer.FAMILY_OFFENSIVE
+
+        if (hasBuff) return ScenarioQuickScorer.FAMILY_DEFENSIVE
+
+        return ScenarioQuickScorer.FAMILY_OFFENSIVE
+    }
+}

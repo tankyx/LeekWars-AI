@@ -1,0 +1,65 @@
+// V9 every-turn rollout re-rank (Path A, docs/v9_scope.md M2) — re-ranks the
+// pipeline's retained top-5 candidates by adding a simulated ENEMY response
+// term (enemy_sim.lk, M1 model) to each candidate's raw full-scorer score.
+// Unlike rollout_veto.lk (catastrophe-only, rare), this runs every turn the
+// pool has 2+ candidates — it is what gives GA v2 per-turn signal on the
+// enemy-response weights. The pipeline's own top-1 stays the default: the
+// caller overrides only when the adjusted winner beats the native pick's
+// adjusted score by more than _v9RerankThreshold. V8 itself is never
+// modified — this module is V9-only.
+//
+// Cost: K (=5, capped by the retention in unified_strategy.lk) × one cheap
+// simulateEnemyResponse call — no new full sims; every candidate's simResult
+// already exists from the pipeline. Gated at _ops86 by the caller.
+
+global _v9RerankEnabled = true
+global _v9RerankLog = true
+global _v9RerankThreshold = 400
+
+include('enemy_sim.lk')
+include('eval.lk')
+
+// Re-rank topCandidates ([['scenario','simResult','score'], ...] sorted desc
+// by raw score) against the predicted enemy response to each end state.
+// Returns [adjustedBest, nativeBest, maxGap]:
+//   adjustedBest — candidate with the highest adjusted score
+//   nativeBest   — top-1 by raw score (topCandidates[0])
+//   maxGap       — adjustedBest.adjusted − nativeBest.adjusted (0 when the
+//                  adjusted winner IS the native pick)
+// Each candidate map is annotated with its 'adjusted' score (the maps are
+// owned by the retention pass — safe to annotate).
+function rolloutRerank(topCandidates, target, arsenal, fieldMapObj) {
+    if (topCandidates == null || count(topCandidates) == 0) return [null, null, 0]
+    if (target == null) return [null, null, 0]
+
+    var nativeBest = null
+    var nativeAdjusted = 0
+    var adjustedBest = null
+    var bestAdjusted = -999999999
+
+    for (var i = 0; i < count(topCandidates); i++) {
+        var cand = topCandidates[i]
+        var simResult = cand['simResult']
+        var endCell = simResult.finalPosition
+        if (endCell == null || endCell == -1) endCell = getCell()
+        var endHP = getLife() + simResult.hpGained
+        var enemyEst = simulateEnemyResponse(target._id, arsenal, endCell, endHP)
+        var enemyTerm = -(EW_RR_TAKEN * enemyEst['damage']) - (EW_RR_HEAL * enemyEst['heals'])
+        if (enemyEst['weDied']) enemyTerm -= EW_RR_DEATH
+        var adjusted = cand['score'] + enemyTerm
+        cand['adjusted'] = adjusted
+        if (i == 0) {
+            nativeBest = cand
+            nativeAdjusted = adjusted
+        }
+        if (adjusted > bestAdjusted) {
+            bestAdjusted = adjusted
+            adjustedBest = cand
+        }
+    }
+
+    var maxGap = bestAdjusted - nativeAdjusted
+    var samePick = (adjustedBest == nativeBest)
+    if (samePick) maxGap = 0
+    return [adjustedBest, nativeBest, maxGap, samePick]
+}

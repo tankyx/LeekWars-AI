@@ -185,6 +185,18 @@ function main() {
         if (executePuzzleTurn()) return
     }
     if (_isBossFight && _bossPhase == "COMBAT") {
+        // Flip-time escape: the solver finishes the puzzle deep in the castle,
+        // adjacent to the army, exactly when Divine Protection drops and it
+        // frees up to hunt (fights 53011079/53013437/53019695: KG died T15/
+        // T17/T19 — one or two turns after every graal death). First COMBAT
+        // turn inside the army's reach: get out BEFORE anything else.
+        if (getTurn() - _combatLatchTurn <= 1) {
+            var flipArmy = puzzleArmyCells()
+            if (count(flipArmy) > 0 && nearestArmyDistFrom(getCell(), flipArmy) < 6) {
+                if (puzzleEmergencyBlink(getEntity())) { return }
+                if (puzzleInversionEscape(getEntity())) { return }
+            }
+        }
         if (executeBossCombatPoke()) { return }
         if (executeBossCombatPeel()) { return }
     }

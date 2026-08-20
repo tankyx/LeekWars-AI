@@ -1237,7 +1237,55 @@ function recoverRemainingTP(target) {
                 if (dist < chipObj._minRange || dist > chipObj._maxRange) continue
                 if (!lineOfSight(getCell(), targetCell)) continue
                 if (chipObj._aoeType != AREA_POINT && !chipObj._selfImmune && fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())) continue
-                value = quickRecoveryChipValue(chipId, 'enemy')
+                // Recovery-denial gate: shackling an already-shackled target is
+                // filler waste (Margaret's 4x slow_down turns came through THIS
+                // pass after the beam finished — 53256942 vs WiseMan).
+                // Read effects LIVE: game_entity._effectsActive is stale/null
+                // on freshly summoned entities (metallic_bulb spam, 53257877).
+                if (chipId == CHIP_SLOW_DOWN || chipId == CHIP_TRANQUILIZER ||
+                    chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN) {
+                    var recShackled = false
+                    var recTargetEffs = getEffects(target._id)
+                    if (recTargetEffs != null) {
+                        for (var rse in recTargetEffs) {
+                            if (rse[0] == 17 || rse[0] == 18) { recShackled = true; break }
+                        }
+                    }
+                    if (recShackled) continue
+                }
+                if (chipId == CHIP_LIBERATION) {
+                    // Recovery strip: shield-scaled value, but ALSO guard the
+                    // friendly fire — reduceEffects erases 40% of our own
+                    // DoTs on the target (matters for venom/toxin kits).
+                    var recLibAbs = target._absShield
+                    var recLibRel = target._relShield
+                    if (recLibAbs == null) recLibAbs = 0
+                    if (recLibRel == null) recLibRel = 0
+                    if (recLibAbs < 100 && recLibRel < 15) continue
+                    var recDotCost = 0
+                    var recEffs = getEffects(target._id)
+                    if (recEffs != null) {
+                        for (var rle in recEffs) {
+                            if (rle[0] == 13) {
+                                var rlTurns = (count(rle) >= 4) ? rle[3] : 1
+                                recDotCost += rle[1] * 0.4 * max(1, min(3, rlTurns))
+                            }
+                        }
+                    }
+                    var recStripVal = 150 + floor(recLibAbs * 0.4) + recLibRel * 8
+                    if (recDotCost > 100 && recDotCost > recStripVal) continue
+                    value = recStripVal - floor(recDotCost)
+                } else {
+                    value = quickRecoveryChipValue(chipId, 'enemy')
+                    // Shield-dampen direct chips (plasma/lightning into a
+                    // fresh stack is a burned cooldown for single digits).
+                    var recBd = getCachedDamageBreakdown(chipId)
+                    if (recBd != null && recBd['direct'] > 0) {
+                        var recFrac = recoveryEffectiveFraction(target, recBd['direct'])
+                        if (recFrac <= 0.1) continue
+                        value = floor(value * recFrac)
+                    }
+                }
                 // B5: don't burn a cooldown damage chip as end-of-turn filler
                 // into a shield stack that expires this turn — the chip would
                 // sit on CD through next turn's strike window while >=25% of
@@ -1271,7 +1319,8 @@ function recoverRemainingTP(target) {
                         // Line weapon not aligned — skip
                     } else if (lineOfSight(getCell(), target._cellPos)) {
                         if (weaponObj._aoeType == AREA_POINT || weaponObj._selfImmune || !fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell())) {
-                            var value = quickRecoveryWeaponValue(currentWeapon)
+                            var recWFrac = recoveryEffectiveFraction(target, getCachedDamageBreakdown(currentWeapon)['direct'])
+                            var value = (recWFrac <= 0.1) ? 0 : floor(quickRecoveryWeaponValue(currentWeapon) * recWFrac)
                             if (value > bestValue) {
                                 bestValue = value
                                 bestAction = ['type': 'weapon', 'cell': target._cellPos]
@@ -1295,6 +1344,8 @@ function recoverRemainingTP(target) {
                 if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
                 if (wObj._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(myPos, target._cellPos)) continue
                 if (wObj._aoeType != AREA_POINT && !wObj._selfImmune && fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)) continue
+                var swapBd = getCachedDamageBreakdown(wid)
+                if (swapBd != null && recoveryEffectiveFraction(target, swapBd['direct']) <= 0.1) continue
                 var wValue = quickRecoveryWeaponValue(wid)
                 if (wValue > bestValue) {
                     bestValue = wValue
@@ -1569,10 +1620,27 @@ function quickRecoveryChipValue(chipId, mode) {
     return value
 }
 
-function quickRecoveryWeaponValue(weaponId) {
-    var bd = getCachedDamageBreakdown(weaponId)
+function quickRecoveryWeaponValue(weaponId) {    var bd = getCachedDamageBreakdown(weaponId)
     if (bd == null) return 0
     return bd['direct'] * 2.0 + bd['dot'] * 1.5 + bd['nova'] * 2.5
+}
+
+// Shield-awareness for recovery fire: the beam scores post-shield damage, but
+// the recovery pass used to fire weapons/chips into fresh stacks for 0-3
+// damage a shot (Ada vs Reveillon 53257330, Margaret vs Portura2 53256968).
+// Returns the fraction of direct damage expected to land (0 when a fresh
+// stack absorbs everything, 1 when unshielded).
+function recoveryEffectiveFraction(target, directEstimate) {
+    if (directEstimate <= 0) return 1.0
+    var absS = target._absShield
+    var relS = target._relShield
+    if (absS == null) absS = 0
+    if (relS == null) relS = 0
+    if (relS > 90) relS = 90
+    if (absS <= 0 && relS <= 0) return 1.0
+    var eff = directEstimate * (1 - relS / 100) - absS
+    if (eff < 0) eff = 0
+    return eff / directEstimate
 }
 
 // Phase 1.3: lightweight kill-probability estimate from a simResult. Mirrors

@@ -1,0 +1,22 @@
+{
+  "run_id": "20260313_151345",
+  "build_type": "MAGIC",
+  "leek_name": "MargaretHamilton",
+  "train_opponents": [
+    "smart_str",
+    "smart_mag",
+    "smart_agi"
+  ],
+  "val_opponents": [
+    "dummy_str",
+    "dummy_mag"
+  ],
+  "population_size": 20,
+  "fights_per_opponent": 10,
+  "max_generations": 30,
+  "mutation_rate": 0.15,
+  "mutation_strength": 0.2,
+  "elitism": 3,
+  "tournament_size": 4,
+  "parallel_workers": 12
+}

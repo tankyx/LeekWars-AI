@@ -1,0 +1,111 @@
+{
+  "generation": 0,
+  "mode": "tunables",
+  "build_type": "TUNABLES",
+  "leek_name": "EdsgerDijkstra",
+  "leek_names": [
+    "EdsgerDijkstra"
+  ],
+  "best_fitness": 0.6759635416666666,
+  "best_val_fitness": 0.0,
+  "best_genome": {
+    "build_type": "TUNABLES",
+    "weights": {
+      "killProbCoef": 4.0,
+      "deathPenalty": 8000,
+      "dyingSoonPenalty": 3000,
+      "survivalMultLow": 50.0,
+      "survivalMultMid": 25.0,
+      "survivalMultHigh": 10.0,
+      "urgencyCap": 7.5,
+      "b5HoldPenalty": 350
+    }
+  },
+  "population": [
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 4.0,
+          "deathPenalty": 8000,
+          "dyingSoonPenalty": 3000,
+          "survivalMultLow": 50.0,
+          "survivalMultMid": 25.0,
+          "survivalMultHigh": 10.0,
+          "urgencyCap": 7.5,
+          "b5HoldPenalty": 350
+        }
+      },
+      "fitness": 0.6759635416666666
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 4.0,
+          "deathPenalty": 8000,
+          "dyingSoonPenalty": 5041,
+          "survivalMultLow": 50.0,
+          "survivalMultMid": 25.0,
+          "survivalMultHigh": 10.0,
+          "urgencyCap": 7.5,
+          "b5HoldPenalty": 441
+        }
+      },
+      "fitness": 0.6759635416666666
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 4.0,
+          "deathPenalty": 14359,
+          "dyingSoonPenalty": 3000,
+          "survivalMultLow": 32.86,
+          "survivalMultMid": 17.16,
+          "survivalMultHigh": 10.0,
+          "urgencyCap": 7.5,
+          "b5HoldPenalty": 350
+        }
+      },
+      "fitness": 0.0
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 2.82,
+          "deathPenalty": 8000,
+          "dyingSoonPenalty": 1652,
+          "survivalMultLow": 50.0,
+          "survivalMultMid": 25.82,
+          "survivalMultHigh": 10.0,
+          "urgencyCap": 7.5,
+          "b5HoldPenalty": 350
+        }
+      },
+      "fitness": 0.0
+    }
+  ],
+  "history": [
+    {
+      "generation": 1,
+      "best": 0.6759635416666666,
+      "avg": 0.3379817708333333,
+      "worst": 0.0,
+      "elapsed_s": 39.3
+    }
+  ],
+  "config": {
+    "population_size": 4,
+    "fights_per_opponent": 3,
+    "mutation_rate": 0.15,
+    "mutation_strength": 0.2,
+    "elitism": 3,
+    "tournament_size": 4,
+    "train_opponents": [
+      "v8_mage_mid"
+    ],
+    "val_opponents": []
+  }
+}

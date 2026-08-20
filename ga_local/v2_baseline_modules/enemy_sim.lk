@@ -1,0 +1,84 @@
+// V9 enemy response simulation — estimates what the enemy does TO US on their
+// next turn, driven by the M1 model (enemy_model.lk). Weapon damage uses their
+// real equipped weapons + strength through the Arsenal's damage breakdown.
+
+include('enemy_model.lk')
+
+// Best single-use weapon damage the enemy can deal at `dist` (0 if nothing
+// reaches). theirStr is live; the Arsenal carries every weapon's effects.
+function enemyBestWeaponDamage(enemyId, arsenal, dist) {
+    var theirStr = getStrength(enemyId)
+    if (theirStr == null) theirStr = 200
+    var best = 0
+    var wids = getWeapons(enemyId)
+    if (wids == null) return 0
+    for (var wid in wids) {
+        var minR = getWeaponMinRange(wid)
+        var maxR = getWeaponMaxRange(wid)
+        if (minR == null || maxR == null) continue
+        if (dist < minR || dist > maxR) continue
+        if (!mapContainsKey(arsenal.weaponsList, wid)) continue
+        var bd = arsenal.getDamageBreakdown(theirStr, 0, 0, 0, wid)
+        if (bd != null && bd['direct'] > best) best = bd['direct']
+    }
+    return best
+}
+
+// Estimate the enemy's next-turn pressure after our candidate turn ends at
+// ourNewCell with ourNewHP. Returns ['damage','heals','weDied'].
+// Weapon damage counts their FULL TP pool (best reaching weapon × affordable
+// swings), not a flat 2 — the flat-2 estimate was too weak to ever trigger
+// the veto (zero V9_VETO markers across the whole local corpus).
+function simulateEnemyResponse(enemyId, arsenal, ourNewCell, ourNewHP) {
+    var enemyCell = getCell(enemyId)
+    var dist = (enemyCell != null) ? getCellDistance(ourNewCell, enemyCell) : 99
+    if (dist == null) dist = 99
+    var preds = predictEnemyTurn(enemyId, getTurn() + 1, dist, getTP(enemyId), getMP(enemyId))
+    var top = preds[0][0]
+    var dmg = 0
+    var heals = 0
+    for (var cls in top) {
+        if (cls == 'weapon') {
+            var theirStr = getStrength(enemyId)
+            if (theirStr == null) theirStr = 200
+            var theirTP = getTP(enemyId)
+            if (theirTP == null) theirTP = 10
+            var bestDmg = 0
+            var bestCost = 1
+            var bestUses = 1
+            var wids = getWeapons(enemyId)
+            if (wids != null) {
+                for (var wid in wids) {
+                    var minR = getWeaponMinRange(wid)
+                    var maxR = getWeaponMaxRange(wid)
+                    if (minR == null || maxR == null) continue
+                    if (dist < minR || dist > maxR) continue
+                    if (!mapContainsKey(arsenal.weaponsList, wid)) continue
+                    var bd = arsenal.getDamageBreakdown(theirStr, 0, 0, 0, wid)
+                    if (bd == null) continue
+                    var wCost = getWeaponCost(wid)
+                    if (wCost == null || wCost < 1) wCost = 1
+                    var wUses = getWeaponMaxUses(wid)
+                    if (wUses == null || wUses < 1) wUses = 1
+                    if (bd['direct'] > bestDmg) {
+                        bestDmg = bd['direct']
+                        bestCost = wCost
+                        bestUses = wUses
+                    }
+                }
+            }
+            if (bestDmg > 0) {
+                var swings = floor(theirTP / bestCost)
+                if (swings > bestUses) swings = bestUses
+                dmg += bestDmg * swings
+            }
+        } else if (cls == 'poison') {
+            // their poison lands regardless of our position; ~2 casts' ticks
+            dmg += 300
+        } else if (cls == 'buff' || cls == 'heal') {
+            heals += 250
+        }
+        // 'summon'/'move'/'deny': no direct damage next turn
+    }
+    return ['damage': dmg, 'heals': heals, 'weDied': dmg >= ourNewHP]
+}

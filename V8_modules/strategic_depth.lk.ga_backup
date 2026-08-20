@@ -1,0 +1,691 @@
+
+include('weight_profiles.lk')
+
+global COUNTER_MULTS = [
+    'vs_kiter_burst': 80,
+    'vs_kiter_heal': 129,
+    'vs_kiter_kite': 56,
+    'vs_kiter_dist': 137,
+    'vs_kiter_dot': 104,
+    'vs_burst_shield': 110,
+    'vs_burst_heal': 142,
+    'vs_burst_threat': 137,
+    'vs_burst_burst': 80,
+    'vs_tank_nova': 193,
+    'vs_tank_denial': 120,
+    'vs_tank_dot': 128,
+    'vs_reflect_on_burst': 39,
+    'vs_reflect_on_shield': 118,
+    'vs_reflect_on_heal': 117,
+    'vs_reflect_off_burst': 128,
+    'cd_shield_burst': 116,
+    'cd_shield_otko': 97,
+    'cd_heal_burst': 111,
+]
+
+global __enemyChipUsage = [:]
+global __currentTurn = -1
+
+// Audit item 6: per-key bounds on adapted-weight drift relative to the base
+// profile. [lo, hi] multipliers — the final clamp in adaptWeightsToSituation
+// enforces these regardless of how many adaptation systems stacked.
+global WEIGHT_DRIFT_BOUNDS = [
+    'burstDamage': [0.5, 1.7],
+    'shieldValue': [0.3, 1.7],
+    'healValue': [0.4, 1.6],
+    'dotEffects': [0.5, 1.8],
+    'poisonStacks': [0.5, 1.8],
+    'denialValue': [0.5, 1.9],
+    'kiteDistance': [0.35, 1.8],
+    'threatReduction': [0.5, 1.7],
+    'novaEffects': [0.6, 1.9],
+    'damageReturn': [0.0, 1.6],
+    'otkoBonus': [0.6, 1.6]
+]
+
+class ChipCooldownInfo {
+    chipId = -1
+    lastUsedTurn = -1
+    cooldownDuration = 0
+    availableOnTurn = -1
+    isAvailable = false
+    confidence = 1.0
+}
+
+function initializeCooldownTracker() {
+    __currentTurn = getTurn()
+
+    var enemies = getAliveEnemies()
+    for (var enemyId in enemies) {
+        if (!mapContainsKey(__enemyChipUsage, enemyId)) {
+            __enemyChipUsage[enemyId] = [:]
+        }
+    }
+}
+
+function trackEnemyChipUsage(enemyId, chipId) {
+    var currentTurn = getTurn()
+
+    if (!mapContainsKey(__enemyChipUsage, enemyId)) {
+        __enemyChipUsage[enemyId] = [:]
+    }
+
+    __enemyChipUsage[enemyId][chipId] = currentTurn
+
+    var chipName = "chip_" + chipId
+}
+
+function predictChipAvailability(enemyId, chipId) {
+    var info = new ChipCooldownInfo()
+    info.chipId = chipId
+
+    var currentTurn = getTurn()
+
+    if (!mapContainsKey(__enemyChipUsage, enemyId)) {
+        info.isAvailable = true
+        info.confidence = 0.3
+        return info
+    }
+
+    var chipHistory = __enemyChipUsage[enemyId]
+    if (!mapContainsKey(chipHistory, chipId)) {
+        info.isAvailable = true
+        info.confidence = 0.5
+        return info
+    }
+
+    var lastUsed = chipHistory[chipId]
+    info.lastUsedTurn = lastUsed
+
+    var cooldown = estimateChipCooldown(chipId)
+    info.cooldownDuration = cooldown
+    info.availableOnTurn = lastUsed + cooldown + 1
+
+    var turnsSinceUse = currentTurn - lastUsed
+    info.isAvailable = (turnsSinceUse > cooldown)
+    info.confidence = 0.9
+
+    return info
+}
+
+function estimateChipCooldown(chipId) {
+
+    if (chipId == 58 || chipId == 59 || chipId == 60) return 3
+    if (chipId == 66 || chipId == 67) return 3
+    if (chipId == 49) return 3
+
+    if (chipId == 70) return 1
+
+    if (chipId == 76) return 2
+
+    return 2
+}
+
+function getKeyChipPredictions(enemyId) {
+    var predictions = [:]
+
+    var keyChips = [
+        58,
+        59,
+        49,
+        66,
+        67,
+        70,
+        76
+    ]
+
+    for (var chipId in keyChips) {
+        var pred = predictChipAvailability(enemyId, chipId)
+        predictions[chipId] = pred
+    }
+
+    return predictions
+}
+
+function isEnemyShieldAvailable(enemyId) {
+    var fortress = predictChipAvailability(enemyId, 58)
+    var wall = predictChipAvailability(enemyId, 59)
+
+    return fortress.isAvailable || wall.isAvailable
+}
+
+function isEnemyAntidoteAvailable(enemyId) {
+    var antidote = predictChipAvailability(enemyId, 49)
+    return antidote.isAvailable
+}
+
+function adaptWeightsToSituation(baseWeights, player, enemies, fieldMap) {
+    var adapted = [:]
+
+    for (var key in mapKeys(baseWeights)) {
+        adapted[key] = baseWeights[key]
+    }
+
+    var currentTurn = getTurn()
+    var enemyCount = count(mapKeys(enemies))
+
+    if (enemyCount >= 3) {
+        adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.5)
+
+        adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 0.9)
+
+    }
+    else if (enemyCount == 2) {
+        adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.2)
+
+    }
+
+    if (currentTurn <= 3) {
+        adapted['tpEfficiency'] = floor(adapted['tpEfficiency'] * 1.5)
+
+    }
+
+    var enemies3 = mapKeys(enemies)
+    for (var eid3 in enemies3) {
+        if (isDead(eid3)) continue
+        var obs = getEnemyObservation(eid3)
+        if (obs == null) continue
+        var turnsObs = obs['turnsObserved']
+        if (turnsObs < 3) continue  // was 5 — faster adaptation
+
+        if (obs['hpTrend'] > 20) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.3)
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.5)
+            }
+        }
+
+        if (obs['timesShielded'] == 0) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.2)
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * 0.8)
+        }
+        break
+    }
+
+    // Audit item 4: primary enemy for weight adaptation was first-alive in
+    // map iteration order — near-arbitrary in team fights (adaptations tuned
+    // against whoever the map happened to list first). Rank by proximity-
+    // discounted threat: the enemy most able to hurt us soon is the one the
+    // counter-weights should be tuned against.
+    var primaryEnemy = null
+    var primaryProfile = null
+    var primaryRank = -1
+    var enemies4 = mapKeys(enemies)
+    for (var eid in enemies4) {
+        if (isDead(eid)) { continue }
+        var candEnemy = enemies[eid]
+        if (candEnemy == null) { continue }
+        var candProfile = getEnemyProfile(eid)
+        var candThreat = 500
+        if (candProfile != null && candProfile['maxBurstDamage'] != null
+            && candProfile['maxBurstDamage'] > 0) {
+            candThreat = candProfile['maxBurstDamage']
+        }
+        var candDist = getCellDistance(player._cellPos, candEnemy._cellPos)
+        if (candDist == null) candDist = 20
+        var candRank = candThreat / (1.0 + candDist / 6.0)
+        if (candRank > primaryRank) {
+            primaryRank = candRank
+            primaryEnemy = candEnemy
+            primaryProfile = candProfile
+        }
+    }
+
+    if (primaryProfile != null) {
+        if (primaryProfile['isKiter'] && primaryProfile['hasPoison']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_kiter_burst'] / 100)
+            adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_kiter_heal'] / 100)
+            if (mapContainsKey(adapted, 'kiteDistance')) {
+                adapted['kiteDistance'] = floor(adapted['kiteDistance'] * COUNTER_MULTS['vs_kiter_kite'] / 100)
+            }
+            adapted['distanceToTarget'] = floor(adapted['distanceToTarget'] * COUNTER_MULTS['vs_kiter_dist'] / 100)
+            if (!primaryProfile['hasAntidote'] && mapContainsKey(adapted, 'dotEffects')) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * COUNTER_MULTS['vs_kiter_dot'] / 100)
+            }
+        }
+
+        // Rush-mage sharpening: when a rush_mage engagement plan is locked on
+        // the primary enemy, the fight is a pure DPT-vs-poison race (trace
+        // F seed-11: ED lost with the enemy at 1356 HP — one turn short).
+        // Every point of burst matters more than sustain: heals barely dent
+        // 1400/turn poison ticks and shields don't block them at all.
+        if (primaryEnemy != null && mapContainsKey(__engagementPlan, primaryEnemy._id)
+            && __engagementPlan[primaryEnemy._id]['mode'] == 'rush_mage') {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.3)
+            adapted['healValue'] = floor(adapted['healValue'] * 0.6)
+            // Poison bypasses shields and the mage deals ~0 direct damage, so
+            // every TP on fortress/mirror/thorn is a wasted weapon shot
+            // (~400 dmg each) in a race lost by ~1 turn. Zero them out.
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * 0.4)
+            if (mapContainsKey(adapted, 'damageReturn')) {
+                adapted['damageReturn'] = 0
+            }
+        }
+
+        if (primaryProfile['isBurstBuild']) {
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * COUNTER_MULTS['vs_burst_shield'] / 100)
+            adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_burst_heal'] / 100)
+            adapted['threatReduction'] = floor(adapted['threatReduction'] * COUNTER_MULTS['vs_burst_threat'] / 100)
+            if (!primaryProfile['hasShield']) {
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_burst_burst'] / 100)
+            }
+        }
+
+        // B3: MP denial as survival tempo. For TANK_SCI players facing a build
+        // that must CLOSE to kill (burst or melee lifesteal bruiser), every MP
+        // stripped is a turn-fraction of distance preserved — worth avoided
+        // incoming damage, not just the generic denial DPT credit. Weight
+        // consumed by the scorer's mpDenialTempo dimension (0 = off elsewhere).
+        // NOT applied to MAGIC: local matrix showed MH vs v8_dijkstra drop
+        // 38→33/40 (replicated) when shackle credit displaced poison scenarios
+        // — magic already wins the burst matchup through the poison race.
+        if (__playerBuildType == BUILD_TANK_SCI
+            && (primaryProfile['isBurstBuild'] || primaryProfile['hasLifestealThreat'])) {
+            adapted['mpDenialTempo'] = 100
+        }
+
+        if (primaryProfile['isTank']) {
+            if (mapContainsKey(adapted, 'novaEffects')) {
+                adapted['novaEffects'] = floor(adapted['novaEffects'] * COUNTER_MULTS['vs_tank_nova'] / 100)
+            }
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * COUNTER_MULTS['vs_tank_denial'] / 100)
+            }
+            if (mapContainsKey(adapted, 'dotEffects') && adapted['dotEffects'] > 0) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * COUNTER_MULTS['vs_tank_dot'] / 100)
+            }
+        }
+
+        // Anti-mage close-distance: vs high-magic opponents (poison mages) we
+        // can't outheal sustained ticks, so push to close range and burn down
+        // the source. Loss-log evidence: 5/24 KurtGodel kills came from poison
+        // ticks while kiting at long range. ONLY applies to non-magic players —
+        // magic builds (MargaretHamilton) win mirror matches by kiting.
+        if (primaryEnemy != null && primaryEnemy._magic > 400 &&
+            __playerBuildType != BUILD_MAGIC && __playerBuildType != BUILD_HYBRID) {
+            if (mapContainsKey(adapted, 'kiteDistance')) {
+                // Invert kite preference (negative value rewards closing).
+                adapted['kiteDistance'] = floor(adapted['kiteDistance'] - 200)
+            }
+            if (mapContainsKey(adapted, 'distanceToTarget')) {
+                adapted['distanceToTarget'] = floor(adapted['distanceToTarget'] - 30)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.25)
+            // Heals can't outpace ticks; don't waste TP on them.
+            adapted['healValue'] = floor(adapted['healValue'] * 0.75)
+
+            // Poison-race commit: when the enemy has Antidote + poison chips + high
+            // RES (e.g. MangeMonAsperge: MAG=590, RES=350, Plague+Arsenic+Toxin),
+            // we're in an unwinnable attrition race. Reflect chips are worthless
+            // (poison bypasses physical reflect), shields don't stop ticks, and
+            // sustain just delays the inevitable. Hard-commit to burst blitz.
+            // Loss-log: EdsgerDijkstra vs MangeMonAsperge — 2W-5L, wins only at
+            // 4-turn KO, losses at 4-9 turns once poison stacks.
+            var enemyRes = primaryEnemy._resistance
+            if (primaryProfile['hasPoison'] && primaryProfile['hasAntidote'] && enemyRes >= 300) {
+                if (mapContainsKey(adapted, 'damageReturn')) {
+                    adapted['damageReturn'] = floor(adapted['damageReturn'] * 0.25)
+                }
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.35)
+                adapted['shieldValue'] = floor(adapted['shieldValue'] * 0.4)
+                adapted['healValue'] = floor(adapted['healValue'] * 0.6)
+            }
+        }
+
+        // Poison-overwhelm: 3+ stacked poisons whose total tick > 12% maxHP/turn
+        // means we're losing the attrition race even if we kill the source in
+        // 2-3 turns. Boost shield/heal weights so we survive the queued ticks,
+        // and boost antidote/liberation chip valuations via dotEffects negation.
+        // Loss-log evidence: fight 52562626 vs koe2 had 4 stacked poisons
+        // ticking 350-550/turn while LR closed distance — died from accumulated
+        // queued ticks, not direct damage.
+        var meEntity = getEntity()
+        var poisonStackCount = 0
+        var poisonTotalTick = 0
+        var meEffects = getEffects(meEntity)
+        if (meEffects != null) {
+            for (var meEff in meEffects) {
+                if (meEff[0] == EFFECT_POISON && count(meEff) >= 2) {
+                    poisonStackCount += 1
+                    var pVal = meEff[1]
+                    var pRem = (count(meEff) >= 4) ? meEff[3] : 1
+                    poisonTotalTick += pVal * max(1, pRem)
+                }
+            }
+        }
+        var meMaxHP = getTotalLife(meEntity)
+        if (meMaxHP == null || meMaxHP <= 0) meMaxHP = 1
+        var poisonRatioPct = poisonTotalTick * 100 / meMaxHP
+        if (poisonStackCount >= 3 && poisonRatioPct >= 12) {
+            // Survive long enough to drop the source: boost defensive weights.
+            adapted['shieldValue'] = floor(adapted['shieldValue'] * 1.5)
+            adapted['healValue'] = floor(adapted['healValue'] * 1.3)
+            // Push for one-shot burst: spending all TP on a single big hit
+            // beats spreading damage when each turn we lose 10-15% HP.
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.2)
+            adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 1.3)
+            // De-prioritize buffs (no time for setup turns).
+            if (mapContainsKey(adapted, 'buffValue')) {
+                adapted['buffValue'] = floor(adapted['buffValue'] * 0.7)
+            }
+        }
+
+        // Phase 2.2: static counter signals (T1-applicable, no observation gate).
+        // The existing observation-based adaptations at lines 167-186 require 5
+        // turns of data. But the enemy profile already encodes verifiable static
+        // signals on T1 — apply them immediately with conservative magnitudes
+        // (smaller than dynamic adaptations to avoid over-tuning on misclassification).
+        // Static signal A: enemy has reflect chip (active or not). Reduce burst
+        // preemptively so we don't slam a full-TP burst into reflect on the turn
+        // they activate. The existing reflect block (below) only fires when
+        // reflectActive == true; T1 with reflect on cooldown was missed.
+        if (primaryProfile['hasReflect']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 0.85)
+        }
+        // Static signal B: enemy carries antidote — boost poison weight while
+        // we're in BAIT so the BAIT pressure is meaningful. Skip when we've
+        // already learned they're a double-carrier (Phase 1.2 already pivoted).
+        // GATED: magic builds are already double-aggressive vs poison-mirrors
+        // (denial × 1.2, otko × 1.4 in MAG-vs-MAG block below). Doubling the
+        // poison weight here breaks the burst-pivot the mirror block tries to
+        // force, so skip for our magic players. Tested via Phase 2 matrix:
+        // MH/smart_mag dropped 97.5% → 87.5% when this signal was unconditional.
+        if (primaryProfile['hasAntidote'] && POISON_PHASE == "BAIT"
+            && __playerBuildType != BUILD_MAGIC) {
+            if (!mapContainsKey(primaryProfile, 'doubleAntidoteCarrier') || !primaryProfile['doubleAntidoteCarrier']) {
+                if (mapContainsKey(adapted, 'dotEffects')) {
+                    adapted['dotEffects'] = floor(adapted['dotEffects'] * 1.15)
+                }
+                if (mapContainsKey(adapted, 'denialValue')) {
+                    adapted['denialValue'] = floor(adapted['denialValue'] * 1.15)
+                }
+            }
+        }
+        // Static signal C: enemy has NO shield chips at all — burst unmitigated.
+        // The existing vs_burst block only applies this when isBurstBuild is true.
+        if (!primaryProfile['hasShield']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.1)
+        }
+        // Static signal D: enemy has NO antidote chip — poison sticks
+        // permanently and burst combos compound without cleanse-undo risk.
+        // Skip BAIT cycling and favor commit-to-kill rotations. DannyD case
+        // (fight 52607388, LR 1W-13L matchup): LR spent 6 turns baiting/
+        // cycling poison vs an enemy who couldn't cleanse anyway, while
+        // DannyD's lifesteal m_laser out-paced the ticks faster than antidote
+        // would have. Boost burst so big-hit windows win over poison drip.
+        if (!primaryProfile['hasAntidote']) {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
+        }
+
+        // Phase 1.2: double-antidote carrier — enemy has cleansed ≥2 times,
+        // proving they pack two antidote sources (chip + bulb, or a teammate
+        // cleanse, etc). Stop investing in poison; pivot toward burst/denial.
+        if (primaryProfile != null && mapContainsKey(primaryProfile, 'doubleAntidoteCarrier')
+            && primaryProfile['doubleAntidoteCarrier']) {
+            if (mapContainsKey(adapted, 'dotEffects')) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * 0.6)
+            }
+            if (mapContainsKey(adapted, 'poisonStacks')) {
+                adapted['poisonStacks'] = floor(adapted['poisonStacks'] * 0.6)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.15)
+            }
+        }
+
+        if (primaryProfile['hasReflect'] && primaryEnemy != null) {
+            var reflectActive = primaryEnemy.hasDamageReturn()
+            if (reflectActive) {
+                var reflectRemaining = primaryEnemy.getDamageReturnRemaining()
+                // Less cautious if reflect expires soon
+                var reflectMult = (reflectRemaining <= 1) ? 85 : COUNTER_MULTS['vs_reflect_on_burst']
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * reflectMult / 100)
+                adapted['shieldValue'] = floor(adapted['shieldValue'] * COUNTER_MULTS['vs_reflect_on_shield'] / 100)
+                adapted['healValue'] = floor(adapted['healValue'] * COUNTER_MULTS['vs_reflect_on_heal'] / 100)
+            } else {
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['vs_reflect_off_burst'] / 100)
+            }
+        }
+
+        // Static signal E: enemy carries Liberation — strips our reflect buffs
+        // (including Mirror/Thorn/Bramble). Reflect chips are wasted TP against
+        // Liberation carriers (Ulg, STR=700, reset our reflect every cycle).
+        // Suppress damageReturn valuation and pivot to direct burst.
+        if (primaryProfile['hasLiberation']) {
+            if (mapContainsKey(adapted, 'damageReturn')) {
+                adapted['damageReturn'] = floor(adapted['damageReturn'] * 0.35)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.25)
+            adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 1.15)
+        }
+
+        if (primaryEnemy != null) {
+            var enemyId = primaryEnemy._id
+            if (primaryProfile['hasShield'] && !isEnemyShieldAvailable(enemyId)) {
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['cd_shield_burst'] / 100)
+                adapted['otkoBonus'] = floor(adapted['otkoBonus'] * COUNTER_MULTS['cd_shield_otko'] / 100)
+            }
+            if (primaryProfile['hasHeal']) {
+                var healAvail = predictChipAvailability(enemyId, 67)
+                if (!healAvail.isAvailable) {
+                    adapted['burstDamage'] = floor(adapted['burstDamage'] * COUNTER_MULTS['cd_heal_burst'] / 100)
+                }
+            }
+        }
+    }
+
+    // Mirror doctrine: break symmetry when facing same build type
+    if (primaryProfile != null) {
+        var enemyBuildType = primaryProfile['buildType']
+        if (enemyBuildType == __playerBuildType && enemyCount <= 1) {
+            var entityId = getEntity()
+            if (entityId % 2 == 0) {
+                // First-mover: compound advantage with defense
+                adapted['shieldValue'] = floor(adapted['shieldValue'] * 1.25)
+                adapted['healValue'] = floor(adapted['healValue'] * 1.20)
+                adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.20)
+                if (mapContainsKey(adapted, 'kiteDistance')) {
+                    adapted['kiteDistance'] = floor(adapted['kiteDistance'] * 1.30)
+                }
+            } else {
+                // Second-mover: compensate with aggression
+                adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
+                adapted['distanceToTarget'] = floor(adapted['distanceToTarget'] * 1.3)
+                if (mapContainsKey(adapted, 'kiteDistance')) {
+                    adapted['kiteDistance'] = floor(adapted['kiteDistance'] * 0.7)
+                }
+            }
+
+            // Magic-vs-magic: both sides want to kite and out-tick — classic
+            // draw fuel. Force decisive pushes: halve kite preference, boost
+            // OTKO recognition and denial (the main way to break a mage loop
+            // is to strip their TP so they can't apply/heal).
+            if (__playerBuildType == BUILD_MAGIC) {
+                if (mapContainsKey(adapted, 'kiteDistance')) {
+                    adapted['kiteDistance'] = floor(adapted['kiteDistance'] * 0.5)
+                }
+                if (mapContainsKey(adapted, 'otkoBonus')) {
+                    adapted['otkoBonus'] = floor(adapted['otkoBonus'] * 1.4)
+                }
+                if (mapContainsKey(adapted, 'denialValue')) {
+                    adapted['denialValue'] = floor(adapted['denialValue'] * 1.2)
+                }
+            }
+        }
+    }
+
+    // Sustain-war detection: when the fight drags past turn 20 with the enemy
+    // still above 50% HP, we're losing a sustain/attrition war. Reflect chips
+    // and defensive weights won't help — the enemy out-heals our chip damage.
+    // Boost nova (permanent maxHP reduction) and denial (break the heal cycle)
+    // to force a decisive outcome. Loss-log: EdsgerDijkstra vs Lightning
+    // (24-31 turn losses, enemy hovering at 50-60% HP while out-sustaining).
+    if (currentTurn > 20 && primaryEnemy != null) {
+        var swEnemyHp = primaryEnemy._currHealth
+        var swEnemyMaxHp = primaryEnemy._maxHealth
+        if (swEnemyHp != null && swEnemyMaxHp != null && swEnemyHp > swEnemyMaxHp * 0.5) {
+            if (mapContainsKey(adapted, 'novaEffects')) {
+                adapted['novaEffects'] = floor(adapted['novaEffects'] * 1.5)
+            }
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.5)
+            }
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.15)
+        }
+    }
+
+    // Audit item 5 follow-up: WIS-stacked sustain bruisers. MH's ladder loss
+    // audit (7/8 recent losses): STR 500-600 + WIS 400-590 heal engines that
+    // out-sustain a plain DoT race while bursting 6-8k. They dodge every
+    // other counter (RES>=300 → not isBurstBuild; ranged → no lifesteal
+    // plan). The profile's amortized healPerTurn names them directly — for
+    // magic players, shift value into denial (soporific's TP-shackle cuts
+    // heal casts) and poison uptime. Static, T1, conservative magnitude.
+    if (primaryProfile != null && __playerBuildType == BUILD_MAGIC
+        && mapContainsKey(primaryProfile, 'healPerTurn')
+        && primaryProfile['healPerTurn'] >= 150) {
+        if (mapContainsKey(adapted, 'denialValue')) {
+            adapted['denialValue'] = floor(adapted['denialValue'] * 1.25)
+        }
+        if (mapContainsKey(adapted, 'dotEffects')) {
+            adapted['dotEffects'] = floor(adapted['dotEffects'] * 1.15)
+        }
+    }
+
+    // Race-model coupling: shift value toward race-CHANGING dimensions when
+    // the analytic race says trading at current rates loses or stalls, and
+    // toward closing it out when we're clearly ahead. Turn ≥4 gate lets the
+    // observed-rate blend accumulate evidence first; every nudge below is
+    // subject to the drift clamp that follows.
+    if (currentTurn >= 4 && __raceVerdict == "LOSING") {
+        // Straight trades lose. If the arsenal has race-CHANGING dimensions
+        // (denial, positive DoT, nova), shift value into them and out of the
+        // burst race we're losing. If it has none (pure burst builds like
+        // ED), the only slope we own is killing faster — press, don't hedge;
+        // backing off burst on a poison clock just guarantees the loss.
+        var raceHasChangers = mapContainsKey(adapted, 'denialValue')
+            || (mapContainsKey(adapted, 'novaEffects') && adapted['novaEffects'] > 0)
+            || (mapContainsKey(adapted, 'dotEffects') && adapted['dotEffects'] > 0)
+        if (raceHasChangers) {
+            if (mapContainsKey(adapted, 'denialValue')) {
+                adapted['denialValue'] = floor(adapted['denialValue'] * 1.25)
+            }
+            if (mapContainsKey(adapted, 'dotEffects') && adapted['dotEffects'] > 0) {
+                adapted['dotEffects'] = floor(adapted['dotEffects'] * 1.15)
+            }
+            if (mapContainsKey(adapted, 'novaEffects')) {
+                adapted['novaEffects'] = floor(adapted['novaEffects'] * 1.3)
+            }
+            adapted['healValue'] = floor(adapted['healValue'] * 1.15)
+            adapted['threatReduction'] = floor(adapted['threatReduction'] * 1.2)
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 0.9)
+        } else {
+            adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.1)
+            adapted['healValue'] = floor(adapted['healValue'] * 1.1)
+        }
+    } else if (__raceVerdict == "STALL" && currentTurn > 12) {
+        // Neither side kills inside the turn limit at current rates: the
+        // draw signature. Nova (permanent max-HP cuts erase heal-back room)
+        // and denial (break their sustain casts) are the only rate-changers.
+        if (mapContainsKey(adapted, 'novaEffects')) {
+            adapted['novaEffects'] = floor(adapted['novaEffects'] * 1.4)
+        }
+        if (mapContainsKey(adapted, 'denialValue')) {
+            adapted['denialValue'] = floor(adapted['denialValue'] * 1.3)
+        }
+    } else if (currentTurn >= 4 && __raceVerdict == "WINNING" && __raceMargin >= 3) {
+        // We win the race with margin: stop over-investing in sustain that
+        // only lengthens the fight; convert the margin into tempo.
+        adapted['healValue'] = floor(adapted['healValue'] * 0.85)
+        adapted['burstDamage'] = floor(adapted['burstDamage'] * 1.1)
+    }
+
+    // Audit item 6: bounded multiplier drift. The adaptations above stack
+    // from independent systems (counter-mults, engagement plans, static
+    // signals, observations, sustain-war, mirror doctrine) and nothing
+    // guarantees the PRODUCT stays sane — audited worst cases hit x1.40 on
+    // paths meant to reduce, and x0.56 on paths meant to boost. Clamp each
+    // key's final drift relative to its base profile value so no stacking
+    // path can zero out or explode a dimension.
+    for (var wdbKey in mapKeys(WEIGHT_DRIFT_BOUNDS)) {
+        if (!mapContainsKey(adapted, wdbKey) || !mapContainsKey(baseWeights, wdbKey)) { continue }
+        var wdbBase = baseWeights[wdbKey]
+        if (wdbBase == null || wdbBase <= 0) { continue }
+        var wdbLo = floor(wdbBase * WEIGHT_DRIFT_BOUNDS[wdbKey][0])
+        var wdbHi = floor(wdbBase * WEIGHT_DRIFT_BOUNDS[wdbKey][1])
+        if (adapted[wdbKey] < wdbLo) adapted[wdbKey] = wdbLo
+        if (adapted[wdbKey] > wdbHi) adapted[wdbKey] = wdbHi
+    }
+
+    return adapted
+}
+
+function calculateAverageThreat(playerCell, enemies, fieldMap) {
+    var totalThreat = 0
+    var threatCount = 0
+
+    for (var enemyId in mapKeys(enemies)) {
+        var enemy = enemies[enemyId]
+        if (isDead(enemyId)) continue
+
+        var enemyPos = enemy._cellPos
+        var dist = getCellDistance(playerCell, enemyPos)
+
+        if (dist != null && dist <= 15) {
+            var threat = estimateEnemyThreat(enemy)
+            totalThreat += threat
+            threatCount++
+        }
+    }
+
+    if (threatCount == 0) return 0
+    return totalThreat / threatCount
+}
+
+function estimateEnemyThreat(enemy) {
+    var weapons = getWeapons(enemy._id)
+    var maxThreat = 0
+
+    for (var weaponId in weapons) {
+        var effects = getWeaponEffects(weaponId)
+        for (var eff in effects) {
+            if (eff[0] == EFFECT_DAMAGE) {
+                var avgDmg = (eff[1] + eff[2]) / 2
+                var scaledDmg = avgDmg * (1 + enemy._strength / 100)
+                if (scaledDmg > maxThreat) {
+                    maxThreat = scaledDmg
+                }
+            }
+        }
+    }
+
+    return maxThreat * 3
+}
+
+function getAdaptedWeights(buildType, player, enemies, fieldMap) {
+    var baseWeights = getWeightsForBuild(buildType, player)
+    var adapted = adaptWeightsToSituation(baseWeights, player, enemies, fieldMap)
+    return adapted
+}
+
+function shouldPrioritizeDefense(player, enemies) {
+    var hpPercent = (player._currHealth * 100) / player._maxHealth
+    var enemyCount = count(mapKeys(enemies))
+
+    if (hpPercent < 30) return true
+    if (hpPercent < 50 && enemyCount >= 2) return true
+
+    return false
+}
+
+function shouldPrioritizeAggression(player, target) {
+    var targetHPPercent = (target._currHealth * 100) / target._maxHealth
+    var playerHPPercent = (player._currHealth * 100) / player._maxHealth
+
+    if (targetHPPercent < 40 && playerHPPercent > 50) return true
+
+    if (playerHPPercent > targetHPPercent + 30) return true
+
+    return false
+}

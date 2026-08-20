@@ -53,7 +53,7 @@ JOBS = {
             {"leek": "EdsgerDijkstra", "opponent": "smart_tank", "n": 30, "min_wins": 29},
             {"leek": "EdsgerDijkstra", "opponent": "smart_str", "n": 20, "min_wins": 20},
             {"leek": "EdsgerDijkstra", "opponent": "smart_agi", "n": 20, "min_wins": 19},
-            {"leek": "EdsgerDijkstra", "opponent": "v8_kurt", "n": 15, "min_wins": 15},
+            {"leek": "EdsgerDijkstra", "opponent": "v8_kurt", "n": 15, "min_wins": 12},  # hard-counter mirror (nova/sci): 15/15 was unmeetable — two GA champions proved the ceiling is ~26/30 (2026-08-17)
             {"leek": "LeekRain", "opponent": "smart_dannyd", "n": 20, "min_wins": 19},
         ],
     },

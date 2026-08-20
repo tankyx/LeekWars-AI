@@ -1,0 +1,350 @@
+
+global BUILD_STRENGTH = 1
+global BUILD_MAGIC = 2
+global BUILD_AGILITY = 3
+global BUILD_STRENGTH_SCIENCE = 4
+global BUILD_TANK_SCI = 5
+global BUILD_HYBRID = 6
+global BUILD_BRUISER_REFLECT = 7
+global BUILD_SUPPORT = 8
+
+global __playerBuildType = 0
+
+global STRENGTH_WEIGHTS = [
+    'burstDamage': 163,
+    'weaponUses': 100,
+    'tpEfficiency': 50,
+    'dotEffects': -50,
+    'kiteDistance': 0,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 80,
+    'healValue': 60,
+    'distanceToTarget': -20,
+    'threatReduction': 40,
+    'otkoBonus': 5000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 500,
+    'noDamagePenalty': -4000
+]
+
+global MAGIC_WEIGHTS = [
+    'burstDamage': 54,
+    'weaponUses': 0,
+    'tpEfficiency': 50,
+    'dotEffects': 272,
+    'kiteDistance': 200,
+    'damageReturn': 0,
+    'poisonStacks': 217,
+    'denialValue': 230,
+    'shieldValue': 100,
+    'healValue': 80,
+    'distanceToTarget': 30,
+    'threatReduction': 80,
+    'otkoBonus': 3000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 3000,
+    'bulbKillBonusBuffer': 1800,
+    'bulbKillBonusAttacker': 1000,
+    'multiTargetBonus': 400
+]
+
+global AGILITY_WEIGHTS = [
+    'burstDamage': 136,
+    'weaponUses': 100,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 50,
+    'damageReturn': 300,
+    'poisonStacks': 0,
+    'shieldValue': 80,
+    'healValue': 60,
+    'distanceToTarget': -10,
+    'threatReduction': 50,
+    'otkoBonus': 4500,
+    'checkpointBonus': 2500,
+    'novaEffects': 200,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2700,
+    'bulbKillBonusBuffer': 1600,
+    'bulbKillBonusAttacker': 900,
+    'multiTargetBonus': 550
+]
+
+global STRENGTH_SCIENCE_WEIGHTS = [
+    'burstDamage': 136,
+    'weaponUses': 80,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 0,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 80,
+    'healValue': 60,
+    'distanceToTarget': -15,
+    'threatReduction': 40,
+    'otkoBonus': 5000,
+    'checkpointBonus': 2500,
+    'novaEffects': 326,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 500,
+    'noDamagePenalty': -4000
+]
+
+global TANK_SCI_WEIGHTS = [
+    'burstDamage': 50,
+    'weaponUses': 60,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 20,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 400,
+    'healValue': 280,
+    'distanceToTarget': -10,
+    'threatReduction': 300,
+    'otkoBonus': 3500,
+    'checkpointBonus': 2500,
+    'novaEffects': 450,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 3000,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 500
+]
+
+global HYBRID_WEIGHTS = [
+    'burstDamage': 109,
+    'weaponUses': 60,
+    'tpEfficiency': 50,
+    'dotEffects': 136,
+    'kiteDistance': 50,
+    'damageReturn': 0,
+    'poisonStacks': 109,
+    'denialValue': 136,
+    'shieldValue': 100,
+    'healValue': 70,
+    'distanceToTarget': 0,
+    'threatReduction': 60,
+    'otkoBonus': 4000,
+    'checkpointBonus': 2500,
+    'novaEffects': 109,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2800,
+    'bulbKillBonusBuffer': 1600,
+    'bulbKillBonusAttacker': 900,
+    'multiTargetBonus': 500
+]
+
+global BRUISER_REFLECT_WEIGHTS = [
+    'burstDamage': 100,
+    'weaponUses': 65,
+    'tpEfficiency': 100,
+    'dotEffects': -96,
+    'kiteDistance': -30,
+    'damageReturn': 449,
+    'poisonStacks': 0,
+    'shieldValue': 200,
+    'healValue': 4,
+    'distanceToTarget': -10,
+    'threatReduction': 50,
+    'otkoBonus': 6789,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 741,
+]
+
+global BOSS_PUZZLE_WEIGHTS = [
+    'burstDamage': 0,
+    'weaponUses': 0,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 0,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 0,
+    'healValue': 50,
+    'distanceToTarget': -100,
+    'threatReduction': 0,
+    'novaEffects': 0,
+    'otkoBonus': 0,
+    'checkpointBonus': 0,
+    'noDamagePenalty': 0,
+    'axisAlignment': 2000,
+    'crystalProximity': 800,
+    'crystalSolved': 5000,
+    'multiTargetBonus': 0
+]
+
+// Phase 2 is an attrition war vs 36k army HP (fight 52977665: we dealt ~2.5k
+// total). Poison is the carry weapon: it sticks while kiting, AoE covers the
+// clustered army, and nobody there cures. Kite hard, poison everything.
+global BOSS_COMBAT_WEIGHTS = [
+    'burstDamage': 163,
+    'weaponUses': 100,
+    'tpEfficiency': 50,
+    'dotEffects': 420,
+    'kiteDistance': 80,
+    'damageReturn': 0,
+    'poisonStacks': 260,
+    'shieldValue': 200,
+    'healValue': 150,
+    'distanceToTarget': -20,
+    'threatReduction': 100,
+    'novaEffects': 109,
+    'otkoBonus': 5000,
+    'checkpointBonus': 2500,
+    'noDamagePenalty': -2000,
+    'antidoteUrgency': 500,
+    'multiTargetBonus': 800
+]
+
+// Team-support profile (e.g. DuskHope: STR 200 / WIS 300 / RES 300, TP 12).
+// Solo it plays a durable skirmisher (it can't out-damage anyone — that's the
+// build, not the AI); with allies alive the allySupport dimension takes over:
+// heals/shields/buffs on teammates outscore its own anemic weapon damage.
+global SUPPORT_WEIGHTS = [
+    'burstDamage': 100,
+    'weaponUses': 80,
+    'tpEfficiency': 50,
+    'dotEffects': 0,
+    'kiteDistance': 60,
+    'damageReturn': 0,
+    'poisonStacks': 0,
+    'shieldValue': 280,
+    'healValue': 240,
+    'distanceToTarget': 0,
+    'threatReduction': 180,
+    'otkoBonus': 3000,
+    'checkpointBonus': 2500,
+    'bulbDamageMultiplier': 1.2,
+    'bulbKillBonusHealer': 2500,
+    'bulbKillBonusBuffer': 1500,
+    'bulbKillBonusAttacker': 800,
+    'multiTargetBonus': 400,
+    'noDamagePenalty': -1500,
+    'allySupport': 350
+]
+
+function getWeightsForBuild(buildType, player) {
+    if (buildType == BUILD_STRENGTH) {
+        return STRENGTH_WEIGHTS
+    }
+    if (buildType == BUILD_MAGIC) {
+        return MAGIC_WEIGHTS
+    }
+    if (buildType == BUILD_AGILITY) {
+        // AGI/SCI hybrid: blend agility positioning with nova damage
+        if (player != null && player._science >= 200) {
+            return blendWeights(AGILITY_WEIGHTS, STRENGTH_SCIENCE_WEIGHTS, 0.6)
+        }
+        return AGILITY_WEIGHTS
+    }
+    if (buildType == BUILD_STRENGTH_SCIENCE) {
+        return STRENGTH_SCIENCE_WEIGHTS
+    }
+    if (buildType == BUILD_TANK_SCI) {
+        return TANK_SCI_WEIGHTS
+    }
+    if (buildType == BUILD_HYBRID) {
+        // Magic-leaning hybrid: if magic stat justifies it, shift weights
+        // toward MAGIC_WEIGHTS (poison stacking, denial, kiting). Static
+        // HYBRID weights otherwise under-utilize magic output.
+        if (player != null && player._magic >= 500 && player._magic > player._strength) {
+            return blendWeights(HYBRID_WEIGHTS, MAGIC_WEIGHTS, 0.6)
+        }
+        return HYBRID_WEIGHTS
+    }
+    if (buildType == BUILD_BRUISER_REFLECT) {
+        return BRUISER_REFLECT_WEIGHTS
+    }
+    if (buildType == BUILD_SUPPORT) {
+        return SUPPORT_WEIGHTS
+    }
+    return STRENGTH_WEIGHTS
+}
+
+function detectBuildType(player) {
+    var strStat = player._strength
+    var magStat = player._magic
+    var agiStat = player._agility
+    var sciStat = player._science
+    var resStat = player._resistance
+    var wisStat = player._wisdom
+
+    if (resStat >= 300 && sciStat >= 300) {
+        return BUILD_TANK_SCI
+    }
+
+    // Support: durable WIS/RES chassis with no meaningful offense stat.
+    // Previously fell through every branch to the BUILD_STRENGTH default —
+    // DuskHope (STR 200/WIS 300/RES 300) played as a damage dealer, producing
+    // heal-race draws solo and zero team contribution. Offense-stat ceilings
+    // keep real attackers out (ProdigalSon STR 480, DawnFall MAG 440).
+    if (resStat >= 250 && wisStat >= 250
+        && strStat < 300 && magStat < 300 && sciStat < 300 && agiStat < 300) {
+        return BUILD_SUPPORT
+    }
+
+    if (strStat > 400 && agiStat > 400 &&
+        (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) ||
+         mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) ||
+         mapContainsKey(arsenal.playerEquippedChips, CHIP_BRAMBLE))) {
+        return BUILD_BRUISER_REFLECT
+    }
+
+    if (strStat >= magStat && strStat >= agiStat && sciStat >= 200) {
+        return BUILD_STRENGTH_SCIENCE
+    }
+
+    // Phase H: relaxed mag-str gap from strict > to >= so leeks like MH
+    // (str=400, mag=500, diff exactly 100) qualify as HYBRID instead of
+    // MAGIC. Their substantial STR makes direct-damage weapons (Unbridled
+    // Gazor, Heavy Sword) viable, and MAGIC's low burstDamage weight (54)
+    // would otherwise force them into pure poison plays.
+    if (magStat >= strStat + 100) {
+        if (strStat >= 200) {
+            return BUILD_HYBRID
+        }
+        return BUILD_MAGIC
+    }
+
+    if (abs(strStat - magStat) < 100 && magStat >= 100 && strStat >= 100) {
+        return BUILD_HYBRID
+    }
+
+    if (agiStat >= strStat && agiStat >= magStat) {
+        return BUILD_AGILITY
+    }
+    if (magStat >= strStat) {
+        return BUILD_MAGIC
+    }
+
+    return BUILD_STRENGTH
+}
+
+function blendWeights(weights1, weights2, ratio) {
+    var blended = [:]
+
+    for (var key in mapKeys(weights1)) {
+        var val1 = weights1[key]
+        var val2 = 0
+        if (mapContainsKey(weights2, key)) {
+            val2 = weights2[key]
+        }
+        blended[key] = floor(val1 * ratio + val2 * (1.0 - ratio))
+    }
+
+    return blended
+}

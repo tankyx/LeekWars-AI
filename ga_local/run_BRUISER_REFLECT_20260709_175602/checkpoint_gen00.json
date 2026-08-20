@@ -1,0 +1,165 @@
+{
+  "generation": 0,
+  "mode": "weights",
+  "build_type": "BRUISER_REFLECT",
+  "leek_name": "EdsgerDijkstra",
+  "leek_names": [
+    "EdsgerDijkstra"
+  ],
+  "best_fitness": 0.0,
+  "best_val_fitness": 0.0,
+  "best_genome": null,
+  "population": [
+    {
+      "genome": {
+        "build_type": "BRUISER_REFLECT",
+        "weights": {
+          "burstDamage": 100,
+          "weaponUses": 65,
+          "tpEfficiency": 100,
+          "dotEffects": -96,
+          "kiteDistance": -30,
+          "damageReturn": 449,
+          "poisonStacks": 0,
+          "shieldValue": 200,
+          "healValue": 4,
+          "distanceToTarget": -10,
+          "threatReduction": 50,
+          "otkoBonus": 6789,
+          "checkpointBonus": 2500,
+          "bulbDamageMultiplier": 1.2,
+          "bulbKillBonusHealer": 2500,
+          "bulbKillBonusBuffer": 1500,
+          "bulbKillBonusAttacker": 800,
+          "multiTargetBonus": 741
+        }
+      },
+      "fitness": 0.0
+    },
+    {
+      "genome": {
+        "build_type": "BRUISER_REFLECT",
+        "weights": {
+          "burstDamage": 100,
+          "weaponUses": 0,
+          "tpEfficiency": 100,
+          "dotEffects": -96,
+          "kiteDistance": -30,
+          "damageReturn": 449,
+          "poisonStacks": 0,
+          "shieldValue": 326,
+          "healValue": 4,
+          "distanceToTarget": -10,
+          "threatReduction": 16,
+          "otkoBonus": 6789,
+          "checkpointBonus": 2883,
+          "bulbDamageMultiplier": 1.2,
+          "bulbKillBonusHealer": 2500,
+          "bulbKillBonusBuffer": 1500,
+          "bulbKillBonusAttacker": 800,
+          "multiTargetBonus": 741
+        }
+      },
+      "fitness": 0.0
+    },
+    {
+      "genome": {
+        "build_type": "BRUISER_REFLECT",
+        "weights": {
+          "burstDamage": 100,
+          "weaponUses": 65,
+          "tpEfficiency": 100,
+          "dotEffects": -96,
+          "kiteDistance": -94,
+          "damageReturn": 458,
+          "poisonStacks": 0,
+          "shieldValue": 200,
+          "healValue": 4,
+          "distanceToTarget": -10,
+          "threatReduction": 50,
+          "otkoBonus": 6789,
+          "checkpointBonus": 2500,
+          "bulbDamageMultiplier": 1.2,
+          "bulbKillBonusHealer": 2500,
+          "bulbKillBonusBuffer": 1500,
+          "bulbKillBonusAttacker": 800,
+          "multiTargetBonus": 441
+        }
+      },
+      "fitness": 0.0
+    },
+    {
+      "genome": {
+        "build_type": "BRUISER_REFLECT",
+        "weights": {
+          "burstDamage": 100,
+          "weaponUses": 65,
+          "tpEfficiency": 73,
+          "dotEffects": -96,
+          "kiteDistance": -30,
+          "damageReturn": 449,
+          "poisonStacks": 0,
+          "shieldValue": 200,
+          "healValue": 4,
+          "distanceToTarget": -42,
+          "threatReduction": 50,
+          "otkoBonus": 6789,
+          "checkpointBonus": 2500,
+          "bulbDamageMultiplier": 1.2,
+          "bulbKillBonusHealer": 2500,
+          "bulbKillBonusBuffer": 1500,
+          "bulbKillBonusAttacker": 800,
+          "multiTargetBonus": 741
+        }
+      },
+      "fitness": 0.0
+    },
+    {
+      "genome": {
+        "build_type": "BRUISER_REFLECT",
+        "weights": {
+          "burstDamage": 100,
+          "weaponUses": 65,
+          "tpEfficiency": 100,
+          "dotEffects": -100,
+          "kiteDistance": -100,
+          "damageReturn": 449,
+          "poisonStacks": 0,
+          "shieldValue": 200,
+          "healValue": 4,
+          "distanceToTarget": -10,
+          "threatReduction": 50,
+          "otkoBonus": 6789,
+          "checkpointBonus": 2500,
+          "bulbDamageMultiplier": 1.2,
+          "bulbKillBonusHealer": 2500,
+          "bulbKillBonusBuffer": 1500,
+          "bulbKillBonusAttacker": 800,
+          "multiTargetBonus": 741
+        }
+      },
+      "fitness": 0.0
+    }
+  ],
+  "history": [
+    {
+      "generation": 1,
+      "best": 0.0,
+      "avg": 0.0,
+      "worst": 0.0,
+      "elapsed_s": 45.1
+    }
+  ],
+  "config": {
+    "population_size": 5,
+    "fights_per_opponent": 3,
+    "mutation_rate": 0.15,
+    "mutation_strength": 0.2,
+    "elitism": 3,
+    "tournament_size": 4,
+    "train_opponents": [
+      "v8_mage_mid"
+    ],
+    "val_opponents": []
+  }
+}

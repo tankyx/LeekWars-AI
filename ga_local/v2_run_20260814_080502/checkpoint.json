@@ -1,0 +1,1000 @@
+{
+  "phase": "M3",
+  "kind": "v9_eval_weights",
+  "generations_completed": 8,
+  "master_seed": 20260813,
+  "seeds": [
+    1851438627,
+    1872407510,
+    1452834154,
+    388672962,
+    879210440,
+    1892401090,
+    438645691,
+    1390666044,
+    993284823,
+    1554418021,
+    1112072621,
+    587280662,
+    501147912,
+    235912047,
+    987036276,
+    76384556,
+    866423267,
+    924443390,
+    910365955,
+    13789816,
+    1193224613,
+    1085000623,
+    1676080871,
+    773023229
+  ],
+  "corpus": [
+    [
+      "EdsgerDijkstra",
+      "smart_str",
+      2
+    ],
+    [
+      "MargaretHamilton",
+      "smart_mag",
+      2
+    ],
+    [
+      "AdaLovelace",
+      "smart_str",
+      2
+    ],
+    [
+      "KurtGodel",
+      "smart_mag",
+      2
+    ],
+    [
+      "AdaLovelace",
+      "live_81744",
+      1
+    ],
+    [
+      "EdsgerDijkstra",
+      "live_69633",
+      1
+    ],
+    [
+      "KurtGodel",
+      "live_105374",
+      1
+    ],
+    [
+      "MargaretHamilton",
+      "live_103148",
+      1
+    ],
+    [
+      "AdaLovelace",
+      "mirror",
+      1
+    ],
+    [
+      "EdsgerDijkstra",
+      "mirror",
+      1
+    ],
+    [
+      "KurtGodel",
+      "mirror",
+      1
+    ],
+    [
+      "MargaretHamilton",
+      "mirror",
+      1
+    ],
+    [
+      "EdsgerDijkstra",
+      "uphill_smart_str",
+      2
+    ],
+    [
+      "MargaretHamilton",
+      "uphill_smart_mag",
+      2
+    ],
+    [
+      "AdaLovelace",
+      "uphill_smart_str",
+      2
+    ],
+    [
+      "KurtGodel",
+      "uphill_smart_mag",
+      2
+    ]
+  ],
+  "baseline": {
+    "EW_DIRECT": 2.0,
+    "EW_DOT": 1.2,
+    "EW_NOVA": 1.5,
+    "EW_SELF_HEAL": 1.4,
+    "EW_SHIELDS": 0.6,
+    "EW_DENIAL": 30.0,
+    "EW_TAKEN": 1.8,
+    "EW_ENEMY_HEAL": 1.2,
+    "EW_KILL": 5000.0,
+    "EW_DEATH": 9000.0,
+    "EW_DROP_PENALTY": 400.0,
+    "EW_APPROACH": 60.0,
+    "EW_BULB_TAX": 0.35,
+    "EW_RR_TAKEN": 1.2,
+    "EW_RR_HEAL": 0.8,
+    "EW_RR_DEATH": 6000.0
+  },
+  "best": {
+    "weights": {
+      "EW_DIRECT": 1.0831,
+      "EW_DOT": 1.0049,
+      "EW_NOVA": 1.927,
+      "EW_SELF_HEAL": 0.0,
+      "EW_SHIELDS": 0.6,
+      "EW_DENIAL": 0.0,
+      "EW_TAKEN": 1.8,
+      "EW_ENEMY_HEAL": 1.2,
+      "EW_KILL": 5000.0,
+      "EW_DEATH": 9767.92,
+      "EW_DROP_PENALTY": 400.0,
+      "EW_APPROACH": 83.1299,
+      "EW_BULB_TAX": 0.35,
+      "EW_RR_TAKEN": 1.2,
+      "EW_RR_HEAL": 0.8,
+      "EW_RR_DEATH": 8687.81
+    },
+    "fitness": 0.9590494791666667,
+    "generation": 1
+  },
+  "history": [
+    {
+      "generation": 1,
+      "best": 0.9590494791666667,
+      "avg": 0.9589811197916668,
+      "worst": 0.9589713541666668,
+      "elapsed_s": 291.0
+    },
+    {
+      "generation": 2,
+      "best": 0.9590494791666667,
+      "avg": 0.9589908854166668,
+      "worst": 0.9589713541666668,
+      "elapsed_s": 263.2
+    },
+    {
+      "generation": 3,
+      "best": 0.9590494791666667,
+      "avg": 0.8272965494791668,
+      "worst": 0.0,
+      "elapsed_s": 269.8
+    },
+    {
+      "generation": 4,
+      "best": 0.9590494791666667,
+      "avg": 0.8455504728618422,
+      "worst": 0.08177083333333333,
+      "elapsed_s": 272.1
+    },
+    {
+      "generation": 5,
+      "best": 0.9590494791666667,
+      "avg": 0.9584830729166668,
+      "worst": 0.9579166666666667,
+      "elapsed_s": 262.2
+    },
+    {
+      "generation": 6,
+      "best": 0.9590494791666667,
+      "avg": 0.9585123697916668,
+      "worst": 0.9576432291666668,
+      "elapsed_s": 261.4
+    },
+    {
+      "generation": 7,
+      "best": 0.9590494791666667,
+      "avg": 0.9587223307291668,
+      "worst": 0.9579166666666667,
+      "elapsed_s": 267.4
+    },
+    {
+      "generation": 8,
+      "best": 0.9590494791666667,
+      "avg": 0.9585563151041667,
+      "worst": 0.9579166666666667,
+      "elapsed_s": 258.3
+    }
+  ],
+  "population": [
+    {
+      "weights": {
+        "EW_DIRECT": 1.0831,
+        "EW_DOT": 1.0049,
+        "EW_NOVA": 1.927,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.6,
+        "EW_DENIAL": 0.0,
+        "EW_TAKEN": 1.8,
+        "EW_ENEMY_HEAL": 1.2,
+        "EW_KILL": 5000.0,
+        "EW_DEATH": 9767.92,
+        "EW_DROP_PENALTY": 400.0,
+        "EW_APPROACH": 83.1299,
+        "EW_BULB_TAX": 0.35,
+        "EW_RR_TAKEN": 1.2,
+        "EW_RR_HEAL": 0.8,
+        "EW_RR_DEATH": 8687.81
+      },
+      "fitness": 0.9590494791666667,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.8477,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "weights": {
+        "EW_DIRECT": 1.0831,
+        "EW_DOT": 1.0049,
+        "EW_NOVA": 1.5898,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.6,
+        "EW_DENIAL": 0.0,
+        "EW_TAKEN": 0.1961,
+        "EW_ENEMY_HEAL": 3.0876,
+        "EW_KILL": 4368.84,
+        "EW_DEATH": 15067.66,
+        "EW_DROP_PENALTY": 368.98,
+        "EW_APPROACH": 190.0891,
+        "EW_BULB_TAX": 0.8058,
+        "EW_RR_TAKEN": 1.3368,
+        "EW_RR_HEAL": 1.2239,
+        "EW_RR_DEATH": 9062.06
+      },
+      "fitness": 0.9589713541666668,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.8461,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "weights": {
+        "EW_DIRECT": 3.0756,
+        "EW_DOT": 2.2494,
+        "EW_NOVA": 0.098,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.6,
+        "EW_DENIAL": 0.0,
+        "EW_TAKEN": 0.1527,
+        "EW_ENEMY_HEAL": 1.4569,
+        "EW_KILL": 4474.75,
+        "EW_DEATH": 9767.92,
+        "EW_DROP_PENALTY": 368.98,
+        "EW_APPROACH": 190.0891,
+        "EW_BULB_TAX": 0.35,
+        "EW_RR_TAKEN": 0.3355,
+        "EW_RR_HEAL": 1.2239,
+        "EW_RR_DEATH": 15856.94
+      },
+      "fitness": 0.9589713541666668,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.8461,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "weights": {
+        "EW_DIRECT": 0.2027,
+        "EW_DOT": 0.5099,
+        "EW_NOVA": 1.927,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.6,
+        "EW_DENIAL": 0.0,
+        "EW_TAKEN": 1.8,
+        "EW_ENEMY_HEAL": 1.2,
+        "EW_KILL": 5000.0,
+        "EW_DEATH": 9767.92,
+        "EW_DROP_PENALTY": 400.0,
+        "EW_APPROACH": 83.1299,
+        "EW_BULB_TAX": 0.35,
+        "EW_RR_TAKEN": 1.2,
+        "EW_RR_HEAL": 0.8,
+        "EW_RR_DEATH": 8687.81
+      },
+      "fitness": 0.9579166666666667,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.825,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "weights": {
+        "EW_DIRECT": 1.0831,
+        "EW_DOT": 1.0049,
+        "EW_NOVA": 1.927,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.6,
+        "EW_DENIAL": 0.0,
+        "EW_TAKEN": 1.8,
+        "EW_ENEMY_HEAL": 1.2,
+        "EW_KILL": 5000.0,
+        "EW_DEATH": 8365.24,
+        "EW_DROP_PENALTY": 337.63,
+        "EW_APPROACH": 83.1299,
+        "EW_BULB_TAX": 0.35,
+        "EW_RR_TAKEN": 1.2,
+        "EW_RR_HEAL": 0.8,
+        "EW_RR_DEATH": 8687.81
+      },
+      "fitness": 0.9579166666666667,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.825,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "weights": {
+        "EW_DIRECT": 1.0831,
+        "EW_DOT": 1.7996,
+        "EW_NOVA": 1.5898,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.0263,
+        "EW_DENIAL": 0.0,
+        "EW_TAKEN": 0.1961,
+        "EW_ENEMY_HEAL": 1.4569,
+        "EW_KILL": 5932.15,
+        "EW_DEATH": 9767.92,
+        "EW_DROP_PENALTY": 368.98,
+        "EW_APPROACH": 83.1299,
+        "EW_BULB_TAX": 0.5342,
+        "EW_RR_TAKEN": 0.042,
+        "EW_RR_HEAL": 0.3755,
+        "EW_RR_DEATH": 7918.29
+      },
+      "fitness": 0.9589713541666668,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.8461,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "weights": {
+        "EW_DIRECT": 0.2,
+        "EW_DOT": 0.5298,
+        "EW_NOVA": 1.5898,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.0263,
+        "EW_DENIAL": 95.7343,
+        "EW_TAKEN": 0.1961,
+        "EW_ENEMY_HEAL": 1.6871,
+        "EW_KILL": 2270.96,
+        "EW_DEATH": 14587.61,
+        "EW_DROP_PENALTY": 329.0,
+        "EW_APPROACH": 190.0891,
+        "EW_BULB_TAX": 0.6848,
+        "EW_RR_TAKEN": 3.1613,
+        "EW_RR_HEAL": 2.5605,
+        "EW_RR_DEATH": 3446.95
+      },
+      "fitness": 0.9585416666666667,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.8375,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    },
+    {
+      "weights": {
+        "EW_DIRECT": 2.9883,
+        "EW_DOT": 0.7165,
+        "EW_NOVA": 1.4445,
+        "EW_SELF_HEAL": 0.0,
+        "EW_SHIELDS": 0.6,
+        "EW_DENIAL": 0.0,
+        "EW_TAKEN": 1.8,
+        "EW_ENEMY_HEAL": 1.4569,
+        "EW_KILL": 5000.0,
+        "EW_DEATH": 9767.92,
+        "EW_DROP_PENALTY": 400.0,
+        "EW_APPROACH": 83.1299,
+        "EW_BULB_TAX": 0.35,
+        "EW_RR_TAKEN": 1.3368,
+        "EW_RR_HEAL": 1.7999,
+        "EW_RR_DEATH": 19890.25
+      },
+      "fitness": 0.9581119791666668,
+      "detail": {
+        "wins": 20,
+        "losses": 4,
+        "draws": 0,
+        "errors": 0,
+        "crashes": 0,
+        "points": 20.0,
+        "total": 24,
+        "win_speed": 0.8289,
+        "per_matchup": {
+          "Edsgvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvsmart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvsmart_mag": {
+            "wins": 2,
+            "total": 2
+          },
+          "AdaLvlive_81744": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvlive_69633": {
+            "wins": 1,
+            "total": 1
+          },
+          "Kurtvlive_105374": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvlive_103148": {
+            "wins": 1,
+            "total": 1
+          },
+          "AdaLvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Edsgvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Kurtvmirror": {
+            "wins": 1,
+            "total": 1
+          },
+          "Margvmirror_t2": {
+            "wins": 0,
+            "total": 1
+          },
+          "Edsgvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Margvuphill_smart_mag": {
+            "wins": 0,
+            "total": 2
+          },
+          "AdaLvuphill_smart_str": {
+            "wins": 2,
+            "total": 2
+          },
+          "Kurtvuphill_smart_mag": {
+            "wins": 2,
+            "total": 2
+          }
+        }
+      }
+    }
+  ],
+  "config": {
+    "population_size": 8,
+    "max_generations": 8,
+    "mutation_rate": 0.3,
+    "mutation_strength": 0.25,
+    "elitism": 1,
+    "tournament_size": 3,
+    "parallel": 8,
+    "use_mirror": true
+  }
+}

@@ -1649,7 +1649,7 @@ def apply_weights(weights_path):
         print("  (no changes)")
         return
 
-    if is_counter:
+    if build_type == "COUNTER":
         injector.inject(weights)
     else:
         injector.inject(build_type, weights)

@@ -1,0 +1,153 @@
+{
+  "generation": 1,
+  "mode": "tunables",
+  "build_type": "TUNABLES",
+  "leek_name": "KurtGodel",
+  "leek_names": [
+    "KurtGodel"
+  ],
+  "best_fitness": 1.009375,
+  "best_val_fitness": 0.0,
+  "best_genome": {
+    "build_type": "TUNABLES",
+    "weights": {
+      "killProbCoef": 2.698993273938223,
+      "deathPenalty": 13617,
+      "dyingSoonPenalty": 1665,
+      "survivalMultLow": 76.62953790146496,
+      "survivalMultMid": 22.308902300204043,
+      "survivalMultHigh": 20.425410145762044,
+      "urgencyCap": 8.297878373595356,
+      "b5HoldPenalty": 771
+    }
+  },
+  "population": [
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.288035850041277,
+          "deathPenalty": 8152,
+          "dyingSoonPenalty": 2569,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 24.434301340482854,
+          "survivalMultHigh": 13.758416434941449,
+          "urgencyCap": 8.674766292536994,
+          "b5HoldPenalty": 881
+        }
+      },
+      "fitness": 1.00951171875
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 2.6421109985326408,
+          "deathPenalty": 9664,
+          "dyingSoonPenalty": 1597,
+          "survivalMultLow": 71.82361658088894,
+          "survivalMultMid": 17.95585481273573,
+          "survivalMultHigh": 24.97438329424689,
+          "urgencyCap": 7.145816827714102,
+          "b5HoldPenalty": 621
+        }
+      },
+      "fitness": 1.00951171875
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.6803378758937795,
+          "deathPenalty": 11918,
+          "dyingSoonPenalty": 3673,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 21.403188852711377,
+          "survivalMultHigh": 15.202176451947711,
+          "urgencyCap": 9.075353454344347,
+          "b5HoldPenalty": 470
+        }
+      },
+      "fitness": 1.00951171875
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 2.698993273938223,
+          "deathPenalty": 13617,
+          "dyingSoonPenalty": 1665,
+          "survivalMultLow": 76.62953790146496,
+          "survivalMultMid": 22.308902300204043,
+          "survivalMultHigh": 20.425410145762044,
+          "urgencyCap": 8.297878373595356,
+          "b5HoldPenalty": 771
+        }
+      },
+      "fitness": 1.009375
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.386790363464046,
+          "deathPenalty": 7300,
+          "dyingSoonPenalty": 500,
+          "survivalMultLow": 71.24912081375889,
+          "survivalMultMid": 18.64922335295381,
+          "survivalMultHigh": 13.902043025336683,
+          "urgencyCap": 8.994529413954824,
+          "b5HoldPenalty": 660
+        }
+      },
+      "fitness": 1.009375
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.65,
+          "deathPenalty": 8076,
+          "dyingSoonPenalty": 2134,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 21.12199351535432,
+          "survivalMultHigh": 17.701805131957904,
+          "urgencyCap": 8.79367881281243,
+          "b5HoldPenalty": 835
+        }
+      },
+      "fitness": 1.009326171875
+    }
+  ],
+  "history": [
+    {
+      "generation": 1,
+      "best": 1.0094140625,
+      "avg": 1.009345703125,
+      "worst": 1.00927734375,
+      "elapsed_s": 141.1
+    },
+    {
+      "generation": 2,
+      "best": 1.00951171875,
+      "avg": 1.0094352213541666,
+      "worst": 1.009326171875,
+      "elapsed_s": 121.8
+    }
+  ],
+  "config": {
+    "population_size": 6,
+    "fights_per_opponent": 2,
+    "mutation_rate": 0.15,
+    "mutation_strength": 0.2,
+    "elitism": 3,
+    "tournament_size": 4,
+    "train_opponents": [
+      "live_105374",
+      "live_125144",
+      "live_91896",
+      "live_129824"
+    ],
+    "val_opponents": []
+  }
+}

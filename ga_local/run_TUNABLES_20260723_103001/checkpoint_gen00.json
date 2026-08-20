@@ -1,0 +1,146 @@
+{
+  "generation": 0,
+  "mode": "tunables",
+  "build_type": "TUNABLES",
+  "leek_name": "KurtGodel",
+  "leek_names": [
+    "KurtGodel"
+  ],
+  "best_fitness": 1.00927734375,
+  "best_val_fitness": 0.0,
+  "best_genome": {
+    "build_type": "TUNABLES",
+    "weights": {
+      "killProbCoef": 3.65,
+      "deathPenalty": 8076,
+      "dyingSoonPenalty": 2134,
+      "survivalMultLow": 80.0,
+      "survivalMultMid": 21.12199351535432,
+      "survivalMultHigh": 17.701805131957904,
+      "urgencyCap": 8.79367881281243,
+      "b5HoldPenalty": 835
+    }
+  },
+  "population": [
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.45,
+          "deathPenalty": 8076,
+          "dyingSoonPenalty": 2134,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 21.12199351535432,
+          "survivalMultHigh": 17.701805131957904,
+          "urgencyCap": 9.55,
+          "b5HoldPenalty": 835
+        }
+      },
+      "fitness": 1.0094140625
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.65,
+          "deathPenalty": 8076,
+          "dyingSoonPenalty": 2134,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 21.12199351535432,
+          "survivalMultHigh": 17.701805131957904,
+          "urgencyCap": 8.79367881281243,
+          "b5HoldPenalty": 835
+        }
+      },
+      "fitness": 1.0094140625
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.65,
+          "deathPenalty": 8076,
+          "dyingSoonPenalty": 2106,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 21.12199351535432,
+          "survivalMultHigh": 17.701805131957904,
+          "urgencyCap": 8.79367881281243,
+          "b5HoldPenalty": 835
+        }
+      },
+      "fitness": 1.0094140625
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.65,
+          "deathPenalty": 8076,
+          "dyingSoonPenalty": 2134,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 21.12199351535432,
+          "survivalMultHigh": 17.701805131957904,
+          "urgencyCap": 8.79367881281243,
+          "b5HoldPenalty": 835
+        }
+      },
+      "fitness": 1.00927734375
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.65,
+          "deathPenalty": 2000,
+          "dyingSoonPenalty": 2134,
+          "survivalMultLow": 80.0,
+          "survivalMultMid": 7.08,
+          "survivalMultHigh": 15.14,
+          "urgencyCap": 8.79367881281243,
+          "b5HoldPenalty": 716
+        }
+      },
+      "fitness": 1.00927734375
+    },
+    {
+      "genome": {
+        "build_type": "TUNABLES",
+        "weights": {
+          "killProbCoef": 3.65,
+          "deathPenalty": 8076,
+          "dyingSoonPenalty": 2134,
+          "survivalMultLow": 59.46,
+          "survivalMultMid": 21.12199351535432,
+          "survivalMultHigh": 17.701805131957904,
+          "urgencyCap": 8.79367881281243,
+          "b5HoldPenalty": 835
+        }
+      },
+      "fitness": 1.00927734375
+    }
+  ],
+  "history": [
+    {
+      "generation": 1,
+      "best": 1.0094140625,
+      "avg": 1.009345703125,
+      "worst": 1.00927734375,
+      "elapsed_s": 141.1
+    }
+  ],
+  "config": {
+    "population_size": 6,
+    "fights_per_opponent": 2,
+    "mutation_rate": 0.15,
+    "mutation_strength": 0.2,
+    "elitism": 3,
+    "tournament_size": 4,
+    "train_opponents": [
+      "live_105374",
+      "live_125144",
+      "live_91896",
+      "live_129824"
+    ],
+    "val_opponents": []
+  }
+}

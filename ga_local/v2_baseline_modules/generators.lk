@@ -1,0 +1,219 @@
+// V9 candidate generation — proposes K complete turns; the rollout re-ranks
+// them by simulation. Proposals stay lean on purpose: the thesis of V9 is
+// that simulation-based PICKING beats heuristic scoring, so the generator
+// only needs to cover the turn shapes, not rank them well.
+// Legality is enforced downstream by ScenarioSimulator.canExecuteAction, and
+// infeasible plans self-penalize via SimulationResult.droppedActions.
+
+function v9WeaponPlan(wid, target, maxActions) {
+    var acts = []
+    if (getWeapon() != wid) {
+        push(acts, new Action(Action.ACTION_WEAPON_SWAP, wid, -1, -1, null))
+    }
+    var uses = getWeaponMaxUses(wid)
+    if (uses == null || uses <= 0) uses = 1
+    if (uses > maxActions) uses = maxActions
+    for (var i = 0; i < uses; i++) {
+        push(acts, new Action(Action.ACTION_DIRECT, wid, -1, target._cellPos, target))
+    }
+    return acts
+}
+
+// Order: chips first (they don't need weapon alignment), weapon tail.
+function v9ChipThenWeapon(chipIds, chipType, wid, target, maxActions) {
+    var acts = []
+    for (var cid in chipIds) {
+        var a = new Action(chipType, -1, cid, target._cellPos, target)
+        push(acts, a)
+    }
+    var tail = v9WeaponPlan(wid, target, maxActions)
+    for (var ta in tail) push(acts, ta)
+    return acts
+}
+
+function v9SelfBuffThenWeapon(chipIds, wid, target, maxActions) {
+    var acts = []
+    var myCell = getCell()
+    for (var cid in chipIds) {
+        push(acts, new Action(Action.ACTION_BUFF, -1, cid, myCell, null))
+    }
+    var tail = v9WeaponPlan(wid, target, maxActions)
+    for (var ta in tail) push(acts, ta)
+    return acts
+}
+
+// Best weapon by rough post-shield direct damage at current distance.
+function v9BestWeapon(target, arsenal) {
+    var best = -1
+    var bestDmg = -1
+    var dist = getCellDistance(getCell(), target._cellPos)
+    for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+        var wObj = arsenal.playerEquippedWeapons[wid]
+        if (dist != null && (dist < wObj._minRange || dist > wObj._maxRange)) continue
+        var bd = arsenal.getDamageBreakdown(getStrength(), getMagic(), getWisdom(), getScience(), wid)
+        if (bd == null) continue
+        var dmg = bd['direct'] + bd['nova']
+        if (dmg > bestDmg) {
+            bestDmg = dmg
+            best = wid
+        }
+    }
+    return best
+}
+
+// Reachable cell picker. Approach: prefer cells we can actually ATTACK from
+// (LoS + in range of some weapon/offensive chip) — the 63-turn stall was
+// Margaret standing 5 cells out, in range but LoS-blocked, with no plan
+// considering sight lines. Kite: farthest, LoS-breaking cell.
+function v9BestStepCell(target, arsenal, approach) {
+    var reach = buildReachableCellsCache(getCell(), getMP())
+    var myCell = getCell()
+    var bestCell = -1
+    var bestScore = -999999
+    for (var c in mapKeys(reach)) {
+        if (c == myCell) continue
+        var d = getCellDistance(c, target._cellPos)
+        if (d == null) continue
+        var los = getCachedLineOfSight(c, target._cellPos)
+        var score = 0
+        if (approach) {
+            var reachHere = 0
+            for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+                var wObj = arsenal.playerEquippedWeapons[wid]
+                if (los && d >= wObj._minRange && d <= wObj._maxRange) reachHere++
+            }
+            for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+                if (!isPoisonChip(cid) && !isDebuffChip(cid)) continue
+                var cObj = arsenal.playerEquippedChips[cid]
+                if (los && d >= cObj._minRange && d <= cObj._maxRange) reachHere++
+            }
+            score += reachHere * 100
+            score -= d * 5
+        } else {
+            score += d * 10
+            if (!los) score += 50
+        }
+        if (score > bestScore) { bestScore = score; bestCell = c }
+    }
+    return bestCell
+}
+
+function v9GenCandidates(target, arsenal) {
+    var cands = []
+
+    // Beam-generated scenarios first (V8-quality proposals) — the rollout
+    // re-ranks these against the lean plans below by simulation.
+    var beamScens = beamSearchScenarios(player, target, arsenal, null)
+    for (var bs in beamScens) push(cands, bs)
+
+    var myCell = getCell()
+    var myHP = getLife()
+    var myMaxHP = getTotalLife()
+    var turn = getTurn()
+
+    var bestW = v9BestWeapon(target, arsenal)
+    if (bestW == -1) {
+        // nothing in range: approach only
+        bestW = mapKeys(arsenal.playerEquippedWeapons)[0]
+    }
+
+    // 1. Pure weapon plans (each equipped weapon at current position)
+    for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+        push(cands, v9WeaponPlan(wid, target, 6))
+    }
+
+    // 2. Poison stack + best weapon (casters)
+    var poisons = []
+    for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+        if (isPoisonChip(cid) && getCooldown(cid, getEntity()) == 0) push(poisons, cid)
+    }
+    if (count(poisons) > 0) {
+        push(cands, v9ChipThenWeapon(poisons, Action.ACTION_DOT, bestW, target, 3))
+    }
+
+    // 3. Denial + weapon
+    var denials = []
+    for (var cid2 in mapKeys(arsenal.playerEquippedChips)) {
+        if (isDebuffChip(cid2) && cid2 != CHIP_LIBERATION && getCooldown(cid2, getEntity()) == 0) push(denials, cid2)
+    }
+    if (count(denials) > 0) {
+        push(cands, v9ChipThenWeapon(denials, Action.ACTION_DEBUFF, bestW, target, 3))
+    }
+
+    // 4. Buff opener (early turns) + weapon
+    if (turn <= 2) {
+        var buffs = []
+        for (var cid3 in mapKeys(arsenal.playerEquippedChips)) {
+            if (isOffensiveBuff(cid3) && getCooldown(cid3, getEntity()) == 0) push(buffs, cid3)
+        }
+        if (count(buffs) > 0) {
+            push(cands, v9SelfBuffThenWeapon(buffs, bestW, target, 2))
+        }
+    }
+
+    // 5. Defensive: best heal (low HP) or shield, then weapon tail
+    if (myHP < myMaxHP * 0.65) {
+        var heals = []
+        for (var cid4 in mapKeys(arsenal.playerEquippedChips)) {
+            if (isHealingChip(cid4) && getCooldown(cid4, getEntity()) == 0) push(heals, cid4)
+        }
+        if (count(heals) > 0) {
+            push(cands, v9SelfBuffThenWeapon(heals, bestW, target, 2))
+        }
+    }
+    var shields = []
+    for (var cid5 in mapKeys(arsenal.playerEquippedChips)) {
+        if (isShieldChip(cid5) && getCooldown(cid5, getEntity()) == 0) push(shields, cid5)
+    }
+    if (count(shields) > 0 && myHP < myMaxHP * 0.85) {
+        push(cands, v9SelfBuffThenWeapon(shields, bestW, target, 2))
+    }
+
+    // 6. Strip + attack when the target is shielded (Liberation, if carried)
+    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_LIBERATION)
+        && getCooldown(CHIP_LIBERATION, getEntity()) == 0) {
+        var tAbs = target._absShield
+        var tRel = target._relShield
+        if (tAbs == null) tAbs = 0
+        if (tRel == null) tRel = 0
+        if (tAbs >= 100 || tRel >= 25) {
+            push(cands, v9ChipThenWeapon([CHIP_LIBERATION], Action.ACTION_DEBUFF, bestW, target, 4))
+        }
+    }
+
+    // 7. Approach + attack (step to the best reachable cell, then weapons)
+    var stepIn = v9BestStepCell(target, arsenal, true)
+    if (stepIn != -1) {
+        var approach = [new Action(Action.MOVEMENT_APPROACH, -1, -1, stepIn, target)]
+        for (var aa in v9WeaponPlan(bestW, target, 4)) push(approach, aa)
+        push(cands, approach)
+
+        // 8. Poison approach (casters: step in, stack, no weapon)
+        if (count(poisons) > 0) {
+            var pa = [new Action(Action.MOVEMENT_APPROACH, -1, -1, stepIn, target)]
+            for (var pc in poisons) {
+                push(pa, new Action(Action.ACTION_DOT, -1, pc, target._cellPos, target))
+            }
+            push(cands, pa)
+        }
+    }
+
+    // 9. Kite: step away + chips only (no weapon)
+    var stepOut = v9BestStepCell(target, arsenal, false)
+    if (stepOut != -1) {
+        var kite = [new Action(Action.MOVEMENT_FLEE, -1, -1, stepOut, target)]
+        var chipOnly = []
+        for (var cid6 in mapKeys(arsenal.playerEquippedChips)) {
+            if ((isPoisonChip(cid6) || (isDebuffChip(cid6) && cid6 != CHIP_LIBERATION))
+                && getCooldown(cid6, getEntity()) == 0) push(chipOnly, cid6)
+        }
+        if (count(chipOnly) > 0) {
+            for (var cc in chipOnly) {
+                push(kite, new Action(isPoisonChip(cc) ? Action.ACTION_DOT : Action.ACTION_DEBUFF, -1, cc, target._cellPos, target))
+            }
+            push(cands, kite)
+        }
+    }
+
+    return cands
+}

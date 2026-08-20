@@ -1,0 +1,1868 @@
+include('action.lk')
+include('../weight_profiles.lk')
+include('../strategic_depth.lk')
+include('../scenario_mutation.lk')
+
+class UnifiedStrategy extends Strategy {
+    _weights = null
+    _player = null
+    _target = null
+    _arsenal = null
+    _turnContext = null
+    _bestScore = -999999
+    _bestScenario = null
+    _bestSimResult = null
+    // V9 Path A: top-5 fully-scored feasible candidates from the last
+    // generateAndEvaluateBestScenario run, consumed by rollout_rerank.lk.
+    _topCandidates = null
+
+    constructor(weights, playerEntity, targetEntity, arsenalObj, fieldMapObj) {
+        super()
+        this._weights = weights
+        this._player = playerEntity
+        this._target = targetEntity
+        this._arsenal = arsenalObj
+        this._fieldMap = fieldMapObj
+
+        this.initializeTurnContext()
+    }
+
+    initializeTurnContext() {
+        this._turnContext = [
+            'poisonRemaining': [],
+            'antidoteUsed': false,
+            'lastShieldChip': null,
+            'baitMode': false,
+            'lastReturnChip': null,
+            'returnChipTurn': 0
+        ]
+    }
+
+    resetTurnContext() {
+        this.initializeTurnContext()
+    }
+
+    createAndExecuteScenario(target, targetHitCell) {
+        arrayClear(this._actions)
+
+        // V9: clear last turn's pipeline results so the rollout veto below
+        // never evaluates (or worse, executes) a stale scenario when this
+        // turn's generator produced zero scenarios (early return path).
+        this._bestScenario = null
+        this._bestSimResult = null
+        this._topCandidates = null
+
+        this._originalTP = player._currTp
+        this._originalMP = player._currMp
+
+        this.checkSelfAntidote()
+
+        this.generateAndEvaluateBestScenario(target, targetHitCell)
+
+        // Phase B: alt-target counterfactual. If target lockin missed a better
+        // option (e.g. low-HP summoner that's 1-shot, or a debuffable kiter),
+        // run a lighter pipeline pass on the second-best target and swap if
+        // it scores meaningfully higher. Status-quo bias: alt must beat
+        // primary by at least 200 score to flip.
+        if (this._bestScenario != null && target != null && getOperations() < _ops50) {
+            var altTarget = this._fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true], target._id)
+            if (altTarget != null && !isDead(altTarget._id)) {
+                var altResult = this.runScoringPipelineLight(altTarget)
+                if (altResult != null) {
+                    // Phase 1.3: percentage threshold + kill-flag override.
+                    // Fixed +200 over-restricted early (scores ~500, refuses
+                    // 30% better alts) and was noise late (scores ~50k).
+                    // Kill-flag override: a confirmed kill on the secondary
+                    // wins even if its raw score is slightly lower — ending
+                    // the fight is worth ≥ any +200 of position.
+                    var threshold = max(200, floor(this._bestScore * 0.15))
+                    var altKillProb = estimateKillProbFromSim(altResult['simResult'], altTarget)
+                    var primaryKillProb = (this._bestSimResult != null) ? estimateKillProbFromSim(this._bestSimResult, this._target) : 0
+                    var altIsKill = altKillProb >= 0.70
+                    var primaryIsKill = primaryKillProb >= 0.70
+                    var killOverride = altIsKill && !primaryIsKill && altResult['score'] > this._bestScore - 1000
+                    if (altResult['score'] > this._bestScore + threshold || killOverride) {
+                        target = altTarget
+                        this._target = altTarget
+                        this._actions = altResult['scenario']
+                        this._bestScenario = altResult['scenario']
+                        this._bestSimResult = altResult['simResult']
+                        this._bestScore = altResult['score']
+                    }
+                }
+            }
+        }
+
+        // V9 every-turn rollout re-rank (Path A): re-rank the retained top-5
+        // feasible candidates by raw score + the simulated enemy response on
+        // each candidate's end state (rollout_rerank.lk). The pipeline's own
+        // top-1 stays the default — we override only when the adjusted winner
+        // beats the native pick's adjusted score by more than
+        // _v9RerankThreshold. Runs BEFORE the rollout veto so the veto still
+        // sees (and can still veto) the re-ranked pick. Guards beyond the
+        // spec snippet: null-best/null-target (nothing safe to re-rank
+        // against; the enemy sim needs a target id) and
+        // _actions == _bestScenario — when the OVR gate swapped in the
+        // fallback scenario, _bestScenario is a no-op the pipeline already
+        // rejected; leave the fallback alone.
+        if (_v9RerankEnabled && this._bestScenario != null && target != null
+            && this._actions == this._bestScenario
+            && this._topCandidates != null && count(this._topCandidates) > 1
+            && getOperations() < _ops86) {
+            var _rr = rolloutRerank(this._topCandidates, target, this._arsenal, this._fieldMap)
+            if (_rr[2] > _v9RerankThreshold && !_rr[3]) {
+                this._bestScenario = _rr[0]['scenario']
+                this._actions = _rr[0]['scenario']
+                this._bestScore = _rr[0]['score']
+                this._bestSimResult = _rr[0]['simResult']
+                if (_v9RerankLog) debugW("V9_RR_T" + getTurn() + "_gap" + floor(_rr[2]))
+            }
+        }
+
+        // V9 rollout veto (Phase M2): simulate the enemy response to the
+        // chosen plan's end state; when catastrophic (predicted death, race
+        // bleed, or a mostly-dropped plan), try simulated defensive
+        // alternatives and override only if one scores strictly higher
+        // (rollout_veto.lk). Gate at _ops79: the scenario pipeline routinely
+        // burns past _ops50 by this point — a 50% gate made the veto dead
+        // code in production (GA v2 proof: zero V9_VETO in any fight log).
+        // _actions must follow _bestScenario — executeScenario runs _actions.
+        if (_v9VetoEnabled && this._bestScenario != null && target != null && getOperations() < _ops79) {
+            var _vetoPick = rolloutVetoCheck(this._bestScenario, this._bestSimResult, target, this._arsenal, this._fieldMap)
+            if (_vetoPick != null && _vetoPick != this._bestScenario) {
+                this._bestScenario = _vetoPick
+                this._actions = _vetoPick
+            }
+        }
+
+        var targetDied = this.executeScenario()
+
+        // Recovery is cheap (~200K-500K ops worst case) and very high value:
+        // skipping it leaves 5-10 TP unspent on tight-budget leeks (8M ops).
+        // Trace whether the recovery gate fires so we can diagnose unspent-TP
+        // turns from the server fight log.
+        // Support post-pass (BUILD_SUPPORT only), BEFORE TP recovery so ally
+        // casts take priority over self-filler. Deterministic like the boss
+        // BUFFER role (direct useChip on ally) — the scenario competition's
+        // 1v1 score landscape (100k+ multiplicative spikes) reliably outbids
+        // any additive ally dimension, so support cannot live inside it.
+        if (__playerBuildType == BUILD_SUPPORT && getTP() >= 2
+            && getOperations() < _opsBudget - 400000) {
+            supportAlliesPass()
+        }
+
+        var tpBeforeRec = getTP()
+        var opsBeforeRec = getOperations()
+        if (!targetDied && target != null && !isDead(target._id) &&
+            opsBeforeRec < _opsBudget - 300000) {
+            debugW("REC_T" + getTurn() + "_TP" + tpBeforeRec + "_OPS" + opsBeforeRec)
+            recoverRemainingTP(target)
+        } else if (tpBeforeRec >= 5) {
+            debugE("REC_SKIP_T" + getTurn() + "_TP" + tpBeforeRec + "_OPS" + opsBeforeRec + "_BUDGET" + _opsBudget)
+        }
+
+        if (targetDied) {
+            var enemies = this._fieldMap.getEnemySubMap()
+            var aliveEnemies = []
+
+            for (var eid in mapKeys(enemies)) {
+                if (!isDead(eid)) {
+                    push(aliveEnemies, enemies[eid])
+                }
+            }
+
+            if (count(aliveEnemies) > 0) {
+
+                player.updateEntity()
+
+                var newTarget = aliveEnemies[0]
+                for (var i = 1; i < count(aliveEnemies); i++) {
+                    var e = aliveEnemies[i]
+                    if (e._currHealth < newTarget._currHealth) {
+                        newTarget = e
+                    }
+                }
+
+                var newTargetHitCell = newTarget._cellPos
+
+                arrayClear(this._actions)
+                this.generateAndEvaluateBestScenario(newTarget, newTargetHitCell)
+                var retargetDied = this.executeScenario()
+
+                if (!retargetDied && !isDead(newTarget._id) && getOperations() < _ops96) {
+                    recoverRemainingTP(newTarget)
+                }
+            }
+        }
+    }
+
+    generateAndEvaluateBestScenario(target, targetHitCell) {
+        // V9 Path A: reset the retained candidate pool; filled at the end of
+        // the scoring pass below (early returns leave it empty → no re-rank).
+        this._topCandidates = []
+
+        var generator = new ScenarioGenerator(
+            arsenal,
+            player,
+            target,
+            this._fieldMap,
+            this
+        )
+
+        var scenarios = generator.generateScenarios()
+
+        if (count(scenarios) == 0) {
+            this.createFallbackScenario(target, targetHitCell)
+            return
+        }
+
+        var quickScorer = new ScenarioQuickScorer(player, target, this._fieldMap, arsenal)
+
+        var scenariosWithQuickScore = []
+        for (var scenario in scenarios) {
+            var qScore = quickScorer.quickScore(scenario)
+            var family = quickScorer.classifyFamily(scenario)
+            var hasHeal = quickScorer.scenarioHasHealAction(scenario)
+            push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore, 'family': family, 'hasHeal': hasHeal])
+        }
+
+        arraySort(scenariosWithQuickScore, function(a, b) {
+            return b['quickScore'] - a['quickScore']
+        })
+
+        // Family diversity reorder, but PIN the top-3 by raw quick-score so
+        // a high-quality scenario doesn't get demoted to overflow just because
+        // a lower-scored same-family entry happened to be sorted first.
+        // Without the pin, e.g. multiple COMBO scenarios: only the first
+        // entered diverseList and the 2nd-COMBO (with higher raw quickScore)
+        // landed at index 4+ and got cut by the post-mutation top-N pool.
+        var rawTopN = min(3, count(scenariosWithQuickScore))
+        var rawPinned = [:]
+        for (var i = 0; i < rawTopN; i++) {
+            rawPinned[i] = true
+        }
+
+        var familySeen = [:]
+        var diverseList = []
+        var overflow = []
+
+        // Pass 1: emit the pinned top-N first, mark their families seen.
+        for (var i = 0; i < count(scenariosWithQuickScore); i++) {
+            if (!mapContainsKey(rawPinned, i)) continue
+            var entry = scenariosWithQuickScore[i]
+            push(diverseList, entry)
+            familySeen[entry['family']] = true
+        }
+
+        // Pass 2: family-diversity-fill from remaining (non-pinned) entries.
+        for (var i = 0; i < count(scenariosWithQuickScore); i++) {
+            if (mapContainsKey(rawPinned, i)) continue
+            var entry = scenariosWithQuickScore[i]
+            var fam = entry['family']
+            if (!mapContainsKey(familySeen, fam)) {
+                familySeen[fam] = true
+                push(diverseList, entry)
+            } else {
+                push(overflow, entry)
+            }
+        }
+        scenariosWithQuickScore = []
+        for (var d in diverseList) push(scenariosWithQuickScore, d)
+        for (var o in overflow) push(scenariosWithQuickScore, o)
+
+        // Phase 2.1: state-dependent diversity floor. Family-diversity-reorder
+        // is purely quick-score-ranked; in FLEE/SUSTAIN that leaves the head of
+        // the list dominated by offensive scenarios when we actually need to
+        // survive. Inject a floor of defensive entries (pulled from overflow
+        // or original list) so the scorer pipeline sees them.
+        if (target != null && !_isBossFight) {
+            var sds_state = generator.determineStrategicState()
+            var defensiveFloor = 0
+            if (sds_state == "FLEE") defensiveFloor = 5
+            else if (sds_state == "SUSTAIN") defensiveFloor = 4
+            if (defensiveFloor > 0) {
+                var sds_defCount = 0
+                var sds_headLimit = min(defensiveFloor + 4, count(scenariosWithQuickScore))
+                for (var sds_i = 0; sds_i < sds_headLimit; sds_i++) {
+                    if (scenariosWithQuickScore[sds_i]['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                        sds_defCount += 1
+                    }
+                }
+                if (sds_defCount < defensiveFloor) {
+                    // Walk the tail for defensive entries and pull them up.
+                    var sds_promoted = []
+                    var sds_rest = []
+                    var sds_need = defensiveFloor - sds_defCount
+                    for (var sds_j = sds_headLimit; sds_j < count(scenariosWithQuickScore); sds_j++) {
+                        var sds_entry = scenariosWithQuickScore[sds_j]
+                        if (sds_need > 0 && sds_entry['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                            push(sds_promoted, sds_entry)
+                            sds_need -= 1
+                        } else {
+                            push(sds_rest, sds_entry)
+                        }
+                    }
+                    if (count(sds_promoted) > 0) {
+                        var sds_new = []
+                        for (var sds_k = 0; sds_k < sds_headLimit; sds_k++) push(sds_new, scenariosWithQuickScore[sds_k])
+                        for (var sds_p in sds_promoted) push(sds_new, sds_p)
+                        for (var sds_r in sds_rest) push(sds_new, sds_r)
+                        scenariosWithQuickScore = sds_new
+                    }
+                }
+            }
+        }
+
+        // Phase 2.1b: MAG opponent defensive injection. When facing a high-MAG
+        // target (>= 300), poison stacks faster than we can close the distance.
+        // Evidence: LR vs AuroraRicochet, 0-1 heal plays in losses vs 4 in win
+        // (F52582894: HP 163 -> 1103 in one turn). Inject a small defensive
+        // floor (2) so heal scenarios reach the scorer even when their raw
+        // quick-score loses to offensive picks.
+        //
+        // Two-pass promotion: first pass pulls hasHeal=true entries (real HP
+        // restorers), second pass pulls any defensive entry. Otherwise (per
+        // F52582973 T5) the floor is satisfied by antidote+manumission combos
+        // that don't actually restore HP.
+        if (target != null && !_isBossFight && target._magic != null && target._magic >= 300) {
+            var magFloor = 2
+            var magHealFloor = 1
+            var magDefCount = 0
+            var magHealCount = 0
+            var magHeadLimit = min(magFloor + 6, count(scenariosWithQuickScore))
+            for (var mag_i = 0; mag_i < magHeadLimit; mag_i++) {
+                if (scenariosWithQuickScore[mag_i]['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                    magDefCount += 1
+                }
+                if (scenariosWithQuickScore[mag_i]['hasHeal'] == true) {
+                    magHealCount += 1
+                }
+            }
+            if (magDefCount < magFloor || magHealCount < magHealFloor) {
+                var mag_promoted = []
+                var mag_rest = []
+                var mag_defNeed = magFloor - magDefCount
+                var mag_healNeed = magHealFloor - magHealCount
+                // Pass 1: pull heal-bearing entries first.
+                for (var mag_j1 = magHeadLimit; mag_j1 < count(scenariosWithQuickScore); mag_j1++) {
+                    var mag_entry1 = scenariosWithQuickScore[mag_j1]
+                    if (mag_healNeed > 0 && mag_entry1['hasHeal'] == true) {
+                        push(mag_promoted, mag_entry1)
+                        mag_healNeed -= 1
+                        if (mag_entry1['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                            mag_defNeed -= 1
+                        }
+                    } else {
+                        push(mag_rest, mag_entry1)
+                    }
+                }
+                // Pass 2: fill remaining defensive floor from the leftover tail.
+                var mag_rest2 = []
+                for (var mag_j2 = 0; mag_j2 < count(mag_rest); mag_j2++) {
+                    var mag_entry2 = mag_rest[mag_j2]
+                    if (mag_defNeed > 0 && mag_entry2['family'] == ScenarioQuickScorer.FAMILY_DEFENSIVE) {
+                        push(mag_promoted, mag_entry2)
+                        mag_defNeed -= 1
+                    } else {
+                        push(mag_rest2, mag_entry2)
+                    }
+                }
+                if (count(mag_promoted) > 0) {
+                    var mag_new = []
+                    for (var mag_k = 0; mag_k < magHeadLimit; mag_k++) push(mag_new, scenariosWithQuickScore[mag_k])
+                    for (var mag_p in mag_promoted) push(mag_new, mag_p)
+                    for (var mag_r in mag_rest2) push(mag_new, mag_r)
+                    scenariosWithQuickScore = mag_new
+                }
+            }
+        }
+
+        var aliveEnemies = count(getAliveEnemies())
+        var topK
+        if (getTurn() < 5 || aliveEnemies > 3) {
+            topK = 35
+        } else if (aliveEnemies == 1) {
+            topK = 80
+        } else {
+            topK = 55
+        }
+        if (_opsBudget < 14000000) {
+            // Audit item 3: floor raised 8 → 14. Low-core leeks were left
+            // simulating a single-digit scenario pool; the quick-scorer's
+            // ordering is too noisy for a top-8 cut to reliably contain the
+            // best play. Ops safety comes from the in-loop gates, not the cap.
+            topK = max(14, floor(topK * _opsBudget / 14000000))
+        }
+        if (getOperations() > _ops79) {
+            topK = max(8, floor(topK * 0.5))
+        }
+        var evaluateCount = min(topK, count(scenariosWithQuickScore))
+
+        var USE_MUTATIONS = true
+        var mutationOpsLimit = _ops89
+
+        if (_isBossFight && _bossPhase == "PUZZLE") {
+            USE_MUTATIONS = false
+        }
+
+        if (USE_MUTATIONS && getOperations() < mutationOpsLimit && count(scenariosWithQuickScore) >= 1) {
+
+            // OBS: pre-mutation generator/quickScore snapshot. Captures total
+            // generator output, top-6 families, top quickScore, and how many
+            // top-K entries look damaging by quickScore heuristic.
+            if (getTurn() <= 20) {
+                var _preN = count(scenariosWithQuickScore)
+                var _preTopQ = (_preN > 0) ? scenariosWithQuickScore[0]['quickScore'] : 0
+                var _preFams = ""
+                var _preSeedCount = min(6, _preN)
+                for (var _pi = 0; _pi < _preSeedCount; _pi++) {
+                    if (_pi > 0) _preFams += ","
+                    _preFams += scenariosWithQuickScore[_pi]['family'] + ":" + scenariosWithQuickScore[_pi]['quickScore']
+                }
+                debugW("PRE_T" + getTurn() + "_n" + _preN + "_topQ" + _preTopQ + "_top6[" + _preFams + "]")
+            }
+
+            var enemies = this._fieldMap.getEnemySubMap()
+            var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
+            var scorer = new ScenarioScorer(player, target, this._fieldMap, adaptedWeights)
+
+            var mutationSeeds = []
+            var seedLimit = min(_mutationMaxSeeds, count(scenariosWithQuickScore))
+            for (var i = 0; i < seedLimit; i++) {
+                push(mutationSeeds, scenariosWithQuickScore[i]['scenario'])
+            }
+
+            var mutationPlanner = new HybridMutationPlanner(arsenal, player, target, this._fieldMap, scorer)
+            var bestMutatedScenario = mutationPlanner.planWithMutations(mutationSeeds)
+
+            // Multi-pass mutation refinement: on bigger budgets (KG), re-feed
+            // the winner back into the planner as the only seed and run a 2nd
+            // mutation pass. This iterates the trusted optimizer instead of
+            // widening the post-mutation picker pool, which previously caused
+            // late-game passive regressions.
+            if (_opsBudget >= 18000000 && getOperations() < _ops79 && bestMutatedScenario != null) {
+                var refineSeeds = [bestMutatedScenario]
+                var refinedWinner = mutationPlanner.planWithMutations(refineSeeds)
+                if (refinedWinner != null) {
+                    bestMutatedScenario = refinedWinner
+                }
+            }
+
+            scenariosWithQuickScore = []
+            push(scenariosWithQuickScore, ['scenario': bestMutatedScenario, 'quickScore': 9999])
+
+            // Include ALL mutation seeds in the final scoring pool (was top 3,
+            // which dropped 2nd/3rd COMBO variants — e.g. J2FIRE — when the
+            // diversity step had pushed them to indices 4-5). Adds ~3 score()
+            // calls per turn (seeds 3..5) and lets the full scorer pick the
+            // damage scenario instead of a mid-tier original.
+            var origLimit = seedLimit
+            for (var i = 0; i < origLimit; i++) {
+                push(scenariosWithQuickScore, ['scenario': mutationSeeds[i], 'quickScore': 8000 - i * 100])
+            }
+
+            evaluateCount = count(scenariosWithQuickScore)
+        }
+
+        var enemies = this._fieldMap.getEnemySubMap()
+        var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
+
+        var simulator = new ScenarioSimulator(arsenal, player, target, this._fieldMap)
+        var scorer = new ScenarioScorer(player, target, this._fieldMap, adaptedWeights)
+
+        var bestScore = -999999
+        var bestScenario = null
+        var bestSimResult = null
+        var scenarioResults = []
+
+        // Fix #1B: NET-TP feasibility gate at scoring/2-ply/lookahead, parallel
+        // to scenario_mutation.lk:416. Without this, infeasible templates
+        // (e.g. T7 Gundamm Vaccin(6)+Move+Cure(4)+Axe-swap(1)+Axe(6)=17 TP at
+        // 14 TP available) bypassed the mutation gate and won bestScore via the
+        // raw-score, 2-ply, or lookahead update sites. Executor then filtered
+        // the trailing weapon attack, leaving an empty heal-and-walk turn.
+        // Summon reserve mirrors the mutation planner's bulb logic.
+        var summonReserveTP = 0
+        // Reserve applies to the big bulbs only (savant/metallic, 301-tuned:
+        // their value justifies pre-cutting the scenario budget). Low-tier
+        // attack bulbs are OPPORTUNISTIC: summoned by the executor tail from
+        // genuinely-leftover TP — reserving for them starved a 12-TP
+        // support's sustain and flipped its unlosable matchups into losses
+        // (DuskHope vs dannyd 0L -> 10-13L with reserve, local matrix).
+        var _hasSavant = mapContainsKey(arsenal.playerEquippedChips, CHIP_SAVANT_BULB)
+        var _hasMetallic = mapContainsKey(arsenal.playerEquippedChips, CHIP_METALLIC_BULB)
+        if (_hasSavant || _hasMetallic) {
+            var _bulbChip = _hasSavant ? CHIP_SAVANT_BULB : CHIP_METALLIC_BULB
+            // Reserve only while we're below the 2-concurrent-summons cap —
+            // otherwise the ready-again cooldown taxes every scenario 16 TP
+            // for a summon the tail will never place.
+            //
+            // Solo gate: pre-cutting 16 TP from a 25-TP leek's scenarios is
+            // measured harm (synthetic bulb-Kurt vs smart_tank: 13W/7D where
+            // vanilla is 40/40 — the reserve paced his damage into draws).
+            // With a leek ally the tempo is shared and the reserve pays; solo
+            // it needs 28+ TP (top-50 bulb users run 27-29). Below that,
+            // summons still happen opportunistically from the executor tail.
+            var _sumLeekAlly = false
+            var _sumAllies = getAliveAllies()
+            if (_sumAllies != null) {
+                for (var _suA in _sumAllies) {
+                    if (_suA == player._id) { continue }
+                    if (getType(_suA) == ENTITY_LEEK && !isDead(_suA)) {
+                        _sumLeekAlly = true
+                        break
+                    }
+                }
+            }
+            if (getCooldown(_bulbChip, player._id) == 0
+                && countMyLivingSummons(player._id) < 2
+                && (_sumLeekAlly || player._currTp >= getChipCost(_bulbChip) + 12)) {
+                summonReserveTP = getChipCost(_bulbChip)
+            }
+        }
+        var tpBudget = player._currTp - summonReserveTP
+
+        // Phase E: per-loop transposition cache. Many scenarios produce
+        // identical post-simulation states (action reorderings that commute,
+        // mutations that converge, AoE aim variants hitting the same enemies).
+        // Cache scorer.score() output by simResult hash so the expensive 23-dim
+        // scoring runs once per unique outcome.
+        var stateScoreCache = [:]
+
+        for (var i = 0; i < evaluateCount; i++) {
+            var scenarioData = scenariosWithQuickScore[i]
+            var scenario = scenarioData['scenario']
+            var qScore = scenarioData['quickScore']
+
+            var simResult = simulator.simulate(scenario)
+            var stateHash = simResult.getStateHash()
+            var score
+            if (mapContainsKey(stateScoreCache, stateHash)) {
+                score = stateScoreCache[stateHash]
+            } else {
+                score = scorer.score(simResult, scenario)
+                stateScoreCache[stateHash] = score
+            }
+
+            // Fix #1B/C: cache net cost for downstream feasibility checks.
+            // Net-TP alone isn't enough — the simulator silently skips
+            // actions whose TP doesn't fit (canExecuteAction=false), so
+            // tpSpent only reflects what fired. A 29-TP scenario where the
+            // sim dropped 3 trailing actions would still report tpSpent=14
+            // and pass the budget check. droppedActions>0 means the executor
+            // will try the same dropped actions and fail (or, for TELE, crash).
+            var netTP = simResult.tpSpent - simResult.tpRefunded
+            var feasible = (netTP <= tpBudget && simResult.droppedActions == 0)
+
+            push(scenarioResults, [
+                'scenario': scenario,
+                'simResult': simResult,
+                'score': score,
+                'quickScore': qScore,
+                'netTP': netTP,
+                'feasible': feasible
+            ])
+
+            if (feasible && score > bestScore) {
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            }
+
+            // Audit item 3: only break early when ops are actually under
+            // pressure — with plentiful ops remaining, cutting the pool at
+            // i=10 on a 2000-point gap discards candidates the quick-scorer
+            // mis-ranked (its damage estimate ignores most scoring dimensions).
+            // Audit item 3 (refined): at full 14M budget the aggressive
+            // early-break is part of the tuned behavior — keep it. Only
+            // low-budget leeks (whose scaled topK is small and quick-order
+            // noise proportionally larger) get the ops-pressure condition.
+            if (i >= 10 && (bestScore - score) > 2000
+                && (_opsBudget >= 14000000 || getOperations() > _ops50)) {
+                break
+            }
+
+            if (getOperations() > _ops93) {
+                break
+            }
+        }
+
+        if (getTurn() <= 20) {
+            var _genN = count(scenarioResults)
+            var _genTopDmg = 0
+            var _genTopDot = 0
+            var _genDmgCount = 0
+            var _genHealCount = 0
+            for (var _gi = 0; _gi < _genN; _gi++) {
+                var _gsim = scenarioResults[_gi]['simResult']
+                if (_gsim.damageDealt > _genTopDmg) _genTopDmg = _gsim.damageDealt
+                if (_gsim.dotDamageQueued > _genTopDot) _genTopDot = _gsim.dotDamageQueued
+                if (_gsim.damageDealt > 0 || _gsim.dotDamageQueued > 0) _genDmgCount++
+                if (_gsim.hpGained > 0) _genHealCount++
+            }
+            debugW("GEN_T" + getTurn() + "_n" + _genN + "_topDmg" + _genTopDmg + "_topDot" + _genTopDot + "_dmgN" + _genDmgCount + "_healN" + _genHealCount)
+        }
+
+        if (count(scenarioResults) >= 2 && getOperations() < _ops79) {
+            arraySort(scenarioResults, function(a, b) {
+                return b['score'] - a['score']
+            })
+
+            var twoplyCount = min(_twoplyTopK, count(scenarioResults))
+            for (var i = 0; i < twoplyCount; i++) {
+                var sd = scenarioResults[i]
+                var twoplyBonus = scorer.project2ndTurnValue(sd['simResult'], sd['scenario'])
+                sd['score'] = sd['score'] + twoplyBonus
+                // Fix #1B: 2-ply promotion must respect net-TP feasibility.
+                if (sd['feasible'] && sd['score'] > bestScore) {
+                    bestScore = sd['score']
+                    bestScenario = sd['scenario']
+                    bestSimResult = sd['simResult']
+                }
+            }
+        }
+
+        if (count(scenarioResults) >= 1 && getOperations() < _ops89) {
+            arraySort(scenarioResults, function(a, b) {
+                return b['score'] - a['score']
+            })
+
+            var predictor = new EnemyPredictor(this._fieldMap, arsenal, player, target)
+            var lookaheadCount = min(_enemyLookaheadTopK, count(scenarioResults))
+
+            for (var i = 0; i < lookaheadCount; i++) {
+                var scenarioData = scenarioResults[i]
+                var simResult = scenarioData['simResult']
+
+                var endState = [
+                    'endPosition': simResult.finalPosition,
+                    'endHP': player._currHealth + simResult.hpGained,
+                    'endTP': player._currTp - simResult.tpSpent,
+                    'score': scenarioData['score'],
+                    'shieldAbs': simResult.shieldsGained,
+                    'shieldRel': simResult.relativeShieldGained
+                ]
+
+                var lookahead = predictor.evaluateScenarioWithLookahead(endState, 0.7)
+
+                scenarioData['finalScore'] = lookahead['finalScore']
+                scenarioData['enemyDamage'] = lookahead['enemyDamage']
+
+            }
+
+            for (var i = 0; i < lookaheadCount; i++) {
+                var scenarioData = scenarioResults[i]
+                if (mapContainsKey(scenarioData, 'finalScore')) {
+                    // Fix #1B: lookahead promotion must respect net-TP feasibility.
+                    if (scenarioData['feasible'] && scenarioData['finalScore'] > bestScore) {
+                        bestScore = scenarioData['finalScore']
+                        bestScenario = scenarioData['scenario']
+                        bestSimResult = scenarioData['simResult']
+                    }
+                }
+            }
+
+        }
+
+        // B1: Lexicographic survival gate. Death is only a soft -8000 in the
+        // scorer, so stacked bonuses (POISON_DUMP +10k, kill multipliers,
+        // time-pressure urgency) can and do outbid it — the AI knowingly ends
+        // turns on cells where the enemy's best response kills it. When the
+        // chosen best is predicted-lethal and doesn't kill the target this
+        // turn, prefer the highest-scored scenario that SURVIVES the enemy's
+        // response instead, regardless of score gap. Off during boss fights
+        // and late time-pressure (a forced draw is worse than a risky swing).
+        if (bestScenario != null && bestSimResult != null && !_isBossFight
+            && !(__timePressure && getTurn() > 40) && __adversarialThreatCacheBuilt) {
+            var b1Cell = bestSimResult.finalPosition
+            if (b1Cell == -1) b1Cell = player._cellPos
+            var b1Threat = getAdversarialThreat(b1Cell)
+            var b1EHP = player._currHealth + bestSimResult.hpGained + bestSimResult.shieldsGained
+            var b1Lethal = (b1EHP - b1Threat * (1.0 - bestSimResult.relativeShieldGained / 100.0)) <= 0
+            var b1Kills = (target != null && bestSimResult.damageDealt >= target._currHealth)
+            if (b1Lethal && !b1Kills) {
+                var b1SafeBest = null
+                var b1SafeScore = -999999
+                for (var b1i = 0; b1i < count(scenarioResults); b1i++) {
+                    var b1sd = scenarioResults[b1i]
+                    if (!b1sd['feasible']) continue
+                    var b1sim = b1sd['simResult']
+                    var b1c = b1sim.finalPosition
+                    if (b1c == -1) b1c = player._cellPos
+                    var b1t = getAdversarialThreat(b1c)
+                    var b1e = player._currHealth + b1sim.hpGained + b1sim.shieldsGained
+                    if (b1e - b1t * (1.0 - b1sim.relativeShieldGained / 100.0) <= 0) continue
+                    var b1s = mapContainsKey(b1sd, 'finalScore') ? b1sd['finalScore'] : b1sd['score']
+                    if (b1s > b1SafeScore) {
+                        b1SafeScore = b1s
+                        b1SafeBest = b1sd
+                    }
+                }
+                if (b1SafeBest != null) {
+                    debugW("B1_GATE_T" + getTurn() + "_sc" + floor(bestScore) + "to" + floor(b1SafeScore) + "_thr" + floor(b1Threat))
+                    bestScenario = b1SafeBest['scenario']
+                    bestSimResult = b1SafeBest['simResult']
+                    bestScore = b1SafeScore
+                }
+            }
+        }
+
+        if (bestScenario != null) {
+            var isDamaging = bestSimResult.damageDealt > 0 || bestSimResult.dotDamageQueued > 0
+            var isHealing = bestSimResult.hpGained > 0
+            // Phase J: shields and applied buffs (e.g. Motivation, Steroid)
+            // count as "doing something" too. Old gate misclassified pure-
+            // defensive turns vs kiters (Armor + Motivation + retreat) as
+            // no-ops and replaced them with range-blind suicide fallback.
+            // Especially bad vs magic-poison kiters at dist >> our reach.
+            var isDefensive = bestSimResult.shieldsGained > 0
+                              || bestSimResult.relativeShieldGained > 0
+                              || count(bestSimResult.buffsApplied) > 0
+            var usesResources = bestSimResult.tpSpent > 0 || bestSimResult.mpSpent > 0
+
+            // BAIT_ANCHOR exemption: a pure-move + checkpoint sequence is an
+            // intentional positioning play, not a wander. Recognise it by the
+            // checkpoint marker so the OVR gate doesn't replace it with the
+            // range-blind fallback (which sends us into the kiter's envelope).
+            var isBaitAnchor = false
+            for (var _bai = 0; _bai < count(bestScenario); _bai++) {
+                var _baAct = bestScenario[_bai]
+                if (_baAct.type == Action.ACTION_CHECKPOINT
+                    && _baAct.checkpointType == "BAIT_ANCHOR") {
+                    isBaitAnchor = true
+                    break
+                }
+            }
+
+            if (!isDamaging && !isHealing && !isDefensive && usesResources && bestScore < 500 && !isBaitAnchor) {
+                if (getTurn() <= 20) {
+                    debugW("OVR_T" + getTurn() + "_dmg" + bestSimResult.damageDealt + "_dot" + bestSimResult.dotDamageQueued + "_heal" + bestSimResult.hpGained + "_sh" + bestSimResult.shieldsGained + "_buf" + count(bestSimResult.buffsApplied) + "_sc" + bestScore)
+                }
+                this.createFallbackScenario(target, targetHitCell)
+            } else {
+
+                this._actions = bestScenario
+            }
+        } else {
+            if (getTurn() <= 20) {
+                debugW("OVR_T" + getTurn() + "_NULL_BEST")
+            }
+            this.createFallbackScenario(target, targetHitCell)
+        }
+
+        // Phase B: expose best results so createAndExecuteScenario can compare
+        // against an alt-target pass.
+        this._bestScore = bestScore
+        this._bestScenario = bestScenario
+        this._bestSimResult = bestSimResult
+
+        // V9 Path A: retain the top-5 fully-scored feasible candidates for the
+        // every-turn rollout re-rank (rollout_rerank.lk). Effective score
+        // mirrors the pipeline's own promotion rules — lookahead finalScore
+        // when the lookahead pass ran on the entry, else the (2-ply-adjusted)
+        // score. Feasibility filter matches every bestScore update site.
+        // Pure retention: no scoring/order/behavior change in this pipeline.
+        var rrPool = []
+        for (var rrI = 0; rrI < count(scenarioResults); rrI++) {
+            var rrSd = scenarioResults[rrI]
+            if (!rrSd['feasible']) continue
+            var rrEff = mapContainsKey(rrSd, 'finalScore') ? rrSd['finalScore'] : rrSd['score']
+            push(rrPool, ['scenario': rrSd['scenario'], 'simResult': rrSd['simResult'], 'score': rrEff])
+        }
+        arraySort(rrPool, function(a, b) {
+            return b['score'] - a['score']
+        })
+        var rrK = min(5, count(rrPool))
+        for (var rrJ = 0; rrJ < rrK; rrJ++) {
+            push(this._topCandidates, rrPool[rrJ])
+        }
+
+        // OBS: log the chosen scenario fingerprint (T<=5). Compact: action
+        // type codes joined with '-', plus score / final cell / damage / heal.
+        if (getTurn() <= 20 && bestScenario != null) {
+            var _obsSeq = ""
+            var _obsCount = count(bestScenario)
+            for (var _oi = 0; _oi < _obsCount; _oi++) {
+                var _oa = bestScenario[_oi]
+                if (_oi > 0) _obsSeq += "-"
+                _obsSeq += _oa.type
+                // For weapon/chip actions, append id so we can identify them
+                if (_oa.weaponId != -1) _obsSeq += "w" + _oa.weaponId
+                if (_oa.chip != -1) _obsSeq += "c" + _oa.chip
+                if (_oa.targetCell != -1) _obsSeq += "@" + _oa.targetCell
+            }
+            var _obsFc = (bestSimResult != null) ? bestSimResult.finalPosition : -1
+            var _obsDmg = (bestSimResult != null) ? bestSimResult.damageDealt : 0
+            var _obsDot = (bestSimResult != null) ? bestSimResult.dotDamageQueued : 0
+            var _obsHeal = (bestSimResult != null) ? bestSimResult.hpGained : 0
+            debugW("OBS_BEST_T" + getTurn() + "_sc" + bestScore + "_fc" + _obsFc + "_dmg" + _obsDmg + "_dot" + _obsDot + "_heal" + _obsHeal + "_n" + _obsCount + "_seq[" + _obsSeq + "]")
+        }
+    }
+
+    // Phase B: lighter scoring pipeline used for alt-target evaluation. Skips
+    // mutation, 2-ply, and enemy lookahead to keep cost bounded (~3M ops).
+    runScoringPipelineLight(altTarget) {
+        var generator = new ScenarioGenerator(arsenal, player, altTarget, this._fieldMap, this)
+        var scenarios = generator.generateScenarios()
+        if (count(scenarios) == 0) return null
+
+        var quickScorer = new ScenarioQuickScorer(player, altTarget, this._fieldMap, arsenal)
+        var scored = []
+        for (var scenario in scenarios) {
+            var qScore = quickScorer.quickScore(scenario)
+            push(scored, ['scenario': scenario, 'quickScore': qScore])
+        }
+        arraySort(scored, function(a, b) {
+            return b['quickScore'] - a['quickScore']
+        })
+
+        var enemies = this._fieldMap.getEnemySubMap()
+        var adaptedWeights = adaptWeightsToSituation(this._weights, player, enemies, this._fieldMap)
+        var simulator = new ScenarioSimulator(arsenal, player, altTarget, this._fieldMap)
+        var scorer = new ScenarioScorer(player, altTarget, this._fieldMap, adaptedWeights)
+
+        // Cap evaluation at the smaller of 25 scenarios or whatever the ops
+        // budget allows; alt-target is best-effort, not exhaustive.
+        var evalCount = min(25, count(scored))
+        var bestScore = -999999
+        var bestScenario = null
+        var bestSimResult = null
+        var altScoreCache = [:]  // Phase E: per-loop transposition cache
+        for (var i = 0; i < evalCount; i++) {
+            if (getOperations() > _ops89) break
+            var scenario = scored[i]['scenario']
+            var simResult = simulator.simulate(scenario)
+            var stateHash = simResult.getStateHash()
+            var score
+            if (mapContainsKey(altScoreCache, stateHash)) {
+                score = altScoreCache[stateHash]
+            } else {
+                score = scorer.score(simResult, scenario)
+                altScoreCache[stateHash] = score
+            }
+            if (score > bestScore) {
+                bestScore = score
+                bestScenario = scenario
+                bestSimResult = simResult
+            }
+        }
+
+        if (bestScenario == null) return null
+        return ['score': bestScore, 'scenario': bestScenario, 'simResult': bestSimResult]
+    }
+
+    createFallbackScenario(target, targetHitCell) {
+
+        if (target == null) {
+            // No target — just queue the precomputed move if provided.
+            if (targetHitCell != null && targetHitCell != -1 && player._currMp > 0) {
+                var pathLen = getCachedPathLength(player._cellPos, targetHitCell)
+                if (pathLen != null && pathLen > 0 && player._currMp >= pathLen) {
+                    var act = new Action(Action.MOVEMENT_APPROACH, -1, -1, targetHitCell, null)
+                    push(this._actions, act)
+                    player._currMp -= pathLen
+                }
+            }
+            return;
+        }
+
+        var weaponIds = mapKeys(arsenal.playerEquippedWeapons)
+        var curDist = getCellDistance(player._cellPos, target._cellPos)
+
+        // Phase L: search for the best fire cell BEFORE queuing the move.
+        // The old code queued MOVEMENT_APPROACH first (threat-aware → often
+        // retreats), then tried to fire from wherever the executor landed.
+        // T3/T10 leak: walked AWAY from enemy because the threat field pushed
+        // us back, then weapon shots failed "Out of range/LOS". Phase L picks
+        // a specific reachable cell with range+LoS to target and uses
+        // MOVEMENT_OFFENSIVE to commit to it (closes-to-fire, not retreat).
+
+        // (1) Current-cell fire: pick best-DPS affordable weapon already in range+LoS.
+        var firingWeaponId = null
+        var firingDPS = 0
+        var fireFromCurrent = false
+        if (curDist != null && lineOfSight(player._cellPos, target._cellPos)) {
+            for (var widCur in weaponIds) {
+                var wCur = arsenal.playerEquippedWeapons[widCur]
+                if (wCur._cost > player._currTp) continue
+                if (curDist < wCur._minRange || curDist > wCur._maxRange) continue
+                var dmgCur = arsenal.getNetDamageAgainstTarget(
+                    player._strength, player._magic, player._wisdom, player._science,
+                    widCur, target)
+                if (dmgCur <= 0) continue
+                var dpsCur = dmgCur / wCur._cost
+                if (dpsCur > firingDPS) {
+                    firingDPS = dpsCur
+                    firingWeaponId = widCur
+                    fireFromCurrent = true
+                }
+            }
+        }
+
+        // (2) After-move fire: search reachable cells (within MP) for a fire cell.
+        var fireCellMove = -1
+        var fireMovePathLen = 0
+        if (!fireFromCurrent && player._currMp > 0) {
+            var reach = this._fieldMap.getReachableCellsWithinMP(player._cellPos, player._currMp)
+            for (var rCell in reach) {
+                if (rCell == player._cellPos) continue
+                var rDist = getCellDistance(rCell, target._cellPos)
+                if (rDist == null) continue
+                var pathR = getCachedPathLength(player._cellPos, rCell)
+                if (pathR == null || pathR > player._currMp) continue
+                var hasLoS = -1
+                for (var widF in weaponIds) {
+                    var wF = arsenal.playerEquippedWeapons[widF]
+                    if (wF._cost > player._currTp) continue
+                    if (rDist < wF._minRange || rDist > wF._maxRange) continue
+                    if (hasLoS == -1) {
+                        hasLoS = lineOfSight(rCell, target._cellPos) ? 1 : 0
+                    }
+                    if (hasLoS == 0) break
+                    var dmgF = arsenal.getNetDamageAgainstTarget(
+                        player._strength, player._magic, player._wisdom, player._science,
+                        widF, target)
+                    if (dmgF <= 0) continue
+                    var dpsF = dmgF / wF._cost
+                    if (dpsF > firingDPS) {
+                        firingDPS = dpsF
+                        firingWeaponId = widF
+                        fireCellMove = rCell
+                        fireMovePathLen = pathR
+                    }
+                }
+            }
+        }
+
+        // (3) Trust targetHitCell if no better fire cell found (precomputed
+        // by fieldMap.getBestWeaponOrChipCell; already range+LoS filtered).
+        if (!fireFromCurrent && fireCellMove == -1 && targetHitCell != null && targetHitCell != -1) {
+            var thcPath = getCachedPathLength(player._cellPos, targetHitCell)
+            if (thcPath != null && thcPath > 0 && player._currMp >= thcPath) {
+                var thcDist = getCellDistance(targetHitCell, target._cellPos)
+                var thcLoS = lineOfSight(targetHitCell, target._cellPos)
+                for (var widT in weaponIds) {
+                    var wT = arsenal.playerEquippedWeapons[widT]
+                    if (wT._cost > player._currTp) continue
+                    if (thcDist == null || thcDist < wT._minRange || thcDist > wT._maxRange) continue
+                    if (!thcLoS) continue
+                    var dmgT = arsenal.getNetDamageAgainstTarget(
+                        player._strength, player._magic, player._wisdom, player._science,
+                        widT, target)
+                    if (dmgT <= 0) continue
+                    var dpsT = dmgT / wT._cost
+                    if (dpsT > firingDPS) {
+                        firingDPS = dpsT
+                        firingWeaponId = widT
+                        fireCellMove = targetHitCell
+                        fireMovePathLen = thcPath
+                    }
+                }
+            }
+        }
+
+        // Phase N: if MP-only Phase L failed to find a fire cell, try JUMP
+        // (CHIP_JUMP, range 1-3). On obstacle-heavy maps (fennel), most
+        // MP-reachable cells lack LoS to a kiting target — but JUMP can drop
+        // us onto a 3-cell radius cell that does have LoS. Without this,
+        // turns with TP=19/MP=7 sit idle at d=8 (T3/T5/T10 in koe2 fights).
+        var jumpFireCell = -1
+        var jumpFireWeaponId = null
+        var jumpFireDPS = 0
+        var jumpCost = 0
+        var canJump = !fireFromCurrent && fireCellMove == -1 &&
+                      mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP) &&
+                      getCooldown(CHIP_JUMP, player._id) == 0
+        if (canJump) {
+            var jChipObj = arsenal.playerEquippedChips[CHIP_JUMP]
+            jumpCost = jChipObj._cost
+            if (jumpCost <= player._currTp - 1) {  // -1 to leave at least cheapest shot
+                var pX = getCellX(player._cellPos)
+                var pY = getCellY(player._cellPos)
+                for (var jdx = -3; jdx <= 3; jdx++) {
+                    for (var jdy = -3; jdy <= 3; jdy++) {
+                        if (jdx == 0 && jdy == 0) continue
+                        if (abs(jdx) + abs(jdy) > 3) continue
+                        var jCell = getCellFromXY(pX + jdx, pY + jdy)
+                        if (jCell == null || jCell < 0) continue
+                        if (isObstacle(jCell) || isEntity(jCell)) continue
+                        var jD = getCellDistance(jCell, target._cellPos)
+                        if (jD == null) continue
+                        var jLoS = -1
+                        for (var widJ in weaponIds) {
+                            var wJ = arsenal.playerEquippedWeapons[widJ]
+                            if (wJ._cost > player._currTp - jumpCost) continue
+                            if (jD < wJ._minRange || jD > wJ._maxRange) continue
+                            if (jLoS == -1) {
+                                jLoS = lineOfSight(jCell, target._cellPos) ? 1 : 0
+                            }
+                            if (jLoS == 0) break
+                            var dmgJ = arsenal.getNetDamageAgainstTarget(
+                                player._strength, player._magic, player._wisdom, player._science,
+                                widJ, target)
+                            if (dmgJ <= 0) continue
+                            var dpsJ = dmgJ / wJ._cost
+                            if (dpsJ > jumpFireDPS) {
+                                jumpFireDPS = dpsJ
+                                jumpFireWeaponId = widJ
+                                jumpFireCell = jCell
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Queue movement based on what we found.
+        if (fireFromCurrent) {
+            // Already in range — no move needed (preserve TP/MP for shots).
+        } else if (fireCellMove != -1 && firingWeaponId != null) {
+            // MOVEMENT_OFFENSIVE commits to fireCellMove (closes-to-fire).
+            var moveAct = new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, fireCellMove, null)
+            push(this._actions, moveAct)
+            player._currMp -= fireMovePathLen
+        } else if (jumpFireCell != -1 && jumpFireWeaponId != null) {
+            // Phase N: JUMP teleport to fire cell, then shoot.
+            var jumpAct = new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, jumpFireCell, target)
+            push(this._actions, jumpAct)
+            player._currTp -= jumpCost
+            firingWeaponId = jumpFireWeaponId
+        } else if (player._currMp > 0) {
+            // No fire cell reachable — fall back to threat-aware approach.
+            var fallTo = (targetHitCell != null && targetHitCell != -1) ? targetHitCell : target._cellPos
+            var fallAct = new Action(Action.MOVEMENT_APPROACH, -1, -1, fallTo, null)
+            push(this._actions, fallAct)
+        }
+
+        if (getTurn() <= 20) {
+            debugW("FBK_L_T" + getTurn() + "_cd" + curDist + "_fc" + fireFromCurrent + "_fm" + fireCellMove + "_jfc" + jumpFireCell + "_fw" + firingWeaponId + "_thc" + targetHitCell)
+        }
+
+        // Queue shots with the firing weapon (current or after-move).
+        if (firingWeaponId != null) {
+            var weapon = arsenal.playerEquippedWeapons[firingWeaponId]
+            var uses = 0
+            while (weapon._cost <= player._currTp && uses < weapon._maxUse) {
+                var action = new Action(Action.ACTION_DIRECT, firingWeaponId, -1, target._cellPos, null)
+                push(this._actions, action)
+                player._currTp -= weapon._cost
+                uses++
+            }
+        } else if (player._currTp >= 3) {
+            // No weapon can reach — burn TP on defensive chips instead.
+            // Priority: heal (if hurt) > shield > offensive buff > anything self-castable.
+            var chipIds = mapKeys(arsenal.playerEquippedChips)
+            var hurt = player._currHealth < player._maxHealth - 100
+            var fbVisited = [:]
+            var attempts = 0
+            while (player._currTp >= 3 && attempts < 6) {
+                attempts++
+                var pickId = null
+                var pickCost = 99
+                for (var cid in chipIds) {
+                    if (mapContainsKey(fbVisited, cid)) continue
+                    if (getCooldown(cid, player._id) > 0) continue
+                    var cChip = arsenal.playerEquippedChips[cid]
+                    if (cChip._cost > player._currTp) continue
+                    var eligible = false
+                    if (hurt && isHealingChip(cid)) eligible = true
+                    else if (isShieldChip(cid)) eligible = true
+                    else if (isOffensiveBuff(cid)) eligible = true
+                    else if (isResourceChip(cid)) eligible = true
+                    else if (isDamageReturnChip(cid)) eligible = true
+                    if (!eligible) continue
+                    if (cChip._cost < pickCost) {
+                        pickCost = cChip._cost
+                        pickId = cid
+                    }
+                }
+                if (pickId == null) break
+                var defAction = new Action(Action.ACTION_BUFF, -1, pickId, player._cellPos, null)
+                push(this._actions, defAction)
+                player._currTp -= pickCost
+                fbVisited[pickId] = true
+            }
+        }
+
+        if (getTurn() <= 20) {
+            var _fbSeq = ""
+            var _fbN = count(this._actions)
+            for (var _fi = 0; _fi < _fbN; _fi++) {
+                var _fa = this._actions[_fi]
+                if (_fi > 0) _fbSeq += "-"
+                _fbSeq += _fa.type
+                if (_fa.weaponId != -1) _fbSeq += "w" + _fa.weaponId
+                if (_fa.chip != -1) _fbSeq += "c" + _fa.chip
+                if (_fa.targetCell != -1) _fbSeq += "@" + _fa.targetCell
+            }
+            debugW("FBK_T" + getTurn() + "_fw" + firingWeaponId + "_n" + _fbN + "_seq[" + _fbSeq + "]")
+        }
+    }
+
+    turnOneBuffs() {
+        super.turnOneBuffs()
+    }
+
+    checkSelfAntidote() {
+    }
+
+    shouldBuildDamageMap() {
+        return true
+    }
+
+}
+
+function recoverRemainingTP(target) {
+    // Universal JUMP pass — fires regardless of which scenario won. Uses the
+    // same tier ranking as the scenario-level JUMP code (REACH_HIT > HIDE >
+    // APPROACH > ANY). Many scenarios don't include JUMP in their action list,
+    // so this guarantees we use mobility when CD is up and TP is available.
+    if (target != null && !isDead(target._id) &&
+        getCooldown(CHIP_JUMP, getEntity()) == 0 &&
+        mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP)) {
+        var jumpChipR = arsenal.playerEquippedChips[CHIP_JUMP]
+        if (jumpChipR != null && jumpChipR._cost <= getTP()) {
+            var jPos = getCell()
+            var jEnemy = target._cellPos
+            var jOrigDist = getCellDistance(jPos, jEnemy)
+            if (jOrigDist == null) jOrigDist = 99
+            var maxWRRec = 0
+            for (var wIdRec in mapKeys(arsenal.playerEquippedWeapons)) {
+                var wObjRec = arsenal.playerEquippedWeapons[wIdRec]
+                if (wObjRec != null && wObjRec._maxRange > maxWRRec) maxWRRec = wObjRec._maxRange
+            }
+            // Hide trigger: shackled, low HP, OR poison stacks projecting >25% HP loss next turn
+            var poisonDoT = 0
+            var pEffs = getEffects(getEntity())
+            if (pEffs != null) {
+                for (var pe in pEffs) {
+                    if (pe[0] == EFFECT_POISON) poisonDoT += pe[1]
+                }
+            }
+            var poisonRatio = poisonDoT * 100 / max(1, player._maxHealth)
+            var deniedRec = player.hasEffect(EFFECT_SHACKLE_TP)
+                || player.hasEffect(EFFECT_SHACKLE_STRENGTH)
+                || player.hasEffect(EFFECT_SHACKLE_MAGIC)
+                || player.hasEffect(EFFECT_SHACKLE_MP)
+            var lowHPRec = (getLife() * 100 / max(1, getTotalLife())) < 60
+            var poisonHeavyRec = poisonRatio > 25
+            // vs magic-poison kiters (koe2-class), the threat is LoS-gated
+            // Slow Down + poison weapons. Hiding behind cover breaks LoS so
+            // we should prefer Tier 2 (hide) over Tier 1 (stand exposed in
+            // weapon range). The previous behaviour parked us at e.g. c485
+            // T15 in plain sight after the attack scenario.
+            var enemyProfRec = getEnemyProfile(target._id)
+            var preferHideRec = (enemyProfRec != null
+                && enemyProfRec['isKiter']
+                && enemyProfRec['kiterFlavor'] == 'magic_poison')
+            // Kite-gate: don't close to a cell the enemy can MP-retreat from
+            // and still keep us out of weapon range. Without this, JUMP just
+            // feeds us into poison range while koe2-style kiters slide back.
+            var enemyMPRec = target._currMp
+            if (enemyMPRec == null) enemyMPRec = 5
+            var kiteHorizonRec = maxWRRec + enemyMPRec
+            var bestTierRec = 5
+            var bestMetricRec = 99999
+            var jumpTargetRec = -1
+            var rX = getCellX(jPos)
+            var rY = getCellY(jPos)
+            for (var jdx = -3; jdx <= 3; jdx++) {
+                for (var jdy = -3; jdy <= 3; jdy++) {
+                    if (jdx == 0 && jdy == 0) continue
+                    if (abs(jdx) + abs(jdy) > 3) continue
+                    var jCand = getCellFromXY(rX + jdx, rY + jdy)
+                    if (jCand == null || jCand < 0) continue
+                    if (isObstacle(jCand) || isEntity(jCand)) continue
+                    var jReach = getCellDistance(jPos, jCand)
+                    if (jReach == null || jReach < 1 || jReach > 3) continue
+                    var dToE = getCellDistance(jCand, jEnemy)
+                    if (dToE == null) continue
+                    var losR = lineOfSight(jCand, jEnemy)
+                    var tierR = 4
+                    var metricR = dToE
+                    if (preferHideRec) {
+                        // vs magic_poison kiter (koe2-class): Slow Down + DoT
+                        // are all LoS-gated, so HIDE first, expose only as
+                        // fallback. Tier swap — no-LoS in retaliation range
+                        // is Tier 1; exposed LoS is Tier 2.
+                        if (!losR && dToE >= max(2, maxWRRec - 3) && dToE <= maxWRRec + 2) {
+                            tierR = 1
+                            metricR = abs(dToE - max(2, maxWRRec - 1)) + getAdversarialThreat(jCand) / 100.0
+                        } else if (losR && dToE >= 1 && dToE <= maxWRRec) {
+                            tierR = 2
+                            metricR = dToE + getAdversarialThreat(jCand) / 100.0
+                        } else if (jOrigDist - dToE >= 2 && dToE <= kiteHorizonRec) {
+                            tierR = 3
+                            metricR = dToE + getAdversarialThreat(jCand) / 100.0
+                        }
+                    } else {
+                        if (losR && dToE >= 1 && dToE <= maxWRRec) {
+                            tierR = 1
+                            // Tier 1 = land in LoS+weapon range. The base distance
+                            // metric ignored incoming threat, so the recovery JUMP
+                            // happily landed us on exposed open cells (e.g. T15
+                            // c485 vs koe2) with no TP left to even fire back.
+                            // Same threat scaling as Tier 3 — comparable cells
+                            // should prefer cover over open.
+                            metricR = dToE + getAdversarialThreat(jCand) / 100.0
+                        } else if ((deniedRec || lowHPRec || poisonHeavyRec) && !losR) {
+                            tierR = 2
+                            metricR = abs(dToE - max(2, maxWRRec - 2))
+                        } else if (jOrigDist - dToE >= 2 && dToE <= kiteHorizonRec) {
+                            tierR = 3
+                            metricR = dToE + getAdversarialThreat(jCand) / 100.0
+                        }
+                    }
+                    if (tierR < bestTierRec || (tierR == bestTierRec && metricR < bestMetricRec)) {
+                        bestTierRec = tierR
+                        bestMetricRec = metricR
+                        jumpTargetRec = jCand
+                    }
+                }
+            }
+            // Only fire if the jump achieves something — Tier 4 (any) is too
+            // weak here since the scenario already moved us optimally. Require
+            // Tier 1–3 (real utility) at this stage.
+            if (jumpTargetRec != -1 && bestTierRec <= 3) {
+                useChipOnCell(CHIP_JUMP, jumpTargetRec)
+            }
+        }
+    }
+
+    var maxAttempts = 10
+    var attempts = 0
+    var weaponUsesThisTurn = 0
+    var currentWeapon = getWeapon()
+    var weaponMaxUses = 0
+    var failedWeapons = [:]
+    if (currentWeapon != null && currentWeapon != -1) {
+        weaponMaxUses = getWeaponMaxUses(currentWeapon)
+        if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
+    }
+
+    while (getTP() >= 2 && attempts < maxAttempts) {
+        attempts++
+        var tpBefore = getTP()
+        var bestAction = null
+        var bestValue = -1
+
+        for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
+            if (chipId == CHIP_PUNISHMENT) continue
+            var chipObj = arsenal.playerEquippedChips[chipId]
+            if (chipObj._cost > getTP()) continue
+            if (getCooldown(chipId, getEntity()) > 0) continue
+
+            var targetCell = null
+            var value = 0
+
+            if (isHealingChip(chipId) || isOffensiveBuff(chipId) || isShieldChip(chipId) ||
+                isDamageReturnChip(chipId) || isResourceChip(chipId)) {
+                // Doping range-gate: only value when close enough to attack
+                if (chipId == CHIP_DOPING) {
+                    var dopRecDist = getCellDistance(getCell(), target._cellPos)
+                    if (dopRecDist == null || dopRecDist > 8) continue
+                }
+                // Regeneration HP-gate: long CD chip, don't burn at near-full HP.
+                // T4 LeekRain log showed Regeneration fired at HP 1620/1664 (97%)
+                // for 106 HP gained — wasted the CD that's needed for FLEE.
+                // Reserve for SUSTAIN/FLEE territory (matches lateGameMult tiers
+                // in quickRecoveryChipValue: 1.5 base, 2.0 at <60%, 3.0 at <40%).
+                if (chipId == CHIP_REGENERATION) {
+                    var hpPctRec = (player._currHealth * 100) / player._maxHealth
+                    if (hpPctRec > 70) continue
+                }
+                targetCell = getCell()
+                value = quickRecoveryChipValue(chipId, 'self')
+            } else if (isUtilityChip(chipId)) {
+                // Conditional utility fills: cleanse chips have huge value when
+                // their matching status is active. Blanket-skipping them left
+                // T3-style turns with 5+ TP unspent and stacked poisons rolling.
+                if (chipId == CHIP_ANTIDOTE) {
+                    if (!player.hasEffect(EFFECT_POISON)) continue
+                    targetCell = getCell()
+                    // Value = total queued poison damage prevented × 1.5
+                    // (matches the buff-score scaling in evaluateBuffs).
+                    var totalPoisonR = player.getTotalPoisonDamage()
+                    if (totalPoisonR <= 0) continue
+                    value = floor(50 + totalPoisonR * 1.5)
+                } else if (chipId == CHIP_LIBERATION) {
+                    // Liberation cleanses 40% of our negative effects. Fire
+                    // when poison or shackle is active — both severely degrade
+                    // future damage output.
+                    var hasNeg = player.hasEffect(EFFECT_POISON) ||
+                                 player.hasEffect(EFFECT_SHACKLE_TP) ||
+                                 player.hasEffect(EFFECT_SHACKLE_STRENGTH) ||
+                                 player.hasEffect(EFFECT_SHACKLE_MAGIC) ||
+                                 player.hasEffect(EFFECT_SHACKLE_MP)
+                    if (!hasNeg) continue
+                    targetCell = getCell()
+                    value = 200
+                } else if (chipId == CHIP_MANUMISSION) {
+                    if (!player.hasEffect(EFFECT_SHACKLE_TP) &&
+                        !player.hasEffect(EFFECT_SHACKLE_STRENGTH) &&
+                        !player.hasEffect(EFFECT_SHACKLE_MAGIC) &&
+                        !player.hasEffect(EFFECT_SHACKLE_MP)) continue
+                    targetCell = getCell()
+                    value = 300
+                } else {
+                    continue
+                }
+            } else {
+                targetCell = target._cellPos
+                var dist = getCellDistance(getCell(), targetCell)
+                if (dist == null) continue
+                if (dist < chipObj._minRange || dist > chipObj._maxRange) continue
+                if (!lineOfSight(getCell(), targetCell)) continue
+                if (chipObj._aoeType != AREA_POINT && !chipObj._selfImmune && fieldMap.wouldAoEHitCell(targetCell, chipObj._aoeType, getCell(), getCell())) continue
+                // Recovery-denial gate: shackling an already-shackled target is
+                // filler waste (Margaret's 4x slow_down turns came through THIS
+                // pass after the beam finished — 53256942 vs WiseMan).
+                // Read effects LIVE: game_entity._effectsActive is stale/null
+                // on freshly summoned entities (metallic_bulb spam, 53257877).
+                if (chipId == CHIP_SLOW_DOWN || chipId == CHIP_TRANQUILIZER ||
+                    chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN) {
+                    var recShackled = false
+                    var recTargetEffs = getEffects(target._id)
+                    if (recTargetEffs != null) {
+                        for (var rse in recTargetEffs) {
+                            if (rse[0] == 17 || rse[0] == 18) { recShackled = true; break }
+                        }
+                    }
+                    if (recShackled) continue
+                }
+                if (chipId == CHIP_LIBERATION) {
+                    // Recovery strip: shield-scaled value, but ALSO guard the
+                    // friendly fire — reduceEffects erases 40% of our own
+                    // DoTs on the target (matters for venom/toxin kits).
+                    var recLibAbs = target._absShield
+                    var recLibRel = target._relShield
+                    if (recLibAbs == null) recLibAbs = 0
+                    if (recLibRel == null) recLibRel = 0
+                    if (recLibAbs < 100 && recLibRel < 15) continue
+                    var recDotCost = 0
+                    var recEffs = getEffects(target._id)
+                    if (recEffs != null) {
+                        for (var rle in recEffs) {
+                            if (rle[0] == 13) {
+                                var rlTurns = (count(rle) >= 4) ? rle[3] : 1
+                                recDotCost += rle[1] * 0.4 * max(1, min(3, rlTurns))
+                            }
+                        }
+                    }
+                    var recStripVal = 150 + floor(recLibAbs * 0.4) + recLibRel * 8
+                    if (recDotCost > 100 && recDotCost > recStripVal) continue
+                    value = recStripVal - floor(recDotCost)
+                } else {
+                    value = quickRecoveryChipValue(chipId, 'enemy')
+                    // Shield-dampen direct chips (plasma/lightning into a
+                    // fresh stack is a burned cooldown for single digits).
+                    var recBd = getCachedDamageBreakdown(chipId)
+                    if (recBd != null && recBd['direct'] > 0) {
+                        var recFrac = recoveryEffectiveFraction(target, recBd['direct'])
+                        if (recFrac <= 0.1) continue
+                        value = floor(value * recFrac)
+                    }
+                }
+                // B5: don't burn a cooldown damage chip as end-of-turn filler
+                // into a shield stack that expires this turn — the chip would
+                // sit on CD through next turn's strike window while >=25% of
+                // its damage evaporates now. Weapons (no CD) are unaffected.
+                var b5RecCd = getChipCooldown(chipId)
+                if (b5RecCd != null && b5RecCd >= 2) {
+                    var b5RecRel = getRelativeShield(target._id)
+                    if (b5RecRel != null && b5RecRel >= 25
+                        && target.getEffectRemaining(EFFECT_RELATIVE_SHIELD) <= 1
+                        && target.getEffectRemaining(EFFECT_ABSOLUTE_SHIELD) <= 1) {
+                        value = floor(value * 0.3)
+                    }
+                }
+            }
+
+            if (value > bestValue) {
+                bestValue = value
+                bestAction = ['type': 'chip', 'id': chipId, 'cell': targetCell]
+            }
+        }
+
+        if (currentWeapon != null && currentWeapon != -1 &&
+            weaponUsesThisTurn < weaponMaxUses &&
+            !mapContainsKey(failedWeapons, currentWeapon) &&
+            mapContainsKey(arsenal.playerEquippedWeapons, currentWeapon)) {
+            var weaponObj = arsenal.playerEquippedWeapons[currentWeapon]
+            if (weaponObj._cost <= getTP()) {
+                var dist = getCellDistance(getCell(), target._cellPos)
+                if (dist != null && dist >= weaponObj._minRange && dist <= weaponObj._maxRange) {
+                    if (weaponObj._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(getCell(), target._cellPos)) {
+                        // Line weapon not aligned — skip
+                    } else if (lineOfSight(getCell(), target._cellPos)) {
+                        if (weaponObj._aoeType == AREA_POINT || weaponObj._selfImmune || !fieldMap.wouldAoEHitCell(target._cellPos, weaponObj._aoeType, getCell(), getCell())) {
+                            var recWFrac = recoveryEffectiveFraction(target, getCachedDamageBreakdown(currentWeapon)['direct'])
+                            var value = (recWFrac <= 0.1) ? 0 : floor(quickRecoveryWeaponValue(currentWeapon) * recWFrac)
+                            if (value > bestValue) {
+                                bestValue = value
+                                bestAction = ['type': 'weapon', 'cell': target._cellPos]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        var myPos = getCell()
+        var distToTarget = getCellDistance(myPos, target._cellPos)
+        var hasLos = (distToTarget != null) ? lineOfSight(myPos, target._cellPos) : false
+        if (hasLos && distToTarget != null) {
+            for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+                if (wid == currentWeapon) continue
+                if (mapContainsKey(failedWeapons, wid)) continue
+                var wObj = arsenal.playerEquippedWeapons[wid]
+                var totalCost = 1 + wObj._cost
+                if (totalCost > getTP()) continue
+                if (distToTarget < wObj._minRange || distToTarget > wObj._maxRange) continue
+                if (wObj._launchType == LAUNCH_TYPE_LINE && !fieldMap.isOnSameLine(myPos, target._cellPos)) continue
+                if (wObj._aoeType != AREA_POINT && !wObj._selfImmune && fieldMap.wouldAoEHitCell(target._cellPos, wObj._aoeType, myPos, myPos)) continue
+                var swapBd = getCachedDamageBreakdown(wid)
+                if (swapBd != null && recoveryEffectiveFraction(target, swapBd['direct']) <= 0.1) continue
+                var wValue = quickRecoveryWeaponValue(wid)
+                if (wValue > bestValue) {
+                    bestValue = wValue
+                    bestAction = ['type': 'weaponSwap', 'id': wid, 'cell': target._cellPos]
+                }
+            }
+        }
+
+        // Dynamic threshold: scale minimum-value gate by remaining TP so we
+        // spend marginal actions when the pool is large (a fixed 15 leaves
+        // 20+ TP unspent on full-HP late-game turns) but don't chase scraps
+        // when nearly spent.
+        var tpLeft = getTP()
+        var dynMin = max(8, floor(tpLeft * 0.6))
+        if (dynMin > 18) dynMin = 18
+        if (bestAction == null || bestValue < dynMin) break
+
+        if (bestAction['type'] == 'chip') {
+            // Block Doping recast in TP recovery
+            if (bestAction['id'] == CHIP_DOPING && __dopingUsed) continue
+            useChipOnCell(bestAction['id'], bestAction['cell'])
+            if (bestAction['id'] == CHIP_DOPING) __dopingUsed = true
+            if (getTP() >= tpBefore && bestValue <= 0) break
+        } else if (bestAction['type'] == 'weaponSwap') {
+            setWeapon(bestAction['id'])
+            currentWeapon = bestAction['id']
+            weaponMaxUses = getWeaponMaxUses(currentWeapon)
+            if (weaponMaxUses == null || weaponMaxUses <= 0) weaponMaxUses = 1
+            weaponUsesThisTurn = 0
+            var tpAfterSwap = getTP()
+            useWeaponOnCell(bestAction['cell'])
+            if (getTP() == tpAfterSwap) {
+                // Attack failed after swap — mark weapon as failed
+                failedWeapons[bestAction['id']] = true
+                continue
+            }
+            if (getTP() >= tpBefore && bestValue <= 0) break
+            weaponUsesThisTurn++
+        } else {
+            var tpBeforeAtk = getTP()
+            useWeaponOnCell(bestAction['cell'])
+            if (getTP() == tpBeforeAtk) {
+                failedWeapons[currentWeapon] = true
+                continue
+            }
+            if (getTP() >= tpBefore && bestValue <= 0) break
+            weaponUsesThisTurn++
+        }
+
+        if (isDead(target._id)) break
+    }
+
+    // FIX A: TP-floor safety net. The value-gated loop above can exit while we
+    // still hold significant TP if every candidate scores below dynMin. Per the
+    // "TP doesn't carry between turns" rule, leftover TP is strictly worse than
+    // any positive action — even a low-utility self-buff that prepays next turn.
+    // This pass re-scans the same chip pool with NO dynMin gate, picking the
+    // highest-value castable self-action and firing it. Same CD/affordability
+    // checks apply; if all useful chips are on CD, we exit cleanly (T3 case).
+    var floorAttempts = 0
+    while (getTP() >= 5 && floorAttempts < 5) {
+        floorAttempts++
+        var floorBest = null
+        var floorBestValue = -999
+        var floorBestCell = getCell()
+        var floorTpBefore = getTP()
+        var floorMyPos = getCell()
+        var floorDistToTarget = getCellDistance(floorMyPos, target._cellPos)
+        var floorHasLos = (floorDistToTarget != null) ? lineOfSight(floorMyPos, target._cellPos) : false
+        for (var chipIdF in mapKeys(arsenal.playerEquippedChips)) {
+            if (chipIdF == CHIP_PUNISHMENT) continue
+            if (chipIdF == CHIP_DOPING && __dopingUsed) continue
+            var chipObjF = arsenal.playerEquippedChips[chipIdF]
+            if (chipObjF._cost > getTP()) continue
+            if (getCooldown(chipIdF, getEntity()) > 0) continue
+            // Self-castable buff/heal/shield/return/resource roles cast on self.
+            // Heals skip if HP full.
+            var selfEligible = isOffensiveBuff(chipIdF) || isShieldChip(chipIdF) ||
+                               isDamageReturnChip(chipIdF) || isResourceChip(chipIdF)
+            if (!selfEligible && isHealingChip(chipIdF) && player._currHealth < player._maxHealth) {
+                selfEligible = true
+            }
+            if (selfEligible) {
+                // Doping range-gate from main loop applies here too.
+                if (chipIdF == CHIP_DOPING) {
+                    var dopFDist = getCellDistance(floorMyPos, target._cellPos)
+                    if (dopFDist == null || dopFDist > 8) continue
+                }
+                // Regeneration HP-gate (same as main loop): long CD, reserve for
+                // SUSTAIN/FLEE. Prevents the floor-pass from firing it at 97% HP
+                // when the main loop correctly skipped it.
+                if (chipIdF == CHIP_REGENERATION) {
+                    var hpPctF = (player._currHealth * 100) / player._maxHealth
+                    if (hpPctF > 70) continue
+                }
+                var fvSelf = quickRecoveryChipValue(chipIdF, 'self')
+                if (fvSelf > floorBestValue) {
+                    floorBestValue = fvSelf
+                    floorBest = chipIdF
+                    floorBestCell = floorMyPos
+                }
+                continue
+            }
+            // Damage chips: cast at target only if currently in range+LoS.
+            // The dynMin gate in the main recovery loop can leave 5-15 TP unspent
+            // with a cheap damage chip (Rock/Pebble) sitting off-CD; the floor
+            // pass should still fire it. AoE-safety: skip if hitting self.
+            // EXCLUSIONS:
+            //  - Poison chips (managed by Magic BAIT/DUMP/SUSTAIN state machine —
+            //    floor-firing them resets antidote timing and can lose tempo).
+            //  - Debuff chips (handled by main scenarios; opportunistic floor
+            //    cast wastes the strategic timing).
+            if (isPoisonChip(chipIdF)) continue
+            if (isDebuffChip(chipIdF)) continue
+            if (floorDistToTarget == null || !floorHasLos) continue
+            if (floorDistToTarget < chipObjF._minRange || floorDistToTarget > chipObjF._maxRange) continue
+            if (chipObjF._aoeType != AREA_POINT && !chipObjF._selfImmune && fieldMap.wouldAoEHitCell(target._cellPos, chipObjF._aoeType, floorMyPos, floorMyPos)) continue
+            var fvDmg = quickRecoveryChipValue(chipIdF, 'enemy')
+            if (fvDmg > floorBestValue) {
+                floorBestValue = fvDmg
+                floorBest = chipIdF
+                floorBestCell = target._cellPos
+            }
+        }
+        if (floorBest == null) {
+            if (getTurn() <= 20 && getTP() >= 5) {
+                // Only flag as real "stuck" when at least one off-CD,
+                // affordable chip exists that the eligibility filter rejected
+                // (genuine classifier gap). Damage/debuff chips that lack
+                // range+LoS to target are correctly skipped, not "stuck".
+                var hadCapGap = false
+                for (var chipIdC in mapKeys(arsenal.playerEquippedChips)) {
+                    if (chipIdC == CHIP_PUNISHMENT) continue
+                    if (chipIdC == CHIP_DOPING && __dopingUsed) continue
+                    var cObj = arsenal.playerEquippedChips[chipIdC]
+                    if (cObj._cost > getTP()) continue
+                    if (getCooldown(chipIdC, getEntity()) > 0) continue
+                    var cSelfElig = isOffensiveBuff(chipIdC) || isShieldChip(chipIdC) ||
+                                    isDamageReturnChip(chipIdC) || isResourceChip(chipIdC)
+                    if (!cSelfElig && isHealingChip(chipIdC) && player._currHealth < player._maxHealth) {
+                        cSelfElig = true
+                    }
+                    if (cSelfElig) {
+                        hadCapGap = true
+                        break
+                    }
+                    // Damage chip is eligible only if currently in range+LoS
+                    // and not poison/debuff (managed by main scenarios).
+                    if (isPoisonChip(chipIdC) || isDebuffChip(chipIdC)) continue
+                    if (floorDistToTarget != null && floorHasLos &&
+                        floorDistToTarget >= cObj._minRange && floorDistToTarget <= cObj._maxRange) {
+                        hadCapGap = true
+                        break
+                    }
+                }
+                if (hadCapGap) {
+                    debugE("FLR_STUCK_T" + getTurn() + "_TP" + getTP())
+                } else {
+                    debugW("FLR_CD_SAT_T" + getTurn() + "_TP" + getTP())
+                }
+            }
+            break
+        }
+        if (getTurn() <= 20) {
+            debugW("FLR_T" + getTurn() + "_c" + floorBest + "_v" + floorBestValue + "_tp" + getTP() + "_at" + floorBestCell)
+        }
+        useChipOnCell(floorBest, floorBestCell)
+        if (floorBest == CHIP_DOPING) __dopingUsed = true
+        // Safety: if the chip silently failed (CD/target check at runtime), bail
+        // so we don't infinite-loop on the same broken candidate.
+        if (getTP() >= floorTpBefore) break
+    }
+}
+
+function quickRecoveryChipValue(chipId, mode) {
+    var bd = getCachedDamageBreakdown(chipId)
+    var value = 0
+
+    if (bd != null) {
+        if (mode == 'enemy') {
+            value += bd['direct'] * 2.0
+            value += bd['dot'] * 1.5
+            value += bd['nova'] * 2.5
+        }
+    }
+
+    if (mode == 'self') {
+        if (isHealingChip(chipId)) {
+            // SERUM never applies to its caster (verified in-engine: cast
+            // succeeds, zero effects land — ally/summon-only in practice).
+            // Self-casting it burns 8 TP for nothing.
+            if (chipId == CHIP_SERUM) { return -1 }
+            var hpMissing = player._maxHealth - player._currHealth
+            if (hpMissing > 0) {
+                var healEst = min(hpMissing, beamEstimateHeal(chipId, player._wisdom))
+                // HP-driven heal urgency (state-aware). Old code gated boost on
+                // turn > 20, so a wounded player early-game (e.g. after burst)
+                // under-valued heals in TP recovery. Scale by HP percentage:
+                // mirrors the SUSTAIN/FLEE state thresholds from scenario_helpers.
+                var hpPct = (player._currHealth * 100) / player._maxHealth
+                var lateGameMult = 1.5
+                if (hpPct < 40) lateGameMult = 3.0      // FLEE territory
+                else if (hpPct < 60) lateGameMult = 2.0 // SUSTAIN territory
+                // Additional late-game nudge (avoids draws by healing into damage race)
+                if (getTurn() > 30 && hpPct < 80) lateGameMult += 0.5
+                value += healEst * lateGameMult
+            } else {
+                return -1
+            }
+        } else if (isShieldChip(chipId)) {
+            value += 100
+            // Shield urgency mirrors heal — HP-driven, not turn-gated.
+            var hpPct2 = (player._currHealth * 100) / player._maxHealth
+            if (hpPct2 < 40) value += 200
+            else if (hpPct2 < 60) value += 100
+        } else if (isDamageReturnChip(chipId)) {
+            value += 150
+        } else if (isOffensiveBuff(chipId)) {
+            var turnsLeft = 64 - getTurn()
+            if (turnsLeft > 3) {
+                if (chipId == CHIP_STEROID) value += 350
+                else if (chipId == CHIP_WARM_UP) value += 300
+                else if (chipId == CHIP_PRISM) value += 300
+                else if (chipId == CHIP_WIZARDRY) value += 250
+                else if (chipId == CHIP_DOPING) {
+                    if (!__dopingUsed && player._currHealth > player._maxHealth * 0.5) {
+                        value += 100
+                    } else {
+                        value -= 300
+                    }
+                }
+                else value += 120
+            } else {
+                value += 50
+            }
+            // Uptime awareness (top-50 pattern: rage/reflexes-class buffs are
+            // recast the moment they expire, all fight — 31-32 casts over 64
+            // turns observed at rank 5). An EXPIRED core buff amplifies every
+            // subsequent attack; a redundant re-stack does far less. Match by
+            // item id in our active effects (effect array index 5).
+            // High-TP leeks only: on a 12-TP support every doubled buff
+            // outbids the attack that actually ends the fight (DuskHope
+            // 5W/20 -> 2-3W/20, draws up — measured).
+            if (player._maxTp == null || player._maxTp >= 18) {
+                var upActive = false
+                for (var upE in player._effectsActive) {
+                    if (count(upE) >= 6 && upE[5] == chipId) { upActive = true; break }
+                }
+                if (!upActive) { value = floor(value * 2.0) }
+                else { value = floor(value * 0.6) }
+            }
+            if (chipId == CHIP_KNOWLEDGE || chipId == CHIP_PRISM) {
+                var hpMissing = player._maxHealth - player._currHealth
+                if (hpMissing > 50) {
+                    var wisBoost = (chipId == CHIP_KNOWLEDGE) ? 260 : 60
+                    var baseHealEst = min(hpMissing, 300)
+                    var amplification = baseHealEst * wisBoost / (100 + player._wisdom)
+                    value += amplification * 1.5
+                }
+            }
+        } else if (isResourceChip(chipId)) {
+            if (chipId == CHIP_ADRENALINE) value += 500
+            else value += 50
+        }
+    }
+
+    if (chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN
+        || chipId == CHIP_TRANQUILIZER || chipId == CHIP_SLOW_DOWN) {
+        value += 200 * (1 + player._magic / 500)
+    }
+
+    return value
+}
+
+function quickRecoveryWeaponValue(weaponId) {    var bd = getCachedDamageBreakdown(weaponId)
+    if (bd == null) return 0
+    return bd['direct'] * 2.0 + bd['dot'] * 1.5 + bd['nova'] * 2.5
+}
+
+// Shield-awareness for recovery fire: the beam scores post-shield damage, but
+// the recovery pass used to fire weapons/chips into fresh stacks for 0-3
+// damage a shot (Ada vs Reveillon 53257330, Margaret vs Portura2 53256968).
+// Returns the fraction of direct damage expected to land (0 when a fresh
+// stack absorbs everything, 1 when unshielded).
+function recoveryEffectiveFraction(target, directEstimate) {
+    if (directEstimate <= 0) return 1.0
+    var absS = target._absShield
+    var relS = target._relShield
+    if (absS == null) absS = 0
+    if (relS == null) relS = 0
+    if (relS > 90) relS = 90
+    if (absS <= 0 && relS <= 0) return 1.0
+    var eff = directEstimate * (1 - relS / 100) - absS
+    if (eff < 0) eff = 0
+    return eff / directEstimate
+}
+
+// Phase 1.3: lightweight kill-probability estimate from a simResult. Mirrors
+// the (mean / hp) lower bound that scorer.score() computes — sufficient for
+// the alt-target kill-flag gate without re-running the full scorer.
+function estimateKillProbFromSim(simResult, t) {
+    if (simResult == null || t == null) return 0
+    var hp = t._currHealth
+    if (hp == null || hp <= 0) return 1.0
+    var direct = simResult.damageDealt != null ? simResult.damageDealt : 0
+    var dot = simResult.dotDamageQueued != null ? simResult.dotDamageQueued : 0
+    var nova = simResult.novaDamageQueued != null ? simResult.novaDamageQueued : 0
+    var total = direct + dot + nova
+    var ratio = total * 1.0 / hp
+    if (ratio >= 1.0) return 1.0
+    if (ratio < 0) return 0
+    return ratio
+}
+
+// Support post-pass (BUILD_SUPPORT builds). Runs after the main scenario
+// executes and BEFORE recoverRemainingTP, so ally casts outrank self-filler.
+// Deterministic direct-cast pattern (same as the boss BUFFER role) — the
+// 1v1 scenario score landscape reliably outbids additive ally dimensions,
+// so team support cannot live inside the scenario competition.
+function supportAlliesPass() {
+    var supAllies = getAliveAllies()
+    if (supAllies == null || count(supAllies) == 0) { return }
+    var supMyId = getEntity()
+    var supMyCell = getCell(supMyId)
+
+    // Weakest ally (heal/shield target) and strongest attacker (buff target).
+    var supWeakId = -1
+    var supWeakRatio = 1.1
+    var supStrongId = -1
+    var supStrongOff = -1
+    for (var supAid in supAllies) {
+        if (supAid == supMyId) continue
+        if (isDead(supAid)) continue
+        var supLife = getLife(supAid)
+        var supMax = getTotalLife(supAid)
+        if (supLife == null || supMax == null || supMax <= 0) continue
+        var supRatio = supLife / supMax
+        if (supRatio < supWeakRatio) {
+            supWeakRatio = supRatio
+            supWeakId = supAid
+        }
+        var supOff = getStrength(supAid) + getMagic(supAid)
+        if (supOff != null && supOff > supStrongOff) {
+            supStrongOff = supOff
+            supStrongId = supAid
+        }
+    }
+    if (supWeakId == -1) { return }
+
+    // 0. Cleanse first (support v2): a poisoned ally bleeding >12% maxHP per
+    // turn gains more from one Antidote than from any heal we can cast —
+    // heals race the ticks, cleanse removes them. Scan all allies, cleanse
+    // the worst-poisoned one in range.
+    if (mapContainsKey(arsenal.playerEquippedChips, CHIP_ANTIDOTE)
+        && getCooldown(CHIP_ANTIDOTE, supMyId) == 0
+        && getTP() >= getCachedChipCost(CHIP_ANTIDOTE)) {
+        var supPoisonId = -1
+        var supPoisonWorst = 0
+        for (var supPa in supAllies) {
+            if (supPa == supMyId) { continue }
+            if (isDead(supPa)) { continue }
+            var supPaEffs = getEffects(supPa)
+            if (supPaEffs == null) { continue }
+            var supPaDot = 0
+            for (var supPe in supPaEffs) {
+                if (supPe[0] == EFFECT_POISON) supPaDot += supPe[1]
+            }
+            var supPaMax = getTotalLife(supPa)
+            if (supPaMax == null || supPaMax <= 0) { continue }
+            if (supPaDot > supPaMax * 0.12 && supPaDot > supPoisonWorst) {
+                var supPaDist = getCellDistance(supMyCell, getCell(supPa))
+                if (supPaDist != null && supPaDist <= getChipMaxRange(CHIP_ANTIDOTE)) {
+                    supPoisonWorst = supPaDot
+                    supPoisonId = supPa
+                }
+            }
+        }
+        if (supPoisonId != -1) {
+            var supPr = useChip(CHIP_ANTIDOTE, supPoisonId)
+            if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_cleanse_ally" + supPoisonId + "_dot" + floor(supPoisonWorst) + "_ret" + supPr)
+        }
+    }
+
+    // 1. Heal the weakest ally when meaningfully wounded.
+    if (supWeakRatio < 0.85) {
+        // SERUM leads: strongest ally HoT and it can ONLY target allies —
+        // the caster is excluded in-engine despite the data mask.
+        var supHealChips = [CHIP_SERUM, CHIP_CURE, CHIP_VACCINE, CHIP_BANDAGE, CHIP_DRIP, CHIP_REMISSION]
+        for (var supHc in supHealChips) {
+            if (!mapContainsKey(arsenal.playerEquippedChips, supHc)) continue
+            if (getCooldown(supHc, supMyId) > 0) continue
+            if (getTP() < getCachedChipCost(supHc)) continue
+            var supHd = getCellDistance(supMyCell, getCell(supWeakId))
+            if (supHd == null || supHd > getChipMaxRange(supHc)) continue
+            var supHr = useChip(supHc, supWeakId)
+            if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_heal" + supHc + "_ally" + supWeakId + "_ret" + supHr)
+            break
+        }
+    }
+
+    // 2. Shield the weakest ally — but only if some enemy can actually
+    // attack them this turn (support v2): shielding an unreachable ally
+    // burns TP on mitigation that expires before it can matter.
+    var supShieldWorth = false
+    var supWeakCell = getCell(supWeakId)
+    if (supWeakCell != null && fieldMap != null) {
+        var supEnemyMap = fieldMap.getEnemySubMap()
+        for (var supEid in mapKeys(supEnemyMap)) {
+            if (isDead(supEid)) { continue }
+            if (predictEnemyCanAttackWithin(supWeakCell, supEnemyMap[supEid], 1)) {
+                supShieldWorth = true
+                break
+            }
+        }
+    }
+    var supShieldChips = [CHIP_SHIELD, CHIP_HELMET, CHIP_WALL, CHIP_FORTRESS, CHIP_ARMOR, CHIP_SOLIDIFICATION]
+    if (!supShieldWorth) { supShieldChips = [] }
+    for (var supSc in supShieldChips) {
+        if (!mapContainsKey(arsenal.playerEquippedChips, supSc)) continue
+        if (getCooldown(supSc, supMyId) > 0) continue
+        if (getTP() < getCachedChipCost(supSc)) continue
+        var supSd = getCellDistance(supMyCell, getCell(supWeakId))
+        if (supSd == null || supSd > getChipMaxRange(supSc)) continue
+        var supSr = useChip(supSc, supWeakId)
+        if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_shield" + supSc + "_ally" + supWeakId + "_ret" + supSr)
+        break
+    }
+
+    // 3. Offensive buff on the strongest attacker.
+    if (supStrongId != -1) {
+        var supBuffChips = [CHIP_MOTIVATION, CHIP_PROTEIN, CHIP_PRISM, CHIP_STEROID]
+        for (var supBc in supBuffChips) {
+            if (!mapContainsKey(arsenal.playerEquippedChips, supBc)) continue
+            if (getCooldown(supBc, supMyId) > 0) continue
+            if (getTP() < getCachedChipCost(supBc)) continue
+            var supBd = getCellDistance(supMyCell, getCell(supStrongId))
+            if (supBd == null || supBd > getChipMaxRange(supBc)) continue
+            var supBr = useChip(supBc, supStrongId)
+            if (getTurn() <= 20) debugW("SUPPASS_T" + getTurn() + "_buff" + supBc + "_ally" + supStrongId + "_ret" + supBr)
+            break
+        }
+    }
+}

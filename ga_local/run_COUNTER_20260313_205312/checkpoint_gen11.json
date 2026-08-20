@@ -1,0 +1,681 @@
+{
+  "generation": 11,
+  "mode": "counter",
+  "build_type": "COUNTER",
+  "leek_name": "MargaretHamilton",
+  "leek_names": [
+    "MargaretHamilton",
+    "AdaLovelace",
+    "KurtGodel",
+    "EdsgerDijkstra"
+  ],
+  "best_fitness": 0.8333333333333334,
+  "best_val_fitness": 0.0,
+  "best_genome": {
+    "build_type": "COUNTER",
+    "weights": {
+      "vs_kiter_burst": 80,
+      "vs_kiter_heal": 135,
+      "vs_kiter_kite": 70,
+      "vs_kiter_dist": 150,
+      "vs_kiter_dot": 130,
+      "vs_burst_shield": 140,
+      "vs_burst_heal": 120,
+      "vs_burst_threat": 120,
+      "vs_burst_burst": 120,
+      "vs_tank_nova": 164,
+      "vs_tank_denial": 130,
+      "vs_tank_dot": 120,
+      "vs_reflect_on_burst": 47,
+      "vs_reflect_on_shield": 130,
+      "vs_reflect_on_heal": 168,
+      "vs_reflect_off_burst": 130,
+      "cd_shield_burst": 121,
+      "cd_shield_otko": 101,
+      "cd_heal_burst": 115
+    }
+  },
+  "population": [
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 80,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 70,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 140,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 120,
+          "vs_burst_burst": 120,
+          "vs_tank_nova": 164,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 130,
+          "cd_shield_burst": 121,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 115
+        }
+      },
+      "fitness": 0.8333333333333334
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 125,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 122
+        }
+      },
+      "fitness": 0.8333333333333334
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 80,
+          "vs_kiter_heal": 133,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 120,
+          "vs_burst_burst": 134,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 80,
+          "vs_reflect_on_burst": 70,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 130,
+          "vs_reflect_off_burst": 130,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 110,
+          "cd_heal_burst": 135
+        }
+      },
+      "fitness": 0.8125
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 137,
+          "vs_kiter_heal": 133,
+          "vs_kiter_kite": 49,
+          "vs_kiter_dist": 157,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 147,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 116,
+          "vs_burst_burst": 127,
+          "vs_tank_nova": 164,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 100,
+          "vs_reflect_on_heal": 170,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 122
+        }
+      },
+      "fitness": 0.8125
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 174,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 157,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 146,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 80,
+          "vs_reflect_on_burst": 70,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 130,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 109,
+          "cd_heal_burst": 129
+        }
+      },
+      "fitness": 0.7916666666666666
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 80,
+          "vs_kiter_heal": 133,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 128,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 137,
+          "vs_burst_burst": 106,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 154,
+          "vs_tank_dot": 95,
+          "vs_reflect_on_burst": 70,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 130,
+          "vs_reflect_off_burst": 130,
+          "cd_shield_burst": 166,
+          "cd_shield_otko": 105,
+          "cd_heal_burst": 135
+        }
+      },
+      "fitness": 0.7708333333333334
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 80,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 65,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 140,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 120,
+          "vs_burst_burst": 120,
+          "vs_tank_nova": 141,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 30,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 130,
+          "cd_shield_burst": 130,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 115
+        }
+      },
+      "fitness": 0.7708333333333334
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 35,
+          "vs_kiter_dist": 141,
+          "vs_kiter_dot": 142,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 118,
+          "vs_tank_denial": 125,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 58,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 109,
+          "cd_heal_burst": 96
+        }
+      },
+      "fitness": 0.75
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 80,
+          "vs_kiter_heal": 133,
+          "vs_kiter_kite": 31,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 142,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 168,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 122,
+          "vs_tank_dot": 80,
+          "vs_reflect_on_burst": 75,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 130,
+          "vs_reflect_off_burst": 81,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 110,
+          "cd_heal_burst": 149
+        }
+      },
+      "fitness": 0.75
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 137,
+          "vs_kiter_heal": 133,
+          "vs_kiter_kite": 49,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 80,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 127,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 122,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 58,
+          "vs_reflect_on_shield": 88,
+          "vs_reflect_on_heal": 170,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 122
+        }
+      },
+      "fitness": 0.75
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 87,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 66,
+          "vs_kiter_dist": 197,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 158,
+          "vs_burst_threat": 129,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 80,
+          "vs_reflect_on_burst": 58,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 145
+        }
+      },
+      "fitness": 0.75
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 140,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 120,
+          "vs_burst_burst": 120,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 44,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 130,
+          "cd_shield_burst": 110,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 110
+        }
+      },
+      "fitness": 0.7291666666666666
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 87,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 147,
+          "vs_burst_shield": 140,
+          "vs_burst_heal": 145,
+          "vs_burst_threat": 129,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 110,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 121,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 115
+        }
+      },
+      "fitness": 0.7291666666666666
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 80,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 127,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 120,
+          "vs_burst_burst": 120,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 117,
+          "vs_tank_dot": 80,
+          "vs_reflect_on_burst": 70,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 130,
+          "vs_reflect_off_burst": 130,
+          "cd_shield_burst": 121,
+          "cd_shield_otko": 110,
+          "cd_heal_burst": 115
+        }
+      },
+      "fitness": 0.7291666666666666
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 140,
+          "vs_kiter_kite": 49,
+          "vs_kiter_dist": 141,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 98,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 160,
+          "vs_burst_burst": 149,
+          "vs_tank_nova": 118,
+          "vs_tank_denial": 83,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 92,
+          "cd_shield_burst": 138,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 115
+        }
+      },
+      "fitness": 0.7083333333333334
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 87,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 69,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 153,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 114,
+          "vs_burst_threat": 108,
+          "vs_burst_burst": 120,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 140,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 161,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 122
+        }
+      },
+      "fitness": 0.7083333333333334
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 133,
+          "vs_tank_denial": 113,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 92,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 122
+        }
+      },
+      "fitness": 0.7083333333333334
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 70,
+          "vs_kiter_dist": 157,
+          "vs_kiter_dot": 146,
+          "vs_burst_shield": 86,
+          "vs_burst_heal": 100,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 164,
+          "vs_tank_denial": 125,
+          "vs_tank_dot": 127,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 109,
+          "cd_heal_burst": 122
+        }
+      },
+      "fitness": 0.6875
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 80,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 72,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 130,
+          "vs_burst_shield": 98,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 150,
+          "vs_tank_denial": 122,
+          "vs_tank_dot": 90,
+          "vs_reflect_on_burst": 58,
+          "vs_reflect_on_shield": 100,
+          "vs_reflect_on_heal": 170,
+          "vs_reflect_off_burst": 80,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 95,
+          "cd_heal_burst": 115
+        }
+      },
+      "fitness": 0.6666666666666666
+    },
+    {
+      "genome": {
+        "build_type": "COUNTER",
+        "weights": {
+          "vs_kiter_burst": 106,
+          "vs_kiter_heal": 135,
+          "vs_kiter_kite": 31,
+          "vs_kiter_dist": 150,
+          "vs_kiter_dot": 92,
+          "vs_burst_shield": 80,
+          "vs_burst_heal": 120,
+          "vs_burst_threat": 148,
+          "vs_burst_burst": 80,
+          "vs_tank_nova": 130,
+          "vs_tank_denial": 130,
+          "vs_tank_dot": 120,
+          "vs_reflect_on_burst": 47,
+          "vs_reflect_on_shield": 130,
+          "vs_reflect_on_heal": 168,
+          "vs_reflect_off_burst": 130,
+          "cd_shield_burst": 120,
+          "cd_shield_otko": 101,
+          "cd_heal_burst": 122
+        }
+      },
+      "fitness": 0.625
+    }
+  ],
+  "history": [
+    {
+      "generation": 1,
+      "best": 0.7916666666666666,
+      "avg": 0.7354166666666667,
+      "worst": 0.6458333333333334,
+      "elapsed_s": 648.4
+    },
+    {
+      "generation": 2,
+      "best": 0.8333333333333334,
+      "avg": 0.746875,
+      "worst": 0.6666666666666666,
+      "elapsed_s": 540.8
+    },
+    {
+      "generation": 3,
+      "best": 0.8333333333333334,
+      "avg": 0.7375,
+      "worst": 0.625,
+      "elapsed_s": 536.0
+    },
+    {
+      "generation": 4,
+      "best": 0.8333333333333334,
+      "avg": 0.7385416666666667,
+      "worst": 0.6666666666666666,
+      "elapsed_s": 538.2
+    },
+    {
+      "generation": 5,
+      "best": 0.8333333333333334,
+      "avg": 0.746875,
+      "worst": 0.6666666666666666,
+      "elapsed_s": 537.5
+    },
+    {
+      "generation": 6,
+      "best": 0.8333333333333334,
+      "avg": 0.7239583333333333,
+      "worst": 0.6458333333333334,
+      "elapsed_s": 538.1
+    },
+    {
+      "generation": 7,
+      "best": 0.8333333333333334,
+      "avg": 0.740625,
+      "worst": 0.625,
+      "elapsed_s": 536.1
+    },
+    {
+      "generation": 8,
+      "best": 0.8333333333333334,
+      "avg": 0.7572916666666667,
+      "worst": 0.6666666666666666,
+      "elapsed_s": 540.2
+    },
+    {
+      "generation": 9,
+      "best": 0.8333333333333334,
+      "avg": 0.7416666666666667,
+      "worst": 0.6458333333333334,
+      "elapsed_s": 542.8
+    },
+    {
+      "generation": 10,
+      "best": 0.8333333333333334,
+      "avg": 0.7395833333333333,
+      "worst": 0.6458333333333334,
+      "elapsed_s": 542.0
+    },
+    {
+      "generation": 11,
+      "best": 0.8333333333333334,
+      "avg": 0.7302083333333333,
+      "worst": 0.6666666666666666,
+      "elapsed_s": 539.6
+    },
+    {
+      "generation": 12,
+      "best": 0.8333333333333334,
+      "avg": 0.7458333333333333,
+      "worst": 0.625,
+      "elapsed_s": 540.1
+    }
+  ],
+  "config": {
+    "population_size": 20,
+    "fights_per_opponent": 3,
+    "mutation_rate": 0.15,
+    "mutation_strength": 0.2,
+    "elitism": 3,
+    "tournament_size": 4,
+    "train_opponents": [
+      "smart_str",
+      "smart_mag",
+      "smart_agi",
+      "smart_tank"
+    ],
+    "val_opponents": []
+  }
+}
