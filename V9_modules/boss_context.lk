@@ -92,6 +92,9 @@ global _krNoProg = 0
 // Perch walk gate: turtle solvers forbid the roam (the walk is the death
 // corridor) — only the immediate in-range kill may fire.
 global _krAllowRoam = true
+// KR crystal commitment (fight 53370567: the resolver oscillated between
+// perches for 8 turns, zero kills) — stick to one crystal till solved/dead.
+global _krCommitEID = -1
 
 // Anchor park latch: -1 = still walking in; once the 9-cell band is reached
 // this holds the park cell forever (kills the in/out oscillation).
@@ -2406,10 +2409,50 @@ function leanSlideStands(crCell, plan) {
 // the open map is hunted down in 2-4 turns. So: never roam. Solve only what
 // comes in range (immediate KR, slides from the stack), heal the anchor,
 // and let the tactician bulbs do the roaming.
+// Ball objective: the squad marches as ONE unit to the nearest unsolved
+// crystal goal (centroid-based) — nobody is ever focused alone (the winning
+// model: Inupi's bruisers took ~400-1,300 total because the support's
+// shields and 3 remissions were always in range).
+function ballObjective() {
+    var cx = 0
+    var cy = 0
+    var n = 0
+    var allB = getAliveAllies()
+    for (var b in allB) {
+        if (isSummon(b)) continue
+        var bc = getCell(b)
+        if (bc == null || bc < 0) continue
+        cx += getCellX(bc)
+        cy += getCellY(bc)
+        n++
+    }
+    var mybc = getCell()
+    cx += getCellX(mybc)
+    cy += getCellY(mybc)
+    n++
+    if (n == 0) { return -1 }
+    cx = floor(cx / n)
+    cy = floor(cy / n)
+    var bestG = -1
+    var bestD = 9999
+    for (var eid in mapKeys(_crystalMap)) {
+        var cd = _crystalMap[eid]
+        if (isCrystalSolved(cd)) continue
+        var cc = getCell(eid)
+        if (cc == null || cc < 0) continue
+        var g = nearestSolvedCellOnAxis(cd['goalAxis'], cc)
+        if (g == -1) continue
+        var dd = getCellDistance(getCellFromXY(cx, cy), g)
+        if (dd != null && dd < bestD) { bestD = dd; bestG = g }
+    }
+    return bestG
+}
+
 function executeTurtleSolverTurn() {
     // Fast dive (the only doctrine that ever solved): every T5-T8 puzzle
     // completion of the campaign came from divers arriving early; the static
-    // turtle survived longer but solved NOTHING (fights 53369052/135/191).
+    // turtle survived longer but solved NOTHING (fights 53369052/135/191),
+    // and the ball doctrine never converged (scattered spawn — 53370537+).
     // Dive with the perch-KR + the solver path's escape machinery.
     return executeSolverPuzzleTurn()
 }
@@ -2487,30 +2530,33 @@ function executeLeanPuzzleTurn() {
         // The 4th instant solve: swap a crystal onto its goal before anchoring
         // (graal dead by R4-6 beats any shield wall — the attrition clock)
         if (getLife() >= 1500 && getTurn() >= 2 && tryOpenerSwapSolve(myID)) { return true }
-        // Brawl anchor (fights 53368762/783): the army does NOT come to a
-        // graal-parked wall — it hunts the divers wherever they are. So the
-        // support chases the pack and parks IN the brawl: shields land on
-        // allies at 0-3, remission at 0-7, and his RES450 hull soaks the focus.
-        if (armyD > 6) { _anchorParkCell = -1 }  // pack moved on: re-chase
-        if (_anchorParkCell == -1) {
-            if (armyD <= 2) {
-                _anchorParkCell = myCell
-            } else {
-                var chaseC = -1
-                var chaseD = 999
-                for (var ac2 in army) {
-                    var acd = getCellDistance(myCell, ac2)
-                    if (acd != null && acd < chaseD) { chaseD = acd; chaseC = ac2 }
-                }
-                if (chaseC != -1) {
-                    var preA = myCell
-                    moveTowardCell(chaseC, getMP())
-                    if (getCell() == preA) { solverWalkToward(chaseC) }
-                    myCell = getCell()
-                }
+        // Brawl anchor (fights 53368762/783): the support SHADOWS the most
+        // exposed resolver and parks on them — fortress/carapace/wall land on
+        // THAT resolver at 0-3, remission at 0-7, and the RES hull body-
+        // blocks the army. The focus then hits a shielded target with a
+        // healer attached instead of a lone diver (the Inupi pair model).
+        var shadT = -1
+        var shadD = 999
+        var allS = getAliveAllies()
+        for (var as2 in allS) {
+            if (isSummon(as2)) continue
+            if (!isNamedSolver(getName(as2))) continue
+            var asC = getCell(as2)
+            if (asC == null || asC < 0) continue
+            var asD = count(army) > 0 ? nearestArmyDistFrom(asC, army) : 99
+            if (asD < shadD) { shadD = asD; shadT = as2 }
+        }
+        if (shadT != -1) {
+            var shadC = getCell(shadT)
+            var dSh = getCellDistance(myCell, shadC)
+            if (dSh != null && dSh > 2) {
+                var preA = myCell
+                moveTowardCell(shadC, getMP())
+                if (getCell() == preA) { solverWalkToward(shadC) }
+                myCell = getCell()
             }
         }
-        say("PZ ANCHOR parked " + myCell)
+        say("PZ ANCHOR parked " + myCell + " shad" + shadT)
         // Rotation (winning reference: 169 shield casts — and the bruisers
         // survived on the support's shields, not their own). Every shield
         // lands on the most-hurt ally IN RANGE (self included); remission
@@ -3763,30 +3809,43 @@ function tryOpenerSwapSolve(myID) {
         var crCell = getCell(eid)
         if (crCell == null || crCell < 0) continue
         var axis = cd['goalAxis']
-        var goalC = nearestSolvedCellOnAxis(axis, crCell)
-        if (goalC == -1) continue
-        // Landing search: any free cell near the goal that IS a solved
-        // position (on the axis with a clear ray to the graal), teleport-
-        // reachable, and from which the crystal is swap-able (line+LoS+14).
-        var gX = getCellX(goalC)
-        var gY = getCellY(goalC)
+        // Swap landing = the INTERSECTION of the crystal's own row/col with
+        // the goal axis — the solved cell that SHARES A LINE with the crystal
+        // (nearestSolvedCellOnAxis returns the axis END, which is off-line
+        // whenever the crystal is far along the axis — why it never fired).
+        var lands = []
+        var icX = getCellX(crCell)
+        var icY = getCellY(crCell)
+        if (axis == "east" || axis == "west") {
+            push(lands, getCellFromXY(icX, _graalY))
+        } else {
+            push(lands, getCellFromXY(_graalX, icY))
+        }
+        var base = lands[0]
+        if (base != null && base >= 0) {
+            var bX = getCellX(base)
+            var bY = getCellY(base)
+            for (var ox2 = -2; ox2 <= 2; ox2++) {
+                for (var oy2 = -2; oy2 <= 2; oy2++) {
+                    if (ox2 == 0 && oy2 == 0) continue
+                    if (abs(ox2) + abs(oy2) > 2) continue
+                    push(lands, getCellFromXY(bX + ox2, bY + oy2))
+                }
+            }
+        }
         var bestLand = -1
         var bestLandD = 999
-        for (var lx = -4; lx <= 4; lx++) {
-            for (var ly = -4; ly <= 4; ly++) {
-                if (abs(lx) + abs(ly) > 4) continue
-                var lc = getCellFromXY(gX + lx, gY + ly)
-                if (lc == null || lc < 0 || lc == myC) continue
-                if (!isEmptyCell(lc)) continue
-                var dMe = getCellDistance(myC, lc)
-                if (dMe == null || dMe > 12 || dMe < 1) continue
-                if (!isCellSolvedForAxis(lc, axis)) continue
-                var dLC = getCellDistance(lc, crCell)
-                if (dLC == null || dLC > 14 || dLC < 1) continue
-                if (!isOnSameLine(lc, crCell)) continue
-                if (!lineOfSight(lc, crCell)) continue
-                if (dMe < bestLandD) { bestLandD = dMe; bestLand = lc }
-            }
+        for (var lc in lands) {
+            if (lc == null || lc < 0 || lc == myC) continue
+            if (!isEmptyCell(lc)) continue
+            var dMe = getCellDistance(myC, lc)
+            if (dMe == null || dMe > 12 || dMe < 1) continue
+            if (!isCellSolvedForAxis(lc, axis)) continue
+            var dLC = getCellDistance(lc, crCell)
+            if (dLC == null || dLC > 14 || dLC < 1) continue
+            if (!isOnSameLine(lc, crCell)) continue
+            if (!lineOfSight(lc, crCell)) continue
+            if (dMe < bestLandD) { bestLandD = dMe; bestLand = lc }
         }
         if (bestLand == -1) continue
         if (useChipOnCell(CHIP_TELEPORTATION, bestLand) != 1) continue
@@ -3833,6 +3892,7 @@ function tryKillResurrectSolve(myID) {
     var myC = getCell()
     var mX = getCellX(myC)
     var mY = getCellY(myC)
+    var krArmy = puzzleArmyCells()
 
     // REVIVE-FIRST (fight 53369486: the chest killed red_crystal at R3,
     // Apocalypse wiped us at R4). An already-dead crystal needs no spark —
@@ -3881,9 +3941,28 @@ function tryKillResurrectSolve(myID) {
     var killScore = 99999
     var walkGoal = -1
     var walkScore = 99999
+    var krWhy = "NOCR"
+    var krWhyD = -1
+    var walkE = -1
+    // KR commitment: the walk scoring re-picks the best crystal/perch every
+    // turn and the resolver oscillates between perches without ever firing
+    // (fight 53370567: ED bounced 469->435->469 for 8 turns, zero kills).
+    // Stick to the committed crystal until it is solved/dead.
+    if (_krCommitEID != -1) {
+        var cc0 = getCell(_krCommitEID)
+        var stillThere = false
+        if (cc0 != null && cc0 >= 0 && mapContainsKey(_crystalMap, _krCommitEID)) {
+            if (!isCrystalSolved(_crystalMap[_krCommitEID]) && !isDead(_krCommitEID)) stillThere = true
+        }
+        if (!stillThere) { _krCommitEID = -1 }
+    }
     for (var eid in mapKeys(_crystalMap)) {
         var cd = _crystalMap[eid]
         if (isCrystalSolved(cd)) continue
+        if (_krCommitEID != -1 && eid != _krCommitEID) continue
+        // Solver work division: skip crystals another solver claimed ([901])
+        // — the two resolvers must work different crystals in parallel
+        if (mapContainsKey(_pzSolverClaims, eid)) continue
         var crCell = getCell(eid)
         if (crCell == null || crCell < 0) continue
         var goalC = nearestSolvedCellOnAxis(cd['goalAxis'], crCell)
@@ -3914,24 +3993,34 @@ function tryKillResurrectSolve(myID) {
             if (bestRc != -1) {
                 var sc = bestDg * 100 - (dCrGoal - bestDg)
                 if (sc < killScore) { killScore = sc; killE = eid; killRT = bestRc }
+            } else {
+                krWhy = "NORT"
+                krWhyD = dCrGoal
             }
         }
-        // (b) perch pick: a free cell within 2 of the goal that still covers
-        // the crystal with spark — the walk target when no kill is ready
-        var gX = getCellX(goalC)
-        var gY = getCellY(goalC)
-        for (var px = -2; px <= 2; px++) {
-            for (var py = -2; py <= 2; py++) {
-                if (abs(px) + abs(py) > 2) continue
-                var pc = getCellFromXY(gX + px, gY + py)
+        // (b) perch: BETWEEN the crystal and the goal — within spark 10 of
+        // the crystal, army-safe (d>=5), and closer to the goal than the
+        // crystal is (the revive is guaranteed progress). The goal-zone perch
+        // left far crystals beyond spark range (53370603+: whyNOCR); the
+        // crystal-side sweet spot is in range AND out of the kill envelope.
+        var cX2 = getCellX(crCell)
+        var cY2 = getCellY(crCell)
+        for (var bx = -10; bx <= 10; bx++) {
+            for (var by = -10; by <= 10; by++) {
+                if (bx == 0 && by == 0) continue
+                var bman = abs(bx) + abs(by)
+                if (bman > 10 || bman < 2) continue
+                var pc = getCellFromXY(cX2 + bx, cY2 + by)
                 if (pc == null || pc < 0) continue
                 if (pc != myC && !isEmptyCell(pc)) continue
-                var dPcCr = getCellDistance(pc, crCell)
-                if (dPcCr == null || dPcCr > killRange) continue
+                var pcArmyD = count(krArmy) > 0 ? nearestArmyDistFrom(pc, krArmy) : 99
+                if (pcArmyD < 5) continue
+                var dPcGoal = getCellDistance(pc, goalC)
+                if (dPcGoal == null || dPcGoal >= dCrGoal) continue
                 var dMePc = getCellDistance(myC, pc)
                 if (dMePc == null) continue
-                var wsc = dMePc + max(0, dPcCr - 6) * 3
-                if (wsc < walkScore) { walkScore = wsc; walkGoal = pc }
+                var wsc = dPcGoal * 20 - pcArmyD * 3 + dMePc
+                if (wsc < walkScore) { walkScore = wsc; walkGoal = pc; walkE = eid }
             }
         }
     }
@@ -3957,6 +4046,12 @@ function tryKillResurrectSolve(myID) {
     }
 
     if (walkGoal == -1 || !_krAllowRoam) { return false }
+    // Commit to the crystal behind this walk target until it is solved/dead,
+    // and claim it so the partner resolver works a DIFFERENT crystal
+    if (_krCommitEID == -1 && walkE != -1) {
+        _krCommitEID = walkE
+        announceFocus(walkE)
+    }
     var dW = getCellDistance(myC, walkGoal)
     // Aggressive teleport (winning replay 52821555: all 4 leeks teleported to
     // their goals at R1-2 and solved at R2). Walking 25 cells takes 5 turns —
@@ -3997,7 +4092,7 @@ function tryKillResurrectSolve(myID) {
         }
     }
     if (!tpDone2) {
-        say("PZ KR perch->" + walkGoal + " d" + dW)
+        say("PZ KR perch->" + walkGoal + " d" + dW + " why" + krWhy + krWhyD + " e" + walkE)
         if (getCell() == myC) { solverWalkToward(walkGoal) }
     }
     if (getCell() == myC) { _krNoProg++ } else { _krNoProg = 0 }
@@ -4046,10 +4141,10 @@ function executeSolverPuzzleTurn() {
     }
     // Kill+Resurrect solve takes priority when the kit is ready (the direct
     // reposition bypasses all slide geometry — the solve that kept stalling).
-    // Lethality pre-gate: a nearly-dead resolver escapes FIRST — fight
-    // 53368592: MH kept walking the KR approach at 303 HP and died that turn,
-    // the escape gate never reached because KR returns true every turn.
-    if (getLife() >= 1500 && getTurn() >= 2 && tryKillResurrectSolve(myID)) { return true }
+    // T1 DIVE (winning replay 52821555: they teleported at R1-2, before the
+    // army organized — our T1-2 hold lets the army form first and the walk
+    // becomes the death corridor). Resolvers go at T1.
+    if (getLife() >= 1500 && getTurn() >= 1 && tryKillResurrectSolve(myID)) { return true }
     // Opener swap-solve: teleport onto the goal, inversion the crystal onto
     // it — the 3rd/4th instant solve (ADA/KG carry inversion, no resurrection)
     if (getLife() >= 1500 && getTurn() >= 2 && tryOpenerSwapSolve(myID)) { return true }
