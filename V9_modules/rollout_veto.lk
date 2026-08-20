@@ -1,0 +1,165 @@
+// V9 rollout veto — simulation-based override layer (Phase M2).
+// Hooked into UnifiedStrategy.createAndExecuteScenario AFTER the alt-target
+// pass and BEFORE executeScenario: the full V8 pipeline has just picked this
+// turn's best scenario; we simulate the ENEMY response to the resulting end
+// state (enemy_sim.lk, M1 model). If the chosen plan is catastrophic
+// (predicted death, or most of its actions silently drop), we build defensive
+// alternatives inline, simulate each with ScenarioSimulator + the same enemy
+// estimate, score them with eval.lk, and override only when a candidate
+// strictly beats the catastrophic plan. V8 itself is never modified — this
+// module is V9-only.
+
+global _v9VetoEnabled = true
+global _v9VetoLog = true
+
+include('enemy_sim.lk')
+include('eval.lk')
+
+// Best available self-heal chip id right now (-1 if none): cooldown-ready,
+// TP-affordable, ranked by the strategy's own recovery valuation.
+function v9VetoBestHealChip(arsenal) {
+    var best = -1
+    var bestVal = 0
+    for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+        if (!isHealingChip(cid)) continue
+        if (getCooldown(cid, player._id) > 0) continue
+        if (getTP() < arsenal.playerEquippedChips[cid]._cost) continue
+        var val = quickRecoveryChipValue(cid, 'self')
+        if (val > bestVal) {
+            bestVal = val
+            best = cid
+        }
+    }
+    return best
+}
+
+// (a) Full defense: every available shield chip + the best heal, self-cast.
+function v9VetoFullDefense(arsenal) {
+    var acts = []
+    var myCell = getCell()
+    for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+        if (!isShieldChip(cid) && !isDamageReturnChip(cid)) continue
+        if (getCooldown(cid, player._id) > 0) continue
+        if (getTP() < arsenal.playerEquippedChips[cid]._cost) continue
+        push(acts, new Action(Action.ACTION_BUFF, -1, cid, myCell, player))
+    }
+    var heal = v9VetoBestHealChip(arsenal)
+    if (heal != -1) {
+        push(acts, new Action(Action.ACTION_BUFF, -1, heal, myCell, player))
+    }
+    return acts
+}
+
+// (b) Retreat: FLEE to the hide-and-seek cell when one is known, else FLEE
+// toward increasing distance, then spend remaining TP on recovery.
+function v9VetoRetreat(arsenal, target, fieldMapObj) {
+    var acts = []
+    var hideCell = -1
+    if (fieldMapObj != null) {
+        var hc = fieldMapObj.getHideAndSeekCell()
+        if (hc != null && hc != getCell()) hideCell = hc
+    }
+    push(acts, new Action(Action.MOVEMENT_FLEE, -1, -1, hideCell, target))
+    var heal = v9VetoBestHealChip(arsenal)
+    if (heal != -1) {
+        push(acts, new Action(Action.ACTION_BUFF, -1, heal, getCell(), player))
+    }
+    return acts
+}
+
+// Score a candidate plan: simulate OUR turn, estimate the enemy response to
+// the resulting end state, evaluate the 1.5-turn outcome.
+function v9VetoScoreCandidate(sim, cand, target, arsenal, fieldMapObj) {
+    var ourSim = sim.simulate(cand)
+    var endCell = ourSim.finalPosition
+    if (endCell == null || endCell == -1) endCell = getCell()
+    var endHP = getLife() + ourSim.hpGained
+    var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+    return evalOutcome(ourSim, enemyEst, target, arsenal)
+}
+
+// Returns bestScenario unchanged, or a defensive replacement when the chosen
+// plan is catastrophic AND a simulated defensive candidate scores higher.
+function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMapObj) {
+    if (bestScenario == null || count(bestScenario) == 0) return bestScenario
+    if (bestSimResult == null) return bestScenario
+    if (target == null) return bestScenario
+
+    // 1. Enemy response to the chosen plan's end state.
+    var endCell = bestSimResult.finalPosition
+    if (endCell == null || endCell == -1) endCell = getCell()
+    var endHP = getLife() + bestSimResult.hpGained
+    var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+
+    // 2. Catastrophe test: predicted death, a plan that mostly no-ops, or a
+    // losing race-bleed (Basileek7 53270783: Ada took 900-1400/turn for four
+    // turns while out-damaged — never a one-turn death, so DEATH never fired).
+    // ourOut includes active damage-return value (reflect builds: their hit
+    // partially refunds), effectiveHP includes freshly-stacked shields.
+    var drVal = 0
+    var drEff = player.getEffect(EFFECT_DAMAGE_RETURN)
+    if (drEff != null && count(drEff) >= 2) drVal = drEff[1]
+    var ourOut = bestSimResult.damageDealt + bestSimResult.dotDamageQueued / 3
+        + bestSimResult.novaDamageQueued + bestSimResult.hpGained
+        + enemyEst['damage'] * drVal / 100
+    var effectiveHP = endHP + bestSimResult.shieldsGained
+    var bleed = enemyEst['damage'] >= effectiveHP * 0.3 && enemyEst['damage'] > ourOut
+    var catastrophic = enemyEst['weDied'] || bleed || (bestSimResult.droppedActions > count(bestScenario) / 2)
+    if (!catastrophic) return bestScenario
+
+    var reason = enemyEst['weDied'] ? "DEATH" : (bleed ? "BLEED" : "DROPS")
+    var baseScore = evalOutcome(bestSimResult, enemyEst, target, arsenal)
+
+    // 3. Defensive candidates, each fully simulated against the same enemy
+    // estimate; the highest evalOutcome challenges the catastrophic plan.
+    var sim = new ScenarioSimulator(arsenal, player, target, fieldMapObj)
+    var bestCand = null
+    var bestCandTag = ""
+    var bestCandScore = baseScore
+
+    var defense = v9VetoFullDefense(arsenal)
+    if (count(defense) > 0 && getOperations() < _ops93) {
+        var s = v9VetoScoreCandidate(sim, defense, target, arsenal, fieldMapObj)
+        if (s > bestCandScore) {
+            bestCandScore = s
+            bestCand = defense
+            bestCandTag = "DEF"
+        }
+    }
+
+    if (getOperations() < _ops93) {
+        var retreat = v9VetoRetreat(arsenal, target, fieldMapObj)
+        var s2 = v9VetoScoreCandidate(sim, retreat, target, arsenal, fieldMapObj)
+        if (s2 > bestCandScore) {
+            bestCandScore = s2
+            bestCand = retreat
+            bestCandTag = "FLEE"
+        }
+    }
+
+    // (c) Beam defensive alternative: rerun the beam and take its first
+    // (highest-scored) scenario carrying a shield/heal/damage-return chip.
+    // Most expensive candidate — only with comfortable ops headroom.
+    if (getOperations() < _ops50) {
+        var beamScens = beamSearchScenarios(player, target, arsenal, fieldMapObj)
+        for (var bs in beamScens) {
+            if (!beamHasDefensiveAction(['actions': bs])) continue
+            var s3 = v9VetoScoreCandidate(sim, bs, target, arsenal, fieldMapObj)
+            if (s3 > bestCandScore) {
+                bestCandScore = s3
+                bestCand = bs
+                bestCandTag = "BEAM"
+            }
+            break
+        }
+    }
+
+    if (bestCand == null) return bestScenario
+
+    if (_v9VetoLog) {
+        debugW("V9_VETO_T" + getTurn() + "_" + reason + "_" + bestCandTag
+               + "_base" + floor(baseScore) + "_cand" + floor(bestCandScore)
+               + "_n" + count(bestCand))
+    }
+    return bestCand
+}

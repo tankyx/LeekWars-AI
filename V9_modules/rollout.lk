@@ -1,0 +1,32 @@
+// V9 rollout verifier — the core of the design. Candidate turns come from
+// generators.lk; each is simulated (our turn via ScenarioSimulator, enemy
+// response via enemy_sim.lk) and scored by eval.lk. The best fully-simulated
+// candidate wins. Ops watchdog: if the rollout overruns its slice, the best
+// candidate computed so far executes (never a partially-simulated pick).
+
+function v9RolloutPick(player, target, arsenal, fieldMapObj, opsCap) {
+    var cands = v9GenCandidates(target, arsenal)
+    if (count(cands) == 0) return null
+
+    var sim = new ScenarioSimulator(arsenal, player, target, fieldMapObj)
+    var best = null
+    var bestScore = -999999
+
+    for (var cand in cands) {
+        if (getOperations() > opsCap) break
+        var ourSim = sim.simulate(cand)
+        var ourHP = getLife() + ourSim.hpGained
+        var enemyEst = simulateEnemyResponse(target._id, arsenal, ourSim.finalPosition, ourHP)
+        var score = evalOutcome(ourSim, enemyEst, target, arsenal)
+        // Dead-turn guard: a plan whose every action drops (all casts out of
+        // range) must never beat a plan that does anything — moving plans
+        // always contain an executable move (ED's empty T2/T4 vs Domingo).
+        if (ourSim.droppedActions >= count(cand)) score = -999999
+        debugW("V9_CAND t" + cand[0].type + " n" + count(cand) + " score" + floor(score) + " dmg" + floor(ourSim.damageDealt) + " dot" + floor(ourSim.dotDamageQueued) + " drop" + ourSim.droppedActions + " fin" + ourSim.finalPosition)
+        if (score > bestScore) {
+            bestScore = score
+            best = cand
+        }
+    }
+    return best
+}

@@ -1,0 +1,723 @@
+
+
+function savantBulbAI() {
+    var me = getEntity()
+    var summoner = getSummoner()
+    var myCell = getCell()
+    var summonerCell = getCell(summoner)
+    var myTP = getTP()
+
+    var distToSummoner = getCellDistance(myCell, summonerCell)
+    if (distToSummoner > 3) {
+        moveToward(summoner)
+        myCell = getCell()
+    }
+
+    if (myTP >= 1 && getCooldown(CHIP_ADRENALINE, me) == 0) {
+        var summonerTP = getTP(summoner)
+        if (summonerTP < 10) {
+            var dist = getCellDistance(myCell, summonerCell)
+            if (dist != null && dist >= 0 && dist <= 3 && lineOfSight(myCell, summonerCell)) {
+                useChip(CHIP_ADRENALINE, summoner)
+                myTP = getTP()
+            }
+        }
+    }
+
+    if (myTP >= 7 && getCooldown(CHIP_MUTATION, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 8 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_MUTATION, summoner)
+            myTP = getTP()
+        }
+    }
+
+    if (myTP >= 3 && getCooldown(CHIP_ALTERATION, me) == 0) {
+        var enemies = getAliveEnemies()
+        var bestTarget = null
+        var bestHP = 999999
+
+        for (var eid in enemies) {
+            if (isDead(eid)) continue
+            var enemyCell = getCell(eid)
+            var dist = getCellDistance(myCell, enemyCell)
+            if (dist != null && dist >= 6 && dist <= 12 && lineOfSight(myCell, enemyCell)) {
+                var hp = getLife(eid)
+                if (hp < bestHP) {
+                    bestHP = hp
+                    bestTarget = eid
+                }
+            }
+        }
+
+        if (bestTarget != null) {
+            useChip(CHIP_ALTERATION, bestTarget)
+            myTP = getTP()
+        }
+    }
+
+    if (myTP >= 4 && getCooldown(CHIP_THORN, me) == 0) {
+        var enemies = getAliveEnemies()
+        var nearbyEnemy = false
+        for (var eid in enemies) {
+            if (isDead(eid)) continue
+            var dist = getCellDistance(myCell, getCell(eid))
+            if (dist != null && dist <= 5) {
+                nearbyEnemy = true
+                break
+            }
+        }
+
+        if (nearbyEnemy) {
+            useChip(CHIP_THORN, me)
+            myTP = getTP()
+        }
+    }
+}
+
+function metallicBulbAI() {
+    var me = getEntity()
+    var summoner = getSummoner()
+    var myCell = getCell()
+    var summonerCell = getCell(summoner)
+    var myTP = getTP()
+
+    var distToSummoner = getCellDistance(myCell, summonerCell)
+    if (distToSummoner > 2) {
+        moveToward(summoner)
+        myCell = getCell()
+    }
+
+    if (myTP >= 6 && getCooldown(CHIP_ARMOR, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 4 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_ARMOR, summoner)
+            myTP = getTP()
+        }
+    }
+
+    if (myTP >= 4 && getCooldown(CHIP_SHIELD, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 4 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_SHIELD, summoner)
+            myTP = getTP()
+        }
+    }
+
+    if (myTP >= 3 && getCooldown(CHIP_WALL, me) == 0) {
+        var dist = getCellDistance(myCell, summonerCell)
+        if (dist != null && dist >= 0 && dist <= 3 && lineOfSight(myCell, summonerCell)) {
+            useChip(CHIP_WALL, summoner)
+            myTP = getTP()
+        }
+    }
+
+    if (myTP >= 6 && getCooldown(CHIP_WINGED_BOOTS, me) == 0) {
+        var enemies = getAliveEnemies()
+        var nearestEnemyDist = 999
+        for (var eid in enemies) {
+            if (isDead(eid)) continue
+            var dist = getCellDistance(summonerCell, getCell(eid))
+            if (dist != null && dist < nearestEnemyDist) {
+                nearestEnemyDist = dist
+            }
+        }
+
+        if (nearestEnemyDist > 5) {
+            var dist = getCellDistance(myCell, summonerCell)
+            if (dist != null && dist >= 0 && dist <= 2 && lineOfSight(myCell, summonerCell)) {
+                useChip(CHIP_WINGED_BOOTS, summoner)
+                myTP = getTP()
+            }
+        }
+    }
+}
+
+// Generic attacker-bulb driver (rocky / iced / puny — the low-tier bulbs a
+// level-150 leek can equip). Bulbs carry their own fixed combat chips; this
+// walks toward the nearest enemy and fires everything that's off cooldown
+// and in range. Kept dumb on purpose: a bulb's job is free damage + body.
+function attackerBulbAI() {
+    var abMe = getEntity()
+    var abCell = getCell()
+    var abEnemies = getAliveEnemies()
+    if (abEnemies == null || count(abEnemies) == 0) { return }
+    var abBest = null
+    var abBestDist = 999
+    for (var abEid in abEnemies) {
+        if (isDead(abEid)) { continue }
+        var abD = getCellDistance(abCell, getCell(abEid))
+        if (abD != null && abD < abBestDist) {
+            abBestDist = abD
+            abBest = abEid
+        }
+    }
+    if (abBest == null) { return }
+    moveToward(abBest)
+    abCell = getCell()
+    var abChips = getChips(abMe)
+    if (abChips == null) { return }
+    for (var abC in abChips) {
+        if (getCooldown(abC, abMe) > 0) { continue }
+        // Damage chips only: bulbs carry utility chips too (puny has
+        // BANDAGE — casting it at the "target" healed the enemy).
+        var abEffs = getChipEffects(abC)
+        if (abEffs == null) { continue }
+        var abIsDamage = false
+        for (var abE in abEffs) {
+            if (abE[0] == EFFECT_DAMAGE || abE[0] == EFFECT_POISON) {
+                abIsDamage = true
+                break
+            }
+        }
+        if (!abIsDamage) { continue }
+        var abCost = getChipCost(abC)
+        if (abCost == null || getTP() < abCost) { continue }
+        var abTgtCell = getCell(abBest)
+        var abD2 = getCellDistance(abCell, abTgtCell)
+        if (abD2 == null || abD2 < getChipMinRange(abC) || abD2 > getChipMaxRange(abC)) { continue }
+        if (!lineOfSight(abCell, abTgtCell)) { continue }
+        useChip(abC, abBest)
+    }
+}
+
+// Command commitment for coach-driven bulbs (shared with the owner's AI
+// instance): a fresh coach replan every turn ping-ponged the walk —
+// fight 53011272: the bulb looped 140→263→387→442→140 for 21 turns,
+// zero casts. The stored command wins until the cast fires or the
+// crystal moves. -9 = no stored command.
+global _bulbCmdEID = null
+global _bulbCmdCr = -1
+global _bulbCmdStand = -9
+global _bulbCmdChip = 0
+global _bulbCmdTarget = -1
+global _bulbCmdTurn = -99
+
+// Tactician bulb (boss fights): the disposable third solver. Its kit IS the
+// solver kit (grapple/boxing/inversion + jump/teleport, 6 TP/6 MP, ~500 HP,
+// no weapon) — it pushes crystals, soaks army turns as a decoy, and cannot
+// trigger the crystal Apocalypse (displacement chips deal zero damage, no
+// weapon to swing). Runs as the summon() AI function inside the owner's AI
+// instance — boss globals are shared with the owner and safe to read; the
+// solvers re-sync their own route state every turn, so clobbering
+// _bossTargetEID here is harmless.
+function tacticianBulbAI() {
+    if (!_isBossFight) {
+        // Ladder fallback (never expected: the cast helper is boss-gated)
+        moveToward(getSummoner())
+        return
+    }
+    // The bulb's own instance never runs main.lk, so its globals are empty:
+    // _crystalMap was [] and every crystal search returned null — the bulb
+    // froze in place for 16 straight attempts (first traced in 53358726).
+    // Refresh the boss context EVERY turn: crystal cells go stale the moment
+    // anything slides them, and isCrystalSolved reads the cached cell.
+    if (detectBossFight()) { updateBossContext() }
+    var bID = getEntity()
+
+    if (_bossPhase == "PUZZLE") {
+        // SELF-CONTAINED lean solver (2026-08-19): no coach messages, no
+        // shared state — the coach chain produced 0 pushes in 17 attempts.
+        // Every turn: nearest unsolved crystal → get behind it (opposite the
+        // graal) → slide it toward the graal with boxing/grapple.
+        if (leanBulbSolve(bID)) { return }
+    }
+
+    if (_bossPhase != "PUZZLE") {
+        // COMBAT: a decoy body near the nearest leek — it can't damage anything
+        var bAlly = getAliveAllies()
+        var bNear = -1
+        var bND = 9999
+        for (var ba in bAlly) {
+            if (isSummon(ba)) continue
+            var bd0 = getCellDistance(getCell(), getCell(ba))
+            if (bd0 != null && bd0 < bND) { bND = bd0; bNear = ba }
+        }
+        if (bNear != -1 && bND > 3) { moveToward(bNear) }
+        return
+    }
+
+    // Coach-driven path: the summoner (14M+ ops) ran the route planner and
+    // broadcast [PZ_MSG_BULB, eid, crystalCell, stand, chip, target]; the
+    // bulb's ~50k ops only execute it. Falls through to the cheap local
+    // logic when no message arrived (coach dead / combat / stale crystal).
+    var cmd = null
+    var bMsgs = getMessages()
+    for (var bm in bMsgs) {
+        if (getMessageType(bm) != MESSAGE_CUSTOM) continue
+        var pm = getMessageParams(bm)
+        if (pm != null && count(pm) == 6 && pm[0] == PZ_MSG_BULB) { cmd = pm }
+    }
+    // Commitment: the stored command beats a fresh replan while its crystal
+    // hasn't moved and its cast hasn't fired (see globals above). Timeout
+    // after 3 turns: an unreachable stand deadlocks the pair (the coach
+    // skips replanning while a command is stored)
+    if (_bulbCmdStand != -9) {
+        if (getTurn() - _bulbCmdTurn > 3) { _bulbCmdStand = -9 }
+        else if (isAlive(_bulbCmdEID) && getCell(_bulbCmdEID) == _bulbCmdCr) {
+            cmd = [PZ_MSG_BULB, _bulbCmdEID, _bulbCmdCr, _bulbCmdStand, _bulbCmdChip, _bulbCmdTarget]
+        } else {
+            _bulbCmdStand = -9
+        }
+    }
+    if (cmd != null) {
+        var cEID = cmd[1]
+        var cCr = cmd[2]
+        var cStand = cmd[3]
+        var cChip = cmd[4]
+        var cTarget = cmd[5]
+        if (!isAlive(cEID)) { cmd = null }
+        else {
+            var nowCr = getCell(cEID)
+            if (nowCr != cCr) {
+                // Crystal moved since planning: drop the command, close on it
+                _bulbCmdStand = -9
+                moveTowardCell(nowCr)
+                return
+            }
+            // Arrival teleport, gated on TP ≥ 9 — currently unreachable:
+            // buffs do NOT apply to summons (verified sandbox AND live
+            // 53019207/209: adrenaline and covetousness both produce zero
+            // effect — do not re-add TP-boost attempts, they just waste TP).
+            if (getTP() >= 9 && allyHasChip(bID, CHIP_TELEPORTATION)) {
+                var aTpCd = getCooldown(CHIP_TELEPORTATION, bID)
+                if (aTpCd != null && aTpCd == 0) {
+                    var aDist = getCellDistance(getCell(), cCr)
+                    if (aDist != null && aDist > 8) {
+                        var aLand = findEmptyCellNear(cCr, getCell(), 12, 1)
+                        if (aLand != -1 && useChipOnCell(CHIP_TELEPORTATION, aLand) >= 1) {
+                            say("PZ BULB TEL @" + aLand)
+                        }
+                    }
+                }
+            }
+            if (cStand == -1) { cmd = null }  // coach had no push: use the local cheap logic
+            else {
+            // Store the command so it survives next turn's replan
+            _bulbCmdEID = cEID
+            _bulbCmdCr = cCr
+            _bulbCmdStand = cStand
+            _bulbCmdChip = cChip
+            _bulbCmdTarget = cTarget
+            _bulbCmdTurn = getTurn()
+            var mCell = getCell()
+            if (mCell != cStand) {
+                var prevB = mCell
+                moveTowardCell(cStand)
+                mCell = getCell()
+                if (mCell == prevB) {
+                    // Stand walled/blocked — drop now, coach replans next turn
+                    _bulbCmdStand = -9
+                }
+            }
+            if (mCell == cStand && getTP() >= 3) {
+                if (cChip == CHIP_INVERSION) {
+                    if (useChip(CHIP_INVERSION, cEID) >= 1) { say("PZ BULB INV c=" + cEID) }
+                    _bulbCmdStand = -9
+                } else if (lineOfSight(mCell, cCr)) {
+                    if (useChipOnCell(cChip, cTarget) >= 1) { say("PZ BULB PUSH c=" + cEID) }
+                    _bulbCmdStand = -9
+                } else {
+                    // LoS broke: retrying the same cast forever is the f=0
+                    // stall — drop it and let the coach replan
+                    _bulbCmdStand = -9
+                }
+            }
+            return
+            }
+        }
+    }
+
+    var bCell = getCell()
+    // Target: nearest unsolved crystal no leek is within 4 of (leeks own
+    // those), skipping crystals the solvers claimed on [901] (work division)
+    var bEID = null
+    var bD = 9999
+    var bAllies = getAliveAllies()
+    var bClaims = [:]
+    for (var bm2 in bMsgs) {
+        if (getMessageType(bm2) != MESSAGE_CUSTOM) continue
+        var bp2 = getMessageParams(bm2)
+        if (bp2 != null && count(bp2) == 2 && bp2[0] == PZ_MSG_FOCUS) {
+            bClaims[bp2[1]] = true
+        }
+    }
+    for (var eid in mapKeys(_crystalMap)) {
+        if (mapContainsKey(bClaims, eid)) continue
+        var cd = _crystalMap[eid]
+        if (isCrystalSolved(cd)) continue
+        var cc = getCell(eid)
+        if (cc == null || cc < 0) continue
+        var taken = false
+        for (var aid in bAllies) {
+            if (isSummon(aid)) continue
+            var ad = getCellDistance(getCell(aid), cc)
+            if (ad != null && ad <= 4) { taken = true; break }
+        }
+        if (taken) continue
+        var dd = getCellDistance(bCell, cc)
+        if (dd != null && dd < bD) { bD = dd; bEID = eid }
+    }
+    if (bEID == null) { bEID = nearestUnsolvedCrystalTo(bCell, null, false) }
+    if (bEID == null) { return }
+    var crCell = getCell(bEID)
+    _bossTargetEID = bEID
+    syncCrystalScalars(_crystalMap[bEID])
+    var bDest = computeCrystalFinalDest()
+    if (bDest == null) { return }
+
+    // OPS BUDGET: bulbs get ~50k ops/turn (user-verified) — the previous
+    // version blew it 6x over (613-cell jump scan + solverWalkToward's
+    // getPathLength loop + the BFS route planner). Everything below is
+    // fixed-offset candidates and x/y geometry only: no map-wide scans,
+    // no getPathLength, no findBestChipMove.
+
+    // Push geometry: the goal axes are cardinal, so the push direction from
+    // the crystal to its dest is a single dominant step
+    var crX = getCellX(crCell)
+    var crY = getCellY(crCell)
+    var deX = getCellX(bDest)
+    var deY = getCellY(bDest)
+    var stepX = 0
+    var stepY = 0
+    if (abs(deX - crX) >= abs(deY - crY)) {
+        if (deX > crX) { stepX = 1 } else if (deX < crX) { stepX = -1 }
+    } else {
+        if (deY > crY) { stepY = 1 } else if (deY < crY) { stepY = -1 }
+    }
+    var behindStand = getCellFromXY(crX - stepX, crY - stepY)
+    var bDist = getCellDistance(bCell, crCell)
+
+    // Arrival: TELEPORT (cost 9) if TP ever reaches it — buffs do NOT apply
+    // to summons (verified sandbox AND live: adrenaline/covetousness produce
+    // zero effect — don't re-add boost attempts), so JUMP chains are the
+    // real mobility. Jump: cost 4, cd 3, range 3.
+    if (bDist != null && bDist > 8 && getTP() >= 9 && allyHasChip(bID, CHIP_TELEPORTATION)) {
+        var bTpCd = getCooldown(CHIP_TELEPORTATION, bID)
+        if (bTpCd != null && bTpCd == 0) {
+            var bLand = findEmptyCellNear(crCell, bCell, 12, 1)
+            if (bLand != -1 && useChipOnCell(CHIP_TELEPORTATION, bLand) >= 1) {
+                bCell = getCell()
+                bDist = getCellDistance(bCell, crCell)
+                say("PZ BULB TEL @" + bLand)
+            }
+        }
+    }
+
+    // JUMP toward the crystal when far (cost 4, cd 3, range 3).
+    // Candidates: fixed ring offsets (dist 1: ±17/±18, dist 2: ±1/±34/±35/±36,
+    // dist 3: ±16/±19/±51..54) — no 613-cell scan.
+    if (bDist != null && bDist > 4 && getTP() >= 4 && allyHasChip(bID, CHIP_JUMP)) {
+        var bJumpCd = getCooldown(CHIP_JUMP, bID)
+        if (bJumpCd != null && bJumpCd == 0) {
+            var jOffs = [17, -17, 18, -18, 1, -1, 34, -34, 35, -35, 36, -36, 16, -16, 19, -19, 51, -51, 52, -52, 53, -53, 54, -54]
+            var bestJC = -1
+            var bestJD = bDist
+            for (var jo in jOffs) {
+                var jc = bCell + jo
+                if (jc < 0 || jc > 612) continue
+                if (isObstacle(jc) || isEntity(jc)) continue
+                var djc = getCellDistance(bCell, jc)
+                if (djc == null || djc < 1 || djc > 3) continue
+                var dcr = getCellDistance(jc, crCell)
+                if (dcr != null && dcr < bestJD) { bestJD = dcr; bestJC = jc }
+            }
+            if (bestJC != -1 && useChipOnCell(CHIP_JUMP, bestJC) >= 1) {
+                bCell = getCell()
+                say("PZ BULB JUMP @" + bestJC)
+            }
+        }
+    }
+
+    // Push loop: stand BEHIND the crystal (opposite the dest) and slide it
+    // toward dest — both push chips are FIRST_IN_LINE with the cast cell as
+    // the slide destination (cd 0, cost 3 → up to 2 slides per turn).
+    var myX = getCellX(bCell)
+    var myY = getCellY(bCell)
+    var myPos = (myX - crX) * stepX + (myY - crY) * stepY
+    var onPushLine = (stepX != 0 && myY == crY) || (stepY != 0 && myX == crX)
+
+    if (onPushLine && myPos > 0 && getTP() >= 4 && allyHasChip(bID, CHIP_INVERSION)) {
+        // In front of the crystal: swap if it advances the crystal toward dest
+        var invCd2 = getCooldown(CHIP_INVERSION, bID)
+        if (invCd2 != null && invCd2 == 0 && isOnSameLine(bCell, crCell) && lineOfSight(bCell, crCell)) {
+            if (getCellDistance(bCell, bDest) < getCellDistance(crCell, bDest)) {
+                if (useChip(CHIP_INVERSION, bEID) >= 1) {
+                    say("PZ BULB INV c=" + bEID)
+                    return
+                }
+            }
+        }
+    }
+
+    var slides = 0
+    while (getTP() >= 3 && slides < 2) {
+        bCell = getCell()
+        myX = getCellX(bCell)
+        myY = getCellY(bCell)
+        myPos = (myX - crX) * stepX + (myY - crY) * stepY
+        onPushLine = (stepX != 0 && myY == crY) || (stepY != 0 && myX == crX)
+        if (!onPushLine || myPos >= 0) {
+            // Not behind: walk to the behind-stand (raw engine call — cheap)
+            if (behindStand != null && behindStand >= 0 && !isObstacle(behindStand) && !isEntity(behindStand)) {
+                var preB = bCell
+                moveTowardCell(behindStand)
+                if (getCell() == preB) { moveTowardCell(crCell) }
+            } else {
+                moveTowardCell(crCell)
+            }
+            break
+        }
+        if (!lineOfSight(bCell, crCell)) { break }
+        // Furthest free slide cell along crystal→dest, still within range 8
+        var slideCell = -1
+        for (var k = 1; k <= 8; k++) {
+            var sc0 = getCellFromXY(crX + stepX * k, crY + stepY * k)
+            if (sc0 == null || sc0 < 0) break
+            if (isObstacle(sc0) || isEntity(sc0)) break
+            var dS = getCellDistance(bCell, sc0)
+            if (dS == null || dS > 8) break
+            slideCell = sc0
+        }
+        if (slideCell == -1) { break }
+        var slideD = getCellDistance(bCell, slideCell)
+        var slideChip = CHIP_BOXING_GLOVE
+        if (slideD != null && slideD < 2) { slideChip = CHIP_GRAPPLE }  // boxing min range 2
+        if (useChipOnCell(slideChip, slideCell) >= 1) {
+            slides++
+            say("PZ BULB PUSH c=" + bEID)
+            crCell = getCell(bEID)
+            crX = getCellX(crCell)
+            crY = getCellY(crCell)
+            behindStand = getCellFromXY(crX - stepX, crY - stepY)
+            continue
+        }
+        break
+    }
+}
+
+// Decoy bulb (boss fights, low-tier bulbs: puny/rocky/iced): a pure body for
+// the army to chew on. PUZZLE phase: NEVER cast — the ladder's attackerBulbAI
+// fires damage chips, and one hit on a crystal is an Apocalypse (this is why
+// boss decoys are summoned with this function, not the ladder one). Stands
+// between the army and our leeks so the hunt meets it first. COMBAT phase:
+// free hits are fine (army vulnerable, crystals are free 1-HP kills) — reuse
+// the attacker AI there.
+function decoyBulbAI() {
+    if (!_isBossFight) {
+        moveToward(getSummoner())
+        return
+    }
+    if (_bossPhase != "PUZZLE") {
+        attackerBulbAI()
+        return
+    }
+    var dbArmy = puzzleArmyCells()
+    if (count(dbArmy) == 0) { return }
+    var dbCell = getCell()
+    var dbNear = 999
+    var dbNearCell = -1
+    for (var dac in dbArmy) {
+        var dd = getCellDistance(dbCell, dac)
+        if (dd != null && dd < dbNear) { dbNear = dd; dbNearCell = dac }
+    }
+    // Close to within 6 of the army so it meets us first; otherwise hold
+    if (dbNearCell != -1 && dbNear > 6) {
+        moveTowardCell(dbNearCell)
+    }
+}
+
+// Concept-test flag (2026-08-18): summon metallic in the opening instead of
+// only as an HP<50% emergency. See scenario_helpers.lk createSummonAction.
+global _v9BulbEarlyEnabled = false
+global _v9HealerEarlyEnabled = false
+
+// Self-contained bulb solver (2026-08-19): no coach, no shared globals.
+// Geometry: to slide a crystal TOWARD the graal, the bulb stands on the far
+// side (crystal − stepTowardGraal) and casts at crystal + stepTowardGraal —
+// the crystal is first-in-line and slides one step toward the graal.
+// Boxing/glove/grapple are FIRST_IN_LINE: cast cell = slide destination.
+function leanBulbSolve(bID) {
+    var bCell0 = getCell()
+    var graalC = _graalCell
+    say("LB c" + bCell0 + " g" + graalC)
+    if (graalC == null || graalC < 0) { return false }
+    var gX = getCellX(graalC)
+    var gY = getCellY(graalC)
+
+    // CAST FIRST: if the current cell is a valid stand for ANY unsolved
+    // crystal, fire immediately (the carrier summoned us onto a stand — a
+    // bulb that walks before casting dies without contributing: 53359546+).
+    // Two casts per life: grapple/boxing are cooldown-0, 6 TP = two slides.
+    for (var pc0 = 0; pc0 < 2; pc0++) {
+        if (getTP() < 3) break
+        var fired = false
+        for (var e0 in mapKeys(_crystalMap)) {
+            var cc0 = getCell(e0)
+            if (cc0 == null || cc0 < 0) continue
+            if (isCellSolvedForAxis(cc0, _crystalMap[e0]['goalAxis'])) continue
+            if (leanBulbTryCast(bID, e0)) { fired = true; break }
+        }
+        if (!fired) break
+    }
+    if (getTP() < 3) { return true }  // cast at least once: turn spent well
+
+    // Nothing castable from here: walk toward the nearest workable crystal's
+    // stand, then try again (the walk lands on the stand more often than not).
+    var bestE = null
+    var bestScore = 9999
+    var bestDest = -1
+    for (var eid in mapKeys(_crystalMap)) {
+        var cc = getCell(eid)
+        if (cc == null || cc < 0) continue
+        var cd = _crystalMap[eid]
+        var ax = cd['goalAxis']
+        if (isCellSolvedForAxis(cc, ax)) continue
+        var cx = getCellX(cc)
+        var cy = getCellY(cc)
+        var dest = -1
+        if (ax == 'south' || ax == 'north') {
+            var okSide = (ax == 'south') ? (cy > gY) : (cy < gY)
+            if (cx != gX && okSide) { dest = getCellFromXY(gX, cy) }
+            else if (cx != gX) {
+                var fixY = (ax == 'south') ? gY + 1 : gY - 1
+                dest = getCellFromXY(cx, fixY)
+            }
+        } else if (ax == 'east' || ax == 'west') {
+            var okSide2 = (ax == 'east') ? (cx > gX) : (cx < gX)
+            if (cy != gY && okSide2) { dest = getCellFromXY(cx, gY) }
+            else if (cy != gY) {
+                var fixX = (ax == 'east') ? gX + 1 : gX - 1
+                dest = getCellFromXY(fixX, cy)
+            }
+        }
+        if (dest == null || dest < 0) continue
+        if (isObstacle(dest) || isEntity(dest)) continue
+        var dd = getCellDistance(bCell0, cc)
+        if (dd == null) continue
+        if (dd < bestScore) { bestScore = dd; bestE = eid; bestDest = dest }
+    }
+    if (bestE == null) { say("LB noEID"); return false }
+    var crCell = getCell(bestE)
+    say("LB eid" + bestE + " s" + bestScore)
+
+    // Slide geometry mirrors routeSlideStand/routeEdgeChip: the cast cell is
+    // the slide DESTINATION; the crystal must be the first entity in line.
+    // Boxing stands behind the crystal (min range 2), grapple beyond the dest.
+    var step = lineStepFromTo(crCell, bestDest)
+    if (step == 0) { return false }
+    // Cap the cast cell at 5 cells along the slide: boxing stands sit k>=2
+    // behind the crystal, and the chips reach 8 — a 10-cell goal slide left
+    // NO valid stand in range, so the bulb walked 6 cells toward a far stand
+    // and died (53359546). Partial slides are progress; it recomputes a turn.
+    var destCell = bestDest
+    var slideD = getCellDistance(crCell, bestDest)
+    if (slideD != null && slideD > 5) {
+        var pos2 = crCell
+        for (var k5 = 1; k5 <= 5; k5++) {
+            var nx5 = diagNext(pos2, step)
+            if (nx5 == null || nx5 == -1) break
+            if (isObstacle(nx5) || isEntity(nx5)) break
+            pos2 = nx5
+        }
+        destCell = pos2
+    }
+    var myC = getCell()
+    var stand = -1
+    var standD = 9999
+    var pos = crCell
+    for (var k = 1; k <= 7; k++) {
+        var nx = diagNext(pos, -step)
+        if (nx == null || nx == -1) break
+        pos = nx
+        if (isObstacle(pos)) break
+        if (pos != myC && isEntity(pos)) break
+        if (k < 2) continue
+        if (getCellDistance(pos, destCell) > 8) continue  // cast range cap
+        if (!lineOfSight(pos, crCell)) continue  // 53360064: bulb reached the stand, cast died on a blocked line
+        var d1 = getCellDistance(myC, pos)
+        if (d1 != null && d1 < standD) { standD = d1; stand = pos }
+    }
+    pos = destCell
+    for (var k2 = 1; k2 <= 7; k2++) {
+        var nx2 = diagNext(pos, step)
+        if (nx2 == null || nx2 == -1) break
+        pos = nx2
+        if (isObstacle(pos)) break
+        if (pos != myC && isEntity(pos)) break
+        if (getCellDistance(pos, destCell) > 8) continue
+        if (!lineOfSight(pos, crCell)) continue
+        var d2 = getCellDistance(myC, pos)
+        if (d2 != null && d2 < standD) { standD = d2; stand = pos }
+    }
+    if (stand == -1) { say("LB noSTAND"); return false }
+
+    if (myC != stand) {
+        // WALK only — never jump. Jump costs 4 TP and left the bulb at 2 TP,
+        // unable to cast after landing (the silent 0-push turns: 53360140,
+        // "LB eid6 s2" then nothing). MP is free; TP is for slides.
+        var preB = getCell()
+        moveTowardCell(stand)
+        if (getCell() == preB) { moveTowardCell(crCell) }
+    }
+    // The bulb lives 1-2 turns — cast the MOMENT it lands, and KEEP casting
+    // (grapple/boxing have cooldown 0 and 4 uses/turn; 6 TP = two slides).
+    for (var pc = 0; pc < 2; pc++) {
+        if (getTP() < 3) break
+        if (!leanBulbTryCast(bID, bestE)) break
+    }
+    return true
+}
+
+// One slide on the given crystal from wherever the bulb stands: validates
+// that the CURRENT cell is a usable stand (collinear, correct side, chip
+// range 8, LoS), casts, and says why on failure. Recomputes the destination
+// fresh every call, so it chains across a crystal that just moved.
+function leanBulbTryCast(bID, eid) {
+    var crCell = getCell(eid)
+    if (crCell == null || crCell < 0) { return false }
+    var ax = _crystalMap[eid]['goalAxis']
+    var cx = getCellX(crCell)
+    var cy = getCellY(crCell)
+    var gX = getCellX(_graalCell)
+    var gY = getCellY(_graalCell)
+    var dest = -1
+    if (ax == 'south' || ax == 'north') {
+        var okSide = (ax == 'south') ? (cy > gY) : (cy < gY)
+        if (cx != gX && okSide) { dest = getCellFromXY(gX, cy) }
+        else if (cx != gX) { dest = getCellFromXY(cx, (ax == 'south') ? gY + 1 : gY - 1) }
+    } else {
+        var okSide2 = (ax == 'east') ? (cx > gX) : (cx < gX)
+        if (cy != gY && okSide2) { dest = getCellFromXY(cx, gY) }
+        else if (cy != gY) { dest = getCellFromXY((ax == 'east') ? gX + 1 : gX - 1, cy) }
+    }
+    if (dest == null || dest < 0) { return false }
+    var step = lineStepFromTo(crCell, dest)
+    if (step == 0) { return false }
+    var slideD = getCellDistance(crCell, dest)
+    if (slideD != null && slideD > 5) {
+        var p = crCell
+        for (var k = 1; k <= 5; k++) {
+            var nx = diagNext(p, step)
+            if (nx == null || nx == -1 || isObstacle(nx) || isEntity(nx)) break
+            p = nx
+        }
+        dest = p
+    }
+    var myC = getCell()
+    var toCr = lineStepFromTo(myC, crCell)
+    var dTCr = getCellDistance(myC, crCell)
+    if (toCr == 0 || dTCr == null) { return false }
+    var chip = -1
+    if (toCr == step && dTCr >= 2) { chip = CHIP_BOXING_GLOVE }
+    else if (toCr == -step && dTCr >= 1) { chip = CHIP_GRAPPLE }
+    if (chip == -1) { return false }
+    if (getCellDistance(myC, dest) > 8) { return false }
+    if (getTP() < 3) { return false }
+    if (!lineOfSight(myC, crCell)) { say("LB LOS e" + eid); return false }
+    if (!allyHasChip(bID, chip) || getCooldown(chip, bID) != 0) { say("LB NOCHIP c" + chip); return false }
+    var rr = useChipOnCell(chip, dest)
+    if (rr >= 1) { say("LB PUSH e" + eid); return true }
+    say("LB FAIL r" + rr + " c" + chip + " d" + getCellDistance(myC, dest))
+    return false
+}

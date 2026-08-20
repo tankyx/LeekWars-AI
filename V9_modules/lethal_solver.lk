@@ -1,0 +1,62 @@
+// lethal_solver.lk — exact endgame checks (V9 pillar: endgame solver, 2026-08-17)
+//
+// Full-game rollout evaluation failed A/B on estimator fidelity, but two
+// endgame questions are near-deterministic and directly convert losses:
+//   1. LETHAL: can WE kill the target this turn for (near-)certain?
+//      -> play the all-in line, ignore everything else.
+//   2. MORTAL: can the ENEMY kill US next turn (incl. pending poison ticks)?
+//      -> play only survival lines (cleanse/shield/heal).
+//
+// Loss-census motivation: KG had 48% near-miss losses (foe dead next turn but
+// no close-out), and died at least once to 1056 pending poison while carrying
+// Antidote. These are the flippable fights.
+
+// A/B kill-switches (2026-08-17 local A/B: full solver neutral within noise,
+// Ada −4 — but the mortal-poison cleanse path has a proven production failure
+// case, KG died to 1056 queued poison with Antidote in hand, 53302621).
+global _v9LethalSolverEnabled = false   // lethal-force + mortal-burst forcing
+global _v9MortalPoisonCleanseEnabled = true
+
+// Conservative (lower-bound) direct damage we can deal to target this turn:
+// weapon damage at 85% of expectation (no crits, absorbs variance) + poison
+// already queued on the target (ticks at their turn start, before they act).
+function v9OurLethalDamage(player, target, arsenal, availableTP) {
+    if (target == null) return 0
+    var weaponDmg = calculateMaxDirectDamage(player, target, arsenal, availableTP)
+    if (weaponDmg == null) weaponDmg = 0
+    var dmg = weaponDmg * 0.85
+    var queuedPoison = target.getTotalPoisonPerTurn()
+    if (queuedPoison == null) queuedPoison = 0
+    return dmg + queuedPoison
+}
+
+function v9LethalNow(player, target, arsenal, availableTP) {
+    if (target == null || target._currHealth <= 0) return false
+    // 10% margin: an all-in that falls 1% short is the worst turn in the game.
+    return v9OurLethalDamage(player, target, arsenal, availableTP) >= target._currHealth * 1.1
+}
+
+// 'none' | 'poison' | 'burst' — can the enemy kill us at/next turn?
+// Poison first: ticks at OUR turn start, so queued poison >= HP means we die
+// before acting — the survival line must cleanse, not shield.
+function v9MortalDanger(player, target, arsenal, fieldMap) {
+    if (target == null) return 'none'
+    var hp = player._currHealth
+    var ownPoison = player.getTotalPoisonPerTurn()
+    if (ownPoison == null) ownPoison = 0
+    if (ownPoison >= hp) return 'poison'
+
+    var hpAfterPoison = hp - ownPoison
+    var threat = 0
+    if (fieldMap != null) {
+        var threatData = predictTotalThreatAtCell(player._cellPos, [target], player, arsenal)
+        if (threatData != null && threatData['total'] != null) threat = threatData['total']
+    }
+    // 1.2 safety factor: threat estimates under-read buffs/crits.
+    // HP gate (2026-08-17 A/B): without it, mortal mode fired mid-fight and
+    // traded away damage races we were winning — only engage survival lines
+    // when actually endangered (<40% HP after poison).
+    if (hpAfterPoison * 2.5 >= player._maxHealth) return 'none'
+    if (threat * 1.2 >= hpAfterPoison) return 'burst'
+    return 'none'
+}

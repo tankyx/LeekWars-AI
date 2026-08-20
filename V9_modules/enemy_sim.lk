@@ -1,0 +1,215 @@
+// V9 enemy response simulation — estimates what the enemy does TO US on their
+// next turn, driven by the M1 model (enemy_model.lk). Weapon damage uses their
+// real equipped weapons + strength through the Arsenal's damage breakdown.
+
+include('enemy_model.lk')
+
+// Best single-use weapon damage the enemy can deal at `dist` (0 if nothing
+// reaches). theirStr is live; the Arsenal carries every weapon's effects.
+function enemyBestWeaponDamage(enemyId, arsenal, dist) {
+    var theirStr = getStrength(enemyId)
+    if (theirStr == null) theirStr = 200
+    var best = 0
+    var wids = getWeapons(enemyId)
+    if (wids == null) return 0
+    for (var wid in wids) {
+        var minR = getWeaponMinRange(wid)
+        var maxR = getWeaponMaxRange(wid)
+        if (minR == null || maxR == null) continue
+        if (dist < minR || dist > maxR) continue
+        if (!mapContainsKey(arsenal.weaponsList, wid)) continue
+        var bd = arsenal.getDamageBreakdown(theirStr, 0, 0, 0, wid)
+        if (bd != null && bd['direct'] > best) best = bd['direct']
+    }
+    return best
+}
+
+// Weapon DPT of one enemy at `dist`: best reaching weapon × swings their full
+// TP pool affords (capped by the weapon's own max-uses). Shared by the
+// single-target estimate and the M4 multi-enemy estimate.
+function enemyWeaponDPT(enemyId, arsenal, dist) {
+    var bestDmg = 0
+    var bestCost = 1
+    var bestUses = 1
+    var theirStr = getStrength(enemyId)
+    if (theirStr == null) theirStr = 200
+    var wids = getWeapons(enemyId)
+    if (wids == null) return 0
+    for (var wid in wids) {
+        var minR = getWeaponMinRange(wid)
+        var maxR = getWeaponMaxRange(wid)
+        if (minR == null || maxR == null) continue
+        if (dist < minR || dist > maxR) continue
+        if (!mapContainsKey(arsenal.weaponsList, wid)) continue
+        var bd = arsenal.getDamageBreakdown(theirStr, 0, 0, 0, wid)
+        if (bd == null) continue
+        var wCost = getWeaponCost(wid)
+        if (wCost == null || wCost < 1) wCost = 1
+        var wUses = getWeaponMaxUses(wid)
+        if (wUses == null || wUses < 1) wUses = 1
+        if (bd['direct'] > bestDmg) {
+            bestDmg = bd['direct']
+            bestCost = wCost
+            bestUses = wUses
+        }
+    }
+    if (bestDmg <= 0) return 0
+    var theirTP = getTP(enemyId)
+    if (theirTP == null) theirTP = 10
+    var swings = floor(theirTP / bestCost)
+    if (swings > bestUses) swings = bestUses
+    return bestDmg * swings
+}
+
+// Estimate the enemy's next-turn pressure after our candidate turn ends at
+// ourNewCell with ourNewHP. Returns ['damage','heals','weDied'].
+//
+// Decision-grade estimator (2026-08-14 rebuild): the old version assumed the
+// enemy always lands their best weapon at full TP — a systematic overestimate
+// that pushed every build into false retreat pressure (and killed ED's
+// reflect bait-play in the A/B test, −24). Now:
+//  - predicts their next POSITION (kite-aware: engagement distance from the
+//    M1 model per opponent, archetype default otherwise) — a kiter who can't
+//    reach us deals zero, and that's the point of the model;
+//  - counts only weapons that BOTH reach the predicted distance AND hold LoS
+//    to our end cell;
+//  - poison estimated from THEIR actual poison chips + magic, not a flat 300.
+function simulateEnemyResponse(enemyId, arsenal, ourNewCell, ourNewHP) {
+    var enemyCell = getCell(enemyId)
+    var dist = (enemyCell != null) ? getCellDistance(ourNewCell, enemyCell) : 99
+    if (dist == null) dist = 99
+    var preds = predictEnemyTurn(enemyId, getTurn() + 1, dist, getTP(enemyId), getMP(enemyId))
+    var top = preds[0][0]
+    var dmg = 0
+    var heals = 0
+    for (var cls in top) {
+        if (cls == 'weapon') {
+            dmg += enemyPredictedWeaponDamage(enemyId, arsenal, dist, ourNewCell)
+        } else if (cls == 'poison') {
+            dmg += enemyPoisonEstimate(enemyId, arsenal)
+        } else if (cls == 'buff' || cls == 'heal') {
+            heals += 250
+        }
+        // 'summon'/'move'/'deny': no direct damage next turn
+    }
+    return ['damage': dmg, 'heals': heals, 'weDied': dmg >= ourNewHP]
+}
+
+// Their next-turn distance to us: memory's mean engagement distance when
+// known, else archetype default; they close or kite by up to their MP.
+function enemyPredictedDist(enemyId, dist) {
+    var arch = getEnemyArchetype(enemyId)
+    var engage = 0
+    var name = getName(enemyId)
+    if (name != null && mapContainsKey(ENEMY_MODEL, name)) {
+        var eg = ENEMY_MODEL[name]['engage']
+        if (eg != null && eg > 0) engage = eg
+    }
+    if (engage <= 0) {
+        if (arch == 'bruiser') engage = 2
+        else if (arch == 'kiter') engage = 9
+        else if (arch == 'summoner') engage = 7
+        else engage = 4
+    }
+    var theirMP = getMP(enemyId)
+    if (theirMP == null || theirMP <= 0) theirMP = 5
+    if (dist > engage) {
+        // closing: as close as MP allows, not past their preferred range
+        return max(engage, dist - theirMP)
+    }
+    // already inside their preferred range: kiters slide out, others hold
+    if (arch == 'kiter') return min(dist + theirMP, engage)
+    return dist
+}
+
+// Weapon damage they'd actually deal next turn: predicted distance + LoS +
+// full-TP swings. Zero when they can't reach or can't see us — the case the
+// old estimator never modeled and the reason it over-punished every build.
+// Per-swing damage counts direct AND nova (nova is the main damage of
+// grenade-launcher-class weapons; counting direct only under-reads burn/AoE
+// builds — KG's profile, user catch 2026-08-14).
+function enemyPredictedWeaponDamage(enemyId, arsenal, dist, ourCell) {
+    var pDist = enemyPredictedDist(enemyId, dist)
+    var theirCell = getCell(enemyId)
+    if (theirCell == null) return 0
+    if (!getCachedLineOfSight(theirCell, ourCell)) return 0
+    var theirStr = getStrength(enemyId)
+    if (theirStr == null) theirStr = 200
+    var theirSci = getScience(enemyId)
+    if (theirSci == null) theirSci = 0
+    var theirTP = getTP(enemyId)
+    if (theirTP == null) theirTP = 10
+    var bestDmg = 0
+    var bestCost = 1
+    var bestUses = 1
+    var wids = getWeapons(enemyId)
+    if (wids == null) return 0
+    for (var wid in wids) {
+        var minR = getWeaponMinRange(wid)
+        var maxR = getWeaponMaxRange(wid)
+        if (minR == null || maxR == null) continue
+        if (pDist < minR || pDist > maxR) continue
+        if (!mapContainsKey(arsenal.weaponsList, wid)) continue
+        var bd = arsenal.getDamageBreakdown(theirStr, 0, 0, theirSci, wid)
+        if (bd == null) continue
+        var perSwing = bd['direct'] + bd['nova']
+        var wCost = getWeaponCost(wid)
+        if (wCost == null || wCost < 1) wCost = 1
+        var wUses = getWeaponMaxUses(wid)
+        if (wUses == null || wUses < 1) wUses = 1
+        if (perSwing > bestDmg) {
+            bestDmg = perSwing
+            bestCost = wCost
+            bestUses = wUses
+        }
+    }
+    if (bestDmg <= 0) return 0
+    var swings = floor(theirTP / bestCost)
+    if (swings > bestUses) swings = bestUses
+    return bestDmg * swings
+}
+
+// Their poison pressure from their actual chips + magic (not a flat number).
+function enemyPoisonEstimate(enemyId, arsenal) {
+    var theirMag = getMagic(enemyId)
+    if (theirMag == null) theirMag = 200
+    var chips = getChips(enemyId)
+    if (chips == null) return 150
+    var best = 0
+    for (var cid in chips) {
+        var cname = getChipName(cid)
+        if (cname == null) continue
+        if (cname != 'venom' && cname != 'toxin' && cname != 'arsenic' &&
+            cname != 'plague' && cname != 'covid' && cname != 'serum') continue
+        if (!mapContainsKey(arsenal.chipsList, cid)) continue
+        var bd = arsenal.getDamageBreakdown(0, theirMag, 0, 0, cid)
+        if (bd != null && bd['dot'] > best) best = bd['dot']
+    }
+    // one cast's DoT landing over the next turns; count the front-loaded share
+    return (best > 0) ? best / 2 : 150
+}
+
+// M4b — multi-enemy estimate: the target's model-driven response PLUS the
+// weapon pressure of every OTHER alive enemy (team fights, and summon-heavy
+// solo fights where bulbs are enemies whose damage was previously invisible).
+// Non-target leeks count at 70% (not all of them reach us the same turn),
+// bulbs at 40% (summon stats are low). Target heals unchanged.
+function simulateEnemyResponseMulti(target, arsenal, ourNewCell, ourNewHP, fieldMapObj) {
+    var base = simulateEnemyResponse(target._id, arsenal, ourNewCell, ourNewHP)
+    if (fieldMapObj == null) return base
+    var extraDmg = 0
+    var enemies = fieldMapObj.getEnemySubMap()
+    for (var eid in mapKeys(enemies)) {
+        if (eid == target._id) continue
+        if (isDead(eid)) continue
+        var e = enemies[eid]
+        var d = getCellDistance(ourNewCell, e._cellPos)
+        if (d == null) continue
+        var contrib = enemyPredictedWeaponDamage(eid, arsenal, d, ourNewCell)
+        if (contrib <= 0) continue
+        if (isBulb(e)) extraDmg += contrib * 0.4
+        else extraDmg += contrib * 0.7
+    }
+    var total = base['damage'] + extraDmg
+    return ['damage': total, 'heals': base['heals'], 'weDied': total >= ourNewHP]
+}

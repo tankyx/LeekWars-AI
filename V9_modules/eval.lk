@@ -1,0 +1,56 @@
+// V9 evaluation function — ALL scoring weights live here, isolated for GA v2
+// (M3). The rollout verifier scores a simulated 1.5-turn outcome; this function
+// is the only place that turns a SimulationResult + enemy estimate into a
+// number. Do not scatter weights elsewhere.
+
+// The 16 EW_* weight globals are GA-managed (Phase M3): they live in
+// ga_weights.lk, which MUST sit next to this file in every environment
+// (local generator + server upload). tools/ga_v2.py regenerates it with
+// the default values when missing; do not hand-edit the values there.
+include('ga_weights.lk')
+
+// Depth-2 reply weight (M4a) — NOT GA-managed for now: it lives here so the
+// running GA's ga_weights.lk rewrites can't clobber it. Fold into EW_ORDER
+// for the next GA cycle.
+global EW_RR_REPLY = 0.6
+
+function evalOutcome(ourSim, enemyEst, target, arsenal) {
+    var score = 0.0
+    score += ourSim.leekDamage * EW_DIRECT
+    score += ourSim.bulbDamage * EW_DIRECT * EW_BULB_TAX
+    score += ourSim.dotDamageQueued * EW_DOT
+    score += ourSim.novaDamageQueued * EW_NOVA
+    score += ourSim.hpGained * EW_SELF_HEAL
+    score += ourSim.shieldsGained * EW_SHIELDS
+    score += ourSim.denialApplied * EW_DENIAL
+    score -= ourSim.droppedActions * EW_DROP_PENALTY
+    if (ourSim.killsSecured > 0) score += EW_KILL
+    score -= enemyEst['damage'] * EW_TAKEN
+    score -= enemyEst['heals'] * EW_ENEMY_HEAL
+    if (enemyEst['weDied']) score -= EW_DEATH
+
+    // Positioning term: when nothing lands, closing the gap to our reach is
+    // the real value of the turn (Margaret's 63-turn stall: weapon-only won
+    // re-ranks because approach plans ate drop penalties while dealing 0).
+    if (ourSim.leekDamage + ourSim.dotDamageQueued + ourSim.novaDamageQueued <= 0 && target != null) {
+        var bestRange = 1
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var wr = arsenal.playerEquippedWeapons[wid]._maxRange
+            if (wr > bestRange) bestRange = wr
+        }
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            if (isPoisonChip(cid) || isDebuffChip(cid)) {
+                var cr = arsenal.playerEquippedChips[cid]._maxRange
+                if (cr > bestRange) bestRange = cr
+            }
+        }
+        var d0 = getCellDistance(getCell(), target._cellPos)
+        var d1 = getCellDistance(ourSim.finalPosition, target._cellPos)
+        if (d0 != null && d1 != null && d1 < d0) {
+            var gap0 = max(0, d0 - bestRange)
+            var gap1 = max(0, d1 - bestRange)
+            score += (gap0 - gap1) * EW_APPROACH
+        }
+    }
+    return score
+}

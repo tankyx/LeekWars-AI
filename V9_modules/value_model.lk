@@ -1,0 +1,82 @@
+// value_model.lk — runtime feature assembly for the learned value model.
+// Must mirror tools/extract_states.py EXACTLY (same feature order/meaning).
+// Model: V9_modules/value_model_data.lk (generated; retrain via
+// tools/train_value_model.py + tools/emit_value_model_lk.py).
+
+// A/B flag + influence scale for the scorer bonus.
+global _v9ValueModelEnabled = false
+global _v9ValueModelScale = 2000
+
+// Learned evaluation of a candidate turn's end state AFTER the enemy's
+// expected response (used by the learned re-rank, rollout_rerank.lk).
+// enemyEst: {'damage': expected damage to us, 'heals': their self-heals}.
+function v9LearnedStateValue(player, target, simResult, enemyEst) {
+    var v = v9FeatureVectorPostTurn(player, target, simResult)
+    var usHp = v[1] * v[3] - enemyEst['damage']
+    var foeHp = v[2] * v[4] + enemyEst['heals']
+    if (usHp < 0) usHp = 0
+    if (foeHp > v[4]) foeHp = v[4]
+    if (foeHp < 0) foeHp = 0
+    v[1] = v[3] > 0 ? usHp / v[3] : 0
+    v[2] = v[4] > 0 ? foeHp / v[4] : 0
+    return v9ValuePredict(v)
+}
+
+// 32 raw features, order = train_value_model.py FEATURES:
+// turn hp_us hp_foe maxhp_us maxhp_foe dist abssh_us abssh_foe relsh_us
+// relsh_foe pois_us pois_foe poisdpt_us poisdpt_foe str_us str_foe mag_us
+// mag_foe agi_us agi_foe wis_us wis_foe res_us res_foe sci_us sci_foe
+// tp_us tp_foe mp_us mp_foe lvl_us lvl_foe
+function v9FeatureVectorPostTurn(player, target, simResult) {
+    var usHp = player._currHealth
+    var foeHp = target._currHealth
+    var usMax = player._maxHealth
+    var foeMax = target._maxHealth
+    var dist = getCellDistance(player._cellPos, target._cellPos)
+    if (simResult != null) {
+        usHp += simResult.hpGained + simResult.lifestealHealing - simResult.selfDamageHP
+        foeHp -= simResult.damageDealt
+        if (simResult.finalPosition >= 0) {
+            var d2 = getCellDistance(simResult.finalPosition, target._cellPos)
+            if (d2 != null) dist = d2
+        }
+    }
+    if (usHp < 0) usHp = 0
+    if (usHp > usMax) usHp = usMax
+    if (foeHp < 0) foeHp = 0
+    if (foeHp > foeMax) foeHp = foeMax
+    // (2026-08-19 incident: method-as-value null guards like
+    // `player.getPoisonStackCount != null` are tolerated by the local compiler
+    // but crash the server runtime — call them, they exist on GameEntity.)
+    var usPois = player.getPoisonStackCount()
+    var foePois = target.getPoisonStackCount()
+    var usPoisDpt = player.getTotalPoisonPerTurn()
+    var foePoisDpt = target.getTotalPoisonPerTurn()
+    var usLvl = getLevel(player._id)
+    var foeLvl = getLevel(target._id)
+    return [
+        getTurn(),
+        usMax > 0 ? usHp / usMax : 0,
+        foeMax > 0 ? foeHp / foeMax : 0,
+        usMax, foeMax,
+        dist == null ? 15 : dist,
+        player._absShield, target._absShield,
+        player._relShield, target._relShield,
+        usPois, foePois,
+        usPoisDpt, foePoisDpt,
+        player._strength, target._strength,
+        player._magic, target._magic,
+        player._agility, target._agility,
+        player._wisdom, target._wisdom,
+        player._resistance, target._resistance,
+        player._science, target._science,
+        player._maxTp, target._maxTp,
+        player._maxMp, target._maxMp,
+        usLvl == null ? 301 : usLvl,
+        foeLvl == null ? 301 : foeLvl
+    ]
+}
+
+// Winner-mining conversion flag (2026-08-18): when race model says LOSING,
+// cut heal value and convert to weapon urgency in the scenario scorer.
+global _v9WinnerConversionEnabled = false

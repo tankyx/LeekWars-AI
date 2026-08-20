@@ -1,0 +1,217 @@
+// V9 every-turn rollout re-rank (Path A, docs/v9_scope.md) — re-ranks the
+// pipeline's retained top-5 candidates by adding the simulated ENEMY response
+// (enemy_sim.lk, M1 model) and our depth-2 reply term to each candidate's raw
+// full-scorer score. The pipeline's own top-1 stays the default: the caller
+// overrides only when the adjusted winner beats the native pick's adjusted
+// score by more than _v9RerankThreshold. V8 itself is never modified.
+//
+// CEILING BREAKER: two V9-generated candidates (LoS-break defense, stand-
+// shield counter-burst) are simulated and scored with the PIPELINE'S OWN
+// scorer, competing on the same scale as V8's pool — this is what lets V9
+// play turns V8 never proposed. The re-rank alone could only reorder.
+
+global _v9RerankEnabled = false
+global _v9RerankLog = true
+global _v9RerankThreshold = 400
+
+// Learned-estimator re-rank (W4 of the value-model project, 2026-08-18): the
+// original re-rank failed A/B on hand-built enemy-response scoring. This path
+// keeps the same skeleton (candidates + ceiling breakers + enemy response sim)
+// but scores each end state with the LEARNED value model instead of the
+// hand-built enemyTerm. No ENEMY_MODEL confidence gate: the model was trained
+// on the whole ladder, not per-opponent memory.
+global _v9RerankLearnedEnabled = false
+global _v9RerankLearnedThreshold = 0.02  // min P(win) delta to flip the pick
+
+include('enemy_sim.lk')
+include('eval.lk')
+
+// Learned-scored variant of rolloutRerank. Returns the same 4-tuple:
+// [learnedBest, nativeBest, pGap, samePick] with pGap in probability units.
+function rolloutRerankLearned(topCandidates, target, arsenal, fieldMapObj, weights) {
+    if (topCandidates == null || count(topCandidates) == 0) return [null, null, 0, true]
+    if (target == null) return [null, null, 0, true]
+
+    var sim = new ScenarioSimulator(arsenal, player, target, fieldMapObj)
+    var adaptedW = adaptWeightsToSituation(weights, player, fieldMapObj.getEnemySubMap(), fieldMapObj)
+    var scorer = new ScenarioScorer(player, target, fieldMapObj, adaptedW)
+    var myCell = getCell()
+
+    var breakers = v9CeilingBreakers(target, arsenal, fieldMapObj, myCell)
+    for (var bk in breakers) {
+        var bSim = sim.simulate(bk)
+        var bScore = scorer.score(bSim, bk)
+        push(topCandidates, ['scenario': bk, 'simResult': bSim, 'score': bScore, 'breaker': true])
+    }
+
+    var nativeBest = null
+    var nativeP = 0
+    var learnedBest = null
+    var bestP = -1
+
+    for (var i = 0; i < count(topCandidates); i++) {
+        var cand = topCandidates[i]
+        var simResult = cand['simResult']
+        var endCell = simResult.finalPosition
+        if (endCell == null || endCell == -1) endCell = myCell
+        var endHP = getLife() + simResult.hpGained
+        var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+        var p = v9LearnedStateValue(player, target, simResult, enemyEst)
+        cand['learnedP'] = p
+        if (i == 0) {
+            nativeBest = cand
+            nativeP = p
+        }
+        if (p > bestP) {
+            bestP = p
+            learnedBest = cand
+        }
+    }
+
+    var gap = bestP - nativeP
+    var samePick = (learnedBest == nativeBest)
+    if (samePick) gap = 0
+    return [learnedBest, nativeBest, gap, samePick]
+}
+
+// Returns [adjustedBest, nativeBest, maxGap, samePick]:
+//   adjustedBest — candidate with the highest adjusted score
+//   nativeBest   — top-1 by raw score (topCandidates[0])
+//   maxGap       — adjustedBest.adjusted − nativeBest.adjusted (0 on samePick)
+//   samePick     — map identity test (array equality was the broken form)
+function rolloutRerank(topCandidates, target, arsenal, fieldMapObj, weights) {
+    if (topCandidates == null || count(topCandidates) == 0) return [null, null, 0, true]
+    if (target == null) return [null, null, 0, true]
+
+    // Confidence gate (2026-08-14, A/B round 1-2 evidence): the estimator is
+    // evidence-based only with per-opponent memory. On unknown opponents its
+    // prior guess systematically mis-serves hybrid builds (KG's nova-in-range,
+    // ED's reflect bait — their best turns end in danger BY DESIGN), and the
+    // flips it drove there were net-negative. No memory -> no re-rank flips;
+    // the catastrophe veto (rollout_veto.lk) still runs, it needs no fine
+    // estimate. Straight-damage/poison builds (Ada/Margaret) kept their edge
+    // BECAUSE their correct end states are low-danger anyway.
+    var targetName = getName(target._id)
+    if (targetName == null || !mapContainsKey(ENEMY_MODEL, targetName)) {
+        return [topCandidates[0], topCandidates[0], 0, true]
+    }
+
+    // Ceiling breakers: V9-only candidates scored with the pipeline scorer.
+    var sim = new ScenarioSimulator(arsenal, player, target, fieldMapObj)
+    var adaptedW = adaptWeightsToSituation(weights, player, fieldMapObj.getEnemySubMap(), fieldMapObj)
+    var scorer = new ScenarioScorer(player, target, fieldMapObj, adaptedW)
+    var enemyCell = target._cellPos
+    var myCell = getCell()
+
+    var breakers = v9CeilingBreakers(target, arsenal, fieldMapObj, myCell)
+    for (var bk in breakers) {
+        var bSim = sim.simulate(bk)
+        var bScore = scorer.score(bSim, bk)
+        push(topCandidates, ['scenario': bk, 'simResult': bSim, 'score': bScore, 'breaker': true])
+    }
+
+    var nativeBest = null
+    var nativeAdjusted = 0
+    var adjustedBest = null
+    var bestAdjusted = -999999999
+
+    for (var i = 0; i < count(topCandidates); i++) {
+        var cand = topCandidates[i]
+        var simResult = cand['simResult']
+        var endCell = simResult.finalPosition
+        if (endCell == null || endCell == -1) endCell = myCell
+        var endHP = getLife() + simResult.hpGained
+        var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+
+        // Reflect carve-out: with return damage active, part of their hit is
+        // income, not loss (ED's reflect build was over-punished in the A/B).
+        var estDamage = enemyEst['damage']
+        var weDied = enemyEst['weDied']
+        var drEff = player.getEffect(EFFECT_DAMAGE_RETURN)
+        if (drEff != null && count(drEff) >= 2 && estDamage > 0) {
+            estDamage = estDamage * 0.65
+            weDied = (estDamage >= endHP)
+        }
+
+        var enemyTerm = -(EW_RR_TAKEN * estDamage) - (EW_RR_HEAL * enemyEst['heals'])
+        if (weDied) enemyTerm -= EW_RR_DEATH
+        // Depth-2 reply term: our best counter from the end position.
+        var replyTerm = EW_RR_REPLY * rolloutReplyDPT(arsenal, endCell, enemyCell)
+
+        var adjusted = cand['score'] + enemyTerm + replyTerm
+        cand['adjusted'] = adjusted
+        if (i == 0) {
+            nativeBest = cand
+            nativeAdjusted = adjusted
+        }
+        if (adjusted > bestAdjusted) {
+            bestAdjusted = adjusted
+            adjustedBest = cand
+        }
+    }
+
+    var maxGap = bestAdjusted - nativeAdjusted
+    var samePick = (adjustedBest == nativeBest)
+    if (samePick) maxGap = 0
+    return [adjustedBest, nativeBest, maxGap, samePick]
+}
+
+// V9-only candidates: turns the V8 pipeline never proposes.
+// (1) LoS-break defense: retreat to the hide cell + every available shield
+//     and the best heal. (2) Stand-and-shield: same defense, no move.
+function v9CeilingBreakers(target, arsenal, fieldMapObj, myCell) {
+    var breakers = []
+    var defendActs = []
+    for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+        if (!isShieldChip(cid) && !isHealingChip(cid)) continue
+        if (getCooldown(cid, getEntity()) > 0) continue
+        if (getTP() < arsenal.playerEquippedChips[cid]._cost) continue
+        push(defendActs, new Action(Action.ACTION_BUFF, -1, cid, myCell, player))
+    }
+    if (count(defendActs) == 0) return breakers
+
+    var hideCell = -1
+    if (fieldMapObj != null) {
+        var hc = fieldMapObj.getHideAndSeekCell()
+        if (hc != null && hc != myCell) hideCell = hc
+    }
+    if (hideCell != -1) {
+        var b1 = [new Action(Action.MOVEMENT_FLEE, -1, -1, hideCell, target)]
+        for (var a in defendActs) push(b1, a)
+        push(breakers, b1)
+    }
+    var b2 = []
+    for (var a2 in defendActs) push(b2, a2)
+    push(breakers, b2)
+    return breakers
+}
+
+// M4a — our expected damage output on the turn AFTER the enemy's response:
+// best per-swing damage landing from endCell onto the enemy's cell. Counts
+// direct AND nova for weapons (grenade-launcher class), and for chips any
+// offensive profile — poison DoT at 1/3-rate, nova (meteorite), direct
+// (lightning class). Direct-only used to blind the reply term for nova/burn
+// builds (KG's kit, user catch 2026-08-14).
+function rolloutReplyDPT(arsenal, endCell, enemyCell) {
+    var d = getCellDistance(endCell, enemyCell)
+    if (d == null) return 0
+    var best = 0
+    for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+        var wObj = arsenal.playerEquippedWeapons[wid]
+        if (d >= wObj._minRange && d <= wObj._maxRange) {
+            var bd = arsenal.getDamageBreakdown(getStrength(), getMagic(), getWisdom(), getScience(), wid)
+            if (bd != null && bd['direct'] + bd['nova'] > best) best = bd['direct'] + bd['nova']
+        }
+    }
+    for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+        if (isHealingChip(cid) || isOffensiveBuff(cid) || isShieldChip(cid) ||
+            isDamageReturnChip(cid) || isResourceChip(cid) || isUtilityChip(cid)) continue
+        var cObj = arsenal.playerEquippedChips[cid]
+        if (d < cObj._minRange || d > cObj._maxRange) continue
+        var cbd = arsenal.getDamageBreakdown(getStrength(), getMagic(), getWisdom(), getScience(), cid)
+        if (cbd == null) continue
+        var chipDmg = cbd['direct'] + cbd['nova'] + cbd['dot'] / 3
+        if (chipDmg > best) best = chipDmg
+    }
+    return best
+}

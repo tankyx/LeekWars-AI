@@ -1,0 +1,398 @@
+
+global _init = false
+global fieldMap = null
+global arsenal = null
+global player = null
+global strategy = null
+
+global __avgDamageRate = 0
+global __lastEnemyHP = -1
+global __timePressure = false
+global __dopingUsed = false
+global __lastTurnWeaponId = null
+// Debug viz: paint a yellow→green gradient over the player's accessible cells
+// based on the cover-exposure heatmap. Only visible to the AI's owner.
+global _showCoverHeatmap = true
+// Phase O: turns-until-shot classifier. 0=current cell, 1=after-move/JUMP,
+// 2=2-ply, 3=far. Used by scorer to decay expiring buffs and reward closing.
+global __nearestFireTurn = 0
+
+global _opsBudget = 14000000
+global _ops50 = 7000000
+global _ops64 = 9000000
+global _ops71 = 10000000
+global _ops79 = 11000000
+global _ops82 = 11500000
+global _ops86 = 12000000
+global _ops89 = 12500000
+global _ops93 = 13000000
+global _ops96 = 13500000
+global _beamWidth = 20
+global _beamMaxDepth = 10
+global _mutationMaxSeeds = 6
+global _mutationMaxPerSeed = 80
+global _twoplyTopK = 5
+global _enemyLookaheadTopK = 8
+// Baseline values stashed at init() — used by per-turn dynamic scaling
+// in scenario_generator. The runtime values above are mutated each turn.
+global _beamMaxDepthBase = 10
+global _mutationMaxSeedsBase = 6
+global _mutationMaxPerSeedBase = 80
+global _beamWidthBase = 20
+
+include('game_entity.lk')
+include('field_map_tactical.lk')
+include('item.lk')
+include('item_roles.lk')
+include('game_context.lk')
+
+include('kill_planning.lk')
+include('cooldown_tracker.lk')
+include('enemy_predictor.lk')
+include('reachable_graph.lk')
+include('performance_infra.lk')
+include('cache_manager.lk')
+include('tactical_awareness.lk')
+include('lethal_solver.lk')
+include('value_model.lk')
+include('value_model_data.lk')
+include('weight_profiles.lk')
+include('enemy_intelligence.lk')
+include('race_model.lk')
+include('strategic_depth.lk')
+include('boss_context.lk')
+
+include('strategy/action.lk')
+include('bulb_ai.lk')
+include('beam_search.lk')
+
+include('scenario_generator.lk')
+include('scenario_simulator.lk')
+include('scenario_scorer.lk')
+include('scenario_quick_scorer.lk')
+include('scenario_mutation.lk')
+
+include('strategy/base_strategy.lk')
+include('strategy/unified_strategy.lk')
+
+// V9 Phase M2: simulation-based override layer (rollout veto). Included last
+// so every symbol it uses (Action, ScenarioSimulator, beam search, strategy
+// helpers) is already pulled in above.
+include('rollout_veto.lk')
+
+// V9 Path A: every-turn rollout re-rank of the retained top-5 pipeline
+// candidates. Included after the veto (same symbol requirements); declares
+// its own _v9Rerank* globals.
+include('rollout_rerank.lk')
+if (!_init) {
+    init()
+    _init = true
+}
+
+main()
+
+function init() {
+    initializeItemRoles()
+    player = Player(getCell())
+
+    _opsBudget = player._cores * 1000000
+    _ops50 = floor(_opsBudget * 0.50)
+    _ops64 = floor(_opsBudget * 0.64)
+    _ops71 = floor(_opsBudget * 0.71)
+    _ops79 = floor(_opsBudget * 0.79)
+    _ops82 = floor(_opsBudget * 0.82)
+    _ops86 = floor(_opsBudget * 0.86)
+    _ops89 = floor(_opsBudget * 0.89)
+    _ops93 = floor(_opsBudget * 0.93)
+    _ops96 = floor(_opsBudget * 0.96)
+
+    if (_opsBudget < 7000000) {
+        _beamWidth = 8
+        _beamMaxDepth = 5
+        _mutationMaxSeeds = 2
+        _mutationMaxPerSeed = 20
+    } else if (_opsBudget < 10000000) {
+        _beamWidth = 12
+        _beamMaxDepth = 7
+        _mutationMaxSeeds = 3
+        _mutationMaxPerSeed = 40
+    } else if (_opsBudget < 14000000) {
+        _beamWidth = 16
+        _beamMaxDepth = 8
+        _mutationMaxSeeds = 4
+        _mutationMaxPerSeed = 60
+    } else if (_opsBudget >= 18000000) {
+        // Phase D: KurtGodel's 20M budget — use the headroom for deeper search.
+        _beamWidth = 28
+        _beamMaxDepth = 12
+        _mutationMaxSeeds = 10
+        _mutationMaxPerSeed = 120
+        _twoplyTopK = 8
+        _enemyLookaheadTopK = 5
+    }
+
+    _beamWidthBase = _beamWidth
+    _beamMaxDepthBase = _beamMaxDepth
+    _mutationMaxSeedsBase = _mutationMaxSeeds
+    _mutationMaxPerSeedBase = _mutationMaxPerSeed
+
+    arsenal = new Arsenal();
+    fieldMap = new FieldMap();
+    initGameContext(player, arsenal, fieldMap)
+
+    if (detectBossFight()) {
+        initBossContext()
+    }
+
+    var buildType = detectBuildType(player)
+    __playerBuildType = buildType
+    var weights = getWeightsForBuild(buildType, player)
+    if (_isBossFight && _bossPhase == "PUZZLE") {
+        weights = BOSS_PUZZLE_WEIGHTS
+    }
+
+    // Day-1 archetype detection: profile enemies BEFORE turnOneBuffs so the
+    // opener can read getEnemyProfile() and skip buff stacking vs burst opps.
+    profileAllEnemies(fieldMap)
+
+    strategy = new UnifiedStrategy(weights, player, null, arsenal, fieldMap)
+    strategy.resetTurnContext()
+    strategy.turnOneBuffs()
+}
+
+function resetTurnState() {
+    clearCaches()
+    clearPerformanceInfra()
+}
+
+function main() {
+    resetTurnState()
+
+    if (getTurn() == 1) {
+        initializeAdjacency()
+
+        // T1 LoS warmup: precompute LoS from our starting cell to every
+        // walkable cell. __losCache is flushed each turn (entities move),
+        // so this only benefits T1's heavy scenario pipeline. Still saves
+        // ~30-70k ops on the first turn where LoS queries are densest.
+        warmLosCacheFromCell(getCell(), _ops89)
+    }
+
+    player.updateEntity()
+    fieldMap.updateMapEntities()
+
+    // OBS: turn-entry snapshot (T<=5). cheap (~1 debugW per turn).
+    if (getTurn() <= 20) {
+        debugW("OBS_ENTER_T" + getTurn() + "_c" + getCell() + "_tp" + getTP() + "_mp" + getMP() + "_hp" + getLife() + "_ops" + getOperations() + "_bud" + _opsBudget)
+    }
+
+    profileAllEnemies(fieldMap)
+
+    observeEnemyBehavior(fieldMap)
+
+    if (_isBossFight) updateBossContext()
+
+    if (_isBossFight) bossDiag(getCell())
+
+    if (_isBossFight && _bossPhase == "PUZZLE") {
+        if (executePuzzleTurn()) return
+    }
+    if (_isBossFight && _bossPhase == "COMBAT") {
+        // Flip-time escape: the solver finishes the puzzle deep in the castle,
+        // adjacent to the army, exactly when Divine Protection drops and it
+        // frees up to hunt (fights 53011079/53013437/53019695: KG died T15/
+        // T17/T19 — one or two turns after every graal death). First COMBAT
+        // turn inside the army's reach: get out BEFORE anything else.
+        if (getTurn() - _combatLatchTurn <= 1) {
+            var flipArmy = puzzleArmyCells()
+            if (count(flipArmy) > 0 && nearestArmyDistFrom(getCell(), flipArmy) < 6) {
+                if (puzzleEmergencyBlink(getEntity())) { return }
+                if (puzzleInversionEscape(getEntity())) { return }
+            }
+        }
+        executeLeanBossBuff()  // KG buffs the fighters first, fights with leftover TP
+        if (executeBossCombatPoke()) { return }
+        if (executeBossCombatPeel()) { return }
+    }
+
+    var target = null
+    if (_isBossFight && _bossPhase == "PUZZLE") {
+        target = getBossPuzzleTarget(fieldMap)
+    } else if (_isBossFight && _bossPhase == "COMBAT") {
+        target = selectCombatTarget(fieldMap)
+    }
+    if (target == null) {
+        target = fieldMap.selectOptimalTarget(['prioritizeLowest': "hp", 'bonusForDebuffed': true])
+    }
+    if (target == null) target = fieldMap.getClosestEnemy()
+
+    // OBS: target choice snapshot
+    if (getTurn() <= 20 && target != null) {
+        var _obsTd = getCellDistance(getCell(), target._cellPos)
+        debugW("OBS_TGT_T" + getTurn() + "_id" + target._id + "_c" + target._cellPos + "_hp" + target._currHealth + "_d" + _obsTd)
+    }
+
+    updateGameContext(player, target, fieldMap)
+
+    computeRaceModel(player, target, fieldMap)
+
+    if (target != null) {
+        var cooldownTracker = new CooldownTracker(target)
+        var enemies = getAliveEnemies()
+        for (var enemyId in enemies) {
+            cooldownTracker.updateCooldowns(enemyId)
+        }
+
+        var killPlanner = new KillPlanner(arsenal, player, target)
+        killPlanner.updateGlobalKillPlan()
+    }
+
+    buildReachableGraph(player._cellPos, player._currMp, player, target, arsenal)
+
+    initializeCaches(player, target, arsenal)
+
+    fieldMap.buildEnemyThreatMap()
+
+    if (target != null && getOperations() < _ops64) {
+        buildAdversarialThreatCache(player, fieldMap.getEnemySubMap(), arsenal)
+    }
+
+    // Render the cover-exposure heatmap every turn so the visualization is
+    // independent of which strategy path runs. Cheap when _showCoverHeatmap
+    // is off; bounded LoS lookups when on (cache is persistent across turns).
+    fieldMap.paintCoverHeatmap()
+
+    // Phase O: classify how many turns until we can land a shot. Used by the
+    // scorer to decay offensive buffs that would expire before any shot and
+    // to reward closing moves on no-shot turns.
+    if (target != null && getOperations() < _ops71) {
+        __nearestFireTurn = estimateNearestFireTurn(player, target, arsenal)
+    } else {
+        __nearestFireTurn = 0
+    }
+    if (getTurn() <= 20) {
+        debugW("FIRETURN_T" + getTurn() + "_" + __nearestFireTurn)
+    }
+
+    var targetHitCell = null
+
+    // Gate at _ops89: buildHitMap can burn millions of ops integrating chip AoE
+    // patterns; if we're already at 89% we'd risk crossing _ops93 mid-loop and
+    // crashing inside u_buildHitMap (observed in F52581885 T3). Letting the
+    // _ops93 fallback below take over is cheaper than a partial map.
+    //
+    // Bulb skip (F52582973 T3): when summons split _opsBudget below 14M AND
+    // the target is a bulb at distance, buildHitMap walks reachable cells
+    // trying to find shoot positions for low-value HP. The ops cost
+    // dwarfs the value. Skip the hit-map build in this case; strategy still
+    // targets the bulb but the heavy mapping is reserved for the primary
+    // enemy on later turns.
+    var skipHitMap = false
+    if (target != null && _opsBudget < 14000000 && isBulb(target)) {
+        var bulbDist = getCellDistance(getCell(), target._cellPos)
+        if (bulbDist > 7 || target._currHealth > 200) {
+            skipHitMap = true
+        }
+    }
+    if (target != null && !skipHitMap && getOperations() < _ops89 && strategy.shouldBuildDamageMap()) {
+        fieldMap.buildHitMap(target._cellPos)
+        targetHitCell = fieldMap.getBestWeaponOrChipCell();
+    }
+
+    if (getOperations() > _ops93) {
+        debugW("FALLBACK_T" + getTurn())
+        if (target != null) {
+            // Phase 1.1: defensive floor — when ops budget is exhausted AND HP
+            // is critical, try firing one heal/shield/damage-return chip before
+            // the standard move+fire pass. Closes the corner case where the
+            // fallback walks a low-HP leek into a burst opponent's range while
+            // unused recovery chips sit on hand.
+            var fbHpPct = (player._currHealth * 100) / player._maxHealth
+            if (fbHpPct < 50) {
+                var bestRecoveryChipId = -1
+                var bestRecoveryVal = 0
+                for (var rcid in mapKeys(arsenal.playerEquippedChips)) {
+                    var rchip = arsenal.playerEquippedChips[rcid]
+                    if (!isHealingChip(rcid) && !isShieldChip(rcid) && !isDamageReturnChip(rcid)) continue
+                    if (getCooldown(rcid, player._id) > 0) continue
+                    if (getTP() < rchip._cost) continue
+                    var rval = quickRecoveryChipValue(rcid, 'self')
+                    if (rval > bestRecoveryVal) {
+                        bestRecoveryVal = rval
+                        bestRecoveryChipId = rcid
+                    }
+                }
+                if (bestRecoveryChipId != -1) {
+                    useChip(bestRecoveryChipId, player._id)
+                    debugW("FALLBACK_DEF_T" + getTurn() + "_chip" + bestRecoveryChipId + "_val" + bestRecoveryVal)
+                }
+            }
+
+            var fbStart = getCell()
+            var fbTargetCell = target._cellPos
+
+            // Find our weapon range envelope (cheap; small loop).
+            var fbMaxR = 0
+            var fbMinR = 99
+            for (var fbwid in mapKeys(arsenal.playerEquippedWeapons)) {
+                var fbw = arsenal.playerEquippedWeapons[fbwid]
+                if (fbw._maxRange > fbMaxR) fbMaxR = fbw._maxRange
+                if (fbw._minRange < fbMinR) fbMinR = fbw._minRange
+            }
+
+            // Only close the gap if we lack LoS or are out of weapon range.
+            // Otherwise stay put — closing into a kiter's spam reach with
+            // a no-LoS retreat cell available is the failure mode we keep
+            // hitting in fights vs poison/denial kiters (e.g. koe2).
+            var fbHasLoS = lineOfSight(fbStart, fbTargetCell)
+            var fbDist = getCellDistance(fbStart, fbTargetCell)
+            if (!fbHasLoS || fbDist > fbMaxR || fbDist < fbMinR) {
+                moveToward(target._id)
+            }
+
+            // Greedy fire pass: cycle through equipped weapons, pick those
+            // whose range envelope contains the current distance, fire each
+            // until TP runs below cheapest cost.
+            var firePos = getCell()
+            var fireDist = getCellDistance(firePos, fbTargetCell)
+            if (lineOfSight(firePos, fbTargetCell)) {
+                for (var fbwid2 in mapKeys(arsenal.playerEquippedWeapons)) {
+                    var fbw2 = arsenal.playerEquippedWeapons[fbwid2]
+                    if (fireDist < fbw2._minRange || fireDist > fbw2._maxRange) continue
+                    if (getTP() < fbw2._cost) continue
+                    setWeapon(fbw2._id)
+                    useWeaponOnCell(fbTargetCell)
+                    // Try a second use of the same weapon if max-use allows.
+                    if (fbw2._maxUse >= 2 && getTP() >= fbw2._cost) {
+                        useWeaponOnCell(fbTargetCell)
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    if (_isBossFight) {
+        strategy._weights = (_bossPhase == "PUZZLE") ? BOSS_PUZZLE_WEIGHTS : BOSS_COMBAT_WEIGHTS
+    }
+
+    strategy.createAndExecuteScenario(target, targetHitCell)
+
+    // Background fill: extend the persistent LoS cache around current cell
+    // and the live target with whatever ops budget remains. Each entry costs
+    // ~50-100 ops; this amortizes LoS work that otherwise hits us mid-turn.
+    if (getOperations() < _ops89) {
+        var losCenters = [getCell()]
+        if (target != null) push(losCenters, target._cellPos)
+        extendLosCache(losCenters, _ops93)
+    }
+
+    // OBS: end-of-turn snapshot — paired with OBS_ENTER, lets us see what
+    // ground was given up and how much TP/ops we burned.
+    if (getTurn() <= 20) {
+        debugW("OBS_END_T" + getTurn() + "_c" + getCell() + "_tp" + getTP() + "_mp" + getMP() + "_hp" + getLife() + "_ops" + getOperations())
+    }
+
+    // Persist weapon choice for cross-turn swap penalty
+    __lastTurnWeaponId = getWeapon()
+}

@@ -1,0 +1,96 @@
+// V9 enemy model — runtime prediction of the enemy's next turn.
+// Memory first (per-opponent tendencies from fight history, baked into
+// enemy_model_data.lk), archetype prior as fallback. Consumed by the rollout
+// verifier (rollout.lk) to simulate the enemy response. Shadow until the
+// accuracy gate (tools/enemy_model_accuracy.py, >=60% top-1) holds.
+
+include('enemy_model_data.lk')
+
+// Archetype prior from the enemy's live kit when no memory exists.
+// Bulb chips => summoner, 2+ poison chips => magic_poison, 3+ shield chips
+// => tank, high MP with long-range kit => kiter, else bruiser.
+function classifyEnemyArchetype(enemyId) {
+    var chips = getChips(enemyId)
+    if (chips != null) {
+        var summonC = 0
+        var poisonC = 0
+        var shieldC = 0
+        for (var cid in chips) {
+            var cname = getChipName(cid)
+            if (cname == null) continue
+            if (indexOf(cname, 'bulb') >= 0) summonC++
+            else if (cname == 'venom' || cname == 'toxin' || cname == 'arsenic' ||
+                     cname == 'plague' || cname == 'covid' || cname == 'serum') poisonC++
+            else if (cname == 'armor' || cname == 'wall' || cname == 'fortress' ||
+                     cname == 'shield' || cname == 'rampart' || cname == 'armoring' ||
+                     cname == 'helmet') shieldC++
+        }
+        if (summonC >= 1) return 'summoner'
+        if (poisonC >= 2) return 'magic_poison'
+        if (shieldC >= 3) return 'tank'
+    }
+    var mp = getMP(enemyId)
+    if (mp != null && mp >= 7) return 'kiter'
+    return 'bruiser'
+}
+
+// Memory first, prior fallback.
+function getEnemyArchetype(enemyId) {
+    var name = getName(enemyId)
+    if (name != null && mapContainsKey(ENEMY_MODEL, name)) {
+        return ENEMY_MODEL[name]['arch']
+    }
+    return classifyEnemyArchetype(enemyId)
+}
+
+// Top-3 likely action-sets + probabilities for the enemy's next turn.
+// turn = fight turn number, dist = current cell distance to us.
+// Returns [[classes, prob], [classes, prob], [classes, prob]].
+function predictEnemyTurn(enemyId, turn, dist, theirTP, theirMP) {
+    var name = getName(enemyId)
+    var mem = null
+    if (name != null && mapContainsKey(ENEMY_MODEL, name)) mem = ENEMY_MODEL[name]
+
+    // Per-turn modal classes from observed history (t1_modal..t3_modal)
+    // beat archetype rules; priors fill turns without memory.
+    if (mem != null) {
+        var modal = null
+        if (turn <= 1) modal = mem['t1m']
+        else if (turn == 2) modal = mem['t2m']
+        else if (turn == 3) modal = mem['t3m']
+        if (modal != null) {
+            return [[[modal], 0.6], [[modal, 'move'], 0.25], [['buff'], 0.15]]
+        }
+    }
+
+    if (turn <= 1) {
+        var arch0 = getEnemyArchetype(enemyId)
+        if (arch0 == 'summoner') return [[['buff', 'summon'], 0.5], [['buff'], 0.3], [['buff', 'move'], 0.2]]
+        if (arch0 == 'tank') return [[['buff'], 0.7], [['buff', 'move'], 0.2], [['move'], 0.1]]
+        return [[['buff', 'move'], 0.55], [['buff'], 0.3], [['move', 'weapon'], 0.15]]
+    }
+
+    // Later turns: dominant observed behavior from memory, prior otherwise.
+    if (mem != null) {
+        if (mem['arch'] == 'summoner' && turn <= 4 && mem['summon'] >= 0.3) {
+            return [[['summon'], 0.55], [['weapon'], 0.25], [['buff'], 0.2]]
+        }
+        var dcls = 'weapon'
+        if (mem['arch'] == 'magic_poison') dcls = 'poison'
+        else if (mem['arch'] == 'tank') dcls = 'buff'
+        if (mem['arch'] == 'kiter') {
+            return [[[dcls, 'move'], 0.5], [[dcls], 0.3], [['move'], 0.2]]
+        }
+        return [[[dcls], 0.55], [[dcls, 'move'], 0.25], [['buff'], 0.2]]
+    }
+
+    var arch = getEnemyArchetype(enemyId)
+    if (arch == 'magic_poison') return [[['poison'], 0.6], [['poison', 'move'], 0.25], [['buff'], 0.15]]
+    if (arch == 'summoner') {
+        if (turn <= 4) return [[['summon'], 0.5], [['weapon'], 0.3], [['buff'], 0.2]]
+        return [[['weapon'], 0.45], [['summon'], 0.3], [['buff'], 0.25]]
+    }
+    if (arch == 'tank') return [[['buff'], 0.5], [['weapon'], 0.35], [['move'], 0.15]]
+    if (arch == 'kiter') return [[['weapon', 'move'], 0.5], [['weapon'], 0.3], [['move'], 0.2]]
+    return [[['weapon'], 0.55], [['weapon', 'move'], 0.25], [['buff'], 0.2]]
+}
