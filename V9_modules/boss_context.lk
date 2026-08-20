@@ -2533,37 +2533,36 @@ function executeLeanPuzzleTurn() {
         // The 4th instant solve: swap a crystal onto its goal before anchoring
         // (graal dead by R4-6 beats any shield wall — the attrition clock)
         if (getLife() >= 1500 && getTurn() >= 2 && tryOpenerSwapSolve(myID)) { return true }
-        // Intercept anchor (verified across 80+ fights: the army attacks the
-        // NEAREST reachable leek — Inupi-front in the winners' replay, our
-        // deep divers in ours). The anchor's job is to BE that nearest body,
-        // always: interpose between the army and the divers, then tank with
-        // the shield/heal rotation (RES 675 + remission survives the focus).
-        // The divers then solve free behind the wall.
-        var iAmNearest = true
-        var myArmyD2 = armyD
-        var allI = getAliveAllies()
-        for (var ai3 in allI) {
-            if (isSummon(ai3)) continue
-            var aiC = getCell(ai3)
-            if (aiC == null || aiC < 0) continue
-            var aiD = nearestArmyDistFrom(aiC, army)
-            if (aiD < myArmyD2) { iAmNearest = false; break }
+        // DECOY KITE (the cleanest model — KG kites the army at armyD 5-8 and
+        // they chase him forever: he survives via shields+remission+kite,
+        // proven R56. The 3 divers then solve everything unmolested at
+        // armyD 12+ instead of feeding one by one).
+        solverSurvival(myID)
+        if (armyD <= 4) {
+            var dkCell = choosePuzzleSustainCellCapped(myID, myCell, false, 14)
+            if (dkCell != -1 && dkCell != myCell) { moveTowardCell(dkCell, getMP()); myCell = getCell() }
+        } else if (armyD > 8) {
+            var nearArmyE = nearestArmyEntity(myCell)
+            if (nearArmyE != -1) { moveTowardCell(getCell(nearArmyE), min(getMP(), armyD - 6)); myCell = getCell() }
         }
-        if (!iAmNearest && count(army) > 0) {
-            var intC = -1
-            var intD = 999
-            for (var ac3 in army) {
-                var acd2 = getCellDistance(myCell, ac3)
-                if (acd2 != null && acd2 < intD) { intD = acd2; intC = ac3 }
-            }
-            if (intC != -1) {
-                var preA = myCell
-                moveTowardCell(intC, getMP())
-                if (getCell() == preA) { solverWalkToward(intC) }
-                myCell = getCell()
-            }
+        armyD = nearestArmyDistFrom(myCell, army)
+        say("PZ DECOY d" + armyD)
+        // Slow/shackle the chasing army from the kite distance (cd 0, boss
+        // not immune) — keeps them slow AND weak while they chase.
+        if (allyHasChip(myID, CHIP_SLOW_DOWN) && count(army) > 0) {
+            var slowT0 = nearestArmyEntity(myCell)
+            if (slowT0 != -1 && getTP() >= 3 && useChip(CHIP_SLOW_DOWN, slowT0) >= 1) say("PZ SLOW " + getName(slowT0))
         }
-        say("PZ ANCHOR near" + iAmNearest + " d" + armyD)
+        // Shackle their TP to zero (tranquilizer, cd 0, boss not immune): no
+        // TP = no Excalibur swings — drops their actual damage output, not
+        // just their mobility.
+        if (allyHasChip(myID, CHIP_TRANQUILIZER) && count(army) > 0 && getTP() >= 3) {
+            var trT = nearestArmyEntity(myCell)
+            if (trT != -1 && useChip(CHIP_TRANQUILIZER, trT) >= 1) say("PZ TRANQ " + getName(trT))
+        }
+            var trT = nearestArmyEntity(myCell)
+            if (trT != -1 && useChip(CHIP_TRANQUILIZER, trT) >= 1) say("PZ TRANQ " + getName(trT))
+        }
         // Rotation (winning reference: 169 shield casts — and the bruisers
         // survived on the support's shields, not their own). Every shield
         // lands on the most-hurt ally IN RANGE (self included); remission
@@ -3012,6 +3011,17 @@ function solverSurvival(slMyID) {
     // +180 RES — then solve with leftovers. Distant army: rolling fortress.
     var svArmy = puzzleArmyCells()
     var svD = count(svArmy) > 0 ? nearestArmyDistFrom(getCell(), svArmy) : 99
+    // Slow the approaching army (shackle MP, cd 0, boss not immune) — a slowed
+    // army can't close on the divers (the attrition-stopper, cast before shields)
+    if (svD <= 9 && getTP() >= 3 && allyHasChip(slMyID, CHIP_SLOW_DOWN) && count(svArmy) > 0) {
+        var svSlowT = nearestArmyEntity(getCell())
+        if (svSlowT != -1) useChip(CHIP_SLOW_DOWN, svSlowT)
+    }
+    // Shackle their TP too (tranquilizer) — no TP = no attack this turn
+    if (svD <= 9 && getTP() >= 3 && allyHasChip(slMyID, CHIP_TRANQUILIZER) && count(svArmy) > 0) {
+        var svTrT = nearestArmyEntity(getCell())
+        if (svTrT != -1) useChip(CHIP_TRANQUILIZER, svTrT)
+    }
     if (svD <= 9 || pct < 85) {
         if (getTP() >= 9 && allyHasChip(slMyID, CHIP_DOME)) {
             var dcd = getCooldown(CHIP_DOME, slMyID)
@@ -3116,6 +3126,22 @@ function nearestArmyDistFrom(cell, armyCells) {
         if (ac == null || ac < 0) continue
         var d = getCellDistance(cell, ac)
         if (d != null && d < best) best = d
+    }
+    return best
+}
+
+// Nearest army ENTITY (for shackle casts) — same filter as puzzleArmyCells
+function nearestArmyEntity(cell) {
+    var best = -1
+    var bestD = 999
+    var enemies = getAliveEnemies()
+    for (var e in enemies) {
+        var n = getName(e)
+        if (n == "graal" || indexOf(n, "crystal") != -1) continue
+        var ec = getCell(e)
+        if (ec == null || ec < 0) continue
+        var d = getCellDistance(cell, ec)
+        if (d != null && d < bestD) { bestD = d; best = e }
     }
     return best
 }
@@ -3523,7 +3549,7 @@ function executeSupportPuzzleTurn() {
 function maybeCastDecoyBulb(myID) {
     if (getTurn() < 2) { return false }
     var dbChip = -1
-    for (var dbc in [CHIP_ROCKY_BULB, CHIP_ICED_BULB, CHIP_PUNY_BULB]) {
+    for (var dbc in [CHIP_METALLIC_BULB, CHIP_ROCKY_BULB, CHIP_ICED_BULB, CHIP_PUNY_BULB]) {
         if (!allyHasChip(myID, dbc)) { continue }
         var dbCd = getCooldown(dbc, myID)
         if (dbCd == null || dbCd > 0) { continue }
@@ -4133,22 +4159,20 @@ function executeSolverPuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
-    // Wall discipline (53372132 autopsy: the army kills the NEAREST leek, and
-    // the divers die because they dive PAST the anchor and become nearest).
-    // Never be closer to the army than the anchor — solve from behind the
-    // wall (spark reaches 10, slides 8), retreat if the anchor falls behind.
+    // Wall discipline (decoy doctrine): the anchor kites the army at 5-8 and
+    // the divers must NEVER be a tempting target — retreat whenever the army
+    // closes within 9, so the focus always lands on the kiting anchor and
+    // the divers solve unmolested in the cleared space.
     if (_leanSquad && _leanAnchorID != -1 && _leanAnchorID != myID && isAlive(_leanAnchorID)) {
         var wdArmy = puzzleArmyCells()
         if (count(wdArmy) > 0) {
             var wdMyD = nearestArmyDistFrom(myCell, wdArmy)
-            var wdAC = getCell(_leanAnchorID)
-            var wdAnchD = (wdAC != null && wdAC >= 0) ? nearestArmyDistFrom(wdAC, wdArmy) : 99
-            if (wdMyD < wdAnchD && wdMyD <= 5) {
+            if (wdMyD <= 9) {
                 solverSurvival(myID)
                 if (!puzzleEmergencyBlink(myID)) { puzzleInversionEscape(myID) }
                 var wdCell = choosePuzzleSustainCellCapped(myID, myCell, false, 14)
                 if (wdCell != -1 && wdCell != myCell) { moveTowardCell(wdCell, getMP()) }
-                say("PZ WALLD myD" + wdMyD + " aD" + wdAnchD)
+                say("PZ WALLD myD" + wdMyD)
                 return true
             }
         }
