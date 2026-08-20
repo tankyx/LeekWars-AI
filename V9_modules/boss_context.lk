@@ -2533,20 +2533,26 @@ function executeLeanPuzzleTurn() {
         // The 4th instant solve: swap a crystal onto its goal before anchoring
         // (graal dead by R4-6 beats any shield wall — the attrition clock)
         if (getLife() >= 1500 && getTurn() >= 2 && tryOpenerSwapSolve(myID)) { return true }
-        // DECOY KITE (the cleanest model — KG kites the army at armyD 5-8 and
-        // they chase him forever: he survives via shields+remission+kite,
-        // proven R56. The 3 divers then solve everything unmolested at
-        // armyD 12+ instead of feeding one by one).
-        solverSurvival(myID)
-        if (armyD <= 4) {
-            var dkCell = choosePuzzleSustainCellCapped(myID, myCell, false, 14)
-            if (dkCell != -1 && dkCell != myCell) { moveTowardCell(dkCell, getMP()); myCell = getCell() }
-        } else if (armyD > 8) {
-            var nearArmyE = nearestArmyEntity(myCell)
-            if (nearArmyE != -1) { moveTowardCell(getCell(nearArmyE), min(getMP(), armyD - 6)); myCell = getCell() }
+        // Intercept anchor (verified across 80+ fights: the army attacks the
+        // NEAREST reachable leek). The anchor interposes as the army's nearest
+        // body ALWAYS and tanks with the shield/heal/shackle rotation — the
+        // divers then solve free instead of feeding one by one.
+        if (count(army) > 0 && armyD > 2) {
+            var intC = -1
+            var intD = 999
+            for (var ac3 in army) {
+                var acd2 = getCellDistance(myCell, ac3)
+                if (acd2 != null && acd2 < intD) { intD = acd2; intC = ac3 }
+            }
+            if (intC != -1) {
+                var preA = myCell
+                moveTowardCell(intC, getMP())
+                if (getCell() == preA) { solverWalkToward(intC) }
+                myCell = getCell()
+                armyD = nearestArmyDistFrom(myCell, army)
+            }
         }
-        armyD = nearestArmyDistFrom(myCell, army)
-        say("PZ DECOY d" + armyD)
+        say("PZ ANCHOR d" + armyD)
         // Slow/shackle the chasing army from the kite distance (cd 0, boss
         // not immune) — keeps them slow AND weak while they chase.
         if (allyHasChip(myID, CHIP_SLOW_DOWN) && count(army) > 0) {
@@ -2557,9 +2563,6 @@ function executeLeanPuzzleTurn() {
         // TP = no Excalibur swings — drops their actual damage output, not
         // just their mobility.
         if (allyHasChip(myID, CHIP_TRANQUILIZER) && count(army) > 0 && getTP() >= 3) {
-            var trT = nearestArmyEntity(myCell)
-            if (trT != -1 && useChip(CHIP_TRANQUILIZER, trT) >= 1) say("PZ TRANQ " + getName(trT))
-        }
             var trT = nearestArmyEntity(myCell)
             if (trT != -1 && useChip(CHIP_TRANQUILIZER, trT) >= 1) say("PZ TRANQ " + getName(trT))
         }
@@ -3011,17 +3014,6 @@ function solverSurvival(slMyID) {
     // +180 RES — then solve with leftovers. Distant army: rolling fortress.
     var svArmy = puzzleArmyCells()
     var svD = count(svArmy) > 0 ? nearestArmyDistFrom(getCell(), svArmy) : 99
-    // Slow the approaching army (shackle MP, cd 0, boss not immune) — a slowed
-    // army can't close on the divers (the attrition-stopper, cast before shields)
-    if (svD <= 9 && getTP() >= 3 && allyHasChip(slMyID, CHIP_SLOW_DOWN) && count(svArmy) > 0) {
-        var svSlowT = nearestArmyEntity(getCell())
-        if (svSlowT != -1) useChip(CHIP_SLOW_DOWN, svSlowT)
-    }
-    // Shackle their TP too (tranquilizer) — no TP = no attack this turn
-    if (svD <= 9 && getTP() >= 3 && allyHasChip(slMyID, CHIP_TRANQUILIZER) && count(svArmy) > 0) {
-        var svTrT = nearestArmyEntity(getCell())
-        if (svTrT != -1) useChip(CHIP_TRANQUILIZER, svTrT)
-    }
     if (svD <= 9 || pct < 85) {
         if (getTP() >= 9 && allyHasChip(slMyID, CHIP_DOME)) {
             var dcd = getCooldown(CHIP_DOME, slMyID)
@@ -4159,24 +4151,10 @@ function executeSolverPuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
-    // Wall discipline (decoy doctrine): the anchor kites the army at 5-8 and
-    // the divers must NEVER be a tempting target — retreat whenever the army
-    // closes within 9, so the focus always lands on the kiting anchor and
-    // the divers solve unmolested in the cleared space.
-    if (_leanSquad && _leanAnchorID != -1 && _leanAnchorID != myID && isAlive(_leanAnchorID)) {
-        var wdArmy = puzzleArmyCells()
-        if (count(wdArmy) > 0) {
-            var wdMyD = nearestArmyDistFrom(myCell, wdArmy)
-            if (wdMyD <= 9) {
-                solverSurvival(myID)
-                if (!puzzleEmergencyBlink(myID)) { puzzleInversionEscape(myID) }
-                var wdCell = choosePuzzleSustainCellCapped(myID, myCell, false, 14)
-                if (wdCell != -1 && wdCell != myCell) { moveTowardCell(wdCell, getMP()) }
-                say("PZ WALLD myD" + wdMyD)
-                return true
-            }
-        }
-    }
+    // Wall discipline REMOVED (fights 53373273-53373575: the over-defensive
+    // layers — wall<=9/6/3, slide-retreat, diver shackles — collapsed the
+    // solve to 0 across 4 straight batches). The divers ENGAGE and solve;
+    // survival comes from the tanky respec + the post-solve retreat only.
 
     // Lean hold-off (fight 53368668 autopsy): the army focus-fires ONE leek to
     // death, then switches. BUT (fight 53368783): waiting for the anchor to be
@@ -4698,6 +4676,21 @@ function executeSolverPuzzleTurn() {
             } else {
                 _pzPinTurns = 0
                 say("PZ f=" + chipsFired + " cr=" + crCell + " dst=" + finalDest)
+            }
+            // Hit-and-run slide: after a slide, if the army is on top of us,
+            // withdraw to safety (route commitment PRESERVED — we re-approach
+            // the same stand next turn) instead of standing in the zone to die.
+            if (chipsFired > 0) {
+                var hrArmy = puzzleArmyCells()
+                if (count(hrArmy) > 0 && nearestArmyDistFrom(getCell(), hrArmy) <= 5) {
+                    solverSurvival(myID)
+                    var hrCell = choosePuzzleSustainCellCapped(myID, getCell(), false, 14)
+                    if (hrCell != -1 && hrCell != getCell()) {
+                        moveTowardCell(hrCell, getMP())
+                        say("PZ SLIDE-WD d" + nearestArmyDistFrom(getCell(), hrArmy))
+                        return true
+                    }
+                }
             }
             // Move toward crystal for next turn — solverWalkToward, never the
             // raw call: the crystal's own cell is occupied and moveTowardCell
