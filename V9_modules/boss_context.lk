@@ -82,6 +82,21 @@ global _hotNoProg = 0
 global _hotLastD = -1
 global _hotBestD = 999
 
+// KR approach stall detection (fight 53368484: ED walked into a walled
+// cul-de-sac at d17 and froze for 5 turns inside tryKillResurrectSolve — the
+// branch always returned true, suppressing the classic INV-APPROACH escape
+// machinery). Two motionless KR turns => return false so the classic solver
+// doctrine (approach inversion, route teleport) takes over the approach.
+global _krLastCell = -1
+global _krNoProg = 0
+// Perch walk gate: turtle solvers forbid the roam (the walk is the death
+// corridor) — only the immediate in-range kill may fire.
+global _krAllowRoam = true
+
+// Anchor park latch: -1 = still walking in; once the 9-cell band is reached
+// this holds the park cell forever (kills the in/out oscillation).
+global _anchorParkCell = -1
+
 global _graalCell = -1
 global _graalX = 0
 global _graalY = 0
@@ -1151,7 +1166,11 @@ function planCrystalRoute(crystalCell, goalAxis, myCell, allowInversion) {
     var parentEdge = [:]  // dest -> ['chip','target','stand','dest']
     var found = -1
     var qi = 0
-    while (qi < count(queue) && count(queue) < 400) {
+    // OPS GUARD (fights 53368668/53368762: too_much_ops killed ADA's whole
+    // turn inside this BFS — 400 nodes x 22 diagNext + stand/army scoring
+    // each blew the 1M budget). Bail to the cheap greedy fallback instead of
+    // losing the turn: keep a 25% headroom for casts after planning.
+    while (qi < count(queue) && count(queue) < 400 && getOperations() < _opsBudget * 3 / 4) {
         var cur = queue[qi]
         qi++
         if (cur != crystalCell && isCellSolvedForAxis(cur, goalAxis)) {
@@ -1456,16 +1475,33 @@ function walkPathDistanceTo(fromCell, crystalCell) {
 function findTeleportTarget(crystalCell, myCell) {
     var queue = getEnclaveCells()
 
-    var bestCell = -1
-    var bestDist = 9999
+    // OPS BOMB FIX (fight 53368484): walkPathDistanceTo costs up to 5
+    // getPathLength BFS calls per candidate — scoring the whole enclave blew
+    // the 1M ops budget (ADA too_much_ops T2-T9, frozen in place, AI_ERROR
+    // every turn). Prefilter by cheap manhattan, real-path score only the
+    // 8 near-best candidates.
+    var manBest = 9999
+    var pool = []
     for (var cell in queue) {
         if (isEntity(cell)) continue
         var dFromMe = getCellDistance(myCell, cell)
-        if (dFromMe < 1 || dFromMe > 12) continue
-        var dFromCrystal = walkPathDistanceTo(cell, crystalCell)
+        if (dFromMe == null || dFromMe < 1 || dFromMe > 12) continue
+        var md = getCellDistance(cell, crystalCell)
+        if (md == null) continue
+        if (md < manBest) manBest = md
+        push(pool, [cell, md])
+    }
+    var bestCell = -1
+    var bestDist = 9999
+    var scored = 0
+    for (var pc in pool) {
+        if (pc[1] > manBest + 4) continue
+        if (scored >= 8) break
+        scored++
+        var dFromCrystal = walkPathDistanceTo(pc[0], crystalCell)
         if (dFromCrystal < bestDist) {
             bestDist = dFromCrystal
-            bestCell = cell
+            bestCell = pc[0]
         }
     }
     return bestCell
@@ -2356,6 +2392,93 @@ function leanSlideStands(crCell, plan) {
     return out
 }
 
+// Turtle solver turn (winning replay 53142219 ground truth: the whole team
+// sat STATIC at spawn R0-23 — Inupi tanked 4,596 on his shield stack, the
+// bruisers took ~400-1,300 TOTAL, the graal fell R16, then they ground the
+// army down). Eight straight losses say the same thing: a leek that walks
+// the open map is hunted down in 2-4 turns. So: never roam. Solve only what
+// comes in range (immediate KR, slides from the stack), heal the anchor,
+// and let the tactician bulbs do the roaming.
+function executeTurtleSolverTurn() {
+    var myID = getEntity()
+    var myCell = getCell()
+    var army = puzzleArmyCells()
+    var myD = count(army) > 0 ? nearestArmyDistFrom(myCell, army) : 99
+    var anchAlive = _leanAnchorID != -1 && isAlive(_leanAnchorID)
+
+    // Shields/heal stack first — the army fires at the stack every turn
+    solverSurvival(myID)
+
+    // remission into the anchor (Inupi model: 1,736 support healing through
+    // 4,596 taken); stack to ~4 of him so the heal range holds
+    if (anchAlive) {
+        var ac2 = getCell(_leanAnchorID)
+        if (ac2 != null && ac2 >= 0) {
+            var dA = getCellDistance(myCell, ac2)
+            if (dA != null && dA > 4 && myD > 8) { moveTowardCell(ac2, min(getMP(), dA - 3)); myCell = getCell(); dA = getCellDistance(myCell, ac2) }
+            if (dA != null && dA <= 7 && entityHPPercent(_leanAnchorID) < 90 && getTP() >= 5 && allyHasChip(myID, CHIP_REMISSION)) {
+                var trcd = getCooldown(CHIP_REMISSION, myID)
+                if (trcd != null && trcd == 0) {
+                    if (useChip(CHIP_REMISSION, _leanAnchorID) >= 1) say("PZ TURTLE heal->anchor pct" + entityHPPercent(_leanAnchorID))
+                }
+            }
+        }
+    }
+
+    // Immediate kill+resurrect only — NO perch walk (the walk is the death
+    // corridor). If nothing is in range, the crystals wait for the bulbs.
+    if (getLife() >= 1500 && getTurn() >= 2) {
+        _krAllowRoam = false
+        if (tryKillResurrectSolve(myID)) { _krAllowRoam = true; return true }
+        _krAllowRoam = true
+    }
+    // Slides from the stack (<= MP shuffle to the stand, never a journey)
+    if (getLife() >= 1500 && tryStackSlides(myID)) { return true }
+
+    // Idle TP goes to combat-phase muscle (protein self, rawSTR +80)
+    if (getTP() >= 3 && allyHasChip(myID, CHIP_PROTEIN)) {
+        var pcd = getCooldown(CHIP_PROTEIN, myID)
+        if (pcd != null && pcd == 0) useChip(CHIP_PROTEIN, myID)
+    }
+    say("PZ TURTLE myD" + myD)
+    // Second tactician carrier (ADA): her bulb joins the roam from the turtle
+    maybeCastTacticianBulb(myID)
+    runBulbCoach(myID)
+    return true
+}
+
+// One slide from the stack: greedy single-slide planner per crystal, taken
+// only when the stand is a small shuffle away (never an approach walk).
+function tryStackSlides(myID) {
+    if (getTP() < 3) { return false }
+    var myCell = getCell()
+    for (var eid in mapKeys(_crystalMap)) {
+        var cd = _crystalMap[eid]
+        if (isCrystalSolved(cd)) continue
+        var crCell = getCell(eid)
+        if (crCell == null || crCell < 0) continue
+        var goalC = nearestSolvedCellOnAxis(cd['goalAxis'], crCell)
+        if (goalC == -1) continue
+        var move = findBestChipMove(crCell, goalC, myCell, 0, 0, 0)
+        if (move == null) continue
+        var st = move['stand']
+        var dSt = getCellDistance(myCell, st)
+        if (dSt == null || dSt > max(2, getMP())) continue
+        if (myCell != st) {
+            moveTowardCell(st, getMP())
+            myCell = getCell()
+            if (myCell != st) continue
+        }
+        if (!lineOfSight(myCell, crCell)) continue
+        var r = useChipOnCell(move['chip'], move['target'])
+        if (r >= 1) {
+            say("PZ TURTLE slide c=" + eid)
+            return true
+        }
+    }
+    return false
+}
+
 function executeLeanPuzzleTurn() {
     // 4-leek doctrine (2026-08-19): ANCHOR + SOLVE. The tankiest leek parks
     // at ~4 cells from the army and tanks it forever (shield/heal rotation),
@@ -2394,53 +2517,78 @@ function executeLeanPuzzleTurn() {
     var armyD = count(army) > 0 ? nearestArmyDistFrom(myCell, army) : 99
 
     if (myID == _leanAnchorID && count(army) > 0) {
-        // Static wall (winning reference 53142219): Inupi PARKED at cell 257 the
-        // entire fight — never moved — and absorbed 4,596 with 1,736 healing
-        // while the 3 bruisers took ~400-1,300 and solved. The tank is a FIXED
-        // wall in the army's path, not a chaser/retreater. Move once toward the
-        // graal to ~6 cells, then NEVER move again; just shield + self-heal.
-        if (_graalCell != null && _graalCell >= 0) {
-            var dG = getCellDistance(myCell, _graalCell)
-            // Park ~9 out (Inupi@257 was 9 from the graal — roam damage, NOT the
-            // focused spawn alpha. Parking at 6 got KG 5-7k and killed).
-            if (dG != null && dG > 9) {
-                var preA = myCell
-                moveTowardCell(_graalCell, min(getMP(), max(0, dG - 9)))
-                if (getCell() == preA) { solverWalkToward(_graalCell) }
-                myCell = getCell()
-            } else if (dG != null && dG < 9 && getMP() > 0) {
-                // Too close to the spawn alpha — back off to the 9-cell band
-                var gx9 = getCellX(_graalCell)
-                var gy9 = getCellY(_graalCell)
-                var mx = getCellX(myCell)
-                var my9 = getCellY(myCell)
-                var bdx = 0
-                var bdy = 0
-                if (mx > gx9) { bdx = 1 } else if (mx < gx9) { bdx = -1 }
-                if (my9 > gy9) { bdy = 1 } else if (my9 < gy9) { bdy = -1 }
-                var besc = getCellFromXY(mx + bdx * 3, my9 + bdy * 3)
-                if (besc == null || besc < 0 || isObstacle(besc)) { besc = getCellFromXY(mx + bdx * 3, my9) }
-                if (besc != null && besc >= 0 && !isObstacle(besc)) { moveTowardCell(besc, getMP()); myCell = getCell() }
+        // Brawl anchor (fights 53368762/783): the army does NOT come to a
+        // graal-parked wall — it hunts the divers wherever they are. So the
+        // support chases the pack and parks IN the brawl: shields land on
+        // allies at 0-3, remission at 0-7, and his RES450 hull soaks the focus.
+        if (armyD > 6) { _anchorParkCell = -1 }  // pack moved on: re-chase
+        if (_anchorParkCell == -1) {
+            if (armyD <= 2) {
+                _anchorParkCell = myCell
+            } else {
+                var chaseC = -1
+                var chaseD = 999
+                for (var ac2 in army) {
+                    var acd = getCellDistance(myCell, ac2)
+                    if (acd != null && acd < chaseD) { chaseD = acd; chaseC = ac2 }
+                }
+                if (chaseC != -1) {
+                    var preA = myCell
+                    moveTowardCell(chaseC, getMP())
+                    if (getCell() == preA) { solverWalkToward(chaseC) }
+                    myCell = getCell()
+                }
             }
         }
-        // PARKED: no further movement, ever — the army finds the wall here.
         say("PZ ANCHOR parked " + myCell)
-        // Survival rotation (winning reference: 169 shield casts). Stack every
-        // shield + self-heal; the tank sustains, it does not trade or kite.
+        // Rotation (winning reference: 169 shield casts — and the bruisers
+        // survived on the support's shields, not their own). Every shield
+        // lands on the most-hurt ally IN RANGE (self included); remission
+        // pours into whoever the army is burning (range 0-7).
+        var anAllies = getAliveAllies()
+        var hurt = myID
+        var hurtPct = entityHPPercent(myID)
+        for (var anI in anAllies) {
+            if (isSummon(anI)) continue
+            var anP = entityHPPercent(anI)
+            if (anP < hurtPct) { hurtPct = anP; hurt = anI }
+        }
         var tankShields = [
-            [CHIP_FORTRESS, 6], [CHIP_ARMOR, 6], [CHIP_RAMPART, 5], [CHIP_WALL, 3],
-            [CHIP_SOLIDIFICATION, 6], [CHIP_CARAPACE, 5], [CHIP_DOME, 9], [CHIP_ARMORING, 5]
+            [CHIP_FORTRESS, 6, 3], [CHIP_ARMOR, 6, 4], [CHIP_WALL, 3, 3],
+            [CHIP_SOLIDIFICATION, 6, 3], [CHIP_CARAPACE, 5, 6], [CHIP_ARMORING, 5, 3]
         ]
         for (var ts in tankShields) {
             var tch = ts[0]
             var tcost = ts[1]
+            var trange = ts[2]
             if (getTP() < tcost) continue
             if (!allyHasChip(myID, tch)) continue
             var tcd = getCooldown(tch, myID)
-            if (tcd != null && tcd == 0) useChip(tch, myID)
+            if (tcd == null || tcd > 0) continue
+            var tT = myID
+            var tP = entityHPPercent(myID)
+            for (var an2 in anAllies) {
+                if (isSummon(an2)) continue
+                var an2C = getCell(an2)
+                if (an2C == null || an2C < 0) continue
+                if (getCellDistance(myCell, an2C) > trange) continue
+                var an2P = entityHPPercent(an2)
+                if (an2P < tP) { tP = an2P; tT = an2 }
+            }
+            useChip(tch, tT)
         }
-        if (entityHPPercent(myID) < 70 && getTP() >= 8 && allyHasChip(myID, CHIP_REGENERATION) && getCooldown(CHIP_REGENERATION, myID) == 0) useChip(CHIP_REGENERATION, myID)
-        if (entityHPPercent(myID) < 50 && getTP() >= 6 && allyHasChip(myID, CHIP_VACCINE) && getCooldown(CHIP_VACCINE, myID) == 0) useChip(CHIP_VACCINE, myID)
+        // remission (cd 1, WIS 400 => ~330) into the most-hurt ally in range
+        if (hurtPct < 95 && getTP() >= 5 && allyHasChip(myID, CHIP_REMISSION)) {
+            var rcd = getCooldown(CHIP_REMISSION, myID)
+            if (rcd != null && rcd == 0) {
+                var rT = hurt
+                if (rT != myID) {
+                    var rC = getCell(rT)
+                    if (rC == null || rC < 0 || getCellDistance(myCell, rC) > 7) rT = myID
+                }
+                if (useChip(CHIP_REMISSION, rT) >= 1 && rT != myID) say("PZ HEAL->" + getName(rT) + " pct" + hurtPct)
+            }
+        }
         // Ally buff rotation (SCI 500 => x6: ferocity +300 STR, bark +360 RES,
         // collar +480 WIS — the temakisushi amp that let 3 bruisers grind 36k).
         // Range 1-8/1-6 reaches solvers on the approach while the anchor parks.
@@ -2475,16 +2623,23 @@ function executeLeanPuzzleTurn() {
             var ccd = getCooldown(CHIP_COLLAR, myID)
             if (ccd != null && ccd == 0 && useChip(CHIP_COLLAR, myID) >= 1) say("PZ BUFF collar")
         }
+        // The roaming second solver: tactician bulb works the cold crystals
+        // while the army grinds on the wall (winning replay: their bulb did
+        // the mid-field work). Summoner stats pass down — RES450 hull bulb.
+        maybeCastTacticianBulb(myID)
+        runBulbCoach(myID)
         return true
     }
 
-    // Named solvers keep solving with the full route planner while the anchor
-    // pins the army — the bulb-only doctrine scored 0 pushes in 17 attempts;
-    // the tactician bulb is the SECOND solver, never the only one (53358838:
-    // solvers hid in corners for 60 turns, zero solver-chip casts).
+    // Named solvers run the TURTLE (winning replay 53142219 ground truth: the
+    // whole team sat static at spawn R0-23, Inupi tanked 4,596 on his shield
+    // stack while the bruisers took ~400-1,300 TOTAL — the army only reaches
+    // the back line through the support's body). Diving into a free army is
+    // the sequential-execution pattern (53368668-810). Solve only through the
+    // safe-dive window (army physically ON the anchor + we are not nearest).
     if (isNamedSolver(getName(myID))) {
         if (allyHasChip(myID, CHIP_GRAPPLE) || allyHasChip(myID, CHIP_BOXING_GLOVE) || allyHasChip(myID, CHIP_INVERSION)) {
-            return executeSolverPuzzleTurn()
+            return executeTurtleSolverTurn()
         }
     }
 
@@ -2827,17 +2982,44 @@ function solverSurvival(slMyID) {
             if (useChip(CHIP_REGENERATION, slMyID) >= 1) say("PZ SOLVER: emergency regen")
         }
     }
-    if (getTP() >= 6 && allyHasChip(slMyID, CHIP_FORTRESS)) {
-        var fcd = getCooldown(CHIP_FORTRESS, slMyID)
-        if (fcd != null && fcd == 0) useChip(CHIP_FORTRESS, slMyID)
+    // Threat-scaled defense (fights 53368668-53368810: the focus is
+    // 1000-1600/turn and the divers spent their TP on slides instead of
+    // shields). Army within 9 (or already hurt): stack EVERY shield first —
+    // dome 60%, fortress 38%, carapace ~385 flat, wall 22%, solidification
+    // +180 RES — then solve with leftovers. Distant army: rolling fortress.
+    var svArmy = puzzleArmyCells()
+    var svD = count(svArmy) > 0 ? nearestArmyDistFrom(getCell(), svArmy) : 99
+    if (svD <= 9 || pct < 85) {
+        if (getTP() >= 9 && allyHasChip(slMyID, CHIP_DOME)) {
+            var dcd = getCooldown(CHIP_DOME, slMyID)
+            if (dcd != null && dcd == 0) useChip(CHIP_DOME, slMyID)
+        }
+        if (getTP() >= 6 && allyHasChip(slMyID, CHIP_FORTRESS)) {
+            var fcd = getCooldown(CHIP_FORTRESS, slMyID)
+            if (fcd != null && fcd == 0) useChip(CHIP_FORTRESS, slMyID)
+        }
+        if (getTP() >= 5 && allyHasChip(slMyID, CHIP_CARAPACE)) {
+            var ccd = getCooldown(CHIP_CARAPACE, slMyID)
+            if (ccd != null && ccd == 0) useChip(CHIP_CARAPACE, slMyID)
+        }
+        if (getTP() >= 3 && allyHasChip(slMyID, CHIP_WALL)) {
+            var wcd = getCooldown(CHIP_WALL, slMyID)
+            if (wcd != null && wcd == 0) useChip(CHIP_WALL, slMyID)
+        }
+        if (getTP() >= 6 && allyHasChip(slMyID, CHIP_SOLIDIFICATION)) {
+            var scd = getCooldown(CHIP_SOLIDIFICATION, slMyID)
+            if (scd != null && scd == 0) useChip(CHIP_SOLIDIFICATION, slMyID)
+        }
+    } else {
+        if (getTP() >= 6 && allyHasChip(slMyID, CHIP_FORTRESS)) {
+            var fcd2 = getCooldown(CHIP_FORTRESS, slMyID)
+            if (fcd2 != null && fcd2 == 0) useChip(CHIP_FORTRESS, slMyID)
+        }
     }
-    if (getTP() >= 6 && allyHasChip(slMyID, CHIP_ARMOR)) {
-        var acd = getCooldown(CHIP_ARMOR, slMyID)
-        if (acd != null && acd == 0) useChip(CHIP_ARMOR, slMyID)
-    }
-    if (pct < 70 && getTP() >= 3 && allyHasChip(slMyID, CHIP_WALL)) {
-        var wcd = getCooldown(CHIP_WALL, slMyID)
-        if (wcd != null && wcd == 0) useChip(CHIP_WALL, slMyID)
+    // remission self-heal — the bruiser sustain backbone (WIS 350 => ~300/cd1)
+    if (pct < 85 && getTP() >= 5 && allyHasChip(slMyID, CHIP_REMISSION)) {
+        var rmd = getCooldown(CHIP_REMISSION, slMyID)
+        if (rmd != null && rmd == 0) useChip(CHIP_REMISSION, slMyID)
     }
 }
 
@@ -2905,8 +3087,10 @@ function puzzleArmyCells() {
 }
 
 function nearestArmyDistFrom(cell, armyCells) {
+    if (cell == null || cell < 0) return 99
     var best = 99
     for (var ac in armyCells) {
+        if (ac == null || ac < 0) continue
         var d = getCellDistance(cell, ac)
         if (d != null && d < best) best = d
     }
@@ -3608,97 +3792,104 @@ function tryKillResurrectSolve(myID) {
     if (spCd == null || spCd > 0) { return false }
     var tpNeed = killCost + 18
     var myC = getCell()
-    // nearest unsolved crystal
-    var bestE = null
-    var bestD = 9999
+    var mX = getCellX(myC)
+    var mY = getCellY(myC)
+
+    // PERCH SOLVE (the mechanic as it actually works): resurrect(entity, cell)
+    // drops the body on a cell within 1-2 OF THE CASTER, and spark hits from
+    // 10 away with NO LoS. So the resolver perches within 2 of the GOAL (next
+    // to the anchor's shield wall), sparks the distant crystal dead, and
+    // drops its body straight onto the goal — never visiting the crystal.
+    var killE = null
+    var killRT = -1
+    var killScore = 99999
+    var walkGoal = -1
+    var walkScore = 99999
     for (var eid in mapKeys(_crystalMap)) {
         var cd = _crystalMap[eid]
         if (isCrystalSolved(cd)) continue
-        var cc = getCell(eid)
-        if (cc == null || cc < 0) continue
-        var dd = getCellDistance(myC, cc)
-        if (dd != null && dd < bestD) { bestD = dd; bestE = eid }
-    }
-    if (bestE == null) { return false }
-    var crCell = getCell(bestE)
-    var axis = _crystalMap[bestE]['goalAxis']
-    var goalC = nearestSolvedCellOnAxis(axis, crCell)
-    if (goalC == -1) { return false }
-
-    // Resurrect target: the free cell within 1-2 of the crystal that lands it
-    // CLOSEST to the goal (progress, never blocked by a fixed-step failure).
-    var resTarget = -1
-    var bestRt = 9999
-    var cX = getCellX(crCell)
-    var cY = getCellY(crCell)
-    for (var ox = -2; ox <= 2; ox++) {
-        for (var oy = -2; oy <= 2; oy++) {
-            if (ox == 0 && oy == 0) continue
-            if (abs(ox) + abs(oy) > 2) continue
-            var rc = getCellFromXY(cX + ox, cY + oy)
-            if (rc == null || rc < 0) continue
-            if (isObstacle(rc) || isEntity(rc)) continue
-            var dg = getCellDistance(rc, goalC)
-            if (dg == null) continue
-            // must actually move the crystal closer to the goal than it is now
-            if (dg >= bestRt) continue
-            bestRt = dg
-            resTarget = rc
-        }
-    }
-    if (resTarget == -1 && getCellDistance(crCell, goalC) <= 2) { resTarget = goalC }
-    if (resTarget == -1) { return false }
-
-    // Position: within 1-2 of resTarget WITH LoS to it (resurrect requires
-    // both), and the crystal inside kill range (LoS only matters for shock).
-    var inPos = getCellDistance(myC, resTarget) <= 2 && lineOfSight(myC, resTarget)
-        && getCellDistance(myC, crCell) <= killRange && (killNeedsLoS ? lineOfSight(myC, crCell) : true)
-    say("PZ KR e" + bestE + " cr" + crCell + " rt" + resTarget + " inPos" + inPos + " tp" + getTP() + " dCr" + getCellDistance(myC, crCell) + " dRt" + getCellDistance(myC, resTarget))
-    if (!inPos) {
-        // Teleport into range of resTarget if possible, else WALK toward it
-        // (never return false into the escape path — that undoes the approach).
-        if (getTP() >= 12) {
-            var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
-            if (tpCd != null && tpCd == 0) {
-                // teleport to a cell satisfying the full inPos condition
-                var zone = -1
-                var bestZ = 9999
-                var rX = getCellX(resTarget)
-                var rY = getCellY(resTarget)
-                for (var oz = -2; oz <= 2; oz++) {
-                    for (var oz2 = -2; oz2 <= 2; oz2++) {
-                        if (oz == 0 && oz2 == 0) continue
-                        if (abs(oz) + abs(oz2) > 2) continue
-                        var zc = getCellFromXY(rX + oz, rY + oz2)
-                        if (zc == null || zc < 0) continue
-                        if (isObstacle(zc) || isEntity(zc)) continue
-                        if (!lineOfSight(zc, resTarget)) continue
-                        if (getCellDistance(zc, crCell) > killRange) continue
-                        if (killNeedsLoS && !lineOfSight(zc, crCell)) continue
-                        var dz = getCellDistance(myC, zc)
-                        if (dz != null && dz < bestZ) { bestZ = dz; zone = zc }
-                    }
-                }
-                if (zone != -1 && getCellDistance(myC, zone) <= 12) {
-                    if (useChipOnCell(CHIP_TELEPORTATION, zone) == 1) { say("PZ KR tp->" + zone); return true }
+        var crCell = getCell(eid)
+        if (crCell == null || crCell < 0) continue
+        var goalC = nearestSolvedCellOnAxis(cd['goalAxis'], crCell)
+        if (goalC == -1) continue
+        var dCrGoal = getCellDistance(crCell, goalC)
+        if (dCrGoal == null) dCrGoal = 99
+        var dMeCr = getCellDistance(myC, crCell)
+        if (dMeCr == null) dMeCr = 99
+        // (a) immediate kill: crystal in spark range + a resurrect cell within
+        // 1-2 of me that IMPROVES on the crystal's current goal distance
+        if (dMeCr <= killRange && (!killNeedsLoS || lineOfSight(myC, crCell))) {
+            var bestDg = 9999
+            var bestRc = -1
+            for (var ox = -2; ox <= 2; ox++) {
+                for (var oy = -2; oy <= 2; oy++) {
+                    if (ox == 0 && oy == 0) continue
+                    if (abs(ox) + abs(oy) > 2) continue
+                    var rc = getCellFromXY(mX + ox, mY + oy)
+                    if (rc == null || rc < 0) continue
+                    if (isObstacle(rc) || isEntity(rc)) continue
+                    if (getCellDistance(myC, rc) > 2) continue
+                    if (!lineOfSight(myC, rc)) continue
+                    var dg = getCellDistance(rc, goalC)
+                    if (dg == null || dg >= dCrGoal) continue
+                    if (dg < bestDg) { bestDg = dg; bestRc = rc }
                 }
             }
+            if (bestRc != -1) {
+                var sc = bestDg * 100 - (dCrGoal - bestDg)
+                if (sc < killScore) { killScore = sc; killE = eid; killRT = bestRc }
+            }
         }
-        solverWalkToward(resTarget)
-        say("PZ KR walk rt" + resTarget + " d" + getCellDistance(getCell(), resTarget))
+        // (b) perch pick: a free cell within 2 of the goal that still covers
+        // the crystal with spark — the walk target when no kill is ready
+        var gX = getCellX(goalC)
+        var gY = getCellY(goalC)
+        for (var px = -2; px <= 2; px++) {
+            for (var py = -2; py <= 2; py++) {
+                if (abs(px) + abs(py) > 2) continue
+                var pc = getCellFromXY(gX + px, gY + py)
+                if (pc == null || pc < 0) continue
+                if (isObstacle(pc) || (pc != myC && isEntity(pc))) continue
+                var dPcCr = getCellDistance(pc, crCell)
+                if (dPcCr == null || dPcCr > killRange) continue
+                var dMePc = getCellDistance(myC, pc)
+                if (dMePc == null) continue
+                var wsc = dMePc + max(0, dPcCr - 6) * 3
+                if (wsc < walkScore) { walkScore = wsc; walkGoal = pc }
+            }
+        }
+    }
+
+    if (killE != null) {
+        _krNoProg = 0
+        var didAdren = false
+        if (allyHasChip(myID, CHIP_ADRENALINE) && getCooldown(CHIP_ADRENALINE, myID) == 0 && getTP() < tpNeed) { useChip(CHIP_ADRENALINE, myID); didAdren = true }
+        if (getTP() < tpNeed) { say("PZ KR lowtp" + getTP() + " ad" + didAdren); return true }
+        say("PZ KR kill e" + killE + " tp" + getTP() + " rt" + killRT)
+        if (useChip(killChip, killE) < 1) { say("PZ KR killfail"); return true }
+        if (isAlive(killE)) { say("PZ KR notdead e" + killE); return true }
+        var rr = resurrect(killE, killRT)
+        say("PZ KR res r" + rr + " ->" + killRT)
         return true
     }
 
-    // Atomic kill + resurrect toward the goal (Apocalypse-safe in one turn).
-    // Adrenaline first (+5 TP) when short so spark(3)+resurrect(18)=21 fits.
-    var didAdren = false
-    if (allyHasChip(myID, CHIP_ADRENALINE) && getCooldown(CHIP_ADRENALINE, myID) == 0 && getTP() < tpNeed) { useChip(CHIP_ADRENALINE, myID); didAdren = true }
-    if (getTP() < tpNeed) { say("PZ KR lowtp" + getTP() + " ad" + didAdren + " acd" + getCooldown(CHIP_ADRENALINE, myID)); return true }
-    say("PZ KR kill e" + bestE + " tp" + getTP())
-    if (useChip(killChip, bestE) < 1) { say("PZ KR killfail"); return true }
-    if (isAlive(bestE)) { say("PZ KR notdead e" + bestE); return true }
-    var rr = resurrect(bestE, resTarget)
-    say("PZ KR res r" + rr + " ->" + resTarget)
+    if (walkGoal == -1 || !_krAllowRoam) { return false }
+    var dW = getCellDistance(myC, walkGoal)
+    say("PZ KR perch->" + walkGoal + " d" + dW)
+    var tpDone2 = false
+    if (dW != null && dW > 2 && dW <= 12 && getTP() >= 12) {
+        var tpCd2 = getCooldown(CHIP_TELEPORTATION, myID)
+        if (tpCd2 != null && tpCd2 == 0 && !isEntity(walkGoal)) {
+            if (useChipOnCell(CHIP_TELEPORTATION, walkGoal) == 1) { tpDone2 = true; say("PZ KR tp->" + walkGoal) }
+        }
+    }
+    if (!tpDone2 && getCell() == myC) { solverWalkToward(walkGoal) }
+    if (getCell() == myC) { _krNoProg++ } else { _krNoProg = 0 }
+    if (_krNoProg >= 2) {
+        say("PZ KR STALL -> classic")
+        _krNoProg = 0
+        return false
+    }
     return true
 }
 
@@ -3715,9 +3906,34 @@ function executeSolverPuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
+    // Lean hold-off (fight 53368668 autopsy): the army focus-fires ONE leek to
+    // death, then switches. BUT (fight 53368783): waiting for the anchor to be
+    // engaged deadlocked 6 turns — the army walks PAST the parked anchor and
+    // hunts the divers anyway. So the hold is a T1-2 staging window only
+    // (buffs land, shields up, anchor closes in), then dive at full speed.
+    if (getTurn() <= 2 && _leanSquad && _leanAnchorID != -1 && _leanAnchorID != myID && isAlive(_leanAnchorID)) {
+        var hoArmy = puzzleArmyCells()
+        if (count(hoArmy) > 0) {
+            var hoMyD = nearestArmyDistFrom(myCell, hoArmy)
+            var hoAC = getCell(_leanAnchorID)
+            var hoAnchD = (hoAC != null && hoAC >= 0) ? nearestArmyDistFrom(hoAC, hoArmy) : 99
+            if (hoAnchD > 3 || hoMyD <= hoAnchD) {
+                if (hoMyD < 9) {
+                    var hoCell = choosePuzzleSustainCellCapped(myID, myCell, false, 12)
+                    if (hoCell != -1 && hoCell != myCell) { moveTowardCell(hoCell, min(getMP(), 3)); myCell = getCell() }
+                }
+                solverSurvival(myID)
+                say("PZ HOLD aD" + hoAnchD + " myD" + hoMyD)
+                return true
+            }
+        }
+    }
     // Kill+Resurrect solve takes priority when the kit is ready (the direct
     // reposition bypasses all slide geometry — the solve that kept stalling).
-    if (getTurn() >= 2 && tryKillResurrectSolve(myID)) { return true }
+    // Lethality pre-gate: a nearly-dead resolver escapes FIRST — fight
+    // 53368592: MH kept walking the KR approach at 303 HP and died that turn,
+    // the escape gate never reached because KR returns true every turn.
+    if (getLife() >= 1500 && getTurn() >= 2 && tryKillResurrectSolve(myID)) { return true }
 
     // Gather phase: hold position until allies' HP buffs stop flowing in.
     // Elevation/armoring are permanent effects (turns=0) invisible to getEffects,
@@ -3970,13 +4186,15 @@ function executeSolverPuzzleTurn() {
 
     // Self leather_boots for extra MP (only if allies haven't cast it on us)
     var bootsCd = getCooldown(CHIP_LEATHER_BOOTS, myID)
-    if (bootsCd != null && bootsCd == 0 && getTP() >= 4) {
+    if (allyHasChip(myID, CHIP_LEATHER_BOOTS) && bootsCd != null && bootsCd == 0 && getTP() >= 4) {
         useChip(CHIP_LEATHER_BOOTS, myID)
     }
 
-    // Self adrenaline for extra TP (only if allies haven't cast it on us)
+    // Self adrenaline for extra TP (only if allies haven't cast it on us).
+    // Resurrection carriers SAVE it for the kill+resurrect solve (spark 3 +
+    // resurrect 18 = 21 TP — burning it here strands the mechanic at tp20).
     var adrenCd = getCooldown(CHIP_ADRENALINE, myID)
-    if (adrenCd != null && adrenCd == 0 && getTP() >= 1) {
+    if (allyHasChip(myID, CHIP_ADRENALINE) && !allyHasChip(myID, CHIP_RESURRECTION) && adrenCd != null && adrenCd == 0 && getTP() >= 1) {
         useChip(CHIP_ADRENALINE, myID)
     }
 
