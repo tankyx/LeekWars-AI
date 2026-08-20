@@ -95,6 +95,9 @@ global _krAllowRoam = true
 // KR crystal commitment (fight 53370567: the resolver oscillated between
 // perches for 8 turns, zero kills) — stick to one crystal till solved/dead.
 global _krCommitEID = -1
+// Hit-and-run latch: set after a successful kill+resurrect — the next turn
+// is a full retreat out of the zone before re-engaging.
+global _krJustSolved = false
 
 // Anchor park latch: -1 = still walking in; once the 9-cell band is reached
 // this holds the park cell forever (kills the in/out oscillation).
@@ -2530,33 +2533,37 @@ function executeLeanPuzzleTurn() {
         // The 4th instant solve: swap a crystal onto its goal before anchoring
         // (graal dead by R4-6 beats any shield wall — the attrition clock)
         if (getLife() >= 1500 && getTurn() >= 2 && tryOpenerSwapSolve(myID)) { return true }
-        // Brawl anchor (fights 53368762/783): the support SHADOWS the most
-        // exposed resolver and parks on them — fortress/carapace/wall land on
-        // THAT resolver at 0-3, remission at 0-7, and the RES hull body-
-        // blocks the army. The focus then hits a shielded target with a
-        // healer attached instead of a lone diver (the Inupi pair model).
-        var shadT = -1
-        var shadD = 999
-        var allS = getAliveAllies()
-        for (var as2 in allS) {
-            if (isSummon(as2)) continue
-            if (!isNamedSolver(getName(as2))) continue
-            var asC = getCell(as2)
-            if (asC == null || asC < 0) continue
-            var asD = count(army) > 0 ? nearestArmyDistFrom(asC, army) : 99
-            if (asD < shadD) { shadD = asD; shadT = as2 }
+        // Intercept anchor (verified across 80+ fights: the army attacks the
+        // NEAREST reachable leek — Inupi-front in the winners' replay, our
+        // deep divers in ours). The anchor's job is to BE that nearest body,
+        // always: interpose between the army and the divers, then tank with
+        // the shield/heal rotation (RES 675 + remission survives the focus).
+        // The divers then solve free behind the wall.
+        var iAmNearest = true
+        var myArmyD2 = armyD
+        var allI = getAliveAllies()
+        for (var ai3 in allI) {
+            if (isSummon(ai3)) continue
+            var aiC = getCell(ai3)
+            if (aiC == null || aiC < 0) continue
+            var aiD = nearestArmyDistFrom(aiC, army)
+            if (aiD < myArmyD2) { iAmNearest = false; break }
         }
-        if (shadT != -1) {
-            var shadC = getCell(shadT)
-            var dSh = getCellDistance(myCell, shadC)
-            if (dSh != null && dSh > 2) {
+        if (!iAmNearest && count(army) > 0) {
+            var intC = -1
+            var intD = 999
+            for (var ac3 in army) {
+                var acd2 = getCellDistance(myCell, ac3)
+                if (acd2 != null && acd2 < intD) { intD = acd2; intC = ac3 }
+            }
+            if (intC != -1) {
                 var preA = myCell
-                moveTowardCell(shadC, getMP())
-                if (getCell() == preA) { solverWalkToward(shadC) }
+                moveTowardCell(intC, getMP())
+                if (getCell() == preA) { solverWalkToward(intC) }
                 myCell = getCell()
             }
         }
-        say("PZ ANCHOR parked " + myCell + " shad" + shadT)
+        say("PZ ANCHOR near" + iAmNearest + " d" + armyD)
         // Rotation (winning reference: 169 shield casts — and the bruisers
         // survived on the support's shields, not their own). Every shield
         // lands on the most-hurt ally IN RANGE (self included); remission
@@ -3961,8 +3968,14 @@ function tryKillResurrectSolve(myID) {
         if (isCrystalSolved(cd)) continue
         if (_krCommitEID != -1 && eid != _krCommitEID) continue
         // Solver work division: skip crystals another solver claimed ([901])
-        // — the two resolvers must work different crystals in parallel
-        if (mapContainsKey(_pzSolverClaims, eid)) continue
+        // — the two resolvers must work different crystals in parallel.
+        // Claim EXPIRES: a dead claimer or an 8-turn-stale claim frees the
+        // crystal (53371132-61: dead solvers' claims stranded crystals and
+        // the graal-death rate collapsed to 0/15).
+        if (mapContainsKey(_pzSolverClaims, eid)) {
+            var claimInfo = _pzSolverClaims[eid]
+            if (isAlive(claimInfo[1]) && getTurn() - claimInfo[0] < 8) continue
+        }
         var crCell = getCell(eid)
         if (crCell == null || crCell < 0) continue
         var goalC = nearestSolvedCellOnAxis(cd['goalAxis'], crCell)
@@ -4037,7 +4050,10 @@ function tryKillResurrectSolve(myID) {
         if (getTP() < tpNeed) { say("PZ KR lowtp" + getTP() + " ad" + didAdren); return true }
         var kr = useChip(killChip, killE)
         var rr = -99
-        if (kr >= 1 && !isAlive(killE)) { rr = resurrect(killE, killRT) }
+        if (kr >= 1 && !isAlive(killE)) {
+            rr = resurrect(killE, killRT)
+            if (rr >= 1) { _krJustSolved = true }
+        }
         // ONE diagnostic say (the fight log only shows the first two says per
         // turn — the old 3-say sequence hid the resurrect result, fights
         // 53369249/53369415: spark landed, resurrect outcome invisible)
@@ -4117,6 +4133,27 @@ function executeSolverPuzzleTurn() {
     var myCell = getCell()
     var myID = getEntity()
 
+    // Wall discipline (53372132 autopsy: the army kills the NEAREST leek, and
+    // the divers die because they dive PAST the anchor and become nearest).
+    // Never be closer to the army than the anchor — solve from behind the
+    // wall (spark reaches 10, slides 8), retreat if the anchor falls behind.
+    if (_leanSquad && _leanAnchorID != -1 && _leanAnchorID != myID && isAlive(_leanAnchorID)) {
+        var wdArmy = puzzleArmyCells()
+        if (count(wdArmy) > 0) {
+            var wdMyD = nearestArmyDistFrom(myCell, wdArmy)
+            var wdAC = getCell(_leanAnchorID)
+            var wdAnchD = (wdAC != null && wdAC >= 0) ? nearestArmyDistFrom(wdAC, wdArmy) : 99
+            if (wdMyD < wdAnchD && wdMyD <= 5) {
+                solverSurvival(myID)
+                if (!puzzleEmergencyBlink(myID)) { puzzleInversionEscape(myID) }
+                var wdCell = choosePuzzleSustainCellCapped(myID, myCell, false, 14)
+                if (wdCell != -1 && wdCell != myCell) { moveTowardCell(wdCell, getMP()) }
+                say("PZ WALLD myD" + wdMyD + " aD" + wdAnchD)
+                return true
+            }
+        }
+    }
+
     // Lean hold-off (fight 53368668 autopsy): the army focus-fires ONE leek to
     // death, then switches. BUT (fight 53368783): waiting for the anchor to be
     // engaged deadlocked 6 turns — the army walks PAST the parked anchor and
@@ -4139,6 +4176,20 @@ function executeSolverPuzzleTurn() {
             }
         }
     }
+    // Hit-and-run: after a successful KR the resolver RETREATS — the
+    // attrition that kills every diver comes from STAYING in the zone after
+    // the solve (fights 53371460-53371531: 5 graal deaths, 0 wins, all from
+    // solvers dying on the NEXT crystal). Solve, get out, come back later.
+    if (_krJustSolved) {
+        _krJustSolved = false
+        solverSurvival(myID)
+        if (!puzzleEmergencyBlink(myID)) { puzzleInversionEscape(myID) }
+        var ktCell = choosePuzzleSustainCellCapped(myID, getCell(), false, 14)
+        if (ktCell != -1 && ktCell != getCell()) { moveTowardCell(ktCell, getMP()) }
+        say("PZ KR retreat d" + nearestArmyDistFrom(getCell(), puzzleArmyCells()))
+        return true
+    }
+
     // Kill+Resurrect solve takes priority when the kit is ready (the direct
     // reposition bypasses all slide geometry — the solve that kept stalling).
     // T1 DIVE (winning replay 52821555: they teleported at R1-2, before the
@@ -4220,13 +4271,13 @@ function executeSolverPuzzleTurn() {
         if (getName(myID) == "KurtGodel") {
             leanLethal = getLife() < 3000 || _pzArmyD0 <= 2
         } else if (getName(myID) == "AdaLovelace") {
-            // Tank-solver: tanks the alpha WHILE diving (RES400 = 16k EHP),
-            // escaping only at one hit from death — she survives as a support
-            // body for the flip. "Never escape" (53361266-73) collapsed the
-            // solve rate: she died at the stand before finishing.
-            leanLethal = getLife() < 800 || _pzArmyD0 <= 1
+            leanLethal = getLife() < 800 || _pzArmyD0 <= 2
         } else {
-            leanLethal = getLife() < escFloor || _pzArmyD0 <= 2
+            // Resolvers escape at army d<=4 (was <=2 — by 2 cells the king's
+            // Excalibur already lands; fights 53371737-66: resolvers died
+            // walking to perches with the escape never armed). Spark reaches
+            // 10, so the solve continues from the blink distance.
+            leanLethal = getLife() < escFloor || _pzArmyD0 <= 4
         }
         if (!_leanSquad || leanLethal) {
             if (!puzzleEmergencyBlink(myID)) { puzzleInversionEscape(myID) }
