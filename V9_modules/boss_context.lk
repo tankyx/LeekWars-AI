@@ -2400,51 +2400,11 @@ function leanSlideStands(crCell, plan) {
 // comes in range (immediate KR, slides from the stack), heal the anchor,
 // and let the tactician bulbs do the roaming.
 function executeTurtleSolverTurn() {
-    var myID = getEntity()
-    var myCell = getCell()
-    var army = puzzleArmyCells()
-    var myD = count(army) > 0 ? nearestArmyDistFrom(myCell, army) : 99
-    var anchAlive = _leanAnchorID != -1 && isAlive(_leanAnchorID)
-
-    // Shields/heal stack first — the army fires at the stack every turn
-    solverSurvival(myID)
-
-    // remission into the anchor (Inupi model: 1,736 support healing through
-    // 4,596 taken); stack to ~4 of him so the heal range holds
-    if (anchAlive) {
-        var ac2 = getCell(_leanAnchorID)
-        if (ac2 != null && ac2 >= 0) {
-            var dA = getCellDistance(myCell, ac2)
-            if (dA != null && dA > 4 && myD > 8) { moveTowardCell(ac2, min(getMP(), dA - 3)); myCell = getCell(); dA = getCellDistance(myCell, ac2) }
-            if (dA != null && dA <= 7 && entityHPPercent(_leanAnchorID) < 90 && getTP() >= 5 && allyHasChip(myID, CHIP_REMISSION)) {
-                var trcd = getCooldown(CHIP_REMISSION, myID)
-                if (trcd != null && trcd == 0) {
-                    if (useChip(CHIP_REMISSION, _leanAnchorID) >= 1) say("PZ TURTLE heal->anchor pct" + entityHPPercent(_leanAnchorID))
-                }
-            }
-        }
-    }
-
-    // Immediate kill+resurrect only — NO perch walk (the walk is the death
-    // corridor). If nothing is in range, the crystals wait for the bulbs.
-    if (getLife() >= 1500 && getTurn() >= 2) {
-        _krAllowRoam = false
-        if (tryKillResurrectSolve(myID)) { _krAllowRoam = true; return true }
-        _krAllowRoam = true
-    }
-    // Slides from the stack (<= MP shuffle to the stand, never a journey)
-    if (getLife() >= 1500 && tryStackSlides(myID)) { return true }
-
-    // Idle TP goes to combat-phase muscle (protein self, rawSTR +80)
-    if (getTP() >= 3 && allyHasChip(myID, CHIP_PROTEIN)) {
-        var pcd = getCooldown(CHIP_PROTEIN, myID)
-        if (pcd != null && pcd == 0) useChip(CHIP_PROTEIN, myID)
-    }
-    say("PZ TURTLE myD" + myD)
-    // Second tactician carrier (ADA): her bulb joins the roam from the turtle
-    maybeCastTacticianBulb(myID)
-    runBulbCoach(myID)
-    return true
+    // Fast dive (the only doctrine that ever solved): every T5-T8 puzzle
+    // completion of the campaign came from divers arriving early; the static
+    // turtle survived longer but solved NOTHING (fights 53369052/135/191).
+    // Dive with the perch-KR + the solver path's escape machinery.
+    return executeSolverPuzzleTurn()
 }
 
 // One slide from the stack: greedy single-slide planner per crystal, taken
@@ -3795,6 +3755,43 @@ function tryKillResurrectSolve(myID) {
     var mX = getCellX(myC)
     var mY = getCellY(myC)
 
+    // REVIVE-FIRST (fight 53369486: the chest killed red_crystal at R3,
+    // Apocalypse wiped us at R4). An already-dead crystal needs no spark —
+    // reviving it onto its goal is BOTH the Apocalypse save AND the solve
+    // (18 TP). Runs before everything: the graal could act any round now.
+    if (getTP() >= 18) {
+        for (var deid in mapKeys(_crystalMap)) {
+            if (!isDead(deid)) continue
+            var dGoal = nearestSolvedCellOnAxis(_crystalMap[deid]['goalAxis'], _crystalMap[deid]['cell'])
+            if (dGoal == -1) continue
+            var dcrCell = getCell(deid)
+            if (dcrCell == null || dcrCell < 0) continue
+            var dcrGoalD = getCellDistance(dcrCell, dGoal)
+            if (dcrGoalD == null) dcrGoalD = 99
+            var dRT = -1
+            var dBest = 9999
+            for (var dox = -2; dox <= 2; dox++) {
+                for (var doy = -2; doy <= 2; doy++) {
+                    if (dox == 0 && doy == 0) continue
+                    if (abs(dox) + abs(doy) > 2) continue
+                    var drc = getCellFromXY(mX + dox, mY + doy)
+                    if (drc == null || drc < 0) continue
+                    if (!isEmptyCell(drc)) continue
+                    if (getCellDistance(myC, drc) > 2) continue
+                    if (!lineOfSight(myC, drc)) continue
+                    var ddg = getCellDistance(drc, dGoal)
+                    if (ddg == null || ddg >= dcrGoalD) continue
+                    if (ddg < dBest) { dBest = ddg; dRT = drc }
+                }
+            }
+            if (dRT != -1 && canUseChipOnCell(CHIP_RESURRECTION, dRT)) {
+                var drr = resurrect(deid, dRT)
+                say("PZ KR REVIVE e" + deid + " r" + drr + " ->" + dRT + " tp" + getTP())
+                return true
+            }
+        }
+    }
+
     // PERCH SOLVE (the mechanic as it actually works): resurrect(entity, cell)
     // drops the body on a cell within 1-2 OF THE CASTER, and spark hits from
     // 10 away with NO LoS. So the resolver perches within 2 of the GOAL (next
@@ -3827,7 +3824,7 @@ function tryKillResurrectSolve(myID) {
                     if (abs(ox) + abs(oy) > 2) continue
                     var rc = getCellFromXY(mX + ox, mY + oy)
                     if (rc == null || rc < 0) continue
-                    if (isObstacle(rc) || isEntity(rc)) continue
+                    if (!isEmptyCell(rc)) continue
                     if (getCellDistance(myC, rc) > 2) continue
                     if (!lineOfSight(myC, rc)) continue
                     var dg = getCellDistance(rc, goalC)
@@ -3849,7 +3846,7 @@ function tryKillResurrectSolve(myID) {
                 if (abs(px) + abs(py) > 2) continue
                 var pc = getCellFromXY(gX + px, gY + py)
                 if (pc == null || pc < 0) continue
-                if (isObstacle(pc) || (pc != myC && isEntity(pc))) continue
+                if (pc != myC && !isEmptyCell(pc)) continue
                 var dPcCr = getCellDistance(pc, crCell)
                 if (dPcCr == null || dPcCr > killRange) continue
                 var dMePc = getCellDistance(myC, pc)
@@ -3862,14 +3859,21 @@ function tryKillResurrectSolve(myID) {
 
     if (killE != null) {
         _krNoProg = 0
+        // Engine pre-flight: the resurrect MUST land — a kill without it is
+        // the Apocalypse at the graal's turn (fight 53369249: spark landed,
+        // resurrect never fired (mid-cell entity/LoS), team wiped at R7).
+        if (!isEmptyCell(killRT)) { say("PZ KR abort occupied rt" + killRT); return true }
+        if (!canUseChipOnCell(CHIP_RESURRECTION, killRT)) { say("PZ KR abort invalid rt" + killRT); return true }
         var didAdren = false
         if (allyHasChip(myID, CHIP_ADRENALINE) && getCooldown(CHIP_ADRENALINE, myID) == 0 && getTP() < tpNeed) { useChip(CHIP_ADRENALINE, myID); didAdren = true }
         if (getTP() < tpNeed) { say("PZ KR lowtp" + getTP() + " ad" + didAdren); return true }
-        say("PZ KR kill e" + killE + " tp" + getTP() + " rt" + killRT)
-        if (useChip(killChip, killE) < 1) { say("PZ KR killfail"); return true }
-        if (isAlive(killE)) { say("PZ KR notdead e" + killE); return true }
-        var rr = resurrect(killE, killRT)
-        say("PZ KR res r" + rr + " ->" + killRT)
+        var kr = useChip(killChip, killE)
+        var rr = -99
+        if (kr >= 1 && !isAlive(killE)) { rr = resurrect(killE, killRT) }
+        // ONE diagnostic say (the fight log only shows the first two says per
+        // turn — the old 3-say sequence hid the resurrect result, fights
+        // 53369249/53369415: spark landed, resurrect outcome invisible)
+        say("PZ KR e" + killE + " k" + kr + " r" + rr + " rt" + killRT + " dd" + isDead(killE) + " tp" + getTP() + " cd" + getCooldown(CHIP_RESURRECTION, myID) + " emp" + isEmptyCell(killRT))
         return true
     }
 
