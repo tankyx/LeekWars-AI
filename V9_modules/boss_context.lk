@@ -1873,6 +1873,13 @@ function tryWeaponStrike(myID) {
     // which were in the table, so he ended 9 of 10 turns with "POKE none" and
     // a full TP bank. Skip a variant and its carrier is a spectator.
     var strTable = [
+        // The bruiser set (boss builds 2026-08-19): scythe is the burst
+        // (300+50 x7 at STR600 ~2100/hit), odachi the cheap follow-up,
+        // sun_spear the 1-4 poke — all single-cell, no ally veto.
+        // NB: getWeapons() returns ITEM ids on the server (410/408/440/180)
+        [WEAPON_SCYTHE, 1, 1, 15, 0, 0],
+        [WEAPON_ODACHI, 1, 1, 9, 0, 0],
+        [440, 1, 4, 7, 0, 0],  // sun_spear (item 440 — no LS constant)
         [WEAPON_M_LASER, 5, 12, 8, 2, 1],
         [WEAPON_ENHANCED_LIGHTNINGER, 6, 10, 9, 1, 0],
         [WEAPON_BAZOOKA, 8, 12, 11, 3, 1],
@@ -2477,6 +2484,9 @@ function executeLeanPuzzleTurn() {
     var armyD = count(army) > 0 ? nearestArmyDistFrom(myCell, army) : 99
 
     if (myID == _leanAnchorID && count(army) > 0) {
+        // The 4th instant solve: swap a crystal onto its goal before anchoring
+        // (graal dead by R4-6 beats any shield wall — the attrition clock)
+        if (getLife() >= 1500 && getTurn() >= 2 && tryOpenerSwapSolve(myID)) { return true }
         // Brawl anchor (fights 53368762/783): the army does NOT come to a
         // graal-parked wall — it hunts the divers wherever they are. So the
         // support chases the pack and parks IN the brawl: shields land on
@@ -3734,6 +3744,75 @@ function nearestSolvedCellOnAxis(goalAxis, nearCell) {
 // NB: resurrect MUST go through the resurrect(entity, cell) LS function —
 // useChipOnCell(CHIP_RESURRECTION, ...) applies effects to ALIVE entities
 // only and silently does nothing (generator Attack.applyOnCell).
+// Opener swap-solve (the 3rd/4th instant solve — we own only 2 resurrection
+// chips): teleport ONTO the crystal's goal cell, then INVERSION — the swap
+// drops the crystal exactly on its goal. Instant solve, no slides needed.
+// This is how the graal falls by R4-6 (winning pace) instead of R10+ —
+// before the army's attrition starts (it kills a leek every ~3 rounds).
+function tryOpenerSwapSolve(myID) {
+    if (!allyHasChip(myID, CHIP_INVERSION) || !allyHasChip(myID, CHIP_TELEPORTATION)) { return false }
+    var invCd = getCooldown(CHIP_INVERSION, myID)
+    if (invCd == null || invCd > 0) { return false }
+    var tpCd = getCooldown(CHIP_TELEPORTATION, myID)
+    if (tpCd == null || tpCd > 0) { return false }
+    if (getTP() < 13) { return false }  // teleport 9 + inversion 4
+    var myC = getCell()
+    for (var eid in mapKeys(_crystalMap)) {
+        var cd = _crystalMap[eid]
+        if (isCrystalSolved(cd)) continue
+        var crCell = getCell(eid)
+        if (crCell == null || crCell < 0) continue
+        var axis = cd['goalAxis']
+        var goalC = nearestSolvedCellOnAxis(axis, crCell)
+        if (goalC == -1) continue
+        // Landing search: any free cell near the goal that IS a solved
+        // position (on the axis with a clear ray to the graal), teleport-
+        // reachable, and from which the crystal is swap-able (line+LoS+14).
+        var gX = getCellX(goalC)
+        var gY = getCellY(goalC)
+        var bestLand = -1
+        var bestLandD = 999
+        for (var lx = -4; lx <= 4; lx++) {
+            for (var ly = -4; ly <= 4; ly++) {
+                if (abs(lx) + abs(ly) > 4) continue
+                var lc = getCellFromXY(gX + lx, gY + ly)
+                if (lc == null || lc < 0 || lc == myC) continue
+                if (!isEmptyCell(lc)) continue
+                var dMe = getCellDistance(myC, lc)
+                if (dMe == null || dMe > 12 || dMe < 1) continue
+                if (!isCellSolvedForAxis(lc, axis)) continue
+                var dLC = getCellDistance(lc, crCell)
+                if (dLC == null || dLC > 14 || dLC < 1) continue
+                if (!isOnSameLine(lc, crCell)) continue
+                if (!lineOfSight(lc, crCell)) continue
+                if (dMe < bestLandD) { bestLandD = dMe; bestLand = lc }
+            }
+        }
+        if (bestLand == -1) continue
+        if (useChipOnCell(CHIP_TELEPORTATION, bestLand) != 1) continue
+        var ir = useChip(CHIP_INVERSION, eid)
+        say("PZ SWAP-SOLVE c=" + eid + " ->" + bestLand + " inv" + ir)
+        return true
+    }
+    // Periodic geometry diagnostic — the swap hasn't fired once in 5 fights
+    if (getTurn() % 6 == 3) {
+        for (var eid2 in mapKeys(_crystalMap)) {
+            var cd2 = _crystalMap[eid2]
+            if (isCrystalSolved(cd2)) continue
+            var cr2 = getCell(eid2)
+            if (cr2 == null || cr2 < 0) continue
+            var g2 = nearestSolvedCellOnAxis(cd2['goalAxis'], cr2)
+            var dG2 = g2 == -1 ? -1 : getCellDistance(g2, cr2)
+            var line2 = g2 != -1 && isOnSameLine(g2, cr2)
+            var los2 = g2 != -1 && lineOfSight(g2, cr2)
+            var emp2 = g2 != -1 && isEmptyCell(g2)
+            say("PZ SWAP? c" + eid2 + " g" + g2 + " dG" + dG2 + " line" + line2 + " los" + los2 + " emp" + emp2)
+            break
+        }
+    }
+    return false
+}
+
 function tryKillResurrectSolve(myID) {
     if (!allyHasChip(myID, CHIP_RESURRECTION)) { return false }
     var killChip = -1
@@ -3879,15 +3958,48 @@ function tryKillResurrectSolve(myID) {
 
     if (walkGoal == -1 || !_krAllowRoam) { return false }
     var dW = getCellDistance(myC, walkGoal)
-    say("PZ KR perch->" + walkGoal + " d" + dW)
+    // Aggressive teleport (winning replay 52821555: all 4 leeks teleported to
+    // their goals at R1-2 and solved at R2). Walking 25 cells takes 5 turns —
+    // the army kills us in 4. Teleport closes 12 now; the rest is a short walk.
+    // LANDING SAFETY (fights 53370123+: MH teleported next to the king and
+    // died R4-5 every time): the destination must not be inside the army's
+    // immediate envelope — walk instead of feeding the resolver.
+    var tpArmy = puzzleArmyCells()
     var tpDone2 = false
-    if (dW != null && dW > 2 && dW <= 12 && getTP() >= 12) {
+    if (dW != null && dW > 2 && getTP() >= 12) {
         var tpCd2 = getCooldown(CHIP_TELEPORTATION, myID)
-        if (tpCd2 != null && tpCd2 == 0 && !isEntity(walkGoal)) {
-            if (useChipOnCell(CHIP_TELEPORTATION, walkGoal) == 1) { tpDone2 = true; say("PZ KR tp->" + walkGoal) }
+        if (tpCd2 != null && tpCd2 == 0) {
+            var tpDest = -1
+            var wgX = getCellX(walkGoal)
+            var wgY = getCellY(walkGoal)
+            var bTd = 9999
+            var bTdSafe = 9999
+            var safeDest = -1
+            for (var tdx = -12; tdx <= 12; tdx++) {
+                for (var tdy = -12; tdy <= 12; tdy++) {
+                    if (abs(tdx) + abs(tdy) > 12) continue
+                    var tc = getCellFromXY(wgX + tdx, wgY + tdy)
+                    if (tc == null || tc < 0) continue
+                    if (!isEmptyCell(tc)) continue
+                    var dMeTc = getCellDistance(myC, tc)
+                    if (dMeTc == null || dMeTc > 12 || dMeTc < 1) continue
+                    var dTcGoal = getCellDistance(tc, walkGoal)
+                    if (dTcGoal == null || dTcGoal >= dW) continue
+                    var tcArmyD = count(tpArmy) > 0 ? nearestArmyDistFrom(tc, tpArmy) : 99
+                    if (tcArmyD >= 5 && dTcGoal < bTdSafe) { bTdSafe = dTcGoal; safeDest = tc }
+                    if (dTcGoal < bTd) { bTd = dTcGoal; tpDest = tc }
+                }
+            }
+            // prefer the army-safe landing; fall back to the bare one only
+            // when the walk would be longer than surviving it
+            if (safeDest != -1) { tpDest = safeDest }
+            if (tpDest != -1 && useChipOnCell(CHIP_TELEPORTATION, tpDest) == 1) { tpDone2 = true; say("PZ KR tp->" + tpDest) }
         }
     }
-    if (!tpDone2 && getCell() == myC) { solverWalkToward(walkGoal) }
+    if (!tpDone2) {
+        say("PZ KR perch->" + walkGoal + " d" + dW)
+        if (getCell() == myC) { solverWalkToward(walkGoal) }
+    }
     if (getCell() == myC) { _krNoProg++ } else { _krNoProg = 0 }
     if (_krNoProg >= 2) {
         say("PZ KR STALL -> classic")
@@ -3938,6 +4050,9 @@ function executeSolverPuzzleTurn() {
     // 53368592: MH kept walking the KR approach at 303 HP and died that turn,
     // the escape gate never reached because KR returns true every turn.
     if (getLife() >= 1500 && getTurn() >= 2 && tryKillResurrectSolve(myID)) { return true }
+    // Opener swap-solve: teleport onto the goal, inversion the crystal onto
+    // it — the 3rd/4th instant solve (ADA/KG carry inversion, no resurrection)
+    if (getLife() >= 1500 && getTurn() >= 2 && tryOpenerSwapSolve(myID)) { return true }
 
     // Gather phase: hold position until allies' HP buffs stop flowing in.
     // Elevation/armoring are permanent effects (turns=0) invisible to getEffects,

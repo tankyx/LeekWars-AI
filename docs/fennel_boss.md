@@ -205,3 +205,78 @@ stat below the survival line — a leek that can't tank 3 turns of focus wastes
 its offense. Equipping solver chips on MH/ED (done) + the 4-solver AI
 (auto-activates via isNamedSolver+iHaveChips, deterministic spatial crystal
 division) gives us the solve; these builds give us the combat.
+
+## 8. The bruiser rebuild + kill+resurrect solve (2026-08-19, fights 53368484+)
+
+*Supersedes the tank+solver+healer doctrines. All 4 leeks rebuilt from zero
+(loadouts 794-797, reproducible via `tools/build_boss_bruisers.py`).*
+
+### The confirmed winning formula (boss-2 leaderboard replays)
+
+**Legumatore 52821555 (graal suicides at R3)**: all 4 leeks teleport into the
+zone at R1-2, then per crystal: spark the 1-HP crystal dead, **resurrect its
+body straight onto the goal**. Four resurrections at R2, graal down at R3,
+then the 36k army is ground down with STR-bruiser weapons + WIS self-heals.
+The damage is the defense; there is no glass solver.
+
+**Engine mechanics (verified in generator source + sandbox):**
+- `resurrect(entity, cell)` is the ONLY working call — `useChip` /
+  `useChipOnCell(CHIP_RESURRECTION)` return -1 (the generic `applyOnCell`
+  path filters to ALIVE entities). Range 1-2 from caster, LoS, target cell
+  must be `available()` (walkable + empty). Body revives on the chosen cell.
+- Chip facts: resurrection cost 18 cd 15 (per leek), NOT purchasable
+  (`purchasable: false`) — we own exactly 2. Spark cost 3, range 0-10,
+  NO LoS. Apocalypse = a crystal dead at the graal's turn (chest kills
+  count: 53369486 wipe at R4).
+- **Attack LoS is blocked by entities on middle cells** (`Map.verifyLoS`) —
+  the engine pre-flight (`isEmptyCell` + `canUseChipOnCell`) is mandatory:
+  a kill without a guaranteed landing is an Apocalypse (53369249/53369415).
+- A "solved" crystal = on its goal axis with an obstacle-free ray to the
+  graal (entities are transparent to the ray) — NOT a single cell.
+- Ops budget = cores × 1M per turn. `core3` component = +10 cores — the
+  puzzle BFS blew 1M constantly (`too_much_ops` turn-kills until core3).
+- `getWeapons()` returns ITEM ids on the server (scythe 410, odachi 408,
+  sun_spear 440, lightninger 180) — NOT weapon ids (39/37/42/25). The local
+  generator diverges (returns weapon ids) — weapon checks are live-only.
+
+### Builds (loadouts 794-797, 1780 capital each, 0 leftover)
+
+| Leek | Totals | Role |
+|---|---|---|
+| KurtGodel | HP 2660 · RES 675 · WIS 665 · SCI 500 · TP 20 · RAM 16 | Support shield-bot (RES-scaled shields cast on allies, SCI buffs ferocity/bark, remission, chase-anchor) |
+| EdsgerDijkstra | HP 4030 · STR 600 · WIS 350+50 · RES 400 · TP 22 | Resolver #1 (spark+resurrect) + bruiser |
+| MargaretHamilton | HP 3150 · STR 600 · WIS 400 · RES 400 · TP 22 | Resolver #2 + bruiser |
+| AdaLovelace | HP 3510 · STR 600 · WIS 400 · RES 400 · TP 20 · RAM 18 | 3rd solver (slides/inversion) + bruiser |
+
+All 4: scythe + odachi + sun_spear + lightninger; solver kit (grapple/boxing/
+inversion/teleport); remission + carapace + dome + fortress + wall +
+solidification + antidote; core3 (+10 cores, +1 TP). KG: shield/buff kit +
+tactician_bulb; ADA: 2nd tactician_bulb. `leekwars_apply_loadout` works from
+zero; `tools/build_boss_bruisers.py` re-applies the whole thing.
+
+### What the solve is now (V9 boss_context.lk)
+
+- `tryKillResurrectSolve` (perch-KR): resolver perches within 2 of a goal,
+  sparks the crystal from ≤10, `resurrect()` the body onto the goal —
+  engine pre-flight before every kill. REVIVE-first: revives any crystal
+  the chest/army kills (the Apocalypse save AND a solve).
+- `tryOpenerSwapSolve`: teleport onto a solved-position cell + inversion —
+  the 3rd/4th instant solve (we own only 2 resurrection chips).
+- Slide solving (route planner + INV-APPROACH) for the rest; tactician
+  bulbs roam with the summoner coach (50k-ops-safe).
+- Doctrines tried and measured (17 fights): fast-dive solves 2-3 crystals
+  by R7-12 but divers die; static turtle survives to R20+ but never solves;
+  focus-kite rotates but the king out-runs it. Current: fast-dive with
+  army-safe teleport landings.
+- **First graal death: 53370125 R12** (2 KR + 2 ADA slides) — but with only
+  ADA alive. The combat phase is the next wall.
+
+### The remaining wall (2026-08-19 end of day)
+
+The solve costs ~3 leeks by R10-12; the graal must fall with 2-3 alive.
+The army focus-fires one leek to death every ~3 rounds (king ~800/hit +
+poison, knights, scribe nuke) — a lone diver dies in 2-3 regardless of
+shields. Open: swap-solve has never fired live (geometry instrumented);
+re-killed revived crystals re-arm the Apocalypse (need the 4-solve inside
+a ~3-round window); combat phase untested with the new builds (weapon
+table now covers scythe/odachi/sun_spear as item ids).
