@@ -317,10 +317,8 @@ function allyHasChip(eid, chipId) {
 // Named solvers carry the puzzle chips (grapple/boxing/inversion). Two solvers
 // roughly halve the solve clock — the army's ~2500/turn makes time the enemy.
 function isNamedSolver(name) {
-    // 3 resolvers + KG anchor: the all-4-dive gets everyone killed (the zone
-    // entry without a wall is lethal). KG anchors (shields/shackles/swap/KR),
-    // the 3 divers KR + slide. 4 resurrection chips equipped but the approach
-    // geometry (crystals 11-13+ from goals, spark range 10) is the real wall.
+    // 3 resolvers + KG anchor — the best-performing split (the all-4-dive is
+    // lethal: 53381880+/53382547+, everyone dies R3-9 with no wall).
     return name == "EdsgerDijkstra" || name == "MargaretHamilton" || name == "AdaLovelace"
 }
 
@@ -4160,6 +4158,9 @@ function executeSolverPuzzleTurn() {
     // layers — wall<=9/6/3, slide-retreat, diver shackles — collapsed the
     // solve to 0 across 4 straight batches). The divers ENGAGE and solve;
     // survival comes from the tanky respec + the post-solve retreat only.
+    // T1 shield-up BEFORE the dive (the Legumatore solve is R2-3 in the zone —
+    // the fortress/wall/carapace stack is what buys the 1-2 turns to finish).
+    if (getTurn() == 1) { solverSelfBuff(myID) }
 
     // Lean hold-off (fight 53368668 autopsy): the army focus-fires ONE leek to
     // death, then switches. BUT (fight 53368783): waiting for the anchor to be

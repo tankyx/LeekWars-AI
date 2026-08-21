@@ -75,7 +75,7 @@ def main():
         print(f"  {'leek':<20} {'talent':>6} {'ranking':>8} {'level':>6}")
         for row in rows:
             print(f"  {row['leek']:<20} {row['talent']:>6} "
-                  f"{row['ranking']:>8} {row['level']:>6}")
+                  f"{str(row['ranking']):>8} {row['level']:>6}")
         print(f"  logged {len(rows) + 1} lines -> {LOG_FILE}")
 
 
