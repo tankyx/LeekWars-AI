@@ -317,10 +317,9 @@ function allyHasChip(eid, chipId) {
 // Named solvers carry the puzzle chips (grapple/boxing/inversion). Two solvers
 // roughly halve the solve clock — the army's ~2500/turn makes time the enemy.
 function isNamedSolver(name) {
-    // 2026-08-19c bruiser rebuild: ED/MH are the kill+resurrect resolvers
-    // (only 2 resurrection chips exist, cd 15); ADA is the third solver using
-    // the classic slide kit (all 4 carry grapple/boxing/inversion now). KG is
-    // the support shield-bot (RES 450 shields, SCI 500 buffs) and anchors.
+    // 3 resolvers + KG anchor: the all-4-dive (53381880+) got everyone killed
+    // — the army needs a wall. KG anchors (shields/shackles/swap), the 3
+    // divers KR + slide.
     return name == "EdsgerDijkstra" || name == "MargaretHamilton" || name == "AdaLovelace"
 }
 
@@ -4099,19 +4098,21 @@ function tryKillResurrectSolve(myID) {
         var tpCd2 = getCooldown(CHIP_TELEPORTATION, myID)
         if (tpCd2 != null && tpCd2 == 0) {
             var tpDest = -1
-            var wgX = getCellX(walkGoal)
-            var wgY = getCellY(walkGoal)
             var bTd = 9999
-            var bTdSafe = 9999
             var safeDest = -1
+            var bTdSafe = 9999
+            // Search cells within 12 of ME (teleport range), scored by progress
+            // toward the perch — the winning move is teleporting 12 cells
+            // closer, not landing at the goal (out of range). Army-safe
+            // preferred (53370123+: landing next to the king killed us).
+            var mX2 = getCellX(myC)
+            var mY2 = getCellY(myC)
             for (var tdx = -12; tdx <= 12; tdx++) {
                 for (var tdy = -12; tdy <= 12; tdy++) {
                     if (abs(tdx) + abs(tdy) > 12) continue
-                    var tc = getCellFromXY(wgX + tdx, wgY + tdy)
+                    var tc = getCellFromXY(mX2 + tdx, mY2 + tdy)
                     if (tc == null || tc < 0) continue
                     if (!isEmptyCell(tc)) continue
-                    var dMeTc = getCellDistance(myC, tc)
-                    if (dMeTc == null || dMeTc > 12 || dMeTc < 1) continue
                     var dTcGoal = getCellDistance(tc, walkGoal)
                     if (dTcGoal == null || dTcGoal >= dW) continue
                     var tcArmyD = count(tpArmy) > 0 ? nearestArmyDistFrom(tc, tpArmy) : 99
