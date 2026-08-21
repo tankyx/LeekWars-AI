@@ -321,3 +321,35 @@ WIS-max ED / decoy+intercept+shadow+kite anchors):
    sustain. Winners out-sustain (TP 27-29, RES 450-510). We can't at 1780.
 4. Accept the boss-2 wall for now; the builds + mechanics are banked and
    winnable with 1-2 more resurrection chips.
+
+## 10. The 2-leek and final verdict (2026-08-21, ~290 boss fights, 0 wins)
+
+**Everything was tried.** 4-leek (every doctrine: fast-dive, turtle, ball,
+decoy, intercept, shadow, hit-and-run; every anchor variant) AND 2-leek
+(fujiwar-style tanky bruisers, ED+MH). ~25 doctrine variants, 6 build
+overhauls. The result is invariant:
+
+- The solve WORKS (2 KR + swap + slides); the graal suicides in ~15% of
+  fights (4 crystals done).
+- The army focus-fires the nearest leek ~1600-2000/turn. Whatever config, the
+  resolvers die R3-9 (MH/ADA first — deepest divers), KG/ED last (tanky).
+- Graal falls with 1-2 leeks; the 36k army mops up. Combat phase never
+  reached with 3+ alive.
+- 2-leek (53382790+): MH dies R3-6 every fight, ED alone can't solve 4.
+
+**Why Legumatore's clear took ~0-2027 damage TOTAL and ours take that PER
+TURN**: they solved at R2-3 (crystals within ~12 of goals, teleport-solvable
+before the army engages). Ours spawn 11-25 from goals — the resolver must
+walk PAST the crystal into the goal-side, through the army, and dies on the
+walk. The boss-2 leaderboard is each farmer's best (favorable-spawn) fight.
+
+**Unlock conditions** (any one converts the work):
+- Crystals spawning within ~12 of their goals (RNG — grind enough and it
+  lands, but our graal deaths show even those need the combat phase fixed).
+- The combat phase surviving the flip (survivors executed mid-zone at graal
+  death — flip-time escape hardened but untested with 3+ alive).
+- A team composition that out-sustains the 2500/turn army focus at 1780
+  capital (winners: TP 27-29 remission spam + RES 450-510; we cap at 19-24).
+
+The builds, loadouts, solve mechanics, and this autopsy are all committed.
+The boss is genuinely hard for our account level — not for lack of effort.

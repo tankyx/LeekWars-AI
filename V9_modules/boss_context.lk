@@ -4027,11 +4027,32 @@ function tryKillResurrectSolve(myID) {
                 krWhyD = dCrGoal
             }
         }
-        // (b) perch: BETWEEN the crystal and the goal — within spark 10 of
-        // the crystal, army-safe (d>=5), and closer to the goal than the
-        // crystal is (the revive is guaranteed progress). The goal-zone perch
-        // left far crystals beyond spark range (53370603+: whyNOCR); the
-        // crystal-side sweet spot is in range AND out of the kill envelope.
+        // (b) perch: GOAL-ADJACENT first when the crystal is within ~12 of its
+        // goal (the revive then lands ON the goal — the instant solve, the
+        // Legumatore R2-3 timing that beats the army's engagement); the
+        // crystal-side perch (within spark 10 of the crystal) only for far
+        // crystals (progress revive + slides finish).
+        var gX = getCellX(goalC)
+        var gY = getCellY(goalC)
+        if (dCrGoal <= 12) {
+            for (var gx2 = -2; gx2 <= 2; gx2++) {
+                for (var gy2 = -2; gy2 <= 2; gy2++) {
+                    if (abs(gx2) + abs(gy2) > 2) continue
+                    var pc0 = getCellFromXY(gX + gx2, gY + gy2)
+                    if (pc0 == null || pc0 < 0) continue
+                    if (pc0 != myC && !isEmptyCell(pc0)) continue
+                    var dPcCr0 = getCellDistance(pc0, crCell)
+                    if (dPcCr0 == null || dPcCr0 > killRange) continue
+                    var dMePc0 = getCellDistance(myC, pc0)
+                    if (dMePc0 == null) continue
+                    var pcArmyD0 = count(krArmy) > 0 ? nearestArmyDistFrom(pc0, krArmy) : 99
+                    var wsc0 = dMePc0 * 10 + dPcCr0 - pcArmyD0
+                    if (wsc0 < walkScore) { walkScore = wsc0; walkGoal = pc0; walkE = eid }
+                }
+            }
+        }
+        if (walkGoal != -1) continue
+        // Crystal-side fallback (far crystals): within spark 10 of the crystal
         var cX2 = getCellX(crCell)
         var cY2 = getCellY(crCell)
         for (var bx = -10; bx <= 10; bx++) {

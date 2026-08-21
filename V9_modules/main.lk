@@ -203,11 +203,18 @@ function main() {
         // frees up to hunt (fights 53011079/53013437/53019695: KG died T15/
         // T17/T19 — one or two turns after every graal death). First COMBAT
         // turn inside the army's reach: get out BEFORE anything else.
+        // HARDENED (53375777-53382573: every graal death ended with the
+        // survivors executed mid-zone that same round): at the flip, retreat
+        // HARD to max army distance and regroup — KG tanks, bruisers deal on
+        // OUR terms, not mid-zone surrounded.
         if (getTurn() - _combatLatchTurn <= 1) {
             var flipArmy = puzzleArmyCells()
-            if (count(flipArmy) > 0 && nearestArmyDistFrom(getCell(), flipArmy) < 6) {
+            var flipD = count(flipArmy) > 0 ? nearestArmyDistFrom(getCell(), flipArmy) : 99
+            if (flipD < 9) {
                 if (puzzleEmergencyBlink(getEntity())) { return }
                 if (puzzleInversionEscape(getEntity())) { return }
+                var flipCell = choosePuzzleSustainCellCapped(getEntity(), getCell(), false, 14)
+                if (flipCell != -1 && flipCell != getCell()) { moveTowardCell(flipCell, getMP()) }
             }
         }
         executeLeanBossBuff()  // KG buffs the fighters first, fights with leftover TP
