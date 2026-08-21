@@ -317,9 +317,10 @@ function allyHasChip(eid, chipId) {
 // Named solvers carry the puzzle chips (grapple/boxing/inversion). Two solvers
 // roughly halve the solve clock — the army's ~2500/turn makes time the enemy.
 function isNamedSolver(name) {
-    // 3 resolvers + KG anchor: the all-4-dive (53381880+) got everyone killed
-    // — the army needs a wall. KG anchors (shields/shackles/swap), the 3
-    // divers KR + slide.
+    // 3 resolvers + KG anchor: the all-4-dive gets everyone killed (the zone
+    // entry without a wall is lethal). KG anchors (shields/shackles/swap/KR),
+    // the 3 divers KR + slide. 4 resurrection chips equipped but the approach
+    // geometry (crystals 11-13+ from goals, spark range 10) is the real wall.
     return name == "EdsgerDijkstra" || name == "MargaretHamilton" || name == "AdaLovelace"
 }
 
@@ -4049,7 +4050,10 @@ function tryKillResurrectSolve(myID) {
                 if (dPcGoal == null || dPcGoal >= dCrGoal) continue
                 var dMePc = getCellDistance(myC, pc)
                 if (dMePc == null) continue
-                var wsc = dPcGoal * 20 - pcArmyD * 3 + dMePc
+                // Spatial division: the perch closest to ME dominates (the 4
+                // resolvers fan out to their own nearest crystal), then goal
+                // progress, then army-safe.
+                var wsc = dMePc * 10 + dPcGoal - pcArmyD * 2
                 if (wsc < walkScore) { walkScore = wsc; walkGoal = pc; walkE = eid }
             }
         }
