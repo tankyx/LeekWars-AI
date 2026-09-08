@@ -136,6 +136,14 @@ global _lureTurns = 4
 // Exile-inversion during the lure regressed alongside lure=6 and could not be
 // isolated; off until tested on its own at lure=4.
 global _lureExile = false
+// PHASE-2 RESERVE (2026-09-08): every graal-death fight ends with 0 survivors —
+// all four die diving as the graal dies, leaving nobody for the COMBAT phase
+// (kill the now-vulnerable 10000-HP king). Hold ONE leek out of the dive: it
+// stays far + full-HP through the puzzle, then fights fresh when the graal dies.
+// The other three still solve. Trades solve power (3 divers not 4) for a
+// phase-2 body — A/B against solve rate. Off = all four dive.
+global _pzReserve = true
+global _pzReserveName = "KurtGodel"
 // BALL AT DIVE PACE (2026-09-07 late, user decision): the ball keeps its
 // cohesion (leader + escorts within 2, KG within 2-3 of the LEADER) but
 // drops the hold / perch / retreat layers that stalled it: the leader
@@ -3626,6 +3634,28 @@ function executeBallEscortTurn(myID, leaderID) {
 // (max distance from the corridor) and drops us on its old cell; the caller
 // then re-retreats. Their aggression taxis them to the back rank; the corridor
 // stays thin. Nearest reachable unit only (inversion range 14, needs LoS).
+// PHASE-2 RESERVE hold: the reserved leek never dives. It self-buffs, shields
+// divers when any are in reach, and holds far off the corridor for the whole
+// PUZZLE phase — preserving a fresh, full-HP body for COMBAT. When the graal
+// dies executePuzzleTurn stops routing here (phase != PUZZLE) and normal combat
+// takes over.
+function reservePuzzleHold(myID) {
+    solverSelfBuff(myID)
+    var rvAll = getAliveAllies()
+    var rvPack = []
+    for (var rp in rvAll) { if (rp != myID && !isSummon(rp)) push(rvPack, rp) }
+    if (count(rvPack) > 0) {
+        var rvDid = sustainStack(myID, rvPack)
+        if (rvDid != "") { pzSay("PZ RESV-STACK" + rvDid) }
+    }
+    var rvArmy = puzzleArmyCells()
+    if (count(rvArmy) > 0 && getMP() > 0) { moveAwayFromCells(rvArmy, getMP()) }
+    var rvc = getCell()
+    if (isCorridorCell(rvc) && getMP() > 0) { moveAwayFromCells(rvArmy, 1); rvc = getCell() }
+    pzSay("PZ RESERVE d" + (count(rvArmy) > 0 ? nearestArmyDistFrom(rvc, rvArmy) : 99))
+    return true
+}
+
 function lureInversionExile(myID) {
     if (!allyHasChip(myID, CHIP_INVERSION) || getTP() < 4) { return false }
     var cd = getCooldown(CHIP_INVERSION, myID)
@@ -3686,6 +3716,10 @@ function executeLeanPuzzleTurn() {
         pzSay("PZ LURE d" + (count(lArmy) > 0 ? nearestArmyDistFrom(lc, lArmy) : 99))
         return true
     }
+
+    // PHASE-2 RESERVE: one leek never dives — it holds far + full-HP through the
+    // whole puzzle so a fresh body remains for the COMBAT phase after graal death.
+    if (_pzReserve && getName(myID) == _pzReserveName) { return reservePuzzleHold(myID) }
 
     if (getTurn() == 1 && !(_anchorIntercept && !isNamedSolver(getName(myID)))) {
         // the intercept tank keeps fortress/wall (cd 4/3) for contact —
