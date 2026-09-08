@@ -207,7 +207,11 @@ function main() {
         // survivors executed mid-zone that same round): at the flip, retreat
         // HARD to max army distance and regroup — KG tanks, bruisers deal on
         // OUR terms, not mid-zone surrounded.
-        if (getTurn() - _combatLatchTurn <= 1) {
+        // Sustain team: the bruisers do NOT retreat at the flip (KG holds
+        // aggro; 53571644: the retreat put them 12-15 from the scribe and the
+        // walk back cost the two rounds they had left)
+        var flipSkip = (_anchorIntercept || _anchorShadow) && getStrength() >= 300
+        if (!flipSkip && getTurn() - _combatLatchTurn <= 1) {
             var flipArmy = puzzleArmyCells()
             var flipD = count(flipArmy) > 0 ? nearestArmyDistFrom(getCell(), flipArmy) : 99
             if (flipD < 9) {
@@ -217,7 +221,8 @@ function main() {
                 if (flipCell != -1 && flipCell != getCell()) { moveTowardCell(flipCell, getMP()) }
             }
         }
-        executeLeanBossBuff()  // KG buffs the fighters first, fights with leftover TP
+        if (executeLeanBossBuff()) { return }  // sustain shield-bot: full turn inside the pack
+        if (executeBossMelee()) { return }
         if (executeBossCombatPoke()) { return }
         if (executeBossCombatPeel()) { return }
     }

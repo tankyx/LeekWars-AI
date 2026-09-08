@@ -1,5 +1,314 @@
 # Fennel King Boss — State of the System
 
+## ⏭️ SESSION HANDOFF (2026-09-07, evening) — READ THIS FIRST NEXT SESSION
+
+**Where we are:** ~500 total fights. Three measured loops today fixed the
+kill+resurrect (KR) layer for real; the outcome metric did not move:
+**0 wins, 1 graal death in the last 48 fights** (53570505: 4 crystals by R8,
+graal R9, then phase 2 lost 3v8). The two divers now each land exactly one
+KR per fight (24/24 on-target in the last batch) and die R3-8. The two other
+resurrection chips (KG, MH) never fire. That is the wall, and it is a
+resources/geometry wall, not a code wall.
+
+### Today's loops (all deployed on main, `9.0/V9/boss_context.lk`, verified md5)
+
+| Loop | Change | Evidence |
+|---|---|---|
+| 1 | **Dive landing fix**: the resolver walked ONTO the solved cell S, the range check failed, `krResurrectAnywhere` dropped the crystal on a random neighbour while the say claimed `r1`. New `krWalkToResurrectRange` stops at distance 1-2 with a legal cast; dive candidates need a real path (`getPathLength`) from stand to S. | Batch 2 (pre-fix): 5 of 8 full dives landed off-target (168≠204, 11≠12, 98≠84, 48≠84, 83≠85). Batches 3-5: 0 misses. Says now print the landing (`->cell`). |
+| 1 | **Unkillable crystals**: `resurrect()` revives with 5 HP (max 10); `crystalShielded()` now compares spark damage to `getLife(eid)`. | 53569989: ED sparked a revived crystal twice (64, 46 dmg, alive) and died with teleport burned. |
+| 1 | **Apocalypse save for every role** (`tryApocalypseRevive`, `_crystalAxisSeen` registry — dead crystals vanish from `getAliveEnemies()` so the old revive-first loop could never see them). From TURN 1 (53570312: chest killed 2 crystals on its T1 turn, wipe on the graal's T2 turn). | 53569997 / 53570312 = 2 wipes in 24 fights. Untested live since (no chest kill occurred in batches 4-5). |
+| 2 | **say() costs 1 TP** (engine `EntityClass.say`: `useTP(1)` before the 2/turn limit, dropped says are paid). `pzSay()` caps at 2 and never pays at 0 TP; B1 say skipped on tight-TP puzzle turns. This freed Ada's exact-30-TP dive: she now dives R2 in 12/12 fights (was ~4/12). | Batch 5: 24 KR events / 12 fights. KG's shield rotation was losing 3-4 TP/turn to says. |
+| 2 | Ops guard in the solve loop + stale `_crystalMap` cell refresh (a crystal slid to its goal was re-picked forever → `too_much_ops` turn kill). | Local repro on 53569989 geometry. |
+| 3 | **Walk-dive** (`DIVE-W`: no teleport, 21 TP, keeps the blink) and the **anchor's own KR** (`_krNoTeleport`; KG has spark+resurrection+adrenaline). Teleport critical returns 2: all `== 1` checks → `>= 1` (a crit teleport was treated as a failure and wasted the turn). | Walk-dive fires locally; live 0/12 for KG (he trails the pack, never within 2+MP of a solved cell with a crystal in spark 10). |
+
+Local harness: `python3 tools/local_boss_v9.py --fight 53569989` (clones a
+real fight's graal/crystal/spawn cells, exact live chips, V9 AI, no army) —
+all four crystals complete by R6-R8 on 53569989 / 53569999 / 53570489
+geometries and the template. `python3 tools/boss_says.py --last 12 --brief`
+reads live batches (KR truth = action 105 rows, since the dive say is dropped
+at 0 TP).
+
+### Batch ledger (correct loadouts 812/814/817/818 verified applied)
+
+| Batch | Fights | Graal | KR events (on target) | Diver deaths |
+|---|---|---|---|---|
+| 08:04 pre-fix | 53569985-53570000 | 0 | 13 (8 misses) | Ada R3-5 ×9, ED R4-8 |
+| loop 1 | 53570311-53570329 | 0 | 15 (0 misses) | same |
+| loop 2 | 53570488-53570505 | **1** (53570505 R9) | 22 (0) | same |
+| loop 3 | 53570552-53570565 | 0 | 24 (0) | same |
+| loop 4 (KG anchor approach, manhattan) | 53570954-53570969 | 1 (53570955 R8) | 25 | KG now dies R3-5 walking into the wall/army, 0 KG dives |
+| loop 5 (**MH Burning→Spark**, support KR) | 53570987-53570999 | **3** (R6, R6, R7) | 40 (KG 3, MH 8) | all four dead R3-8; phase 2 entered with 0-2 alive |
+| loop 6 (approach refuses hot stands) | 53571006-53571018 | 0 | 12 | reverted: safety killed the KRs |
+| **respec** KG TP 27 / MH TP 26 (loadouts 817/818, user-approved) | 53571210-53571222 | **5** (R6-R7) | KG R2 teleport-dive 12/12 | KG dead R3-4 on the pad |
+| support post-dive retreat + MH Adrenaline | 53571235-53571252 | **4** (R5, R6, R6, R7) | all four fire by R2-3 | 0-1 alive at the flip every time |
+| 04:56 (solo loadouts by mistake) | 53568638-53568649 | 0 | 0 | ED anchor dead R4 |
+| **SUSTAIN TEAM** turtle (no teleport dives) | 53571383-53571395 | 0 | ~18 | Ada (front) R3-5; ED/KG live to R14-31 |
+| ball (leader + 2 escorts + KG) | 53571480-53571492 | 2 (R8, R10) | ~20 | fights run to R25-52; 53571491 only Ada died |
+| ball + escort slides + leader hold | 53571504-53571515 | 0 | ~18 | leader blinks away, 5-turn holds |
+| turtle escape discipline | 53571524-53571538 | 0 | ~20 | KRs land 1-off, chips wasted |
+| projected-focus shield stack | 53571556-53571602 | 0 | — | MH (escort) dead R3-6 ×12; ball takes 800-1000/round avg |
+| **intercept + bruisers kite until KG has aggro** (T2-6 hold) | 53571628-53571641 | **4** (R9, R10, R12, R13) | 3-4 solves in 7/12 | 53571632: 3 alive at the R10 flip, phase 2 ran to R34 (first real phase-2 sample) |
+| **option 2: intercept-tank with the RES-760 KG, bruisers dive-era** (`_anchorIntercept=true`, `_turtleMode=false`) | 53581046-53581058 | 1 (R10) | 1-3 in 11/12 | KG dead R4-6 in 12/12 — the "near-immune" tank does not survive first contact with the full army; bruisers R5-12 |
+| column + cast-before-move + KG capped to 3 cells near the army | 53573100-53573112 | 0 | 0-1 | deaths R5-17 (53573103 to R47); the ball still loses one leek per 1-2 rounds once the full army is on it — the stack covers 1-2 targets per round, the alpha lands on the third |
+| **single-file column** (columnMove, KG leads to the path-nearest crystal) | 53573063-53573079 | 0 | 0 | ball forms R7-8 and takes 0 for R2-8; from R9 the army catches it mid-move: 3,828 / 2,926 / 3,212 per round, KG cast NOTHING R9-11 (he walked 6 ahead, pack out of range 3) → cast-before-move + 3-cell cap added |
+| **shield-math respec** (KG RES 760, bruisers STR 640 / RES 230) + leashed ball | 53572536-53572548 | 0 | **0** | inside the dome the pack takes ZERO for whole rounds (R7-9 of 53572536); 53572546 three alive to the end; but the ball never reaches a crystal — KG crawls, then a corridor deadlock (KG at 333 with his own ball packed behind him in the 1-wide passage) |
+| leashed ball (leader ≤ 3 from KG, KR stands ≤ 4 from KG, no route teleports) | 53572311-53572322 | 0 | 0-1 | fights R9-29; the ball creeps at KG's pace (MP 6) through the corridors, "closing on … hot d=14/15/12" for rounds, 0 solves; ED alone in the pocket dies R5-6 |
+| **corridor-aware ball** (rally on KG T1-2, escorts follow KG, never park on articulation cells) | 53572274-53572303 | 0 | 0-2 | **fights run to R13-34** (three to R27-34), ball holds (KG/MH within 1-2 of Ada), intake mostly 0-500/round; the leader steps out of the dome and eats 2,450 bursts; solves collapse → leash added |
+| shield-math rotation (`sustainStack`: solidification → dome → rampart/fortress/wall by lowest rel) | 53572039-53572050 | 1 (R8) | 0-3 | stacks of 72-99% landed only on ED (in range); Ada/MH took 1,000-2,050/round at the spawn front R2-4 while KG was 9+ behind → rally on KG at T1-2 added |
+| **ball at dive pace** (leader + escorts within 2, KG on the leader, escorts walk-dive) | 53571950-53571964 | 0 | 0-2 | local: 4 crystals by R8-12, escorts within 3 on 116/126 turns; live: MH (escort id 2, glued to the leader) dead R3-4 in 12/12, Ada R4-7, solve stalls; three fights ran to R17-25 with 0 solves |
+| **shadow** (KG follows the bruiser the army is on; bruisers dive-era, no hold) | 53571805-53571818 | 0 | 0-3 | focus flips every round across bruisers 10-19 apart; KG (MP 6) ends d5-19 from it with 26 TP unspent; Ada dies R3-5 in the corridor before he arrives |
+| KG shield-bot INSIDE the melee pack (`executeSustainBotCombat`) | 53571720-53571733 | 2 (R9, R11) | 3-4 solves in 7/12 | KG dead R5-9 in 12/12 BEFORE the flip (dome burned at R2 on the pack, 0-2 shields at contact, 1,400-2,400/round) — the pack bot never ran |
+| contact-timed tank stack (dome + rotation only at army ≤ 5) | 53571755-53571767 | 1 (R9) | 2-4 solves in 8/12 | KG now takes ~100/round at contact and lives R9-12 — but the army kills the bruisers instead (ED 1,967 R5, MH 2,393 R6, Ada 1,687 R8 in 53571756): aggro is per-unit reach, not "nearest body" |
+| melee + steroid/protein, no flip retreat | 53571699-53571711 | 1 (R10) | 2-4 solves in 7/12 | **53571702: 2,734 / 1,944 / 1,849 into the scribe on R10-12 (6,527 = his HP pool), he healed 4,874 back**; all dead R11-13 |
+| **melee phase 2** (heavy sword/rhino, scribe first) | 53571644-53571689 | 3 (R9, R13, R13) | 3-4 solves in 6/12 | 53571644: 3 alive at R9 flip, sword hits ~650, 1,838 dealt, all dead R12; the flip retreat cost 2 rounds of walking |
+| intercept tank (KG holds aggro, bruisers dive-era) | 53571611-53571623 | 0 | — | 53571619: 4 solves by R8, chest re-killed blue R12 → Apocalypse R13; KG takes 100-1,400/round when focused and lives R12-40; Ada hit R0-3 in the corridor |
+
+**Live builds now — SHIELD-MATH RESPEC (user decision 2026-09-08 ~01:30;
+verify with `tools/fetch_leek_configs.py`; loadouts 812/814/817/818):**
+- **KG 817 shield-caster**: base RES 600 / WIS 200 / SCI 200 / HP 2195 / TP 19
+  / MP 6; components core3, ram2, ram, nuclear_core, power_supply,
+  neural_core_pro, obsidian_plate ×2 → **RES 760** / TP 26 / HP 2605 / SCI 350
+  / WIS 200. Shields ×8.6 (×10.6 under solidification): rampart 77-106 %,
+  dome 95-112 % (everyone within 3), fortress 60-85 %, carapace ~470 abs.
+- **ED 812 / ADA 814 / MH 818 bruisers**: base STR 600 / RES 200 / WIS 130 /
+  HP 2060 / TP 20 / MP 6; same components → **STR 640** / RES 230 / TP 23 /
+  MP 7 / HP 2580. Buffed sword ~1,650; three swords + rhino ≈ scribe's 6,000.
+- Restat potions consumed today: 10 (KG ×3, MH ×3, ED ×2, ADA ×2).
+- Previous line (sustain team, superseded): RES 480 bruisers — RES on a
+  non-caster does nothing (see SHIELD MATH).
+
+**(Sustain-team line before the respec, kept for the ledger's context —
+loadouts 812/814/817/818 as rebuilt 2026-09-07 evening, 1780 capital
+each, 16 chips, RAM 16):**
+- **KG 817 shield-bot**: base WIS 230 / RES 400 / SCI 500 / HP 2075 / TP 19 /
+  MP 6; components core3, ram2, ram, nuclear_core, power_supply,
+  neural_core_pro, amazonite, strawberry → HP 2365 / TP 26 / SCI 650 / RES 460
+  / WIS 280. Chips: fortress, wall, dome, solidification, carapace, armor,
+  rampart, armoring, shield, remission, therapy, serum, knowledge, elevation,
+  rage, resurrection (no spark: never dives; resurrection = Apocalypse save).
+- **ED 812 / ADA 814 / MH 818 bruiser-tanks** (identical): base STR 420 / WIS
+  250 / RES 450 / HP 2060 / TP 20 / MP 6; components core3, ram2, ram,
+  power_supply, amazonite, strawberry, propulsor, limbani → HP 2580 / TP 23 /
+  MP 7 / STR 460 / RES 480 / WIS 285. Weapons heavy_sword 278 / rhino 153 /
+  bazooka 184. Chips: spark, resurrection, grapple, boxing, inversion,
+  teleport, protein, steroid, adrenaline, carapace, wall, fortress,
+  solidification, remission, antidote, dome. MH's MAG is gone (no poison).
+- AI: `_turtleMode = true` in boss_context.lk — no teleport dives (walk-dive
+  / immediate KR only, 21 TP), route teleports only onto stands with army
+  > 12; KG anchors/follows the pack with the shield rotation. First batch
+  after the rebuild: see ledger.
+
+**Phase-2 audit** (the two earlier graal deaths): survivors dealt 1,175 and
+5,871 to the 36k army after the flip; the scribe/knights healed 754 and
+3,361 of it back. Phase 2 is unwinnable with what survives the puzzle. The
+puzzle now runs at the winners' pace (graal R6-7 in 3/12); the clear needs
+a team that (a) reaches the flip with 3-4 alive and (b) can grind 36k HP
+through ~1-3k/turn of army healing. Both are build questions (see §7).
+
+### Hard-won engine facts added today
+- `say()` = 1 TP per call, even when dropped (limit 2 logged/turn, 100 chars).
+- `resurrect(e, cell)`: revived entity gets totalLife = max(10, 50%), life = half → crystals come back at 5 HP; the cell argument IS honored (the misses were our own walk).
+- Teleport (any chip) returns 2 on a critical — never test `== 1`.
+- A bare un-braced `return` swallows the NEXT LINE (silently: `updateBossContext` aborted from turn 2 when a statement was inserted after `if (!_isBossFight) return`). Brace every return.
+- Dead crystals are not in `getAliveEnemies()`; the chest can kill two crystals on its turn-1 turn.
+- Resurrection + spark + adrenaline exist on all four leeks; the 4 chips are equipped (inventory has no spare). TP budgets: teleport-dive 30, walk-dive/immediate 21. KG (TP 20+5) and MH (22, no spark, no adrenaline) cannot teleport-dive.
+
+### The remaining wall (honest) and the decisions that need the user
+User ruling 2026-09-07: **8-leek lobby is not acceptable — 4-leek clear only.**
+Done since: MH loadout 818 Burning→Spark (applied); all 4 chips now fire
+(`supportKRTurn`: KG/MH walk-dive or immediate kill, approach stands ranked
+by real path and refused when army < 6). Graal R6-7 in 3/12. Everyone dies
+R3-8 because the dive window is a walk into the army for the TP 20-22 leeks
+(teleport-dive needs 30 TP: only ED 27 / ADA 26 + adrenaline reach it).
+**CLOSING VERDICT v3 (2026-09-08 ~03:00, 13 credits left, ~590 boss fights
+today, 0 wins).** Everything mechanical is now in place and verified: the
+KR layer lands every dive, all four chips fire, the shield math is applied
+(zero-damage rounds inside the dome), the corridors are mapped and the
+column traverses them single file, the ball forms and moves. What still
+loses is the arithmetic of one shield-caster against eight attackers: KG
+can put 2-3 casts per round on 1-2 targets (dome 4 of every 8 rounds), the
+army spreads over three bruisers, and whoever is uncovered takes 2-3k. The
+winners' Inupi did it with TP 24 and 169 casts because his bruisers took
+"400-1,300 TOTAL" — i.e. the army was NOT on them: their formation kept the
+army on the shield-bot. Ours reaches the army as a blob. Options that remain
+are all builds/formation, not mechanics: (a) a SECOND shield caster (Ada:
+RES 700 + rampart/fortress/carapace/dome, STR 0) so two casters cover three
+bruisers every round; (b) KG solo-intercept WITH the new stack (he is now
+near-immune himself: solidification + dome + fortress + wall ≈ 200 %) while
+the bruisers solve dive-era — the 4/12-graal doctrine of 53571628-641 with
+a KG that no longer dies; (c) accept and bank. I recommend (b) first: it is
+a two-line change (`_anchorIntercept = true`, `_turtleMode = false`) on
+builds that already exist, and it is the only configuration today that
+produced graal deaths at 30 %.
+
+**SINGLE-FILE COLUMN (built + local-validated 2026-09-08 ~02:30):**
+`columnMove(obj, stopD)` for every ball move — candidates = 12 lowest
+manhattan cells within MP, scored by REAL path to the objective
+(`pathTo`, falls back to an empty neighbour when the objective is
+occupied), corridor cells +25 penalty and only allowed when no ally is on a
+corridor cell within 5 (`allyInCorridorNear`), never stop inside unless
+already inside, strict path improvement required. KG (acts first, id 0)
+leads toward the unsolved crystal with the shortest real path from him
+(crystals outside the walls have none and are skipped — local 53570489: KG
+aimed at cell 44 for 60 rounds). Local: MH and ED file through 315-263 one
+at a time, ball forms by R7, KG leads through 351/369/374/391 R9-14, three
+KRs at R16-19, no deadlock, no bugs. Live batch: see ledger.
+
+**CLOSING VERDICT v2 (2026-09-08 ~02:00, 37 credits left):** the shield-math
+respec is live and WORKS as mitigation — zero-damage rounds for the whole
+pack inside KG's dome (RES 760: dome 95-112 %, rampart 77-106 %). The
+remaining problem is purely movement: a 4-leek ball cannot traverse the
+castle's 1-wide corridors as a blob (KG parked at 333 with his own ball
+behind him = deadlock; ED alone in the 476-590 pocket dies R4-8 every
+fight). The next work is a single-file corridor traversal: order the
+column (KG first, then the leader, escorts), each member enters a corridor
+cell only when the next one is free, nobody stops inside; form the ball
+again on the first wide cell past the corridor (cells adjacent to 228 and
+the interior). With that, the immune ball reaches the crystals and the
+KR/slide layer (all verified) solves them. Phase 2 arithmetic with STR 640
+bruisers: buffed sword ~1,650 ×3 + rhino ≈ 6,000 = the scribe in one round
+IF all three are adjacent — the melee routine must stage the three
+adjacent cells before the burst.
+
+**CLOSING VERDICT (2026-09-08 ~01:00, 49 credits left, ~500 fights today):**
+Two durable facts were established tonight and are in memory: (1) target
+RES does nothing — shields sum uncapped and are scaled by the CASTER's RES,
+so the winners' mitigation is a shield-caster stacking two relative shields
+per target, and (2) the castle's single-cell corridors wall the team out
+whenever a follower parks on one. With those applied, the ball survives
+R20-34 but solves 0-2 (it moves at KG's MP 6 through the corridors while
+the leader is leashed to the dome); without the leash the leader solves
+3-4 crystals and dies R4-8 with the graal falling R9-13 in ~30% of fights
+and 1-3 alive; phase 2 then loses to the scribe's ~1,600/round heal vs our
+~2,500/round of buffed sword. The next real step is not another doctrine
+loop but a build change guided by the shield math: RES belongs on the
+shield-CASTER only (KG RES → 700+ makes rampart/fortress ~100% each), the
+bruisers' 400 capital of RES should go to STR/TP/HP, and the scribe needs
+a one-round kill (~6,000): 3 bruisers at STR 700+ buffed (~1,700/sword) +
+rhino get close. Ask the user before any respec.
+
+**CASTLE CORRIDORS (map 4562, BFS/Tarjan on tools/boss_map_data.json):** the
+spawn pockets (476-590 block) connect to the interior through single-cell
+corridors; 59 articulation cells (263, 280, 298, 315, 351, 369, 387, 513,
+530-531, 549, 567, 585-591, 603-608 …) — an ally standing on one walls the
+rest of the team out (local + live: ED stuck at d14 with mv0 for whole
+fights; MH parked at 263 within 2 of KG did it). Deployed:
+`_pzCorridorCells` (hardcoded list), `ballMoveTo()` parks only on
+non-corridor cells within 3 of the anchor, rally T1-2 on KG (spawn 228,
+already inside), escorts follow KG (the shield source, dome radius 3).
+
+**SHIELD MATH (generator source, verified 2026-09-07 night — this reframes
+every build decision of the campaign):**
+- `EffectDamage`: damage = raw × (1+STR/100) − damage × relShield% − absShield,
+  floored at 0. **The target's RES does not reduce damage at all.** RES only
+  multiplies the shields the RES-holder CASTS: shield value = (v1 + jet·v2) ×
+  (1 + casterRES/100). Our RES-480 bruisers were bought for nothing unless
+  they cast their own shields.
+- Relative shields from DIFFERENT chips SUM (buff stats are added across
+  active effects, no clamp anywhere) → ≥ 100% relative = zero damage.
+  Recasting the same chip replaces it (non-stackable). Solidification =
+  +180-200 RES RAW (unscaled) for 3 turns.
+- KG (RES 460, ×5.6; ×7.6 under solidification): rampart 72%, fortress 57%,
+  wall 34%, dome 84-99% on everyone within 3, carapace ~420 abs. Two casts
+  on one bruiser (rampart + fortress) = 129% = immune for 3 rounds; dome
+  alone near-immunizes the pack 4 of every 8 rounds. Bruisers' own dome
+  (RES 480) = 64-75%.
+- Deployed as `sustainStack()`: solidification self → dome (pack within 3)
+  → rampart/fortress/wall on the bruiser with the lowest
+  `getRelativeShield()` → carapace/armor/shield on the lowest absolute;
+  used in the puzzle STACK block and phase 2. Bruisers self-dome at
+  contact when their own relative shield < 60.
+
+**BALL AT DIVE PACE — live result 0/12 (53571950-964).** The ball holds
+together live (as locally) and the army takes it apart in order: the escort
+glued to the leader (MH) R3-4, the leader R4-7, then KG/ED. Cohesion did not
+convert into survival: KG's rotation puts 1-2 shields per round on one
+bruiser while all three stand in the army's reach. **End of the sustain
+program's doctrine space at these builds: 19 batches, best 4/12 graal
+deaths (intercept + kite), 0 phase-2 survivals beyond 3 rounds.**
+
+**BALL AT DIVE PACE (built + local-validated, 2026-09-07 late):**
+`_turtleMode` on, `_ballHoldPerch` off (no hold/perch/retreat layers),
+leader = `ballLeader()` (lowest-id named solver with the kit, computed on
+every instance incl. KG), escorts within 2 taking walk-dives / ≤1-off
+immediate KRs / local slides, PDIVE allowed when the landing is ≤ 2 from
+the goal, KG shadows the LEADER within 2-3 with dome at contact and the
+rotation on the pack. Local: 4 crystals by R8 / R9 / R12 on the 53569989 /
+53571535 / 53570489 geometries, KG on the leader 100% of turns. Live batch:
+see ledger.
+
+**COHESION vs TEMPO (53571805-818):** shielding needs the bruisers within
+3-7 of KG; dive-era solving scatters them 10-19 apart and the army's focus
+flips between them every round. Neither the ball (cohesion, no tempo) nor
+the shadow (tempo, no cohesion) converts. The reconciliation still owed: the
+ball moving as one to crystal A, then B (leader dives/slides, escorts take
+only solved-landing KRs and slides, KG within 3), at dive pace — i.e. the
+ball doctrine with today's KR fixes but WITHOUT the blink/hold/retreat
+layers and with ballObjective() re-picked per crystal. Untested as a whole.
+
+**AGGRO FACT (53571755-767):** the army does not focus the nearest body as
+a group; each unit hits whatever is in its own reach. A tank at d1-2 with a
+full stack takes ~100/round while the three bruisers 5-9 cells away take
+the rest. Mitigation therefore has to sit ON the bruisers (KG inside the
+pack casting on them) — which is the ball, whose solve tempo collapsed
+(0-2 solves in 25-50 rounds). The two halves have not been reconciled.
+
+**THE PHASE-2 EQUATION (53571702, the cleanest sample):** three buffed
+bruisers adjacent to the scribe deliver ~2,000-2,700/round; the scribe
+heals ~1,600/round; the bruisers survive 2-3 rounds in melee. Killing the
+scribe (6,000) needs either a one-round burst ≥ 6,000 (4 leeks: KG has STR
+0), his heal suppressed (TP shackles are MAG-scaled — useless on these
+builds; the poison MAG carrier is gone with MH's respec), or the bruisers
+surviving 6+ rounds adjacent (the winners' near-immunity). Everything
+below this line is the day's trail to that equation.
+
+**Sustain-team verdict (2026-09-07 night, ~150 fights on the new builds):**
+the puzzle converts again with the intercept doctrine (graal R9-13 in 3-4 of
+12, 2-3 alive at the flip) and phase 2 now exists (`executeBossMelee`:
+scribe-first, rhino 2-4, heavy sword adjacent; steroid/protein before the
+sword; bruisers skip the flip retreat). The arithmetic that remains: a
+heavy-sword hit is ~650 (STR 460) → ~1,300 buffed; 36k army at 3×1,300 ≈
+9-10 rounds of three bruisers surviving adjacent to the army. Today they
+survive 2-3 rounds of phase 2. KG's stack covers one focus target; in melee
+all three are in the army. Next levers: KG dome/carapace rotation on the
+whole melee pack (stand inside it), rampart from range, the scribe's
+6,000 HP as the only kill that matters (its heals are what make the grind
+impossible), and the chest as an Apocalypse hazard (53571619: chest
+re-killed a revived crystal at R12 with every chip on cooldown).
+
+Decision 1 (TP respec) was taken earlier: graal R5-7 in 4-5 of 12 with the dive builds.
+What remains is invariant across the last 36 fights: every leek that dives
+is dead 1-3 turns later (teleport spent on the dive = no escape; the army
+kills ~one leek per turn from R3), so the flip is reached with 0-1 alive
+and phase 2 (36k HP, 1-3k/turn of healing) is lost immediately.
+Remaining decisions:
+1. **Phase-2 team** (the only path to a clear): the winners' 4-leek shape = SCI-720 shield-bot + 3 STR600/RES450/WIS400/TP29 bruisers (§7), turtling under shields; the KR layer then solves at walk-dive pace (TP 21) plus slides, R8-15 instead of R5-7, with bodies intact. Needs all four loadouts rebuilt (loadouts 794-797 are a stale first attempt) and a shield-rotation doctrine that actually keeps the pack alive (KG's current rotation: dome/rage/slb/wall on the nearest pair).
+2. Phase-2 doctrine after the flip (scribe first, kite, covid) is unwritten and untestable until (1).
+3. Cheap puzzle-side polish left: MH dies R2-3 on her dive (HP 2450 into the pad); ED's dives land R3-5 because his crystals are far — both cosmetic next to (1).
+
+### Next-agent prompt (paste to start)
+
+> Read `docs/fennel_boss.md` "SESSION HANDOFF (2026-09-07, evening)" first
+> — CLOSING VERDICT v3, SHIELD MATH, CASTLE CORRIDORS and SINGLE-FILE COLUMN
+> are the current state — then sections 1, 7 and the runbook. Live AI =
+> ball mode (`_turtleMode = true`, `_anchorShadow = true`, KG leads via
+> `columnMove`); builds = shield-math respec (KG RES 760 caster, STR 640
+> bruisers). First experiment recommended: intercept-tank with the new KG
+> (`_anchorIntercept = true`, `_turtleMode = false`). Builds = the SUSTAIN TEAM (loadouts 812/814/817/818
+> rebuilt 2026-09-07 night, see "Live builds now"); AI = intercept tank +
+> kite-until-aggro + dive-era solving + `executeBossMelee` phase 2. Loadouts 812/814/817/818 must be
+> applied (verify with `tools/fetch_leek_configs.py`; the user sometimes
+> reverts to solo loadouts). 4-leek clear only (user ruling; no 8-leek
+> lobby). The puzzle is solved: all four leeks kill+resurrect by R2-3, graal
+> dies R5-7 in ~40% of fights — but with 0-1 leeks alive, and phase 2 is
+> lost every time. Do not spend more loops on the puzzle. The next work is
+> the phase-2-capable team (§7 winners' shape) + a shield doctrine that keeps
+> 4 alive to the flip, then the phase-2 grind. Ask before any respec or git
+> mutation. Validate every .lk change with `tools/local_boss_v9.py --fight
+> 53569989` (bare `return` swallows the next line; say() costs 1 TP).
+
+---
+
 *Last updated: 2026-07-17 evening (fight 52984834: graal-alive wipe — KG frozen 17 turns in a manhattan-lure cul-de-sac; path-aware walk fix verified locally).*
 *All logic lives in `V8_modules/boss_context.lk`, hooked from `main.lk` (puzzle branch + COMBAT branch). Everything is gated on `_isBossFight` — zero ladder impact.*
 
