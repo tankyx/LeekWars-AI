@@ -138,7 +138,7 @@ global _krLeashD = 99
 // NEAREST the army and eats everything on a full self-stack while the
 // bruisers work. KG intercepts (army d 3), self-stacks every shield, heals
 // himself; the three bruisers solve dive-era style (walk-dives + slides).
-global _anchorIntercept = true
+global _anchorIntercept = false
 // SHADOW (2026-09-07 late, user decision): aggro is per-unit reach, not
 // "nearest body" (53571755-767: a fully stacked KG at d1 took ~100/round
 // while the bruisers died 5-9 cells away). KG shadows the bruiser the army
@@ -393,7 +393,8 @@ function isNamedSolver(name) {
     // (only 2 resurrection chips exist, cd 15); ADA is the third solver using
     // the classic slide kit (all 4 carry grapple/boxing/inversion now). KG is
     // the support shield-bot (RES 450 shields, SCI 500 buffs) and anchors.
-    return name == "EdsgerDijkstra" || name == "MargaretHamilton" || name == "AdaLovelace"
+    // Legumatore clone doctrine (2026-09-08): all four solve — four T2 dives
+    return name == "EdsgerDijkstra" || name == "MargaretHamilton" || name == "AdaLovelace" || name == "KurtGodel"
 }
 
 function assignPuzzleRoles() {
@@ -1754,6 +1755,471 @@ function logMapLayout() {
 // 156+17 x STR) + rhino (2-4, 5 TP x3). The poke orbit never approached —
 // 53571632: three bruisers alive 24 rounds after the flip, "POKE none" every
 // turn, 316 damage total. Kill order scribe > squire > knight > king.
+// GATHER + BLAST (user doctrine 2026-09-08): grapple = "attract directly to
+// the cast cell" (the first enemy on the caster->cell line slides onto it,
+// range 1-8, 3 TP, 4/turn). Pull enemies onto the plus-2 cells around a
+// centre (scribe first), then PLASMA (37+2j x STR x TARGETS HIT, plus-2,
+// 9 TP): 5 targets at STR 640 ~ 5,900 in one cast. Bazooka (circle-3,
+// 8-12) / lightning (circle-2 x3, cd 0) / meteorite / rockfall with the rest.
+// All inside ONE turn (the army moves between our leeks' turns).
+function firstEnemyOnLine(fromCell, throughCell, maxD) {
+    // first entity strictly beyond throughCell on the ray from fromCell
+    var fx = getCellX(fromCell)
+    var fy = getCellY(fromCell)
+    var tx = getCellX(throughCell)
+    var ty = getCellY(throughCell)
+    var dx = tx - fx
+    var dy = ty - fy
+    if (dx != 0 && dy != 0) { return -1 }   // not a straight line
+    var sx = dx == 0 ? 0 : (dx > 0 ? 1 : -1)
+    var sy = dy == 0 ? 0 : (dy > 0 ? 1 : -1)
+    var d0 = abs(dx) + abs(dy)
+    for (var k = d0 + 1; k <= maxD; k++) {
+        var c = getCellFromXY(fx + sx * k, fy + sy * k)
+        if (c == null || c < 0 || isObstacle(c)) { return -1 }
+        var e = getEntityOnCell(c)
+        if (e != null && e != -1) {
+            if (isEnemy(e)) { return e }
+            return -1
+        }
+    }
+    return -1
+}
+function inPlus2(cell, centreCell) {
+    var ax = getCellX(cell) - getCellX(centreCell)
+    var ay = getCellY(cell) - getCellY(centreCell)
+    return (ax == 0 && abs(ay) <= 2) || (ay == 0 && abs(ax) <= 2)
+}
+function executeBossGather() {
+    var myID = getEntity()
+    if (getStrength() < 300 || !allyHasChip(myID, CHIP_PLASMA)) { return false }
+    var army = puzzleArmyCells()
+    if (count(army) == 0) { return false }
+    var myC = getCell()
+    // centre: army unit maximising priority + neighbours within 2, must be
+    // within plasma range 0-6 and LoS (walk closer first if needed)
+    var centre = -1
+    var centreC = -1
+    var centreSc = -99999
+    var en = getAliveEnemies()
+    for (var e in en) {
+        var nm = getName(e)
+        if (nm == "graal" || indexOf(nm, "crystal") != -1) continue
+        var ec = getCell(e)
+        if (ec == null || ec < 0) continue
+        var nb = 0
+        for (var ac in army) { var dd = getCellDistance(ec, ac); if (dd != null && dd <= 2) nb++ }
+        var dMe = getCellDistance(myC, ec)
+        if (dMe == null) continue
+        var sc = bossTargetPriority(nm) + nb * 40 - dMe * 3
+        if (sc > centreSc) { centreSc = sc; centre = e; centreC = ec }
+    }
+    if (centre == -1) { return false }
+    var dC = getCellDistance(myC, centreC)
+    var aligned = isOnSameLine(myC, centreC)
+    if (dC == null || dC > 5 || dC < 4 || !aligned || !lineOfSight(myC, centreC)) {
+        // stand ON the centre's axis at distance 4-5: lightning (line launch,
+        // 2-5), meteorite (5-9), rockfall (5-7), plasma (0-6) all fire and
+        // the plus-2 (radius 2) cannot reach me
+        var best = -1
+        var bestSc = 9999
+        var cx = getCellX(centreC)
+        var cy = getCellY(centreC)
+        for (var ddx = -6; ddx <= 6; ddx++) {
+            for (var ddy = -6; ddy <= 6; ddy++) {
+                var man = abs(ddx) + abs(ddy)
+                if (man < 3 || man > 6) continue
+                var c = getCellFromXY(cx + ddx, cy + ddy)
+                if (c == null || c < 0 || isObstacle(c) || (c != myC && isEntity(c))) continue
+                if (!lineOfSight(c, centreC)) continue
+                var pl = getPathLength(myC, c)
+                if (pl == null || pl > getMP()) continue
+                var onAxis = (ddx == 0 || ddy == 0)
+                var sc2 = abs(man - 5) * 5 + pl + (onAxis ? 0 : 30) + (inPlus2(c, centreC) ? 60 : 0)
+                if (sc2 < bestSc) { bestSc = sc2; best = c }
+            }
+        }
+        if (best != -1 && best != myC) { moveTowardCell(best, getMP()); myC = getCell() }
+        else if (getMP() > 0 && (dC == null || dC > 6)) {
+            // out of one-move reach: close the distance along the real path
+            var apC = findEmptyCellNear(centreC, myC, 60, 2)
+            moveTowardCell(apC != -1 ? apC : centreC, getMP()); myC = getCell()
+        }
+        dC = getCellDistance(myC, centreC)
+        if (dC == null || dC > 6 || dC < 2 || !lineOfSight(myC, centreC)) {
+            // long range while walking in: bazooka 8-12 on the centre
+            var bzW = getWeapons()
+            if (bzW != null && inArray(bzW, WEAPON_BAZOOKA) && dC != null && dC >= 8 && dC <= 12 && lineOfSight(myC, centreC) && getTP() >= 12) {
+                if (getWeapon() != WEAPON_BAZOOKA) setWeapon(WEAPON_BAZOOKA)
+                if (useWeapon(centre) >= 1) { pzSay("PZ GATHER bazooka d" + dC); return true }
+            }
+            pzSay("PZ GATHER approach d" + dC)
+            return true
+        }
+    }
+    castCovetousness(myID)
+    // pull enemies onto the empty plus-2 cells around the centre
+    var cxx = getCellX(centreC)
+    var cyy = getCellY(centreC)
+    var plusOff = [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]
+    var pulls = 0
+    if (allyHasChip(myID, CHIP_GRAPPLE)) {
+        for (var po in plusOff) {
+            if (getTP() < 3 + 9 || pulls >= 4) break
+            var pc = getCellFromXY(cxx + po[0], cyy + po[1])
+            if (pc == null || pc < 0 || isObstacle(pc) || isEntity(pc)) continue
+            var dpc = getCellDistance(myC, pc)
+            if (dpc == null || dpc < 1 || dpc > 8) continue
+            if (!lineOfSight(myC, pc)) continue
+            var victim = firstEnemyOnLine(myC, pc, 8)
+            if (victim == -1) continue
+            var vn = getName(victim)
+            if (vn == "graal" || indexOf(vn, "crystal") != -1) continue
+            if (useChipOnCell(CHIP_GRAPPLE, pc) >= 1) pulls++
+        }
+    }
+    // blast: plasma on the centre if 2+ targets in the plus, else bazooka/lightning
+    var inPlus = 0
+    for (var ac2 in puzzleArmyCells()) {
+        var ax = getCellX(ac2) - cxx
+        var ay = getCellY(ac2) - cyy
+        if ((ax == 0 && abs(ay) <= 2) || (ay == 0 && abs(ax) <= 2)) inPlus++
+    }
+    var did = ""
+    var selfHit = inPlus2(getCell(), centreC)
+    if (!selfHit && inPlus >= 2 && getTP() >= 9 && getCooldown(CHIP_PLASMA, myID) == 0 && isAlive(centre)) {
+        if (useChip(CHIP_PLASMA, centre) >= 1) did = did + " plasma" + inPlus
+    }
+    // the rest of the TP always goes into AoE on the centre (a single target
+    // still takes full value; circle-2 needs me >= 3 from the centre)
+    var dNow = getCellDistance(getCell(), centreC)
+    var safeC2 = dNow != null && dNow >= 3
+    if (safeC2 && allyHasChip(myID, CHIP_METEORITE) && getTP() >= 8 && getCooldown(CHIP_METEORITE, myID) == 0) {
+        if (dNow >= 5 && dNow <= 9 && isAlive(centre) && useChip(CHIP_METEORITE, centre) >= 1) did = did + " meteor"
+    }
+    if (safeC2 && isOnSameLine(getCell(), centreC) && allyHasChip(myID, CHIP_LIGHTNING) && getCooldown(CHIP_LIGHTNING, myID) == 0) {
+        var ln = 0
+        while (getTP() >= 4 && ln < 3 && isAlive(centre) && dNow <= 5) {
+            if (useChip(CHIP_LIGHTNING, centre) < 1) break
+            ln++
+        }
+        if (ln > 0) did = did + " light" + ln
+    }
+    if (safeC2 && allyHasChip(myID, CHIP_ROCKFALL) && getTP() >= 5 && getCooldown(CHIP_ROCKFALL, myID) == 0) {
+        if (dNow >= 5 && dNow <= 7 && isAlive(centre) && useChip(CHIP_ROCKFALL, centre) >= 1) did = did + " rock"
+    }
+    var bzW2 = getWeapons()
+    if (bzW2 != null && inArray(bzW2, WEAPON_BAZOOKA) && dNow != null && dNow >= 8 && dNow <= 12 && getTP() >= 12 && isAlive(centre) && lineOfSight(getCell(), centreC)) {
+        if (getWeapon() != WEAPON_BAZOOKA) setWeapon(WEAPON_BAZOOKA)
+        if (useWeapon(centre) >= 1) did = did + " bazooka"
+    }
+    if (did == "" && getTP() >= 16) {
+        // nothing to blast (plus < 2, no AoE chips in range): let the melee
+        // routine spend the TP on the sword (53581832: 16 TP idle at the flip)
+        return false
+    }
+    pzSay("PZ GATHER " + getName(centre) + " pull" + pulls + " plus" + inPlus + (selfHit ? " SELF" : "") + did + " tp" + getTP())
+    return true
+}
+
+// LEGUMATORE PHASE 2 (52821555 R3+): stand still, fire RHINO x3 (2-4),
+// NEUTRINO x3 (2-6), LIGHTNINGER x2 (6-10) every round at the KING first,
+// then squires, knights, SCRIBE LAST; protein / self-shields with the
+// leftover TP; WIS lifesteal (value x WIS/1000) is the sustain.
+function cloneKillPriority(name) {
+    // SCRIBE FIRST (53583029: it healed 6,590 of our 8,211 — the heal engine
+    // must die before the grind means anything), then squires, knights, king.
+    if (name == "fennel_scribe") { return 400 }
+    if (name == "fennel_squire") { return 200 }
+    if (name == "fennel_knight") { return 100 }
+    if (name == "fennel_king") { return 50 }
+    return -1
+}
+function reflectUp(myID) {
+    // mirror (0-2, area 4, ~26% at AGI 380, 3t) + thorn (0-3, area 3, ~17%, 2t)
+    // on self — the army's raw alpha bounces back onto every attacker,
+    // unhealable by the scribe (verified engine EffectDamage.returnDamage).
+    var did = ""
+    if (getTP() >= 5 && allyHasChip(myID, CHIP_MIRROR) && getCooldown(CHIP_MIRROR, myID) == 0) {
+        if (useChip(CHIP_MIRROR, myID) >= 1) did = "mir"
+    }
+    if (getTP() >= 4 && allyHasChip(myID, CHIP_THORN) && getCooldown(CHIP_THORN, myID) == 0) {
+        if (useChip(CHIP_THORN, myID) >= 1) did = did + "thn"
+    }
+    return did
+}
+
+function castCovetousness(myID) {
+    // X-2 area, range 0-8: +1 TP to the caster per ENEMY hit, 2 turns (verified
+    // engine 2026-09-08). Cast centred on the army cluster before spending TP.
+    if (!allyHasChip(myID, CHIP_COVETOUSNESS)) { return 0 }
+    if (getTP() < 2) { return 0 }
+    if (getCooldown(CHIP_COVETOUSNESS, myID) != 0) { return 0 }
+    var army = puzzleArmyCells()
+    if (count(army) == 0) { return 0 }
+    var myC = getCell()
+    var mx = getCellX(myC)
+    var my = getCellY(myC)
+    // X-2 offsets (diagonals, radius 2) relative to the aim cell
+    var xoff = [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 2], [-2, 2], [2, -2], [-2, -2]]
+    var bestAim = -1
+    var bestN = 0
+    for (var ac in army) {
+        var ax = getCellX(ac)
+        var ay = getCellY(ac)
+        var daim = abs(ax - mx) + abs(ay - my)
+        if (daim > 8) continue
+        var n = 0
+        for (var a2 in army) {
+            var bx = getCellX(a2) - ax
+            var by = getCellY(a2) - ay
+            if ((bx == 0 && by == 0) || (abs(bx) == abs(by) && abs(bx) <= 2)) n++
+        }
+        if (n > bestN) { bestN = n; bestAim = ac }
+    }
+    if (bestAim == -1 || bestN < 1) { return 0 }
+    if (useChipOnCell(CHIP_COVETOUSNESS, bestAim) >= 1) { pzSay("PZ COVET +" + bestN + " tp" + getTP()); return bestN }
+    return 0
+}
+
+function executeBossStand() {
+    var myID = getEntity()
+    var weps = getWeapons()
+    if (weps == null) { return false }
+    var hasRhino = inArray(weps, WEAPON_RHINO)
+    var hasNeut = inArray(weps, WEAPON_NEUTRINO)
+    var hasLight = inArray(weps, WEAPON_LIGHTNINGER)
+    if (!hasRhino && !hasNeut) { return false }
+    var army = puzzleArmyCells()
+    if (count(army) == 0) { return false }
+    castCovetousness(myID)
+    var svArmyD0 = nearestArmyDistFrom(getCell(), army)
+    if (svArmyD0 != null && svArmyD0 <= 8) reflectUp(myID)
+    var myC = getCell()
+    // PLASMA on the densest plus-2 cluster (user 2026-09-08): 37+2j x STR x
+    // TARGETS-HIT, so a 4-5 cluster is ~1,000 EACH; catches the scribe when
+    // it's in the + behind the knights. Aim within range 6, LoS, self-safe.
+    if (allyHasChip(myID, CHIP_PLASMA) && getCooldown(CHIP_PLASMA, myID) == 0 && getTP() >= 9) {
+        var pl_off = [[0, 0], [1, 0], [-1, 0], [2, 0], [-2, 0], [0, 1], [0, -1], [0, 2], [0, -2]]
+        var bestAim = -1
+        var bestN = 0
+        for (var pac in army) {
+            var pax = getCellX(pac)
+            var pay = getCellY(pac)
+            var dpc = getCellDistance(myC, pac)
+            if (dpc == null || dpc > 6 || !lineOfSight(myC, pac)) continue
+            // self must not be in the + of this aim (no self-hit)
+            var selfIn = false
+            for (var po in pl_off) { if (getCellFromXY(pax + po[0], pay + po[1]) == myC) selfIn = true }
+            if (selfIn) continue
+            var n = 0
+            for (var a2 in army) {
+                var bx = getCellX(a2) - pax
+                var by = getCellY(a2) - pay
+                if ((bx == 0 && abs(by) <= 2) || (by == 0 && abs(bx) <= 2)) n++
+            }
+            if (n > bestN) { bestN = n; bestAim = pac }
+        }
+        if (bestAim != -1 && bestN >= 2) {
+            if (useChipOnCell(CHIP_PLASMA, bestAim) >= 1) pzSay("PZ PLASMA x" + bestN)
+        }
+    }
+    // REACH THE SCRIBE (measured 2026-09-08: it heals ~90% of our phase-2
+    // damage, net ~500/fight; it hides behind the knights out of weapon
+    // range 2-6 and grapple can't pull it through them → it NEVER dies).
+    // TELEPORT onto it (range 12, no LoS) and blast: the only way to stop
+    // the heal engine. One leek per turn dives; the scribe (6,000, self-heal
+    // ~1,600) falls to 2 divers in ~3 rounds.
+    var scr = -1
+    for (var se in getAliveEnemies()) { if (getName(se) == "fennel_scribe") scr = se }
+    if (scr != -1 && allyHasChip(myID, CHIP_TELEPORTATION) && getCooldown(CHIP_TELEPORTATION, myID) == 0) {
+        var scrC0 = getCell(scr)
+        var dS0 = (scrC0 != null && scrC0 >= 0) ? getCellDistance(myC, scrC0) : 99
+        // teleport only if the scribe is out of weapon reach and TP funds the dive+shots
+        if (dS0 != null && dS0 > 6 && getTP() >= 9 + 6) {
+            var sx = getCellX(scrC0)
+            var sy = getCellY(scrC0)
+            var land = -1
+            var landD = 99
+            for (var tdx = -3; tdx <= 3; tdx++) {
+                for (var tdy = -3; tdy <= 3; tdy++) {
+                    var tm = abs(tdx) + abs(tdy)
+                    if (tm < 2 || tm > 4) continue
+                    var tc = getCellFromXY(sx + tdx, sy + tdy)
+                    if (tc == null || tc < 0 || isObstacle(tc) || isEntity(tc)) continue
+                    var dme = getCellDistance(myC, tc)
+                    if (dme == null || dme > 12) continue
+                    if (tm < landD) { landD = tm; land = tc }
+                }
+            }
+            if (land != -1 && useChipOnCell(CHIP_TELEPORTATION, land) >= 1) { myC = getCell(); pzSay("PZ SCRDIVE ->" + myC + " dS" + getCellDistance(myC, scrC0)) }
+        }
+    }
+    // M_LASER THROUGH THE COLUMN (user 2026-09-08): laser-line hits EVERY
+    // entity between me and the target, so aimed at the scribe it hits the
+    // knights AND the scribe behind them (range 5-12, aligned). The only way
+    // to damage the unreachable heal engine. Align first (step onto its row
+    // or column within 5-12), then fire x2.
+    if (scr != -1 && inArray(getWeapons(), WEAPON_M_LASER)) {
+        var scrC1 = getCell(scr)
+        if (scrC1 != null && scrC1 >= 0) {
+            var aligned = isOnSameLine(getCell(), scrC1)
+            var dL = getCellDistance(getCell(), scrC1)
+            var losOk = lineOfSight(getCell(), scrC1)   // laser needs LoS to the aim (obstacles block; entities don't)
+            if ((!aligned || dL == null || dL < 5 || dL > 12 || !losOk) && getMP() > 0) {
+                // find ANY reachable cell (full MP) on the scribe's row/column,
+                // range 5-12, with a clear obstacle-line to it — fire this turn
+                var sxL = getCellX(scrC1)
+                var syL = getCellY(scrC1)
+                var bestL = -1
+                var bestLsc = 99999
+                for (var k = 5; k <= 12; k++) {
+                    var cands = [getCellFromXY(sxL + k, syL), getCellFromXY(sxL - k, syL), getCellFromXY(sxL, syL + k), getCellFromXY(sxL, syL - k)]
+                    for (var cc in cands) {
+                        if (cc == null || cc < 0 || isObstacle(cc) || (cc != getCell() && isEntity(cc))) continue
+                        if (!lineOfSight(cc, scrC1)) continue
+                        var pl = getPathLength(getCell(), cc)
+                        if (pl == null || pl > getMP()) continue
+                        if (pl < bestLsc) { bestLsc = pl; bestL = cc }
+                    }
+                }
+                if (bestL != -1 && bestL != getCell()) { moveTowardCell(bestL, getMP()) }
+                aligned = isOnSameLine(getCell(), scrC1); dL = getCellDistance(getCell(), scrC1); losOk = lineOfSight(getCell(), scrC1)
+            }
+            if (aligned && losOk && dL != null && dL >= 5 && dL <= 12 && getTP() >= 8) {
+                if (getWeapon() != WEAPON_M_LASER) setWeapon(WEAPON_M_LASER)
+                var ml = 0
+                while (getTP() >= 8 && ml < 2 && isAlive(scr)) { if (useWeapon(scr) < 1) break; ml++ }
+                if (ml > 0) { pzSay("PZ MLASER scribe x" + ml + " d" + dL); return true }
+            }
+        }
+    }
+    if (scr != -1 && allyHasChip(myID, CHIP_GRAPPLE) && getCooldown(CHIP_GRAPPLE, myID) == 0 && getTP() >= 3) {
+        var scrC = getCell(scr)
+        var dScr = (scrC != null && scrC >= 0) ? getCellDistance(myC, scrC) : 99
+        if (dScr != null && dScr >= 4 && dScr <= 8 && isOnSameLine(myC, scrC)) {
+            // cast cell = a cell 3 toward me on the scribe's line (pull it to ~3)
+            var sxm = getCellX(myC)
+            var sym = getCellY(myC)
+            var sxs = getCellX(scrC)
+            var sys = getCellY(scrC)
+            var stepx = sxs == sxm ? 0 : (sxs > sxm ? -1 : 1)
+            var stepy = sys == sym ? 0 : (sys > sym ? -1 : 1)
+            var pullC = getCellFromXY(sxs + stepx * (dScr - 3), sys + stepy * (dScr - 3))
+            // only if the scribe is the first enemy on the line (no knight in front)
+            var firstOnLine = firstEnemyOnLine(myC, getCellFromXY(sxm + stepx, sym + stepy), 8)
+            if (pullC != null && pullC >= 0 && isEmptyCell(pullC) && firstOnLine == scr) {
+                if (useChipOnCell(CHIP_GRAPPLE, pullC) >= 1) { pzSay("PZ SCRPULL ->" + getCell(scr)) }
+            }
+        }
+    }
+    // target in range now: highest priority, then lowest HP
+    var pickT = -1
+    var pickSc = -99999
+    var en = getAliveEnemies()
+    for (var e in en) {
+        var nm = getName(e)
+        var pr = cloneKillPriority(nm)
+        if (pr < 0) continue
+        var ec = getCell(e)
+        if (ec == null || ec < 0) continue
+        var dd = getCellDistance(myC, ec)
+        if (dd == null || dd < 2 || dd > 6 || !lineOfSight(myC, ec)) continue
+        var sc = pr * 100 - entityHPPercent(e)
+        if (sc > pickSc) { pickSc = sc; pickT = e }
+    }
+    var moved = 0
+    if (pickT == -1 && getMP() > 0) {
+        // nothing in 2-6: greedy step toward the nearest priority target
+        // (multi-step, stop 3 away), king first
+        var bestE = -1
+        var bestSc = -99999
+        for (var e2 in en) {
+            var pr2 = cloneKillPriority(getName(e2))
+            if (pr2 < 0) continue
+            var ec2 = getCell(e2)
+            if (ec2 == null || ec2 < 0) continue
+            var pl = getCellDistance(myC, ec2)
+            if (pl == null) continue
+            var sc2 = pr2 * 10 - pl
+            if (sc2 > bestSc) { bestSc = sc2; bestE = e2 }
+        }
+        if (bestE != -1) {
+            var tc = getCell(bestE)
+            for (var ms = 0; ms < 10; ms++) {
+                var dcur = getCellDistance(getCell(), tc)
+                if (dcur == null || dcur <= 2 || getMP() <= 0) break
+                var mb = getCell()
+                moveTowardCell(tc, 1)
+                if (getCell() == mb) break
+                moved++
+            }
+            myC = getCell()
+            var d2 = getCellDistance(myC, tc)
+            if (d2 != null && d2 >= 2 && d2 <= 6 && lineOfSight(myC, tc)) pickT = bestE
+        }
+    }
+    var did = ""
+    var fired = false
+    if (pickT != -1) {
+        var tc2 = getCell(pickT)
+        var dT = getCellDistance(myC, tc2)
+        // protein ONLY when a rhino/neutrino shot will actually land (else it
+        // drains TP and triggers the shield block for nothing — 53582477)
+        var willShoot = (hasRhino && dT >= 2 && dT <= 4) || (hasNeut && dT >= 2 && dT <= 6)
+        if (willShoot && allyHasChip(myID, CHIP_PROTEIN) && getCooldown(CHIP_PROTEIN, myID) == 0 && getTP() >= 3 + 8) {
+            if (useChip(CHIP_PROTEIN, myID) >= 1) did = did + " prot"
+        }
+        if (hasRhino && dT >= 2 && dT <= 4 && getTP() >= 5) {
+            if (getWeapon() != WEAPON_RHINO) setWeapon(WEAPON_RHINO)
+            var rn = 0
+            while (getTP() >= 5 && rn < 3 && isAlive(pickT)) { if (useWeapon(pickT) < 1) break; rn++; fired = true }
+            if (rn > 0) did = did + " rhino" + rn
+        }
+        if (hasNeut && isAlive(pickT) && dT >= 2 && dT <= 6 && getTP() >= 4) {
+            if (getWeapon() != WEAPON_NEUTRINO) setWeapon(WEAPON_NEUTRINO)
+            var nn = 0
+            while (getTP() >= 4 && nn < 3 && isAlive(pickT)) { if (useWeapon(pickT) < 1) break; nn++; fired = true }
+            if (nn > 0) did = did + " neut" + nn
+        }
+    }
+    // lightninger on anything 6-10 aligned-free (x1 area) with leftover TP
+    if (hasLight && getTP() >= 10) {
+        var lt = -1
+        var ltSc = -99999
+        for (var e3 in en) {
+            var pr3 = cloneKillPriority(getName(e3))
+            if (pr3 < 0 || !isAlive(e3)) continue
+            var ec3 = getCell(e3)
+            if (ec3 == null || ec3 < 0) continue
+            var d3 = getCellDistance(getCell(), ec3)
+            if (d3 == null || d3 < 6 || d3 > 10 || !lineOfSight(getCell(), ec3)) continue
+            if (pr3 > ltSc) { ltSc = pr3; lt = e3 }
+        }
+        if (lt != -1) {
+            if (getWeapon() != WEAPON_LIGHTNINGER) setWeapon(WEAPON_LIGHTNINGER)
+            var ln = 0
+            while (getTP() >= 9 && ln < 2 && isAlive(lt)) { if (useWeapon(lt) < 1) break; ln++ }
+            if (ln > 0) did = did + " light" + ln
+        }
+    }
+    // self-shields only after a shot landed or the army is adjacent — a
+    // walking-in round banks its TP so the first volley is at full budget
+    var svArmyD = nearestArmyDistFrom(getCell(), army)
+    var pct = entityHPPercent(myID)
+    if (fired || pct < 75 || (svArmyD != null && svArmyD <= 3)) {
+        var selfB = [[CHIP_FORTRESS, 6], [CHIP_WALL, 3], [CHIP_ARMOR, 6], [CHIP_SOLIDIFICATION, 6]]
+        for (var sb in selfB) {
+            if (getTP() < sb[1] || !allyHasChip(myID, sb[0])) continue
+            if (getCooldown(sb[0], myID) == 0 && useChip(sb[0], myID) >= 1) did = did + " " + sb[0]
+        }
+    }
+    if (getTP() >= 3 && allyHasChip(myID, CHIP_ANTIDOTE) && isPoisoned(myID) && getCooldown(CHIP_ANTIDOTE, myID) == 0) useChip(CHIP_ANTIDOTE, myID)
+    if (pct < 70 && getTP() >= 5 && allyHasChip(myID, CHIP_REMISSION) && getCooldown(CHIP_REMISSION, myID) == 0) useChip(CHIP_REMISSION, myID)
+    pzSay("PZ STAND " + (pickT != -1 ? getName(pickT) : "none") + did + " mv" + moved + " tp" + getTP() + " hp" + pct)
+    return true
+}
+
 function executeBossMelee() {
     var myID = getEntity()
     if (getStrength() < 300) { return false }
@@ -1764,6 +2230,7 @@ function executeBossMelee() {
     if (!hasSword && !hasRhino) { return false }
     var mArmy = puzzleArmyCells()
     if (count(mArmy) == 0) { return false }
+    castCovetousness(myID)
     // light self-care: the sword needs 16 TP; KG's stack is the defense
     var mPct = entityHPPercent(myID)
     if (mPct < 50 && getTP() >= 5 && allyHasChip(myID, CHIP_REMISSION) && getCooldown(CHIP_REMISSION, myID) == 0) { useChip(CHIP_REMISSION, myID) }
@@ -1849,6 +2316,7 @@ function executeBossCombatPoke() {
         swatCrystals(myID)
         return false
     }
+    castCovetousness(myID)
 
     // DUMP posture (user doctrine: "dump poison then sustain") gated by the
     // COORDINATED STRIKE quorum: one dumper is at heal-parity with the scribe
@@ -2196,6 +2664,7 @@ function tryWeaponStrike(myID) {
         [WEAPON_HEAVY_SWORD, 1, 1, 15, 0, 0]
     ]
     var magTable = [
+        [WEAPON_UNBRIDLED_GAZOR, 2, 7, 8, 3, 1],
         [WEAPON_GAZOR, 2, 7, 8, 3, 1],
         [WEAPON_FLAME_THROWER, 2, 8, 6, 2, 1],
         [WEAPON_DOUBLE_GUN, 2, 7, 4, 0, 0]
@@ -3153,7 +3622,9 @@ function executeLeanPuzzleTurn() {
     // killed two crystals on its T1 turn, the graal wiped us on its T2 turn.
     if (tryApocalypseRevive(myID)) { return true }
 
-    if (getTurn() == 1) {
+    if (getTurn() == 1 && !(_anchorIntercept && !isNamedSolver(getName(myID)))) {
+        // the intercept tank keeps fortress/wall (cd 4/3) for contact —
+        // 53581832: fortress burned at R0, missing on the R3-4 contact rounds
         solverSelfBuff(myID)
     }
 
@@ -3405,8 +3876,14 @@ function executeLeanPuzzleTurn() {
             // d9-10, gone for the R4-6 contact; KG took 1,400-2,400/round with
             // 0-2 shields up and died R5-7 every fight). Dome ONLY at contact,
             // then the self rotation below; remission when hurt.
-            if (armyD <= 5 && getTP() >= 9 && allyHasChip(myID, CHIP_DOME) && getCooldown(CHIP_DOME, myID) == 0) {
-                useChip(CHIP_DOME, myID)
+            // pre-stack one round BEFORE contact (53581049: only solidification
+            // up at d3, 2,044 taken): dome from army distance 9
+            // dome does NOT cover its caster (targets 26 = allies+summons):
+            // in intercept mode only worth it with an ally within 3
+            if (armyD <= 11 && getTP() >= 9 && allyHasChip(myID, CHIP_DOME) && getCooldown(CHIP_DOME, myID) == 0) {
+                var dmAl = 0
+                for (var da2 in getAliveAllies()) { if (da2 != myID && !isSummon(da2)) { var dd2 = getCellDistance(myCell, getCell(da2)); if (dd2 != null && dd2 <= 3) dmAl++ } }
+                if (dmAl > 0) useChip(CHIP_DOME, myID)
             }
             if (entityHPPercent(myID) < 80 && getTP() >= 5 && allyHasChip(myID, CHIP_REMISSION) && getCooldown(CHIP_REMISSION, myID) == 0) {
                 useChip(CHIP_REMISSION, myID)
@@ -3474,10 +3951,12 @@ function executeLeanPuzzleTurn() {
                 if (faD < focusD) { focusD = faD; focusT = fa }
             }
         }
-        var stackGate = !(_anchorIntercept || _anchorShadow) || (count(fArmy) > 0 && focusD <= 7)
+        var stackGate = !(_anchorIntercept || _anchorShadow) || (count(fArmy) > 0 && focusD <= 11)
         if (stackGate) {
+            // the intercept tank stacks on HIMSELF too (53581542: at d3 with
+            // 17 TP he cast only solidification — the pack excluded him)
             var stPack = []
-            for (var sp in anAllies) { if (sp != myID && !isSummon(sp)) push(stPack, sp) }
+            for (var sp in anAllies) { if (!isSummon(sp) && (sp != myID || _anchorIntercept)) push(stPack, sp) }
             var stDid = sustainStack(myID, stPack)
             if (stDid != "") pzSay("PZ STACK" + stDid + " fd" + focusD)
         }
@@ -3955,6 +4434,7 @@ function solverSurvival(slMyID) {
     // +180 RES — then solve with leftovers. Distant army: rolling fortress.
     var svArmy = puzzleArmyCells()
     var svD = count(svArmy) > 0 ? nearestArmyDistFrom(getCell(), svArmy) : 99
+    if (svD <= 8) reflectUp(slMyID)
     if (_turtleMode && !allyHasChip(slMyID, CHIP_RAMPART)) {
         // Turtle bruiser: the support's stack is the defense (winners' bruisers
         // took 400-1,300 TOTAL on Inupi's shields). Self: fortress + wall only
@@ -5637,6 +6117,78 @@ function executeSolverPuzzleTurn() {
             return true
         }
     }
+    // LEGUMATORE T1 (52821555): leather_boots, walk 8 toward the crystal
+    // zone, JUMP 3 more (no LoS, no initial cd), then solidification /
+    // motivation / armor / protein. Nobody engages; T2 = adrenaline + spark
+    // + teleport + walk + resurrect from within reach. Target = the goal
+    // cell of my focus crystal (nearest solved cell on its axis).
+    if (getTurn() == 1 && _isDiver) {
+        if (allyHasChip(myID, CHIP_LEATHER_BOOTS) && getTP() >= 3 && getCooldown(CHIP_LEATHER_BOOTS, myID) == 0) { useChip(CHIP_LEATHER_BOOTS, myID) }
+        var t1E = pickFocusCrystal(getCell())
+        var t1Goal = -1
+        if (t1E != null) {
+            var t1C = getCell(t1E)
+            if (t1C != null && t1C >= 0) t1Goal = nearestSolvedCellOnAxis(_crystalMap[t1E]['goalAxis'], t1C)
+        }
+        if (t1Goal == -1 && _graalCell != -1) t1Goal = _graalCell
+        if (t1Goal != -1) {
+            // the goal cells hug the graal chamber and are often path-unreachable
+            // (local: pl null from 588/228/563); aim at the REACHABLE cell
+            // nearest the goal within 6 of it
+            // getPathLength/moveTowardCell give up on long routes (37-step
+            // paths from the pocket returned null): greedy step — the cell
+            // within MP (short real path) that minimises distance to the goal
+            var t1Aim = -1
+            var t1AimSc = 99999
+            var myT = getCell()
+            var mxT = getCellX(myT)
+            var myY = getCellY(myT)
+            var mpT = getMP()
+            for (var adx = -mpT; adx <= mpT; adx++) {
+                for (var ady = -mpT; ady <= mpT; ady++) {
+                    var am = abs(adx) + abs(ady)
+                    if (am == 0 || am > mpT) continue
+                    var ac = getCellFromXY(mxT + adx, myY + ady)
+                    if (ac == null || ac < 0 || isObstacle(ac) || isEntity(ac)) continue
+                    var agd = getCellDistance(ac, t1Goal)
+                    if (agd == null) continue
+                    var asc = agd * 10 + am
+                    if (asc >= t1AimSc) continue
+                    var apl = getPathLength(myT, ac)
+                    if (apl == null || apl > mpT) continue
+                    t1AimSc = asc; t1Aim = ac
+                }
+            }
+            if (t1Aim != -1) moveTowardCell(t1Aim, getMP())
+            if (allyHasChip(myID, CHIP_JUMP) && getTP() >= 4 && getCooldown(CHIP_JUMP, myID) == 0) {
+                var jx = getCellX(getCell())
+                var jy = getCellY(getCell())
+                var jBest = -1
+                var jBestD = getCellDistance(getCell(), t1Goal)
+                if (jBestD == null) jBestD = 999
+                for (var jdx = -3; jdx <= 3; jdx++) {
+                    for (var jdy = -3; jdy <= 3; jdy++) {
+                        var jm = abs(jdx) + abs(jdy)
+                        if (jm == 0 || jm > 3) continue
+                        var jc = getCellFromXY(jx + jdx, jy + jdy)
+                        if (jc == null || jc < 0 || isObstacle(jc) || isEntity(jc)) continue
+                        var jd = getCellDistance(jc, t1Goal)
+                        if (jd != null && jd < jBestD) { jBestD = jd; jBest = jc }
+                    }
+                }
+                if (jBest != -1) { useChipOnCell(CHIP_JUMP, jBest) }
+            }
+        }
+        var t1Buffs = [[CHIP_SOLIDIFICATION, 6], [CHIP_MOTIVATION, 4], [CHIP_ARMOR, 6], [CHIP_FORTRESS, 6], [CHIP_PROTEIN, 3], [CHIP_KNOWLEDGE, 5]]
+        for (var tb in t1Buffs) {
+            if (getTP() < tb[1] || !allyHasChip(myID, tb[0])) continue
+            var tbcd = getCooldown(tb[0], myID)
+            if (tbcd != null && tbcd == 0) useChip(tb[0], myID)
+        }
+        pzSay("PZ T1 goal" + t1Goal + " me" + getCell() + " tp" + getTP())
+        return true
+    }
+
     // Kill+Resurrect solve takes priority when the kit is ready (the direct
     // reposition bypasses all slide geometry — the solve that kept stalling).
     // T1 DIVE (winning replay 52821555: they teleported at R1-2, before the

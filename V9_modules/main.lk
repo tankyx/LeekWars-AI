@@ -210,7 +210,9 @@ function main() {
         // Sustain team: the bruisers do NOT retreat at the flip (KG holds
         // aggro; 53571644: the retreat put them 12-15 from the scribe and the
         // walk back cost the two rounds they had left)
-        var flipSkip = (_anchorIntercept || _anchorShadow) && getStrength() >= 300
+        // bruisers (STR carriers) never retreat at the flip — they charge the
+        // army (53582477: the retreat pushed 3 survivors away, wasted the flip)
+        var flipSkip = getStrength() >= 300
         if (!flipSkip && getTurn() - _combatLatchTurn <= 1) {
             var flipArmy = puzzleArmyCells()
             var flipD = count(flipArmy) > 0 ? nearestArmyDistFrom(getCell(), flipArmy) : 99
@@ -222,6 +224,8 @@ function main() {
             }
         }
         if (executeLeanBossBuff()) { return }  // sustain shield-bot: full turn inside the pack
+        if (executeBossStand()) { return }
+        if (executeBossGather()) { return }
         if (executeBossMelee()) { return }
         if (executeBossCombatPoke()) { return }
         if (executeBossCombatPeel()) { return }

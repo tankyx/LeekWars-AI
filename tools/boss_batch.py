@@ -6,7 +6,11 @@ import time
 import requests
 from config_loader import load_credentials
 
-LEEKS = [129295, 20443, 129296, 129288]
+# Participant order = spawn slot (verified 53581862): slot1 -> cell 228 (interior,
+# nearest the crystals), slot2 -> 491 (corridor front, first hit by the army's
+# opening walk), slot3 -> 563, slot4 -> 588 (the pocket). MH (fragile solver)
+# inside, KG (tank) at the front, bruisers behind.
+LEEKS = [129296, 129295, 20443, 129288]
 NAMES_SHORT = {129295: 'KG', 20443: 'ADA', 129296: 'MH', 129288: 'ED'}
 
 

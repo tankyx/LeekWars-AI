@@ -46,9 +46,11 @@ def clone_geometry(scn, fid):
 def build(configs, seed, fid):
     scn = lt.build_boss_scenario(configs, seed=seed)
     leeks = configs['leeks']
+    LIVE2GEN = {}   # the generator resolves live item ids itself (heavy_sword 278 worked); keep identity
     for e in scn['entities'][0]:
         e['ai'] = 'V9_modules/main.lk'
         e['chips'] = list(leeks[e['name']]['chips'])   # exactly the live loadout, no kit injection
+        e['weapons'] = [LIVE2GEN.get(w, w) for w in leeks[e['name']].get('weapons', [])]  # live item id -> generator weapon id
     if fid:
         clone_geometry(scn, fid)
     return scn

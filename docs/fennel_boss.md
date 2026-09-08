@@ -48,6 +48,13 @@ at 0 TP).
 | turtle escape discipline | 53571524-53571538 | 0 | ~20 | KRs land 1-off, chips wasted |
 | projected-focus shield stack | 53571556-53571602 | 0 | — | MH (escort) dead R3-6 ×12; ball takes 800-1000/round avg |
 | **intercept + bruisers kite until KG has aggro** (T2-6 hold) | 53571628-53571641 | **4** (R9, R10, R12, R13) | 3-4 solves in 7/12 | 53571632: 3 alive at the R10 flip, phase 2 ran to R34 (first real phase-2 sample) |
+| **gather builds, intercept flags still on** (MH MAG 680/RES 30, strikers without self-shields) | 53581358-53581371 | 0 | 0-2 | all dead R4-8: KG holds one round, then 3,000+/round on the unshielded strikers; phase 2 never reached |
+| spawn order [MH, KG, Ada, ED] (MH at 228, KG at the 491 front) | 53581878-53581891 | 0 | 0-2 | no change: MH at 228 dies R4-8 (the interior is nearest to the army too), everyone dead R4-14 |
+| fortress kept for contact, dome only with allies near, T1 gate fixed | 53581844-53581855 | 0 | 0-3 | KG now takes 28-458/round once fortress+armor+shield+wall are up and lives R10-18 — but the army walks past him: MH R5-8, Ada R6-9, ED R5-10 (per-unit reach, not aggro) |
+| **tank self-stack fix** (KG in his own pack, gates at d11) | 53581832-53581843 | 2 (R9, R9) | 0-3 | KG stacks wall/armor/shield/solid on himself from R2 but fortress was burned at T1 (cd 4 → missing R3-4): 1,751 taken R4, dead R6-9; phase 2 reached twice with 2 alive — striker idle at 16 TP (plus1, no AoE chips), MH DUMP x3 → ~150 dmg; both dead next round |
+| **reconciled builds** (strikers plasma + dome/carapace/wall, MH MAG 680 / RES 230) + intercept with KG pre-stack at d9 | 53581538-53581549 (11) | 0 | 0-3 in 8/11 | KG dead R4-6 in 11/11 even pre-stacked; everyone dead R6-13; phase 2 never reached; 0 credits left |
+| **gather builds, column ball (valid rerun after the full re-upload)** | 53581468-53581480 | 0 | **0** | ball holds (four fights to R23-38 with KG's stack) but solves nothing; ED dies R4-5 alone in the spawn pocket in 8/12; phase 2 (the gather doctrine) never reached |
+| gather builds, column ball — **INVALID: server compile corrupt** | 53581405-53581423, 53581459-465 | — | — | every leek bugged every turn (`item_roles.lk:2 VARIABLE_NAME_UNAVAILABLE`, `Invalid AI`) after single-file writes; fixed by the full `tools/upload_v9.py` re-upload (53581467 clean). 26 credits lost to it |
 | **option 2: intercept-tank with the RES-760 KG, bruisers dive-era** (`_anchorIntercept=true`, `_turtleMode=false`) | 53581046-53581058 | 1 (R10) | 1-3 in 11/12 | KG dead R4-6 in 12/12 — the "near-immune" tank does not survive first contact with the full army; bruisers R5-12 |
 | column + cast-before-move + KG capped to 3 cells near the army | 53573100-53573112 | 0 | 0-1 | deaths R5-17 (53573103 to R47); the ball still loses one leek per 1-2 rounds once the full army is on it — the stack covers 1-2 targets per round, the alpha lands on the third |
 | **single-file column** (columnMove, KG leads to the path-nearest crystal) | 53573063-53573079 | 0 | 0 | ball forms R7-8 and takes 0 for R2-8; from R9 the army catches it mid-move: 3,828 / 2,926 / 3,212 per round, KG cast NOTHING R9-11 (he walked 6 ahead, pack out of range 3) → cast-before-move + 3-cell cap added |
@@ -141,6 +148,66 @@ a two-line change (`_anchorIntercept = true`, `_turtleMode = false`) on
 builds that already exist, and it is the only configuration today that
 produced graal deaths at 30 %.
 
+**STATE 2026-09-08 ~06:00 (0 credits):** the reconciled builds restore the
+dive tempo (0-3 solves, KR fires) but KG as intercept tank dies R4-6 in
+11/11 with the pre-stack — the RES-760 self-stack does not survive first
+contact with the full army (it did hold vs a partial army in 53571755+).
+Phase 2 / gather has still never executed live. ROOT CAUSE FOUND
+(53581542 audit): `sustainStack` built its pack from allies EXCLUDING the
+caster, so the intercept tank at d3 with 17 TP cast only solidification —
+he never had fortress/wall/armor/shield on himself at contact (R4: 2,546
+taken, dead). Fixed and uploaded (full re-upload): the tank is in his own
+pack in intercept mode; dome/rotation gates moved to army distance 11
+(R2 at d10 was missing by one). UNTESTED LIVE (0 credits). Next session:
+one batch of exactly this configuration before changing anything; expected
+KG intake at contact well under 1k/round if the fix holds, then the graal
+should fall R9-13 with 3 alive and `executeBossGather` finally runs.
+
+**STATE 2026-09-08 ~05:00 (11 credits left, superseded):** the gather doctrine is live
+on the server but has never executed in a real fight — with the gather
+builds (MH MAG/RES 30, strikers without self-shields) neither puzzle
+doctrine converts: intercept → 3k/round on the unshielded strikers, dead
+R4-8; ball → survives R7-38, solves 0. The puzzle/phase-2 build tension is
+the open problem: the puzzle needs the intercept tempo with self-shielded
+RES-230 strikers (graal in ~30 %), phase 2 needs plasma/lightning/meteorite
+slots and a MAG covid carrier. Candidate reconciliation for next session:
+strikers keep plasma + bazooka + dome/carapace (drop lightning/meteorite/
+rockfall), MH keeps the kit + covid but gets RES back through components
+(amazonite/obsidian) instead of chiyembekezo, and the puzzle runs the
+intercept doctrine with KG pre-stacking at army distance 9.
+
+**PHASE-2 GATHER + BLAST (user doctrine 2026-09-08, built + sandboxed, NOT
+yet executed live):** builds: MH back to MAG (818 "BOSS MH covid":
+MAG 680 / TP 24 / HP 2930, covid/plague/toxin/arsenic/venom/soporific +
+solver kit + spark/resurrection/adrenaline, gazor + flame thrower); ED/ADA
+keep STR 640 and swap carapace/wall/solidification/dome for plasma,
+lightning, meteorite, rockfall (bazooka/sword/rhino kept). Engine facts:
+grapple = "attract directly to the cast cell" (first enemy on the straight
+caster→cell ray slides onto the cell; 4/turn, 3 TP); plasma = 37+2j × STR ×
+TARGETS-HIT in a plus-2 (self-hit if the caster stands on the centre's
+axes within 2); AoE falloff 1 − 0.2·dist; covid 69+10j × MAG × 7 turns,
+propagation 2 (≈28k over the army once clustered at MAG 680). Code:
+`executeBossGather()` (centre = scribe-first cluster, off-axis approach to
+range 2-6, up to 4 grapples onto the plus cells from enemies beyond them,
+plasma when 2+ in the plus, lightning ×3 / meteorite / rockfall / bazooka
+8-12 otherwise); MH uses the existing dump path (covid-first, dive).
+Sandbox `tools/local_phase2.py` (8 passive fennel units, no graal):
+2,500-3,400 dmg/round to the army from R3 with pulls of 2 and plasma on
+2-3 targets, plus MH's poison ticking 500/round then 2,278 after her dive.
+Geometry facts learned in the sandbox: grapple rays are straight lines
+only and the ray toward the centre hits the centre first, so from one
+position the plus fills with 2-3 targets, not 5 — the real cluster
+mechanic is covid's propagation on the army's own formation; LIGHTNING is
+a line-launch chip (must be aligned with the target); plus-2 plasma
+self-hits when the caster is on the centre's axis within 2. Hence the
+strikers stand ON the centre's axis at distance 4-5 (plasma 0-6,
+lightning 2-5 aligned, meteorite 5-9, rockfall 5-7, all self-safe), pull
+2/turn, and always spend the rest of the TP on AoE at the centre. Sandbox
+(passive army): 26,055 dmg in 12 rounds, scribe down by R9, no bugs.
+Deployed to the server (md5-verified) but NEVER run live — 1 credit left.
+Untested live: the army's movement between our turns (it will not stand in
+the plus), and the puzzle phase with MH at RES 30.
+
 **SINGLE-FILE COLUMN (built + local-validated 2026-09-08 ~02:30):**
 `columnMove(obj, stopD)` for every ball move — candidates = 12 lowest
 manhattan cells within MP, scored by REAL path to the objective
@@ -187,6 +254,94 @@ bruisers' 400 capital of RES should go to STR/TP/HP, and the scribe needs
 a one-round kill (~6,000): 3 bruisers at STR 700+ buffed (~1,700/sword) +
 rhino get close. Ask the user before any respec.
 
+**M_LASER BREAKTHROUGH + PLASMA/REFLECT REGRESSIONS (2026-09-08, user-directed):**
+- **m_laser (weapon 47, laser-line, range 5-12, ~500/hit) is THE unlock**: it
+  hits every entity on the line, so fired down the column it damages the
+  scribe THROUGH the knights (the scribe was previously untouchable). First
+  scribe kill of the campaign: 53584089 (graal R4, 4 alive, scribe dead R9,
+  14,652 dealt / 6,604 net — best fight ever). Wired as the phase-2 primary:
+  align on the scribe's row/col within 5-12 with LoS, fire x2.
+- **The remaining wall is flip survival**: m_laser needs 3-4 leeks alive to
+  laser-focus the scribe faster than its ~1,600/round self-heal; we usually
+  reach the flip with 1-2 (die R5-11), so the scribe mostly survives and net
+  stays ~500-2,000/fight vs 36k needed.
+- **plasma (chip 143) REGRESSED** (swapped for armor → lost a shield → died
+  R5-7, plasma rarely fired self-safe): 4/12 graal, net 0-1,616. Reverted.
+- **reflect (AGI+mirror+thorn) REGRESSED** (cost HP/STR → died in the puzzle):
+  2/12 graal. Reverted (cost 8 restat potions, user re-bought).
+- **BEST/CURRENT config**: all-STR clones (STR 420-460 / WIS 450 / RES 270-350
+  / TP 26) + covetousness (TP engine) + m_laser through-column (scribe) +
+  rhino/neutrino + full shield stack + scribe-first + aggressive stand.
+- **MAG covid carrier (MH) REGRESSED** (user idea: covid spreads → poisons the
+  hidden scribe unhealably): sound in theory but the MAG leek is too fragile
+  in the puzzle dive — MH died R4-5 in 12/12, DUMP=0, covid never cast.
+  Survival is the binding constraint on EVERY build change (reflect, plasma,
+  MAG all regress by trading the survival that reaches phase 2 with a team).
+- **THE WALL (final, 2026-09-08, ~750 boss fights, 0 wins)**: flip survival.
+  m_laser makes the scribe killable (proven: 53584089 scribe dead R9, 14,652
+  dealt) but only with 3-4 leeks alive to laser-focus it past its ~1,600/round
+  self-heal; we reach the flip with 1-2 alive (die R4-11) most fights. No
+  build change closes it (all trade survival); the winners concentrate STR
+  780 + reflect + TP 29 into 1-2 leeks, which our 1,780-capital-x4 can't match.
+  Next lever if resumed: raise flip survival WITHOUT trading the dive speed —
+  e.g. one leek reserves teleport for a phase-2 blink, or grind volume for
+  the favorable spawn where 4 reach the flip and the m_laser+grind clears.
+
+**BEST CONFIG THIS SESSION (2026-09-08) + COVETOUSNESS + REFLECT RESULT:**
+The peak was ALL FOUR as STR clones (STR 420-460 / WIS 450 / RES 270-350 /
+TP 26, rhino+neutrino+lightninger, jump) + **covetousness** (chip 120, X-2
+area = +1 TP per enemy hit for 2t, the TP engine) + scribe-first phase 2 +
+the aggressive stand routine (buff/shield only on a landed shot, close to
+range 2): **9/12 graal deaths, once all four alive at the flip, ~3,000/round
+phase-2 damage.** The wall there: the scribe (heal engine) sits behind the
+knights out of weapon range 2-6, grapple can't pull it through them
+(SCRPULL fired 0×), the army heals ~1,600-3,200/round, net ~0-1,400, leeks
+die R4-8 — can't clear 36k. REFLECT respec (AGI 350-380, mirror+thorn, ~43%
+return) REGRESSED it to 2/12 graal: reflect does NOT reduce damage taken
+(engine EffectDamage: returnDamage is separate from the shield subtraction),
+so paying AGI cost HP/RES/STR → leeks die FASTER in the puzzle (R2-9) and
+never reach phase 2 where reflect's attrition would matter. Reverted KG/ED
+to STR clones; ADA/MH stuck as reflect (out of restat potions — buy in UI or
+wait). **The proven-best is the all-STR-clone + covetousness + scribe-first
++ aggressive-stand config; restore ADA/MH to it when potions refresh.**
+
+**THE LEGUMATORE FORMULA, DECODED ROUND BY ROUND (52821555, 2026-09-08):**
+four identical leeks (fight totals HP 3,282 / TP 26 / MP 6 / STR 600 / RES
+500 / WIS 541 / SCI 110 / AGI 50), our exact spawns 228/491/563/588, same army.
+- **T1**: leather_boots (+2 MP), walk 8 toward the crystal zone, JUMP (chip
+  144: range 3, no LoS, no initial cooldown, we own 3), then
+  solidification, motivation, armor/fortress, protein. Figue: 491 → 425
+  (walk) → 390 (jump). Nobody engages the army.
+- **T2**: adrenaline, spark the crystal (from ≤10), TELEPORT (12), walk 8
+  (MP 6 + boots) to within 2 of the solved cell, resurrect. All FOUR
+  crystals solved on T2 (res → 85 / 84 / 187 / 138). TP: 26 + 5 − 1 = 30 =
+  spark 3 + teleport 9 + resurrect 18. This is exactly our dive code with
+  a T1 approach in front of it.
+- **R3**: graal dies. From R3 to the end NOBODY MOVES (positions 154 /
+  121 / 227 / 296 all fight). Each leek fires 3-5 weapon shots per round:
+  RHINO (79 hits, avg 439 at STR 600; 5 TP, 3 uses, range 2-4),
+  NEUTRINO (27 hits, avg 225; 4 TP, 3 uses, range 2-6, +8 % vulnerability),
+  LIGHTNINGER (5 hits, avg 673) — ~1,300/leek/round, 3.4-6.9k/round team.
+  Leftover TP: protein every 3 rounds, wall/fortress/armor/solidification
+  on self, dome on the pack, knowledge.
+- **Kill order**: KING first (3.5k / 5.2k / 4.1k / 3.2k on R3-6 → dead R6),
+  then squires (R7-8), knights (R8-10), SCRIBE LAST (6,000 in one round R11).
+- **Sustain**: WIS 541 → lifesteal 54 % of every hit (engine: value ×
+  WIS/1000, any direct damage) ≈ 700 heal/leek/round, plus self-shields.
+  Damage taken 300-2,900/round team-wide; nobody died.
+- We own every piece: rhino 153 ×9, neutrino 182 ×60, lightninger 180 ×4,
+  jump 144 ×3, leather_boots, motivation, protein, knowledge, solidification,
+  armor, fortress, wall, dome, spark, resurrection ×4, teleport, adrenaline.
+
+**SPAWN SLOTS = PARTICIPANT ORDER (verified 53581862, 2026-09-08):** the
+`participants` list of `/garden/start-boss-fight` maps to spawn cells in
+order: slot 1 → 228 (interior, closest to the crystals, out of the opening
+walk), slot 2 → 491 (corridor front, hit R0-3), slot 3 → 563, slot 4 → 588
+(the pocket behind the 315-263 corridor). Entity ids follow the same order
+(slot 1 acts first). The whole campaign ran [KG, Ada, MH, ED] — Ada in the
+front slot, the tank in the safe interior. `tools/boss_batch.py` now sends
+[MH, KG, Ada, ED].
+
 **CASTLE CORRIDORS (map 4562, BFS/Tarjan on tools/boss_map_data.json):** the
 spawn pockets (476-590 block) connect to the interior through single-cell
 corridors; 59 articulation cells (263, 280, 298, 315, 351, 369, 387, 513,
@@ -204,6 +359,11 @@ every build decision of the campaign):**
   multiplies the shields the RES-holder CASTS: shield value = (v1 + jet·v2) ×
   (1 + casterRES/100). Our RES-480 bruisers were bought for nothing unless
   they cast their own shields.
+- **Dome does NOT cover its caster** (effect targets 26 = allies + summons,
+  no TARGET_CASTER bit); fortress/wall/armor/shield/solidification (30) do;
+  rampart's and carapace's second effect lands on the caster (self +4-5 %
+  rel / +15 abs per cast). A lone tank's stack is fortress + wall + rampart
+  self + armor/shield abs — about 125 % relative when all are up.
 - Relative shields from DIFFERENT chips SUM (buff stats are added across
   active effects, no clamp anywhere) → ≥ 100% relative = zero damage.
   Recasting the same chip replaces it (non-stackable). Solidification =
