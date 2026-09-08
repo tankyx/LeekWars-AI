@@ -122,6 +122,20 @@ global _krNoTeleport = false
 // route teleports only onto cold stands. The KR layer solves at walk-dive /
 // immediate-kill pace; slides do the rest; the pack stays inside KG's shields.
 global _turtleMode = false
+// LURE PHASE (2026-09-08 experiment): the army camps the crystal corridor
+// (fight 53589485: it holds cells 150-362 while we spawn 211-605, and dies
+// diving in). For the first _lureTurns rounds every leek retreats to maximize
+// distance from the army and self-buffs — pulling the mobile knights/squires
+// OUT of the corridor before the existing TP-dive doctrine runs. Set false to
+// restore the immediate-dive behavior.
+global _pzLure = true
+// 4 is the proven sweet spot (batch 53589610-624: 3/12 graal deaths, 2-4
+// crystals). 6 regressed to 0/12 — over-exposure + the army re-spreads to
+// re-cover the corridor before the delayed dive.
+global _lureTurns = 4
+// Exile-inversion during the lure regressed alongside lure=6 and could not be
+// isolated; off until tested on its own at lure=4.
+global _lureExile = false
 // BALL AT DIVE PACE (2026-09-07 late, user decision): the ball keeps its
 // cohesion (leader + escorts within 2, KG within 2-3 of the LEADER) but
 // drops the hold / perch / retreat layers that stalled it: the leader
@@ -3607,6 +3621,37 @@ function executeBallEscortTurn(myID, leaderID) {
     return true
 }
 
+// LURE-EXILE (2026-09-08): during the lure, a far leek inverts with the
+// nearest pursuing army unit — the swap flings that unit out to our far cell
+// (max distance from the corridor) and drops us on its old cell; the caller
+// then re-retreats. Their aggression taxis them to the back rank; the corridor
+// stays thin. Nearest reachable unit only (inversion range 14, needs LoS).
+function lureInversionExile(myID) {
+    if (!allyHasChip(myID, CHIP_INVERSION) || getTP() < 4) { return false }
+    var cd = getCooldown(CHIP_INVERSION, myID)
+    if (cd == null || cd > 0) { return false }
+    var myCell = getCell()
+    var bestE = -1
+    var bestD = 999
+    var enemies = getAliveEnemies()
+    for (var eid in enemies) {
+        var en = getName(eid)
+        if (en == "graal" || indexOf(en, "crystal") != -1) continue
+        var ec = getCell(eid)
+        if (ec == null || ec < 0) continue
+        var d = getCellDistance(myCell, ec)
+        if (d == null || d > 14 || d < 2) continue
+        if (!lineOfSight(myCell, ec)) continue
+        if (d < bestD) { bestD = d; bestE = eid }
+    }
+    if (bestE == -1) { return false }
+    if (useChip(CHIP_INVERSION, bestE) >= 1) {
+        pzSay("PZ LURE-EXILE d" + bestD)
+        return true
+    }
+    return false
+}
+
 function executeLeanPuzzleTurn() {
     // 4-leek doctrine (2026-08-19): ANCHOR + SOLVE. The tankiest leek parks
     // at ~4 cells from the army and tanks it forever (shield/heal rotation),
@@ -3621,6 +3666,26 @@ function executeLeanPuzzleTurn() {
     // dome+rage+slb would starve it). From TURN 1: 53570312 — the chest
     // killed two crystals on its T1 turn, the graal wiped us on its T2 turn.
     if (tryApocalypseRevive(myID)) { return true }
+
+    // LURE PHASE: retreat + self-buff for the first _lureTurns rounds, no dive.
+    // Goal: draw the mobile army out of the 1-wide crystal corridor so the
+    // TP-dive that follows faces a thinner defense. Empirical — read army
+    // displacement (PZ LURE d<dist>) from the batch says.
+    if (_pzLure && getTurn() <= _lureTurns) {
+        var lArmy = puzzleArmyCells()
+        solverSelfBuff(myID)
+        // exile the nearest pursuer with inversion, THEN re-retreat from where
+        // the swap dropped us (buffs already ran, so MP/TP are maxed). Only on
+        // the EARLY lure turns so inversion (cd 4) recharges before the dive.
+        if (_lureExile && getTurn() <= 2) { lureInversionExile(myID) }
+        lArmy = puzzleArmyCells()
+        if (count(lArmy) > 0 && getMP() > 0) { moveAwayFromCells(lArmy, getMP()) }
+        var lc = getCell()
+        // never park a lure turn on a corridor articulation cell (walls the team out)
+        if (isCorridorCell(lc) && getMP() > 0) { moveAwayFromCells(lArmy, 1); lc = getCell() }
+        pzSay("PZ LURE d" + (count(lArmy) > 0 ? nearestArmyDistFrom(lc, lArmy) : 99))
+        return true
+    }
 
     if (getTurn() == 1 && !(_anchorIntercept && !isNamedSolver(getName(myID)))) {
         // the intercept tank keeps fortress/wall (cd 4/3) for contact —
