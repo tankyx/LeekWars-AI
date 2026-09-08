@@ -74,7 +74,7 @@ function v9VetoScoreCandidate(sim, cand, target, arsenal, fieldMapObj) {
     var endCell = ourSim.finalPosition
     if (endCell == null || endCell == -1) endCell = getCell()
     var endHP = getLife() + ourSim.hpGained
-    var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+    var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
     return evalOutcome(ourSim, enemyEst, target, arsenal)
 }
 
@@ -89,7 +89,7 @@ function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMap
     var endCell = bestSimResult.finalPosition
     if (endCell == null || endCell == -1) endCell = getCell()
     var endHP = getLife() + bestSimResult.hpGained
-    var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+    var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
 
     // 2. Catastrophe test: predicted death, a plan that mostly no-ops, or a
     // losing race-bleed (Basileek7 53270783: Ada took 900-1400/turn for four

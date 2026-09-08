@@ -55,7 +55,7 @@ function rolloutRerankLearned(topCandidates, target, arsenal, fieldMapObj, weigh
         var endCell = simResult.finalPosition
         if (endCell == null || endCell == -1) endCell = myCell
         var endHP = getLife() + simResult.hpGained
-        var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+        var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
         var p = v9LearnedStateValue(player, target, simResult, enemyEst)
         cand['learnedP'] = p
         if (i == 0) {
@@ -121,7 +121,7 @@ function rolloutRerank(topCandidates, target, arsenal, fieldMapObj, weights) {
         var endCell = simResult.finalPosition
         if (endCell == null || endCell == -1) endCell = myCell
         var endHP = getLife() + simResult.hpGained
-        var enemyEst = simulateEnemyResponseMulti(target._id, arsenal, endCell, endHP, fieldMapObj)
+        var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
 
         // Reflect carve-out: with return damage active, part of their hit is
         // income, not loss (ED's reflect build was over-punished in the A/B).
