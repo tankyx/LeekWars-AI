@@ -888,3 +888,41 @@ poison after one tick regardless. (Generator Action.java: 103 = HEAL, 307 = REMO
 cannot be banked. The phase-2 lever the data points at: an EARLIER graal death with more
 bodies alive at the flip (53590030: graal@8 with 3 alive) — STR m_laser bodies (~1000/turn
 each) not a lone ~450/turn poison body. KG's MAG respec is likely net-negative for phase 2.
+
+**STR-reserve batch 53592294-306 (KG respecced back to STR, loadout 927): 2/12 graal deaths, 0 wins.**
+The "STR bodies at an earlier flip" reading did not materialize: both flips came late (T12/T13)
+with exactly ONE body alive — the reserve — and it put 0 direct damage on the king in its ~2
+phase-2 turns: says show `STAND none` on 2 of 3 turns (53592298: STAND none x2 then dead at
+hp10 — it never fired) and a single `MLASER scribe x2 d5` volley in 53592299 (executeBossStand
+is scribe-first: scribe 400 vs king 50). A lone body at a late flip mostly cannot get a shot off. The T8-with-3-alive window (53590030) was a one-off in ~50
+fights. All three phase-2 levers are now ruled out with evidence: survival stats (obsidian),
+banked DoT (COVID: fight ends on last death + REMOVE_POISONS), and a lone STR reserve. Every
+variant converges on "1 body, ~2 turns, vs a 10000-HP king + a healer". What remains requires
+MORE bodies alive at the flip: divers that survive their solve (the KR dive is a 30-TP
+suicide), an earlier flip (bounded by the 1-wide corridor + army re-kills), or more leeks.
+Session spend: ~10 batches / ~120 fights. Puzzle progress is real and committed (0 → 2-5/12).
+
+## 2026-09-09 — 8-LEEK LOBBY (Virus + Cure), user decision after the 4-leek phase-2 wall
+
+**Why:** the constraint is bodies alive at the flip; four more bodies attack it directly.
+**Cure's side (live audit):** LeekRain L212 MAG447 HP1617 TP15 / DawnFall L215 MAG462 HP1757
+TP15 / DuskHope L213 MAG462 HP1160 TP16 / ProdigalSon L238 STR500 HP1991 TP15. All run
+`8.0/V8/main.lk` (path-based, no numeric id). Cure inventory: 0 resurrection / boxing /
+inversion / teleport / m_laser, 1 grapple, 7 spark; 0 restat potions; unspent capital
+110/71/65/5. They CANNOT dive-solve → they are RESERVES (bodies): far-held all puzzle,
+fresh at the flip, and they keep the fight alive (which is what killed the COVID plan).
+**Lobby mechanics (MCP boss_lobby):** MAIN opens an unlocked squad; Cure must join from the
+user's own browser/phone via the returned link (one WebSocket per IP — cannot be automated
+here); then "start". So no automated batches — each 8-leek fight needs a manual join.
+**Code (uncommitted, local-validated):** `_pzReserveNames` list = the 4 Cure names (KG is a
+diver again; Virus-only fights now run lure-4 all-dive with no reserve); `_leanSquad =
+leekN <= 9` so 8 leeks use the lure/reserve path (the non-lean doctrine pairs chipless leeks
+to solvers as escorts → they walk into the army); anchor selection skips reserves.
+**Harness:** `local_boss_v9.py --extra` adds the 4 Cure leeks (ids must be unique across
+BOTH teams — the graal/crystals use 5-9; the generator then re-numbers everything on output,
+so read results by NAME); say printer whitelist extended. **Validated locally:** all 8
+`PZ LURE` T0-T3, the 4 Cure leeks `PZ RESERVE` from T4, KG dives/solves, Virus solves, bugs=0.
+**To run live (needs go):** `upload_v9.py --account cure` (→ Cure 9.0/V9/, V8 kept),
+`/leek/set-ai` with `ai_path=9.0/V9/main.lk` for the 4 Cure leeks, additive capital on Cure
+(0 potions: life ≈4 HP/capital → LeekRain +~440, DawnFall +~280, DuskHope +~260), then the
+open → user-joins → start loop.

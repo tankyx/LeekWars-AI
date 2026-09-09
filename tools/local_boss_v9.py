@@ -18,7 +18,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(__file__))
 import local_test as lt  # noqa: E402
 
-OURS = ('KurtGodel', 'AdaLovelace', 'MargaretHamilton', 'EdsgerDijkstra')
+OURS = ('KurtGodel', 'AdaLovelace', 'MargaretHamilton', 'EdsgerDijkstra', 'LeekRain', 'DawnFall', 'DuskHope', 'ProdigalSon')
 
 
 def clear_cache():
@@ -43,9 +43,36 @@ def clone_geometry(scn, fid):
     scn['map']['team2'] = [e['cell'] for e in scn['entities'][1]]
 
 
-def build(configs, seed, fid):
+# 8-leek lobby (Virus + Cure): Cure's four join team 1 as far-held reserves.
+# Cells are far stands our leeks have occupied in real fights (walkable).
+# Template geometry only — do not combine with --fight (clone maps by the
+# four Virus names).
+EXTRA_LEEKS = [('LeekRain', 229), ('DawnFall', 441), ('DuskHope', 549), ('ProdigalSon', 609)]
+
+STAT_KEYS = ('type', 'level', 'life', 'cores', 'ram', 'tp', 'mp', 'strength', 'magic',
+             'agility', 'wisdom', 'resistance', 'science', 'frequency')
+
+
+def build(configs, seed, fid, extra=False):
     scn = lt.build_boss_scenario(configs, seed=seed)
     leeks = configs['leeks']
+    if extra:
+        # ids must be unique across BOTH teams (graal/crystals use low ids too)
+        all_ents = [e for team in scn['entities'] for e in team]
+        max_id = max(e['id'] for e in all_ents)
+        for k, (nm, cell) in enumerate(EXTRA_LEEKS):
+            cfg = leeks[nm]
+            eid = max_id + 1 + k
+            ent = {'id': eid, 'ai': 'V9_modules/main.lk', 'name': nm, 'farmer': eid, 'team': 1,
+                   'cell': cell, 'weapons': list(cfg.get('weapons', [])), 'chips': list(cfg['chips'])}
+            for sk in STAT_KEYS:
+                if sk in cfg:
+                    ent[sk] = cfg[sk]
+            scn['entities'][0].append(ent)
+            if isinstance(scn.get('farmers'), list):
+                scn['farmers'].append({'id': eid, 'name': nm, 'country': 'fr'})
+        if isinstance(scn.get('map'), dict) and isinstance(scn['map'].get('team1'), list):
+            scn['map']['team1'] = [e['cell'] for e in scn['entities'][0]]
     LIVE2GEN = {}   # the generator resolves live item ids itself (heavy_sword 278 worked); keep identity
     for e in scn['entities'][0]:
         e['ai'] = 'V9_modules/main.lk'
@@ -113,13 +140,14 @@ def main():
     ap.add_argument('--seeds', type=int, default=1)
     ap.add_argument('--seed', type=int, default=12345)
     ap.add_argument('--full', action='store_true')
+    ap.add_argument('--extra', action='store_true', help='add the 4 Cure leeks (8-leek lobby)')
     args = ap.parse_args()
     clear_cache()
     configs = lt.load_configs()
     tot = 0
     for k in range(args.seeds):
         seed = args.seed + k
-        scn = build(configs, seed, args.fight)
+        scn = build(configs, seed, args.fight, extra=args.extra)
         print(f'=== seed {seed} fight-geometry {args.fight}')
         data = run(scn)
         n, bugs = report(data, args.full)

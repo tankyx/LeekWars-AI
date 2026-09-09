@@ -143,7 +143,15 @@ global _lureExile = false
 // The other three still solve. Trades solve power (3 divers not 4) for a
 // phase-2 body — A/B against solve rate. Off = all four dive.
 global _pzReserve = true
-global _pzReserveName = "KurtGodel"
+// 8-LEEK LOBBY (2026-09-09, user decision): Virus's four dive (max solve
+// power); Cure's four are the reserves — they cannot dive (no resurrection /
+// boxing / inversion / teleport, TP 15) but they are BODIES: far-held all
+// puzzle, fresh at the flip, and they keep the fight alive so damage can
+// land on the king. In a Virus-only fight nobody is reserved (lure-4 all-dive).
+global _pzReserveNames = ["LeekRain", "DawnFall", "DuskHope", "ProdigalSon"]
+function isReserveName(rnName) {
+    return inArray(_pzReserveNames, rnName)
+}
 // BALL AT DIVE PACE (2026-09-07 late, user decision): the ball keeps its
 // cohesion (leader + escorts within 2, KG within 2-3 of the LEADER) but
 // drops the hold / perch / retreat layers that stalled it: the leader
@@ -446,7 +454,10 @@ function assignPuzzleRoles() {
     for (var lAid in allAllies) {
         if (!isSummon(lAid)) leekN++
     }
-    _leanSquad = leekN <= 5
+    // <= 9: the 8-leek Virus+Cure lobby must use the lean lure/reserve path —
+    // the non-lean doctrine pairs chipless leeks to solvers as escorts, which
+    // walks the Cure bodies into the army (the failure lean mode replaced).
+    _leanSquad = leekN <= 9
 
     if (count(allAllies) <= 1) {
         _puzzleRole = "SOLVER"
@@ -3786,7 +3797,7 @@ function executeLeanPuzzleTurn() {
 
     // PHASE-2 RESERVE: one leek never dives — it holds far + full-HP through the
     // whole puzzle so a fresh body remains for the COMBAT phase after graal death.
-    if (_pzReserve && getName(myID) == _pzReserveName) { return reservePuzzleHold(myID) }
+    if (_pzReserve && isReserveName(getName(myID))) { return reservePuzzleHold(myID) }
 
     if (getTurn() == 1 && !(_anchorIntercept && !isNamedSolver(getName(myID)))) {
         // the intercept tank keeps fortress/wall (cd 4/3) for contact —
@@ -3807,6 +3818,8 @@ function executeLeanPuzzleTurn() {
         var la = getAliveAllies()
         for (var laI in la) {
             if (isSummon(laI)) continue
+            // reserves never anchor — they hold far for the whole puzzle
+            if (isReserveName(getName(laI))) continue
             var laKit = allyHasChip(laI, CHIP_GRAPPLE) || allyHasChip(laI, CHIP_BOXING_GLOVE) || allyHasChip(laI, CHIP_INVERSION)
             if (laKit && isNamedSolver(getName(laI))) continue
             var ehp = getTotalLife(laI) * (1 + getResistance(laI) / 100)
@@ -5480,7 +5493,7 @@ function tryApocalypseRevive(myID) {
         // "REVIVE ->561 solvedfalse", 4 solved yet graal never died, 0/12).
         // The reserve revives ONLY on-axis; otherwise a diver beside the graal
         // does the on-axis revive. Divers keep the apocalypse save unchanged.
-        var isReserve = _pzReserve && getName(myID) == _pzReserveName
+        var isReserve = _pzReserve && isReserveName(getName(myID))
         if (bestC != -1 && isReserve && bestS < 10000) {
             pzSay("PZ KR REVIVE-SKIP e" + deid + " off-axis from reserve")
             bestC = -1
