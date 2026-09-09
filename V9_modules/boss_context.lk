@@ -2324,6 +2324,19 @@ function executeBossMelee() {
     return true
 }
 
+// The king's cell (-1 when dead/absent). Phase-2 win condition: 10000 HP,
+// vulnerable once the graal dies. Covid propagates from it to the pack.
+function bossKingCell() {
+    var kEn = getAliveEnemies()
+    for (var ke in kEn) {
+        if (getName(ke) == "fennel_king") {
+            var kc = getCell(ke)
+            return (kc == null || kc < 0) ? -1 : kc
+        }
+    }
+    return -1
+}
+
 function executeBossCombatPoke() {
     var myID = getEntity()
     // MAG carries poke poison; STR carries poke plasma + ranged weapon.
@@ -2407,6 +2420,33 @@ function executeBossCombatPoke() {
     }
 
     if (dumping) {
+        // MAG PAYLOAD APPROACH (2026-09-08, fight 53589980): the phase-2
+        // reserve enters COMBAT parked 13-19 from the army (its puzzle hold),
+        // just past the dive's 12-cell landing reach — "POKE none" for three
+        // turns with 24 TP, then a lone venom. Walk toward the KING first so
+        // the teleport-dive below can land ring-1 and covid (range 2) fires.
+        if (getMagic() >= 300 && getMP() > 0) {
+            var apKing = bossKingCell()
+            var apAim = apKing
+            if (apAim == -1) {
+                var apBest = 99
+                for (var apc in armyCells) {
+                    var apd = getCellDistance(getCell(), apc)
+                    if (apd != null && apd < apBest) { apBest = apd; apAim = apc }
+                }
+            }
+            if (apAim != -1) {
+                var apD = getCellDistance(getCell(), apAim)
+                if (apD != null && apD > 12) {
+                    // apAim is an OCCUPIED entity cell — moveTowardCell onto it
+                    // moves zero (same trap as aiming at a crystal's own cell).
+                    // Path to a free cell beside it instead (the dive's helper).
+                    var apStand = findEmptyCellNear(apAim, getCell(), 99, 1)
+                    if (apStand != -1) { moveTowardCell(apStand, getMP()) }
+                    pzSay("PZ APPROACH d" + getCellDistance(getCell(), apAim))
+                }
+            }
+        }
         // Teleport INTO the enclave when the cluster is beyond walking reach
         // and the payload justifies it (covid up, or the whole kit ready)
         var diveTpCd = getCooldown(CHIP_TELEPORTATION, myID)
@@ -2443,6 +2483,16 @@ function executeBossCombatPoke() {
                     var dsc = cl2 * 20 + pri2
                     if (bestA == -1 || dsc > bestC2) { bestC2 = dsc; bestA = aim2 }
                 }
+                // MAG carrier: the KING is the target when in teleport reach —
+                // the poison must land on the 10000-HP win condition, not the
+                // densest knight pocket. Covid propagates to the pack anyway.
+                if (getMagic() >= 300) {
+                    var kAim = bossKingCell()
+                    if (kAim != -1) {
+                        var kD = getCellDistance(getCell(), kAim)
+                        if (kD != null && kD <= 14) { bestA = kAim; bestC2 = 9999 }
+                    }
+                }
                 if (bestA != -1) {
                     // Land ADJACENT (ring 1): at ring 2 the single intervening
                     // cell of a packed cluster blocks covid's LoS — fights
@@ -2456,6 +2506,23 @@ function executeBossCombatPoke() {
                         pzSay("PZ DIVE c" + bestC2)
                     }
                 }
+            }
+        }
+        // COVID -> KING first when adjacent (range 2, LoS): guarantee the
+        // propagating, long-duration payload sits on the win condition so it
+        // keeps ticking after the reserve dies (53589980: only a 3-turn venom
+        // ever landed — 0 poison after Kur's death).
+        if (getMagic() >= 300 && getTP() >= 8 && allyHasChip(myID, CHIP_COVID) && getCooldown(CHIP_COVID, myID) == 0) {
+            var ckEn = getAliveEnemies()
+            for (var cke in ckEn) {
+                if (getName(cke) != "fennel_king") continue
+                var ckc = getCell(cke)
+                if (ckc == null || ckc < 0) continue
+                var ckd = getCellDistance(getCell(), ckc)
+                if (ckd != null && ckd <= 2 && lineOfSight(getCell(), ckc)) {
+                    if (useChip(CHIP_COVID, cke) >= 1) { casted++; pzSay("PZ COVID->KING") }
+                }
+                break
             }
         }
         // COVID FIRST — value order, not range order. Fight 52984012: with
@@ -5405,6 +5472,18 @@ function tryApocalypseRevive(myID) {
                 }
                 if (sc0 > bestS) { bestS = sc0; bestC = drc }
             }
+        }
+        // The scan is CASTER-relative. From the far phase-2 RESERVE an
+        // off-axis revive strands the crystal next to the reserve, 300+ cells
+        // from the graal, where no diver can re-align it — one stranded
+        // crystal breaks the 4-aligned condition for good (batch 53589946-959:
+        // "REVIVE ->561 solvedfalse", 4 solved yet graal never died, 0/12).
+        // The reserve revives ONLY on-axis; otherwise a diver beside the graal
+        // does the on-axis revive. Divers keep the apocalypse save unchanged.
+        var isReserve = _pzReserve && getName(myID) == _pzReserveName
+        if (bestC != -1 && isReserve && bestS < 10000) {
+            pzSay("PZ KR REVIVE-SKIP e" + deid + " off-axis from reserve")
+            bestC = -1
         }
         if (bestC != -1) {
             var arr = resurrect(deid, bestC)

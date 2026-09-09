@@ -100,7 +100,10 @@ def apply_loadout(s, b):
     return call(s, 'POST', '/loadout/apply', set_id=b['loadout'], leek_id=b['leek'], use_restat='false')
 
 def spend(s, leek, stat, amount):
-    return call(s, 'POST', '/leek/spend-capital', leek_id=leek, characteristic=stat, amount=amount)
+    # API wants a `characteristics` JSON map (the old characteristic+amount
+    # form returns missing_parameter). It also spends in tier-limited chunks —
+    # re-read leek.capital and loop until 0 (verified 2026-09-08, KG respec).
+    return call(s, 'POST', '/leek/spend-capital', leek_id=leek, characteristics=json.dumps({stat: amount}))
 
 def get_leek(s, leek):
     return call(s, 'GET', f'/leek/get-private/{leek}') if False else s.get(f'{BASE}/leek/get/{leek}').json()

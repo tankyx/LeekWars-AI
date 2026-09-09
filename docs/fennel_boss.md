@@ -822,3 +822,69 @@ walk. The boss-2 leaderboard is each farmer's best (favorable-spawn) fight.
 
 The builds, loadouts, solve mechanics, and this autopsy are all committed.
 The boss is genuinely hard for our account level — not for lack of effort.
+
+## 2026-09-08 — LURE breakthrough, phase-2 RESERVE, MAG+COVID respec
+
+**Obsidian ruled out as a lever.** 2 obsidian_plates crafted (all parts were already
+in stock — the Nasu katana farm was unnecessary, see docs/component_farming_plan.md)
+and equipped on ED/KG. Batch: 0/12, 0 graal deaths. It bought KG one turn (dies T4,
+dead-on-the-margin) — a survival-stat lever does not crack the wall.
+
+**LURE phase (commit c39b2329) — first puzzle clears of the campaign.** Fight-cache
+53589485: the army camps cells 150-362 and never reaches our far spawn (211-605);
+*we* close the distance by diving in. New gate at the top of executeLeanPuzzleTurn:
+for `_lureTurns` rounds every leek retreats (moveAwayFromCells) + self-buffs, no dive.
+Batch 53589610-624 (lure=4): **3/12 graal deaths, 2-4 crystals**, 53589622 solved
+all 4 and killed the graal at T10. Mechanism confirmed in 53589619: army max cell
+377→390→477 chasing us out. **lure=6 regressed to 0/12** (over-exposure while
+kiting + the army re-spreads to re-cover the corridor before the delayed dive).
+`lureInversionExile()` (invert with the nearest pursuer to fling it to the back
+rank) is parked behind `_lureExile=false` — regressed alongside lure=6, not isolated.
+
+**Phase-2 RESERVE (commit c07af189).** Every graal-death fight ended with 0
+survivors — all four die diving as the graal dies. `reservePuzzleHold()`: KG never
+dives, holds far + self-buffs for the whole PUZZLE. Batch 53589827-839: 2/12 graal
+deaths (solve survives 3 divers); Kur holds at d17-20 and in 53589836 reached
+COMBAT at 60% HP and fought 4 turns (STAND, COVET +2, rhino on the scribe) before
+dying. **The resource wall, precisely:** solving needs ~4 suicide divers (30-TP dive,
+nothing left to escape); winning phase 2 needs several fresh bodies vs a 10000-HP
+king + 6000 scribe + 4x4000 knights. Four leeks cannot staff both. One fresh STR
+body lands a few hits and dies.
+
+**MAG+COVID reserve (user-authorized respec, loadout 926).** Damage that OUTLIVES
+the leeks: a poison keeps ticking after its caster dies, COVID spreads. KG respecced
+STR 410 → MAG 410 (identical cost curve, cost-neutral; HP/RES unchanged at
+2856/340), weapons Gazor + Flame Thrower (gazor is the only true MAG-poison weapon
+owned — unbridled_gazor is STR damage despite the name), kit COVID/Plague/Toxin/
+Arsenic/Venom + Regeneration. No dispatch change needed: Gather/Melee bail on
+STR<300, the stand bails without Rhino/Neutrino, so a MAG leek falls through to
+executeBossCombatPoke (poison dump); its quorum is min(2, magAlive) so a lone
+carrier fires. API notes in memory `leekwars-loadout-capital-api`.
+
+**Regression found and fixed — the reserve stranded crystals.** Batch
+53589946-959 (MAG reserve): 0/12 graal deaths although two fights solved all 4.
+Cause: `tryApocalypseRevive` scans cells within 2 of the CASTER and resurrects the
+dead crystal there — designed for divers beside the graal. From the far reserve it
+placed a crystal at cell 561 (`REVIVE ->561 solvedfalse`), 300+ cells from the
+graal, unrecoverable; one stranded crystal breaks the 4-aligned condition for good.
+(The STR reserve logged 0 revives across 4 fights — timing variance, but the revive
+is strictly harmful from the far zone whenever it fires.) Fix: the reserve revives
+ONLY on-axis (`bestS >= 10000`), otherwise `REVIVE-SKIP` and a diver beside the
+graal does the on-axis revive; divers' apocalypse save unchanged. Uploaded
+(updated=50 failed=0). Fixed batch 53589979-991: **3/12 graal deaths** (the batch summary said 1/12 — 7 of 12 failed to fetch; boss_says recovered all 12), 0 revives/stranding — the MAG reserve is fully back at the lure-4 peak, so the respec cost nothing on phase 1. **First direct test of the poison plan, 53589980:** graal dead T7, Kur alive to T14 (7 turns of COMBAT) — but it sat at `POKE none d=13-14` with 24/18/15 TP for three turns and landed only one 3-turn Venom; COVID/Plague/Toxin/Arsenic never cast; king took 93 direct + 446 venom ticks and **0 poison after Kur died**. Cause is positional: the reserve enters COMBAT parked 13-19 away (its puzzle hold), just past the teleport-dive's 12-cell landing reach; pass-2 walking bails on mp<=0 (mp was 2/0/2). The bomb was never planted — hypothesis untested, not refuted. Fix in executeBossCombatPoke: MAG carrier walks toward the KING to <=12 first (`PZ APPROACH`), dive aim biased to the king, and COVID cast on the king when adjacent (`PZ COVID->KING`). Also 53589984 solved all 4 with no stranding yet no graal death — a separate pre-existing limit (army re-kills early crystals before the 4th aligns).
+
+**Delivery-fix batch 53590018-032: 5/12 graal deaths (campaign best; summary saw 3 of the 5
+fetched) — and COVID landed on the king for the first time.** 53590018: `APPROACH d11 → DIVE
+c9999` (king-biased dive) → COVID 364/turn x7 + venom on the king at T10, 459 tick at T11.
+53590020/030: reserve approached (17→11, 19→14) but never dove — the dive's `TP >= 20` gate is
+fragile after the survival shields, and 030 never got inside 12. **Structural flaw in the
+"bomb" plan:** COVID had 6 turns left when Kur died T12/13 and ticked 0 more — the fight ENDS
+when the last leek dies, and the reserve is by design the last survivor, so "poison outlives
+the caster" is bounded by the reserve's own lifespan (the resource it lacks). **Both mechanisms confirmed in the 53590018 action trace:** Kur dead T12 = last NEW_TURN of the
+fight (0 turns after); and at T11, right after the 459 tick, `[307,16]` on the king then four
+`[103,16,..]` heals (137+41+171+64 = 413 — the whole tick healed back), so the king CLEANSED the
+poison after one tick regardless. (Generator Action.java: 103 = HEAL, 307 = REMOVE_POISONS
+"Les poisons de X sont neutralisés", 303 = REMOVE_EFFECT.) Verdict: delivery is solved, the payload
+cannot be banked. The phase-2 lever the data points at: an EARLIER graal death with more
+bodies alive at the flip (53590030: graal@8 with 3 alive) — STR m_laser bodies (~1000/turn
+each) not a lone ~450/turn poison body. KG's MAG respec is likely net-negative for phase 2.
