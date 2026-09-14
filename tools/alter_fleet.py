@@ -52,8 +52,13 @@ def stat(leek, key):
 
 def weights_for(leek):
     """Weight stats by what this leek's build actually uses."""
+    # tp/mp/cores/ram are the "indivisible" alterations: their power is always
+    # 40-100, and probability is 0 whenever power exceeds ~25% of a component's
+    # capacity (largest capacity seen is 150, so TP at power 80 would need ~320).
+    # They can never land, so weighting them only wastes preview sweeps and lets
+    # an impossible target outrank an achievable one.
     w = {'life': 1.0, 'wisdom': 0.3, 'science': 0.2, 'frequency': 0.0,
-         'tp': 120.0, 'mp': 120.0, 'cores': 20.0, 'ram': 20.0,
+         'tp': 0.0, 'mp': 0.0, 'cores': 0.0, 'ram': 0.0,
          'strength': 0.0, 'magic': 0.0, 'agility': 0.0, 'resistance': 3.0}
     if stat(leek, 'strength') >= 300:
         w['strength'] = 5.0
