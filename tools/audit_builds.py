@@ -45,6 +45,26 @@ SUMMON = {'chip_puny_bulb', 'chip_rocky_bulb', 'chip_fire_bulb', 'chip_iced_bulb
           'chip_lightning_bulb', 'chip_metallic_bulb', 'chip_savant_bulb',
           'chip_healer_bulb', 'chip_tactician_bulb', 'chip_wizard_bulb'}
 
+# Weapons carry effects too, and they are often the REAL user of a stat:
+# effect 1 = damage (STR), 30 = nova/max-HP (SCI), 13 = poison (MAG),
+# 61 = steal life (WIS). The quantum_rifle is 1+30+61, so a "SCI with no nova
+# chips" build can still be perfectly coherent - this audit missed that at first.
+WEAPON_EFFECT_STAT = {1: 'strength', 30: 'science', 13: 'magic', 61: 'wisdom',
+                      2: 'strength', 6: 'magic'}
+
+
+def weapon_stats_used(weapons_json, names):
+    used = set()
+    for w in (weapons_json.values() if isinstance(weapons_json, dict) else weapons_json):
+        if not isinstance(w, dict) or w.get('name') not in names:
+            continue
+        for e in w.get('effects', []) or []:
+            st = WEAPON_EFFECT_STAT.get(e.get('id'))
+            if st:
+                used.add(st)
+    return used
+
+
 STAT_USERS = {'strength': 'weapons/damage chips', 'magic': 'poison chips',
               'wisdom': 'heal chips', 'resistance': 'shield chips',
               'science': 'nova/summons', 'agility': 'crit + damage return'}
@@ -61,6 +81,13 @@ def main():
         cstats = json.load(f)
     nm = lambda t: by_id.get(t, {}).get('name', str(t))  # noqa: E731
 
+    wj = {}
+    for cand in ('/home/ubuntu/leek-wars-generator/data/weapons.json',):
+        if os.path.exists(cand):
+            with open(cand) as f:
+                wj = json.load(f)
+            break
+
     lw = LWSession(args.account)
     leeks = lw.farmer.get('leeks', {})
     leeks = list(leeks.values()) if isinstance(leeks, dict) else list(leeks)
@@ -73,18 +100,21 @@ def main():
         chips = [nm(c['template']) for c in (L.get('chips') or []) if c]
         comps = [c for c in (L.get('components') or []) if c]
 
+        wused = weapon_stats_used(wj, set(w.replace('weapon_', '') for w in weapons))
         has = {
             'strength': bool(weapons),
-            'magic': any(c in POISON for c in chips),
-            'wisdom': any(c in HEAL for c in chips),
+            'magic': any(c in POISON for c in chips) or 'magic' in wused,
+            'wisdom': any(c in HEAL for c in chips) or 'wisdom' in wused,
             'resistance': any(c in SHIELD for c in chips),
-            'science': any(c in NOVA or c in SUMMON for c in chips),
+            'science': any(c in NOVA or c in SUMMON for c in chips) or 'science' in wused,
             'agility': True,   # crit always applies
         }
         print(f"\n=== {L.get('name')} (L{L.get('level')} HP{L.get('life')} "
               f"TP{L.get('tp')} MP{L.get('mp')})")
         print('   stats: ' + '  '.join(f'{k[:3].upper()}{v}' for k, v in st.items()))
         print(f'   weapons: {weapons}')
+        if wused:
+            print(f'   weapon effects scale off: {sorted(wused)}')
 
         issues = []
         for k, v in st.items():
