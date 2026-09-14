@@ -31,7 +31,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lw_api import LWSession            # noqa: E402
-from alter_components import pump, load_items, base_stats_of, score  # noqa: E402
+from alter_components import pump, load_items, score  # noqa: E402
 
 # leek -> its Solo loadout id (loadout/get-all)
 LOADOUTS = {'KurtGodel': 466, 'AdaLovelace': 786,
@@ -78,6 +78,9 @@ def main():
     args = ap.parse_args()
 
     by_id, params2 = load_items()
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'component_stats.json')) as f:
+        cstats = json.load(f)
     lw = LWSession(args.account)
     stock = {}
     for a in lw.farmer.get('alterations', []) or []:
@@ -122,19 +125,32 @@ def main():
             cur = [x for x in (lw.leek(meta['id']).get('components') or []) if x]
             return len(cur), {x['template']: x.get('stats') for x in cur if x.get('altered_power')}
 
-        for comp in list(L.get('components') or []):
+        # COMPONENT SELECTION. Success probability rises monotonically with how
+        # much of that stat the component ALREADY has (obsidian_plate: life 300
+        # -> 0.950, resistance 80 -> 0.744, strength 20 -> 0.589). So rank
+        # (component, stat) pairs by weight x base_amount: the build decides what
+        # a stat is worth, the component decides how reliably we can buy it.
+        # Then push that ONE stat - "beyond its values" - instead of spreading
+        # across everything the component happens to have.
+        pairs = []
+        for comp in (L.get('components') or []):
             if not comp:
                 continue
-            tpl = comp['template']
+            base = dict(cstats.get(str(comp['template']), {}).get('stats', []))
+            for stat, amount in base.items():
+                if amount <= 0 or w.get(stat, 0) <= 0:
+                    continue
+                pairs.append((w[stat] * amount, comp['template'], comp, stat, amount))
+        pairs.sort(key=lambda x: -x[0])
+        seen_tpl = set()
+        for rank, tpl, comp, stat, amount in pairs:
+            if tpl in seen_tpl:
+                continue          # a component saturates after ~2 alterations
             cname = by_id.get(tpl, {}).get('name', str(tpl))
             cur_stats = comp.get('stats') if comp.get('altered_power') else None
-            on_stat = base_stats_of(tpl)
-            if not on_stat:
-                continue
-            # is an on-stat gain even possible for this leek's weights?
-            if not any(w.get(k, 0) > 0 for k in on_stat):
-                print(f'   {cname}: no on-stat the build values, skipping')
-                continue
+            on_stat = {stat}
+            print(f'   {cname}: target {stat} (component has {amount}, '
+                  f'weight {w[stat]}, rank {rank:.0f})')
             stack = next((c for c in lw.farmer.get('components', [])
                           if c['template'] == tpl and not c.get('altered_power')
                           and c.get('quantity', 0) > 0), None)
@@ -145,9 +161,9 @@ def main():
                 print('   budget exhausted.')
                 break
             if args.dry_run:
-                print(f'   {cname}: would pump on-stat {sorted(on_stat)} (spare x{stack["quantity"]})')
+                print(f'   {cname}: would push {stat} (spare x{stack["quantity"]})')
                 continue
-            print(f'   {cname}: pumping on-stat {sorted(on_stat)}...', flush=True)
+            print(f'   {cname}: pumping {stat}...', flush=True)
             cid, steps, spent, broke = pump(
                 lw, stack['id'], stock, params2, w, args.max_break,
                 budget=args.budget - spent_total, min_eff=args.min_eff,
@@ -157,8 +173,13 @@ def main():
             it = next((c for c in lw.farmer.get('components', []) if c['id'] == cid), None)
             new_stats = it.get('stats') if it else None
             if not new_stats:
-                print(f'      -> nothing gained ({spent} habs)')
+                # TP/MP/cores/ram alterations are "indivisible" and sit at
+                # probability 0 on every component tested, so a high-weight
+                # target can yield nothing. Do NOT consume the component -
+                # let it fall through to its next-best stat.
+                print(f'      -> {stat}: nothing achievable ({spent} habs)')
                 continue
+            seen_tpl.add(tpl)
             if cur_stats and score(
                     {k: {'points': v} for k, v in new_stats.items()}, w) <= score(
                     {k: {'points': v} for k, v in cur_stats.items()}, w):
