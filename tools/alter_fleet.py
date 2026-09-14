@@ -125,32 +125,37 @@ def main():
             cur = [x for x in (lw.leek(meta['id']).get('components') or []) if x]
             return len(cur), {x['template']: x.get('stats') for x in cur if x.get('altered_power')}
 
-        # COMPONENT SELECTION. Success probability rises monotonically with how
-        # much of that stat the component ALREADY has (obsidian_plate: life 300
-        # -> 0.950, resistance 80 -> 0.744, strength 20 -> 0.589). So rank
-        # (component, stat) pairs by weight x base_amount: the build decides what
-        # a stat is worth, the component decides how reliably we can buy it.
-        # Then push that ONE stat - "beyond its values" - instead of spreading
-        # across everything the component happens to have.
-        pairs = []
+        # COMPONENT SELECTION + PUSH THE WHOLE PROFILE.
+        # Two separate questions:
+        #  1) WHICH components to spend on - rank by how well the component's
+        #     whole native profile matches this build (sum of weight x amount).
+        #     Probability also rises with how much of a stat the component
+        #     already has (obsidian_plate life 300 -> 0.950, strength 20 ->
+        #     0.589), so a high-match component is both more valuable AND more
+        #     reliable to alter.
+        #  2) WHAT to boost on it - every stat it natively has, i.e. push the
+        #     component beyond its own values rather than bolting on new ones.
+        #     Stats the build does not value score 0 EV and are dropped by the
+        #     efficiency floor inside pump(), so passing them all is safe.
+        ranked = []
         for comp in (L.get('components') or []):
             if not comp:
                 continue
             base = dict(cstats.get(str(comp['template']), {}).get('stats', []))
-            for stat, amount in base.items():
-                if amount <= 0 or w.get(stat, 0) <= 0:
-                    continue
-                pairs.append((w[stat] * amount, comp['template'], comp, stat, amount))
-        pairs.sort(key=lambda x: -x[0])
-        seen_tpl = set()
-        for rank, tpl, comp, stat, amount in pairs:
-            if tpl in seen_tpl:
-                continue          # a component saturates after ~2 alterations
+            on_stat = {k for k, v in base.items() if v > 0}
+            if not on_stat:
+                continue
+            match = sum(w.get(k, 0) * v for k, v in base.items() if v > 0)
+            if match <= 0:
+                continue          # nothing this build cares about
+            ranked.append((match, comp['template'], comp, on_stat, base))
+        ranked.sort(key=lambda x: -x[0])
+
+        for match, tpl, comp, on_stat, base in ranked:
             cname = by_id.get(tpl, {}).get('name', str(tpl))
             cur_stats = comp.get('stats') if comp.get('altered_power') else None
-            on_stat = {stat}
-            print(f'   {cname}: target {stat} (component has {amount}, '
-                  f'weight {w[stat]}, rank {rank:.0f})')
+            valued = {k: base[k] for k in on_stat if w.get(k, 0) > 0}
+            print(f'   {cname}: push {valued} (match {match:.0f})')
             stack = next((c for c in lw.farmer.get('components', [])
                           if c['template'] == tpl and not c.get('altered_power')
                           and c.get('quantity', 0) > 0), None)
@@ -161,9 +166,9 @@ def main():
                 print('   budget exhausted.')
                 break
             if args.dry_run:
-                print(f'   {cname}: would push {stat} (spare x{stack["quantity"]})')
+                print(f'   {cname}: would push (spare x{stack["quantity"]})')
                 continue
-            print(f'   {cname}: pumping {stat}...', flush=True)
+            print(f'   {cname}: pumping...', flush=True)
             cid, steps, spent, broke = pump(
                 lw, stack['id'], stock, params2, w, args.max_break,
                 budget=args.budget - spent_total, min_eff=args.min_eff,
@@ -177,9 +182,8 @@ def main():
                 # probability 0 on every component tested, so a high-weight
                 # target can yield nothing. Do NOT consume the component -
                 # let it fall through to its next-best stat.
-                print(f'      -> {stat}: nothing achievable ({spent} habs)')
+                print(f'      -> nothing achievable ({spent} habs)')
                 continue
-            seen_tpl.add(tpl)
             if cur_stats and score(
                     {k: {'points': v} for k, v in new_stats.items()}, w) <= score(
                     {k: {'points': v} for k, v in cur_stats.items()}, w):
