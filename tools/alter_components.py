@@ -110,6 +110,100 @@ def greedy_plan(lw, cid, stock, weights, max_break, max_alts, verbose=True):
     return combo, best_prev, tried
 
 
+def base_stats_of(template):
+    """Stat names a component natively has (component_stats.json)."""
+    try:
+        with open(os.path.join(HERE, 'component_stats.json')) as f:
+            cs = json.load(f)
+    except OSError:
+        return None
+    e = cs.get(str(template))
+    return {k for k, _ in e.get('stats', [])} if e else None
+
+
+def pump(lw, stack_id, stock, params2, weights, max_break, budget=None,
+         min_eff=0.00005, max_total_break=0.25, on_stat=None, verbose=True):
+    """Alter one unit off `stack_id`, then keep altering THAT instance.
+
+    /component/alter splits a single unit into a new item carrying its own
+    capacity budget (e.g. 52) and an `altered_power` total; each alteration
+    spends `power` against it. So the real game is a knapsack on one instance,
+    not a single 8-alteration shot. Picks the best value-per-power step that
+    fits and stays under the break limit. Stops when nothing fits, the stock is
+    out, the habs budget is gone, or the component BREAKS.
+    """
+    cid, spent, steps = stack_id, 0, []
+    used = total = None
+    survive = 1.0          # running P(no break yet)
+    while True:
+        best = None
+        for p, have in sorted(stock.items()):
+            if have <= 0:
+                continue
+            r = preview(lw, cid, {p: 1})
+            time.sleep(0.3)
+            if not isinstance(r, dict) or 'error' in r:
+                continue
+            if not r.get('fits') or r.get('overfilled'):
+                continue
+            if r.get('break_probability', 1) > max_break:
+                continue
+            if budget is not None and spent + r.get('habs_cost', 0) > budget:
+                continue
+            # on-stat-only: refuse to bolt a stat onto a component that never
+            # had it. Off-stat rolls succeed ~0.54 vs ~0.95 on-stat, so they
+            # cost about double per point (adding strength to a power_supply).
+            if on_stat is not None:
+                rolled = set((r.get('rolls') or {}).keys())
+                if not rolled or not rolled.issubset(on_stat):
+                    continue
+            # Rank by expected value PER HAB, not per power. habs are paid on
+            # every attempt including failures, so a 0.54-probability pick is
+            # half as efficient as it looks. (Learned the hard way: a strawberry
+            # run spent 1.62M habs on 40 steel attempts, 30 of which failed.)
+            cost = max(r.get('habs_cost', 1), 1)
+            val = score(r.get('rolls'), weights) * r.get('probability', 0)
+            eff = val / cost
+            if eff < min_eff:
+                continue
+            if best is None or eff > best[0]:
+                best = (eff, p, r)
+        if best is None:
+            if verbose:
+                print('   nothing left is worth its habs cost (or capacity is full).')
+            break
+        if 1.0 - survive * (1.0 - best[2].get('break_probability', 0)) > max_total_break:
+            if verbose:
+                print(f'   stopping: cumulative break risk would exceed {max_total_break:.0%}')
+            break
+        survive *= (1.0 - best[2].get('break_probability', 0))
+        _, p, pr = best
+        d = lw.post('/component/alter', component_id=cid, alterations=json.dumps({str(p): 1}))
+        if not isinstance(d, dict) or 'error' in d:
+            print(f'   alter failed: {str(d)[:160]}')
+            break
+        stock[p] = stock.get(p, 0) - 1
+        spent += d.get('habs_cost', 0)
+        cid = d.get('id', cid)
+        cap = d.get('capacity') or {}
+        used, total = cap.get('used'), cap.get('total')
+        ok = d.get('success')
+        steps.append((params2.get(p, {}).get('name', p), ok, d.get('stats')))
+        if verbose:
+            print(f"   {'OK ' if ok else 'FAIL'} {params2.get(p, {}).get('name', p):<16}"
+                  f"-> stats={d.get('stats')} cap={used}/{total} habs={spent}", flush=True)
+        if d.get('broken'):
+            # "broken" = the alteration backfired and applied a NEGATIVE stat.
+            # The component survives; it is not destroyed.
+            print(f"   *** BREAK: penalty applied, stats now {d.get('stats')} ***")
+            return cid, steps, spent, True
+        if used is not None and total is not None and used >= total:
+            if verbose:
+                print(f'   capacity full ({used}/{total}).')
+            break
+    return cid, steps, spent, False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--account', default='main', choices=['main', 'cure'])
@@ -119,9 +213,22 @@ def main():
                     help='reject any plan whose break chance exceeds this (default 0.01 = 1%%)')
     ap.add_argument('--max-alts', type=int, default=8, help='max alterations per component (server cap 8)')
     ap.add_argument('--apply', action='store_true', help='APPLY the plan (gamble: can destroy the component)')
+    ap.add_argument('--pump', help='take one unit of this component and alter it repeatedly to capacity (GAMBLES)')
+    ap.add_argument('--budget', type=int, default=None, help='max habs to spend while pumping')
+    ap.add_argument('--min-eff', type=float, default=0.00005,
+                    help='min expected weighted stat-points per hab (default 5e-5 = 20k habs/point)')
+    ap.add_argument('--max-total-break', type=float, default=0.25,
+                    help='stop before CUMULATIVE break risk exceeds this (default 0.25)')
+    ap.add_argument('--on-stat-only', action='store_true',
+                    help="only boost stats the component already has (~0.95 success vs ~0.54)")
+    ap.add_argument('--weights', help='JSON stat->weight overrides, e.g. \'{"magic":0}\' '
+                    '(magic is worthless on a STR build and will otherwise be bought)')
     args = ap.parse_args()
 
     by_id, params2 = load_items()
+    weights = dict(DEFAULT_WEIGHTS)
+    if args.weights:
+        weights.update(json.loads(args.weights))
     lw = LWSession(args.account)
     comps = lw.farmer.get('components', []) or []
     stock = {}
@@ -130,7 +237,7 @@ def main():
         if it and str(it.get('params', '')).isdigit():
             stock[int(it['params'])] = a['quantity']
 
-    if args.list or not args.component:
+    if args.list or (not args.component and not args.pump):
         print('COMPONENTS:')
         for c in sorted(comps, key=lambda x: -x['quantity']):
             print(f"   {by_id.get(c['template'], {}).get('name', c['template']):<20}"
@@ -140,6 +247,31 @@ def main():
             print(f"   {p:>3} {params2.get(p, {}).get('name', '?'):<18} x{q}")
         return
 
+    if args.pump:
+        st = next((c for c in comps
+                   if by_id.get(c['template'], {}).get('name') == args.pump), None)
+        if not st:
+            sys.exit(f'no component named {args.pump} in inventory (try --list)')
+        print(f"Pumping one {args.pump} (from stack {st['id']} x{st['quantity']}), "
+              f"max_break={args.max_break} per step, budget={args.budget}")
+        print(f'   weights: { {k: v for k, v in weights.items() if v} }')
+        on_stat = base_stats_of(st['template']) if args.on_stat_only else None
+        if on_stat is not None:
+            print(f'   on-stat-only: {sorted(on_stat)}')
+        cid, steps, spent, broke = pump(lw, st['id'], stock, params2,
+                                        weights, args.max_break, args.budget,
+                                        args.min_eff, args.max_total_break, on_stat)
+        good = sum(1 for _, ok, _ in steps if ok)
+        print(f"\n{'STOPPED (break penalty)' if broke else 'Done'}: {len(steps)} alterations "
+              f"({good} succeeded), {spent} habs spent, item id={cid}")
+        if not broke:
+            fresh = LWSession(args.account)
+            it = next((c for c in fresh.farmer.get('components', []) if c['id'] == cid), None)
+            if it:
+                print(f"   final: {args.pump} stats={it.get('stats')} "
+                      f"altered_power={it.get('altered_power')}")
+        return
+
     target = next((c for c in comps
                    if by_id.get(c['template'], {}).get('name') == args.component), None)
     if not target:
@@ -147,7 +279,7 @@ def main():
 
     print(f"Planning alterations for {args.component} (id={target['id']}, "
           f"x{target['quantity']}), max_break={args.max_break}, max {args.max_alts} alterations")
-    combo, best, tried = greedy_plan(lw, target['id'], stock, DEFAULT_WEIGHTS,
+    combo, best, tried = greedy_plan(lw, target['id'], stock, weights,
                                      args.max_break, args.max_alts)
     if not combo:
         print('No alteration improves this component within the break limit '
