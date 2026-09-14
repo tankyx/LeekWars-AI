@@ -38,18 +38,30 @@ LOADOUTS = {'KurtGodel': 466, 'AdaLovelace': 786,
             'EdsgerDijkstra': 787, 'MargaretHamilton': 789}
 
 
+def stat(leek, key):
+    """TOTAL stat (capital + components + alterations), not the base.
+
+    /leek/get exposes both `science` (base) and `total_science`. Reading the
+    base mis-weighted KurtGodel: base SCI 290 fell under the >=300 gate so
+    science scored 0.2 and wisdom (0.3) won, even though his real SCI is 500
+    and his quantum_rifle's nova scales off it.
+    """
+    v = leek.get('total_' + key)
+    return v if v is not None else (leek.get(key) or 0)
+
+
 def weights_for(leek):
     """Weight stats by what this leek's build actually uses."""
     w = {'life': 1.0, 'wisdom': 0.3, 'science': 0.2, 'frequency': 0.0,
          'tp': 120.0, 'mp': 120.0, 'cores': 20.0, 'ram': 20.0,
          'strength': 0.0, 'magic': 0.0, 'agility': 0.0, 'resistance': 3.0}
-    if (leek.get('strength') or 0) >= 300:
+    if stat(leek, 'strength') >= 300:
         w['strength'] = 5.0
-    if (leek.get('magic') or 0) >= 300:
+    if stat(leek, 'magic') >= 300:
         w['magic'] = 5.0
-    if (leek.get('agility') or 0) >= 300:
+    if stat(leek, 'agility') >= 300:
         w['agility'] = 2.5
-    if (leek.get('science') or 0) >= 300:
+    if stat(leek, 'science') >= 300:
         w['science'] = 1.0
     return w
 
