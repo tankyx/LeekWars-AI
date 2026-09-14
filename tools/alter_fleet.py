@@ -74,6 +74,9 @@ def main():
     ap.add_argument('--max-total-break', type=float, default=0.30)
     ap.add_argument('--min-eff', type=float, default=0.00005)
     ap.add_argument('--only', help='restrict to one leek name')
+    ap.add_argument('--reroll', action='store_true',
+                    help='re-pump components that already carry an alteration '
+                         '(usually wasted: the fresh copy is normally worse)')
     ap.add_argument('--dry-run', action='store_true', help='show the plan, alter nothing')
     args = ap.parse_args()
 
@@ -155,6 +158,16 @@ def main():
             cname = by_id.get(tpl, {}).get('name', str(tpl))
             cur_stats = comp.get('stats') if comp.get('altered_power') else None
             valued = {k: base[k] for k in on_stat if w.get(k, 0) > 0}
+            # Already altered? Re-pumping is almost always wasted: a component
+            # saturates after ~2 alterations, so the fresh copy usually scores
+            # WORSE than what is equipped and gets discarded - but the habs are
+            # spent before we can compare. A 3M run burned 1,357,300 habs on
+            # pumps that were then thrown away, vs 88,799 actually equipped.
+            # Skip unless explicitly re-rolling.
+            if cur_stats and not args.reroll:
+                print(f'   {cname}: already altered {cur_stats}, skipping '
+                      f'(--reroll to spend anyway)')
+                continue
             print(f'   {cname}: push {valued} (match {match:.0f})')
             stack = next((c for c in lw.farmer.get('components', [])
                           if c['template'] == tpl and not c.get('altered_power')
