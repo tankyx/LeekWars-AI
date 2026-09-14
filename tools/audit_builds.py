@@ -94,8 +94,11 @@ def main():
 
     for meta in sorted(leeks, key=lambda x: x.get('name', '')):
         L = lw.leek(meta['id'])
-        st = {k: (L.get(k) or 0) for k in
-              ('strength', 'magic', 'wisdom', 'resistance', 'science', 'agility')}
+        # /leek/get exposes BOTH: `strength` is the base (capital only) while
+        # `total_strength` includes components and alterations. Always audit the
+        # TOTAL - the base understates TP by 10 on a component-heavy build.
+        st = {k: (L.get('total_' + k) if L.get('total_' + k) is not None else L.get(k) or 0)
+              for k in ('strength', 'magic', 'wisdom', 'resistance', 'science', 'agility')}
         weapons = [nm(w['template']) for w in (L.get('weapons') or []) if w]
         chips = [nm(c['template']) for c in (L.get('chips') or []) if c]
         comps = [c for c in (L.get('components') or []) if c]
@@ -109,8 +112,9 @@ def main():
             'science': any(c in NOVA or c in SUMMON for c in chips) or 'science' in wused,
             'agility': True,   # crit always applies
         }
-        print(f"\n=== {L.get('name')} (L{L.get('level')} HP{L.get('life')} "
-              f"TP{L.get('tp')} MP{L.get('mp')})")
+        print(f"\n=== {L.get('name')} (L{L.get('level')} "
+              f"HP{L.get('total_life', L.get('life'))} "
+              f"TP{L.get('total_tp', L.get('tp'))} MP{L.get('total_mp', L.get('mp'))})")
         print('   stats: ' + '  '.join(f'{k[:3].upper()}{v}' for k, v in st.items()))
         print(f'   weapons: {weapons}')
         if wused:
