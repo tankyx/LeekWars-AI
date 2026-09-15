@@ -122,7 +122,8 @@ def base_stats_of(template):
 
 
 def pump(lw, stack_id, stock, params2, weights, max_break, budget=None,
-         min_eff=0.00005, max_total_break=0.25, on_stat=None, verbose=True):
+         min_eff=0.00005, max_total_break=0.25, on_stat=None, max_stack=6,
+         verbose=True):
     """Alter one unit off `stack_id`, then keep altering THAT instance.
 
     /component/alter splits a single unit into a new item carrying its own
@@ -137,37 +138,36 @@ def pump(lw, stack_id, stock, params2, weights, max_break, budget=None,
     survive = 1.0          # running P(no break yet)
     while True:
         best = None
+        # METABOLISM: each component has a hidden ideal dosage. Alteration
+        # `dose` and `power` SUM across a combined cast, and probability peaks
+        # when the total sits near that ideal, then falls off a cliff (measured
+        # on motherboard2: 1x cast_iron power 10 -> 0.680, 2x power 20 -> 0.725,
+        # 3x power 30 -> 0.658, 4x power 40 -> 0.000). So we must search STACKED
+        # casts, not just singles - applying one at a time both misses the peak
+        # and pays a separate habs charge per step.
         for p, have in sorted(stock.items()):
-            if have <= 0:
-                continue
-            r = preview(lw, cid, {p: 1})
-            time.sleep(0.3)
-            if not isinstance(r, dict) or 'error' in r:
-                continue
-            if not r.get('fits') or r.get('overfilled'):
-                continue
-            if r.get('break_probability', 1) > max_break:
-                continue
-            if budget is not None and spent + r.get('habs_cost', 0) > budget:
-                continue
-            # on-stat-only: refuse to bolt a stat onto a component that never
-            # had it. Off-stat rolls succeed ~0.54 vs ~0.95 on-stat, so they
-            # cost about double per point (adding strength to a power_supply).
-            if on_stat is not None:
-                rolled = set((r.get('rolls') or {}).keys())
-                if not rolled or not rolled.issubset(on_stat):
+            for n in range(1, min(have, max_stack) + 1):
+                r = preview(lw, cid, {p: n})
+                time.sleep(0.3)
+                if not isinstance(r, dict) or 'error' in r:
+                    break
+                if not r.get('fits') or r.get('overfilled'):
+                    break
+                if r.get('break_probability', 1) > max_break:
+                    break
+                if budget is not None and spent + r.get('habs_cost', 0) > budget:
+                    break
+                if on_stat is not None:
+                    rolled = set((r.get('rolls') or {}).keys())
+                    if not rolled or not rolled.issubset(on_stat):
+                        break
+                cost = max(r.get('habs_cost', 1), 1)
+                val = score(r.get('rolls'), weights) * r.get('probability', 0)
+                eff = val / cost
+                if eff < min_eff:
                     continue
-            # Rank by expected value PER HAB, not per power. habs are paid on
-            # every attempt including failures, so a 0.54-probability pick is
-            # half as efficient as it looks. (Learned the hard way: a strawberry
-            # run spent 1.62M habs on 40 steel attempts, 30 of which failed.)
-            cost = max(r.get('habs_cost', 1), 1)
-            val = score(r.get('rolls'), weights) * r.get('probability', 0)
-            eff = val / cost
-            if eff < min_eff:
-                continue
-            if best is None or eff > best[0]:
-                best = (eff, p, r)
+                if best is None or eff > best[0]:
+                    best = (eff, p, r, n)
         if best is None:
             if verbose:
                 print('   nothing left is worth its habs cost (or capacity is full).')
@@ -177,12 +177,12 @@ def pump(lw, stack_id, stock, params2, weights, max_break, budget=None,
                 print(f'   stopping: cumulative break risk would exceed {max_total_break:.0%}')
             break
         survive *= (1.0 - best[2].get('break_probability', 0))
-        _, p, pr = best
-        d = lw.post('/component/alter', component_id=cid, alterations=json.dumps({str(p): 1}))
+        _, p, pr, n = best
+        d = lw.post('/component/alter', component_id=cid, alterations=json.dumps({str(p): n}))
         if not isinstance(d, dict) or 'error' in d:
             print(f'   alter failed: {str(d)[:160]}')
             break
-        stock[p] = stock.get(p, 0) - 1
+        stock[p] = stock.get(p, 0) - n
         spent += d.get('habs_cost', 0)
         cid = d.get('id', cid)
         cap = d.get('capacity') or {}
@@ -190,7 +190,7 @@ def pump(lw, stack_id, stock, params2, weights, max_break, budget=None,
         ok = d.get('success')
         steps.append((params2.get(p, {}).get('name', p), ok, d.get('stats')))
         if verbose:
-            print(f"   {'OK ' if ok else 'FAIL'} {params2.get(p, {}).get('name', p):<16}"
+            print(f"   {'OK ' if ok else 'FAIL'} {str(n) + 'x ' + str(params2.get(p, {}).get('name', p)):<18}"
                   f"-> stats={d.get('stats')} cap={used}/{total} habs={spent}", flush=True)
         if d.get('broken'):
             # "broken" = the alteration backfired and applied a NEGATIVE stat.
