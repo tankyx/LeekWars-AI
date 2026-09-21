@@ -854,6 +854,33 @@ pick and for 2-ply. Smoke stage must show it winning selection at least
 once before the A/B runs (a change that cannot be shown to fire is not an
 experiment).
 
+*Smoke:* 24 turns, 40 hide variants added, 4 won selection (fires; ~10%).
+
+*Panel 1 (paired n=60 each, seeds 7000+, `-j 2`, baseline = HEAD which
+already carries the MP-bounded fix), patch `docs/patches/hide_append_v1.patch`:*
+
+| opponent | NEW | HEAD | gained / lost | p | HP-lead | fire-then-move | shot-denial |
+|---|---|---|---|---|---|---|---|
+| Ed vs Ludaskia | 23 | 22 | 1 / 0 | 1.0 | +0.7 | +0.011 | +0.006 |
+| Margaret vs TheLeaker | 24 | 21 | 7 / 4 | 0.55 | −1.0 | **+0.127** | +0.013 |
+| Margaret vs ReauBotcode | **13** | 4 | **10 / 1** | **0.012** | +1.0 | **+0.117** | +0.061 |
+| Margaret vs BretzelLeekide | 45 | 46 | 3 / 4 | 1.0 | +4.3 | **+0.169** | +0.030 |
+| Margaret vs Hydrogène | 18 | 20 | 3 / 5 | 0.73 | −2.6 | +0.084 | +0.017 |
+| **Margaret pooled (n=240)** | **100 (41.7%)** | 91 (37.9%) | 23 / 14 | 0.19 | +0.2 | **+0.124** | +0.030 |
+
+Reading: the behaviour moved to where the ladder is (fire-then-move
+0.21–0.29 → 0.33–0.41, the top-player band), and the one opponent she was
+losing 4/60 to went to 13/60 (p=0.012). But the pooled win-rate gain
+(+3.8pp) is within noise and, unlike the MP-bounded fix, the **HP-lead did
+not move (+0.2)** although the probe said a hidden end costs the enemy
+~570 HP/turn. Either the appended hides are the shallow ones (in current
+LoS shadow but inside the enemy's reach — the cache-rated 1500–2500
+bucket that still took 1093), or the hide costs us next-turn damage by
+moving us off our firing cell. A paired end-of-turn probe (same seeds as
+the HEAD probe: damage taken AND dealt per turn) and a second fresh-seed
+panel (seeds 7100+, pooled to n=480) are running to separate the two
+before any adoption call.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)

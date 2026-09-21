@@ -1,0 +1,116 @@
+diff --git a/V9_modules/field_map_tactical.lk b/V9_modules/field_map_tactical.lk
+index 67f5ba1b..16a410d6 100644
+--- a/V9_modules/field_map_tactical.lk
++++ b/V9_modules/field_map_tactical.lk
+@@ -1028,6 +1028,42 @@ class FieldMap extends FieldMapPatterns {
+         return bonus
+     }
+ 
++    // Hide-append support: the best LoS-break cell reachable from `origin`
++    // with `mpBound` MP (exact cached path length, the same function the
++    // simulator uses to accept a move). Lowest adversarial threat first,
++    // then farthest from the enemy, then shortest path. Returns -1 when no
++    // such cell exists or every candidate is rated MORE dangerous than
++    // staying put (the cache knows about enemy MP; current LoS does not).
++    findLosBreakCell(origin, mpBound, enemyCell) {
++        if (origin == -1 || mpBound <= 0 || enemyCell == null || enemyCell == -1) return -1
++        var acc = this.getAccessibleCells(player)
++        var best = -1
++        var bestThreat = 999999999
++        var bestDist = -1
++        var bestLen = 999
++        var originThreat = getAdversarialThreat(origin)
++        for (var i = 0; i < count(acc); i++) {
++            var c = acc[i]
++            if (c == origin) continue
++            var d = getCellDistance(origin, c)
++            if (d == null || d > mpBound) continue
++            if (getCachedLineOfSight(c, enemyCell)) continue
++            var len = getCachedPathLength(origin, c)
++            if (len == null || len <= 0 || len > mpBound) continue
++            var th = getAdversarialThreat(c)
++            var ed = getCellDistance(c, enemyCell)
++            if (ed == null) ed = 0
++            if (th < bestThreat || (th == bestThreat && ed > bestDist) || (th == bestThreat && ed == bestDist && len < bestLen)) {
++                best = c
++                bestThreat = th
++                bestDist = ed
++                bestLen = len
++            }
++        }
++        if (best != -1 && bestThreat > originThreat) return -1
++        return best
++    }
++
+     getHideAndSeekCell() {
+         var result = this.findHideAndSeekCell("defensive")
+         if (result != null) {
+diff --git a/V9_modules/strategy/unified_strategy.lk b/V9_modules/strategy/unified_strategy.lk
+index 6021bdfb..16d142cc 100644
+--- a/V9_modules/strategy/unified_strategy.lk
++++ b/V9_modules/strategy/unified_strategy.lk
+@@ -3,6 +3,16 @@ include('../weight_profiles.lk')
+ include('../strategic_depth.lk')
+ include('../scenario_mutation.lk')
+ 
++// V9 hide-append pass (2026-09-21): measured on the STR panel that on
++// 70-80% of the turns we ended exposed, a no-LoS cell was within our
++// leftover MP by path length, and that ending hidden costs the enemy
++// ~570 HP of damage per turn on average. The hide templates cannot supply
++// it (they fire less to reserve MP); this appends an MP-exact LoS-break
++// move to the best plans as they are and lets the scorer decide.
++global _v9HideAppendEnabled = true
++global _v9HideAppendTopK = 5
++global _v9HideAppendLog = false
++
+ class UnifiedStrategy extends Strategy {
+     _weights = null
+     _player = null
+@@ -620,6 +630,47 @@ class UnifiedStrategy extends Strategy {
+             debugW("GEN_T" + getTurn() + "_n" + _genN + "_topDmg" + _genTopDmg + "_topDot" + _genTopDot + "_dmgN" + _genDmgCount + "_healN" + _genHealCount)
+         }
+ 
++        if (_v9HideAppendEnabled && count(scenarioResults) >= 1 && getOperations() < _ops79 && target != null) {
++            arraySort(scenarioResults, function(a, b) {
++                return b['score'] - a['score']
++            })
++            var haCount = min(_v9HideAppendTopK, count(scenarioResults))
++            var haAdded = []
++            var haWon = 0
++            for (var hi = 0; hi < haCount; hi++) {
++                if (getOperations() > _ops79) break
++                var hsd = scenarioResults[hi]
++                if (!hsd['feasible']) continue
++                var hsc = hsd['scenario']
++                var hsr = hsd['simResult']
++                if (hsc == null || count(hsc) == 0) continue
++                var hLast = hsc[count(hsc) - 1]
++                if (hLast.type == Action.MOVEMENT_HNS || hLast.type == Action.MOVEMENT_FLEE) continue
++                var hFinal = hsr.finalPosition
++                if (hFinal == -1) hFinal = player._cellPos
++                var hMpLeft = player._currMp - hsr.mpSpent
++                if (hMpLeft <= 0) continue
++                var hCell = this._fieldMap.findLosBreakCell(hFinal, hMpLeft, target._cellPos)
++                if (hCell == -1) continue
++                var hClone = []
++                for (var ha in hsc) push(hClone, ha)
++                push(hClone, new Action(Action.MOVEMENT_HNS, -1, -1, hCell, target))
++                var hSim = simulator.simulate(hClone)
++                var hNet = hSim.tpSpent - hSim.tpRefunded
++                if (!(hNet <= tpBudget && hSim.droppedActions == 0)) continue
++                var hScore = scorer.score(hSim, hClone)
++                push(haAdded, ['scenario': hClone, 'simResult': hSim, 'score': hScore, 'quickScore': hsd['quickScore'], 'netTP': hNet, 'feasible': true])
++                if (hScore > bestScore) {
++                    bestScore = hScore
++                    bestScenario = hClone
++                    bestSimResult = hSim
++                    haWon = 1
++                }
++            }
++            for (var hx in haAdded) push(scenarioResults, hx)
++            if (_v9HideAppendLog) debugW("HA_e" + getEntity() + "_T" + getTurn() + "_tried" + haCount + "_added" + count(haAdded) + "_won" + haWon)
++        }
++
+         if (count(scenarioResults) >= 2 && getOperations() < _ops79) {
+             arraySort(scenarioResults, function(a, b) {
+                 return b['score'] - a['score']
