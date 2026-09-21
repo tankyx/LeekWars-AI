@@ -20,8 +20,8 @@ global _v9RerankThreshold = 400
 // but scores each end state with the LEARNED value model instead of the
 // hand-built enemyTerm. No ENEMY_MODEL confidence gate: the model was trained
 // on the whole ladder, not per-opponent memory.
-global _v9RerankLearnedEnabled = false
-global _v9RerankLearnedThreshold = 0.02  // min P(win) delta to flip the pick
+global _v9RerankLearnedEnabled = true
+global _v9RerankLearnedThreshold = 0.005  // min P(win) delta to flip the pick
 
 include('enemy_sim.lk')
 include('eval.lk')
