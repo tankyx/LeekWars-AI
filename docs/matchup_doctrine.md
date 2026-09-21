@@ -428,6 +428,28 @@ identical damage. Two different failures follow:
    fire-then-move proxy — the first A/B whose success criterion is a
    behaviour the ladder rewards rather than the harness.
 
+   **Run 2026-09-21, paired n=120, BASELINE = re-rank ON (HEAD), NEW = OFF:**
+
+   | testbed | wins NEW / BASE | flipped | p | HP-lead | fire-then-move NEW / BASE | shot-denial |
+   |---|---|---|---|---|---|---|
+   | Éleeksire (MAG) | 20 / 23 | 14 / 17 | 0.72 | +1.0 (t=0.23) | **0.170 / 0.128** | +0.025 |
+   | Sepignouf (STR) | 120 / 120 | 0 / 0 | 1.00 | +0.0 | **0.003 / 0.003** | −0.012 |
+
+   Three readings. (a) The re-rank's override is real — switching it off
+   raises hit-and-hide by a third — but outcome-neutral on a real-opponent
+   testbed: **the +7–11pp mirror gain does not transfer.** The mirror harness
+   rewarded V9 for what V9 already did. (b) Even with the re-rank off our
+   rate is 0.17, half the ladder's 0.32, so the re-rank is not the main
+   suppressor. (c) Versus the STR weapon-user — exactly where the ladder
+   says denial matters most — we produce a post-fire hide on **0.3% of
+   firing turns on both arms**. The candidate pool had a hide on 46% of
+   those turns (earlier probe) but never post-fire. That is a
+   **generation** gap: the hide templates are composed hide-then-fire, not
+   fire-then-hide, against opponents who shoot back. Next question: where
+   the hide scenario is built (`getDebuffAction`-style sites in
+   `base_strategy.lk` 1118 / 1544 / 1715 / 1773 and the `_hideCache` in
+   `scenario_helpers.lk`), why the movement precedes the attack.
+
 This is the same signature as the morning's category-D turns (plan predicted
 damage, nothing executed). The lever is the plan->execution path, not a weight.
 
