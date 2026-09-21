@@ -634,8 +634,32 @@ hide twin (ratio 1.000 trivially). Against a non-hide incumbent the hide
 plan sits **a quarter to a third lower**. There are no ties to break; the
 tie-break is dead. The question is now **which dimension prices a post-fire
 hide at −25–35%**: a second shot forgone, the position term, or 2-ply
-projecting less next-turn damage from the hide cell. Measured next by
-logging both plans' dimension breakdown side by side.
+projecting less next-turn damage from the hide cell. **Measured — none of
+them.** Pairing the best non-hide and best hide-shaped scenario scored on
+each turn (43 turns, MH vs TheLeaker + Ed vs Ludaskia), median per
+dimension:
+
+| dim | non-hide | hide | |
+|---|---|---|---|
+| total | 1,116,821 | 1,103,121 | **~1% apart** |
+| damage | 326,089 | 321,380 | −1.5% |
+| DoT | 249,955 | 249,955 | equal |
+| TP-efficiency | 278,131 | **348,165** | hide +25% (23 TP for the same damage) |
+| position / threat / heal / shield | equal | equal | threat ≈ 0.06% of total |
+| 2-ply bonus | 0 | **+154** | favours the hide |
+
+So the hide *shape* is not what scores 25–35% lower. What trails by 25–35%
+at the selection sites is the **unmutated hide sibling in the pool**, and
+the incumbent it loses to is the **mutation planner's winner** — scored
+first at quick-score 9999, refined, buffed. Hide-shaped plans that score
+within 1% of it exist only *inside* `HybridMutationPlanner.planWithMutations`,
+which returns exactly one scenario; its runners-up never reach the pool,
+so 2-ply (which favours the hide) and final scoring never get to compare
+them. Hypothesis to test next: the planner's internal top-3 contains a
+hide-shaped plan within 1–2% of its winner on most turns. If so, the lever
+is a **candidate-set** change — return the best hide-shaped runner-up
+alongside the winner — exactly the "proposal ceiling" the SWOT named, and
+not a weight.
 
 ---
 
