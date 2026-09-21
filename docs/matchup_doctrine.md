@@ -407,12 +407,26 @@ identical damage. Two different failures follow:
 
 1. **vs the STR weapon-user — where denial matters most — it is never the
    post-fire pick.** Parity plus tie-break goes to stand-and-fire every time.
-2. **vs the MAG caster it IS picked, and then not executed.** Of 17 chosen
-   post-fire hides, the executor never reached the move on 12 (71%). A second
-   probe attributes at least 21% of planned hides (6/28) to
-   `validateAndFilterActions` stripping actions at or before the hide index;
-   the executor-loop share is unmeasured (the loop is `for (var a in
-   this._actions)` and the first hook missed it) — **open**.
+2. **vs the MAG caster it IS picked by the generator, then overridden before
+   execution — by the learned re-rank.** Pinned with a stage probe (30 fights,
+   28 generator-picked post-fire hides): 13 survived to execution and moved;
+   **14 were replaced by `rolloutRerankLearned`** (it ran on 18 of the 28
+   turns and overrode the hide on 14 — 78% of the turns it touched); 1 by the
+   veto. `validateAndFilterActions` drops none — an earlier attribution of
+   "≥21% stripped by the filter" was wrong: the filter's *input* already
+   lacked the hide, because the re-rank had swapped the plan upstream.
+
+   This is not a bug. The re-rank flips to a stand-and-fire twin at identical
+   score and damage on a P(win)-delta of ≥0.005 — and the learned re-rank is
+   the one change in this project that ever measured positive (+7–11pp in
+   mirror A/B, p=0.001/0.038). Two valid measurements are in tension: the
+   mirror harness rewards standing and firing; 5,380 top-ladder fights say
+   firing then moving is what wins. The mirror harness plays V9 against V9,
+   so it can only ever reward what V9 already does. **Next experiment,
+   deliberately not run without a decision:** `_v9RerankLearnedEnabled` on vs
+   off, paired, on the ladder testbeds, scoring BOTH win rate and the
+   fire-then-move proxy — the first A/B whose success criterion is a
+   behaviour the ladder rewards rather than the harness.
 
 This is the same signature as the morning's category-D turns (plan predicted
 damage, nothing executed). The lever is the plan->execution path, not a weight.
