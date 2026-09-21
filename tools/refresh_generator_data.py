@@ -4,10 +4,14 @@ Refresh leek-wars-generator data files from our market_data.json.
 
 The generator ships with incomplete weapons.json (24 entries) and chips.json.
 Our market_data.json has the full set (39 weapons, 109 chips) from the live API.
-NOTE: the market listing omits FORGOTTEN weapons (e.g. plutonium_bazooka,
-template 26) and lags newly released ones (desert_saber 41, sun_spear 42);
-seed those into raw_data.weapons from /weapon/get-all or they never reach
-the generator and local fights cannot simulate them.
+NOTE: FORGOTTEN weapons (`forgotten: true`, e.g. plutonium_bazooka template
+26) are not market items at all -- they must be UNLOCKED and a farmer may
+hold at most ONE of each, so the market listing never carries them. The
+listing also lags newly released weapons (desert_saber 41, sun_spear 42).
+Seed both kinds into raw_data.weapons from /weapon/get-all or they never
+reach the generator and local fights cannot simulate them. The one-per-
+farmer rule also means a ladder build is only replicable if we have
+unlocked its forgotten weapon, and two of our leeks cannot both carry it.
 
 This script converts raw_data.weapons and raw_data.chips to the generator's format
 and writes them to the generator's data/ directory.
