@@ -592,16 +592,31 @@ first-seen stand-and-fire plan, and the learned re-rank then overrode most of
 the remainder. That is the whole selection story, and it is why re-rank OFF
 helps everywhere.
 
-The deeper fact is *why* it is parity. `findHideAndSeekCell` picks the hide
-cell because its own `computeDangerForCell` + `evaluateCoverScore` rate it
-safer — but the scorer's **adversarial threat cache rates the hide cell no
-safer than the firing cell on 100% / 83% of turns**, so the scorer sees no
-benefit and scores the two plans identically. Two estimators disagree, and
-the one that decides is blind to the shot denial that 5,380 ladder fights
-say wins. Next: measure both estimators on the same cells to confirm, then
-test the cheapest downstream fix — prefer the post-fire hide on *exact*
-ties — locally on the panel with the proxies. If the cache is LoS-blind,
-the real fix is there, not in the tie-break.
+The deeper fact is *why* it is parity — and the first explanation written
+here ("the threat cache is blind to denial") was **wrong**. Measured on the
+same cells at the moment the hide is picked:
+
+| | Ed vs Ludaskia (113 picks) | Margaret vs TheLeaker (255) |
+|---|---|---|
+| picker: hide cell lower danger than current | 75% | 75% |
+| **scorer: adversarial threat lower at hide cell** | **40%** (median 0 vs 191) | **69%** (475 vs 1306) |
+| adversarial threat **zero at both cells** | **42%** | **23%** |
+
+The cache does see the hide as safer most of the time. Parity has two other
+causes: the threat/position term carries ~0.1% of score weight (the scale
+asymmetry), and on a quarter to two-fifths of turns the cache predicts the
+enemy can reach *neither* cell — i.e. it believes standing cannot be
+punished, while 5,380 ladder fights say it is. That is a **calibration gap
+in predicted next-turn enemy reach**, not line-of-sight blindness.
+
+**Tie-break experiment, first attempt — broken, not null.** A hide-preferring
+break on `score == bestScore` ran 960 paired fights across the panel and
+Ludaskia and produced **zero flips and zero proxy change** — bit-identical,
+the "perfect null means a half-closed gate" signature this document already
+warns about. The ties measured above were *within 0.1%*, not equal floats;
+float `==` never fired. Re-run with a relative tolerance, and with the chain
+counting branch firings in a smoke run and aborting on zero **before** the
+A/B. A change that cannot be shown to fire is not an experiment.
 
 ---
 
