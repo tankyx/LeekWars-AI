@@ -881,6 +881,35 @@ the HEAD probe: damage taken AND dealt per turn) and a second fresh-seed
 panel (seeds 7100+, pooled to n=480) are running to separate the two
 before any adoption call.
 
+*Paired end-of-turn probe (same 20 seeds as the HEAD probe):* Margaret
+ends hidden 42% → 48% of turns, **damage taken per turn 714 → 602**,
+damage dealt per turn unchanged (25 → 56, noisy: poison vs. their heals),
+fights 7.5 → 8.3 turns. So the hides are real and do not cost damage; the
+flat HP-lead in panel 1 was the small effect at n=240.
+
+*Panel 2 (fresh seeds 7100+):* pooled **103 (42.9%) vs 88 (36.7%)**,
+gained 27 / lost 12, **p=0.024**; BretzelLeekide 46 vs 38 with **8 gained
+/ 0 lost** (p=0.008); TheLeaker the one flat arm (25 vs 26).
+
+*Both panels pooled (n=480):* **203 (42.3%) vs 179 (37.3%), gained 50 /
+lost 26, McNemar p=0.0079**; fire-then-move +0.116; shot-denial +0.034.
+Ed vs Ludaskia: 27 vs 26 and 23 vs 22, no harm.
+
+**Adopted 2026-09-21** and uploaded to `9.0/V9/`. Together with the
+MP-bounded fix, Margaret's STR panel went from 35.8% (morning HEAD) to
+~42% on the same opponents. The learned re-rank flag is untouched (held).
+
+What this settles about "the scorer": it was never the ceiling. The
+23-dimension scorer is calibrated on threat and already prefers a hidden
+end; the ceiling was that no candidate ever offered *the chosen attack
+sequence plus the move we had MP for*. The two fixes are both candidate
+construction. The next ceiling of the same kind is the firing cell: 98% of
+turns had a fire-AND-hide cell, and the tactical cell chooser
+(`findBestTacticalCell`: damage − threat×w − path) does not know whether a
+hide exists within the MP it leaves — a retreat-aware firing cell would
+let the append pass fire on the turns where the current pick leaves
+nothing to hide behind.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
