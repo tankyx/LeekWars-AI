@@ -614,9 +614,28 @@ break on `score == bestScore` ran 960 paired fights across the panel and
 Ludaskia and produced **zero flips and zero proxy change** — bit-identical,
 the "perfect null means a half-closed gate" signature this document already
 warns about. The ties measured above were *within 0.1%*, not equal floats;
-float `==` never fired. Re-run with a relative tolerance, and with the chain
-counting branch firings in a smoke run and aborting on zero **before** the
-A/B. A change that cannot be shown to fire is not an experiment.
+float `==` never fired. **Second attempt, 0.1% relative band with a fire-count
+guard: the branch fired 0 times in 6 fights** (the chain then failed to
+abort and was killed by hand — every chain now uses an explicit
+`|| {{ revert; exit 1; }}` plus `trap revert EXIT` instead of `set -e`).
+
+**Why neither can fire — the parity claim was an artefact.** A gap probe at
+the three selection sites, logging every hide candidate against the
+incumbent *at the moment of comparison* (10 fights, 33 evaluations):
+
+| site | evals | cand above incumbent | within 0.1% below | >0.1% below | median rel. gap |
+|---|---|---|---|---|---|
+| 1 base score | 11 | **0** | 3 | 8 | **−34%** |
+| 2 two-ply | 8 | **0** | 1 | 7 | −23% |
+| 3 finalScore | 14 | **0** | 2 | 12 | −24% |
+
+The "75% / 44% exact ties" above counted the eventual winner as its own
+hide twin (ratio 1.000 trivially). Against a non-hide incumbent the hide
+plan sits **a quarter to a third lower**. There are no ties to break; the
+tie-break is dead. The question is now **which dimension prices a post-fire
+hide at −25–35%**: a second shot forgone, the position term, or 2-ply
+projecting less next-turn damage from the hide cell. Measured next by
+logging both plans' dimension breakdown side by side.
 
 ---
 
