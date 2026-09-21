@@ -598,6 +598,31 @@ those, scored on the proxies. Held findings are not adopted on this.
 ceiling; three are losing matchups. The panel reproduces her real-ladder
 48%-vs-STR picture and is the testbed the re-rank decision was missing.
 
+**Re-rank OFF vs ON on the panel (paired n=60 each, pooled by
+`tools/pool_ab.py`):**
+
+| opponent | OFF | ON | gained / lost | p | HP-lead | shot-denial |
+|---|---|---|---|---|---|---|
+| TheLeaker | **38** | 24 | 23 / 9 | **0.020** | +19.9 | +0.047 |
+| Hydrogène | 18 | 15 | 11 / 8 | 0.65 | +9.7 | +0.039 |
+| ReauBotcode | **14** | 3 | 11 / **0** | **0.001** | +24.5 | +0.073 |
+| BretzelLeekide | **54** | 42 | 15 / 3 | **0.0075** | +30.3 | +0.059 |
+| **pooled (n=240)** | **124 (51.7%)** | **84 (35.0%)** | **60 / 20** | **≈0** | **+22.2 (t=7.63)** | **+0.054** |
+
+Fire-then-move −0.018: the gain is not hiding, it is **shot denial** — the
+same mechanism as vs Éleeksire. With this, there is no real-opponent testbed
+on which the learned re-rank wins: Ed vs Ludaskia ×2 (p=0.039, 0.016),
+Margaret vs Éleeksire (p≈0), Margaret vs her STR panel (p≈0), KurtGodel
+same direction, two ceilings. The mirror A/B that shipped it was V9
+rewarding V9's own habits.
+
+**Adoption case, restated after the hold:** +16.7pp on the archetype that
+sets Margaret's real-ladder talent, replicated across four opponents built
+from her own losses. Lowest-risk path: side-by-side deploy (`9.0/V9-NR/`,
+flag off) with only Margaret assigned, 50 real solo fights against her 53%
+baseline, fully reversible by reassigning her AI. `upload_v9.py --root`
+exists for exactly this.
+
 ---
 
 ## Other archetypes
