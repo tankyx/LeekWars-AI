@@ -153,10 +153,27 @@ function predictEnemyThreatAtCell(targetCell, enemy, player, arsenal) {
     return prediction
 }
 
-function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, availableTP) {
+// Memo for bestAttackDamageAtRange, keyed by enemy id + distance + LoS.
+// calculateBestAttackDamage is a PURE function of (dist, hasLos) for a given
+// enemy, but the adversarial threat cache called it ~10,000 times per turn
+// (our reachable cells x enemy reachable positions), rescanning every weapon
+// and chip and re-sorting each time. Distances span ~30 values, so there are
+// only ~60 distinct inputs per enemy: memoising collapses the work ~150x.
+// Declared in cache_manager.lk (included first) and cleared there each turn.
 
+function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, availableTP) {
     var dist = getCellDistance(fromCell, targetCell)
     if (dist == null) return 0
+    var hasLos = getCachedLineOfSight(fromCell, targetCell)
+    return bestAttackDamageAtRange(dist, hasLos, enemy, weapons, chips, availableTP)
+}
+
+function bestAttackDamageAtRange(dist, hasLos, enemy, weapons, chips, availableTP) {
+    // TP is in the key too: both current callers pass enemy._currTp (constant
+    // per enemy per turn) but keying without it would silently return a stale
+    // value if any future caller passes a different budget.
+    var memoKey = enemy._id * 1000000 + availableTP * 1000 + dist * 2 + (hasLos ? 1 : 0)
+    if (mapContainsKey(__advDmgMemo, memoKey)) { return __advDmgMemo[memoKey] }
 
     // Collect all viable attack options. Previously this returned max() over a
     // single weapon OR single chip — which under-counted multi-chip burst
@@ -168,7 +185,6 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
     // descending, take each in order until TP runs out. Slight over-estimate
     // vs ideal MILP (ignores swap costs between weapons, and assumes all
     // chips off CD), but right-direction conservative for threat assessment.
-    var hasLos = lineOfSight(fromCell, targetCell)
     var attacks = []
 
     for (var weaponId in weapons) {
@@ -218,7 +234,7 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
         push(attacks, [scaledDmg, chipCost, false, 1])
     }
 
-    if (count(attacks) == 0) return 0
+    if (count(attacks) == 0) { __advDmgMemo[memoKey] = 0; return 0 }
 
     arraySort(attacks, function(a, b) {
         if (a[0] > b[0]) return -1
@@ -240,6 +256,7 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
         remainingTP -= aCost * uses
     }
 
+    __advDmgMemo[memoKey] = totalDamage
     return totalDamage
 }
 

@@ -9,6 +9,12 @@ global __chipCostCache = [:]
 global __weaponCostCache = [:]
 global __pathLengthCache = [:]
 global __losCache = [:]
+// Memo for bestAttackDamageAtRange, keyed by enemy id + distance + LoS.
+// The adversarial threat cache called that pure function ~10,000x per turn
+// (our reachable cells x enemy reachable positions), rescanning every weapon
+// and chip and re-sorting each time. Only ~60 distinct (dist, LoS) inputs
+// exist per enemy, so memoising collapses the work. Flushed every turn.
+global __advDmgMemo = [:]
 // Per-turn cache: count of enemy access cells with LoS to a candidate cell.
 // Used by FieldMapTactical.computeDangerForCell. enemyAccess is fixed per turn,
 // so we key by candidate cellId only.
@@ -42,6 +48,7 @@ function clearCaches() {
     // substantial ops during scenario generation/simulation/scoring
     // where the same cell pairs are queried repeatedly.
     __losCache = [:]
+    __advDmgMemo = [:]
     __dangerCellCache = [:]
     __adversarialThreatCache = [:]
     __adversarialThreatCacheBuilt = false
