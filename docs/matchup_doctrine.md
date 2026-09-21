@@ -454,6 +454,29 @@ identical damage. Two different failures follow:
    To test generation vs STR without a ceiling, measure the proxy on
    `ladder_ludaskia` (STR, ~75–100% for us, not saturated).
 
+   **Hide-cell selection is not the flaw.** `findHideAndSeekCell("defensive")`
+   ranks candidates by `computeDangerForCell` and `evaluateCoverScore`, both
+   computed against the enemy's *reachable* cells (`enemyAccess`), not its
+   current position, and has no archetype gate. Three suspects remain for
+   the real-fight gap (ours 0.14 vs ladder 0.36 vs STR opponents):
+   leftover MP after approaching rarely reaches a low-danger cell (the
+   `legLen <= playerMP` gate); the `_ops89` early return truncates the
+   search; and the **tie-break** — the stage probe found the fire-then-hide
+   candidate present on 46% of turns vs Sepignouf at parity score and
+   identical damage, yet chosen post-fire on 0/74. The selection compares
+   with strict `>` (first-seen wins exact ties). Since the hide variant is generated as a later sibling of the
+   no-hide plan, a first-seen tie-break hands every exact parity to
+   stand-and-fire.
+
+   **Proposed experiment (not run without a decision):** break exact
+   score ties in favour of the candidate that ends in a hide — a tie-break,
+   not a re-weighting — and measure paired on `ladder_ludaskia` and
+   `ladder_eleeksire` with `matchup_ab.py`, whose success criterion now
+   includes the fire-then-move and shot-denial proxies. Prediction if the
+   tie-break is the block: hide rate rises toward the ladder's 0.32 with
+   flat-or-better outcomes; if MP or the ops gate is the block, the rate
+   barely moves and the next probe is `legLen` vs `playerMP` at the gate.
+
 This is the same signature as the morning's category-D turns (plan predicted
 damage, nothing executed). The lever is the plan->execution path, not a weight.
 
