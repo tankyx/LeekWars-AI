@@ -693,6 +693,19 @@ with margin and site. If those margins are ~1–2%, the right experiment is
 the **inverse** band — a non-hide challenger must beat a hide incumbent by
 more than the band to displace it.
 
+**Measured: 2 overtakes in 10 fights.** Non-hide candidates almost never
+displace a hide incumbent. The inverse band is dead — the fourth
+selection-layer margin hypothesis in a row (tie-break, threat-blind cache,
+planner runner-up, inverse band) killed by measurement. What fits every
+probe at once: the planner's hide winner never *becomes* the incumbent,
+because it fails the **feasibility gate** (`feasible` at the pool stage —
+the NET-TP check, Fix #1B). That would produce zero hide challengers near
+a non-hide incumbent (the hide was filtered before comparison), zero
+overtakes (it was never incumbent), the 41% → ~6% collapse, and the
+morning's "plan predicted damage, nothing executed" turns. Measured next:
+every site-1 candidate's hide flag and feasibility, and whether the
+planner's index-0 winner is hide-shaped and infeasible.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
