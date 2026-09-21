@@ -3,6 +3,16 @@ include('../weight_profiles.lk')
 include('../strategic_depth.lk')
 include('../scenario_mutation.lk')
 
+// V9 hide-append pass (2026-09-21): measured on the STR panel that on
+// 70-80% of the turns we ended exposed, a no-LoS cell was within our
+// leftover MP by path length, and that ending hidden costs the enemy
+// ~570 HP of damage per turn on average. The hide templates cannot supply
+// it (they fire less to reserve MP); this appends an MP-exact LoS-break
+// move to the best plans as they are and lets the scorer decide.
+global _v9HideAppendEnabled = true
+global _v9HideAppendTopK = 5
+global _v9HideAppendLog = false
+
 class UnifiedStrategy extends Strategy {
     _weights = null
     _player = null
@@ -618,6 +628,47 @@ class UnifiedStrategy extends Strategy {
                 if (_gsim.hpGained > 0) _genHealCount++
             }
             debugW("GEN_T" + getTurn() + "_n" + _genN + "_topDmg" + _genTopDmg + "_topDot" + _genTopDot + "_dmgN" + _genDmgCount + "_healN" + _genHealCount)
+        }
+
+        if (_v9HideAppendEnabled && count(scenarioResults) >= 1 && getOperations() < _ops79 && target != null) {
+            arraySort(scenarioResults, function(a, b) {
+                return b['score'] - a['score']
+            })
+            var haCount = min(_v9HideAppendTopK, count(scenarioResults))
+            var haAdded = []
+            var haWon = 0
+            for (var hi = 0; hi < haCount; hi++) {
+                if (getOperations() > _ops79) break
+                var hsd = scenarioResults[hi]
+                if (!hsd['feasible']) continue
+                var hsc = hsd['scenario']
+                var hsr = hsd['simResult']
+                if (hsc == null || count(hsc) == 0) continue
+                var hLast = hsc[count(hsc) - 1]
+                if (hLast.type == Action.MOVEMENT_HNS || hLast.type == Action.MOVEMENT_FLEE) continue
+                var hFinal = hsr.finalPosition
+                if (hFinal == -1) hFinal = player._cellPos
+                var hMpLeft = player._currMp - hsr.mpSpent
+                if (hMpLeft <= 0) continue
+                var hCell = this._fieldMap.findLosBreakCell(hFinal, hMpLeft, target._cellPos)
+                if (hCell == -1) continue
+                var hClone = []
+                for (var ha in hsc) push(hClone, ha)
+                push(hClone, new Action(Action.MOVEMENT_HNS, -1, -1, hCell, target))
+                var hSim = simulator.simulate(hClone)
+                var hNet = hSim.tpSpent - hSim.tpRefunded
+                if (!(hNet <= tpBudget && hSim.droppedActions == 0)) continue
+                var hScore = scorer.score(hSim, hClone)
+                push(haAdded, ['scenario': hClone, 'simResult': hSim, 'score': hScore, 'quickScore': hsd['quickScore'], 'netTP': hNet, 'feasible': true])
+                if (hScore > bestScore) {
+                    bestScore = hScore
+                    bestScenario = hClone
+                    bestSimResult = hSim
+                    haWon = 1
+                }
+            }
+            for (var hx in haAdded) push(scenarioResults, hx)
+            if (_v9HideAppendLog) debugW("HA_e" + getEntity() + "_T" + getTurn() + "_tried" + haCount + "_added" + count(haAdded) + "_won" + haWon)
         }
 
         if (count(scenarioResults) >= 2 && getOperations() < _ops79) {
