@@ -18,6 +18,14 @@ There are THREE id spaces in play. Use the right accessor for the right source:
                                     field as its id, so heavy_sword is 278 in
                                     tools/leek_configs.json and in loadouts)
 
+SERVER fights use the same template space for USE_CHIP / SET_WEAPON as the
+local generator, so chip() and weapon() apply to both -- verified 2026-09-21 on
+ladder fight 53748910 (template decode yields a coherent kit, config-space
+decode yields garbage). Only the packaging differs: the server returns the
+action stream under fight['data'], not at top level. Leek stat sheets from
+/leek/get are a different matter: top-level `strength` etc. are BASE values,
+and the simulation-relevant totals (including components) are `total_*`.
+
 Action shapes (generator src/main/java/com/leekwars/generator/action/):
     [7,  entity]                     LEEK_TURN   - sets the acting entity
     [12, chip_template, cell, result]  USE_CHIP  - result 1=ok 2=critical
