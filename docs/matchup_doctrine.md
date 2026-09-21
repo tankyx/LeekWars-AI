@@ -348,6 +348,47 @@ entries are not committed. Recipes are the drop/add lists in the table above
 
 ---
 
+## What top players DO (5,380 solo fights, 185 accounts) vs what our AI does (500)
+
+Single-chip cast rates barely separate their wins from their losses
+(owner-normalised, first 10 turns: jump 0.05/0.05, reflexes 0.05/0.05,
+wall 0.12/0.12, armoring 0.19/0.19). The one robust exception is **remission
+cast more in losses** (0.163 won vs 0.208 lost) — heal-cycling as the loser
+signature, third independent confirmation of `scenario_scorer.lk:833`.
+
+The signal is in **how they play**, not what they cast — measured with three
+proxies that need no map geometry (all owner-normalised, first 10 turns):
+
+| behaviour | top players won / lost | **ours** won / lost |
+|---|---|---|
+| enemy fired no weapon on their next turn, **vs weapon-user opponents** | 0.33 / 0.26 | 0.31 / 0.21 |
+| **moved AFTER firing** (hit-and-hide) | **0.32 / 0.27** (STR builds 0.39 / 0.30; vs STR opp 0.36 / 0.26) | **0.13 / 0.14** |
+| dealt no damage this turn | 0.42 / 0.48 | 0.25 / 0.35 |
+
+Read across: denial of the enemy's shot discriminates wins for both sides by
+about the same margin once conditioned on weapon-user opponents (the
+unconditioned gap was partly caster opponents who never fire). Our AI deals
+damage on MORE turns than they do. The gap is the middle row: **they fire and
+then move; we fire and stand.** We do it at ~40% of their rate, and for us it
+does not track outcome at all — it is not a play our AI makes on purpose.
+Combos say the same thing about denial: MAG winners pair a shackle with a
+poison in the same turn (fracture+arsenic, fracture+venom, stacked slow_down);
+losers pair remission with anything.
+
+This is a positioning / scenario-generation lever, not a scoring one — exactly
+where seven null valuation changes and the ALPA transplant already pointed.
+Position is ~0.1% of scenario score, and `MOVEMENT_HNS` exists as an action
+type; whether fire-then-move is rarely generated or generated-and-outscored is
+the next question to answer before touching anything.
+
+Method notes: "enemy fired no weapon next turn" is a proxy (dead/finishing
+enemies also fire nothing); always condition on opponent archetype. Cover, LoS
+and AoE placement proper need the map's cell geometry, not yet derived.
+Scripts: `/tmp/ladder/analyze_play.py`, `analyze_wide.py` (to be moved into
+tools/ once the geometry work decides their final shape).
+
+---
+
 ## Other archetypes
 
 Not yet written. Each needs a stabilised testbed first (`matchup_stability.py`),
