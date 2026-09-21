@@ -54,9 +54,34 @@ def _one(args):
     if r.get('error'):
         return {'error': r['error'], 'seed': seed}
     stats = parse_fight({'leeks': r['leeks'], 'actions': r['actions']}, DEC)
+    idle, acted = idle_turns(r, stats)
     return {'result': r['result'], 'seed': seed, 'turns': r['total_turns'],
             'ops': r['our_ops'], 'bug': r['has_bug'], 'stats': stats,
-            'leeks': r['leeks'], 'trace': trace_chip(r, stats)}
+            'leeks': r['leeks'], 'trace': trace_chip(r, stats),
+            'idle': idle, 'acted': acted}
+
+
+def idle_turns(r, stats):
+    """How many of our turns dealt no damage at all.
+
+    Distinguishes 'we cannot spend the TP because nothing is in range' from
+    'we have TP but choose badly' - the two call for opposite fixes."""
+    ours = {k for k, e in stats.items() if k != '_meta' and e.get('team') == 1}
+    cur, dealt, idle, acted = None, False, 0, 0
+    for a in r['actions']:
+        if not isinstance(a, list) or not a:
+            continue
+        if a[0] == 7:
+            if cur in ours:
+                acted += 1
+                idle += 0 if dealt else 1
+            cur, dealt = (a[1] if len(a) > 1 else None), False
+        elif a[0] in (101, 107, 109) and len(a) > 2 and cur in ours and a[1] not in ours:
+            dealt = True
+    if cur in ours:
+        acted += 1
+        idle += 0 if dealt else 1
+    return idle, acted
 
 
 def trace_chip(r, stats):
@@ -83,7 +108,7 @@ def trace_chip(r, stats):
 def fold(runs, side_team):
     """Sum per-entity stats across runs for one team."""
     acc = {'chips': defaultdict(int), 'weapons': defaultdict(int),
-           'tp_chip': 0, 'tp_weapon': 0,
+           'tp_chip': 0, 'tp_weapon': 0, 'tp_switch': 0, 'idle': 0, 'acted': 0,
            'taken': defaultdict(int), 'dealt': defaultdict(int),
            'healed': 0, 'cleansed': 0, 'crits': 0, 'moves': 0, 'turns': 0,
            'deaths': 0, 'n': 0}
@@ -102,12 +127,16 @@ def fold(runs, side_team):
                 acc['taken'][t] += v
             for t, v in e['dealt'].items():
                 acc['dealt'][t] += v
+            acc['tp_switch'] += e['switches']
             acc['healed'] += e['healed']
             acc['cleansed'] += e['poisons_cleansed']
             acc['crits'] += e['crits']
             acc['moves'] += e['moves']
             acc['turns'] += e['turns']
             acc['deaths'] += 1 if e['died'] else 0
+        if side_team == 1:      # idle_turns only tracks our own entities
+            acc['idle'] += run.get('idle', 0)
+            acc['acted'] += run.get('acted', 0)
     return acc
 
 
@@ -124,12 +153,17 @@ def show(label, acc):
              acc['healed'] / max(sum(tk.values()), 1),
              acc['cleansed'] / n))
     t = max(acc['turns'], 1)
-    print('     TP/turn: %.1f on chips + %.1f on weapons = %.1f   weapon uses/turn %.2f'
-          % (acc['tp_chip'] / t, acc['tp_weapon'] / t,
-             (acc['tp_chip'] + acc['tp_weapon']) / t,
+    print('     TP/turn: %.1f chips + %.1f weapons + %.1f switches = %.1f'
+          '   weapon uses/turn %.2f'
+          % (acc['tp_chip'] / t, acc['tp_weapon'] / t, acc['tp_switch'] / t,
+             (acc['tp_chip'] + acc['tp_weapon'] + acc['tp_switch']) / t,
              sum(acc['weapons'].values()) / t))
     print('     damage dealt/turn: %.0f   moves/turn %.2f'
           % (sum(acc['dealt'].values()) / t, acc['moves'] / t))
+    if acc['acted']:
+        print('     turns dealing ZERO damage: %d of %d (%.0f%%)  <- out of range '
+              'or nothing castable, not a TP shortage'
+              % (acc['idle'], acc['acted'], 100 * acc['idle'] / acc['acted']))
     top = sorted(acc['chips'].items(), key=lambda x: -x[1])[:8]
     print('     chips/turn: ' + ', '.join('%s %.2f(%dtp)' % (k, v / t, COST.get(k, 0))
                                           for k, v in top))

@@ -152,7 +152,7 @@ def parse_fight(fight, decoder=None):
             'name': l.get('name'), 'team': l.get('team'), 'chips': defaultdict(int),
             'weapons': defaultdict(int), 'crits': 0, 'moves': 0, 'turns': 0,
             'taken': defaultdict(int), 'healed': 0, 'dealt': defaultdict(int),
-            'poisons_cleansed': 0, 'died': False,
+            'poisons_cleansed': 0, 'died': False, 'switches': 0,
         }
 
     def ent(i):
@@ -160,7 +160,7 @@ def parse_fight(fight, decoder=None):
             ents[i] = {'name': 'summon/%s' % i, 'team': None, 'chips': defaultdict(int),
                        'weapons': defaultdict(int), 'crits': 0, 'moves': 0, 'turns': 0,
                        'taken': defaultdict(int), 'healed': 0, 'dealt': defaultdict(int),
-                       'poisons_cleansed': 0, 'died': False}
+                       'poisons_cleansed': 0, 'died': False, 'switches': 0}
         return ents[i]
 
     cur = None
@@ -181,6 +181,10 @@ def parse_fight(fight, decoder=None):
             if cur is not None:
                 ent(cur)['moves'] += 1
         elif c == 13 and len(a) > 1 and cur is not None:
+            # A weapon switch costs 1 TP (State.setWeapon -> entity.useTP(1)),
+            # which is easy to miss and understates TP spend on a 4-weapon leek.
+            if held.get(cur) != a[1]:
+                ent(cur)['switches'] += 1
             held[cur] = a[1]
         elif c == 12 and len(a) > 2 and cur is not None:
             e = ent(cur)
