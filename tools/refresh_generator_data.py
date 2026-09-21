@@ -3,7 +3,11 @@
 Refresh leek-wars-generator data files from our market_data.json.
 
 The generator ships with incomplete weapons.json (24 entries) and chips.json.
-Our market_data.json has the full set (36 weapons, 109 chips) from the live API.
+Our market_data.json has the full set (39 weapons, 109 chips) from the live API.
+NOTE: the market listing omits FORGOTTEN weapons (e.g. plutonium_bazooka,
+template 26) and lags newly released ones (desert_saber 41, sun_spear 42);
+seed those into raw_data.weapons from /weapon/get-all or they never reach
+the generator and local fights cannot simulate them.
 
 This script converts raw_data.weapons and raw_data.chips to the generator's format
 and writes them to the generator's data/ directory.
