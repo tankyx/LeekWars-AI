@@ -573,6 +573,38 @@ bundle (`upload_v9.py` does not bundle) — verified below.
 
 ---
 
+## The lever above the re-rank: parity ties, and a threat model blind to denial
+
+The tie-break retraction above was wrong — it rested on the pool probe that
+counted ties as wins. A corrected probe compares **final** scores (post-2-ply
+where present) of the winner and the best post-fire-hide sibling:
+
+| | Ed vs Ludaskia (32 turns) | Margaret vs TheLeaker (199) |
+|---|---|---|
+| hide final / winner final, median (p25–p75) | **1.000** (1.000–1.000) | 0.852 (0.471–1.000) |
+| **exact ties (within 0.1%)** | **75%** | **44%** |
+| hide strictly higher | **0%** | **0%** |
+| hide gives up damage | 12% of turns | 8% |
+| **hide cell safer by adversarial threat** | **0% of turns** | **17%** |
+
+So: on parity the strict `>` at every selection site hands the turn to the
+first-seen stand-and-fire plan, and the learned re-rank then overrode most of
+the remainder. That is the whole selection story, and it is why re-rank OFF
+helps everywhere.
+
+The deeper fact is *why* it is parity. `findHideAndSeekCell` picks the hide
+cell because its own `computeDangerForCell` + `evaluateCoverScore` rate it
+safer — but the scorer's **adversarial threat cache rates the hide cell no
+safer than the firing cell on 100% / 83% of turns**, so the scorer sees no
+benefit and scores the two plans identically. Two estimators disagree, and
+the one that decides is blind to the shot denial that 5,380 ladder fights
+say wins. Next: measure both estimators on the same cells to confirm, then
+test the cheapest downstream fix — prefer the post-fire hide on *exact*
+ties — locally on the panel with the proxies. If the cache is LoS-blind,
+the real fix is there, not in the tie-break.
+
+---
+
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
 
 All four main leeks sit at Elo equilibrium on the real ladder (last 125 solo
