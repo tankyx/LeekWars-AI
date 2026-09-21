@@ -728,6 +728,23 @@ simulated MP remaining, TP remaining — to tell a true MP shortfall (fix the
 planner's MP accounting) from a planner/simulator mismatch (fix the
 simulator).
 
+**Measured: 2,324 refused hide moves — 98% genuine MP shortfalls**
+(median 4 MP left after the attack, hide leg needing median 10), **0**
+planner/simulator mismatches. The simulator is right. The defect is where
+the hide cell comes from: `getHideAndSeekAction(mpBudget)` uses its budget
+only as `if (mpBudget <= 0) return null`, then returns a per-turn cached
+cell that `findHideAndSeekCell("defensive")` picked from
+`getAccessibleCells(player)` — **cells reachable with full MP from the
+pre-move position** — and that cell is appended to plans *after* an
+approach and attack have spent most of that MP. The globally safest cell is
+~10 steps away; the plan has 4. The ladder's winners hide with the MP they
+have left. **Fix: bound the hide cell by residual MP from the plan's
+post-attack position at insertion** (fall back to the best reachable cover
+cell rather than the best cell). Not a weight, not a tie-break; a
+reachability bug in candidate construction — the "proposal ceiling" made
+concrete. To be A/B'd locally on the panel + Ludaskia with the proxies, with
+a guard that the number of feasible hide plans actually rises.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
