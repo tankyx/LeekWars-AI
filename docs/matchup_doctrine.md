@@ -475,14 +475,26 @@ identical damage. Two different failures follow:
    no-hide plan, a first-seen tie-break hands every exact parity to
    stand-and-fire.
 
-   **Proposed experiment (not run without a decision):** break exact
-   score ties in favour of the candidate that ends in a hide — a tie-break,
-   not a re-weighting — and measure paired on `ladder_ludaskia` and
-   `ladder_eleeksire` with `matchup_ab.py`, whose success criterion now
-   includes the fire-then-move and shot-denial proxies. Prediction if the
-   tie-break is the block: hide rate rises toward the ladder's 0.32 with
-   flat-or-better outcomes; if MP or the ops gate is the block, the rate
-   barely moves and the next probe is `legLen` vs `playerMP` at the gate.
+   **Suspects measured (30 fights each, probe of cell search / ops cut /
+   pool / selection) — the tie-break proposal is RETRACTED:**
+
+   | | Ludaskia (STR) | Éleeksire (MAG) |
+   |---|---|---|
+   | `findHideAndSeekCell` found a cell | 158 / 158 (100%) | 588 / 588 |
+   | aborted by the `_ops89` cut | 0 | 0 |
+   | post-fire-hide candidate in pool | 34% of turns | 65% |
+   | its score / winner's (median) | 1.01 | 1.00 |
+   | **it won selection when present** | **17 / 32 (53%)** | 114 / 208 (55%) |
+
+   Cell search: not the block. Ops cut: not the block. Tie-break: not the
+   block — the hide candidate scores *above* parity and wins selection more
+   than half the time it exists. On Ludaskia ~18% of turns SELECT a post-fire
+   hide; the executed rate is 1.5%. **The hide is discarded after selection.**
+   On Éleeksire the stage probe put that on the learned re-rank (14 of 15,
+   veto 1); on Ludaskia it is unmeasured — that is the next probe, plus the
+   re-rank on/off A/B on Ludaskia scored on the proxies. (The
+   `createOffensiveScenario` MP-gate probe never fired: that template is not
+   the one producing these hides.)
 
 This is the same signature as the morning's category-D turns (plan predicted
 damage, nothing executed). The lever is the plan->execution path, not a weight.
