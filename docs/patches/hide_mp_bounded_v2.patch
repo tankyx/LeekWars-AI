@@ -1,0 +1,193 @@
+diff --git a/V9_modules/field_map_tactical.lk b/V9_modules/field_map_tactical.lk
+index 567d870b..67f5ba1b 100644
+--- a/V9_modules/field_map_tactical.lk
++++ b/V9_modules/field_map_tactical.lk
+@@ -86,11 +86,21 @@ class FieldMap extends FieldMapPatterns {
+         return this._enemyAccessCache
+     }
+ 
+-    findHideAndSeekCell(mode = "defensive", target = null) {
++    findHideAndSeekCell(mode = "defensive", target = null, origin = -1, mpBound = -1) {
+         var enemyAccess = this.getEnemyAccess()
+         if (count(enemyAccess) == 0) return null
+         var playerAccessible = this.getAccessibleCells(player)
+         if (indexOf(playerAccessible, player._cellPos) == -1) push(playerAccessible, player._cellPos)
++        if (origin != -1 && mpBound >= 0) {
++            var boundedAcc = []
++            for (var bai = 0; bai < count(playerAccessible); bai++) {
++                var bc = playerAccessible[bai]
++                if (bc == origin) continue
++                var bl = getCachedPathLength(origin, bc)
++                if (bl != null && bl > 0 && bl <= mpBound) push(boundedAcc, bc)
++            }
++            playerAccessible = boundedAcc
++        }
+ 
+         var isApproachMode = (mode == "approach")
+         var targetPos = isApproachMode ? target._cellPos : -1
+diff --git a/V9_modules/scenario_combos.lk b/V9_modules/scenario_combos.lk
+index b82952ff..d8e03833 100644
+--- a/V9_modules/scenario_combos.lk
++++ b/V9_modules/scenario_combos.lk
+@@ -84,7 +84,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             push(actions, atk)
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -174,7 +174,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             push(actions, atk)
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -228,7 +228,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             push(actions, atk)
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -338,7 +338,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             push(actions, atk)
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -1189,7 +1189,7 @@ class ScenarioCombos extends ScenarioHelpers {
+         }
+ 
+         if (params.repositioning == "hide") {
+-            var hideAction = this.getHideAndSeekAction(mpBudget)
++            var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+             if (hideAction != null) {
+                 push(actions, hideAction)
+             }
+@@ -1253,7 +1253,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             push(actions, atk)
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -1330,7 +1330,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             tpBudget -= heavySwordCost
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -1411,7 +1411,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             tpBudget -= axeCost
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -1501,7 +1501,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             tpBudget -= weaponCost
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -2925,7 +2925,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             push(actions, atk)
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -3081,7 +3081,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             push(actions, atk)
+         }
+ 
+-        var hideAction = this.getHideAndSeekAction(mpBudget)
++        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+         if (hideAction != null) {
+             push(actions, hideAction)
+         }
+@@ -3190,7 +3190,7 @@ class ScenarioCombos extends ScenarioHelpers {
+         }
+ 
+         if (hpPercent < 30) {
+-            var hideAction = this.getHideAndSeekAction(mpBudget)
++            var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
+             if (hideAction != null) {
+                 push(actions, hideAction)
+             }
+diff --git a/V9_modules/scenario_helpers.lk b/V9_modules/scenario_helpers.lk
+index 14cafbca..614eced2 100644
+--- a/V9_modules/scenario_helpers.lk
++++ b/V9_modules/scenario_helpers.lk
+@@ -46,6 +46,7 @@ class ScenarioHelpers {
+ 
+     _moveCache = [:]
+     _hideCache = null
++    _hideCacheB = null
+     _kiteCache = null
+ 
+     // Phase H: when set, findBestAvailableAttack discounts weapon dot — used
+@@ -1131,20 +1132,29 @@ class ScenarioHelpers {
+         return action
+     }
+ 
+-    getHideAndSeekAction(mpBudget) {
++    getHideAndSeekAction(mpBudget, fromCell = -1) {
+         if (mpBudget <= 0) return null
+-
+-        if (this._hideCache != null) {
+-            return this._hideCache
+-        }
+-
+-        var hideCell = this._fieldMap.findHideAndSeekCell("defensive")
+-        if (hideCell != null) {
+-            this._hideCache = new Action(Action.MOVEMENT_HNS, -1, -1, hideCell['cell'], this._target)
+-            return this._hideCache
++        if (fromCell == -1) {
++            if (this._hideCache != null) return this._hideCache
++            var hideCell0 = this._fieldMap.findHideAndSeekCell("defensive")
++            if (hideCell0 != null) {
++                this._hideCache = new Action(Action.MOVEMENT_HNS, -1, -1, hideCell0['cell'], this._target)
++                return this._hideCache
++            }
++            return null
+         }
+-
+-        return null
++        if (this._hideCache != null) {
++            var cLen = getCachedPathLength(fromCell, this._hideCache.targetCell)
++            if (cLen != null && cLen > 0 && cLen <= mpBudget) return this._hideCache
++        }
++        var bKey = fromCell * 100 + mpBudget
++        if (this._hideCacheB == null) this._hideCacheB = [:]
++        if (mapContainsKey(this._hideCacheB, bKey)) return this._hideCacheB[bKey]
++        var hideCellB = this._fieldMap.findHideAndSeekCell("defensive", null, fromCell, mpBudget)
++        var actB = null
++        if (hideCellB != null && hideCellB['cell'] != fromCell) actB = new Action(Action.MOVEMENT_HNS, -1, -1, hideCellB['cell'], this._target)
++        this._hideCacheB[bKey] = actB
++        return actB
+     }
+ 
+     getKiteAwayAction(mpBudget) {

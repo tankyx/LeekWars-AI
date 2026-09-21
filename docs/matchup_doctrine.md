@@ -745,6 +745,43 @@ reachability bug in candidate construction — the "proposal ceiling" made
 concrete. To be A/B'd locally on the panel + Ludaskia with the proxies, with
 a guard that the number of feasible hide plans actually rises.
 
+**Measured: the MP-bounded hide fix (`docs/patches/hide_mp_bounded_v2.patch`,
+three files, ~70 lines).** `findHideAndSeekCell` takes an `origin` and
+`mpBound`, and filters the existing full-MP candidate list by cached path
+length from the plan position (bounded by the list, not the board -- a
+board-scan variant was also written but never measured: both variants first
+failed to compile because a stale `return null` was left after the new
+return, `CANT_ADD_INSTRUCTION_AFTER_BREAK`, AI dead, smoke 0W/3D -- which
+was first misread as "fix ineffective"). All 12 `getHideAndSeekAction`
+call sites in the combos pass `simPos`; results are memoised per
+(position, budget).
+
+*Guard passed:* post-fire hide plans feasible at site 1 went from **12% to
+77%** (63 of 82, 0 errors, 8 fights). The proposal ceiling is lifted.
+
+*Paired A/B, fix vs HEAD, n=60 each, `-j 2` (`-j 4` was OOM-killed):*
+
+| opponent | NEW | HEAD | gained / lost | p | HP-lead | fire-then-move | shot-denial |
+|---|---|---|---|---|---|---|---|
+| Ed vs Ludaskia | 23 | 23 | 2 / 2 | 1.0 | +2.1 | +0.040 | -0.001 |
+| Margaret vs TheLeaker | 24 | 22 | 7 / 5 | 0.77 | +4.9 | +0.004 | +0.005 |
+| Margaret vs ReauBotcode | 4 | 4 | 3 / 3 | 1.0 | +11.2 (t=2.7) | +0.013 | +0.051 |
+| Margaret vs BretzelLeekide | 46 | 40 | 8 / 2 | 0.11 | +8.7 (t=2.2) | +0.032 | +0.017 |
+| Margaret vs Hydrogène | 23 | 20 | 4 / 1 | 0.38 | +7.9 (t=2.8) | -0.025 | +0.028 |
+| **Margaret pooled (n=240)** | **97 (40.4%)** | 86 (35.8%) | **22 / 11** | **0.080** | **+8.2 (se 1.8, t=4.5)** | +0.006 | +0.025 |
+
+Reading: every arm is >= HEAD on wins and positive on HP-lead; the pooled
+win-rate gain (+4.6pp) misses 0.05 while the HP-lead gain is unambiguous
+(t=4.5). Ed is unchanged (his hide budget after a Ludaskia approach is
+rarely non-zero). The fire-then-move rate barely moves (+0.006) even though
+feasible hide plans went 12% -> 77%: the plans now survive the gate but are
+still out-scored -- so the *second* half of the ceiling is the scorer, not
+the proposal. The fix is a correctness repair (a plan the planner builds and
+the simulator refuses is a bug regardless of the A/B) with a small,
+consistent, real-opponent gain and no measured harm. Recommended to adopt;
+independent of the held re-rank flag. A larger sample (n=120 on the two
+best arms) would settle the win-rate p if wanted before a server deploy.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
