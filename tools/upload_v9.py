@@ -60,6 +60,7 @@ def resolve_includes(root: Path, entry: str) -> list:
 
 
 def main():
+    global ROOT_PATH
     ap = argparse.ArgumentParser()
     ap.add_argument("--account", default="main", choices=["main", "cure"])
     ap.add_argument("--root", default=ROOT_PATH,
@@ -67,7 +68,6 @@ def main():
                          "9.0/V9-NR for a side-by-side variant: assign only the leeks under "
                          "test to it, and roll back by reassigning their AI." % ROOT_PATH)
     args = ap.parse_args()
-    global ROOT_PATH
     ROOT_PATH = args.root.strip("/")
 
     login, password = load_credentials(account=args.account)
