@@ -452,7 +452,11 @@ identical damage. Two different failures follow:
    evidence for under-hiding vs weapon users is the real-fight comparison
    (ours 0.14 / 0.16 vs the ladder's 0.36 / 0.26 against STR opponents).
    To test generation vs STR without a ceiling, measure the proxy on
-   `ladder_ludaskia` (STR, ~75–100% for us, not saturated).
+   `ladder_ludaskia` (STR). **Measured (true null, n=40): we win 16/40 =
+   40%** — the fleet matrix's 9/12 was an n=12 upward fluctuation — and our
+   **post-fire hide rate there is 0.015**, against the ladder winners' 0.36
+   vs STR opponents. Against a STR weapon-user we lose to, we hide after
+   firing on 1.5% of firing turns. Ludaskia is the testbed for this gap.
 
    **Hide-cell selection is not the flaw.** `findHideAndSeekCell("defensive")`
    ranks candidates by `computeDangerForCell` and `evaluateCoverScore`, both
