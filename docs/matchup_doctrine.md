@@ -488,11 +488,29 @@ identical damage. Two different failures follow:
 
    Cell search: not the block. Ops cut: not the block. Tie-break: not the
    block — the hide candidate scores *above* parity and wins selection more
-   than half the time it exists. On Ludaskia ~18% of turns SELECT a post-fire
-   hide; the executed rate is 1.5%. **The hide is discarded after selection.**
-   On Éleeksire the stage probe put that on the learned re-rank (14 of 15,
-   veto 1); on Ludaskia it is unmeasured — that is the next probe, plus the
-   re-rank on/off A/B on Ludaskia scored on the proxies. (The
+   than half the time it exists (**correction:** that pool probe counted
+   score *ties* as selection wins; the stage probe, which checks the scenario
+   actually picked, puts the generator's post-fire-hide pick rate on Ludaskia
+   at ~6% of turns, 6 in 30 fights). The executed rate is 1.5%. **The hide
+   is discarded after selection, by the learned re-rank on both testbeds:**
+   Éleeksire 14 of 15 (veto 1); Ludaskia 4 of 6.
+
+   **Re-rank on vs off, Ludaskia, paired n=120 (seeds 7000–7119):**
+
+   | | wins | flipped | p | HP-lead | fire-then-move | shot-denial |
+   |---|---|---|---|---|---|---|
+   | OFF (NEW) | **60 / 120** | 10 gained / 2 lost | **0.039** | +2.7 (t=1.05) | 0.023 | 0.526 |
+   | ON (HEAD) | 52 / 120 | | | | 0.014 | 0.558 |
+
+   The first significant real-opponent result of the campaign — and it says
+   the only feature that ever measured positive (mirror +7–11pp on Margaret
+   and Ed) is **worse against a STR opponent we lose to**. Two things to hold
+   it to before adoption: it is one testbed on one seed block at p=0.039, and
+   the hide rate barely moved, so **hiding is not the mechanism** — the
+   re-rank is costing something else vs STR. Across testbeds: Éleeksire
+   null (p=0.72), Sepignouf ceiling, Ludaskia OFF better. Confirmation queued:
+   Ed on a fresh seed block, then MargaretHamilton and KurtGodel on both
+   testbeds, all scored on the proxies. Not adopted without that. (The
    `createOffensiveScenario` MP-gate probe never fired: that template is not
    the one producing these hides.)
 
