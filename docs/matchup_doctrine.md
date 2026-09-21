@@ -460,8 +460,11 @@ identical damage. Two different failures follow:
    current position, and has no archetype gate. Three suspects remain for
    the real-fight gap (ours 0.14 vs ladder 0.36 vs STR opponents):
    leftover MP after approaching rarely reaches a low-danger cell (the
-   `legLen <= playerMP` gate); the `_ops89` early return truncates the
-   search; and the **tie-break** — the stage probe found the fire-then-hide
+   `legLen <= playerMP` gate — **verified correct as accounting**:
+   `createOffensiveScenario` starts `playerMP` at `_currMp`, subtracts the
+   approach leg and any second offensive move, and measures `legLen` from
+   the firing cell, so this is a genuine budget limit, not a bug); the
+   `_ops89` early return truncates the search; and the **tie-break** — the stage probe found the fire-then-hide
    candidate present on 46% of turns vs Sepignouf at parity score and
    identical damage, yet chosen post-fire on 0/74. The selection compares
    with strict `>` (first-seen wins exact ties). Since the hide variant is generated as a later sibling of the
