@@ -782,6 +782,78 @@ consistent, real-opponent gain and no measured harm. Recommended to adopt;
 independent of the held re-rank flag. A larger sample (n=120 on the two
 best arms) would settle the win-rate p if wanted before a server deploy.
 
+**Adopted 2026-09-21** (commit `1016fe2b`, uploaded to `9.0/V9/`).
+
+### After the gate: why the surviving hide plans still lose (the scorer, measured)
+
+Term-by-term probe (ten cumulative snapshots inside `score()`, logged for
+every feasible candidate at site 1, 8 fights on the panel + Ludaskia; pick
+vs the best feasible post-fire hide plan on the same turn):
+
+| | Margaret (23 turns) | Ed (5 turns) |
+|---|---|---|
+| hide plan picked | 4 | 3 |
+| median score gap pick − hide | 986,826 | 40,024 |
+| gap from damage term | 249k (63% of turns >0) | 25k |
+| gap from eff/buff/denial/synergy | 231k (100%) | 15k |
+| gap from position | −301 (hide slightly better) | −753 |
+| gap from death/threat | **0** | **0** |
+| adversarial threat at final cell, pick vs hide (median) | 1928 vs 1928 | 199 vs 199 |
+
+The hide plans that survive are **weaker attack sequences with a hide
+appended** (the templates give the move 50–70% of MP and the attack a
+reduced budget), so they lose on damage by an order of magnitude more than
+any positional term can pay. And their hide cell is no safer than the
+pick's: same threat. When a hide plan carried the *same* damage it was
+picked (7 of 7 such turns). So the scorer is not the ceiling either; the
+candidate set is — there is no "the pick, plus a hide" candidate.
+
+### Is hiding actually worth anything against these opponents? (measured)
+
+End-of-turn probe, 113 turn pairs, 20 fights (Margaret vs TheLeaker,
+BretzelLeekide, Hydrogène; Ed vs Ludaskia): our cell, enemy cell, LoS,
+cache-predicted threat, HP now vs HP at our next turn start.
+
+| end of our turn | n | damage taken on the enemy's turn (median / mean) | took 0 |
+|---|---|---|---|
+| enemy has LoS to us | 64 | 846 / 883 | 8% |
+| enemy has **no LoS** (hidden) | 49 | **0 / 310** | **63%** |
+| hidden and dist ≥ 8 | 40 | 0 / ~330 | 64–71% |
+
+Ending hidden is worth ~570 HP per turn on average against the STR
+opponents that set Margaret's ladder. The adversarial threat cache is
+**calibrated, not blind**: cells it rates 0–300 took a mean 316 (23 when
+hidden); cells rated 1500–2500 took 1093 (it over-predicts by ~2x there,
+being a max over enemy positions, but the ordering is right). So a hidden
+cell already scores lower on threat, death and cover — the scorer would
+prefer it if it were offered.
+
+### The unused hide (measured — this is the lever)
+
+Same probe, 100 turns, at the end of each turn with leftover MP:
+
+| | Margaret (85 turns) | Ed (15) |
+|---|---|---|
+| ended hidden | 29% | 33% |
+| ended exposed with a no-LoS cell within leftover MP **by path length** | **77%** | **70%** |
+| turns with a firing cell | 68% | 53% |
+| …of which a fire-AND-hide cell existed (fire cell + no-LoS cell within remaining MP) | 98% | 100% |
+| MP left at end of turn (median) | 4 | 2 |
+
+Three of four exposed turns could have ended hidden with the MP we had
+left, with the plan otherwise unchanged. The ladder's fire-then-move is
+not a different plan; it is the same plan plus the move we throw away.
+
+**Fix under test: hide-append pass** (`_v9HideAppendEnabled`, unified
+strategy, after the base scoring loop): for the top-5 feasible plans that
+leave MP and do not already end in a hide/flee, clone the plan, append an
+MP-exact `MOVEMENT_HNS` to the lowest-threat no-LoS cell reachable from
+the plan's final position (`findLosBreakCell`; never a cell the cache
+rates worse than staying), simulate, score, and let it compete for the
+pick and for 2-ply. Smoke stage must show it winning selection at least
+once before the A/B runs (a change that cannot be shown to fire is not an
+experiment).
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
