@@ -510,7 +510,38 @@ identical damage. Two different failures follow:
    re-rank is costing something else vs STR. Across testbeds: Éleeksire
    null (p=0.72), Sepignouf ceiling, Ludaskia OFF better. Confirmation queued:
    Ed on a fresh seed block, then MargaretHamilton and KurtGodel on both
-   testbeds, all scored on the proxies. Not adopted without that. (The
+   testbeds, all scored on the proxies. Not adopted without that.
+
+   **Confirmation (paired n=120 each, re-rank OFF = NEW vs ON = HEAD):**
+
+   | leek vs testbed | OFF | ON | flipped | p | HP-lead | fire-then-move | shot-denial |
+   |---|---|---|---|---|---|---|---|
+   | Ed vs Ludaskia, fresh seeds 7120+ | **62** | 55 | 7 / **0** | **0.016** | +2.6 | 0.020 / 0.009 | −0.02 |
+   | **Margaret vs Éleeksire** | **88** | 51 | **48 / 11** | **≈0** | **+30.8 (t=6.97)** | 0.155 / 0.168 | **+0.136** |
+   | KurtGodel vs Éleeksire | 21 | 16 | 11 / 6 | 0.33 | +2.6 | 0.357 / 0.326 | −0.02 |
+   | Margaret vs Ludaskia | 120 | 120 | 0 / 0 | ceiling | +3.0 | | |
+   | KurtGodel vs Ludaskia | 113 | 112 | 1 / 0 | ceiling | −3.2 (t=−2.1) | | |
+
+   **Conclusion: the learned re-rank is worse on every non-saturated
+   real-opponent testbed — two significant results, none against, and the Ed
+   result replicates on a seed block it never saw.** The leek the mirror A/B
+   credited with +11pp (Margaret) loses 31 points of win rate to the re-rank
+   against the poison archetype that caps our rank. The mechanism is not
+   hiding (rate flat) but **shot denial**: on Margaret vs Éleeksire the share
+   of turns after which the enemy fired nothing rises 0.58 → 0.72 with the
+   re-rank off. The re-rank was overriding plans that denied the enemy's
+   next shot in favour of stand-and-fire twins at equal score.
+
+   **Why the mirror harness got it backwards:** mirror A/B plays V9 against
+   V9, so a change that makes V9 better at beating V9's own habits scores as
+   a win even when it makes V9 worse against opponents who play differently.
+   The mirror harness is not evidence for adoption; ladder testbeds with the
+   behavioural proxies are.
+
+   **Recommendation:** set `_v9RerankLearnedEnabled = false` fleet-wide and
+   upload. Left at the committed state (ON) pending the decision. Watch-out
+   on adoption: KurtGodel vs Ludaskia leans −3.2 HP (t=−2.1) on a 94% ceiling
+   — worth a look on the real ladder, not a reason to hold. (The
    `createOffensiveScenario` MP-gate probe never fired: that template is not
    the one producing these hides.)
 
