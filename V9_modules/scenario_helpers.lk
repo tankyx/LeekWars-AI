@@ -46,6 +46,7 @@ class ScenarioHelpers {
 
     _moveCache = [:]
     _hideCache = null
+    _hideCacheB = null
     _kiteCache = null
 
     // Phase H: when set, findBestAvailableAttack discounts weapon dot — used
@@ -1131,20 +1132,29 @@ class ScenarioHelpers {
         return action
     }
 
-    getHideAndSeekAction(mpBudget) {
+    getHideAndSeekAction(mpBudget, fromCell = -1) {
         if (mpBudget <= 0) return null
-
+        if (fromCell == -1) {
+            if (this._hideCache != null) return this._hideCache
+            var hideCell0 = this._fieldMap.findHideAndSeekCell("defensive")
+            if (hideCell0 != null) {
+                this._hideCache = new Action(Action.MOVEMENT_HNS, -1, -1, hideCell0['cell'], this._target)
+                return this._hideCache
+            }
+            return null
+        }
         if (this._hideCache != null) {
-            return this._hideCache
+            var cLen = getCachedPathLength(fromCell, this._hideCache.targetCell)
+            if (cLen != null && cLen > 0 && cLen <= mpBudget) return this._hideCache
         }
-
-        var hideCell = this._fieldMap.findHideAndSeekCell("defensive")
-        if (hideCell != null) {
-            this._hideCache = new Action(Action.MOVEMENT_HNS, -1, -1, hideCell['cell'], this._target)
-            return this._hideCache
-        }
-
-        return null
+        var bKey = fromCell * 100 + mpBudget
+        if (this._hideCacheB == null) this._hideCacheB = [:]
+        if (mapContainsKey(this._hideCacheB, bKey)) return this._hideCacheB[bKey]
+        var hideCellB = this._fieldMap.findHideAndSeekCell("defensive", null, fromCell, mpBudget)
+        var actB = null
+        if (hideCellB != null && hideCellB['cell'] != fromCell) actB = new Action(Action.MOVEMENT_HNS, -1, -1, hideCellB['cell'], this._target)
+        this._hideCacheB[bKey] = actB
+        return actB
     }
 
     getKiteAwayAction(mpBudget) {

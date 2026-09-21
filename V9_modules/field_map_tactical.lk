@@ -86,11 +86,21 @@ class FieldMap extends FieldMapPatterns {
         return this._enemyAccessCache
     }
 
-    findHideAndSeekCell(mode = "defensive", target = null) {
+    findHideAndSeekCell(mode = "defensive", target = null, origin = -1, mpBound = -1) {
         var enemyAccess = this.getEnemyAccess()
         if (count(enemyAccess) == 0) return null
         var playerAccessible = this.getAccessibleCells(player)
         if (indexOf(playerAccessible, player._cellPos) == -1) push(playerAccessible, player._cellPos)
+        if (origin != -1 && mpBound >= 0) {
+            var boundedAcc = []
+            for (var bai = 0; bai < count(playerAccessible); bai++) {
+                var bc = playerAccessible[bai]
+                if (bc == origin) continue
+                var bl = getCachedPathLength(origin, bc)
+                if (bl != null && bl > 0 && bl <= mpBound) push(boundedAcc, bc)
+            }
+            playerAccessible = boundedAcc
+        }
 
         var isApproachMode = (mode == "approach")
         var targetPos = isApproachMode ? target._cellPos : -1

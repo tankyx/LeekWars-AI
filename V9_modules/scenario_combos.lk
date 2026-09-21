@@ -84,7 +84,7 @@ class ScenarioCombos extends ScenarioHelpers {
             push(actions, atk)
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -174,7 +174,7 @@ class ScenarioCombos extends ScenarioHelpers {
             push(actions, atk)
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -228,7 +228,7 @@ class ScenarioCombos extends ScenarioHelpers {
             push(actions, atk)
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -338,7 +338,7 @@ class ScenarioCombos extends ScenarioHelpers {
             push(actions, atk)
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -1189,7 +1189,7 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (params.repositioning == "hide") {
-            var hideAction = this.getHideAndSeekAction(mpBudget)
+            var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
             if (hideAction != null) {
                 push(actions, hideAction)
             }
@@ -1253,7 +1253,7 @@ class ScenarioCombos extends ScenarioHelpers {
             push(actions, atk)
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -1330,7 +1330,7 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= heavySwordCost
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -1411,7 +1411,7 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= axeCost
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -1501,7 +1501,7 @@ class ScenarioCombos extends ScenarioHelpers {
             tpBudget -= weaponCost
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -2925,7 +2925,7 @@ class ScenarioCombos extends ScenarioHelpers {
             push(actions, atk)
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -3081,7 +3081,7 @@ class ScenarioCombos extends ScenarioHelpers {
             push(actions, atk)
         }
 
-        var hideAction = this.getHideAndSeekAction(mpBudget)
+        var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
         if (hideAction != null) {
             push(actions, hideAction)
         }
@@ -3190,7 +3190,7 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (hpPercent < 30) {
-            var hideAction = this.getHideAndSeekAction(mpBudget)
+            var hideAction = this.getHideAndSeekAction(mpBudget, simPos)
             if (hideAction != null) {
                 push(actions, hideAction)
             }
