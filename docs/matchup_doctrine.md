@@ -150,6 +150,89 @@ just under it (Éleeksire RES 200) and kept paying for reflect all fight.
 
 ---
 
+## Negative result: rebalancing the damage/defence scale does nothing
+
+**Tested 2026-09-21. Scaling the defensive terms 100x flips 13 of 120 paired
+fights, p=1.00. It is one more valuation change with no effect — not a fix, and
+not a disaster either.**
+
+### The observation that motivates the idea
+
+Instrumenting every dimension's contribution to the *winning* scenario shows the
+scorer is a damage maximiser regardless of weight profile:
+
+| build | damage | dot | heal | shield | rest |
+|---|---|---|---|---|---|
+| EdsgerDijkstra (AGILITY) | 84.6% | 15.0% | 0.1% | 0.0% | 0.1% |
+| KurtGodel (TANK_SCI) | 100.0% | 0.0% | 0.0% | 0.0% | 0.0% |
+| MargaretHamilton (MAGIC) | 90.3% | 9.6% | 0.0% | 0.0% | 0.0% |
+
+Measured scale: **~12,820 score points per HP of damage dealt vs ~9.5 per HP
+healed**, about 1,350:1. KurtGodel's profile sets the highest defensive weights
+in the codebase (`shieldValue` 400, `healValue` 280), he gains 13,370 HP over
+157 turns — he really is healing and shielding — and both dimensions still land
+at 0.0% of his score. Lifesteal is no better: `lifestealScore` is 2.0 points
+per HP.
+
+It looks exactly like a calibration bug.
+
+### What happened when it was corrected
+
+A `_defScale` knob multiplying the heal/shield terms (1.0 = current behaviour),
+KurtGodel vs `ladder_eleeksire`, **paired, n=120**:
+
+| | wins | |
+|---|---|---|
+| `_defScale` 100 | 23/120 (19.2%) | 7 gained, 6 lost |
+| baseline | 22/120 (18.3%) | McNemar **p = 1.00** |
+
+HP-lead differential −2.8 (sd 16.1, t=−1.92) — a weak negative lean, not
+significant. Only 13 of 120 fights changed outcome at all.
+
+### DO NOT trust the n=40 sweep that preceded this
+
+The first pass swept n=40 per point and produced 13 → 6 → 5 wins at
+1x / 100x / 1000x, which reads as a clean monotone collapse and was briefly
+written up as "rebalancing halves the win rate". **It did not replicate.** The
+same baseline scores 13/40 on seeds 7000-7039 but 22/120 over 7000-7119; the
+100x arm scores 6/40 on the first block and 23/120 overall. The sweep was noise
+dressed as a trend.
+
+`matchup_stability.py` had already printed the reason: at this baseline,
+detecting a 15pp change needs ~125 fights per arm unpaired. A 5-point sweep at
+n=40 cannot resolve anything, and reading a trend off one is how you invent a
+result. **Sweep to locate a direction, then confirm with a paired A/B at the
+sample size the stability tool prescribes — never publish the sweep.**
+
+### Choose the test subject by its KIT, not by its build label
+
+An earlier sweep ran on EdsgerDijkstra and came back flat — which proved
+nothing, because **Ed carries no shield chips at all** and only regeneration +
+antidote for healing. The knob scaled `shieldsGained` (always 0 for him) and
+`hpGained` (non-zero only on a rare regeneration turn). Before sweeping a
+dimension, confirm the leek has chips that produce it: `tools/lw_decode.py`
+`Decoder.chip_cfg` + `info()` answers it in seconds.
+
+### What IS still broken, and was left alone deliberately
+
+- **`healValue` is dead code in combat.** It is read only in `scorePuzzle`
+  (boss fights). Every `adapted['healValue'] *= ...` in `strategic_depth.lk` —
+  the vs-kiter, vs-burst and vs-reflect adaptations — therefore does nothing
+  outside boss fights. It is a knob people believe they are turning that is not
+  connected. Connecting it is unlikely to help given the result above, but it
+  should be connected or deleted rather than left as a decoy.
+- **DoT is double-counted.** `totalDamage = damageDealt + dotDmg + novaDmg`
+  feeds `damageScore`, then `dotScore` and `novaScore` are added again.
+
+### Related prior evidence (different claim, do not conflate)
+
+`scenario_scorer.lk:833` records a finding from 4,434 mined ladder fights:
+top-2000 players win by shielding early and converting to weapons, and lose with
+heal-cycling. That is evidence about *heal-cycling behaviour*, not about this
+scale factor, and it neither confirms nor refutes the result above.
+
+---
+
 ## Other archetypes
 
 Not yet written. Each needs a stabilised testbed first (`matchup_stability.py`),
