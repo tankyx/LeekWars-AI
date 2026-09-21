@@ -21,7 +21,9 @@ from pathlib import Path
 
 REPO = Path("/home/ubuntu/LeekWars-AI")
 WEAPONS_JSON = Path("/home/ubuntu/leek-wars-generator/data/weapons.json")
-DB_FILE = REPO / "V8_modules" / "item_database.lk"
+# Optional argv[1]: the item_database.lk to re-key (default V8; pass
+# V9_modules/item_database.lk or an absolute scratch path).
+DB_FILE = Path(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] else REPO / "V8_modules" / "item_database.lk"
 
 # WEAPON_DATABASE spans these line numbers (1-indexed, inclusive).
 # Verified by inspection: opens at line 2 with `global WEAPON_DATABASE = [`
@@ -50,10 +52,17 @@ def main():
     lines = DB_FILE.read_text().splitlines(keepends=True)
 
     # Verify the boundaries are what we expect.
-    if "global WEAPON_DATABASE" not in lines[WEAPON_DB_START_LINE - 1]:
-        raise SystemExit(f"line {WEAPON_DB_START_LINE} is not the WEAPON_DATABASE opening")
-    if lines[WEAPON_DB_END_LINE - 1].strip() != "]":
-        raise SystemExit(f"line {WEAPON_DB_END_LINE} is not the WEAPON_DATABASE closing bracket")
+    # Locate the block by content: the generated file opens with a comment
+    # header, so hardcoded line numbers (inspected on an older hand-edited
+    # file) point at a comment and abort.
+    starts = [i for i, l in enumerate(lines) if l.startswith("global WEAPON_DATABASE = [")]
+    if len(starts) != 1:
+        raise SystemExit("could not locate a unique 'global WEAPON_DATABASE = [' line")
+    WEAPON_DB_START_LINE = starts[0] + 1
+    end = next((i for i in range(starts[0] + 1, len(lines)) if lines[i].rstrip("\n") == "]"), None)
+    if end is None:
+        raise SystemExit("could not locate the WEAPON_DATABASE closing bracket")
+    WEAPON_DB_END_LINE = end + 1
 
     # Match `    9: [` style key lines. Use [ \t]* (horizontal whitespace
     # only) so the regex never gobbles the trailing newline that

@@ -92,8 +92,17 @@ def generate_leekscript_database(json_path, output_path):
     with open(json_path, 'r') as f:
         data = json.load(f)
 
-    weapons = data.get('weapons', {})
-    chips = data.get('chips', {})
+    weapons = dict(data.get('weapons', {}))
+    chips = dict(data.get('chips', {}))
+    # market_data.json carries two copies: the curated top-level maps and the
+    # verbatim API dump under raw_data. Records seeded from /weapon/get-all
+    # (forgotten and newly released weapons the market listing never shows)
+    # land in raw_data only, so merge them in or they never reach the AI.
+    raw = data.get('raw_data', {})
+    for k, v in raw.get('weapons', {}).items():
+        weapons.setdefault(str(k), v)
+    for k, v in raw.get('chips', {}).items():
+        chips.setdefault(str(k), v)
 
     print(f"Found {len(weapons)} weapons and {len(chips)} chips")
 
@@ -166,7 +175,10 @@ def main():
     project_root = os.path.dirname(script_dir)
 
     json_path = os.path.join(project_root, 'data', 'market_data.json')
-    output_path = os.path.join(project_root, 'V8_modules', 'item_database.lk')
+    # Optional argv[1]: target tree (V8_modules default; pass V9_modules for V9,
+    # or an absolute path to a scratch file to validate without touching a tree).
+    tree = sys.argv[1] if len(sys.argv) > 1 else 'V8_modules'
+    output_path = tree if os.path.isabs(tree) else os.path.join(project_root, tree, 'item_database.lk')
 
     if not os.path.exists(json_path):
         print(f"Error: {json_path} not found", file=sys.stderr)
