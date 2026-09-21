@@ -706,6 +706,28 @@ morning's "plan predicted damage, nothing executed" turns. Measured next:
 every site-1 candidate's hide flag and feasibility, and whether the
 planner's index-0 winner is hide-shaped and infeasible.
 
+**Measured — this is the mechanism** (10 fights, 458 site-1 evaluations):
+
+| | candidates | **infeasible** | median dropped actions | median TP / MP spent |
+|---|---|---|---|---|
+| non-hide | 328 | 76 (23%) | 1 | 20 / 5 |
+| **hide-shaped** | 130 | **115 (88%)** | 1 | 25 / 4 |
+| planner's winner (index 0), hide-shaped | 26 | **24 (92%)** | | |
+
+On **8 of 14 turns every hide candidate was infeasible** — eliminated by
+the gate before any comparison. `feasible` is
+`netTP <= tpBudget && simResult.droppedActions == 0`, and `droppedActions`
+counts actions the **simulator** dropped because `canExecuteAction` said no
+— a trailing hide move it will not simulate. One dropped move voids the
+whole plan. This reconciles every probe: no hide challengers near a
+non-hide incumbent (filtered first), no overtakes (never incumbent),
+planner 41% → pick 6%, and the morning's "plan predicted damage, nothing
+executed" turns. Not a weight, not a tie-break: **a plan the planner builds
+and the simulator refuses.** Next: instrument the drop — required MP vs
+simulated MP remaining, TP remaining — to tell a true MP shortfall (fix the
+planner's MP accounting) from a planner/simulator mismatch (fix the
+simulator).
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
