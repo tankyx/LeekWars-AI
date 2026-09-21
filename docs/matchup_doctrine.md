@@ -678,6 +678,21 @@ The 0.1% band could not see a single one of the 412 mutants within 2%.
 Next experiment: the same hide-preferring band at **2%**, fire-count
 guarded, local A/B on the panel + Ludaskia with the proxies.
 
+**Run: the 2% band fired 0 times in 6 fights.** The explicit guard aborted
+the chain and the trap reverted the tree within minutes (the pattern that
+replaced `set -e` paid for itself on its first outing). So the band is
+wrong-*sided*, not wrong-width. Reading the two probes together, selection
+has two regimes: when the incumbent is the planner's **hide** winner (41%
+of planner calls), nearby hide candidates have nothing to prefer over it;
+when the incumbent is non-hide, hide candidates trail by 23–34%. The
+41% → ~6% collapse must therefore be **non-hide candidates overtaking a
+hide incumbent** — the ~1% edge the composition probe showed — a
+comparison the gap probe never logged because it only recorded hide
+*challengers*. Measured next: every non-hide overtake of a hide incumbent,
+with margin and site. If those margins are ~1–2%, the right experiment is
+the **inverse** band — a non-hide challenger must beat a hide incumbent by
+more than the band to displace it.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
