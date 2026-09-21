@@ -593,6 +593,11 @@ the panel is meant to be read together. First use: a true-null baseline to
 find which of the four she does not ceiling, then the re-rank on/off A/B on
 those, scored on the proxies. Held findings are not adopted on this.
 
+**Baseline (true null, n=30 each):** TheLeaker **13/30 (43%)**, BretzelLeekide
+22/30 (73%), Hydrogène **8/30 (27%)**, ReauBotcode **6/30 (20%)**. None is a
+ceiling; three are losing matchups. The panel reproduces her real-ladder
+48%-vs-STR picture and is the testbed the re-rank decision was missing.
+
 ---
 
 ## Other archetypes
