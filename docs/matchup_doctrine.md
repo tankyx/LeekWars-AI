@@ -661,6 +661,23 @@ is a **candidate-set** change — return the best hide-shaped runner-up
 alongside the winner — exactly the "proposal ceiling" the SWOT named, and
 not a weight.
 
+**Measured — the planner is not the wall.** Inside `planWithMutations`
+(10 fights, 64 calls): the winner it returns is **hide-shaped on 41%** of
+calls; 2,174 hide-shaped mutants were compared against the running best,
+69 beat it, 412 sat within 2%; on **77% of turns** with a hide candidate the
+best one was within 2% of the planner's final winner. Yet the eventual pick
+(measured at `s0gen`, before the re-rank) is hide-shaped on ~6%. So the
+hide-shaped planner winner is **beaten in the pool selection** by an
+unmutated non-hide seed — by the ~1% the composition probe showed: 1.5%
+more damage (one extra TP on attack) against a denial benefit the scorer
+prices at ~0.06%. This is the damage-dominance asymmetry biting at the
+margin where the ladder's winners take the opposite trade.
+
+It also explains the failed tie-break: the real gap is **1–2%**, not 0.1%.
+The 0.1% band could not see a single one of the 412 mutants within 2%.
+Next experiment: the same hide-preferring band at **2%**, fire-count
+guarded, local A/B on the panel + Ludaskia with the proxies.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
