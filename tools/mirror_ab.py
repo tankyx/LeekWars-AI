@@ -19,6 +19,14 @@ Result reporting is deliberately conservative: a 2-sided binomial test on
 decisive games, because at N=40 a 55% score is indistinguishable from noise and
 acting on it would be worse than not measuring at all.
 
+LIMITATION - per-opponent memory. Code paths gated on ENEMY_MODEL cannot be
+measured here. rolloutRerank early-returns (gap 0, same pick) unless the target
+is one of the ~397 known ladder opponents in enemy_model_data_iso.lk, and
+neither the smart_* bots nor our own leeks are in it - so a mirror A/B of that
+feature returns ~50% and looks like "no effect" when it simply never ran. The
+LEARNED re-rank has no such gate (by design) and is measurable. Check for a
+confidence gate before trusting a null result from this harness.
+
 Calibration (identical code both sides, MargaretHamilton, n=40): 20-20, p=1.000
 with draw-breaking; 12-15 (p=0.701) with --strict-draws. The harness is
 unbiased. Detection power, roughly: 40 decisive games catches ~68%+ win rates,

@@ -926,3 +926,99 @@ so read results by NAME); say printer whitelist extended. **Validated locally:**
 `/leek/set-ai` with `ai_path=9.0/V9/main.lk` for the 4 Cure leeks, additive capital on Cure
 (0 potions: life ≈4 HP/capital → LeekRain +~440, DawnFall +~280, DuskHope +~260), then the
 open → user-joins → start loop.
+
+**FIRST 8-LEEK FIGHT 53593096 (user-launched from Cure; loss, 19 turns) — bodies-at-flip SOLVED,
+phase-2 DPS is the new wall.** All 8 ran V9 as designed: LURE T0-3 on all, Cure RESERVE from
+T4, KG PDIVE T5, Ada diving. **Graal dead T12 with FOUR bodies alive at the flip** (DawnFall,
+ProdigalSon, LeekRain, Margaret) vs 1 in every 4-leek fight; they lived T15/T16/T18/T19 — ~7
+turns of COMBAT. DuskHope died T4 during the lure (its "retreat" from cell 549 closed 18→8 —
+geometry pulled it toward the army). **Phase 2: 3481 damage, all on the scribe, ~3300 healed
+back (495-782/turn) — heal parity; king untouched (0).** Only Margaret fired (MLASER scribe x2
+d5 = 765-794/turn). DawnFall (MAG 502, carries a Neutrino) was CAPTURED by executeBossStand —
+"STAND none" x4 at hp100 — the stand gates on rhino/neutrino, not STR, unlike Gather/Melee →
+dispatch bug, never reached the poison path. ProdigalSon (STR 580, rhino+lightninger, no
+m_laser) "STAND none" T12-15 at hp100 then one 374 hit at T19 — the stand's shot search is
+m_laser-centric. LeekRain "POKE none d=10-15" — no teleport, never inside venom range+LoS.
+**Read:** four bodies and seven turns are now on the table; the doctrine spends them on one
+laser at heal parity. Fixes before the next fight: gate the stand on STR>=300; give
+non-laser STR bodies a shot (rhino/lightninger); then re-evaluate scribe-first vs king.
+Ops: the MCP lobby's "start" never saw Cure's join (twice); the user launched from Cure's own
+squad page, which works — the fight shows in both farmers' histories.
+**Fixes applied after 53593096 (compiled, 8-leek local regression clean):** executeBossStand
+now (a) gates on `getStrength() >= 300` like Gather/Melee — MAG bodies carrying a
+rhino/neutrino fall through to the poison path instead of "STAND none"; (b) counts a
+lightninger volley as `fired`; (c) returns FALSE when no shot landed, so executeBossMelee
+(STR>=300 + rhino → approach, rhino x3) picks up a rhino body like ProdigalSon with its
+leftover TP/MP instead of burning the turn. Uploaded to both accounts. Open design question
+for the next fight: scribe-first (heal parity with one laser) vs. putting all bodies on the
+10000-HP king. Also unaddressed: DuskHope's lure retreat from cell 549 closed toward the army.
+**8-leek fight #2, 53593107 (loss, 50-turn timeout): puzzle failed, no phase 2 → the stand fixes
+are still untested.** All 4 crystals killed T5-7 by the army before the T6 KR-dives (Eds PDIVE,
+Mar KR) could re-align them; graal never vulnerable; divers dead T9-14; LeekRain held far alone
+to T50. Puzzle variance (1 clear in 2 at 8 leeks; 2-5/12 at 4). **DuskHope died T5 in the lure
+for the 2nd fight running** (d 15→11→15→9→6): moveAwayFromCells from its spawn pocket walks
+it toward the army as away-options shrink; ProdigalSon closed 13→7 the same way. A reserve body
+is lost before the flip every fight → fix: hold reserves on the threat-based coldest cell
+(choosePuzzleSustainCellCapped) instead of naive move-away.
+**Applied (compiled, 8-leek regression clean, uploaded to both accounts):** reserves now retreat
+via `reserveRetreat()` = choosePuzzleSustainCellCapped(armyCap 14) — the real-path coldest cell
+in reach — during the lure AND the hold, with moveAwayFromCells only as a fallback. Virus
+divers' lure unchanged. Untested live: the reserve retreat (no army locally) and the stand
+fixes (fight #2 never reached phase 2).
+**8-leek fight #3, 53593123 (loss, 25 turns): puzzle failed again (yellow+green crystals dead
+T5), no phase 2 — stand fixes still untested; 1 clear in 3 at 8 leeks.** DuskHope died T5 for
+the THIRD fight running despite reserveRetreat: lure d 14→14→13→5→7 — the army closes ~8 cells
+after its move; MP 5, lowest HP (1866), no jump/teleport → structurally the first catch from
+its spawn slot. No retreat heuristic outruns that; it is one body, not the plan.
+**8 leeks did NOT hurt the puzzle (cache comparison):** the army kills the first crystal at T5
+in EVERY fight — median first-crystal-death T5 across 24 cached 4-leek fights and all three
+8-leek fights. Graal-death rate: 4-leek 7/24 (29%) vs 8-leek 1/3 (33%) — same distribution.
+The T5 crystal kill is the army's fixed script, not a race we lose; dead crystals are cheaper
+for KR (no spark). The ~30% gate is whether all four resurrect-alignments complete before the
+divers die — the campaign's long-standing variance, unchanged by the lobby. Cost model: ~3
+manual joins per phase-2 sample.
+
+## 2026-09-09 — Campaign stopped by the user (0 wins). Loadouts reverted to Solo.
+
+Virus's four restored via their saved Solo sets (466/786/787/789, use_restat, 4 potions → 8
+left): KG STR500/SCI290, ADA STR520, ED STR440/AGI440 (reflect), MH MAG420. Boss sets
+812-818/926/927 remain saved. Both accounts still run the latest V9 (stand fixes + reserve
+retreat); Cure's four leeks are still assigned `9.0/V9/main.lk` (their V8 intact at 8.0/V8/).
+Uncommitted: V9_modules/boss_context.lk, this ledger, tools/leek_configs.json.
+Net of the campaign: puzzle 0 → ~30% clears (lure + reserve), bodies at the flip 1 → 4 (8-leek
+lobby); phase 2 never converted. Every negative result is recorded above.
+
+## 2026-09-21 — AI performance work (not boss-specific, recorded here for continuity)
+
+Profiling found buildAdversarialThreatCache eating 8.4M ops/turn (62% of
+MargaretHamilton's 13.6M, which was 97% of her budget and near the 13M fallback
+to simple move+attack). calculateBestAttackDamage is pure in (dist, hasLoS) per
+enemy but was called ~10,000x/turn; memoised it -> 0.84M (10x). A second pass
+memoised Arsenal.getDamageBreakdown (pure without AoE cells) and gated a
+leftover "TEMP DEBUG" AoE trace that fired unconditionally in production: a
+further ~8%. Net ~8.4M ops/turn freed, MH now 73% of budget.
+
+Built tools/mirror_ab.py to make AI changes measurable at all: local smart_*
+bots saturate at 100% and the ladder self-corrects to ~50%, so neither can
+detect an improvement. Mirror matches (same leek both sides, only the AI
+differs) have no ceiling. Calibrated at 20-20 (p=1.000) with identical code.
+
+Findings, all pre-committed n=220 with fresh seeds:
+- MORE SEARCH DOES NOTHING. beam width 20->28, depth 10->12, mutation seeds
+  6->10: 113-107, 51.4%, p=0.736. Reverted. (An exploratory n=60 had shown a
+  tempting 56.7%/p=0.37 - extending it until significant would have shipped a
+  no-op costing 18% more ops.)
+- BETTER EVALUATION DOES. The learned value-model re-rank was disabled AND
+  mis-thresholded: _v9RerankLearnedThreshold = 0.02 sat above the model's
+  typical P(win) gap, so it ran every turn, disagreed with the pipeline on 3 of
+  4 turns (gaps 0.003/0.005/0.018) and was overruled every time. At 0.005:
+  MargaretHamilton 134-85 (61.2%, p=0.001), EdsgerDijkstra 120-89 (57.4%,
+  p=0.038). Enabled fleet-wide. Ops went DOWN (10.21M -> 9.87M).
+- Threshold is insensitive in 0.002-0.01 (both ~53% vs 0.005, p>0.34) - the win
+  was crossing it at all, not where it sits.
+- The HAND-BUILT re-rank stays disabled, and is UNTESTABLE by this harness: it
+  early-returns unless the target is in ENEMY_MODEL (~397 real ladder
+  opponents), and neither the smart_* bots nor our own leeks are. Its historic
+  "failed A/B" verdict is also suspect - the simulateEnemyResponseMulti(
+  target._id) crash fixed earlier this session was live in both of its call
+  sites, so it was throwing whenever it did engage.
