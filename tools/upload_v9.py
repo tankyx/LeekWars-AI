@@ -4,7 +4,7 @@
 Never touches 8.0/V8/* and never changes any leek's AI assignment. V9 starts
 with zero leeks; trials are per-leek opt-in via leekwars_set_leek_ai.
 
-Usage: python3 tools/upload_v9.py [--account main|cure]
+Usage: python3 tools/upload_v9.py [--account main|cure] [--root 9.0/V9-NR]
 """
 import argparse
 import os
@@ -62,7 +62,13 @@ def resolve_includes(root: Path, entry: str) -> list:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--account", default="main", choices=["main", "cure"])
+    ap.add_argument("--root", default=ROOT_PATH,
+                    help="server folder to upload into (default %s). Use a sibling such as "
+                         "9.0/V9-NR for a side-by-side variant: assign only the leeks under "
+                         "test to it, and roll back by reassigning their AI." % ROOT_PATH)
     args = ap.parse_args()
+    global ROOT_PATH
+    ROOT_PATH = args.root.strip("/")
 
     login, password = load_credentials(account=args.account)
     s = requests.Session()
