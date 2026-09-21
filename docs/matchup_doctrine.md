@@ -163,16 +163,33 @@ scorer is a damage maximiser regardless of weight profile:
 
 | build | damage | dot | heal | shield | rest |
 |---|---|---|---|---|---|
-| EdsgerDijkstra (AGILITY) | 84.6% | 15.0% | 0.1% | 0.0% | 0.1% |
-| KurtGodel (TANK_SCI) | 100.0% | 0.0% | 0.0% | 0.0% | 0.0% |
-| MargaretHamilton (MAGIC) | 90.3% | 9.6% | 0.0% | 0.0% | 0.0% |
+| EdsgerDijkstra (**BRUISER_REFLECT**, burst 118) | 84.6% | 15.0% | 0.1% | 0.0% | 0.1% |
+| KurtGodel (**STR_SCIENCE**, burst 304) | 100.0% | 0.0% | 0.0% | 0.0% | 0.0% |
+| MargaretHamilton (MAGIC, burst 38) | 90.3% | 9.6% | 0.0% | 0.0% | 0.0% |
 
 Measured scale: **~12,820 score points per HP of damage dealt vs ~9.5 per HP
-healed**, about 1,350:1. KurtGodel's profile sets the highest defensive weights
-in the codebase (`shieldValue` 400, `healValue` 280), he gains 13,370 HP over
-157 turns — he really is healing and shielding — and both dimensions still land
-at 0.0% of his score. Lifesteal is no better: `lifestealScore` is 2.0 points
+healed**, about 1,350:1. Lifesteal is no better: `lifestealScore` is 2.0 points
 per HP.
+
+**CORRECTION (2026-09-21, same day):** an earlier version of this table labelled
+Ed as AGILITY and KurtGodel as TANK_SCI, and argued the asymmetry was proven on
+"the build with the highest defensive weights in the codebase
+(`shieldValue` 400, `healValue` 280)". Both labels were wrong — verified by
+reading `__playerBuildType` out of a live fight rather than inferring it from
+the stat line. KurtGodel classifies as **STR_SCIENCE**, whose `burstDamage` of
+304 is the *highest damage weight in the codebase*, so damage dominating his
+score is expected rather than evidence of a defect. The defensive-rebalance A/B
+below was run on that same leek, so it tested a damage profile, not a tank one.
+
+In fact **no leek in the fleet uses TANK_SCI**: detection requires RES >= 300
+AND SCI >= 300, and KurtGodel is RES 12 / SCI 524. The profile carrying the
+defensive weights is unused. Half the fleet (MargaretHamilton, LeekRain,
+DawnFall, DuskHope) runs MAGIC at `burstDamage` 38.
+
+Verify a leek's profile with the `BUILD_<n>` debug line rather than reading
+`detectBuildType` against a stat sheet — the priority order (TANK_SCI >
+SUPPORT > BRUISER_REFLECT > STR_SCIENCE > MAGIC > HYBRID > AGILITY > STRENGTH)
+makes it easy to guess wrong.
 
 It looks exactly like a calibration bug.
 
@@ -230,6 +247,104 @@ dimension, confirm the leek has chips that produce it: `tools/lw_decode.py`
 top-2000 players win by shielding early and converting to weapons, and lose with
 heal-cycling. That is evidence about *heal-cycling behaviour*, not about this
 scale factor, and it neither confirms nor refutes the result above.
+
+---
+
+## Kit experiments (2026-09-21): what a ladder audit can and cannot tell you
+
+**Six kit arms, one positive, three significantly negative. The negative ones
+were all built on a cross-player chip correlation whose sign was wrong for
+defensive chips. The within-player fight data predicted every sign before the
+runs finished.**
+
+### The correlation that started it
+
+Top 75 vs bottom 75 of the FR ladder top-300, by chips *carried*:
+mobility/buff/denial/summon chips over-represented at the top (manumission
++27pp, jump +20, seven_league_boots +17, doping +16, rage +15, bulbs +13,
+reflexes +12); every shield and heal under-represented (fortress -24, armor
+-20, remission -19, wall -17, elevation -16, shield/serum/armoring -13..-15).
+It looks like "winners don't shield". It is not.
+
+### What the fights say (first 10 turns, within the same players)
+
+Top-ladder solo fights split by outcome: fortress, shield, armor, wall, rage,
+reflexes and soporific are all cast **more in the fights they win**; jump,
+metallic_bulb, healer_bulb and remission are cast **more in the fights they
+lose** (bulbs 0.004/turn in wins vs 0.06 in losses). Short fights (<=15 turns)
+are won 56%, long ones 32%. This matches the codebase's own mined rule at
+`scenario_scorer.lk:833` ("shield early + convert to weapons; lose with
+heal-cycling"). **Who carries a chip and who wins with it are different
+questions.** Build kit changes on the second one.
+
+### The arms (paired, vs `ladder_eleeksire`, `tools/kit_ab.py`)
+
+| leek | change | n | wins | flipped | p | HP-lead |
+|---|---|---|---|---|---|---|
+| Ed KIT | -armoring,elevation,thorn +manumission,7league,reflexes | 120 | 25 -> **36** | 30/19 | 0.15 | **+12.8 (t=2.09)** |
+| KG KIT | -fortress,armor,elevation,3 boss chips +manumission,7league,doping,reflexes,**2 bulbs** | 60 | 12 -> 6 | 5/11 | 0.21 | -19.0 (t=-3.11) |
+| Ada KIT | -fortress,wall,elevation,armoring,3 boss chips +manumission,7league,doping,**2 bulbs** | 60 | 18 -> 7 | 5/16 | **0.027** | -20.9 (t=-2.37) |
+| MH KIT | -armoring,serum,elevation +manumission,7league,**metallic_bulb** | 60 | 42 -> 12 | 2/32 | **~0** | **-43.9 (t=-7.62)** |
+| KG KIT2 | keep shields; -3 boss chips,elevation +manumission,7league,doping,reflexes | 60 | 12 -> 10 | 6/8 | 0.79 | -7.0 |
+| Ada KIT2 | same shape | 60 | 18 -> 14 | 10/14 | 0.54 | -2.2 |
+
+The only gain came from the one arm that removed no shield and added a buff
+winners cast at 0.20/turn. Every arm that dropped shields and added bulbs lost;
+keeping the shields (KIT2) removed the harm but produced no gain.
+
+### A whole top-ladder kit transplanted onto our AI loses badly
+
+Alpacake (rank 8, talent 3345, 721 base stat points) has a kit that is
+**entirely on the main account already** — every weapon, every chip, both
+components. AdaLovelace is a near-exact chassis (base STR 520 vs 515). Her
+stats cannot be reduced (the only capital service is `leek/spend-capital`; no
+reset exists in the API), so the test was Alpacake's full kit on Ada's stats,
+one chip cut to fit her 17 slots:
+
+| | wins | flipped | p | HP-lead |
+|---|---|---|---|---|
+| Ada (own kit) | 37/120 | 8 gained / 32 lost | **0.0002** | **-20.2 (t=-3.33)** |
+| Ada + Alpacake kit | 13/120 | | | |
+
+A kit that carries a player to rank 8 costs *our* AI 20 points of win rate.
+Kits are tuned to the AI that drives them; the kit is not the transferable
+part. This is the same conclusion the 20-0 / 16-0 finding reached from the
+other side, and it is the strongest evidence this project has that **the gap
+is how the kit is played, not what is carried.** Stat allocation is not it
+either: across the top 300, spread vs concentration correlates with talent at
+|r| < 0.14, and our fleet sits exactly on the ladder median (3 stats >= 100).
+
+### The audit itself, with the constraints that matter
+
+- Components: 208 / 300 top builds replicable from main's stock (44 templates,
+  ~1,100 units).
+- **Forgotten weapons are unlockables, one per farmer** (not market items).
+  Applied: 77 of those 208 are blocked; `mysterious_electrisor` alone gates 42,
+  `revoked_m_laser` 32. We hold 5 of 9. Two of our leeks can never both carry
+  the same one (dark_katana clash between Maelam and LeekOfAir).
+- Stat budget <= ours (1,140): **84 survive**. Seven of the top ten need no
+  forgotten weapon at all (Alpacake, Alpacare, ChellJohnson, sif, artorias,
+  Blasar, Alpacore).
+- Chips are also one instance per equip; the bag holds one of each.
+
+### Data gaps closed on the way
+
+- The generator, the AI's `item_database.lk` and the market snapshot all
+  lacked 3 live weapons: `plutonium_bazooka` (forgotten, never in the market
+  listing), `desert_saber`, `sun_spear`. Seeded from `/weapon/get-all` into
+  `data/market_data.json`; the regeneration pair now targets V9 and locates
+  its block by content instead of a hardcoded line number. V9 now carries 39.
+- Server fights use the same template id space as local ones; only the
+  packaging differs (`fight['data']`). `/leek/get` top-level stats are BASE;
+  `total_*` are what fights use — `leek_configs.json` was never stale.
+- On ladder testbeds **both sides run our AI** and the log has no entity tag;
+  tag probes with `getEntity()` or you average our decisions with theirs.
+
+### To reproduce the kit variants
+
+`fetch_leek_configs.py` regenerates `tools/leek_configs.json`, so the `*_KIT`
+entries are not committed. Recipes are the drop/add lists in the table above
+(chip ids via `Decoder.chip_cfg`, weapons via `Decoder.weapon_cfg`).
 
 ---
 
