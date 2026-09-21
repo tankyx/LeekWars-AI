@@ -573,6 +573,28 @@ bundle (`upload_v9.py` does not bundle) — verified below.
 
 ---
 
+## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
+
+All four main leeks sit at Elo equilibrium on the real ladder (last 125 solo
+fights each): Ada 48%, Ed 51%, KurtGodel 51%, Margaret 53%. Margaret's split
+by opponent archetype: **STR 47/97 (48%)**, MAG 11/15 (73%), SCI 8/13 (62%).
+She meets STR opponents 78% of the time and is at parity against them; the
++31pp re-rank-off gain was measured vs a MAG opponent she meets 12% of the
+time. **The real-ladder value of any change to Margaret is decided by her
+STR matchups**, and neither Sepignouf nor Ludaskia is a testbed for that —
+she ceilings both (120/120).
+
+So the panel is built from her own losses: the four STR opponents she went
+0/2 against in those 125 fights, fetched via `/leek/get` with `total_*` stats
+and full kits, added as `ladder_theleaker`, `ladder_bretzelleekide`,
+`ladder_hydrogene`, `ladder_reaubotcode` (`science: -1` on ReauBotcode — an
+alteration debuff — clamped to 0 for the generator). 0/2 is thin per opponent;
+the panel is meant to be read together. First use: a true-null baseline to
+find which of the four she does not ceiling, then the re-rank on/off A/B on
+those, scored on the proxies. Held findings are not adopted on this.
+
+---
+
 ## Other archetypes
 
 Not yet written. Each needs a stabilised testbed first (`matchup_stability.py`),
