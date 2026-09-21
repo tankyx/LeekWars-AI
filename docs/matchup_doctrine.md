@@ -442,13 +442,17 @@ identical damage. Two different failures follow:
    rate is 0.17, half the ladder's 0.32, so the re-rank is not the main
    suppressor. (c) Versus the STR weapon-user — exactly where the ladder
    says denial matters most — we produce a post-fire hide on **0.3% of
-   firing turns on both arms**. The candidate pool had a hide on 46% of
-   those turns (earlier probe) but never post-fire. That is a
-   **generation** gap: the hide templates are composed hide-then-fire, not
-   fire-then-hide, against opponents who shoot back. Next question: where
-   the hide scenario is built (`getDebuffAction`-style sites in
-   `base_strategy.lk` 1118 / 1544 / 1715 / 1773 and the `_hideCache` in
-   `scenario_helpers.lk`), why the movement precedes the attack.
+   firing turns on both arms** — but Sepignouf is a 120/120 ceiling where
+   hiding never matters, so that number is **not** evidence of a generation
+   gap (an earlier draft of this line said it was; retracted). Reading the
+   composition sites (`base_strategy.lk` 1118 / 1544 / 2744 / 2770): the
+   templates ARE fire-then-hide — the `MOVEMENT_HNS` is pushed after the
+   attack block — gated only on `findHideAndSeekCell("defensive")` returning
+   a cell and that cell being reachable with leftover MP. The surviving
+   evidence for under-hiding vs weapon users is the real-fight comparison
+   (ours 0.14 / 0.16 vs the ladder's 0.36 / 0.26 against STR opponents).
+   To test generation vs STR without a ceiling, measure the proxy on
+   `ladder_ludaskia` (STR, ~75–100% for us, not saturated).
 
 This is the same signature as the morning's category-D turns (plan predicted
 damage, nothing executed). The lever is the plan->execution path, not a weight.
