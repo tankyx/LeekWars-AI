@@ -8,6 +8,12 @@ global __damageCache = [:]
 global __chipCostCache = [:]
 global __weaponCostCache = [:]
 global __pathLengthCache = [:]
+// Memo for Arsenal.getDamageBreakdown when called WITHOUT AoE cells, where it
+// is a pure function of (str, mag, wis, sci, itemID). beam_search calls it in
+// hot loops over cells/items (~52% of a turn is beam search). Flushed per turn
+// because the sim stats it is keyed on are per-turn buff states.
+global __dmgBdMemo = [:]
+global _aoeAimTrace = false   // AoE-aim debug trace; costs ops, keep off in production
 global __losCache = [:]
 // Memo for bestAttackDamageAtRange, keyed by enemy id + distance + LoS.
 // The adversarial threat cache called that pure function ~10,000x per turn
@@ -49,6 +55,7 @@ function clearCaches() {
     // where the same cell pairs are queried repeatedly.
     __losCache = [:]
     __advDmgMemo = [:]
+    __dmgBdMemo = [:]
     __dangerCellCache = [:]
     __adversarialThreatCache = [:]
     __adversarialThreatCacheBuilt = false

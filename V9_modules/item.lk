@@ -248,6 +248,13 @@ class Arsenal {
     }
 
     getDamageBreakdown(str, mag, wis, sci, itemID, centerCell = -1, targetCell = -1) {
+        // Pure in (str, mag, wis, sci, itemID) when no AoE cells are supplied -
+        // which is how beam_search calls it, in hot loops. Memoise that case.
+        var bdKey = -1
+        if (centerCell == -1 && targetCell == -1) {
+            bdKey = itemID * 100000000 + str * 10000 + mag * 100 + (wis + sci)
+            if (mapContainsKey(__dmgBdMemo, bdKey)) { return __dmgBdMemo[bdKey] }
+        }
 
         var isWeapon = mapContainsKey(this.playerEquippedWeapons, itemID)
 
@@ -316,7 +323,9 @@ class Arsenal {
         if (itemID == CHIP_PUNISHMENT) {
             selfDamage = getLife() * 0.75
         }
-        return ['direct': direct, 'dot': dot, 'nova': nova, 'total': direct + dot + nova, 'directMin': directMin, 'directMax': directMax, 'dotMin': dotMin, 'dotMax': dotMax, 'novaMin': novaMin, 'novaMax': novaMax, 'denial': denial, 'statReduce': statReduce, 'selfDamage': selfDamage]
+        var bdOut = ['direct': direct, 'dot': dot, 'nova': nova, 'total': direct + dot + nova, 'directMin': directMin, 'directMax': directMax, 'dotMin': dotMin, 'dotMax': dotMax, 'novaMin': novaMin, 'novaMax': novaMax, 'denial': denial, 'statReduce': statReduce, 'selfDamage': selfDamage]
+        if (bdKey != -1) { __dmgBdMemo[bdKey] = bdOut }
+        return bdOut
     }
 
     getPoisonChipsSorted(str, mag, wis, sci) {

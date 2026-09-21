@@ -204,8 +204,10 @@ class FieldMapPatterns extends FieldMapCore {
 
         var aoeType = item._aoeType
 
-        // TEMP DEBUG: diagnose grenade_launcher AoE-aim against kiters
-        var _dbgAoE = (aoeType == AREA_CIRCLE_2)
+        // Diagnostic AoE-aim trace (was left on unconditionally: it fires for
+        // EVERY circle-2 aim and once per accepted candidate inside the loop,
+        // and debug() costs ops in production). Flag it off by default.
+        var _dbgAoE = _aoeAimTrace && (aoeType == AREA_CIRCLE_2)
         if (_dbgAoE) {
             debug("AOEAIM t" + getTurn() + " item=" + itemId + " shoot=" + shooterCell +
                   " primaryCell=" + primaryCell + " primaryId=" + primaryTarget._id +
