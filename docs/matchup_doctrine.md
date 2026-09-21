@@ -389,6 +389,59 @@ tools/ once the geometry work decides their final shape).
 
 ---
 
+## Fire-then-move: generated, chosen, and then lost between plan and execution
+
+The doctrine's open question ("rarely generated, or generated and outscored?")
+is answered, and the answer is neither.
+
+**It is generated and it wins the turn.** Probing our own candidate pool
+(entity-tagged, local, ED vs the two ladder testbeds):
+
+| opponent | our turns | fire-then-move candidate in pool | its score / winner's | its damage / winner's | it WON the turn |
+|---|---|---|---|---|---|
+| Éleeksire (MAG) | 206 | 64% | median 1.00 (p25 0.88) | 1.00 | **74 / 132 (56%)** |
+| Sepignouf (STR) | 74 | 46% | median 0.98 (p25 0.73) | 1.00 | **8 / 34 (24%)**, chosen post-fire **0 / 74** |
+
+So position weight is not the block: the hide candidate scores at parity with
+identical damage. Two different failures follow:
+
+1. **vs the STR weapon-user — where denial matters most — it is never the
+   post-fire pick.** Parity plus tie-break goes to stand-and-fire every time.
+2. **vs the MAG caster it IS picked, and then not executed.** Of 17 chosen
+   post-fire hides, the executor never reached the move on 12 (71%). A second
+   probe attributes at least 21% of planned hides (6/28) to
+   `validateAndFilterActions` stripping actions at or before the hide index;
+   the executor-loop share is unmeasured (the loop is `for (var a in
+   this._actions)` and the first hook missed it) — **open**.
+
+This is the same signature as the morning's category-D turns (plan predicted
+damage, nothing executed). The lever is the plan->execution path, not a weight.
+
+### Synergy: we also under-use the buff -> fire pattern
+
+| per turn, first 10, owner-normalised | top players won / lost | ours |
+|---|---|---|
+| offensive buff cast BEFORE firing / firing turns | 0.28 / 0.26 | **0.09 / 0.09** |
+| shots in an adrenaline turn | 0.66 / 0.57 | 0.37 / 0.22 |
+| shots with / without a preceding buff | 1.84 / 2.01 | 1.47 / 1.57 |
+
+We buff-then-fire at a third of their rate and convert adrenaline into fewer
+shots. Caveat: for them it barely discriminates wins (0.28 vs 0.26) and a
+buff costs a shot that turn; no (buff -> weapon) pair exceeds +0.005/turn.
+A frequency gap, not a proven win lever. Tool: `tools/ladder_synergy_analysis.py`.
+
+### Is the deployed AI the one we measured?
+
+Our 500 real solo fights were played by the server copy uploaded 2026-09-21
+11:03 UTC. `strategy/base_strategy.lk` on the server is byte-identical in
+size to HEAD (126,307 chars), and the strategy/scorer files last changed in
+HEAD on 2026-08-20, so the behavioural comparison is against the same
+decision logic. The server reports `main.lk` as ~1.5 MB / 35,787 lines: that
+is the include-resolved size it computes after compiling, not a separate
+bundle (`upload_v9.py` does not bundle) — verified below.
+
+---
+
 ## Other archetypes
 
 Not yet written. Each needs a stabilised testbed first (`matchup_stability.py`),
