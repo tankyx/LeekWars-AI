@@ -41,8 +41,47 @@ def _one(args):
     r = lt.run_fight(scn)
     if r.get('error'):
         return {'seed': seed, 'result': 'ERR', 'turns': 0, 'hp': 0, 'err': r['error']}
+    px = play_proxies(r)
     return {'seed': seed, 'result': r['result'], 'turns': r['total_turns'],
-            'hp': hp_lead(r)}
+            'hp': hp_lead(r), 'hnh': px[0], 'deny': px[1]}
+
+
+def play_proxies(r):
+    """Behavioural proxies over our first 10 turns, same definitions as
+    tools/ladder_play_analysis.py so an A/B can be scored on what the ladder
+    rewards, not only on who won:
+      hnh  - share of our firing turns where we MOVED after the last shot
+      deny - share of our turns after which the enemy fired no weapon on
+             their next turn (a proxy; condition on weapon-user opponents)
+    Win rate alone can pass while restoring fire-and-stand; these catch it.
+    """
+    ours = {l['id'] for l in r['leeks'] if l.get('team') == 1}
+    cur, t = None, 0
+    seq = {}
+    enemy_shots = {}
+    for a in r['actions']:
+        if not isinstance(a, list) or not a:
+            continue
+        c = a[0]
+        if c == 6:
+            t += 1
+            continue
+        if c == 7:
+            cur = a[1] if len(a) > 1 else None
+            continue
+        if cur in ours:
+            if c == 16:
+                seq.setdefault(t, []).append('F')
+            elif c == 10:
+                seq.setdefault(t, []).append('M')
+        elif cur is not None and c == 16:
+            enemy_shots[t] = enemy_shots.get(t, 0) + 1
+    my = sorted(seq)[:10]
+    fire_turns = [tt for tt in my if 'F' in seq[tt]]
+    hnh = sum(1 for tt in fire_turns
+              if 'M' in seq[tt] and max(i for i, x in enumerate(seq[tt]) if x == 'M') > seq[tt].index('F'))
+    deny = sum(1 for tt in my if enemy_shots.get(tt, 0) + enemy_shots.get(tt + 1, 0) == 0)
+    return (hnh / max(len(fire_turns), 1), deny / max(len(my), 1))
 
 
 def hp_lead(r):
@@ -149,6 +188,12 @@ def main():
         sd = t = 0.0
     print('\nHP%%-lead at end: NEW %+.1f  BASELINE %+.1f   paired diff %+.1f'
           ' (sd %.1f, t=%.2f)' % (hp_new, hp_old, md, sd, t))
+
+    for key, name in (('hnh', 'fire-then-move rate (of firing turns)'),
+                      ('deny', 'enemy denied a shot next turn (of turns)')):
+        nv = sum(new[s][key] for s in ok) / max(len(ok), 1)
+        ov = sum(old[s][key] for s in ok) / max(len(ok), 1)
+        print('%-42s NEW %.3f  BASELINE %.3f  diff %+.3f' % (name, nv, ov, nv - ov))
 
     if p < 0.05 and len(c) > len(b):
         print('\nVERDICT: NEW is better in this matchup (p=%.4f). Adopt.' % p)
