@@ -337,15 +337,21 @@ class ScenarioScorer {
 
         if (simResult.selfDamageHP > 0) {
             var hpAfterSelf = this._player._currHealth - simResult.selfDamageHP + simResult.lifestealHealing
-            var selfDmgPenalty = simResult.selfDamageHP * 3.0
+            // Reflected damage is a plain HP trade (charged even on a kill: the
+            // return lands during our hit); Punishment's self-cost keeps the
+            // suicidal-finisher logic below.
+            var reflPart = _v9ReflectSelfDamage ? simResult.reflectTaken : 0
+            var punishPart = simResult.selfDamageHP - reflPart
+            var selfDmgPenalty = punishPart * 3.0
             if (killProbability >= 0.95) {
                 selfDmgPenalty = 0
             } else if (killProbability >= 0.85) {
                 selfDmgPenalty *= 0.3
             } else {
                 // Not a kill-finisher: massive penalty to prevent suicidal Punishment
-                selfDmgPenalty = simResult.selfDamageHP * 10.0
+                selfDmgPenalty = punishPart * 10.0
             }
+            selfDmgPenalty += reflPart * 3.0
             if (hpAfterSelf <= 0) {
                 selfDmgPenalty += 50000
             } else if (hpAfterSelf < this._player._maxHealth * 0.30) {
@@ -895,7 +901,7 @@ class ScenarioScorer {
             adversarialThreat = getAdversarialThreat(evalCell)
         }
         if (adversarialThreat > 0) {
-            var effectiveHP = this._player._currHealth + simResult.hpGained + simResult.shieldsGained
+            var effectiveHP = this._player._currHealth + simResult.hpGained + simResult.shieldsGained - (_v9ReflectSelfDamage ? simResult.reflectTaken : 0)
             var relShieldReduction = simResult.relativeShieldGained / 100.0
             var effectiveEnemyDmg = adversarialThreat * (1.0 - relShieldReduction)
             var survivalAfterEnemy = effectiveHP - effectiveEnemyDmg
@@ -2414,7 +2420,7 @@ class ScenarioScorer {
             incomingDmg = getAdversarialThreat(finalPos)
         }
 
-        var projectedHP = this._player._currHealth + simResult.hpGained - incomingDmg
+        var projectedHP = this._player._currHealth + simResult.hpGained - incomingDmg - (_v9ReflectSelfDamage ? simResult.reflectTaken : 0)
         var relShieldReduction = simResult.relativeShieldGained / 100.0
         projectedHP += incomingDmg * relShieldReduction
         projectedHP += simResult.shieldsGained

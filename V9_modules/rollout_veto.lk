@@ -79,7 +79,7 @@ function v9VetoScoreCandidate(sim, cand, target, arsenal, fieldMapObj) {
     var ourSim = sim.simulate(cand)
     var endCell = ourSim.finalPosition
     if (endCell == null || endCell == -1) endCell = getCell()
-    var endHP = getLife() + ourSim.hpGained
+    var endHP = getLife() + ourSim.hpGained - (_v9ReflectSelfDamage ? ourSim.reflectTaken : 0)
     var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
     return evalOutcome(ourSim, enemyEst, target, arsenal)
 }
@@ -94,7 +94,7 @@ function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMap
     // 1. Enemy response to the chosen plan's end state.
     var endCell = bestSimResult.finalPosition
     if (endCell == null || endCell == -1) endCell = getCell()
-    var endHP = getLife() + bestSimResult.hpGained
+    var endHP = getLife() + bestSimResult.hpGained - (_v9ReflectSelfDamage ? bestSimResult.reflectTaken : 0)
     var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
     // Calibrated incoming (2026-09-22). 437 real turn pairs: the simulator
     // predicted 0 on 71% of turns (it needs LoS from the enemy's CURRENT

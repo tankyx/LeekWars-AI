@@ -87,6 +87,7 @@ class SimulationResult {
     erosionDamage = 0
 
     selfDamageHP = 0
+    reflectTaken = 0
 
     crystalAxisReduction = 0
     crystalSolved = false
@@ -155,6 +156,12 @@ class SimulationResult {
 // antidote multiplier scaled the FULL queued value (0.4-0.7x at c=0),
 // which still let a 7-turn poison outscore a shot. Cap the ticks instead.
 global _v9DotCapEnabled = true
+// Reflect self-damage (2026-09-22): a hit on a target carrying EFFECT_DAMAGE_RETURN
+// costs us raw_damage x pct/100, bypassing our own shields (generator EffectDamage:
+// return is computed on pre-shield d and removeLife'd on the caster). Real fight
+// 53768119: bramble at 311%, two sword hits reflected 2414 + 1878, Ada died on
+// her own turn 2. Nothing in the pipeline had modelled it.
+global _v9ReflectSelfDamage = true
 global _v9DotCapLog = false
 global __dotCapTurn = -1
 global __dotCapTicks = -1
@@ -221,6 +228,12 @@ class ScenarioSimulator {
         }
 
         var targetIsBulb = (this._target != null) ? isBulb(this._target) : false
+        var simReflectPct = 0
+        if (_v9ReflectSelfDamage && this._target != null && this._target._effectsActive != null) {
+            for (var rEff in this._target._effectsActive) {
+                if (rEff[0] == EFFECT_DAMAGE_RETURN && count(rEff) >= 2) simReflectPct += rEff[1]
+            }
+        }
 
         result.finalPosition = simPos
 
@@ -294,6 +307,12 @@ class ScenarioSimulator {
                         result.damageDealtMin += punishNet
                         result.damageDealtMax += punishNet
                         result.erosionDamage += punishNet * 0.05
+                        if (simReflectPct > 0) {
+                            var reflDmg = punishNet * simReflectPct / 100.0
+                            result.selfDamageHP += reflDmg
+                            result.reflectTaken += reflDmg
+                            simPlayerHP -= reflDmg
+                        }
                         simEnemyCurrHP -= punishNet
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
                         var selfCost = simPlayerHP * 0.75
@@ -353,6 +372,12 @@ class ScenarioSimulator {
                     result.damageDealtMin += directDmgMin
                     result.damageDealtMax += directDmgMax
                     result.erosionDamage += directDmg * 0.05
+                    if (simReflectPct > 0) {
+                        var reflDmg = rawDirect * simReflectPct / 100.0
+                        result.selfDamageHP += reflDmg
+                        result.reflectTaken += reflDmg
+                        simPlayerHP -= reflDmg
+                    }
                     simEnemyCurrHP -= directDmg
                     if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
@@ -471,6 +496,12 @@ class ScenarioSimulator {
                         result.damageDealtMin += directDmgMin
                         result.damageDealtMax += directDmgMax
                         result.erosionDamage += directDmg * 0.05
+                        if (simReflectPct > 0) {
+                            var reflDmg = rawDirect * simReflectPct / 100.0
+                            result.selfDamageHP += reflDmg
+                            result.reflectTaken += reflDmg
+                            simPlayerHP -= reflDmg
+                        }
                         simEnemyCurrHP -= directDmg
                         if (simEnemyCurrHP < 0) simEnemyCurrHP = 0
 
