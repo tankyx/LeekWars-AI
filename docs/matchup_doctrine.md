@@ -1547,6 +1547,27 @@ the same way. Seven-league boots reverted to fortress (instance
 2399058); leather boots stay. Rule recorded: no science-scaled chips on
 a build without science — the quantum-rifle lesson, second instance.
 
+### The opening scales with science; components re-cut for it (2026-09-22)
+
+Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
+adrenaline → steroid in 100% of today's real Ada fights (armoring, which
+the boots swap had removed, restored in place of the never-used boxing
+glove). Every buff in that opening is `round(base × (1 + caster
+SCI/100))`, and the permanent HP from elevation (80) and armoring (27) is
+then `× (1 + WIS/100)` on the *boosted* wisdom. Ada's science is 100%
+components, so science components are not wasted on her; they are the
+opening's multiplier.
+
+Enumerated owned component swaps under RAM ≥ 11, cores ≥ 13, TP ≥ 26,
+MP ≥ 7, scoring effective HP after the opening, boosted strength (sword)
+and boosted wisdom (lifesteal). Best: **power supply + chiyembekezo →
+neural core pro + neural core**: science 120 → 250, knowledge +260 →
++910 wisdom, steroid +160 → +560 strength, leather boots +4 → +7 MP,
+effective HP 3,732 → 3,833 despite −260 raw life, sword ≈ +20%; cost
+TP 29 → 27 (jump + sword + rhino + swap = 25 still fits), frequency 230
+→ 210. Applied via loadout 786 (`use_restat=false`). Revert: components
+index-for-index back to 307 and 308.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
