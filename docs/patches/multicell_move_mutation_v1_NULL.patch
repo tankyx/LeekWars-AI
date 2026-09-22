@@ -1,0 +1,97 @@
+diff --git a/V9_modules/field_map_tactical.lk b/V9_modules/field_map_tactical.lk
+index 16a410d6..4ff8d4df 100644
+--- a/V9_modules/field_map_tactical.lk
++++ b/V9_modules/field_map_tactical.lk
+@@ -987,6 +987,25 @@ class FieldMap extends FieldMapPatterns {
+         return best
+     }
+ 
++    // Multi-cell variants (2026-09-22): the top-k firing cells by the same
++    // base score as findBestTacticalCell, so the mutation planner can offer
++    // "the same plan, fired from the runner-up cell" as a full candidate.
++    findTopTacticalCells(maxMP, threatWeight, k) {
++        var playerPos = player._cellPos
++        var scored = []
++        for (var cellId in mapKeys(this.damageMap)) {
++            var cell = this.damageMap[cellId]
++            var pathLen = getCachedPathLength(playerPos, cell._id)
++            if (pathLen == null || pathLen > maxMP) continue
++            var score = cell._totalDamage - (this.getThreatAtCell(cell._id) * threatWeight) + this.calculateMultiTargetBonus(cell._id) - pathLen * 2.0
++            push(scored, [score, cell._id])
++        }
++        arraySort(scored, function(a, b) { return b[0] - a[0] })
++        var out = []
++        for (var i = 0; i < count(scored) && i < k; i++) push(out, scored[i][1])
++        return out
++    }
++
+     calculateMultiTargetBonus(cellId) {
+         var enemies = this.getEnemySubMap()
+         if (count(mapKeys(enemies)) <= 1) return 0
+diff --git a/V9_modules/scenario_mutation.lk b/V9_modules/scenario_mutation.lk
+index 34fbb147..bbbb2c99 100644
+--- a/V9_modules/scenario_mutation.lk
++++ b/V9_modules/scenario_mutation.lk
+@@ -1,6 +1,14 @@
+ include('scenario_simulator.lk')
+ include('cache_manager.lk')
+ 
++// Multi-cell scenario variants (2026-09-22). Chooser-level retreat
++// heuristics were measured harmful; this instead lets the planner try the
++// seed plan fired from the runner-up tactical cells and lets the full
++// simulation + scorer (+ hide-append) judge the whole turn.
++global _v9MultiCellEnabled = true
++global _v9MultiCellK = 2
++global _v9MultiCellLog = false
++
+ class MutationDescriptor {
+     actionIndex = -1
+     field = ""
+@@ -49,6 +57,13 @@ class ScenarioMutator {
+         // Insertion (new chips) > Substitution (better chips) > Swap (reorder) > Aim shift
+         var descriptors = []
+ 
++        if (_v9MultiCellEnabled) {
++            var mcDescriptors = this.generateMoveCellDescriptors(scenario)
++            for (var desc in mcDescriptors) {
++                push(descriptors, desc)
++            }
++        }
++
+         var insDescriptors = this.generateInsertionDescriptors(scenario)
+         for (var desc in insDescriptors) {
+             push(descriptors, desc)
+@@ -72,6 +87,25 @@ class ScenarioMutator {
+         return descriptors
+     }
+ 
++    generateMoveCellDescriptors(scenario) {
++        var descriptors = []
++        var moveIdx = -1
++        for (var i = 0; i < count(scenario); i++) {
++            var a = scenario[i]
++            if (a.type == Action.MOVEMENT_OFFENSIVE || a.type == Action.MOVEMENT_APPROACH) { moveIdx = i; break }
++        }
++        if (moveIdx == -1) return descriptors
++        var cur = scenario[moveIdx].targetCell
++        if (cur == -1) return descriptors
++        var alts = this._fieldMap.findTopTacticalCells(this._player._currMp, 0.5, _v9MultiCellK + 1)
++        for (var alt in alts) {
++            if (alt == cur) continue
++            if (count(descriptors) >= _v9MultiCellK) break
++            push(descriptors, new MutationDescriptor(moveIdx, "targetCell", alt, "MoveCell " + cur + " -> " + alt))
++        }
++        return descriptors
++    }
++
+     generateAimCellDescriptors(scenario) {
+         var descriptors = []
+ 
+@@ -485,6 +519,7 @@ class HybridMutationPlanner {
+                 if (score > bestScore) {
+                     bestScore = score
+                     bestScenario = seed
++                    if (_v9MultiCellLog && startsWith(desc.description, "MoveCell")) debugW("MC_e" + getEntity() + "_T" + getTurn() + "_won")
+                 } else {
+                     this._mutator.revertMutation(seed, desc, originalValue)
+                 }

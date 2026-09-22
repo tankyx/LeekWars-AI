@@ -952,6 +952,35 @@ retreat, then hide" exists as a fully simulated candidate and the scorer
 judges the whole turn. Cost is scenario count; to be measured with the
 same probe before any A/B.
 
+### Multi-cell scenario variants: null (2026-09-22)
+
+Built as a mutation (`MoveCell`, `docs/patches/multicell_move_mutation_v1_NULL.patch`):
+for each planner seed, retarget its first offensive/approach move to the
+two runner-up tactical cells (`findTopTacticalCells`, same base score as
+the chooser) and let the full simulation + scorer + hide-append judge. It
+fires: 9 MoveCell mutations became the planner's best in the 4-fight
+smoke. Paired 20-seed probe: Margaret hidden 48% → 49%, taken 602 → 608,
+dealt 56 → 39 — nothing. Ed hidden 50% → 62%, dealt 438 → 571, taken 156
+→ 148 on 5 fights.
+
+| pooled, two panels | NEW | HEAD | gained / lost | p | HP-lead | fire-then-move |
+|---|---|---|---|---|---|---|
+| Margaret STR panel n=480 | 206 (42.9%) | 209 (43.5%) | 16 / 19 | 0.74 | −1.1 (t −1.5) | −0.002 |
+| Ed vs Ludaskia n=60 | 22 | 22 | **0 / 0** | 1.0 | +0.0 | +0.000 |
+
+Bit-identical for Ed, 35 flips in 480 for Margaret with no direction.
+The runner-up firing cells, judged by the full pipeline, are simply not
+better: once the plan can already append its own hide, *which* firing
+cell it fires from carries no further value against these opponents.
+**Not adopted; tree reverted.** The firing-cell lever is closed both
+ways (heuristic: harmful; candidate: null).
+
+Where Margaret's remaining 57% of losses on this panel live is now the
+open question, and it is not positioning. Next measurement should be the
+loss autopsy on the current build (turn of death, HP trajectory, whether
+the poison landed, what the STR opponent did on the killing turns) --
+the same panel, the losses only.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
