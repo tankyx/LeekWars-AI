@@ -1186,6 +1186,11 @@ class ScenarioCombos extends ScenarioHelpers {
             for (var atk in attackActions) {
                 push(actions, atk)
             }
+            if (didJump && count(attackActions) == 0) {
+                var jIdx = -1
+                for (var ji = 0; ji < count(actions); ji++) { if (actions[ji].chip == CHIP_JUMP) { jIdx = ji; break } }
+                if (jIdx != -1) remove(actions, jIdx)
+            }
         }
 
         if (params.repositioning == "hide") {
@@ -1822,6 +1827,9 @@ class ScenarioCombos extends ScenarioHelpers {
         var tpAfterJump = availableTP - jumpCost
         var attackActions = this.getAttackActions(tpAfterJump, 1.0, bestAttackCell)
         for (var atk in attackActions) push(actions, atk)
+        // A jump that lands no attack is 4 TP and a 3-turn cooldown for
+        // nothing (Domingo test fights: 14 of 24 jump turns fired no shot).
+        if (count(attackActions) == 0) return null
 
         return actions
     }
