@@ -1258,6 +1258,70 @@ entity-tagged, so the state attribution in that probe is unreliable. The
 scorer term probe (pick vs best feasible attack plan, per turn) is the
 next measurement and is running.
 
+*Measured, three probes deep:* (1) term probe — of 302 site-1 turns, the
+pick had no attack while a feasible attack plan existed on **0**; (2)
+candidate probe — on 52 of 56 no-attack picks the generator produced **no
+attack-bearing scenario at all** (4 were infeasible, dropped actions);
+(3) entity-tagged state + damage map — those turns were AGGRO (37),
+ATTRITION (8), KILL (8) at 79–100% HP with an **empty damage map**, and
+an independent in-AI check (every equipped weapon, range + LoS + launch,
+from the current cell and from every reachable cell) found **no shot on
+54 of 54** of them. Locally the buffs are the right use of the TP: there
+was nothing to shoot. The local turtling is not a bug.
+
+The real fights disagree, and they are the ones that count. Recomputed
+with exact weapon costs and launch types (m_laser needs a line,
+lightninger a star), the unarguable wasted-shot turns — a weapon she used
+that fight in range with LoS and launch valid from the cell she stood on,
+its TP in hand, and nothing fired — are **27 in Ada's 58 real losses
+(0.47 per loss) vs 4 in 60 wins**; KG 13 / 2, Ed 4 / 7, Margaret 5 / 2.
+The V9-driven copies of her nemeses never put her in that situation (she
+beats them 40/40). Reproducing it needs the opponents' own AIs: the
+server test-scenario route (`/ai/test-scenario`, `leekwars_test_fight`)
+with our debug logs on, against one of rotulet / grinhaire / topac. That
+is the next step for Ada and it is not a local job.
+
+### Step 4 as taken: the poison cap, adopted and put on the ladder
+
+The "hold" turn shape was dropped on reading the code: the zero-damage
+penalty only bites plans with no damage at all, and a turn with no poison
+never triggers the enemy's antidote, so the existing bait logic is the
+right shape; the wrong part was the price of long poisons before the
+antidote, which the cap fixes. Adopted (commit `6f6dadd3`, 26 gained / 13
+lost over 420 paired local fights) and deployed at 10:01 for round 3.
+
+### Round 3 (poison cap on; 135 real fights)
+
+| leek | round 3 W% (n) | HP-lead | dealt/turn | rounds 1 / 2 / 3 W% |
+|---|---|---|---|---|
+| AdaLovelace | 41 (34) | −8.3 | 637 | 44 / 56 / 41 |
+| EdsgerDijkstra | 53 (34) | +17.6 | 958 | 43 / 50 / 53 |
+| KurtGodel | 49 (35) | +17.2 | 631 | 55 / 50 / 49 |
+| MargaretHamilton | 42 (26) | −17.6 | 683 | 36 / 56 / 42 |
+
+Pooled 60 W / 67 L (47%); rounds: 44% → 53% → 47%; baseline 51%. At
+n≈30 per leek a round resolves ±17pp, so rounds 2 and 3 are
+indistinguishable from each other and from the baseline; only round 1's
+regression and its repair are outside noise. The poison cap shows no
+real-fight gain in this sample; it stays deployed on its mechanism and
+local evidence, flagged, and the next validation round should be
+larger (≥80 fights per leek) before any further change is judged.
+
+### Where the six steps ended (2026-09-22)
+
+1. AoE geometry rewrite — adopted; KG's wasted-attack turns 18 → 0 locally.
+2. Wasted-attack metric on all leeks — Ed and Margaret clean; Ada and KG's
+   were the grapple/splash/geometry bugs, now fixed.
+3. Ada's turtling — real (0.47 turns per loss), not reproducible with V9
+   driving her nemeses; needs server test-scenario fights.
+4. Margaret's antidote windows — poison cap adopted; no measurable
+   real-fight gain yet.
+5. Ranged-STR cycle — they keep the shot 85–87% of turns and step back 2;
+   we fire 63–64% and close. A range-and-tempo contest, unaddressed.
+6. Real-fight validation — three rounds, 442 fights: caught and repaired
+   a real regression the local panel could not see. This loop is now the
+   gate for anything touching positioning.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
