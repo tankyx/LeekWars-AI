@@ -1205,6 +1205,18 @@ class ScenarioCombos extends ScenarioHelpers {
             }
         }
 
+        // No jump without a shot in the same plan (2026-09-22): a turn-1
+        // adrenaline > approach > jump opener spent the dive chip on 3 cells
+        // and put it on cooldown for turns 2-4, when the sword dive is due.
+        if (didJump) {
+            var pHasAtk = false
+            for (var pa in actions) { if (pa.type == Action.ACTION_DIRECT || pa.type == Action.ACTION_DOT) { pHasAtk = true; break } }
+            if (!pHasAtk) {
+                var jIdx2 = -1
+                for (var ji2 = 0; ji2 < count(actions); ji2++) { if (actions[ji2].chip == CHIP_JUMP) { jIdx2 = ji2; break } }
+                if (jIdx2 != -1) remove(actions, jIdx2)
+            }
+        }
         return actions
     }
 
