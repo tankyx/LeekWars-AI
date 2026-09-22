@@ -1125,6 +1125,41 @@ fired (`plan=APPROACH.DIRECT did=move`, `plan=DIRECT did=adrenaline`
 with 33 TP left at distance 9) are not the grapple. Entity-tagged
 executor reasons on those turns are the next probe.
 
+**Measured (entity-tagged executor lines, 48 fights):** KG 18 of 18 and
+Ada 8 of 12 wasted-attack turns are `EXEC ... STALE_TARGET_SKIP`, with
+the plan's aim cell 2 ids from the live enemy for 4 consecutive turns
+while the enemy never moved. Not a stale target: a **splash aim**. When
+the enemy's own cell has no LoS from the firing cell,
+`findBestAvailableAttack` aims an AoE weapon at a cell beside the enemy
+(`findAoEWeaponSplashCell`, `isSplash = true`); the executor compares the
+aim cell to the live enemy cell, assumes the enemy moved, tries to
+retarget onto the LoS-less enemy cell, fails LoS, skips the shot, and the
+turn ends with 20–33 TP. Executor fix (`docs/patches`, `keepSplashAim`):
+keep the aim when it is still in range, LoS and launch-valid from the
+current cell AND its area covers the live enemy. Local on the same seeds:
+KG 18 → 12 wasted-attack turns, `SPLASH_KEEP` fired 8×, but 13 STALE
+skips remained — and a second diagnostic explains them exactly: all 13
+were range OK, LoS OK, launch OK, **area coverage false, aim cell 4
+cells from the enemy on an X-shaped area of radius 2** (quantum rifle).
+
+**Third member, the root of the family:** `getAoEAffectedCells` builds
+area cells by adding hard-coded id offsets (x 18 / y 17) to the centre —
+not how the diamond map is laid out (this was also the root cause of the
+old self-poison bug). For X shapes its "diagonals" are ±1 / ±35 in id
+space, i.e. cells that are 4 game-cells away. The splash finder believed
+those cells covered the enemy; the game would have hit nothing. Rewrite
+(`getAoEAffectedCells`, `wouldAoEHitCell`) on the generator's own
+shapes (MaskAreaCell: circle |dx|+|dy| ≤ r, plus = axes, X = diagonals,
+square = Chebyshev box) in `getCellX/getCellY` coordinates via
+`getCellFromXY`, obstacle/off-map cells dropped, memoised per turn. Under
+test together with the executor fix.
+
+Step 2 of the plan (the wasted-attack metric for Ed and Margaret) from
+their REAL fights: the exact, unarguable subset (shot from the start
+cell, LoS, TP affordable, none fired) is 4 turns in Ed's 58 losses and 6
+in Margaret's 58 — it is not their problem. Local probes for them follow
+the geometry A/B.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
