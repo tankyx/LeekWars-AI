@@ -60,6 +60,9 @@ class Color {
     }
 }
 
+global __aoeCellsTurn = -1
+global __aoeCellsMemo = [:]
+
 class FieldMapCore {
     cells = [:]
     entities = [:]
@@ -459,25 +462,30 @@ class FieldMapCore {
     wouldAoEHitCell(centerCell, aoeType, shooterCell, checkCell) {
         if (aoeType == AREA_POINT) return checkCell == centerCell
         if (checkCell == centerCell) return true
-
-        var dist = getCellDistance(centerCell, checkCell)
-        if (dist == null) return false
-
-        if (aoeType == AREA_CIRCLE_1 || aoeType == AREA_PLUS_1) return dist <= 1
-        if (aoeType == AREA_CIRCLE_2) return dist <= 2
-        if (aoeType == AREA_CIRCLE_3) return dist <= 3
-
-        if (aoeType == AREA_PLUS_2) return dist <= 2
-        if (aoeType == AREA_PLUS_3) return dist <= 3
-
-        if (aoeType == AREA_X_1) return dist <= 1
-        if (aoeType == AREA_X_2) return dist <= 2
-        if (aoeType == AREA_X_3) return dist <= 3
-
-        if (aoeType == AREA_SQUARE_1) return dist <= 1
-        if (aoeType == AREA_SQUARE_2) return dist <= 2
-
         if (aoeType == AREA_LASER_LINE) return false
+
+        var cx = getCellX(centerCell)
+        var cy = getCellY(centerCell)
+        var kx = getCellX(checkCell)
+        var ky = getCellY(checkCell)
+        if (cx == null || cy == null || kx == null || ky == null) return false
+        var adx = abs(kx - cx)
+        var ady = abs(ky - cy)
+
+        if (aoeType == AREA_CIRCLE_1) return adx + ady <= 1
+        if (aoeType == AREA_CIRCLE_2) return adx + ady <= 2
+        if (aoeType == AREA_CIRCLE_3) return adx + ady <= 3
+
+        if (aoeType == AREA_PLUS_1) return (adx == 0 || ady == 0) && adx + ady <= 1
+        if (aoeType == AREA_PLUS_2) return (adx == 0 || ady == 0) && adx + ady <= 2
+        if (aoeType == AREA_PLUS_3) return (adx == 0 || ady == 0) && adx + ady <= 3
+
+        if (aoeType == AREA_X_1) return adx == ady && adx <= 1
+        if (aoeType == AREA_X_2) return adx == ady && adx <= 2
+        if (aoeType == AREA_X_3) return adx == ady && adx <= 3
+
+        if (aoeType == AREA_SQUARE_1) return adx <= 1 && ady <= 1
+        if (aoeType == AREA_SQUARE_2) return adx <= 2 && ady <= 2
 
         return false
     }
@@ -490,87 +498,73 @@ class FieldMapCore {
             return affected
         }
 
-        push(affected, centerCell)
-
-        if (aoeType == AREA_CIRCLE_1 || aoeType == AREA_CIRCLE_2 || aoeType == AREA_CIRCLE_3) {
-            var radius = (aoeType == AREA_CIRCLE_1) ? 1 : ((aoeType == AREA_CIRCLE_2) ? 2 : 3)
-            for (var dx = -radius; dx <= radius; dx++) {
-                for (var dy = -radius; dy <= radius; dy++) {
-                    var dist = abs(dx) + abs(dy)
-                    if (dist > 0 && dist <= radius) {
-                        var cellId = centerCell + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
-                        if (cellId >= 0 && cellId < FieldMapCore.board_cell_count) {
-                            push(affected, cellId)
-                        }
-                    }
-                }
-            }
-        }
-
-        else if (aoeType == AREA_PLUS_1 || aoeType == AREA_PLUS_2 || aoeType == AREA_PLUS_3) {
-            var radius = (aoeType == AREA_PLUS_1) ? 1 : ((aoeType == AREA_PLUS_2) ? 2 : 3)
-            for (var d = 1; d <= radius; d++) {
-                var cells = [
-                    centerCell + FieldMapCore.x_offset * d,  
-                    centerCell - FieldMapCore.x_offset * d,  
-                    centerCell + FieldMapCore.y_offset * d,  
-                    centerCell - FieldMapCore.y_offset * d   
-                ]
-                for (var c in cells) {
-                    if (c >= 0 && c < FieldMapCore.board_cell_count) push(affected, c)
-                }
-            }
-        }
-
-        else if (aoeType == AREA_X_1 || aoeType == AREA_X_2 || aoeType == AREA_X_3) {
-            var radius = (aoeType == AREA_X_1) ? 1 : ((aoeType == AREA_X_2) ? 2 : 3)
-            var up_right_offset = FieldMapCore.x_offset - FieldMapCore.y_offset
-            var down_right_offset = FieldMapCore.x_offset + FieldMapCore.y_offset
-            var down_left_offset = -1 * (FieldMapCore.x_offset - FieldMapCore.y_offset)
-            var up_left_offset = -1 * (FieldMapCore.x_offset + FieldMapCore.y_offset)
-            for (var d = 1; d <= radius; d++) {
-                var cells = [
-                    centerCell + up_right_offset * d,
-                    centerCell + down_right_offset * d,
-                    centerCell + down_left_offset * d,
-                    centerCell + up_left_offset * d
-                ]
-                for (var c in cells) {
-                    if (c >= 0 && c < FieldMapCore.board_cell_count) push(affected, c)
-                }
-            }
-        }
-
-        else if (aoeType == AREA_SQUARE_1 || aoeType == AREA_SQUARE_2) {
-            var radius = (aoeType == AREA_SQUARE_1) ? 1 : 2
-            for (var dx = -radius; dx <= radius; dx++) {
-                for (var dy = -radius; dy <= radius; dy++) {
-                    if (dx == 0 && dy == 0) continue 
-                    var cellId = centerCell + FieldMapCore.x_offset * dx + FieldMapCore.y_offset * dy
-                    if (cellId >= 0 && cellId < FieldMapCore.board_cell_count) {
-                        push(affected, cellId)
-                    }
-                }
-            }
-        }
-
-        else if (aoeType == AREA_LASER_LINE) {
+        if (aoeType == AREA_LASER_LINE) {
+            push(affected, centerCell)
             if (shooterCell != -1 && shooterCell != centerCell) {
-
                 var lineCells = this.getCellsInLine(shooterCell, centerCell)
                 if (lineCells != null) {
                     for (var i = 0; i < count(lineCells); i++) {
                         var c = lineCells[i]
-
                         if (c != shooterCell && c != centerCell) {
                             push(affected, c)
                         }
                     }
                 }
             }
-
+            return affected
         }
 
+        if (__aoeCellsTurn != getTurn()) {
+            __aoeCellsTurn = getTurn()
+            __aoeCellsMemo = [:]
+        }
+        var memoKey = centerCell * 100 + aoeType
+        if (mapContainsKey(__aoeCellsMemo, memoKey)) return __aoeCellsMemo[memoKey]
+
+        push(affected, centerCell)
+        var cx = getCellX(centerCell)
+        var cy = getCellY(centerCell)
+        if (cx == null || cy == null) {
+            __aoeCellsMemo[memoKey] = affected
+            return affected
+        }
+
+        var radius = 0
+        var shape = 0   // 1 circle, 2 plus, 3 X, 4 square
+        if (aoeType == AREA_CIRCLE_1) { radius = 1; shape = 1 }
+        else if (aoeType == AREA_CIRCLE_2) { radius = 2; shape = 1 }
+        else if (aoeType == AREA_CIRCLE_3) { radius = 3; shape = 1 }
+        else if (aoeType == AREA_PLUS_1) { radius = 1; shape = 2 }
+        else if (aoeType == AREA_PLUS_2) { radius = 2; shape = 2 }
+        else if (aoeType == AREA_PLUS_3) { radius = 3; shape = 2 }
+        else if (aoeType == AREA_X_1) { radius = 1; shape = 3 }
+        else if (aoeType == AREA_X_2) { radius = 2; shape = 3 }
+        else if (aoeType == AREA_X_3) { radius = 3; shape = 3 }
+        else if (aoeType == AREA_SQUARE_1) { radius = 1; shape = 4 }
+        else if (aoeType == AREA_SQUARE_2) { radius = 2; shape = 4 }
+        if (shape == 0) {
+            __aoeCellsMemo[memoKey] = affected
+            return affected
+        }
+
+        for (var dx = -radius; dx <= radius; dx++) {
+            for (var dy = -radius; dy <= radius; dy++) {
+                if (dx == 0 && dy == 0) continue
+                var adx = abs(dx)
+                var ady = abs(dy)
+                var inShape = false
+                if (shape == 1) inShape = (adx + ady <= radius)
+                else if (shape == 2) inShape = (dx == 0 || dy == 0)
+                else if (shape == 3) inShape = (adx == ady)
+                else inShape = true
+                if (!inShape) continue
+                var c = getCellFromXY(cx + dx, cy + dy)
+                if (c == null || c == -1) continue
+                if (isObstacle(c)) continue
+                push(affected, c)
+            }
+        }
+        __aoeCellsMemo[memoKey] = affected
         return affected
     }
 

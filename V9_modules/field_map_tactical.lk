@@ -1,5 +1,9 @@
 include('field_map_patterns.lk')
 
+global _v9HideReachGate = true
+global __hideReachTurn = -1
+global __hideReachCache = 999
+
 class FieldMap extends FieldMapPatterns {
 
     _enemyAccessCache = []
@@ -1034,9 +1038,44 @@ class FieldMap extends FieldMapPatterns {
     // then farthest from the enemy, then shortest path. Returns -1 when no
     // such cell exists or every candidate is rated MORE dangerous than
     // staying put (the cache knows about enemy MP; current LoS does not).
+    // Next-turn reach for a hide (2026-09-22): 167 real fights after the hide
+    // deploys showed every leek firing less (59-76% vs 76-86%) and dealing
+    // 30-60% less on the turn after a hidden end, because real opponents
+    // kite and the hide cell ends 12+ cells from any shot. A hide is only
+    // worth its ~570 HP if we can still shoot next turn: cap the hide cell's
+    // distance to the enemy at (max attack range + MP).
+    getMaxAttackReach() {
+        if (__hideReachTurn == getTurn()) return __hideReachCache
+        __hideReachTurn = getTurn()
+        var best = 0
+        for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+            var w = arsenal.playerEquippedWeapons[wid]
+            if (w != null && w._maxRange > best) best = w._maxRange
+        }
+        for (var cid in mapKeys(arsenal.playerEquippedChips)) {
+            var ch = arsenal.playerEquippedChips[cid]
+            if (ch == null) continue
+            if (!(isPoisonChip(cid) || mapContainsKey(ch._effects, EFFECT_DAMAGE))) continue
+            if (ch._maxRange > best) best = ch._maxRange
+        }
+        // The enemy moves too: what we can reach next turn is our range plus
+        // our MP minus the MP they can retreat with. Never below our range.
+        var enemyMp = 0
+        var enemiesR = this.getEnemySubMap()
+        for (var eidR in mapKeys(enemiesR)) {
+            var eR = enemiesR[eidR]
+            if (eR == null || isDead(eidR)) continue
+            var em = getTotalMP(eidR)
+            if (em != null && em > enemyMp) enemyMp = em
+        }
+        __hideReachCache = max(best, best + player._maxMp - enemyMp)
+        return __hideReachCache
+    }
+
     findLosBreakCell(origin, mpBound, enemyCell) {
         if (origin == -1 || mpBound <= 0 || enemyCell == null || enemyCell == -1) return -1
         var acc = this.getAccessibleCells(player)
+        var reach = _v9HideReachGate ? this.getMaxAttackReach() : 999
         var best = -1
         var bestThreat = 999999999
         var bestDist = -1
@@ -1048,6 +1087,8 @@ class FieldMap extends FieldMapPatterns {
             var d = getCellDistance(origin, c)
             if (d == null || d > mpBound) continue
             if (getCachedLineOfSight(c, enemyCell)) continue
+            var ed0 = getCellDistance(c, enemyCell)
+            if (ed0 != null && ed0 > reach) continue
             var len = getCachedPathLength(origin, c)
             if (len == null || len <= 0 || len > mpBound) continue
             var th = getAdversarialThreat(c)

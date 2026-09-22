@@ -2311,9 +2311,10 @@ class Strategy {
                     var maxRange = 0
                     var launchType = 0
                     var weaponFound = false
+                    var weaponObj = null
 
                     if (mapContainsKey(arsenal.playerEquippedWeapons, a.weaponId)) {
-                        var weaponObj = arsenal.playerEquippedWeapons[a.weaponId]
+                        weaponObj = arsenal.playerEquippedWeapons[a.weaponId]
                         minRange = weaponObj._minRange
                         maxRange = weaponObj._maxRange
                         launchType = weaponObj._launchType
@@ -2336,7 +2337,30 @@ class Strategy {
                     // (Out of range/LOS), enemy stayed at c233, but two
                     // Axe@318 fires still executed (r1, d=1 to c318) and
                     // burned 12 TP without touching the enemy.
-                    if (a.targetEntity != null && !isDead(a.targetEntity._id)) {
+                    // Splash aim (2026-09-22): when the planner aimed an AoE weapon at
+                    // a cell beside the enemy because the enemy's own cell has no LoS,
+                    // the aim cell differs from the live cell BY DESIGN. Measured on
+                    // KurtGodel vs ranged STR: 18 of 18 "plan had an attack, nothing
+                    // fired" turns were this path being mistaken for a stale target,
+                    // retargeted onto the LoS-less enemy cell, and skipped with 20-30
+                    // TP left. Keep the aim when it is still valid and still covers
+                    // the live enemy.
+                    var keepSplashAim = false
+                    if (a.isSplash && a.targetEntity != null && !isDead(a.targetEntity._id)) {
+                        var splashLive = getCell(a.targetEntity._id)
+                        if (splashLive != null && splashLive != targetPos
+                            && dist >= minRange && dist <= maxRange
+                            && lineOfSight(currentPos, targetPos)
+                            && isSimLaunchValid(launchType, currentPos, targetPos)
+                            && fieldMap.wouldAoEHitCell(targetPos, weaponObj._aoeType, currentPos, splashLive)) {
+                            keepSplashAim = true
+                            if (getTurn() <= 20) {
+                                debugW("EXEC_T" + getTurn() + "_DIRw" + a.weaponId + "_SPLASH_KEEP_tc" + targetPos + "_live" + splashLive + "_fc" + currentPos)
+                            }
+                        }
+                    }
+
+                    if (!keepSplashAim && a.targetEntity != null && !isDead(a.targetEntity._id)) {
                         var liveTargetPos = getCell(a.targetEntity._id)
                         if (liveTargetPos != null && liveTargetPos != targetPos) {
                             var liveDist = getCellDistance(currentPos, liveTargetPos)
