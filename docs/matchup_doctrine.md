@@ -1240,6 +1240,24 @@ the three chooser/candidate experiments moved this; the honest next
 measurement is per-weapon fire rate vs distance for our leeks in these
 fights, to see which weapon we should be holding at 9–10.
 
+### Step 3, first cut: the testbed cannot hold Ada's nemeses
+
+Configs for her five worst real opponents (rotulet 0/8, grinhaire 0/7,
+topac 0/5, Yongyong 1/8, HerculeNsjtt 3/9 on the ladder) fetched from
+`/leek/get` into `tools/leek_configs.json` (`ladder_rotulet` …). With V9
+driving those leeks locally, **Ada wins 40 of 40**. Their own AIs beat
+her 33 of 37. That is the testbed's blind spot stated as a number: a
+V9-vs-V9 fight measures V9's habits, not the ladder's. Anything about
+approach, kiting or tempo against ranged STR is decided on real fights.
+
+The turtling itself does reproduce locally even in wins: 42 turns in
+those 40 fights where the damage map held targets, TP ≥ weapon cost was
+in hand, and the picked plan had no attack (plans: `BUFF`, `FLEE.BUFF`,
+`FLEE`, move-only; 41 of 42 at HP ≥ 70%). The `GEN_STATE` line is not
+entity-tagged, so the state attribution in that probe is unreliable. The
+scorer term probe (pick vs best feasible attack plan, per turn) is the
+next measurement and is running.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
