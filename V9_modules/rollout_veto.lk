@@ -11,6 +11,10 @@
 
 global _v9VetoEnabled = true
 global _v9VetoBleedRaceAware = true
+global _v9VetoCalibratedIncoming = true
+global _v9VetoSimScale = 0.85
+global _v9VetoAdvScale = 0.5
+global _v9VetoEmaScale = 1.0
 global _v9VetoLog = true
 
 include('enemy_sim.lk')
@@ -91,12 +95,24 @@ function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMap
     if (endCell == null || endCell == -1) endCell = getCell()
     var endHP = getLife() + bestSimResult.hpGained
     var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
-    // Calibration log (2026-09-22): the estimate for the chosen plan's end
-    // state, every turn, so real fights can compare it with the damage
-    // actually taken on the enemy's next turn.
+    // Calibrated incoming (2026-09-22). 437 real turn pairs: the simulator
+    // predicted 0 on 71% of turns (it needs LoS from the enemy's CURRENT
+    // cell and counts weapons only) and on those we took 552 on average
+    // (764 at distance 0-3); where it predicted >0 the actual was 0.83x.
+    // It missed 14 of 14 real deaths. Floor it with the adversarial threat
+    // cache (max over the enemy's reachable positions; ~0.5x calibrated)
+    // and with the damage actually taken per turn so far this fight.
+    var simIn = enemyEst['damage']
+    var advIn = __adversarialThreatCacheBuilt ? getAdversarialThreat(endCell) : 0
+    var emaIn = (__avgDamageTakenRate > 0) ? __avgDamageTakenRate : 0
+    if (_v9VetoCalibratedIncoming) {
+        var calIn = max(simIn * _v9VetoSimScale, max(advIn * _v9VetoAdvScale, emaIn * _v9VetoEmaScale))
+        enemyEst['damage'] = calIn
+        enemyEst['weDied'] = calIn >= endHP + bestSimResult.shieldsGained
+    }
     if (_v9VetoLog) {
-        debugW("VEST_T" + getTurn() + "_in" + floor(enemyEst['damage']) + "_died" + (enemyEst['weDied'] ? 1 : 0)
-               + "_hp" + floor(endHP) + "_sh" + floor(bestSimResult.shieldsGained) + "_cell" + endCell
+        debugW("VEST_T" + getTurn() + "_in" + floor(enemyEst['damage']) + "_sim" + floor(simIn) + "_adv" + floor(advIn) + "_ema" + floor(emaIn)
+               + "_died" + (enemyEst['weDied'] ? 1 : 0) + "_hp" + floor(endHP) + "_sh" + floor(bestSimResult.shieldsGained) + "_cell" + endCell
                + "_d" + getCellDistance(endCell, target._cellPos) + "_thp" + floor(target._currHealth))
     }
 
