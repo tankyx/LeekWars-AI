@@ -173,7 +173,8 @@ function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMap
     if (_v9VetoLog) {
         debugW("V9_VETO_T" + getTurn() + "_" + reason + "_" + bestCandTag
                + "_base" + floor(baseScore) + "_cand" + floor(bestCandScore)
-               + "_n" + count(bestCand))
+               + "_n" + count(bestCand) + "_hp" + floor(effectiveHP) + "_thp" + floor(target._currHealth)
+               + "_out" + floor(ourOut) + "_in" + floor(enemyEst['damage']) + "_died" + (enemyEst['weDied'] ? 1 : 0))
     }
     return bestCand
 }
