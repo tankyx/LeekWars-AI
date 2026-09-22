@@ -1358,6 +1358,21 @@ death-races or the enemy estimate (a max over positions) being
 pessimistic. The re-rank's 19% is the held flag; its real-opponent
 record is already in this ledger.
 
+*Round 5 (18 Ada fights on the enriched veto log, 8 W / 9 L / 1 D):*
+vetoes **2.2%** of turns (6 of 267; rounds 1–4: 6.4 / 9.1 / 8.7 / 4.9%),
+no-attack-with-attack-scenarios **6.7%** (rounds 1–4: 9.3 / 12.3 / 12.0
+/ 8.3%). All six remaining vetoes are losing races by the numbers logged
+(turns-to-die 1.6–2.5 vs turns-to-kill 2.8–11.7), e.g. 2345 HP vs 3587
+taking a predicted 1085 per turn. Three of the six were in fights she
+still won, and the predicted incoming (1085–1892) is 1.5–2× the ~650–700
+she actually takes per turn on the ladder — the enemy estimate is a max
+over positions. Calibrating that estimate against real damage taken is
+the next refinement of the veto; it is no longer the turtling.
+
+Ada's residual no-attack turns are now the held learned re-rank (19% of
+the original set) and the scorer's own picks (15%). The server-log loop
+(`/fight/get-logs`) is the tool for both.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
