@@ -1180,6 +1180,19 @@ class UnifiedStrategy extends Strategy {
 
 }
 
+// Recovery jump (2026-09-22): the leftover-TP jump toward the enemy was 25
+// of Ada's 32 no-shot jump turns locally and 17 of 22 vs Rex; it puts the
+// chip on its 3-turn cooldown, so the walk-jump-sword dive cannot use it
+// next turn. A melee build keeps the jump for the dive.
+global _v9RecoveryJumpSkipMelee = true
+function _v9HasMeleeWeapon() {
+    for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
+        var w = arsenal.playerEquippedWeapons[wid]
+        if (w != null && w._maxRange <= 1) return true
+    }
+    return false
+}
+
 function recoverRemainingTP(target) {
     // Universal JUMP pass — fires regardless of which scenario won. Uses the
     // same tier ranking as the scenario-level JUMP code (REACH_HIT > HIDE >
@@ -1187,7 +1200,8 @@ function recoverRemainingTP(target) {
     // so this guarantees we use mobility when CD is up and TP is available.
     if (target != null && !isDead(target._id) &&
         getCooldown(CHIP_JUMP, getEntity()) == 0 &&
-        mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP)) {
+        mapContainsKey(arsenal.playerEquippedChips, CHIP_JUMP) &&
+        !(_v9RecoveryJumpSkipMelee && _v9HasMeleeWeapon())) {
         var jumpChipR = arsenal.playerEquippedChips[CHIP_JUMP]
         if (jumpChipR != null && jumpChipR._cost <= getTP()) {
             var jPos = getCell()
