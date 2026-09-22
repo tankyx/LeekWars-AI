@@ -1214,6 +1214,32 @@ knowledge, steroid with 20 TP left) is the open item, and it must be
 reproduced against her real nemeses (rotulet 0/8, grinhaire 0/7, topac
 0/5, Yongyong 1/8, HerculeNsjtt 3/9), not the V9 panel.
 
+### Step 5: the ranged-STR turn cycle, theirs vs ours (500 real fights)
+
+Per turn, in the baseline real fights against ranged-STR opponents
+(rhino / lightninger / m_laser / enhanced lightninger users):
+
+| leek, losses | fired % | shots per firing turn | move after fire | dist start → end | hidden end |
+|---|---|---|---|---|---|
+| Ada — THEM / US | 87 / **64** | 2.1 / 1.8 | 2.3 / 0.9 | 9.3→9.6 / 10.6→9.0 | 58 / 52 |
+| Ed — THEM / US | 77 / 80 | 2.3 / 1.7 | 2.2 / 2.1 | 9.9→9.9 / 12.3→9.2 | 47 / 47 |
+| KG — THEM / US | 85 / **63** | 2.2 / 2.0 | 1.8 / 1.4 | 10.4→9.1 / 11.0→10.1 | 54 / 58 |
+| Margaret — THEM / US | 80 / 75 | 2.4 / 4.3 | 2.3 / 0.5 | 9.1→9.2 / 10.9→8.3 | 40 / 32 |
+
+The winners' cycle is: fire from 9–10, step back ~2 cells, end the turn
+at the same distance, repeat — 85–87% of their turns contain a shot. Ours
+against them: approach (2.5 cells), fire on 63–64% of turns, end closer
+(9.0) but with fewer shots per firing turn, and the next turn they have
+stepped back again. In the fights we win against the same archetype our
+fire rate is 72–87% and theirs drops to 64% (Ed, Margaret): the matchup
+is decided by who keeps the shot every turn, and against kiters with
+range 8–10 that is a range-and-tempo contest we lose with melee/short
+weapons (Ada's heavy sword, Margaret's 7-range chips) and win with
+Ed's 10-range destroyer when he keeps LoS. Positioning lever: none of
+the three chooser/candidate experiments moved this; the honest next
+measurement is per-weapon fire rate vs distance for our leeks in these
+fights, to see which weapon we should be holding at 9–10.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
