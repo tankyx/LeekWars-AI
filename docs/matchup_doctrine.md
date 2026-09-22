@@ -1464,6 +1464,31 @@ remains unproven either way. Challenges against a fixed opponent are the
 right instrument for anything about Ada: 25 per arm reproduce the ladder
 (1/43/6 → 2/20/3 → 1/19/5) where the local panel gave 40/40.
 
+### Kit test queued: quantum rifle for Ada's rhino (2026-09-22)
+
+Ada's real no-shot turns by distance at turn start (2,038 turns): 182 at
+6–10, 84 at 11–14, 322 at 15+. Her kit: heavy sword (1), rhino (2–4),
+enhanced lightninger (6–10, circle launch), m_laser (5–12, line launch).
+The rhino is dead weight against kiters who hold 9–10. Owned long-range
+options: only the **quantum rifle** (5–10, circle launch, X-shaped area
+now aimed correctly since the geometry fix, 10 TP; two spare in the
+inventory). Longer (bazooka 8–12 diagonal, revoked m_laser 5–12 line,
+j_laser 5–11 line) are not owned.
+
+Swapped on the server: rhino (template 153, instance 2564911) out,
+quantum rifle (template 428, new instance 2602242) in — `DELETE
+/leek/remove-weapon` then `POST /leek/add-weapon` (adding first fails
+with `too_much_weapons`). Local sanity vs three V9-driven nemeses, 18
+fights per kit: the AI equips and fires it (60 uses; rhino had 37),
+fire-turn rate 0.77 both, 18/18 both (local cannot judge the matchup).
+Local config `AdaLovelace_QR`.
+
+Test: the same 25 challenges (rotulet, grinhaire, topac, HerculeNsjtt,
+Yongyong × 5) against today's two arms on the old kit, **2 / 20 / 3 and
+1 / 19 / 5**, HP-lead −61. The challenge pool is empty for today
+(`error_fight_not_enought_challenges`); the kit is live on the ladder
+meanwhile. Revert: remove instance 2602242, add rhino instance 2564911.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
