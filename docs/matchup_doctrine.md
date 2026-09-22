@@ -1036,6 +1036,65 @@ unchanged; the scorer just sees the poison that can land. Gate: the 120
 seeds above re-run paired against these HEAD fights (wins, wiped/landed),
 then a fresh-seed panel.
 
+*Result:* the cap fires thousands of times per fight and changes almost
+nothing she casts — every damage source Margaret owns is poison, so the
+cap lowers every plan by the same factor and the pick stays. Paired: 120
+autopsy seeds 53 vs 49 (8/4, p=0.39); fresh panel n=240 108 vs 102
+(14/8, p=0.29, HP-lead +2.3 t=2.3); Éleeksire 49 vs 46 (4/1). All 420
+paired: gained 26 / lost 13. Consistent, small, not adoption-grade alone;
+**held uncommitted** (`_v9DotCapEnabled` in the working tree). The lever
+the autopsy found is a turn shape (deny + hide at antidote cooldown 0–1,
+dump at 3–4), not a price.
+
+## Fleet loss autopsy on REAL solo fights (2026-09-22)
+
+`data/ladder/our_solo.json`: 125 real ladder fights per main leek
+(AdaLovelace, EdsgerDijkstra, KurtGodel, MargaretHamilton), same action
+format as local fights, plus the map. Run through `tools/loss_autopsy.py`
+and an exact geometry port of the generator (`tools/lw_geometry.py`:
+cell→(x,y), getCellDistance, `verifyLoS` with the same Bresenham walk and
+entity rules).
+
+**Who beats us (all four leeks):** ranged-STR users (rhino, lightninger,
+m_laser, enhanced lightninger) — 85 W / 118 L = 42%; melee opponents 38
+W / 19 L; poison ~55%. Losses across the fleet are longer, we take ~30%
+more per turn and deal less, and the share of our turns with no shot
+rises (Ada 24%→36%, Ed 31%→39%, KG 20%→36%).
+
+**No-shot turns in losses, by exact geometry** (a "firing cell" = walkable,
+unoccupied, in range of a weapon we used that fight, with LoS; MP bound
+by distance, so this bucket is an upper bound):
+
+| leek | no-shot turns in losses | shot from start cell | firing cell within MP | none possible |
+|---|---|---|---|---|
+| AdaLovelace | 289 | 43 (15%) | 129 (45%) | 117 (40%) |
+| EdsgerDijkstra | 97 | 30 (31%) | 24 (25%) | 43 (44%) |
+| KurtGodel | 207 | 20 (10%) | 101 (49%) | 86 (42%) |
+| MargaretHamilton | 126 | 13 (10%) | 20 (16%) | 93 (74%) |
+
+Of the turns where a shot existed, TP was still affordable after the
+chips cast (median 20 TP left): Ada 150/172, KG 98/121, Margaret 24/33;
+Ed 17/54 (Ed spends his TP on buffs first). The exact, unarguable subset
+— shot from the start cell, LoS, TP affordable, none fired:
+
+| leek | per loss | per win | what was done instead |
+|---|---|---|---|
+| **AdaLovelace** | **0.57** (losses last 15.5 turns) | 0.12 | move, knowledge, armoring, steroid+vaccine+wall, regeneration+wall |
+| KurtGodel | 0.22 | 0.03 | nothing (3), regeneration, rage, fortress+knowledge |
+| Margaret | 0.10 | 0.08 | regeneration+serum |
+| Ed | 0.07 | 0.12 | — |
+
+Ada is the fleet's clearest case: long losses to ranged STR in which she
+turtles (wall 4.7, fortress 3.8, knowledge 3.7, steroid 3.3, vaccine 3.0
+per loss vs 3.3/2.4/2.6/2.3/2.1 per win) with 20 TP unused on turns a
+heavy-sword/lightninger shot was on the board, 63 of those 150 turns at
+HP ≥ 70%. KurtGodel's losses end with the enemy at 25% (his are the
+closest races) and include turns with literally no action. No AI error
+(1002) in any of the 500 fights. Local reproduction (Ada/KG vs the
+ranged-STR ladder configs, per-turn probe of TP left, damage-map cells,
+state and the chosen plan) is running to see the decision from the
+AI's side.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
