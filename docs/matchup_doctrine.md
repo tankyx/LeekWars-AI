@@ -1501,6 +1501,37 @@ Yongyong × 5) against today's two arms on the old kit, **2 / 20 / 3 and
 ladder meanwhile. Revert: remove bazooka instance 2602250, add m_laser
 from the inventory (template 47).
 
+### Ada as a diver: jump chip + STR/WIS respec, no resistance (2026-09-22)
+
+Owner's thesis: leverage jump/teleport for the heavy sword, respec
+toward STR/WIS without shields. Numbers: heavy sword ≈ 1,100–1,200 per
+hit for 15 TP (two enhanced lightninger shots ≈ 1,250 for 18), so the
+case is reach, not damage per TP: her 7 MP + jump 3 = 10, matching the
+9–10 the kiters hold; jump + sword + rhino + swap = 25 of 26 TP every 3
+turns. Sustain without shields comes from wisdom: lifesteal ≈ damage ×
+WIS/1000, so a landed sword heals ~500 at WIS 440 and ~600 at 530.
+
+The AI's dive templates require the **jump** chip; Ada carried
+teleportation (9 TP, cooldown 10) and no jump, so no dive candidate was
+ever generated for her. Owner swapped wall → jump. Local probe (12
+fights, 57 jump turns): 21 were walk-jump-**sword** plans that landed the
+sword, 25 jumped into a ranged shot, 11 were jumps with no attack in the
+plan (a template gap: jump with an empty attack list; ~4 TP wasted).
+
+Respec applied through loadout 786 (`PUT /loadout/update` stats +
+`POST /loadout/apply use_restat=true`): capital {mp 120, tp 525, life
+265, wisdom 300, strength 570, resistance 0} — base STR 520 → 535, WIS
+310 → 400, RES 220 → 0; totals with components STR 594, WIS 530, RES 14,
+TP 29, MP 7, life 2,475. Shield chips (fortress, armoring) still
+equipped for now; with RES 0 they are weak and are the next swap
+candidates for reach (leather boots / seven-league boots).
+
+Test: 25 challenges vs the five nemeses against the old-build arms
+(2/20/3, 1/19/5, HP-lead −61); mechanism checks are sword hits per turn
+(baseline about one per three turns) and healed per turn. Pool empty
+today; the build is live on the ladder. Revert line: {mp 120, tp 525,
+life 265, wisdom 210, strength 540, resistance 120}.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
