@@ -10,6 +10,7 @@
 // module is V9-only.
 
 global _v9VetoEnabled = true
+global _v9VetoBleedRaceAware = true
 global _v9VetoLog = true
 
 include('enemy_sim.lk')
@@ -104,6 +105,19 @@ function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMap
         + enemyEst['damage'] * drVal / 100
     var effectiveHP = endHP + bestSimResult.shieldsGained
     var bleed = enemyEst['damage'] >= effectiveHP * 0.3 && enemyEst['damage'] > ourOut
+    // Race-aware bleed (2026-09-22). Server logs of Ada's real losses: the
+    // veto fired 31 times in losses vs 4 in wins, replacing kill plans
+    // (Ada 4140 HP vs 2027, 667 dmg) with a lone shield because a losing
+    // one-turn trade counted as catastrophic. A trade is only a bleed when
+    // it loses the race: we would die before they do at these rates.
+    if (bleed && _v9VetoBleedRaceAware && target != null) {
+        var theirHP = target._currHealth
+        var ourRate = max(1, ourOut)
+        var theirRate = max(1, enemyEst['damage'])
+        var turnsToKillThem = theirHP / ourRate
+        var turnsToDie = effectiveHP / theirRate
+        if (turnsToDie > turnsToKillThem) bleed = false
+    }
     var catastrophic = enemyEst['weDied'] || bleed || (bestSimResult.droppedActions > count(bestScenario) / 2)
     if (!catastrophic) return bestScenario
 
