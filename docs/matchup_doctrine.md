@@ -1670,6 +1670,51 @@ ends turn 1 within reach of a 30-TP STR bruiser and takes 3425 in one
 enemy turn (five weapon uses) at full buffed HP. That is the adversarial
 threat cache under-predicting a multi-weapon burst, not the reflect.
 
+### Stats were frozen at turn 1, and the no-shot fallback was threat-blind (2026-09-22)
+
+Seed 4 vs `ladder_mimitau` (a turn-1 loss in both reflect arms) led to
+two pipeline defects, neither Ada-specific.
+
+**Frozen stats.** `Entity.updateEntity()` refreshed HP, TP, MP, shields
+and effects each turn but never STR/MAG/AGI/WIS/SCI/RES or max MP/TP;
+those were read once in the constructor. The engine's `getStrength()`
+returns base + buffs (generator `Entity.getStat`), so after turn 1 every
+consumer — simulator, adversarial threat cache, race model, kill
+planning, quick scorer, value model — ran on turn-1 stats. Probe on
+seed 4, turn 2: engine STR 929 (steroid + protein + prism) vs entity 525
+for the bruiser; Ada 743 vs 585 after her own steroid. The threat cache
+predicted 1653 at the cell where 3425 then landed. V8 has the same gap.
+Fix: `_v9EntityStatRefresh` re-reads the eight stats per turn.
+
+**Threat-blind fallback.** When the override gate replaces a no-op plan
+with the fallback and no fire cell is reachable, the fallback queued
+`MOVEMENT_APPROACH` on the enemy cell, which the executor runs as the
+engine's `moveTowardCell`: 9 cells straight into a 30-TP bruiser's
+reach, no shot. Fix (`_v9FallbackThreatCap = 0.6`): take the closest
+reachable cell whose cached threat is under 60% of current HP; if none,
+stay, or move to the least-threatened cell when the current one is
+over the cap.
+
+Results: seeds 3 and 4 flip to wins, Ada 20/20 vs `ladder_mimitau`
+(17/20 with only the fallback cap, 18/20 before either), smoke matrix
+clean, LeekRain vs smart_mag 1/8 vs 0/8 (that matchup is bad either
+way). Paired panel vs the previous commit (local, V9 both sides):
+
+| testbed | n | NEW | BASE | gained / lost | HP-lead |
+|---|---|---|---|---|---|
+| Ada vs mimitau | 30 | 28 | 29 | 1 / 2 | +6.9 |
+| Ada vs rotulet | 20 | 20 | 20 | 0 / 0 | −9.1 |
+| Ed vs Éleeksire | 20 | 9 | 8 | 4 / 3 | −0.8 |
+| Margaret vs TheLeaker | 20 | 6 | 8 | 1 / 3 | +7.1 |
+| pooled | 90 | 70.0% | 72.2% | 6 / 8 | +0.7 (p=0.79) |
+
+Noise-level, no regression; adopted on the strength of the real-fight
+evidence (these are correctness fixes, not tuning). Both arms run V9 on
+both sides, so the panel cannot show the gain against buffing real
+opponents; the next real-ladder window is the test. Memory note: the
+panel OOM-killed at −j 2 and once at −j 1 in the background; foreground
+−j 1, n ≤ 30 per testbed, went through.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
