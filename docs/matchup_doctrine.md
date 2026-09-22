@@ -910,6 +910,48 @@ hide exists within the MP it leaves — a retreat-aware firing cell would
 let the append pass fire on the turns where the current pick leaves
 nothing to hide behind.
 
+### Retreat-aware firing cell: three variants, all negative (2026-09-22)
+
+`findBestTacticalCell` scores `damage − threat×w − path×2`. Diagnostic
+(one fight each, Margaret/TheLeaker and Ed/Ludaskia): its threat term is
+`enemyThreatMap`, **flat and tiny** (342 on every cell for Margaret, 18–41
+for Ed) against damage values of 2,000–6,000 — threat never decides the
+firing cell. The adversarial cache rates the no-LoS cells within reach
+(1303–1357) about as dangerous as the firing cell (1306–1648).
+
+| variant | picks changed | Margaret: ended hidden | damage taken / turn | dealt / turn | wins (15 paired) |
+|---|---|---|---|---|---|
+| HEAD (both hide fixes) | — | 48% | 602 | 56 | 10 |
+| v1: replace threat by retreat-cell threat | **0** of 77 | — | — | — | — |
+| v2: +300 bonus, retreat by `getCellDistance` | 13 of 387 | 46% | 656 | 58 | 10 |
+| v2: +1000 bonus | 84 of 371 | 40% | 696 | 34 | 8 |
+| v3: +500, retreat by **exact path**, top-8 re-pick | 169 of 375 | 41% | 679 | 51 | 7 |
+| v3: +1500 | 219 of 397 | 40% | 689 | 32 | 9 |
+
+Ed (5 paired): v3 raised his hidden-end rate 50% → 80% / 62% and damage
+dealt 438 → 589 / 660, but also damage taken 156 → 182 / 250; 2 wins vs 1,
+too few to read. Margaret is the leek the lever was for, and every
+variant that changed her picks made her end hidden *less* often and take
+*more* damage on the same seeds.
+
+Two traps recorded: (1) a LoS-break cell is usually across the obstacle
+that blocks the path — bounding the retreat by `getCellDistance` picks
+cells that are one step away and five steps to walk (v2); (2) fixing that
+(v3) did not help, so the failure is not the bound. The chooser is one
+movement provider among several, its `maxMP` is a template's movement
+budget rather than the MP the final plan leaves, and the firing cell it
+prefers for a retreat changes which attacks the plan can make — the
+scorer then picks a different plan whose end is *not* hidden. A
+chooser-level heuristic cannot see any of that; the two fixes that worked
+both added candidates and let the full simulation + scorer decide.
+
+**Not adopted.** If the firing cell is to be revisited, the
+pipeline-shaped version is: emit the top-2/3 tactical cells as separate
+scenario variants (not one heuristic pick), so "fire from the cell with a
+retreat, then hide" exists as a fully simulated candidate and the scorer
+judges the whole turn. Cost is scenario count; to be measured with the
+same probe before any A/B.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
