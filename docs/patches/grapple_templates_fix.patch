@@ -1,0 +1,94 @@
+diff --git a/V9_modules/scenario_combos.lk b/V9_modules/scenario_combos.lk
+index d8e03833..eca0ff86 100644
+--- a/V9_modules/scenario_combos.lk
++++ b/V9_modules/scenario_combos.lk
+@@ -1281,6 +1281,21 @@ class ScenarioCombos extends ScenarioHelpers {
+         if (dist == null) {
+             return null
+         }
++        if (dist < 2 || dist > 8) {
++            return null
++        }
++        // Grapple (range 1-8, line launch, LoS) must be valid against the
++        // ENEMY, which is what the executor validates. Measured 2026-09-22:
++        // with no range/LoS gate here and the simulator checking the adjacent
++        // aim cell instead, this template topped the pool ~3x per fight vs
++        // ranged STR, was rejected at execution every time (0 grapples in 125
++        // real fights), and the turn ended with 20+ TP unspent.
++        if (!this.isOnSameLine(simPos, this._target._cellPos)) {
++            return null
++        }
++        if (!lineOfSight(simPos, this._target._cellPos)) {
++            return null
++        }
+ 
+         if (tpBudget < 10) {
+             return null
+@@ -1310,7 +1325,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             return null
+         }
+ 
+-        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
++        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, this._target._cellPos, this._target))
+         tpBudget -= getCachedChipCost(CHIP_GRAPPLE)
+ 
+         var enemyPulledPosition = grappleCell
+@@ -1362,6 +1377,21 @@ class ScenarioCombos extends ScenarioHelpers {
+         if (dist == null) {
+             return null
+         }
++        if (dist < 2 || dist > 8) {
++            return null
++        }
++        // Grapple (range 1-8, line launch, LoS) must be valid against the
++        // ENEMY, which is what the executor validates. Measured 2026-09-22:
++        // with no range/LoS gate here and the simulator checking the adjacent
++        // aim cell instead, this template topped the pool ~3x per fight vs
++        // ranged STR, was rejected at execution every time (0 grapples in 125
++        // real fights), and the turn ended with 20+ TP unspent.
++        if (!this.isOnSameLine(simPos, this._target._cellPos)) {
++            return null
++        }
++        if (!lineOfSight(simPos, this._target._cellPos)) {
++            return null
++        }
+ 
+         var axeCost = getCachedWeaponCost(WEAPON_AXE, this._arsenal)
+         if (axeCost == null) axeCost = 6
+@@ -1393,7 +1423,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             return null
+         }
+ 
+-        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
++        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, this._target._cellPos, this._target))
+         tpBudget -= grappleCost
+ 
+         var enemyPulledPosition = grappleCell
+@@ -1449,6 +1479,18 @@ class ScenarioCombos extends ScenarioHelpers {
+         // Range gate: too close (already at melee, just fire) or too far
+         // (grapple can't reach — covers ~8 cells on axis).
+         if (dist < 2 || dist > 8) return null
++        // Grapple (range 1-8, line launch, LoS) must be valid against the
++        // ENEMY, which is what the executor validates. Measured 2026-09-22:
++        // with no range/LoS gate here and the simulator checking the adjacent
++        // aim cell instead, this template topped the pool ~3x per fight vs
++        // ranged STR, was rejected at execution every time (0 grapples in 125
++        // real fights), and the turn ended with 20+ TP unspent.
++        if (!this.isOnSameLine(simPos, this._target._cellPos)) {
++            return null
++        }
++        if (!lineOfSight(simPos, this._target._cellPos)) {
++            return null
++        }
+ 
+         // Prefer Magnum for raw burst, fall back to Destroyer.
+         var weaponId = hasMagnum ? WEAPON_MAGNUM : WEAPON_DESTROYER
+@@ -1482,7 +1524,7 @@ class ScenarioCombos extends ScenarioHelpers {
+             return null
+         }
+ 
+-        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, grappleCell, this._target))
++        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, this._target._cellPos, this._target))
+         tpBudget -= grappleCost
+ 
+         var enemyPulledPosition = grappleCell

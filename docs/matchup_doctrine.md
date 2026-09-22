@@ -1095,6 +1095,36 @@ ranged-STR ladder configs, per-turn probe of TP left, damage-map cells,
 state and the chosen plan) is running to see the decision from the
 AI's side.
 
+**Local reproduction (Ada, KurtGodel vs Hydrogène/TheLeaker/Ludaskia, 48
+fights, per-turn probe of TP left, damage-map cells, state and the chosen
+plan's action types):** a new metric, *plan had an attack, nothing
+fired*: Ada 22 of 426 turns, KG 18 of 248. On those turns the executor
+logged `FLT ... c162 ... Out of range/LOS` and `EXEC ... STALE_TARGET_SKIP`:
+chip 162 is the **grapple**. The three grapple-combo templates
+(heavy sword, axe, ranged) aimed the grapple at the cell *next to the
+player*, checked only "same line", never the chip's 2–8 range or LoS to
+the enemy; the simulator validated range against the adjacent aim cell,
+so the plan simulated as two free sword hits (quick-scorer +2000 for the
+grapple and a combo bonus: COMBO family topped the pool 75 times in 24
+Ada fights), and the executor — which validates push/pull chips against
+the enemy — rejected it every time. **0 grapple casts in Ada's 125 real
+fights**, with 20+ TP left on those turns. Ada and KG both carry grapple.
+
+*Fix (adopted 2026-09-22, `docs/patches/grapple_templates_fix.patch`):*
+require 2 ≤ dist ≤ 8, same line via the validator's own helper, and LoS
+to the enemy; aim the grapple at the enemy's cell (as the covid combo
+already did). Local: Ada 22 → 12 wasted-attack turns on the same seeds;
+KG unchanged (his 18 are a different cause). Paired A/B vs HEAD, n=60
+each: Ada vs TheLeaker 50/47 (5/2), Ludaskia 54/53 (3/2), Hydrogène 1/1
+(0/0 — a matchup she cannot win locally); KG bit-identical on both.
+Pooled 8 gained / 4 lost, p=0.39 — no harm, small gain, mechanism
+proven; adopted as a correctness repair.
+
+Open: KurtGodel's 18 turns where the plan had an attack and nothing
+fired (`plan=APPROACH.DIRECT did=move`, `plan=DIRECT did=adrenaline`
+with 33 TP left at distance 9) are not the grapple. Entity-tagged
+executor reasons on those turns are the next probe.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
