@@ -1160,6 +1160,60 @@ cell, LoS, TP affordable, none fired) is 4 turns in Ed's 58 losses and 6
 in Margaret's 58 — it is not their problem. Local probes for them follow
 the geometry A/B.
 
+*Geometry rewrite, local:* KG wasted-attack turns 18 → **0**, Ada 12 → 2
+on the same 24 fights, `SPLASH_KEEP` 17×, no STALE skips left. Paired A/B
+vs HEAD was null on the two arms that completed (KG vs Hydrogène 19/21,
+vs TheLeaker 48/50) — local fights re-roll too much to show a
+one-turn-per-fight repair; the chain was stopped when a working-tree edit
+contaminated it (lesson: never touch the tree while an A/B runs on it).
+
+## Real-fight validation, two rounds (2026-09-22, `tools/real_before_after.py`)
+
+**Round 1** (hide fixes + grapple fix deployed 09:20; 171 real solo
+fights, selector "smart", same as the baseline):
+
+| leek | baseline W% (n=125) | round 1 W% (n) | HP-lead | hidden-end | fire-then-move | dealt/turn |
+|---|---|---|---|---|---|---|
+| AdaLovelace | 48 | 44 (41) | −2.8 → −11.9 | .41 → .42 | .29 → .51 | 679 → 645 |
+| EdsgerDijkstra | 51 | 43 (42) | +7.1 → −2.5 | .41 → .55 | .30 → .45 | 988 → 981 |
+| KurtGodel | 51 | 55 (42) | +21 → +18 | .45 → .57 | .23 → .45 | 710 → 680 |
+| **MargaretHamilton** | 53 | **36 (42)** | −2.9 → **−25** | .30 → .42 | .13 → .26 | 834 → **715** |
+
+The deploys did what they were built to do (fire-then-move doubled on
+every leek) and it was a **regression** on the real ladder. The paired
+end-of-turn probe on real fights found why: on the turn after a hidden
+end, every leek fires less and deals far less than after an exposed end
+(Margaret 59% / 426 vs 86% / 1047; KG 67% / 429 vs 85% / 719), and the
+next turn opens at 12–13 cells instead of 6. Real opponents kite; the
+hide cell ends out of reach of any shot, and the local `ladder_*` panel
+(V9 on both sides) never showed it because V9 does not kite that way.
+
+**Round 2** (geometry + splash keep + a next-turn reach gate on the
+appended hide: LoS-break cell within max attack range + our MP − enemy
+MP of the enemy; deployed 09:39, commit `95ed3780`; 136 fights):
+
+| leek | round 2 W% (n=34) | HP-lead | taken/turn | after-hide fire % (base / r1 / r2) |
+|---|---|---|---|---|
+| AdaLovelace | 56 | +4.7 | 680 | 65 / 66 / 74 |
+| EdsgerDijkstra | 50 | +7.9 | 612 | 81 / 76 / 77 |
+| KurtGodel | 50 | +7.8 | 859 | 74 / 67 / 73 |
+| MargaretHamilton | 56 | +0.8 | **631** (was 811) | 77 / 59 / 74 |
+
+Pooled: round 1 74 W / 87 L (44%), round 2 72 W / 62 L (53%), baseline
+~51%. The reach gate restored the after-hide fire rate to baseline while
+keeping the higher hide rate; Margaret trades 22% less damage per turn.
+n=34 per leek cannot show a gain over the baseline; it shows the
+regression is gone. **Rule from this: any change to positioning is
+validated on real fights before it is called adopted; the local panel is
+a gate, not a verdict.**
+
+Ada's real-fight wasted-shot turns (shot from the start cell, TP in
+hand, none fired) did **not** move: 0.57 → 0.62 → 0.69 per loss. The
+grapple/splash repairs were not that; her turtling (wall, fortress,
+knowledge, steroid with 20 TP left) is the open item, and it must be
+reproduced against her real nemeses (rotulet 0/8, grinhaire 0/7, topac
+0/5, Yongyong 1/8, HerculeNsjtt 3/9), not the V9 panel.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
