@@ -1464,30 +1464,41 @@ remains unproven either way. Challenges against a fixed opponent are the
 right instrument for anything about Ada: 25 per arm reproduce the ladder
 (1/43/6 → 2/20/3 → 1/19/5) where the local panel gave 40/40.
 
-### Kit test queued: quantum rifle for Ada's rhino (2026-09-22)
+### Kit test queued: bazooka for Ada's rhino (2026-09-22)
 
 Ada's real no-shot turns by distance at turn start (2,038 turns): 182 at
 6–10, 84 at 11–14, 322 at 15+. Her kit: heavy sword (1), rhino (2–4),
 enhanced lightninger (6–10, circle launch), m_laser (5–12, line launch).
-The rhino is dead weight against kiters who hold 9–10. Owned long-range
-options: only the **quantum rifle** (5–10, circle launch, X-shaped area
-now aimed correctly since the geometry fix, 10 TP; two spare in the
-inventory). Longer (bazooka 8–12 diagonal, revoked m_laser 5–12 line,
-j_laser 5–11 line) are not owned.
+The rhino is dead weight against kiters who hold 9–10.
+
+Owned weapons by range (inventory templates mapped through
+`tools/item_get-all.json`; an earlier pass compared market ids to
+inventory templates and wrongly reported bazooka/lightninger as not
+owned): **bazooka 8–12** (diagonal launch, circle-3 area, 11 TP, ×8),
+j_laser 5–11 (line, 5 TP, ×8), lightninger 6–10 (star, ×3), quantum
+rifle 5–10 (circle, X-2 area, 10 TP, ×2), rifle 7–9 (×2).
+
+Local sanity vs three V9-driven nemeses, 18 fights per kit (cannot judge
+the matchup, only that the AI uses the weapon and nothing breaks):
+
+| kit | fire-turn rate | uses of the swapped-in weapon | self-damage |
+|---|---|---|---|
+| current (rhino) | 0.77 | rhino 37 | 0 |
+| quantum rifle for rhino | 0.77 | 60 | 0 |
+| **bazooka for rhino** | 0.76 | **7** (diagonal launch + 11 TP limit its turns) | 0 |
 
 Swapped on the server: rhino (template 153, instance 2564911) out,
-quantum rifle (template 428, new instance 2602242) in — `DELETE
-/leek/remove-weapon` then `POST /leek/add-weapon` (adding first fails
-with `too_much_weapons`). Local sanity vs three V9-driven nemeses, 18
-fights per kit: the AI equips and fires it (60 uses; rhino had 37),
-fire-turn rate 0.77 both, 18/18 both (local cannot judge the matchup).
-Local config `AdaLovelace_QR`.
+bazooka (template 184, new instance 2602246) in — `DELETE
+/leek/remove-weapon` then `POST /leek/add-weapon`. Local configs
+`AdaLovelace_BZ` and `AdaLovelace_QR`.
 
 Test: the same 25 challenges (rotulet, grinhaire, topac, HerculeNsjtt,
 Yongyong × 5) against today's two arms on the old kit, **2 / 20 / 3 and
-1 / 19 / 5**, HP-lead −61. The challenge pool is empty for today
-(`error_fight_not_enought_challenges`); the kit is live on the ladder
-meanwhile. Revert: remove instance 2602242, add rhino instance 2564911.
+1 / 19 / 5**, HP-lead −61; the quantum rifle is the second arm if the
+pool allows. The pool is empty for today
+(`error_fight_not_enought_challenges`); the bazooka kit is live on the
+ladder meanwhile. Revert: remove instance 2602246, add rhino instance
+2564911.
 
 ---
 
