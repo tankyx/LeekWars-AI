@@ -1625,6 +1625,51 @@ the source).
 gain is the bot-side number; the real test is the queued challenge
 battery vs Ada's five nemeses once the pool refreshes.
 
+### Diver build on the real ladder: 30 garden fights, and the reflect hole (2026-09-22)
+
+The challenge pool stayed exhausted, so the daily 30 garden fights went to
+Ada with the diver kit (both jump gates on). Real opponents, garden
+selector, compared with her 125-fight baseline via
+`tools/real_before_after.py 2026-09-22T13:50 2026-09-23` (pass an explicit
+end: the default `9999` compares as a number against the text timestamp
+column and returns nothing).
+
+| Ada, real ladder | n | W | HP-lead | dealt / turn | taken / turn | fire-then-move | turns |
+|---|---|---|---|---|---|---|---|
+| baseline (old kit) | 125 | 48% | −2.8 | 679 | 707 | 0.29 | 16.3 |
+| diver kit | 30 | 43% (13 W / 13 L / 4 D) | −0.6 | 788 | 748 | 0.48 | 17.6 |
+
+Win rate is inside noise at n=30 (se ≈ 9 pp); the trade moved the right
+way (+16% dealt, +6% taken). Wins average 12 turns with 0.47 sword hits
+per turn; losses average 8.7 turns with 31% no-attack turns — when the
+dive lands she wins, when it does not she dies fast. 11 of 13 losses were
+ranged-STR kiters (rhino/lightninger/m_laser), talent 1950–2110.
+
+One loss was a defect, not a matchup: MimiTau (STR 525 / AGI 460, bramble)
+cast a 311% damage return on turn 1; Ada's two sword hits on turn 2
+reflected 2414 + 1878 and she died on her own turn at full HP. Nothing in
+the pipeline modelled reflected damage on our own attacks: the simulator
+only read the *enemy* profile's reflect for a burst-weight multiplier
+(which gets *less* cautious when the effect has ≤1 turn left — exactly
+when it is live during our turn), the veto's end-HP ignored it, and the
+2-ply projection ignored it. Generator rule (EffectDamage.apply): return =
+raw pre-shield damage × pct, applied to the caster's life directly, so our
+shields do nothing against it; the live effect value is the exact
+percentage (311 here, AGI-scaled). Fix (`_v9ReflectSelfDamage`): the
+simulator subtracts raw × pct from our HP at every direct-damage site and
+reports it as `reflectTaken`; the scorer charges it at 3 HP-points per
+point (even on a kill, the return lands during the hit) plus the existing
+lethal-self-damage penalties; veto end-HP and 2-ply subtract it. A
+`ladder_mimitau` config (fight-observed stats, public loadout) reproduces
+it locally: seed 5 was a turn-1 loss with 1951 reflected on the baseline,
+a 6-turn win with 0 reflected after; 20/20 vs the config (18/20 before),
+10/10 vs smart_agi, live 6/6 vs Hachess with 0 errors.
+
+Open from the same config: seed 4 is a turn-1 loss in both arms — Ada
+ends turn 1 within reach of a 30-TP STR bruiser and takes 3425 in one
+enemy turn (five weapon uses) at full buffed HP. That is the adversarial
+threat cache under-predicting a multi-weapon burst, not the reflect.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
