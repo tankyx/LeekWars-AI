@@ -1558,6 +1558,27 @@ then `× (1 + WIS/100)` on the *boosted* wisdom. Ada's science is 100%
 components, so science components are not wasted on her; they are the
 opening's multiplier.
 
+Enumerated owned component swaps (`tools/component_stats.json`) under
+RAM ≥ 11, cores ≥ 13, TP ≥ 26, MP ≥ 7, scoring effective HP after the
+opening, boosted strength (sword) and boosted wisdom. Best: **power
+supply + chiyembekezo → neural core pro + neural core**. Applied via
+loadout 786: science 120 → **262**, TP 29 → 27 (jump + sword + rhino +
+swap = 25 still fits), life 2,475 → 2,215 raw but elevation/armoring now
+land on a knowledge-boosted wisdom of ~1,470, strength 594 → 585 raw with
+steroid now +580, frequency 230 → 259 (acts earlier). Revert:
+components index 0 → 307, index 5 → 308.
+
+### The opening scales with science; components re-cut for it (2026-09-22)
+
+Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
+adrenaline → steroid in 100% of today's real Ada fights (armoring, which
+the boots swap had removed, restored in place of the never-used boxing
+glove). Every buff in that opening is `round(base × (1 + caster
+SCI/100))`, and the permanent HP from elevation (80) and armoring (27) is
+then `× (1 + WIS/100)` on the *boosted* wisdom. Ada's science is 100%
+components, so science components are not wasted on her; they are the
+opening's multiplier.
+
 Enumerated owned component swaps under RAM ≥ 11, cores ≥ 13, TP ≥ 26,
 MP ≥ 7, scoring effective HP after the opening, boosted strength (sword)
 and boosted wisdom (lifesteal). Best: **power supply + chiyembekezo →
