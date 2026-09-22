@@ -981,6 +981,61 @@ loss autopsy on the current build (turn of death, HP trajectory, whether
 the poison landed, what the STR opponent did on the killing turns) --
 the same panel, the losses only.
 
+### Loss autopsy, Margaret vs the STR panel (2026-09-22, 120 fights, current build)
+
+`tools/loss_autopsy.py` on 30 fights per opponent (seeds 7200+), wins vs
+losses side by side. Record: TheLeaker 10/30, Hydrogène 16/30,
+ReauBotcode 4/30, BretzelLeekide 19/30.
+
+Shape of every fight: both sides fire on turn 1; fights last 6–10 turns;
+the HP-lead is negative from turn 1 in wins AND losses (−5 to −30 by
+turn 3) because the STR opponent's direct damage lands first and our
+poison ticks later. Wins are races the poison catches up in around turn
+6–7; in losses we die at turn 7–9 with the enemy at **48–68% HP**. So a
+loss is not a close race lost; it is a race we were never in.
+
+| per turn, wins vs losses | Bretzel | Hydrogène | ReauBotcode | TheLeaker |
+|---|---|---|---|---|
+| damage taken, turn 4+ | 710 / 1011 | 770 / 964 | 693 / 945 | 624 / 802 |
+| poison dealt per turn | 819 / 661 | 951 / 698 | 926 / 778 | 1066 / 888 |
+| enemy healed per fight | 2717 / 3757 | 4115 / 4400 | 4789 / 4856 | 5464 / 6764 |
+| enemy antidotes per fight | 1.4 / 2.2 | 1.3 / 1.7 | 1.8 / 1.9 | 1.4 / 2.2 |
+
+**The antidote is the mechanism.** Enemy antidote cadence is exactly
+every 4 turns (84 of 93 gaps; chip cooldown 4) and they cast it the
+first turn it is ready while poisoned. Queued poison wiped per fight vs
+poison that actually landed:
+
+| | wins | losses |
+|---|---|---|
+| Bretzel | 1656 wiped / 5431 landed (30%) | 5238 / 5169 (**101%**) |
+| Hydrogène | 4804 / 7129 (67%) | 5000 / 5334 (**94%**) |
+| ReauBotcode | 6531 / 8334 (78%) | 7407 / 6347 (**117%**) |
+| TheLeaker | 4042 / 9380 (43%) | 7928 / 8476 (**94%**) |
+
+In losses the antidote wipes as much poison as lands — roughly twice the
+enemy's max HP per fight. And our casting is not synchronised with the
+cadence: queued poison cast in the 2 turns before an antidote equals
+that cast in the 2 turns after (602k vs 593k value·turns); 56% of our
+queued poison is cast with ≤2 ticks available; covid/plague (7-turn)
+are cast at 0–1 ticks left 24–32 times each.
+
+*Cooldown semantics, probed live:* with the enemy's antidote cooldown
+reading `c` on our turn (`getCooldown(CHIP_ANTIDOTE, enemy)` is exact for
+enemies), a poison cast now ticks **max(1, c)** times, then is wiped.
+The scorer's `calculateAntidoteMultiplier` already reads that cooldown,
+but multiplies the *full* queued value (0.4–0.7× at c=0), so a 7-turn
+covid at c=0 is still valued at ~3.9 ticks against a true 1 — a 4×
+overvaluation that lets it outscore a shot.
+
+**Fix under test: antidote-aware poison cap** in the simulator
+(`_v9DotCapEnabled`): each poison source's queued damage and duration are
+capped at max(1, c) ticks when the target carries antidote. Downstream
+scoring (dot weight, multiplier, lifetime bonus, continuation) is
+unchanged; the scorer just sees the poison that can land. Gate: the 120
+seeds above re-run paired against these HEAD fights (wins, wiped/landed),
+then a fresh-seed panel.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
