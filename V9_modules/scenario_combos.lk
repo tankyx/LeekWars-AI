@@ -1,5 +1,6 @@
 include('scenario_helpers.lk')
 
+global _v9ApproachJumpGate = true
 class ScenarioCombos extends ScenarioHelpers {
 
     constructor(arsenal, player, target, fieldMap, strategy) {
@@ -3362,7 +3363,7 @@ class ScenarioCombos extends ScenarioHelpers {
                     }
                 }
             }
-            if (msJumpBest != -1 && msJumpBestDist < msFromDist) {
+            if (msJumpBest != -1 && msJumpBestDist < msFromDist && this._approachJumpPays(msFromDist, this._maxEquippedWeaponRange())) {
                 push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, msJumpBest, null))
                 tpBudget -= msJumpCost
             }
@@ -3478,7 +3479,7 @@ class ScenarioCombos extends ScenarioHelpers {
                     }
                 }
             }
-            if (bsJumpBest != -1 && bsJumpBestDist < bsFromDist) {
+            if (bsJumpBest != -1 && bsJumpBestDist < bsFromDist && this._approachJumpPays(bsFromDist, this._maxEquippedWeaponRange())) {
                 push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, bsJumpBest, null))
                 tpBudget -= bsJumpCost
             }
@@ -3491,6 +3492,29 @@ class ScenarioCombos extends ScenarioHelpers {
 
         if (count(actions) < 3) return null
         return actions
+    }
+
+    // Approach-only jump (no shot this plan) pays only when the gap after this
+    // turn's move is beyond next turn's walk + jump + weapon reach: otherwise a
+    // jump next turn closes the same cells AND lands the hit, while jumping now
+    // puts the dive chip on cooldown (3) for exactly the turns the shot is due.
+    // Live evidence 2026-09-22 (Hachess/Rex): 4/16 and 7/17 jump turns were
+    // T1 adrenaline > approach > jump with no attack, 3 of 4 followed by a
+    // NO_SHOT turn 2.
+    _approachJumpPays(gapAfterMove, maxWeaponRange) {
+        if (!_v9ApproachJumpGate) return true
+        var nextMp = this._player._maxMp
+        if (nextMp == null || nextMp < 0) nextMp = this._player._currMp
+        return gapAfterMove > nextMp + 3 + maxWeaponRange
+    }
+
+    _maxEquippedWeaponRange() {
+        var mr = 0
+        for (var wId in mapKeys(this._arsenal.playerEquippedWeapons)) {
+            var wObj = this._arsenal.playerEquippedWeapons[wId]
+            if (wObj != null && wObj._maxRange > mr) mr = wObj._maxRange
+        }
+        return mr
     }
 
     createBuffApproachScenario(availableTP, availableMP) {
@@ -3660,7 +3684,8 @@ class ScenarioCombos extends ScenarioHelpers {
                     } else if ((deniedBA || lowHPBA) && !hasLosBA) {
                         tierBA = 2
                         metricBA = abs(toEnemy - max(2, maxWRBA - 2))
-                    } else if (origDistBA - toEnemy >= 2 && toEnemy <= kiteHorizonBA) {
+                    } else if (origDistBA - toEnemy >= 2 && toEnemy <= kiteHorizonBA &&
+                               this._approachJumpPays(origDistBA, maxWRBA)) {
                         tierBA = 3
                         metricBA = toEnemy + getAdversarialThreat(jCand) / 100.0
                     }

@@ -1597,6 +1597,34 @@ follows; the recovery jump is skipped for builds carrying a melee weapon
 17/22 → 6/16, Hachess 15/29 → 9/19; residual from the motivation-setup
 jump and attacks dropped at execution, being attributed.
 
+### The residual no-shot jump was the turn-1 approach jump (2026-09-22)
+
+Server logs on a fresh Hachess battery: every residual no-shot jump was
+the same turn-1 plan, `adrenaline > approach > jump` with no attack
+(`seq[3c16-5-14c144]`), and 3 of the 4 were followed by a `NO_SHOT`
+turn 2. It is the adrenaline-combo wrapper around the buff-approach
+template, whose "approach tier" jump closes 2-3 cells for TP when no
+hit cell exists. Against a kiter that trade is pure loss: the jump goes
+on its 3-turn cooldown for exactly the turns the walk-jump-sword dive is
+due, and next turn's jump would close the same cells *and* land the hit.
+Gate (`_v9ApproachJumpGate`): an approach-only jump in buff-approach,
+buff-stage and motivation-setup is kept only when the gap after the move
+exceeds next turn's walk + jump + weapon reach, i.e. when jumping now
+actually saves an approach turn. A no-attack guard at the parametric
+template's exit went in first and changed nothing (that template was not
+the source).
+
+| live battery (10 fights) | no-shot jump turns | sword hits / turn | dealt / turn | turns / fight |
+|---|---|---|---|---|
+| Hachess, before gate | 7 / 16 | 0.14 | 564 | 7.2 |
+| Hachess, gate on | **1 / 12** | 0.23 | 762 | 5.7 |
+| Rex, before gate | 7 / 17 | 0.08 | 728 | 6.2 |
+| Rex, gate on | **2 / 18** | 0.17 | 701 | 6.6 |
+
+10/10 wins both times, 0 errors. Bots do not kite, so the dealt/turn
+gain is the bot-side number; the real test is the queued challenge
+battery vs Ada's five nemeses once the pool refreshes.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
