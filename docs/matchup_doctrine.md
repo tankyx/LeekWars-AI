@@ -1535,8 +1535,17 @@ life 265, wisdom 210, strength 540, resistance 120}.
 Chips then swapped (owner): fortress (instance 2562937) and armoring
 (2581990) out, leather boots (+2 MP, 3 TP) and seven-league boots
 (+40% MP, 4 TP) in — reach 7 → 9–10 before the jump. `DELETE
-/leek/remove-chip` / `POST /leek/add-chip` with instance ids. Local
-sanity below.
+/leek/remove-chip` / `POST /leek/add-chip` with instance ids.
+
+Local sanity on that kit (12 fights): leather boots cast 26 times,
+seven-league boots **never**. The generator's `EffectBuffMP` is
+`round((value1 + value2·jet) × (1 + science/100))`: seven-league boots
+roll 0.4–0.5 base, so on Ada that is 0–1 MP for 4 TP (the simulator
+models exactly that and never picks it); leather boots roll a flat 2,
+which her science lifts to 3–4. Every MP/TP buff chip is science-scaled
+the same way. Seven-league boots reverted to fortress (instance
+2399058); leather boots stay. Rule recorded: no science-scaled chips on
+a build without science — the quantum-rifle lesson, second instance.
 
 ---
 
