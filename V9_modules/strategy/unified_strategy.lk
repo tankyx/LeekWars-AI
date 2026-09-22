@@ -1096,10 +1096,57 @@ class UnifiedStrategy extends Strategy {
             player._currTp -= jumpCost
             firingWeaponId = jumpFireWeaponId
         } else if (player._currMp > 0) {
-            // No fire cell reachable — fall back to threat-aware approach.
+            // No fire cell reachable. The old "threat-aware approach" was the
+            // engine's moveTowardCell on the enemy cell: threat-blind. Seed 4
+            // vs ladder_mimitau (2026-09-22): the OVR gate replaced a hide
+            // plan with this fallback, Ada walked 9 cells to d7 of a 30-TP
+            // bruiser without a shot and took 3425 in one enemy turn at full
+            // HP. Now: close as far as the adversarial threat cache allows
+            // (threat < cap x HP); if no closing cell is that safe, stay, or
+            // move to the least-threatened cell when the current one is hot.
             var fallTo = (targetHitCell != null && targetHitCell != -1) ? targetHitCell : target._cellPos
-            var fallAct = new Action(Action.MOVEMENT_APPROACH, -1, -1, fallTo, null)
-            push(this._actions, fallAct)
+            if (_v9FallbackThreatCap > 0 && __adversarialThreatCacheBuilt) {
+                var reachFb = this._fieldMap.getReachableCellsWithinMP(player._cellPos, player._currMp)
+                var capFb = player._currHealth * _v9FallbackThreatCap
+                var curDFb = getCellDistance(player._cellPos, fallTo)
+                if (curDFb == null) curDFb = 999
+                var bestCFb = -1
+                var bestDFb = curDFb
+                var bestTFb = 999999
+                for (var rcFb in reachFb) {
+                    if (rcFb == player._cellPos) continue
+                    var tFb = getAdversarialThreat(rcFb)
+                    if (tFb >= capFb) continue
+                    var dFb = getCellDistance(rcFb, fallTo)
+                    if (dFb == null) continue
+                    if (dFb < bestDFb || (dFb == bestDFb && tFb < bestTFb)) {
+                        bestDFb = dFb
+                        bestTFb = tFb
+                        bestCFb = rcFb
+                    }
+                }
+                var curTFb = getAdversarialThreat(player._cellPos)
+                if (bestCFb != -1) {
+                    fallTo = bestCFb
+                } else if (curTFb >= capFb) {
+                    var minTFb = curTFb
+                    var minCFb = -1
+                    for (var rc2Fb in reachFb) {
+                        var t2Fb = getAdversarialThreat(rc2Fb)
+                        if (t2Fb < minTFb) { minTFb = t2Fb; minCFb = rc2Fb }
+                    }
+                    fallTo = minCFb
+                } else {
+                    fallTo = -1
+                }
+                if (getTurn() <= 20) {
+                    debugW("FBK_SAFE_T" + getTurn() + "_to" + fallTo + "_d" + bestDFb + "_thr" + floor(bestTFb == 999999 ? curTFb : bestTFb) + "_cap" + floor(capFb) + "_curthr" + floor(curTFb))
+                }
+            }
+            if (fallTo != -1) {
+                var fallAct = new Action(Action.MOVEMENT_APPROACH, -1, -1, fallTo, null)
+                push(this._actions, fallAct)
+            }
         }
 
         if (getTurn() <= 20) {
@@ -1185,6 +1232,9 @@ class UnifiedStrategy extends Strategy {
 // chip on its 3-turn cooldown, so the walk-jump-sword dive cannot use it
 // next turn. A melee build keeps the jump for the dive.
 global _v9RecoveryJumpSkipMelee = true
+// Fallback approach threat cap (2026-09-22): a no-shot fallback move may
+// not end on a cell whose predicted enemy burst is >= this fraction of HP.
+global _v9FallbackThreatCap = 0.6
 function _v9HasMeleeWeapon() {
     for (var wid in mapKeys(arsenal.playerEquippedWeapons)) {
         var w = arsenal.playerEquippedWeapons[wid]

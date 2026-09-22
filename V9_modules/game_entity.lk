@@ -1,3 +1,4 @@
+global _v9EntityStatRefresh = true
 class Entity {
     _cellPos = 0
     _maxHealth = 0
@@ -57,6 +58,23 @@ class Entity {
         this._cellPos = getCell(this._id)
         this._currHealth = getLife(this._id)
         this._maxHealth = getTotalLife(this._id)
+        // Live stats (2026-09-22). These were read once in the constructor, so
+        // every buff and shackle applied after turn 1 was invisible to the
+        // simulator, the threat cache, the race model and kill planning:
+        // seed 4 vs ladder_mimitau, turn 2 — engine STR 929 (steroid +
+        // protein + prism), entity still 525, threat predicted 1653 at a
+        // cell where the enemy then dealt 3425. Our own side too: Ada 743
+        // vs 585 after her turn-1 steroid.
+        if (_v9EntityStatRefresh) {
+            this._strength = getStrength(this._id)
+            this._resistance = getResistance(this._id)
+            this._agility = getAgility(this._id)
+            this._wisdom = getWisdom(this._id)
+            this._science = getScience(this._id)
+            this._magic = getMagic(this._id)
+            this._maxMp = getTotalMP(this._id)
+            this._maxTp = getTotalTP(this._id)
+        }
         this._inUseWeapon = getWeapon(this._id)
         this._currMp = getMP(this._id)
         this._currTp = getTP(this._id)
