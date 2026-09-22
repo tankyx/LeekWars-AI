@@ -12,6 +12,7 @@
 global _v9VetoEnabled = true
 global _v9VetoBleedRaceAware = true
 global _v9VetoCalibratedIncoming = false
+global _v9VetoCalibratedDeath = false
 global _v9VetoSimScale = 0.85
 global _v9VetoAdvScale = 0.5
 global _v9VetoEmaScale = 1.0
@@ -105,10 +106,15 @@ function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMap
     var simIn = enemyEst['damage']
     var advIn = __adversarialThreatCacheBuilt ? getAdversarialThreat(endCell) : 0
     var emaIn = (__avgDamageTakenRate > 0) ? __avgDamageTakenRate : 0
+    var calIn = max(simIn * _v9VetoSimScale, max(advIn * _v9VetoAdvScale, emaIn * _v9VetoEmaScale))
     if (_v9VetoCalibratedIncoming) {
-        var calIn = max(simIn * _v9VetoSimScale, max(advIn * _v9VetoAdvScale, emaIn * _v9VetoEmaScale))
         enemyEst['damage'] = calIn
         enemyEst['weDied'] = calIn >= endHP + bestSimResult.shieldsGained
+    } else if (_v9VetoCalibratedDeath) {
+        // Death only: the simulator missed 14 of 14 real deaths. The bleed
+        // test keeps the raw simulator estimate (a realistic incoming makes
+        // bleed fire on a third of all turns).
+        enemyEst['weDied'] = enemyEst['weDied'] || (calIn >= endHP + bestSimResult.shieldsGained)
     }
     if (_v9VetoLog) {
         debugW("VEST_T" + getTurn() + "_in" + floor(enemyEst['damage']) + "_sim" + floor(simIn) + "_adv" + floor(advIn) + "_ema" + floor(emaIn)
