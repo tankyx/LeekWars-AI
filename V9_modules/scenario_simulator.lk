@@ -147,10 +147,24 @@ class SimulationResult {
     }
 }
 
+// Antidote-aware poison cap (2026-09-22). Loss autopsy on Margaret's STR
+// panel: the enemy's antidote fires every 4 turns and in losses wipes
+// queued poison equal to 94-117% of all poison that landed. With the
+// enemy's live cooldown c (getCooldown on the enemy is exact), a poison
+// cast now ticks max(1, c) times before it is cleansed. The scorer's
+// antidote multiplier scaled the FULL queued value (0.4-0.7x at c=0),
+// which still let a 7-turn poison outscore a shot. Cap the ticks instead.
+global _v9DotCapEnabled = true
+global _v9DotCapLog = false
+global __dotCapTurn = -1
+global __dotCapTicks = -1
+global __dotCapFired = 0
+
 class ScenarioSimulator {
     _arsenal = null
     _player = null
     _target = null
+    _dotTicks = -1
     _fieldMap = null
 
     constructor(arsenal, player, target, fieldMap) {
@@ -161,6 +175,22 @@ class ScenarioSimulator {
     }
 
     simulate(actions) {
+        this._dotTicks = -1
+        if (_v9DotCapEnabled && this._target != null) {
+            if (__dotCapTurn != getTurn()) {
+                if (_v9DotCapLog && __dotCapTurn != -1) debugW("DC_e" + getEntity() + "_T" + __dotCapTurn + "_ticks" + __dotCapTicks + "_fired" + __dotCapFired)
+                __dotCapFired = 0
+                __dotCapTurn = getTurn()
+                __dotCapTicks = -1
+                var tChips = getChips(this._target._id)
+                if (tChips != null && inArray(tChips, CHIP_ANTIDOTE)) {
+                    var tCd = getCooldown(CHIP_ANTIDOTE, this._target._id)
+                    if (tCd == null || tCd < 0) tCd = 0
+                    __dotCapTicks = max(1, tCd)
+                }
+            }
+            this._dotTicks = __dotCapTicks
+        }
         var result = new SimulationResult()
 
         var simPos = this._player._cellPos
@@ -337,18 +367,28 @@ class ScenarioSimulator {
                     }
 
                     var chipDot = breakdown['dot'] * expectedCritMult
+                    var chipDotMin = breakdown['dotMin'] * expectedCritMult
+                    var chipDotMax = breakdown['dotMax'] * expectedCritMult
+                    var chipPoisonTurns = 0
+                    if (chipDot > 0 && mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
+                        var pChipItem = this._arsenal.playerEquippedChips[action.chip]
+                        if (mapContainsKey(pChipItem._effects, EFFECT_POISON)) chipPoisonTurns = pChipItem._effects[EFFECT_POISON]._effectDuration
+                    }
+                    if (this._dotTicks > 0 && chipPoisonTurns > this._dotTicks) {
+                        var capF = this._dotTicks / chipPoisonTurns
+                        chipDot *= capF
+                        chipDotMin *= capF
+                        chipDotMax *= capF
+                        chipPoisonTurns = this._dotTicks
+                        __dotCapFired++
+                    }
                     result.dotDamageQueued += chipDot
-                    result.dotDamageMin += breakdown['dotMin'] * expectedCritMult
-                    result.dotDamageMax += breakdown['dotMax'] * expectedCritMult
+                    result.dotDamageMin += chipDotMin
+                    result.dotDamageMax += chipDotMax
                     result.erosionDamage += chipDot * 0.10
                     if (chipDot > 0) {
                         result.poisonSourcesUsed++
-                        if (mapContainsKey(this._arsenal.playerEquippedChips, action.chip)) {
-                            var pChipItem = this._arsenal.playerEquippedChips[action.chip]
-                            if (mapContainsKey(pChipItem._effects, EFFECT_POISON)) {
-                                result.poisonTurnsQueued += pChipItem._effects[EFFECT_POISON]._effectDuration
-                            }
-                        }
+                        result.poisonTurnsQueued += chipPoisonTurns
                     }
 
                     var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
@@ -456,15 +496,25 @@ class ScenarioSimulator {
                         }
 
                         var weaponDot = weaponBreakdown['dot'] * expectedCritMult
+                        var weaponDotMin = weaponBreakdown['dotMin'] * expectedCritMult
+                        var weaponDotMax = weaponBreakdown['dotMax'] * expectedCritMult
+                        var weaponPoisonTurns = 0
+                        if (weaponDot > 0 && mapContainsKey(weaponObj._effects, EFFECT_POISON)) weaponPoisonTurns = weaponObj._effects[EFFECT_POISON]._effectDuration
+                        if (this._dotTicks > 0 && weaponPoisonTurns > this._dotTicks) {
+                            var capW = this._dotTicks / weaponPoisonTurns
+                            weaponDot *= capW
+                            weaponDotMin *= capW
+                            weaponDotMax *= capW
+                            weaponPoisonTurns = this._dotTicks
+                            __dotCapFired++
+                        }
                         result.dotDamageQueued += weaponDot
-                        result.dotDamageMin += weaponBreakdown['dotMin'] * expectedCritMult
-                        result.dotDamageMax += weaponBreakdown['dotMax'] * expectedCritMult
+                        result.dotDamageMin += weaponDotMin
+                        result.dotDamageMax += weaponDotMax
                         result.erosionDamage += weaponDot * 0.10
                         if (weaponDot > 0) {
                             result.poisonSourcesUsed++
-                            if (mapContainsKey(weaponObj._effects, EFFECT_POISON)) {
-                                result.poisonTurnsQueued += weaponObj._effects[EFFECT_POISON]._effectDuration
-                            }
+                            result.poisonTurnsQueued += weaponPoisonTurns
                         }
 
                         var hpDeficit = simEnemyMaxHP - simEnemyCurrHP
