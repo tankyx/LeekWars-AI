@@ -1440,6 +1440,30 @@ own AIs (V9-driven copies: 40/40 for her). No-attack turns there by
 cause: grinhaire veto 23, topac veto 14, rotulet re-rank 7 + other 5,
 HerculeNsjtt other 3, Yongyong other 3.
 
+*Validation, 50 challenges, same five opponents, 5 each per arm:*
+
+| arm | W / L / D | HP-lead | dealt / taken per turn | no-attack turns (attack scenarios existed) |
+|---|---|---|---|---|
+| A: veto on, calibrated death test | 2 / 20 / 3 | −60.8 | 515 / 616 | 30 (veto 30, of which grinhaire 18, topac 8) |
+| B: **veto off** | 1 / 19 / 5 | −61.2 | 549 / 638 | 11 (re-rank 8, other 3) |
+
+With the veto off she attacks on almost every turn and loses exactly as
+badly. **The veto produced Ada's no-attack turns; it did not produce her
+losses.** Against rotulet, grinhaire, topac, Yongyong and HerculeNsjtt
+she loses the trade outright over 27-turn fights: 515–549 dealt per turn
+against 616–638 taken, ending 61 HP points behind. That is the
+range-and-tempo contest of step 5 (they fire from 9–10 and step back;
+her heavy sword needs 1, her lightninger 6–10), not a decision bug, and
+it will not move without a kit or approach change measured on these
+challenges.
+
+Deployed state after validation: HEAD — veto on, race-aware bleed on the
+raw simulator, death test on adversarial cache × 0.4. Veto-off is
+measured equivalent on this panel; the death test's value (F1 ≈ 0.4)
+remains unproven either way. Challenges against a fixed opponent are the
+right instrument for anything about Ada: 25 per arm reproduce the ladder
+(1/43/6 → 2/20/3 → 1/19/5) where the local panel gave 40/40.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
