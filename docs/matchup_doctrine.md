@@ -1373,6 +1373,48 @@ Ada's residual no-attack turns are now the held learned re-rank (19% of
 the original set) and the scorer's own picks (15%). The server-log loop
 (`/fight/get-logs`) is the tool for both.
 
+### Calibrating the veto's enemy estimate against real damage taken (2026-09-22)
+
+`VEST_T…` logs the veto's enemy-response estimate every turn; joined to the
+damage actually taken on the enemy's following turn over **437 real turn
+pairs** (33 fights, four leeks):
+
+| | n | predicted mean | actual mean |
+|---|---|---|---|
+| all turns | 437 | 156 | 521 |
+| simulator predicted **0** (71% of turns) | 288 | 0 | 552; at distance 0–3: 764, 87% took damage |
+| simulator predicted > 0 | 121 | — | 0.83× predicted |
+| predicted deaths | 2 | 0 real | — |
+| real deaths on the enemy's turn | 14 | **0 predicted** | — |
+
+Not a scale problem. Two structural holes in `enemyPredictedWeaponDamage`:
+it returns 0 unless the enemy has LoS from its **current** cell to our end
+cell (they move first — and the hide logic now ends most turns out of
+their current LoS), and it counts weapons only, while stalactite,
+iceberg, meteorite and rockfall are the top damage sources on us.
+
+*Attempt 1 — calibrated incoming = max(0.85×sim, 0.5×adversarial cache,
+observed damage-taken EMA), used for bleed and death:* deployed for 25
+minutes and pulled. Local paired check (20 fights): Ada 5 W / 2 L / 1 D
+vs 8 W / 0 L without it; **130 vetoes vs 0**. The bleed rule (incoming ≥
+30% HP and > our output, race-aware) was tuned to an estimate that was
+mostly zero; a realistic incoming makes it fire on a third of all turns.
+
+*Attempt 2 — calibrated number for the death test only, bleed on the raw
+simulator:* results back at the reference (Ada 7 W / 1 D, others
+identical) but 39 predicted deaths in 8 fights, still far too many.
+Committed behind `_v9VetoCalibratedDeath = false`. Deployed state: race-
+aware bleed on the raw simulator (round 5 numbers), calibration off,
+components (sim / adv / ema) logged every turn.
+
+Next, with fresh fight credits: fit the three scales on the logged
+components against actual damage and actual deaths (a death threshold
+that predicts ≥ 10 of the 14 real deaths with few false positives), and
+only then re-enable the death path. The bleed criterion should not be
+reconnected to a realistic estimate without a candidate that keeps an
+attack; a defensive plan that fires nothing is what turned the veto into
+the turtling in the first place.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
