@@ -1464,41 +1464,42 @@ remains unproven either way. Challenges against a fixed opponent are the
 right instrument for anything about Ada: 25 per arm reproduce the ladder
 (1/43/6 → 2/20/3 → 1/19/5) where the local panel gave 40/40.
 
-### Kit test queued: bazooka for Ada's rhino (2026-09-22)
+### Kit test queued: bazooka for Ada's m_laser (2026-09-22)
 
 Ada's real no-shot turns by distance at turn start (2,038 turns): 182 at
 6–10, 84 at 11–14, 322 at 15+. Her kit: heavy sword (1), rhino (2–4),
 enhanced lightninger (6–10, circle launch), m_laser (5–12, line launch).
-The rhino is dead weight against kiters who hold 9–10.
 
 Owned weapons by range (inventory templates mapped through
 `tools/item_get-all.json`; an earlier pass compared market ids to
 inventory templates and wrongly reported bazooka/lightninger as not
 owned): **bazooka 8–12** (diagonal launch, circle-3 area, 11 TP, ×8),
 j_laser 5–11 (line, 5 TP, ×8), lightninger 6–10 (star, ×3), quantum
-rifle 5–10 (circle, X-2 area, 10 TP, ×2), rifle 7–9 (×2).
+rifle 5–10 (circle, ×2 — **useless on Ada**: its damage scales with
+science and she has 80), rifle 7–9 (×2).
 
-Local sanity vs three V9-driven nemeses, 18 fights per kit (cannot judge
-the matchup, only that the AI uses the weapon and nothing breaks):
+Two constraints from the owner: the quantum rifle is out for that
+reason, and close range must stay covered — dropping the rhino would
+leave 2–4 to the heavy sword's range 1 alone. So the test swaps the
+**m_laser for the bazooka**: heavy sword 1, rhino 2–4, enhanced
+lightninger 6–10, bazooka 8–12. Coverage loses only distance 5; the
+long end keeps 12 and moves from a line launch to a diagonal one. TP:
+sword + rhino 21, bazooka + lightninger 21, sword + bazooka 27 > 26 (not
+in one turn).
 
-| kit | fire-turn rate | uses of the swapped-in weapon | self-damage |
-|---|---|---|---|
-| current (rhino) | 0.77 | rhino 37 | 0 |
-| quantum rifle for rhino | 0.77 | 60 | 0 |
-| **bazooka for rhino** | 0.76 | **7** (diagonal launch + 11 TP limit its turns) | 0 |
-
-Swapped on the server: rhino (template 153, instance 2564911) out,
-bazooka (template 184, new instance 2602246) in — `DELETE
-/leek/remove-weapon` then `POST /leek/add-weapon`. Local configs
-`AdaLovelace_BZ` and `AdaLovelace_QR`.
+Local sanity vs four V9-driven nemeses, 20 fights per kit (cannot judge
+the matchup): fire-turn rate 0.82 → 0.83, bazooka 12 uses (m_laser had
+62 — the diagonal launch and 11 TP limit its turns), self-damage 0,
+19/20 vs 20/20. Server kit now: bazooka (instance 2602250), rhino
+(2602252), enhanced lightninger (2322592), heavy sword (2581987); m_laser
+returned to the inventory (template 47). Local config `AdaLovelace_BZ2`.
 
 Test: the same 25 challenges (rotulet, grinhaire, topac, HerculeNsjtt,
 Yongyong × 5) against today's two arms on the old kit, **2 / 20 / 3 and
-1 / 19 / 5**, HP-lead −61; the quantum rifle is the second arm if the
-pool allows. The pool is empty for today
+1 / 19 / 5**, HP-lead −61. The pool is empty for today
 (`error_fight_not_enought_challenges`); the bazooka kit is live on the
-ladder meanwhile. Revert: remove instance 2602246, add rhino instance
-2564911.
+ladder meanwhile. Revert: remove bazooka instance 2602250, add m_laser
+from the inventory (template 47).
 
 ---
 
