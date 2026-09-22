@@ -91,6 +91,14 @@ function rolloutVetoCheck(bestScenario, bestSimResult, target, arsenal, fieldMap
     if (endCell == null || endCell == -1) endCell = getCell()
     var endHP = getLife() + bestSimResult.hpGained
     var enemyEst = simulateEnemyResponseMulti(target, arsenal, endCell, endHP, fieldMapObj)
+    // Calibration log (2026-09-22): the estimate for the chosen plan's end
+    // state, every turn, so real fights can compare it with the damage
+    // actually taken on the enemy's next turn.
+    if (_v9VetoLog) {
+        debugW("VEST_T" + getTurn() + "_in" + floor(enemyEst['damage']) + "_died" + (enemyEst['weDied'] ? 1 : 0)
+               + "_hp" + floor(endHP) + "_sh" + floor(bestSimResult.shieldsGained) + "_cell" + endCell
+               + "_d" + getCellDistance(endCell, target._cellPos) + "_thp" + floor(target._currHealth))
+    }
 
     // 2. Catastrophe test: predicted death, a plan that mostly no-ops, or a
     // losing race-bleed (Basileek7 53270783: Ada took 900-1400/turn for four
