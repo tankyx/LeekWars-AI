@@ -1571,6 +1571,32 @@ does not use; and **any generator formula that changes a decision must
 be checked against real-fight effect values (`302`/`104` records)
 before it is acted on** — the local generator is not the live server.
 
+### Live test fights as the free validation instrument (2026-09-22)
+
+`POST /test-scenario/new` → `update` (ai path) → `add-leek` (ours, team
+0, ai path) + `add-leek` (bot id −1..−6, team 1, ai −2) → `POST
+/ai/test-scenario` returns a fight id; `/fight/get/<id>` has the full
+action stream on the live engine, `/fight/get-logs/<id>` our debug
+lines. Free and unlimited. Bots: Domingo −1 … Rex −6, Hachess −5 are
+the strongest; the bot ai string is only `/normal` — other strings
+(`/hard`, `/nightmare`…) are accepted and make the bot crash (0 damage,
+1002 errors), so "hardest difficulty" means Rex/Hachess, not a level.
+
+Used it for three checks: (1) the science claim — leather boots +2,
+knowledge +270, steroid +169 on the live engine, no scaling, confirming
+the real-fight numbers; (2) the new kit runs clean — Ada 10/10 vs
+Domingo, Rex and Hachess, 0 errors; (3) a defect: after a jump she fired
+no shot on 14 of 24 jump turns (Domingo). Attribution with the plan
+probe: 25 of 32 no-shot jumps were the **TP-recovery jump** (leftover TP
+spent on a hop toward the enemy after the plan), which puts the chip on
+its 3-turn cooldown and starves the walk-jump-sword dive; 7 were
+in-plan jumps whose attack list came back empty. Fixes: jump-attack
+returns null and the parametric template drops its jump when no attack
+follows; the recovery jump is skipped for builds carrying a melee weapon
+(`_v9RecoveryJumpSkipMelee`). Local: no-shot jumps 32 → 3. Live: Rex
+17/22 → 6/16, Hachess 15/29 → 9/19; residual from the motivation-setup
+jump and attacks dropped at execution, being attributed.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
