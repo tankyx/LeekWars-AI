@@ -1532,6 +1532,12 @@ Test: 25 challenges vs the five nemeses against the old-build arms
 today; the build is live on the ladder. Revert line: {mp 120, tp 525,
 life 265, wisdom 210, strength 540, resistance 120}.
 
+Chips then swapped (owner): fortress (instance 2562937) and armoring
+(2581990) out, leather boots (+2 MP, 3 TP) and seven-league boots
+(+40% MP, 4 TP) in — reach 7 → 9–10 before the jump. `DELETE
+/leek/remove-chip` / `POST /leek/add-chip` with instance ids. Local
+sanity below.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
