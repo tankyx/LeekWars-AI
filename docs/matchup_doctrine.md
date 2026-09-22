@@ -1322,6 +1322,42 @@ larger (≥80 fights per leek) before any further change is judged.
    a real regression the local panel could not see. This loop is now the
    gate for anything touching positioning.
 
+## Ada on the server: the rollout veto is the turtling (2026-09-22)
+
+The test-scenario API refuses other farmers' leeks (`not_your_leek`), but
+`GET /fight/get-logs/<fight_id>` returns **our AI's debug output for real
+fights**, only our farmer's lines. That is the missing instrument: the
+AI's own reasoning on the exact real turns, with attribution solved.
+(`data/fight_logs/<id>.json`.)
+
+Ada's real turns where attack scenarios were generated and nothing was
+fired, all four rounds, 206 turns, attributed by the log lines present:
+
+| cause | turns | share |
+|---|---|---|
+| **rollout veto** replaced the pick (`V9_VETO_… BLEED_DEF/FLEE/BEAM`, `DEATH_*`) | 135 | 66% |
+| learned re-rank flipped the pick (`V9_RRL`), no veto | 39 | 19% |
+| neither: the pipeline's own best had no attack | 32 | 15% |
+
+The veto's bleed rule fired whenever the enemy's predicted reply was
+≥ 30% of our HP and > our output — every losing one-turn trade, with no
+regard for the race. Fight 53764705 T15: Ada 4140 HP vs 2027, state
+KILL, race WINNING, a 667-damage plan replaced by a lone shield
+(`BLEED_DEF base −1574 cand 0`); T16 the same, replaced by a flee.
+Vetoes in her real fights: 31 in losses, 4 in wins.
+
+*Fix (commit `48285b80`, deployed 10:38):* a bleed is catastrophic only
+if we would die before they do at those rates (`_v9VetoBleedRaceAware`).
+
+*Round 4 (34 Ada fights, 16 W / 14 L / 4 D):* vetoes per turn 6.4% /
+9.1% / 8.7% (rounds 1–3) → **4.9%**; bleed vetoes 35 / 37 / 36 → 18;
+no-attempt turns 9.3% / 12.3% / 12.0% → **8.3%**. Half the bleed vetoes
+remain; the veto line now logs our HP, their HP, our output and the
+predicted incoming so the next round says whether those are real
+death-races or the enemy estimate (a max over positions) being
+pessimistic. The re-rank's 19% is the held flag; its real-opponent
+record is already in this ledger.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
