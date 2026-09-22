@@ -1415,6 +1415,31 @@ reconnected to a realistic estimate without a candidate that keeps an
 attack; a defensive plan that fires nothing is what turned the veto into
 the turtling in the first place.
 
+*Calibration round (2026-09-22, 50 bought garden fights + 50 challenges;
+1727 real turn pairs, 64 deaths):*
+
+| component vs actual damage on the enemy's next turn | mean | ratio actual/est | est = 0 |
+|---|---|---|---|
+| actual | 489 | — | — |
+| simulator | 193 | 2.5 | 67% |
+| adversarial cache | 1046 | 0.47 | 26% |
+| damage-taken EMA | 115 | 4.2 | — |
+
+Grid fit of est = max(a·sim, b·adv, c·ema): **best MAE 378 at a=0,
+b=0.4, c=0** — the simulator and the EMA add nothing once the cache is
+in. Raw simulator MAE 486. Deaths: raw simulator F1 **0.07** (3 tp / 13
+fp / 61 fn); adv×0.4 F1 0.38 (20 / 20 / 44); best F1 0.45 at 0.5·adv +
+1.2·ema (28 / 33 / 36). Half of predicted deaths stay false at any
+setting: death is variance, not a threshold.
+
+*Deployed (commit above):* death test on adv×0.4, bleed on the raw
+simulator. Local paired sanity (20 fights) before upload: results at the
+reference. Validation: challenges vs Ada's nemeses, which reproduce the
+ladder exactly — **1 W / 43 L / 6 D** over 50 challenges against their
+own AIs (V9-driven copies: 40/40 for her). No-attack turns there by
+cause: grinhaire veto 23, topac veto 14, rotulet re-rank 7 + other 5,
+HerculeNsjtt other 3, Yongyong other 3.
+
 ---
 
 ## Real-ladder baselines and the STR-nemesis panel (2026-09-21)
