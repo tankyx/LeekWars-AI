@@ -309,6 +309,10 @@ class ScenarioGenerator extends ScenarioCombos {
         if (neutrinoStack != null) {
             push(scenarios, neutrinoStack)
         }
+        var vulnStackDive = this.createVulnStackDiveScenario(availableTP, availableMP)
+        if (vulnStackDive != null) {
+            push(scenarios, vulnStackDive)
+        }
 
         var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)
         if (steroidOTKO != null) {
@@ -454,6 +458,10 @@ class ScenarioGenerator extends ScenarioCombos {
         var neutrinoStack = this.createNeutrinoStackingScenario(availableTP, availableMP)
         if (neutrinoStack != null) {
             push(scenarios, neutrinoStack)
+        }
+        var vulnStackDive = this.createVulnStackDiveScenario(availableTP, availableMP)
+        if (vulnStackDive != null) {
+            push(scenarios, vulnStackDive)
         }
 
         var steroidOTKO = this.createSteroidOTKOScenario(availableTP, availableMP)

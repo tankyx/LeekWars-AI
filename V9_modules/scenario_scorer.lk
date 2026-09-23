@@ -6,6 +6,7 @@ global __lastSurvivalHP = 0
 
 global __bandInside = 0
 global __bandHold = 0
+global _v9VulnNextTurn = true
 class ScenarioScorer {
     _player = null
     _target = null
@@ -1089,6 +1090,22 @@ class ScenarioScorer {
                 vulnValue *= 2.0
             }
             score += vulnValue * (this.getWeight('burstDamage', 200) / 200.0)
+            // Next-turn pricing (2026-09-23): the stack lives 2 turns, so its
+            // value is the extra NET damage of next turn's best weapon turn:
+            // raw x vuln%, priced at the damage scale, discounted 0.6.
+            if (_v9VulnNextTurn) {
+                var vnBest = 0
+                for (var vnW in mapKeys(arsenal.playerEquippedWeapons)) {
+                    var vnObj = arsenal.playerEquippedWeapons[vnW]
+                    if (vnObj == null || vnObj._cost <= 0) continue
+                    var vnBd = arsenal.getDamageBreakdown(this._player._strength, this._player._magic, this._player._wisdom, this._player._science, vnW)
+                    if (vnBd == null) continue
+                    var vnUses = min(vnObj._maxUse, floor((this._player._maxTp - 1) / vnObj._cost))
+                    var vnRaw = vnBd['direct'] * vnUses
+                    if (vnRaw > vnBest) vnBest = vnRaw
+                }
+                score += damageWeight * vnBest * vulnPercent * 0.6
+            }
         }
 
         var critBonus = this.calculateCritBonus(simResult.damageDealt, simResult.buffsApplied)

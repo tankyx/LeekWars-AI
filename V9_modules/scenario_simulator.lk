@@ -572,8 +572,9 @@ class ScenarioSimulator {
                             result.vulnerabilityApplied += 8
                             simEnemyRelShield -= 0.08
                         } else if (action.weaponId == WEAPON_HEAVY_SWORD) {
-                            result.vulnerabilityApplied += 60
-                            simEnemyRelShield -= 0.60
+                            // Effect 27 = ABSOLUTE vulnerability 60 for 1 turn
+                            // (+60 flat per hit taken), not -60% relative.
+                            simEnemyAbsShield -= 60
                         }
 
                         for (var wEff in mapKeys(weaponObj._effects)) {

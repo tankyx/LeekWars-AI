@@ -2,6 +2,7 @@ include('scenario_helpers.lk')
 
 global _v9ApproachJumpGate = true
 global _v9StripDive = true
+global _v9VulnStackDive = true
 class ScenarioCombos extends ScenarioHelpers {
 
     constructor(arsenal, player, target, fieldMap, strategy) {
@@ -1219,6 +1220,100 @@ class ScenarioCombos extends ScenarioHelpers {
                 if (jIdx2 != -1) remove(actions, jIdx2)
             }
         }
+        return actions
+    }
+
+    // Vulnerability stack-then-dive (2026-09-23). Neutrino is diagonal-only
+    // (launch type 2), range 2-6, 3 uses, -8% relative shield per hit for 2
+    // turns, stacking and not stat-scaled. The old stacking template never
+    // moved, so it needed the player to already stand on a diagonal; on the
+    // rotulet/topac challenges it fired 0 times in 10 fights. This one walks
+    // to the best diagonal launch cell, strips with Liberation when it can,
+    // lands the three hits, spends the rest against the reduced shields and
+    // marks the plan so the scorer prices the next-turn sword.
+    createVulnStackDiveScenario(availableTP, availableMP) {
+        if (!_v9VulnStackDive) return null
+        if (this._target == null) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_NEUTRINO)) return null
+        var relSh = this._target._relShield
+        if (relSh == null) relSh = 0
+        var vsProf = getEnemyProfile(this._target._id)
+        var vsTank = (vsProf != null && vsProf['isTank'])
+        if (relSh < 25 && !vsTank) return null
+        var vsSwap = (getWeapon() != WEAPON_NEUTRINO) ? 1 : 0
+        if (availableTP < vsSwap + 12) return null
+        // Already stacked to 3 with 2 turns left: nothing to add.
+        var vsLive = 0
+        var vsRem = 0
+        if (this._target._effectsActive != null) {
+            for (var ve in this._target._effectsActive) {
+                if (ve[0] == EFFECT_VULNERABILITY && count(ve) >= 2) { vsLive += ve[1]; if (count(ve) >= 4 && ve[3] > vsRem) vsRem = ve[3] }
+            }
+        }
+        if (vsLive >= 24 && vsRem >= 2) return null
+
+        // 1. Launch cell: reachable, diagonal to the target, dist 2-6, LoS,
+        //    lowest adversarial threat (tie: farther).
+        var tPos = this._target._cellPos
+        var best = -1
+        var bestT = 999999
+        var bestD = -1
+        var cands = getReachableCells()
+        var pool = []
+        push(pool, this._player._cellPos)
+        for (var rc in cands) push(pool, rc)
+        for (var c in pool) {
+            var mpC = (c == this._player._cellPos) ? 0 : getGraphMPCost(c)
+            if (mpC == null || mpC > availableMP) continue
+            var d = getCellDistance(c, tPos)
+            if (d == null || d < 2 || d > 6) continue
+            if (!this.isDiagonal(c, tPos)) continue
+            if (!getCachedLineOfSight(c, tPos)) continue
+            var t = getAdversarialThreat(c)
+            if (t < bestT || (t == bestT && d > bestD)) { bestT = t; best = c; bestD = d }
+        }
+        if (best == -1) return null
+
+        var actions = []
+        var tpBudget = availableTP
+        if (best != this._player._cellPos) {
+            push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, best, this._target))
+        }
+        // 2. Strip first when we can: Liberation x0.6 then the stack.
+        var stripped = false
+        if (mapContainsKey(this._arsenal.playerEquippedChips, CHIP_LIBERATION) &&
+            getCooldown(CHIP_LIBERATION, this._player._id) == 0 &&
+            (relSh >= 25 || this._target._absShield >= 80) &&
+            tpBudget >= getCachedChipCost(CHIP_LIBERATION) + vsSwap + 12) {
+            push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_LIBERATION, tPos, this._target))
+            tpBudget -= getCachedChipCost(CHIP_LIBERATION)
+            stripped = true
+        }
+        // 3. Three neutrino hits.
+        if (vsSwap == 1) {
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
+            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            tpBudget -= 1
+        }
+        for (var i = 0; i < 3; i++) {
+            push(actions, new Action(Action.ACTION_DIRECT, WEAPON_NEUTRINO, -1, tPos, this._target))
+            tpBudget -= 4
+        }
+        // 4. Leftover TP against the shields as they will be after the stack.
+        var saveRel = this._target._relShield
+        var saveAbs = this._target._absShield
+        this._target._relShield = (stripped ? saveRel * 0.6 : saveRel) - 24
+        this._target._absShield = stripped ? floor(saveAbs * 0.6) : saveAbs
+        var follow = this.getAttackActions(tpBudget, 1.0, best)
+        this._target._relShield = saveRel
+        this._target._absShield = saveAbs
+        for (var fa in follow) {
+            if (fa.type == Action.ACTION_DIRECT && fa.weaponId == WEAPON_NEUTRINO) continue
+            push(actions, fa)
+        }
+        var cp = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, null)
+        cp.checkpointType = "VULN_STACK"
+        push(actions, cp)
         return actions
     }
 
