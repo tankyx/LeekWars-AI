@@ -2005,6 +2005,27 @@ even more (5.2 per fight) and takes 38% less damage per turn than in
 either earlier window; the poison output is back near the untuned
 uncapped bot number. The cap stays in the code as a flag, off.
 
+### Ada's kit on the real ladder: neutrino vs bazooka, same day (2026-09-23)
+
+Two 25-fight garden windows on the max-uses build, random opponent pick,
+a few hours apart; only the fourth weapon slot differs.
+
+| Ada, real ladder | n | W / L / D | vs STR | HP-lead | dealt / taken per turn | fire-then-move | opp talent |
+|---|---|---|---|---|---|---|---|
+| baseline (old kit, selector) | 125 | 48% | — | −2.8 | 679 / 707 | 0.29 | 2026 |
+| neutrino kit (08:42) | 25 | 13 / 12 / 0 | — | +5.9 | 738 / 732 | 0.37 | 2030 |
+| bazooka kit (09:22) | 25 | 12 / 12 / 1 | 10 / 20 | −3.5 | 828 / 799 | 0.43 | 2025 |
+
+Indistinguishable at this size (52% vs 48%); the ladder mix is 80% STR
+and she splits those evenly with either weapon. Multi-shot is now her
+normal turn: 176 of 291 weapon-turns fired the same weapon twice or
+three times (rhino 10 shots per fight). The kit question is therefore
+decided by the nemeses, not the garden: neutrino keeps the stack-then-
+dive available (topac 3/5), the bazooka does nothing the lightninger
+does not (0.8 uses per fight). Pending: the bazooka attribution arm on
+topac/HerculeNsjtt when the challenge pool refreshes (cron job in this
+session), then the neutrino goes back on.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
