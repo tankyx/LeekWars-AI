@@ -1867,6 +1867,66 @@ this turn's leftover TP, (3) measure on these same 15 challenges. Both
 are candidate-set and valuation changes, not weights; neither is
 evidence-backed yet.
 
+### Stack-then-dive built, and the max-uses bug it uncovered (2026-09-23)
+
+`createVulnStackDiveScenario` (`_v9VulnStackDive`): gate = neutrino
+equipped and target relative shield ≥ 25 or tank profile; walk to the
+lowest-threat diagonal cell at 2-6 with LoS (neutrino is diagonal-only,
+launch type 2), or walk to a pad and jump onto one; Liberation first when
+off cooldown; swap; neutrino ×3; leftover TP via getAttackActions with
+the target's shields temporarily set to what they will be after the
+strip and stack; checkpoint `VULN_STACK`. Generated in KILL, AGGRO and
+ATTRITION. Scorer: vulnerability is also priced against next turn —
+raw damage of our best weapon turn × vuln% at the damage scale
+(`_v9VulnNextTurn`, discount `_v9VulnNextTurnDisc` = 1.0). Simulator:
+heavy sword's effect 27 is ABSOLUTE vulnerability 60, was modelled as
+−60% relative.
+
+Three live probe rounds to make it fire (each parsed from
+`/fight/get-logs`, 2-5 challenges):
+1. Not generated at range: the 12 diagonal cells at 2-6 are rarely
+   walk-reachable from 10-14 → jump-assisted launch.
+2. Generated on 36 rotulet turns, picked on none, 13 of them lost to a
+   plan with no attack → score probe: the stack plan scored 113k vs the
+   pick's −7k but had `droppedActions 1` and `vulnerabilityApplied 8`,
+   so the feasibility gate (dropped == 0) removed it. The dropped action
+   was the weapon swap: the neutrino templates built it as
+   `Action(SWAP, -1, …)` with `.weapon = WEAPON_NEUTRINO`, a field the
+   execute check never reads (three sites, all fixed to carry
+   `weaponId`). The single vulnerability hit exposed the second bug.
+3. **`buildAllWeaponsList` loaded every database weapon with max uses
+   hard-coded to 1.** The simulator's per-turn gate then skipped every
+   repeat shot silently (not counted as dropped), and getAttackActions
+   never planned one: rhino ×3, lightninger ×2, neutrino ×3 were all
+   simulated as one shot per turn, for every leek. Fixed from
+   `getWeaponMaxUses` (≤ 0 → 99). Local: same-weapon multi-shot turns
+   appear for every leek; smoke and plan logs clean; paired panel vs the
+   previous commit noise-level (Ada/rotulet 19-19, Ed/Éleeksire 10-12,
+   pooled p=0.75, HP +0.7) — V9-vs-V9 testbeds cannot show what a
+   real opponent's shields do with it.
+
+Challenges after all three (neutrino kit):
+
+| 5 challenges | W / L | no-attack | dealt / taken per turn | neutrino uses | stack plans picked | 3-shot turns |
+|---|---|---|---|---|---|---|
+| rotulet, best earlier arm | 0 / 5 | 35% | 308 / 707 | 0 | 0 | — |
+| rotulet, now | 0 / 5 | 26% | 397 / 795 | 39 | 21 | 15 |
+| topac, earlier arms (×3) | 0 / 15 | 12-25% | 603-717 / 812-883 | 0-3 | 0 | — |
+| topac, now | **3 / 2** | 10% | **959** / 776 | 27 | 10 | 29 |
+
+First movement on topac in 20 challenges. Two changes landed at once:
+the stack plan (picked 10 times) and the max-uses fix (66 rhino shots
+in 5 fights). Attribution needs one arm with the bazooka kit on the
+max-uses build (stack template cannot fire without neutrino); the pool
+had 2 challenges left. rotulet: better on every mechanism, still lost —
+her 397 against 795 taken is the resistance/heal wall, not a plan gap.
+Live kit left on neutrino overnight (HerculeNsjtt was 5/0 with it on the
+last battery); bazooka instance 2603118 is in the inventory.
+
+Next: (a) 5 topac + 5 HerculeNsjtt with the bazooka kit on this build,
+(b) 5 Yongyong + 5 grinhaire with the neutrino kit, (c) the max-uses
+fix is fleet-wide — watch the daily garden window for Ed/KG/Margaret.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
