@@ -1272,11 +1272,53 @@ class ScenarioCombos extends ScenarioHelpers {
             var t = getAdversarialThreat(c)
             if (t < bestT || (t == bestT && d > bestD)) { bestT = t; best = c; bestD = d }
         }
+        // Jump-assisted launch: the 12 diagonal cells at 2-6 are rarely on
+        // the walk graph from range 10-14 (live probe: reason 7 on every
+        // such turn). Walk to a reachable cell, jump 1-3 onto a diagonal.
+        var jumpFrom = -1
+        if (best == -1 && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
+            getCooldown(CHIP_JUMP, this._player._id) == 0 &&
+            availableTP >= vsSwap + 12 + getCachedChipCost(CHIP_JUMP)) {
+            var tx = getCellX(tPos)
+            var ty = getCellY(tPos)
+            for (var k = 1; k <= 3; k++) {
+                for (var sx = -1; sx <= 1; sx += 2) {
+                    for (var sy = -1; sy <= 1; sy += 2) {
+                        var dc = getCellFromXY(tx + sx * k, ty + sy * k)
+                        if (dc == null || dc < 0) continue
+                        if (isObstacle(dc) || isEntity(dc)) continue
+                        if (!getCachedLineOfSight(dc, tPos)) continue
+                        var dd = getCellDistance(dc, tPos)
+                        if (dd == null || dd < 2 || dd > 6) continue
+                        var t2 = getAdversarialThreat(dc)
+                        if (t2 >= bestT) continue
+                        // nearest reachable launch pad within jump range
+                        var padBest = -1
+                        var padMp = 999
+                        for (var pc in pool) {
+                            var jd = getCellDistance(pc, dc)
+                            if (jd == null || jd < 1 || jd > 3) continue
+                            var pm = (pc == this._player._cellPos) ? 0 : getGraphMPCost(pc)
+                            if (pm == null || pm > availableMP) continue
+                            if (pm < padMp) { padMp = pm; padBest = pc }
+                        }
+                        if (padBest == -1) continue
+                        bestT = t2; best = dc; bestD = dd; jumpFrom = padBest
+                    }
+                }
+            }
+        }
         if (best == -1) return null
 
         var actions = []
         var tpBudget = availableTP
-        if (best != this._player._cellPos) {
+        if (jumpFrom != -1) {
+            if (jumpFrom != this._player._cellPos) {
+                push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, jumpFrom, this._target))
+            }
+            push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, best, this._target))
+            tpBudget -= getCachedChipCost(CHIP_JUMP)
+        } else if (best != this._player._cellPos) {
             push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, best, this._target))
         }
         // 2. Strip first when we can: Liberation x0.6 then the stack.

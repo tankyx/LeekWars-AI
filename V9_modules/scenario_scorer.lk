@@ -7,6 +7,7 @@ global __lastSurvivalHP = 0
 global __bandInside = 0
 global __bandHold = 0
 global _v9VulnNextTurn = true
+global _v9VulnNextTurnDisc = 1.0
 class ScenarioScorer {
     _player = null
     _target = null
@@ -1104,7 +1105,7 @@ class ScenarioScorer {
                     var vnRaw = vnBd['direct'] * vnUses
                     if (vnRaw > vnBest) vnBest = vnRaw
                 }
-                score += damageWeight * vnBest * vulnPercent * 0.6
+                score += damageWeight * vnBest * vulnPercent * _v9VulnNextTurnDisc
             }
         }
 

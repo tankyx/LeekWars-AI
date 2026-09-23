@@ -670,6 +670,10 @@ class ScenarioGenerator extends ScenarioCombos {
             }
         }
 
+        var vulnStackDiveAttr = this.createVulnStackDiveScenario(availableTP, availableMP)
+        if (vulnStackDiveAttr != null) {
+            push(scenarios, vulnStackDiveAttr)
+        }
         var jumpAttackAttr = this.createJumpAttackScenario(availableTP, availableMP)
         if (jumpAttackAttr != null) {
             push(scenarios, jumpAttackAttr)
