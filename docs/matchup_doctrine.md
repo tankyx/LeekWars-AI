@@ -1715,6 +1715,79 @@ opponents; the next real-ladder window is the test. Memory note: the
 panel OOM-killed at −j 2 and once at −j 1 in the background; foreground
 −j 1, n ≤ 30 per testbed, went through.
 
+### Diver kit on the nemesis challenges: 8 / 16 / 1 (2026-09-23)
+
+The pool refreshed; 25 challenges, 5 per nemesis, with the diver kit and
+everything deployed on 2026-09-22 (jump gates, reflect model, live stat
+refresh, threat-capped fallback). Against the old-kit arms:
+
+| arm | W / L / D | HP-lead | dealt / taken per turn | no-attack turns |
+|---|---|---|---|---|
+| old kit, veto on | 2 / 20 / 3 | −60.8 | 515 / 616 | 30 of ~675 |
+| old kit, veto off | 1 / 19 / 5 | −61.2 | 549 / 638 | 11 |
+| **diver kit** | **8 / 16 / 1** | **+10** | 412 / 523 | 45% of 492 |
+
+| opponent | W / L / D | sword / turn | dealt / taken | healed / turn | what they are |
+|---|---|---|---|---|---|
+| HerculeNsjtt | **5 / 0 / 0** | 0.26 | 410 / 364 | 328 | rhino kiter, STR |
+| Yongyong | 3 / 1 / 1 | 0.04 | 261 / 368 | 261 | machine-gun / rhino, STR |
+| rotulet | 0 / 5 / 0 | 0.25 | 262 / 785 | 338 | RES 480 / WIS 482 shield tank with a heavy sword |
+| grinhaire | 0 / 5 / 0 | 0.27 | 506 / 592 | 401 | rhino kiter, STR 520 / AGI 330 / WIS 450, 3800 HP buffed |
+| topac | 0 / 5 / 0 | 0.23 | 630 / 875 | 548 | katana bruiser, STR 500 / RES 300 / WIS 400 |
+
+The kit change moved the loss set rather than the total: the two ranged
+kiters she used to lose to now fall to the dive (HerculeNsjtt was 3/9 on
+the ladder, Yongyong 1/8), and the three she still loses to are the ones
+that out-trade a 0-RES diver in melee or through shields. Fewer draws,
+shorter fights, and the HP-lead went from −61 to +10.
+
+**rotulet, autopsied.** Turns 1-3 of every fight were pure walking
+(`plan_dmg0`), at 785 taken per turn. Server logs at turn 3: d10, 29 TP,
+`GEN topDmg 100`. Local replay of the same map and cells against an idle
+stat-clone fired rhino at d4 and dived next turn, so geometry was not
+the block. The block was rotulet's shield stack: fortress 59% + wall 33%
+relative (base 7% and 4% at RES 480) + armor 145 absolute, live during
+Ada's turn because she moves first — every weapon computed to 0 net. She
+carries Liberation (−40% of shields and buffs) and used it on turn 4 for
+a 611 sword hit, but the Liberation template only cast from the current
+cell within range 6 and priced its follow-ups against the *unstripped*
+shields, so at d10 it returned null and at d≤6 it usually had no attack.
+`_v9StripDive`: walk into range 6 (LoS, tie-break on threat), strip,
+then attack with the target's shields temporarily scaled by 0.6 for the
+attack helpers (the simulator already models the strip in sequence);
+if the walk ends within 4 and nothing lands, jump adjacent for the
+sword. Replay vs a shield-stacking clone on rotulet's map: turn-2 plan
+walk › liberation › jump › sword, 613 damage. Smoke matrix clean, Ada
+20/20 vs `ladder_rotulet`.
+
+Re-run, 5 rotulet challenges with it deployed:
+
+| rotulet | W / L | first shot | sword / turn | no-attack | dealt / taken per turn |
+|---|---|---|---|---|---|
+| before | 0 / 5 | T4 | 0.25 | 47% | 262 / 785 |
+| strip-dive | 0 / 5 | T3–T4 | 0.43 | 35% | 308 / 707 |
+
+Better on every mechanism, still 0/5: her sword does ~400 through what
+remains of the shields while rotulet's sword does 1218 to a 0-RES leek,
+and rotulet heals on 482 WIS. That is the build trade, not a decision
+bug; the diver kit should not melee a RES-480 shield tank at all, and a
+matchup-aware retreat to the lightninger band (6-10, outside its sword,
+inside its m_laser 5-12) is the next thing to measure, not code blind.
+
+**grinhaire, autopsied.** 23 of 46 no-attack turns were the race-aware
+bleed veto: at full HP she deals ~800 against ~1100-1500 predicted (28 TP
+of rhino from a 520-STR leek), 3800 HP each way, so the race reads as
+lost and the veto swaps the attack for a flee or shield that deals 0 —
+and she takes 1300-1500 anyway on the next turn. The veto-off arm of
+2026-09-22 lost identically, so the veto is where the no-attack turns
+come from, not where the losses come from: even trades against 450 WIS
+of healing are lost trades.
+
+**topac, from the action stream.** Katana 600-900 per hit, 1800-2000 per
+enemy turn when adjacent, plus grenade launcher at range; she dealt
+5-10k per fight and took 8-14k. Same class as rotulet: a RES/WIS melee
+bruiser out-trades the 0-RES diver in her own range.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
