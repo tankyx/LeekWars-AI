@@ -2105,6 +2105,30 @@ validate: upload HEAD to Cure tomorrow and run 25 per leek against
 today's two windows; if the trio does not recover to the rollback's
 50%, keep the rollback and bisect the remaining hide changes.
 
+### Attribution arm: bazooka kit on the max-uses build (2026-09-24)
+
+Same build as the neutrino arm (max uses from the engine, stack-then-dive
+template, which cannot fire without a neutrino), fourth slot = bazooka.
+5 topac + 5 HerculeNsjtt challenges (2 topac from the day before, 8 today).
+
+| topac, 5 challenges | W / L | dealt / taken per turn | neutrino uses |
+|---|---|---|---|
+| diver kit, three earlier arms | 0 / 15 | 603-717 / 812-883 | 0-3 |
+| max-uses build, **bazooka** kit | **0 / 5** | 847 / 793 | 0 |
+| max-uses build, **neutrino** kit | **3 / 2** | 959 / 776 | 27 |
+
+| HerculeNsjtt, 5 challenges | W / L / D | dealt / taken per turn |
+|---|---|---|---|
+| diver kit | 5 / 0 / 0 | 410 / 364 |
+| max-uses build, neutrino kit | 5 / 0 / 0 | 480 / 358 |
+| max-uses build, bazooka kit | 3 / 1 / 1 | 290 / 422 |
+
+The max-uses fix alone lifts topac damage per turn (847 vs 603-717) but
+wins nothing; the three topac wins belong to the neutrino line. The
+bazooka gives HerculeNsjtt nothing either (fired 2 per fight). Kit
+decided: neutrino stays on Ada. A probe fight launched before the swap
+(neutrino kit, topac, loss at 847/886) is not counted in either arm.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
