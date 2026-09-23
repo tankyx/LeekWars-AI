@@ -1986,6 +1986,25 @@ adopts the retune; a second 30-35% window reinstates the cap
 goes to a GA pass on the profile, not to more hand-tuning. Side-by-side
 root `9.0/V9-MS/` holds the same build for bot tests.
 
+### Margaret's retune window: 14 / 10 / 1 (2026-09-23)
+
+25 garden fights on the retuned build (burst 12, cap off), random
+opponent pick, mean opponent talent 1958 (the cap window's was 1950).
+
+| Margaret, real ladder | n | W | vs STR | HP-lead | dealt / taken per turn | poison / turn | double gun per fight |
+|---|---|---|---|---|---|---|---|
+| baseline (selector-picked) | 125 | 53% | ~48% | −2.9 | 834 / 811 | — | 2.0 |
+| max-uses, untuned | 25 | 32% | 1 / 14 | −24.6 | 654 / 783 | ~630 | 4.2 |
+| **retuned** | 25 | **56%** (14 / 10 / 1) | **6 / 13** | see below | 708+ / **487** | 708 | 5.2 |
+
+The decision rule from the previous entry said "recovery to ~50% adopts
+the retune": adopted. Same-day, same-selector, weaker-than-baseline
+opponents in both windows, so the 32% → 56% swing is the build, not the
+sample — with the usual n=25 caveat (±10 pp). She fires the double gun
+even more (5.2 per fight) and takes 38% less damage per turn than in
+either earlier window; the poison output is back near the untuned
+uncapped bot number. The cap stays in the code as a flag, off.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
