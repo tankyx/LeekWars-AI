@@ -2087,6 +2087,24 @@ Next: attribute on the level-220 kits — local hide-append on/off on the
 trio for poison per turn and fire-then-move, then a Cure garden window
 on HEAD with the winning flag state before re-uploading HEAD there.
 
+Attribution from the fights' own logs (12 fights per arm per leek):
+
+| picked plans | HEAD: with hide move | rollback: with hide move | HEAD no-weapon turns | rollback |
+|---|---|---|---|---|
+| LeekRain | 29% | 4% | 98 of 151 (dot-only 43) | 57 of 89 |
+| DawnFall | 31% | 8% | 136 of 182 (dot-only 65) | 74 of 111 |
+| DuskHope | 41% | 6% | 104 of 143 (dot-only 55) | 84 of 132 |
+
+Vetoes and fallbacks are the same order in both arms; the difference is
+the hide-after-fire machinery (hide-append pass, MP-bounded hide, reach
+gate), which was measured only on 30-TP / 7-MP leeks. Local bots cannot
+show it (hide-append on/off identical on the trio). Fix under test:
+`_v9HideAppendMinMp = 6` — the append pass is off for leeks with fewer
+than 6 max MP (all four Cure leeks; inert for the main four). To
+validate: upload HEAD to Cure tomorrow and run 25 per leek against
+today's two windows; if the trio does not recover to the rollback's
+50%, keep the rollback and bisect the remaining hide changes.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
