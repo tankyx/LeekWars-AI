@@ -1826,6 +1826,47 @@ matchup moves with positioning; both are the build. Ada's three remaining
 nemeses are the leeks that out-sustain her, and the diver respec traded
 her old kiter losses for these. Flag off, deployed.
 
+### Neutrino for the bazooka: 15 challenges, reverted (2026-09-23)
+
+Rationale: vulnerability (effect 26) is a negative relative shield, not
+stat-scaled (`EffectVulnerability`: −8% per hit, 2 turns, stacks), applied
+inside the same shield subtraction as fortress/wall, so three neutrino
+hits (12 TP, range 2-6) take rotulet's 92% to 68%, and after a Liberation
+strip to 31% — a 1390-raw sword hit goes from 0 to ~800. Swapped on the
+live leek (`DELETE /leek/remove-weapon` + `POST /leek/add-weapon`;
+inventory from `/farmer/get-from-token`, which is what the MCP inventory
+tool reads; the bazooka is template 184, the enhanced lightninger 225).
+
+| 5 challenges each | W / L / D | dealt / taken per turn | neutrino uses | vulnerability stacks landed |
+|---|---|---|---|---|
+| rotulet (diver + strip-dive) | 0 / 5 | 308 / 707 | — | — |
+| rotulet, neutrino kit | 0 / 5 | 328 / 797 | **0** | 3 (from the enemy's own effects) |
+| topac (diver) | 0 / 5 | 630 / 875 | — | — |
+| topac, neutrino kit | 0 / 5 | 717 / 881 | **0** | 9 |
+| HerculeNsjtt (diver) | **5 / 0** | 410 / 364 | — | — |
+| HerculeNsjtt, neutrino kit | 2 / 2 / 1 | 307 / 401 | 13 | 3 |
+
+The AI never fired the neutrino at either tank in ten fights. Cause, in
+the scorer: vulnerability is priced as `remainingTP × 100 × vuln% × 2`
+(×2 vs tanks) × burst weight — with 17 TP left after three hits that is
+~1300 points, about 8 HP-equivalents against a damage scale of 163 per
+HP — and only against damage *this turn*; the stack-then-dive value
+lives in the next turn, which the 2-ply projection would see
+(`vulnMult` at scorer 2508) except that it runs only on the top 5 plans
+and a 0-damage neutrino turn never reaches them. Meanwhile the attack
+helper ranks options by net damage, and neutrino through 92% shields is
+0. So the line the kit was bought for cannot be generated, and against
+the rhino kiter she lost the bazooka opener (8-12) that made HerculeNsjtt
+5/0. Reverted the same hour; bazooka instance 2603118 back on the leek.
+
+What it would take, if the line is wanted: (1) generate a
+strip/stack setup template that emits neutrino ×3 (and Liberation when in
+range) as a deliberate multi-turn plan with a checkpoint, (2) price
+vulnerability against next-turn expected damage at the damage scale, not
+this turn's leftover TP, (3) measure on these same 15 challenges. Both
+are candidate-set and valuation changes, not weights; neither is
+evidence-backed yet.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
