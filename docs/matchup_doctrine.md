@@ -1927,6 +1927,34 @@ Next: (a) 5 topac + 5 HerculeNsjtt with the bazooka kit on this build,
 (b) 5 Yongyong + 5 grinhaire with the neutrino kit, (c) the max-uses
 fix is fleet-wide — watch the daily garden window for Ed/KG/Margaret.
 
+### First real window after the max-uses fix: 100 garden fights (2026-09-23)
+
+25 per main leek, opponent chosen at random among the garden's offer
+(the earlier window picked the lowest talent, which biases the sample),
+Ada on the neutrino kit. `real_before_after.py 2026-09-23T08:40 2026-09-24`.
+
+| leek | before (n=125) | window (n=25) | HP-lead | dealt / taken per turn | 3-shot turns |
+|---|---|---|---|---|---|
+| Ada | 48% | 52% (13 / 12) | −2.8 → +5.9 | 679/707 → 738/732 | 83 |
+| Edsger | 51% | 56% (14 / 11) | +7.1 → +1.8 | 988/695 → 892/658 | 30 |
+| KurtGodel | 51% | 52% (13 / 11 / 1) | +21 → +13 | 710/760 → 751/736 | 45 |
+| **Margaret** | 53% | **32% (8 / 17)** | −2.9 → **−24.6** | 834/811 → **654**/783 | 24 |
+
+Margaret: 1 / 14 against STR opponents (her baseline is ~48% on a 78%-STR
+ladder; the window's mix was 14 STR / 9 MAG / 2 AGI), 6 / 9 against
+MAG. Losses average 9 turns with 73 double-gun shots and 20 triple-shot
+turns; damage per turn fell 22% while poison per turn stayed ~620 —
+she is spending her TP on triple direct-damage bursts that her weights
+(`weaponUses` 0, `burstDamage` low) were never tuned for, instead of
+the poison-and-hide turn cycle. Her STR testbed could not confirm it
+(vs TheLeaker 7-6 for the fix, p=1, n=24: V9-driven copies do not punish
+it), so the hold is on the real number: `_v9MaxUsesMagicCap = 1` returns
+MAG > STR + 100 builds to one shot per weapon per turn; STR and tank
+builds keep the engine value. Deployed. Retest Margaret on the next
+garden window; if she recovers, the magic weight profile needs
+re-tuning for multi-shot before the cap comes off, not the other way
+round.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
