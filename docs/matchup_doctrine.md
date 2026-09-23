@@ -2026,6 +2026,29 @@ does not (0.8 uses per fight). Pending: the bazooka attribution arm on
 topac/HerculeNsjtt when the challenge pool refreshes (cron job in this
 session), then the neutrino goes back on.
 
+### StrongSTR, the owner's custom test bot (2026-09-23)
+
+A custom test leek (`/test-leek/get-all`, id −17934; STR 600 / WIS 620 /
+AGI 250 / RES 50, 28 TP, 5 MP; odachi, neutrino, pistol, heavy sword;
+20 chips) driven by the built-in `/expert` AI. `tools/live_bot_battery.py
+<leek> StrongSTR --ai /expert -n 8` runs it for free through the
+test-scenario API (also takes domingo…rex and `--root` for side-by-side
+builds). What it is worth: a live-engine mechanism and error check that
+hits back harder than Domingo (Ada took 517 per turn vs ~0), not a
+strength test — the built-in AI only fires pistol and neutrino, never
+the odachi or sword, and throws runtime errors in roughly half its
+fights with both `/expert` and `/normal`.
+
+| vs StrongSTR /expert | W / L | turns | dealt / taken per turn | bot errors |
+|---|---|---|---|---|
+| Ada (neutrino kit) | 8 / 0 | 3.8 | 1145 / 517 | 4 of 8 |
+| Edsger | 6 / 0 | 3.3 | 1148 / 211 | 4 of 6 |
+| KurtGodel | 6 / 0 | 3.0 | 1131 / 381 | 6 of 6 |
+| Margaret (retuned) | 5 / 1 | 6.2 | 1210 / 854 | 3 of 6 |
+
+Ladder STR players end these fights the other way round; keep the
+nemesis challenges as the strength instrument.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
