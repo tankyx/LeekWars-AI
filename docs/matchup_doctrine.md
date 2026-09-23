@@ -1788,6 +1788,44 @@ enemy turn when adjacent, plus grenade launcher at range; she dealt
 5-10k per fight and took 8-14k. Same class as rotulet: a RES/WIS melee
 bruiser out-trades the 0-RES diver in her own range.
 
+### Lightninger-band retreat vs rotulet and topac: measured, rejected (2026-09-23)
+
+The rule (`_v9BandVsMeleeTank`, code kept, flag off): when the target's
+highest-damage weapon is melee and it has RES ≥ 250 and we carry a
+range-6+ weapon, price the end cell at top level in damage units — ending
+inside its melee reach (MP + jump + weapon range) costs 1500
+HP-equivalents unless the plan kills, ending in the 6-10 band with LoS
+after dealing damage earns 150 — and make the strip-dive hold the
+Liberation cast at range 6 instead of walking to contact. The existing
+kite_bruiser engagement plan already targets 6-9 for these opponents but
+sits under positionWeight 0.2, worth +500 against damage terms in the
+100k's, which is why it never bound. Local stand-ins cannot test this
+(Ada kills a 2545-HP clone in 3 turns, so the kill exemption bypasses the
+penalty); the challenges are the instrument. Traps hit on the way: a
+scorer reference to a field that does not exist threw on every scored
+scenario and the AI fell back to the simple attacker, which still beats
+the local bots — the smoke matrix passed at 4/4 everywhere. Smokes now
+also require `OBS_BEST` plan logs in every fight. A bare `{ }` block is a
+LeekScript parse error.
+
+| 5 challenges each | W / L | no-attack | dealt / taken per turn | end-dist ≤4 | lightninger uses | band term fired |
+|---|---|---|---|---|---|---|
+| rotulet, strip-dive only | 0 / 5 | 35% | 308 / 707 | — | — | — |
+| rotulet, band rule | 0 / 5 | 47% | 328 / **876** | 23 of 53 turns | 5 | inside 1392, hold **0** |
+| topac, diver kit | 0 / 5 | 23% | 630 / 875 | — | — | — |
+| topac, band rule | 0 / 5 | **12%** | 713 / 883 | 33 of 83 turns | 43 | inside 1479, hold 249 |
+
+vs rotulet the hold bonus never fired: the lightninger does 0 through
+fortress + wall at RES 480, so no band cell ever had damage > 0, and the
+only damaging plans remain strip + contact — the rule just made her hover
+and take more. vs topac the band engaged as designed (43 lightninger
+shots, half the no-attack turns gone, +13% dealt) and the exchange is
+still lost by 170 a turn: grenade launcher at range plus 400 WIS of
+healing and 300 RES of shields beat a 0-RES leek at any distance. Neither
+matchup moves with positioning; both are the build. Ada's three remaining
+nemeses are the leeks that out-sustain her, and the diver respec traded
+her old kiter losses for these. Flag off, deployed.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →

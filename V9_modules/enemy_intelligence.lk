@@ -255,7 +255,7 @@ function detectEnemyBuildType(str, mag, agi, sci, res) {
 // highest-damage weapon is melee (range <= 2), it has RES >= 250, and we
 // carry a weapon with range >= 6. Consumers: scorer top-level band term,
 // strip-dive walk-cell preference.
-global _v9BandVsMeleeTank = true
+global _v9BandVsMeleeTank = false
 global _v9BandInsideHP = 1500
 global _v9BandHoldHP = 150
 function v9MeleeTankBand(target) {

@@ -408,7 +408,6 @@ function main() {
     // ground was given up and how much TP/ops we burned.
     if (getTurn() <= 20) {
         debugW("OBS_END_T" + getTurn() + "_c" + getCell() + "_tp" + getTP() + "_mp" + getMP() + "_hp" + getLife() + "_ops" + getOperations())
-        if (getTurn() <= 20) { debugW("BAND_T" + getTurn() + "_inside" + __bandInside + "_hold" + __bandHold); __bandInside = 0; __bandHold = 0 }
     }
 
     // Persist weapon choice for cross-turn swap penalty
