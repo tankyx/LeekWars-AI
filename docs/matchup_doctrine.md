@@ -1955,6 +1955,37 @@ garden window; if she recovers, the magic weight profile needs
 re-tuning for multi-shot before the cap comes off, not the other way
 round.
 
+### Margaret: retune for multi-shot instead of the cap (2026-09-23)
+
+What the window's evidence actually says, re-read before touching weights:
+the 13 STR losses had *lower* damage taken per turn than her baseline STR
+losses (748 vs 924), slightly lower poison (673 vs 718), more direct
+damage (79 vs 18, double gun ×4.2 per fight vs 1.9), longer fights, and
+45% of turns in SUSTAIN; opponents were weaker than the baseline's (mean
+talent 1950 vs 2055 — the baseline was collected with the danger-avoiding
+selector, this window with random picks, which makes 1/14 vs STR *more*
+anomalous, not less). Neither her local STR testbeds (TheLeaker 6-5,
+Bretzel 12-12, pooled p=1) nor the live bots reproduce any harm from
+multi-shot: on the live engine, uncapped, she deals more poison per turn
+(686 vs 606 on Rex, 671 vs 625 on Hachess) and fires the gazor twice.
+The one mechanism the code supports is cheap filler: the attack helper
+zero-weights weapon DoT once chip poisons are queued, so extra double-gun
+shots are added for ~21 direct damage each and the magic profile's
+burstDamage 38 still paid for them (about 800 points a shot).
+
+Retune: `MAGIC_WEIGHTS.burstDamage` 38 → 12 (direct damage is nearly
+worthless to a STR-0 build; poison keeps `dotEffects` 224 and
+`poisonStacks` 164), `_v9MaxUsesMagicCap` off. Local smoke clean, paired
+panel null (as always for her), live bots with the retune: Rex poison
+per turn 768 (cap 606, uncapped-untuned 686), Hachess 642, no errors,
+fights shorter. Deployed. The decision instrument is the next real
+window (25 garden fights, random opponent pick, `real_before_after.py`
+with the 2026-09-23 08:40 window as the "before"): recovery to ~50%
+adopts the retune; a second 30-35% window reinstates the cap
+(`_v9MaxUsesMagicCap = 1`) and the multi-shot question for magic builds
+goes to a GA pass on the profile, not to more hand-tuning. Side-by-side
+root `9.0/V9-MS/` holds the same build for bot tests.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
