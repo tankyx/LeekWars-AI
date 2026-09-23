@@ -1333,8 +1333,7 @@ class ScenarioCombos extends ScenarioHelpers {
         }
         // 3. Three neutrino hits.
         if (vsSwap == 1) {
-            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
-            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_NEUTRINO, -1, -1, this._target))
             tpBudget -= 1
         }
         for (var i = 0; i < 3; i++) {
@@ -1392,8 +1391,7 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (getWeapon() != WEAPON_NEUTRINO) {
-            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
-            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_NEUTRINO, -1, -1, this._target))
             tpBudget -= 1
         }
 
@@ -2954,8 +2952,7 @@ class ScenarioCombos extends ScenarioHelpers {
         }
 
         if (getWeapon() != WEAPON_NEUTRINO) {
-            push(actions, new Action(Action.ACTION_WEAPON_SWAP, -1, -1, -1, this._target))
-            actions[count(actions) - 1].weapon = WEAPON_NEUTRINO
+            push(actions, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_NEUTRINO, -1, -1, this._target))
             tpBudget -= 1
         }
 
