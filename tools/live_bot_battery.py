@@ -8,9 +8,10 @@ test leek, through the test-scenario API (no garden / challenge credits).
 Opponent: a name from /test-leek/get-all (custom test leeks, e.g. StrongSTR,
 id -17934) or one of the built-in bots domingo/tuxo/bibol/hachess/rex
 (ids -1..-6). Bot AI: /normal (default) or /expert for custom test leeks.
-Prints W/L/D, turns per fight, damage dealt/taken per turn, weapons per
-fight on both sides, and runtime errors per side (the built-in bot AI throws
-1002 in roughly half its fights; our side must always be 0).
+Prints W/L/D, turns per fight, damage dealt/taken per turn, weapons AND
+chips per fight on both sides, and runtime errors per side. StrongSTR's
+expert AI overruns its own ops budget on some turns (a 1002 in about one
+fight in four, at 15-17M ops); our side must always be 0.
 """
 import argparse, json, os, sys, time
 from collections import Counter
@@ -80,6 +81,8 @@ def main():
                 held[cur] = x[1]
             elif x[0] == 16:
                 (weap if cur == mid else ew)[str(D.weapon(held.get(cur, -1)))] += 1
+            elif x[0] == 12 and len(x) > 1:
+                (weap if cur == mid else ew)['chip:' + str(D.chip(x[1]))] += 1
             elif x[0] == 1002:
                 errs['ours' if cur == mid else 'bot'] += 1
             if x[0] in (101, 110, 108) and len(x) > 2:

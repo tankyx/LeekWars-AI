@@ -2033,21 +2033,26 @@ AGI 250 / RES 50, 28 TP, 5 MP; odachi, neutrino, pistol, heavy sword;
 20 chips) driven by the built-in `/expert` AI. `tools/live_bot_battery.py
 <leek> StrongSTR --ai /expert -n 8` runs it for free through the
 test-scenario API (also takes domingo…rex and `--root` for side-by-side
-builds). What it is worth: a live-engine mechanism and error check that
-hits back harder than Domingo (Ada took 517 per turn vs ~0), not a
-strength test — the built-in AI only fires pistol and neutrino, never
-the odachi or sword, and throws runtime errors in roughly half its
-fights with both `/expert` and `/normal`.
+builds). It plays its full kit — devil strike, inversion, teleportation,
+jump, motivation/steroid/protein, neutrino stacks, pistol — and hits Ada
+for 1000+ per turn (7514 over a 6-turn loss). The first write-up here
+called it "pistol and neutrino only": that was a metric counting weapon
+uses (action 16) and ignoring chips (action 12). Its `1002` errors are
+its own ops budget: both error fights sat at 15-17M ops (budget 14M),
+about one fight in four, one turn each — the bot's problem, not ours.
 
-| vs StrongSTR /expert | W / L | turns | dealt / taken per turn | bot errors |
+| vs StrongSTR /expert | W / L | turns | dealt / taken per turn | bot ops errors |
 |---|---|---|---|---|
-| Ada (neutrino kit) | 8 / 0 | 3.8 | 1145 / 517 | 4 of 8 |
-| Edsger | 6 / 0 | 3.3 | 1148 / 211 | 4 of 6 |
-| KurtGodel | 6 / 0 | 3.0 | 1131 / 381 | 6 of 6 |
-| Margaret (retuned) | 5 / 1 | 6.2 | 1210 / 854 | 3 of 6 |
+| Ada (neutrino kit), batch 1 | 8 / 0 | 3.8 | 1145 / 517 | 4 fights |
+| Ada, batch 2 (3 s between launches) | 7 / 1 | 3.6 | — / ~1150 | 2 fights |
+| Edsger | 6 / 0 | 3.3 | 1148 / 211 | 4 |
+| KurtGodel | 6 / 0 | 3.0 | 1131 / 381 | 6 |
+| Margaret (retuned) | 5 / 1 | 6.2 | 1210 / 854 | 3 |
 
-Ladder STR players end these fights the other way round; keep the
-nemesis challenges as the strength instrument.
+Worth: the strongest free live-engine opponent we have (Domingo dealt
+~0), good for kit, error and mechanism checks; every leek still beats it
+~7-8 of 8 where ladder STR players split with them, so the nemesis
+challenges stay the strength instrument.
 
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
