@@ -3042,7 +3042,8 @@ class ScenarioCombos extends ScenarioHelpers {
             //    allows, tie-break on adversarial threat.
             var sdPos = this._player._cellPos
             var sdMpLeft = availableMP
-            if (dist > 6 || dist < 1) {
+            var sdBand = v9MeleeTankBand(this._target)
+            if (dist > 6 || dist < 1 || (sdBand && dist < 6)) {
                 var sdBest = -1
                 var sdBestD = 99
                 var sdBestT = 999999
@@ -3054,6 +3055,9 @@ class ScenarioCombos extends ScenarioHelpers {
                     if (sdD == null || sdD > 6 || sdD < 1) continue
                     if (!getCachedLineOfSight(sdC, this._target._cellPos)) continue
                     var sdT = getAdversarialThreat(sdC)
+                    // Band rule: vs a melee tank hold the strip at range 6 (the
+                    // lightninger band) instead of walking to contact.
+                    if (sdBand && sdD < 6) continue
                     if (sdD < sdBestD || (sdD == sdBestD && sdT < sdBestT)) {
                         sdBestD = sdD
                         sdBestT = sdT
@@ -3078,7 +3082,7 @@ class ScenarioCombos extends ScenarioHelpers {
             this._target._absShield = floor(sdAbsSave * 0.6)
             var sdAttacks = this.getAttackActions(tpBudget, 1.0, sdPos)
             var sdJumpCell = -1
-            if (count(sdAttacks) == 0 &&
+            if (count(sdAttacks) == 0 && !sdBand &&
                 mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
                 getCooldown(CHIP_JUMP, this._player._id) == 0 &&
                 tpBudget >= getCachedChipCost(CHIP_JUMP) + 4) {

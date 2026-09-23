@@ -4,6 +4,8 @@ include('ga_tunables.lk')
 global __inSurvivalMode = false
 global __lastSurvivalHP = 0
 
+global __bandInside = 0
+global __bandHold = 0
 class ScenarioScorer {
     _player = null
     _target = null
@@ -893,6 +895,35 @@ class ScenarioScorer {
         // route within its MP budget (spam-and-hide pattern). Complements
         // evaluateHerding which only checks the straight-line retreat axis.
         score += this.evaluateHideDenial(simResult.finalPosition)
+
+        // Band-vs-melee-tank (2026-09-23 experiment, `_v9BandVsMeleeTank`).
+        // rotulet (RES 480 / WIS 482, heavy sword) and topac (RES 300 / WIS
+        // 400, katana) beat the 0-RES diver 0/5 each on challenges: her sword
+        // does ~400 through their shields, theirs does 1218 to her. The
+        // kite_bruiser engagement plan already exists for them but sits under
+        // positionWeight 0.2 (+500 in band) against damage terms in the
+        // 100k's. This prices the end cell in damage units at top level:
+        // ending inside the tank's melee reach (MP + jump + weapon range)
+        // costs _v9BandInsideHP HP-equivalents unless the plan kills; ending
+        // in the ranged band (6-10, LoS) after dealing damage earns
+        // _v9BandHoldHP. Gate: highest-damage enemy weapon is melee (range
+        // <= 2) and RES >= 250 — rotulet, topac; not the rhino kiters.
+        if (simResult.finalPosition != -1 && this._enemyProfile != null && v9MeleeTankBand(this._target)) {
+                var bmD = getCellDistance(simResult.finalPosition, this._target._cellPos)
+                var bmMp = this._enemyProfile['mobilityMP']
+                if (bmMp == null) bmMp = 5
+                var bmChips = getChips(this._target._id)
+                var bmReach = bmMp + this._enemyProfile['preferredRange'] + (inArray(bmChips, CHIP_JUMP) ? 3 : 0)
+                var bmKill = (this._target._currHealth - simResult.damageDealt) <= 0
+                if (bmD != null && bmD <= bmReach && !bmKill) {
+                    score -= damageWeight * _v9BandInsideHP
+                    __bandInside++
+                } else if (bmD != null && bmD >= 6 && bmD <= 10 && simResult.damageDealt > 0
+                           && getCachedLineOfSight(simResult.finalPosition, this._target._cellPos)) {
+                    score += damageWeight * _v9BandHoldHP
+                    __bandHold++
+                }
+        }
 
         var adversarialThreat = 0
         if (__adversarialThreatCacheBuilt) {

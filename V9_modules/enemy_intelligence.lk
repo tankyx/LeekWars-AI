@@ -250,6 +250,27 @@ function detectEnemyBuildType(str, mag, agi, sci, res) {
     return BUILD_STRENGTH
 }
 
+
+// Melee-tank band rule (2026-09-23 experiment): true when the target's
+// highest-damage weapon is melee (range <= 2), it has RES >= 250, and we
+// carry a weapon with range >= 6. Consumers: scorer top-level band term,
+// strip-dive walk-cell preference.
+global _v9BandVsMeleeTank = true
+global _v9BandInsideHP = 1500
+global _v9BandHoldHP = 150
+function v9MeleeTankBand(target) {
+    if (!_v9BandVsMeleeTank || target == null) return false
+    if (__playerBuildType == BUILD_MAGIC || __playerBuildType == BUILD_TANK_SCI) return false
+    var prof = getEnemyProfile(target._id)
+    if (prof == null || prof['preferredRange'] == null || prof['preferredRange'] > 2) return false
+    if (target._resistance < 250) return false
+    for (var bw in mapKeys(arsenal.playerEquippedWeapons)) {
+        var bwo = arsenal.playerEquippedWeapons[bw]
+        if (bwo != null && bwo._maxRange >= 6) return true
+    }
+    return false
+}
+
 function getEnemyProfile(enemyId) {
     if (mapContainsKey(__enemyProfile, enemyId)) {
         return __enemyProfile[enemyId]
