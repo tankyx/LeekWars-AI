@@ -2054,6 +2054,39 @@ Worth: the strongest free live-engine opponent we have (Domingo dealt
 ~7-8 of 8 where ladder STR players split with them, so the nemesis
 challenges stay the strength instrument.
 
+### Cure account: today's build regressed the level-220 magic trio; rolled back (2026-09-23)
+
+Uploaded HEAD (36621 lines) to the Cure account, whose leeks had been on
+a mid-September build, and ran 25 random-pick garden fights per leek;
+then rolled the account back to 3cc85a69 (last commit before
+2026-09-15, 35724 lines, uploaded from a git worktree with
+`tools/config.json` copied in) and ran 25 more. **The Cure account is
+on 3cc85a69 until this is fixed.**
+
+| Cure leek (level, kit) | baseline (24 cached, selector) | HEAD window | rollback window |
+|---|---|---|---|
+| LeekRain (218, MAG 487, 17 TP / 5 MP) | 58%, 408 dealt/t, opp talent 980 | 10 / 15, 229/t, ftm 0.48, talent 981 | 12 / 13, 336/t, ftm 0.25, talent 921 |
+| DawnFall (221, MAG 502, 17 TP) | 54%, 336/t, talent 941 | 7 / 18, 189/t, ftm 0.35, talent 1003 | 13 / 12, 252/t, ftm 0.13, talent 911 |
+| DuskHope (219, MAG 502, 18 TP) | 50%, 385/t, talent 1050 | 8 / 16 / 1, 166/t, ftm 0.34, talent 1012 | 13 / 12, 339/t, ftm 0.16, talent 966 |
+| ProdigalSon (245, STR 580, 17 TP) | 62%, 355/t, talent 1162 | 11 / 13, 416/t, ftm 0.39, talent 1040 | 12 / 13, 385/t, ftm 0.16, talent 986 |
+
+HEAD 36 / 100 vs rollback 50 / 100; the rollback's opponents were ~50
+talent weaker, which does not cover a poison-per-turn drop of 30-50%
+(LeekRain 213 vs 324, DawnFall 184 vs 249, DuskHope 159 vs 330) at
+equal talent. The behavioural fingerprint is the same on all three
+magic leeks: fire-then-move doubled or tripled (0.13-0.25 → 0.34-0.48),
+fights 4-5 turns longer, fewer venom/slow_down casts per turn, more
+wall/vaccine/armor. That is the hide-after-fire machinery (hide-append,
+MP-bounded hide, reach gate, all measured only on 30-TP / 7-MP leeks)
+applied to 17-TP / 5-MP poison mages, plus whatever else landed between
+2026-09-15 and today. The one local toggle that moved DawnFall vs
+smart_str was hide-append off (5 W / 3 D vs 3 W / 5 D; turns 32 vs 45).
+Opponents' 1002s (3 / 0 / 2 / 1 fights) were theirs, not ours.
+
+Next: attribute on the level-220 kits — local hide-append on/off on the
+trio for poison per turn and fire-then-move, then a Cure garden window
+on HEAD with the winning flag state before re-uploading HEAD there.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
