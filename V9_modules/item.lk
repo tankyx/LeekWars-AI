@@ -1,3 +1,4 @@
+global _v9MaxUsesMagicCap = 1
 include('item_database.lk')
 
 class EffectsInfos {
@@ -122,6 +123,15 @@ class Arsenal {
                 // and getAttackActions never planned a second one.
                 var dbMaxUse = getWeaponMaxUses(w)
                 if (dbMaxUse == null || dbMaxUse <= 0) dbMaxUse = 99
+                // Magic-build hold (2026-09-23): the first real-ladder window
+                // after the fix had Margaret 1/14 vs STR opponents (baseline
+                // ~48%), losses full of triple double-gun turns; her scorer
+                // was tuned around one shot per turn. Capped back to 1 for
+                // MAG > STR + 100 builds until measured; STR/tank keep the
+                // engine value (Ada 13/12, Ed 14/11, KG 13/11 that window).
+                if (_v9MaxUsesMagicCap > 0 && getMagic(getEntity()) > getStrength(getEntity()) + 100 && dbMaxUse > _v9MaxUsesMagicCap) {
+                    dbMaxUse = _v9MaxUsesMagicCap
+                }
                 var dbWeapon = new Weapon(
                     w,
                     weaponData[1],
