@@ -1,6 +1,7 @@
 include('scenario_helpers.lk')
 
 global _v9ApproachJumpGate = true
+global _v9StripDive = true
 class ScenarioCombos extends ScenarioHelpers {
 
     constructor(arsenal, player, target, fieldMap, strategy) {
@@ -3008,7 +3009,14 @@ class ScenarioCombos extends ScenarioHelpers {
         if (getCooldown(CHIP_LIBERATION, this._player._id) != 0) return null
 
         var dist = getCellDistance(this._player._cellPos, this._target._cellPos)
-        if (dist == null || dist > 6) return null  // Liberation range is 0-6
+        if (dist == null) return null
+        // Walk-strip-dive (2026-09-23, rotulet challenges 0/5): at d10 vs a
+        // 92% relative shield stack (fortress 59 + wall 33 at RES 480) no
+        // template could deal damage, so Ada spent turns 1-3 walking and
+        // took 785/turn. With _v9StripDive the template walks into range 6,
+        // casts Liberation, then attacks against the stripped shields —
+        // jumping adjacent for the sword when the walk ends within 4.
+        if (!_v9StripDive && dist > 6) return null  // Liberation range is 0-6
 
         // Gate on strip value: shield mass, or 2+ relevant buffs.
         var absSh = this._target._absShield
@@ -3028,6 +3036,88 @@ class ScenarioCombos extends ScenarioHelpers {
 
         var libCost = getCachedChipCost(CHIP_LIBERATION)
         if (tpBudget < libCost) return null
+
+        if (_v9StripDive) {
+            // 1. Walk into Liberation range (<= 6, LoS), as close as the graph
+            //    allows, tie-break on adversarial threat.
+            var sdPos = this._player._cellPos
+            var sdMpLeft = availableMP
+            if (dist > 6 || dist < 1) {
+                var sdBest = -1
+                var sdBestD = 99
+                var sdBestT = 999999
+                var sdReach = getReachableCells()
+                for (var sdC in sdReach) {
+                    var sdMp = getGraphMPCost(sdC)
+                    if (sdMp == null || sdMp > availableMP) continue
+                    var sdD = getCellDistance(sdC, this._target._cellPos)
+                    if (sdD == null || sdD > 6 || sdD < 1) continue
+                    if (!getCachedLineOfSight(sdC, this._target._cellPos)) continue
+                    var sdT = getAdversarialThreat(sdC)
+                    if (sdD < sdBestD || (sdD == sdBestD && sdT < sdBestT)) {
+                        sdBestD = sdD
+                        sdBestT = sdT
+                        sdBest = sdC
+                    }
+                }
+                if (sdBest == -1) return null
+                push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, sdBest, this._target))
+                sdMpLeft = availableMP - getGraphMPCost(sdBest)
+                sdPos = sdBest
+                simPos = sdBest
+            }
+            // 2. Strip.
+            push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_LIBERATION, this._target._cellPos, this._target))
+            tpBudget -= libCost
+            // 3. Attacks priced against the stripped shields (x0.6, as the
+            //    simulator models it). Temporarily patch the target's shields
+            //    so the attack helpers see what the sword will see.
+            var sdRelSave = this._target._relShield
+            var sdAbsSave = this._target._absShield
+            this._target._relShield = sdRelSave * 0.6
+            this._target._absShield = floor(sdAbsSave * 0.6)
+            var sdAttacks = this.getAttackActions(tpBudget, 1.0, sdPos)
+            var sdJumpCell = -1
+            if (count(sdAttacks) == 0 &&
+                mapContainsKey(this._arsenal.playerEquippedChips, CHIP_JUMP) &&
+                getCooldown(CHIP_JUMP, this._player._id) == 0 &&
+                tpBudget >= getCachedChipCost(CHIP_JUMP) + 4) {
+                // Jump adjacent for a melee weapon when the walk ended within 4.
+                var sdTx = getCellX(this._target._cellPos)
+                var sdTy = getCellY(this._target._cellPos)
+                var sdBestJT = 999999
+                for (var sdDx = -1; sdDx <= 1; sdDx++) {
+                    for (var sdDy = -1; sdDy <= 1; sdDy++) {
+                        if (abs(sdDx) + abs(sdDy) != 1) continue
+                        var sdJ = getCellFromXY(sdTx + sdDx, sdTy + sdDy)
+                        if (sdJ == null || sdJ < 0) continue
+                        if (isObstacle(sdJ) || isEntity(sdJ)) continue
+                        var sdJD = getCellDistance(sdPos, sdJ)
+                        if (sdJD == null || sdJD < 1 || sdJD > 3) continue
+                        var sdJT = getAdversarialThreat(sdJ)
+                        if (sdJT < sdBestJT) { sdBestJT = sdJT; sdJumpCell = sdJ }
+                    }
+                }
+                if (sdJumpCell != -1) {
+                    sdAttacks = this.getAttackActions(tpBudget - getCachedChipCost(CHIP_JUMP), 1.0, sdJumpCell)
+                    if (count(sdAttacks) == 0) sdJumpCell = -1
+                }
+            }
+            this._target._relShield = sdRelSave
+            this._target._absShield = sdAbsSave
+            if (count(sdAttacks) == 0) {
+                // Nothing lands even stripped: keep the plain strip only when
+                // it needed no walk (old behaviour), never a walk for nothing.
+                if (dist <= 6) return actions
+                return null
+            }
+            if (sdJumpCell != -1) {
+                push(actions, new Action(Action.ACTION_TELEPORT, -1, CHIP_JUMP, sdJumpCell, this._target))
+            }
+            for (var sdA in sdAttacks) push(actions, sdA)
+            return actions
+        }
+
         push(actions, new Action(Action.ACTION_DEBUFF, -1, CHIP_LIBERATION, this._target._cellPos, this._target))
         tpBudget -= libCost
 
