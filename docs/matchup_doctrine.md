@@ -2211,6 +2211,52 @@ would show as talent trending up over weeks with the selector, not in
 any 25-fight window; keep reading `talent_history` weekly and stop
 spending garden credits on random-pick windows for that purpose.
 
+### Peek-and-retreat built; `arraySort` never sorted (2026-09-24)
+
+**Bug found on the way: LeekScript 4 `arraySort(a, f)` returns a new sorted
+array and leaves `a` untouched** (verified with a standalone AI: in-place
+order unchanged, returned array sorted, both int and float comparators).
+All 13 V9 calls (11 in V8) discarded the result, so none ever sorted:
+quick-score ranking before pruning (the simulator evaluated the first N
+scenarios in *generation order*), beam-search pruning, lookahead / hide-
+append / re-rank top-K, and the enemy-threat greedy fill. Fixed by
+assigning the result at every site (0e25d066). The peek template was
+generated late in the list and pruned on every turn before this.
+
+**Template** (`createPeekRetreatScenarios`, `_v9PeekRetreat`): firing cells
+= reachable cells from which an affordable weapon is in range / LoS /
+launch-valid with ≥ 2 MP left, farthest first; for up to 8 of them, attacks
+from that cell, then the retreat cell reachable with the leftover MP that is
+out of LoS (else ≤ half the threat), preferring hidden then lower threat
+then farther. Up to two plans per turn, generated in every combat state,
+retreat as `MOVEMENT_PAB` (now handled by the executor like HNS). Gated on
+max MP ≥ 6 with the other hide sources. No checkpoint (would add 2500).
+
+**Why the scorer never chose it, and the change:** peek plans deal 35-93%
+of the best plan's damage; the only compensation was
+`threatReduction` × cache (0.4 per HP) against `burstDamage` 163 per HP,
+and the cache rates a hidden far cell like the firing cell. Real data
+disagree sharply — next-turn damage taken, relative to an open end at
+distance ≤ 5 (identical in 46k top-300 and 8k own turn pairs):
+
+| end of turn | ≤ 5 | 6-8 | 9+ |
+|---|---|---|---|
+| open | 1.00 | 1.0 | 0.72 |
+| hidden | 0.90 | 0.75 | **0.36** |
+
+`_v9ThreatHpSymmetric`: expected incoming HP = cache × 0.52 × that factor
+(0.52 re-fits the overall 0.4 calibration), net of shields gained, priced
+at the same weight as outgoing damage (max of burst and DoT weight).
+
+**Results.** Local smoke clean with plan logs. Paired panel vs the deployed
+build d832f7e9 (V9 both sides, n=20 each): Ada/TheLeaker 11-8, Edsger/
+Éleeksire 12-16, Margaret/TheLeaker 3-6; pooled 26-30, p = 0.56, HP-lead
+−5.9 (t = −0.81) — noise, as every positioning change is on these
+testbeds. Mechanism: fire-then-move +0.18 pooled (Ada 0.53 → 0.74,
+Margaret 0.19 → 0.50), shot denial +0.07. Live StrongSTR fights are too
+short (3-7 turns) to show it. Not deployed; the only instrument that can
+judge it is talent under the normal selector.
+
 ### What the top 300 do that we don't (2026-09-24, `tools/top_vs_us.py`)
 
 Data: 5,181 solo fights owned by top-300 leeks (`data/ladder/solo_fights_wide.json`,
