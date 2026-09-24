@@ -2023,6 +2023,10 @@ function executeBossStand() {
     var hasNeut = inArray(weps, WEAPON_NEUTRINO)
     var hasLight = inArray(weps, WEAPON_LIGHTNINGER)
     if (!hasRhino && !hasNeut) { return false }
+    // STR bodies only (like Gather/Melee): 8-leek fight 53593096 — DawnFall
+    // (MAG 502, carries a Neutrino) was captured here, "STAND none" x4 at
+    // hp100, and never reached the poison path.
+    if (getStrength() < 300) { return false }
     var army = puzzleArmyCells()
     if (count(army) == 0) { return false }
     castCovetousness(myID)
@@ -2233,7 +2237,7 @@ function executeBossStand() {
             if (getWeapon() != WEAPON_LIGHTNINGER) setWeapon(WEAPON_LIGHTNINGER)
             var ln = 0
             while (getTP() >= 9 && ln < 2 && isAlive(lt)) { if (useWeapon(lt) < 1) break; ln++ }
-            if (ln > 0) did = did + " light" + ln
+            if (ln > 0) { did = did + " light" + ln; fired = true }
         }
     }
     // self-shields only after a shot landed or the army is adjacent — a
@@ -2250,6 +2254,10 @@ function executeBossStand() {
     if (getTP() >= 3 && allyHasChip(myID, CHIP_ANTIDOTE) && isPoisoned(myID) && getCooldown(CHIP_ANTIDOTE, myID) == 0) useChip(CHIP_ANTIDOTE, myID)
     if (pct < 70 && getTP() >= 5 && allyHasChip(myID, CHIP_REMISSION) && getCooldown(CHIP_REMISSION, myID) == 0) useChip(CHIP_REMISSION, myID)
     pzSay("PZ STAND " + (pickT != -1 ? getName(pickT) : "none") + did + " mv" + moved + " tp" + getTP() + " hp" + pct)
+    // No shot landed: fall through so Melee (rhino approach) / Poke can spend
+    // the leftover TP+MP. 53593096: ProdigalSon (STR 580, rhino+lightninger, no
+    // m_laser) sat "STAND none" x4 at hp100 while this returned true.
+    if (!fired) { return false }
     return true
 }
 
@@ -3717,6 +3725,18 @@ function executeBallEscortTurn(myID, leaderID) {
 // PUZZLE phase — preserving a fresh, full-HP body for COMBAT. When the graal
 // dies executePuzzleTurn stops routing here (phase != PUZZLE) and normal combat
 // takes over.
+// Reserve retreat: the real-path coldest cell in reach (armyCap 14), not the
+// engine's greedy moveAwayFromCells — that walked DuskHope from its spawn
+// pocket TOWARD the army in both 8-leek fights (53593096/107: d 15→9→6, dead
+// T4/T5) as its away-options shrank. Falls back to the old move if the chooser
+// finds nothing.
+function reserveRetreat(myID, armyCells) {
+    if (count(armyCells) == 0 || getMP() <= 0) { return }
+    var rc = choosePuzzleSustainCellCapped(myID, getCell(), false, 14)
+    if (rc != -1 && rc != getCell()) { moveTowardCell(rc, getMP()) }
+    else if (rc == -1) { moveAwayFromCells(armyCells, getMP()) }
+}
+
 function reservePuzzleHold(myID) {
     solverSelfBuff(myID)
     var rvAll = getAliveAllies()
@@ -3727,7 +3747,7 @@ function reservePuzzleHold(myID) {
         if (rvDid != "") { pzSay("PZ RESV-STACK" + rvDid) }
     }
     var rvArmy = puzzleArmyCells()
-    if (count(rvArmy) > 0 && getMP() > 0) { moveAwayFromCells(rvArmy, getMP()) }
+    reserveRetreat(myID, rvArmy)
     var rvc = getCell()
     if (isCorridorCell(rvc) && getMP() > 0) { moveAwayFromCells(rvArmy, 1); rvc = getCell() }
     pzSay("PZ RESERVE d" + (count(rvArmy) > 0 ? nearestArmyDistFrom(rvc, rvArmy) : 99))
@@ -3787,7 +3807,8 @@ function executeLeanPuzzleTurn() {
         // the EARLY lure turns so inversion (cd 4) recharges before the dive.
         if (_lureExile && getTurn() <= 2) { lureInversionExile(myID) }
         lArmy = puzzleArmyCells()
-        if (count(lArmy) > 0 && getMP() > 0) { moveAwayFromCells(lArmy, getMP()) }
+        if (isReserveName(getName(myID))) { reserveRetreat(myID, lArmy) }
+        else if (count(lArmy) > 0 && getMP() > 0) { moveAwayFromCells(lArmy, getMP()) }
         var lc = getCell()
         // never park a lure turn on a corridor articulation cell (walls the team out)
         if (isCorridorCell(lc) && getMP() > 0) { moveAwayFromCells(lArmy, 1); lc = getCell() }

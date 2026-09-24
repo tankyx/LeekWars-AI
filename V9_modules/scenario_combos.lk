@@ -3,6 +3,8 @@ include('scenario_helpers.lk')
 global _v9ApproachJumpGate = true
 global _v9StripDive = true
 global _v9VulnStackDive = true
+global _v9PeekRetreat = true
+global _v9PeekMinRetreat = 2
 class ScenarioCombos extends ScenarioHelpers {
 
     constructor(arsenal, player, target, fieldMap, strategy) {
@@ -1231,6 +1233,111 @@ class ScenarioCombos extends ScenarioHelpers {
     // to the best diagonal launch cell, strips with Liberation when it can,
     // lands the three hits, spends the rest against the reduced shields and
     // marks the plan so the scorer prices the next-turn sword.
+    // Peek-and-retreat (2026-09-24). Top-300 leeks fire from the edge of
+    // their range (median distance 6 STR / 7 MAG, ours 4) after ~3 MP in, then
+    // spend 2-3 MP after the shot to leave the enemy's line of sight (60-72%
+    // of their firing turns; ours 9-26%). Our hide logic appended a hide to
+    // plans chosen for damage; this chooses the firing cell WITH the retreat:
+    // the farthest in-range cell that still leaves MP to reach a no-LoS cell
+    // (or a much safer one). Emits up to two plans; the scorer decides.
+    // Retreat step uses MOVEMENT_PAB so picks are identifiable in logs.
+    createPeekRetreatScenarios(availableTP, availableMP) {
+        var outPR = []
+        if (!_v9PeekRetreat || this._target == null) return outPR
+        if (this._player._maxMp < _v9HideMinMp) return outPR
+        if (availableMP < 3 || availableTP < 3) return outPR
+        if (getOperations() > _ops71) return outPR
+        var tPos = this._target._cellPos
+        var pool = [this._player._cellPos]
+        for (var rc in getReachableCells()) push(pool, rc)
+        var curW = getWeapon()
+        // 1. Firing candidates: in range + LoS + launch-valid for some affordable
+        //    weapon, with >= _v9PeekMinRetreat MP left afterwards.
+        var cands = []
+        for (var c in pool) {
+            var mpC = (c == this._player._cellPos) ? 0 : getGraphMPCost(c)
+            if (mpC == null || mpC > availableMP - _v9PeekMinRetreat) continue
+            var d = getCellDistance(c, tPos)
+            if (d == null || d < 2) continue
+            var canHit = false
+            for (var wid in mapKeys(this._arsenal.playerEquippedWeapons)) {
+                var w = this._arsenal.playerEquippedWeapons[wid]
+                if (w == null) continue
+                var sw = (curW != wid) ? 1 : 0
+                if (w._cost + sw > availableTP) continue
+                if (d < w._minRange || d > w._maxRange) continue
+                if (w._launchType != null && w._launchType > 0 && !isSimLaunchValid(w._launchType, c, tPos)) continue
+                if (!getCachedLineOfSight(c, tPos)) break
+                canHit = true
+                break
+            }
+            if (!canHit) continue
+            push(cands, [c, d, mpC, getAdversarialThreat(c)])
+        }
+        if (count(cands) == 0) return outPR
+        // Order farthest first, lower threat first within a distance (explicit
+        // bucket pass: arraySort left these array rows unordered).
+        var byD = [:]
+        var maxD = 0
+        for (var cq in cands) {
+            if (!mapContainsKey(byD, cq[1])) byD[cq[1]] = []
+            push(byD[cq[1]], cq)
+            if (cq[1] > maxD) maxD = cq[1]
+        }
+        var ordered = []
+        for (var dq = maxD; dq >= 2; dq--) {
+            if (!mapContainsKey(byD, dq)) continue
+            var bucket = byD[dq]
+            while (count(bucket) > 0) {
+                var bi = 0
+                for (var bj = 1; bj < count(bucket); bj++) { if (bucket[bj][3] < bucket[bi][3]) bi = bj }
+                push(ordered, bucket[bi])
+                remove(bucket, bi)
+            }
+        }
+        cands = ordered
+        // 2. For the farthest candidates, find a retreat cell.
+        var tried = 0
+        for (var ci = 0; ci < count(cands) && count(outPR) < 2 && tried < 8; ci++) {
+            if (getOperations() > _ops71) break
+            var fc = cands[ci][0]; var fd = cands[ci][1]; var fmp = cands[ci][2]
+            var left = availableMP - fmp
+            tried++
+            var atks = this.getAttackActions(availableTP, 1.0, fc)
+            if (count(atks) == 0) continue
+            var hasMove = false
+            for (var at in atks) { if (at.type >= Action.MOVEMENT_APPROACH && at.type <= Action.MOVEMENT_PAB) { hasMove = true; break } }
+            if (hasMove) continue
+            var fThreat = getAdversarialThreat(fc)
+            var best = -1; var bestHid = false; var bestT = 999999; var bestD = -1
+            for (var sc in pool) {
+                if (sc == fc) continue
+                var dd = getCellDistance(fc, sc)
+                if (dd == null || dd > left) continue
+                var hid = !getCachedLineOfSight(sc, tPos)
+                var th = getAdversarialThreat(sc)
+                if (!hid && th > fThreat * 0.5) continue
+                if (bestHid && !hid) continue
+                var ed = getCellDistance(sc, tPos)
+                if (ed == null) continue
+                if (!(hid && !bestHid) && !(th < bestT || (th == bestT && ed > bestD))) continue
+                var pl = getCachedPathLength(fc, sc)
+                if (pl == null || pl <= 0 || pl > left) continue
+                best = sc; bestHid = hid; bestT = th; bestD = ed
+            }
+            if (best == -1) continue
+            var acts = []
+            if (fc != this._player._cellPos) push(acts, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, fc, this._target))
+            for (var at2 in atks) push(acts, at2)
+            push(acts, new Action(Action.MOVEMENT_PAB, -1, -1, best, this._target))
+            push(outPR, acts)
+            if (getTurn() <= 30) {
+                debugW("PEEK_T" + getTurn() + "_fc" + fc + "_d" + fd + "_rc" + best + "_hid" + (bestHid ? 1 : 0) + "_thr" + floor(fThreat) + ">" + floor(bestT) + "_n" + count(atks))
+            }
+        }
+        return outPR
+    }
+
     createVulnStackDiveScenario(availableTP, availableMP) {
         if (!_v9VulnStackDive) return null
         if (this._target == null) return null

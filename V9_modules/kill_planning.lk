@@ -65,7 +65,7 @@ class KillPlanner {
             }
         }
 
-        arraySort(damageItems, function(a, b) {
+        damageItems = arraySort(damageItems, function(a, b) {
             var ratioA = a['damage'] / a['cost']
             var ratioB = b['damage'] / b['cost']
             return ratioB - ratioA

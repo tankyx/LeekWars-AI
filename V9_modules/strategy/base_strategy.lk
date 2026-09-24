@@ -2113,7 +2113,7 @@ class Strategy {
             push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore])
         }
 
-        arraySort(scenariosWithQuickScore, function(a, b) {
+        scenariosWithQuickScore = arraySort(scenariosWithQuickScore, function(a, b) {
             return b['quickScore'] - a['quickScore']
         })
 
@@ -2151,7 +2151,7 @@ class Strategy {
         }
 
         if (count(scenarioResults) >= 1 && getOperations() < _ops71) {
-            arraySort(scenarioResults, function(a, b) {
+            scenarioResults = arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
 
@@ -2233,7 +2233,7 @@ class Strategy {
                 moveAwayFrom(a.targetEntity._id)
                 hasMoved = true
             }
-            else if (a.type == Action.MOVEMENT_HNS) {
+            else if (a.type == Action.MOVEMENT_HNS || a.type == Action.MOVEMENT_PAB) {
                 if (hasMoved && attacksSucceeded == 0) {
                     continue
                 }

@@ -183,6 +183,14 @@ class ScenarioGenerator extends ScenarioCombos {
             }
         }
 
+        // Peek-and-retreat: every combat state; competes on score.
+        if (state == "AGGRO" || state == "ATTRITION" || state == "SUSTAIN" ||
+            state == "KILL" || state == "CLEANUP") {
+            for (var prS in this.createPeekRetreatScenarios(availableTP, availableMP)) {
+                push(scenarios, prS)
+            }
+        }
+
         // Support template: for BUILD_SUPPORT with living teammates, in every
         // combat state. The state machine is 1v1-target-centric; team support
         // is orthogonal to it — the scenario competes on the allySupport
