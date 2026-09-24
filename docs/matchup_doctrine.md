@@ -2095,6 +2095,28 @@ Attribution from the fights' own logs (12 fights per arm per leek):
 | DawnFall | 31% | 8% | 136 of 182 (dot-only 65) | 74 of 111 |
 | DuskHope | 41% | 6% | 104 of 143 (dot-only 55) | 84 of 132 |
 
+**Validation of the MP gate (2026-09-24, 25 random-pick fights per leek
+on HEAD with `_v9HideAppendMinMp = 6`):**
+
+| Cure leek | HEAD (23rd) | rollback (23rd) | HEAD + MP gate (24th) | opp talent |
+|---|---|---|---|---|
+| LeekRain | 10 / 15, poison/t 213, hide plans 29% | 12 / 13, 324, 4% | 13 / 12, 252, 26% | 932 |
+| DawnFall | 7 / 18, 184, 31% | 13 / 12, 249, 8% | 13 / 12, 225, 21% | 922 |
+| DuskHope | 8 / 16 / 1, 159, 41% | 13 / 12, 330, 6% | 9 / 14 / 2, 158, 14% | 872 |
+| ProdigalSon | 11 / 13 | 12 / 13 | 14 / 10 / 1 | 996 |
+
+Wins 49 / 100 vs the rollback's 50 / 100, so the gate recovered the
+outcome on average, but not the mechanism: the trio's poison per turn is
+still 20-50% below the rollback and hide moves are still in 14-26% of
+picked plans (DuskHope, against the weakest opponents of the three
+windows, 9 / 14 / 2). The append pass was only one of the hide sources;
+the MP-bounded hide templates and the reach gate (both 2026-09-21/22)
+still fire on 5-MP leeks. Decision by the rule: **kept rollback** —
+3cc85a69 re-uploaded to Cure. Next: bisect the remaining hide changes
+(`findHideAndSeekCell` MP bound, `getHideAndSeekAction`, reach gate) on
+the same instrument, one Cure window each, and consider one mobility
+gate for all of them rather than per-pass flags.
+
 Vetoes and fallbacks are the same order in both arms; the difference is
 the hide-after-fire machinery (hide-append pass, MP-bounded hide, reach
 gate), which was measured only on 30-TP / 7-MP leeks. Local bots cannot
