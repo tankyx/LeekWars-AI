@@ -2211,6 +2211,36 @@ would show as talent trending up over weeks with the selector, not in
 any 25-fight window; keep reading `talent_history` weekly and stop
 spending garden credits on random-pick windows for that purpose.
 
+### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
+
+Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
+m_laser use correlates with talent (+0.52 / +0.41 / +0.27), rhino and
+heavy sword negatively (−0.34 / −0.23). 25 nemesis challenges per arm,
+same seeds (500-504), both on 12e6e563 (sort fix + peek + symmetric threat).
+
+| opponent | A: neutrino, rhino, enh. lightninger, heavy sword | B: rhino, enh. lightninger, lightninger, m_laser |
+|---|---|---|
+| rotulet | 0 / 5 | 0 / 5 |
+| grinhaire | 0 / 5 | 0 / 5 |
+| topac | 0 / 5 | **4 / 1** |
+| Yongyong | 2 / 3 | 3 / 2 |
+| HerculeNsjtt | **5 / 0** | 2 / 3 |
+| **total** | 7 / 18, 709 dealt / 719 taken per turn | 9 / 16, 561 / 610 |
+| fire distance / MP after shot | 6 / 2.4 | 7 / 2.5 |
+| move after fire / hidden end / end distance | 63% / 56% / 8 | 68% / 65% / 9 |
+
+Same-seed pairs: B gained 6, lost 4, McNemar p = 0.75 — not
+distinguishable. The two kits trade matchups: the long-range kit takes
+topac (a katana bruiser it can out-range) and loses HerculeNsjtt (a rhino
+kiter the dive kit beats). Current kit restored on the leek.
+
+The deployed build's positioning shows up on real opponents with either
+kit: move-after-fire 63-68% and hidden ends 56-65% (Ada before the
+deploy: 24% and 43%), firing distance 6-7 (was 4), end distance 8-9 —
+the top-300 profile. Topac fell from 3 / 2 (neutrino kit, previous build)
+to 0 / 5 on the control arm: the peek plans outcompete the stack-then-dive
+line against him.
+
 ### Cure account: sort fix only, on the rollback build (2026-09-24)
 
 Cure now runs **653c0b8a** (branch `cure-3cc85a69-sortfix`, pushed) =
