@@ -37,6 +37,7 @@ function getTeleportMaxRange(chipId) {
     return 0
 }
 
+global _v9HideMinMp = 6
 class ScenarioHelpers {
     _arsenal = null
     _player = null
@@ -1134,6 +1135,13 @@ class ScenarioHelpers {
 
     getHideAndSeekAction(mpBudget, fromCell = -1) {
         if (mpBudget <= 0) return null
+        // Mobility gate (2026-09-24): the MP-bounded, from-simPos hide made
+        // hide plans feasible (they used to be dropped by the simulator) and
+        // put a hide move in 29-41% of the Cure magic trio's picked plans
+        // (17-18 TP / 5 MP) against 4-8% on the 2026-09-15 build, halving
+        // their poison per turn. Below _v9HideMinMp max MP, use the old path:
+        // one cached hide from the current cell, unbounded.
+        if (fromCell != -1 && this._player._maxMp < _v9HideMinMp) fromCell = -1
         if (fromCell == -1) {
             if (this._hideCache != null) return this._hideCache
             var hideCell0 = this._fieldMap.findHideAndSeekCell("defensive")
