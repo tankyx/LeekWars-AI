@@ -156,6 +156,11 @@ def analyse(f, owner):
                     other = [i for i, p in pos.items() if p == a[2]]
                     if other:
                         pos[other[0]], pos[cur] = pos[cur], a[2]
+        elif c in (101, 107, 108) and len(a) > 2 and a[1] == mid and cur != mid and out['turns']:
+            out['turns'][-1]['taken_after'] = out['turns'][-1].get('taken_after', 0) + a[2]
+            if a[1] == eid:
+                pass
+            out['taken_total'] = out.get('taken_total', 0) + a[2]
         elif c in (101, 107, 110, 108) and len(a) > 2:
             if a[1] == eid and cur == mid and t is not None and c != 110:
                 t['dealt'] += a[2]

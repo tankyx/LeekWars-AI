@@ -7,6 +7,8 @@ global __lastSurvivalHP = 0
 global __bandInside = 0
 global __bandHold = 0
 global _v9VulnNextTurn = true
+global _v9ThreatHpSymmetric = true
+global _v9ThreatHpScale = 0.52
 global _v9VulnNextTurnDisc = 1.0
 class ScenarioScorer {
     _player = null
@@ -991,6 +993,34 @@ class ScenarioScorer {
 
             var threatWeight = this.getWeight('threatReduction', 40) / 100.0
             score -= adversarialThreat * threatWeight
+
+            // HP-symmetric incoming damage (2026-09-24). One HP dealt is worth
+            // damageWeight (163 for STR) but one HP of predicted incoming damage
+            // cost threatWeight (0.4): the scorer could never prefer the top-300
+            // pattern of firing from the edge of range and stepping out of LoS
+            // (their plans deal 35-93% of our best plan's damage and end hidden).
+            // Price expected incoming HP at the same weight as outgoing HP; the
+            // expected value is the adversarial cache x _v9ThreatHpScale (0.4,
+            // fit on 1,727 real turn pairs), net of shields gained this plan.
+            if (_v9ThreatHpSymmetric) {
+                var hpW = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight()))
+                // Real next-turn damage vs end position (46k top-300 + 8k own
+                // turn pairs, identical ratios in both): relative to an open end
+                // at distance <= 5, open 6-8 x1.0, open 9+ x0.72, hidden <= 5
+                // x0.9, hidden 6-8 x0.75, hidden 9+ x0.36. The cache is a worst
+                // case that rates a hidden far cell like the firing cell.
+                var posF = 1.0
+                if (this._target != null && simResult.finalPosition != -1) {
+                    var fdS = getCellDistance(simResult.finalPosition, this._target._cellPos)
+                    var hidS = !getCachedLineOfSight(simResult.finalPosition, this._target._cellPos)
+                    if (fdS != null) {
+                        if (hidS) posF = (fdS >= 9) ? 0.36 : ((fdS >= 6) ? 0.75 : 0.9)
+                        else posF = (fdS >= 9) ? 0.72 : 1.0
+                    }
+                }
+                var expIn = effectiveEnemyDmg * _v9ThreatHpScale * posF - simResult.shieldsGained
+                if (expIn > 0) score -= hpW * expIn
+            }
 
             if (adversarialThreat > 300) {
                 score += (simResult.hpGained + simResult.shieldsGained) * (adversarialThreat / 1000.0)
