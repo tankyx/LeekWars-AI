@@ -2105,6 +2105,18 @@ on HEAD with `_v9HideAppendMinMp = 6`):**
 | DuskHope | 8 / 16 / 1, 159, 41% | 13 / 12, 330, 6% | 9 / 14 / 2, 158, 14% | 872 |
 | ProdigalSon | 11 / 13 | 12 / 13 | 14 / 10 / 1 | 996 |
 
+**Single mobility gate built (2026-09-24, d832f7e9):** `_v9HideMinMp = 6`
+in scenario_helpers. Below it, `getHideAndSeekAction` ignores the
+from-simPos / MP-bounded path (the 2026-09-21 change that made hide plans
+feasible) and uses the pre-2026-09-15 path — one cached hide from the
+current cell, unbounded — and the hide-append pass shares the threshold.
+Local hide-plan share after the gate: LeekRain 0%, DawnFall 2%,
+ProdigalSon 2%, DuskHope 17% (vs smart_str); main leeks unchanged (Ada
+43%, Margaret 32%, KG 8%). Cure had 19 credits left; the 100-fight
+window is scheduled for 2026-09-25 05:07 UTC with the decision rule:
+adopt only if the trio's wins ≥ rollback, poison per turn within ~15% of
+the rollback, hide plans under ~12%.
+
 Wins 49 / 100 vs the rollback's 50 / 100, so the gate recovered the
 outcome on average, but not the mechanism: the trio's poison per turn is
 still 20-50% below the rollback and hide moves are still in 14-26% of
