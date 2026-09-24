@@ -2257,6 +2257,14 @@ Margaret 0.19 → 0.50), shot denial +0.07. Live StrongSTR fights are too
 short (3-7 turns) to show it. Not deployed; the only instrument that can
 judge it is talent under the normal selector.
 
+
+**Deployed to main 2026-09-24 (12e6e563, 36780 lines) on the owner's call.**
+Talent at deploy: Ada 2009, Edsger 2049, KurtGodel 1999, Margaret 1961.
+Live check vs StrongSTR /expert, 4 each: 3/1, 4/0, 4/0, 3/1, 0 runtime
+errors on our side. Rollback: upload d832f7e9. Read `talent_history` over
+1-2 weeks; mechanism check on real fights with `tools/top_vs_us.py`
+(fire distance, MP after the shot, hidden end).
+
 ### What the top 300 do that we don't (2026-09-24, `tools/top_vs_us.py`)
 
 Data: 5,181 solo fights owned by top-300 leeks (`data/ladder/solo_fights_wide.json`,
