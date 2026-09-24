@@ -2211,6 +2211,19 @@ would show as talent trending up over weeks with the selector, not in
 any 25-fight window; keep reading `talent_history` weekly and stop
 spending garden credits on random-pick windows for that purpose.
 
+### Cure account: sort fix only, on the rollback build (2026-09-24)
+
+Cure now runs **653c0b8a** (branch `cure-3cc85a69-sortfix`, pushed) =
+3cc85a69 + the 12 `arraySort` assignments, nothing else (no peek template,
+no symmetric threat, no hide changes). Local smoke clean with plan logs.
+Live vs Domingo, 8 fights per leek, previous build (side root `9.0/V9-R/`)
+vs sort-fixed: LeekRain 1 / 7 vs 3 / 5, DawnFall 4 / 4 vs 2 / 6, DuskHope
+3 / 5 vs 5 / 3, ProdigalSon 3 / 5 vs 3 / 5 — 11 vs 13 of 32, no errors on
+our side in either (Domingo beats level-220 leeks about 60% of the time
+with either build). Talent at upload: LeekRain 947, DawnFall 922, DuskHope
+868, ProdigalSon 1022. The scheduled hide-gate validation on Cure was
+cancelled: its reference windows were taken on the unsorted build.
+
 ### Peek-and-retreat built; `arraySort` never sorted (2026-09-24)
 
 **Bug found on the way: LeekScript 4 `arraySort(a, f)` returns a new sorted
