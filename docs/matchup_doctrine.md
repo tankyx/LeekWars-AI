@@ -2151,6 +2151,23 @@ bazooka gives HerculeNsjtt nothing either (fired 2 per fight). Kit
 decided: neutrino stays on Ada. A probe fight launched before the swap
 (neutrino kit, topac, loss at 847/886) is not counted in either arm.
 
+### Neutrino kit, remaining nemeses: Yongyong 3 / 2, grinhaire 0 / 5 (2026-09-24)
+
+| 5 challenges | diver kit (23rd) | max-uses build, neutrino kit |
+|---|---|---|
+| Yongyong | 3 / 1 / 1, 261 / 368 per turn | 3 / 2, 640 / 819 |
+| grinhaire | 0 / 5, 506 / 592 | 0 / 5, **833 / 833** |
+
+Yongyong unchanged; grinhaire still 0 / 5 but the trade is now even
+(833 dealt against 833 taken, from 506 against 592): the max-uses fix
+doubled her output there, and grinhaire's 450 WIS still out-heals an
+even trade. Neutrino fired 0.6 per fight vs grinhaire (RES 80, no shield
+stack, so the stack template does not gate on), 3.0 vs Yongyong.
+
+Nemesis tally on the current build and kit, 5 each: HerculeNsjtt 5 / 0,
+Yongyong 3 / 2, topac 3 / 2, rotulet 0 / 5, grinhaire 0 / 5 = **11 / 14**,
+from 8 / 16 / 1 (diver kit, 23rd) and 2 / 20 / 3 (old kit, 22nd).
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
