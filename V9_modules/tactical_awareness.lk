@@ -220,7 +220,7 @@ function calculateBestAttackDamage(fromCell, targetCell, enemy, weapons, chips, 
 
     if (count(attacks) == 0) return 0
 
-    arraySort(attacks, function(a, b) {
+    attacks = arraySort(attacks, function(a, b) {
         if (a[0] > b[0]) return -1
         if (a[0] < b[0]) return 1
         return 0
@@ -319,7 +319,7 @@ function buildAdversarialThreatCache(playerObj, enemies, arsenalObj) {
 
     if (count(aliveEnemies) > 0) {
         if (count(aliveEnemies) > 2) {
-            arraySort(aliveEnemies, function(a, b) {
+            aliveEnemies = arraySort(aliveEnemies, function(a, b) {
                 var da = getCellDistance(playerCell, a._cellPos)
                 var db = getCellDistance(playerCell, b._cellPos)
                 if (da == null) da = 999

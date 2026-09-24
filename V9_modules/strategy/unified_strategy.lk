@@ -243,7 +243,7 @@ class UnifiedStrategy extends Strategy {
             push(scenariosWithQuickScore, ['scenario': scenario, 'quickScore': qScore, 'family': family, 'hasHeal': hasHeal])
         }
 
-        arraySort(scenariosWithQuickScore, function(a, b) {
+        scenariosWithQuickScore = arraySort(scenariosWithQuickScore, function(a, b) {
             return b['quickScore'] - a['quickScore']
         })
 
@@ -621,7 +621,7 @@ class UnifiedStrategy extends Strategy {
         }
 
         if (count(scenarioResults) >= 2 && getOperations() < _ops79) {
-            arraySort(scenarioResults, function(a, b) {
+            scenarioResults = arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
 
@@ -640,7 +640,7 @@ class UnifiedStrategy extends Strategy {
         }
 
         if (count(scenarioResults) >= 1 && getOperations() < _ops89) {
-            arraySort(scenarioResults, function(a, b) {
+            scenarioResults = arraySort(scenarioResults, function(a, b) {
                 return b['score'] - a['score']
             })
 
@@ -786,7 +786,7 @@ class UnifiedStrategy extends Strategy {
             var rrEff = mapContainsKey(rrSd, 'finalScore') ? rrSd['finalScore'] : rrSd['score']
             push(rrPool, ['scenario': rrSd['scenario'], 'simResult': rrSd['simResult'], 'score': rrEff])
         }
-        arraySort(rrPool, function(a, b) {
+        rrPool = arraySort(rrPool, function(a, b) {
             return b['score'] - a['score']
         })
         var rrK = min(5, count(rrPool))
@@ -829,7 +829,7 @@ class UnifiedStrategy extends Strategy {
             var qScore = quickScorer.quickScore(scenario)
             push(scored, ['scenario': scenario, 'quickScore': qScore])
         }
-        arraySort(scored, function(a, b) {
+        scored = arraySort(scored, function(a, b) {
             return b['quickScore'] - a['quickScore']
         })
 

@@ -1061,7 +1061,7 @@ class FieldMap extends FieldMapPatterns {
             ])
         }
 
-        arraySort(candidates, function(a, b) {
+        candidates = arraySort(candidates, function(a, b) {
             return b['score'] - a['score']
         })
 

@@ -242,7 +242,7 @@ function beamSearchScenarios(playerObj, targetObj, arsenalObj, fieldMapObj) {
 
         if (count(allCandidates) == 0) break
 
-        arraySort(allCandidates, function(a, b) {
+        allCandidates = arraySort(allCandidates, function(a, b) {
             return b['cumScore'] - a['cumScore']
         })
 
