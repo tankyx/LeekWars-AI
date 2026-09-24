@@ -2211,6 +2211,64 @@ would show as talent trending up over weeks with the selector, not in
 any 25-fight window; keep reading `talent_history` weekly and stop
 spending garden credits on random-pick windows for that purpose.
 
+### What the top 300 do that we don't (2026-09-24, `tools/top_vs_us.py`)
+
+Data: 5,181 solo fights owned by top-300 leeks (`data/ladder/solo_fights_wide.json`,
+owner talent median 2924, up to 3693; 69 STR / 110 MAG owners) against our
+own 780 real fights (baseline + this week). Same code, same metrics, owner
+side. Owner-level figures use the 122 top owners with ≥ 8 fights.
+
+**1. They fire from the edge of range and walk back out. We fire close and stand.**
+
+| per own turn | top STR | top MAG | Ada | Edsger | KurtGodel | Margaret |
+|---|---|---|---|---|---|---|
+| distance when firing (median) | **6** | **7** | 4 | 4 | 6 | 4 |
+| MP moved before the shot | 3.6 | 3.1 | 2.8 | 3.1 | 2.8 | 2.6 |
+| MP moved **after** the shot | **2.1** | **2.9** | 1.2 | 1.2 | 1.3 | 0.5 |
+| MP moved in total (of ~7) | 5.1 | 5.7 | 4.3 | 4.6 | 4.2 | 3.9 |
+| firing turns followed by a move | **60%** | **72%** | 24% | 23% | 26% | 9% |
+| turn ends out of enemy LoS | **62%** | **57%** | 43% | 34% | 45% | 27% |
+| distance at end of turn (median) | **9** | **8** | 6 | 6 | 8 | 5 |
+| turns with an attack | 52% | 65% | 74% | 69% | 68% | 70% |
+
+Owner-normalised: 85% of top STR owners and 90% of top MAG owners move after
+at least 40% of their firing turns (median ~70%). Within the top STR group
+the behaviour tracks talent: hidden ends r = +0.41, end distance r = +0.51;
+the upper talent half ends turns at distance 10 and hidden 68% of the time,
+the lower half at 6 and 54%. They pay for it the same way we did — after a
+hidden end they fire on 49% of next turns (66% after an open end) — and
+accept it: fewer attack turns, longer fights (18 vs our 8-16), less damage
+taken per exchange. Same MP (6.9 vs 7) and TP (29 vs 27-30) as ours: this
+is behaviour, not resources.
+
+Why our earlier hide work regressed: it added a hide to plans that fired
+from distance 4 (close, so the hide cell was far and the next turn had no
+shot), and on 5-MP leeks it replaced shots. The top pattern is different:
+spend ~3 MP to reach a cell at the *edge* of weapon range, fire, spend the
+remaining ~2-3 MP to break LoS or step out of reach. That needs the firing
+cell to be chosen with the retreat in mind, which our pipeline never does
+(the firing position is scored for damage; the hide is appended after).
+
+**2. They summon.** Top STR 2.6 bulbs per fight (metallic bulb in 32% of
+fights), top MAG 1.1 (savant 27%, wizard/metallic on turn 1); ours 0.
+The main farmer owns metallic ×2, savant ×3, wizard ×6, healer, tactician
+and others. Within-top correlation of bulbs with talent is ~0, so this is
+a kit difference, lower confidence than (1).
+
+**3. Kit and stats, secondary.** Top STR run protein (74%), liberation
+(72%), serum (67%), remission (55%), jump (54%); top MAG do not use
+slow_down / tranquilizer / covid at ≥ 25%, which Margaret casts in 85-95% of
+fights. Top leeks carry ~2860-2940 life and ~160-200 RES, ~170-180
+frequency (ours 210-240); within the top, RES and frequency correlate
+negatively with talent, so neither is a lever.
+
+**What to build (not yet built):** a peek-and-retreat template — choose the
+firing cell as the farthest cell within weapon range that still leaves
+≥ 2 MP to reach a no-LoS or out-of-reach cell, fire, spend the remaining
+MP on that retreat — generated as a full candidate and scored, not appended.
+Success measure: talent over 1-2 weeks, per the 2026-09-24 verdict, with
+fire distance / move-after-fire / hidden-end as the mechanism check.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
