@@ -2180,6 +2180,37 @@ Nemesis tally on the current build and kit, 5 each: HerculeNsjtt 5 / 0,
 Yongyong 3 / 2, topac 3 / 2, rotulet 0 / 5, grinhaire 0 / 5 = **11 / 14**,
 from 8 / 16 / 1 (diver kit, 23rd) and 2 / 20 / 3 (old kit, 22nd).
 
+### Main account, two days of random-pick windows: no ladder-level gain (2026-09-24)
+
+25 random-pick garden fights per leek today on the current build (max
+uses from the engine, Margaret burst 12, neutrino on Ada, hide gate
+inert at 7 MP), pooled with yesterday's 25 (Margaret's yesterday = the
+retune window).
+
+| leek | baseline (125, selector) | 23rd | 24th | pooled 50 | dealt / taken per turn (24th) | opp talent (24th) |
+|---|---|---|---|---|---|---|
+| Ada | 48% | 13 / 12 | 12 / 13 | 50% | 720 / 722 | 2025 |
+| Edsger | 51% | 14 / 11 | 11 / 13 / 1 | 50% | 938 / 676 | 2092 |
+| KurtGodel | 51% | 13 / 11 / 1 | 11 / 14 | 48% | 825 / 784 | 2047 |
+| Margaret | 53% | 14 / 10 / 1 | 12 / 12 / 1 | 52% | 771 / 761 | 1974 |
+
+Daily talent (`/leek/get` `talent_history`, last 7 days → now): Ada 2012
+→ 2009, Edsger 2021 → 2049, KurtGodel 2049 → 1999, Margaret 2047 → 1961
+(her −86 includes the 32% untuned window). Zero runtime errors on our
+side in 100 fights.
+
+Reading: on a matchmade ladder the win rate sits at ~50% by
+construction, and these windows say the fleet is at that equilibrium
+with no measurable shift — the baselines' 48-53% were collected with
+the danger-avoiding selector, which inflates them. Talent, the ladder's
+own measure, is flat to slightly down over the campaign. The gains
+that are real are matchup-level, not ladder-level: Ada's five nemeses
+2 / 20 / 3 → 11 / 14, Margaret's recovery from a self-inflicted 32%,
+zero wasted-shot turns after the max-uses fix. A ladder-level gain
+would show as talent trending up over weeks with the selector, not in
+any 25-fight window; keep reading `talent_history` weekly and stop
+spending garden credits on random-pick windows for that purpose.
+
 ### The opening scales with science; components re-cut for it (2026-09-22)
 
 Owner's check: turn 1 is knowledge → elevation → armoring → fortress →
