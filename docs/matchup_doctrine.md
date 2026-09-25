@@ -2234,6 +2234,23 @@ distinguishable. The two kits trade matchups: the long-range kit takes
 topac (a katana bruiser it can out-range) and loses HerculeNsjtt (a rhino
 kiter the dive kit beats). Current kit restored on the leek.
 
+**Second round (2026-09-25, seeds 600-604) and pooled, n = 50 per kit:**
+
+| opponent | current kit | long-range kit |
+|---|---|---|
+| rotulet | 1 / 9 | 0 / 10 |
+| grinhaire | 1 / 9 | 0 / 10 |
+| topac | 0 / 10 | **5 / 5** |
+| Yongyong | 4 / 6 | 6 / 4 |
+| HerculeNsjtt | **9 / 0 / 1** | 4 / 3 / 3 |
+| total | 15 / 34 / 1 | 15 / 32 / 3 |
+
+Same-seed pairs: 9 gained, 9 lost, p = 1.00. **The kits are equal overall
+and swap two matchups** (long range takes topac, loses HerculeNsjtt; the
+other three do not move). Nothing here justifies a kit change; the
+current kit stays. A kit choice for the ladder needs the ladder's
+opponent mix (80% STR), i.e. a talent period, not five nemeses.
+
 The deployed build's positioning shows up on real opponents with either
 kit: move-after-fire 63-68% and hidden ends 56-65% (Ada before the
 deploy: 24% and 43%), firing distance 6-7 (was 4), end distance 8-9 —
