@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Daily garden run for the talent read (installed in crontab 2026-09-25).
+"""Daily garden run for the talent read (crontab 22:17 UTC: credits refresh at
+22:00 UTC, i.e. midnight Paris; installed 2026-09-25, moved 2026-09-26).
 
 Spends every garden credit on both accounts through the MCP server's own
 `leekwars_solo_fight` smart selector (the same opponent picks as a manual
@@ -85,7 +86,9 @@ def talent(lw, lid):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--dry-run', action='store_true'); a = ap.parse_args()
-    today = datetime.date.today().isoformat()
+    # Label by the Paris day of the credit pool (pools open at midnight Paris).
+    from zoneinfo import ZoneInfo
+    today = datetime.datetime.now(ZoneInfo('Europe/Paris')).date().isoformat()
     print('=== daily_garden %s' % datetime.datetime.now().isoformat(timespec='seconds'), flush=True)
     rows = []
     mcp = None if a.dry_run else MCP()
@@ -115,6 +118,9 @@ def main():
     finally:
         if mcp:
             mcp.close()
+    if not a.dry_run and sum(r[4] for r in rows) == 0:
+        print('no fights played (no credits) - nothing logged', flush=True)
+        return
     if not a.dry_run:
         new = not os.path.exists(LOG_CSV)
         with open(LOG_CSV, 'a', newline='') as fh:
