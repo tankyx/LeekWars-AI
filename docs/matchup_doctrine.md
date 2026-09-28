@@ -2878,3 +2878,16 @@ in shieldsGained). Next model iteration: kit/reach features per side (max
 weapon range, can-hit-next-turn = dist ≤ MP + range, weapon damage per TP)
 — from items used in prod fights / getWeapons in game — then retrain.
 KurtGodel stays off (valueNetMode 0) in the candidate until then.
+
+**Value model v2 on the harness (2026-09-28).** v2 = burned max HP (nova /
+erosion attrition; hpfrac vs pre-attrition max), kit potential + max range,
+reach per side, permanent effects kept; AUC 0.867; exchange: nova burning
+450 max HP +7.2pp, 300 dealt +4.4pp. Replace mode for every profile
+(vn-v2rep) vs base 6f8eec23 vs candidate 275657cf, same seeds/panels:
+KurtGodel 65.0 / 32.5 / 65.0% (v2 vs base hpLead −28.8, p<0.001 — kit /
+attrition features did NOT fix him); Edsger 29.2 / 56.7 / 59.2%; Margaret
+32.2 / **38.5** / 32.2% (v2 vs base +6pp, p=0.21; best Margaret arm so
+far); Ada 41.1 / 43.0 / 43.9%. 2 harness errors = compile-cache race
+("Truncated class file") on a new arm, not the AI. KurtGodel's loss is not
+explained by missing state features; next: log, per turn, the value and
+simulated outcome of base's chosen plan vs the model's chosen plan.
