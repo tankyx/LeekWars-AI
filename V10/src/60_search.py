@@ -181,11 +181,12 @@ def leaf(cx, A1, B1, our_cell, turn):
         return v_no
     a2 = copy_side(a); b2 = copy_side(b)
     d = follow_up(cx, a2, b2, our_cell, ec)
+    # a follow-up "kill" is optimistic (no LoS / movement / reply): clamp the
+    # enemy at 1 HP and let the model score it, so plans stay differentiated
     if b2['life'] <= 0:
-        v_f = FOLLOW_KILL      # a kill NEXT turn is likely, not certain (never answered)
-    else:
-        los = los0 if d == d0 else True
-        v_f = 1.0 - value(features(turn + 1, d, los, b2, a2), key=('f', d, los))
+        b2['life'] = 1.0
+    los = los0 if d == d0 else True
+    v_f = 1.0 - value(features(turn + 1, d, los, b2, a2), key=('f', d, los))
     return FOLLOW_W * v_f + (1.0 - FOLLOW_W) * v_no
 
 
