@@ -2937,3 +2937,32 @@ harness is not a reliable judge of value-model changes (or other large
 behaviour changes); it validated on a sort-fix change but misses here. Not
 deployed. Margaret's mechanism moved the right way (more dealt, less taken)
 without wins on a testbed where both arms win 1/20.
+
+**Garden opponent selection by the value model — failed (pool 2026-09-29).**
+`tools/model_garden.py` picked, from each offer (~5 opponents at the same
+talent), the one with the highest turn-1 P(win) (stats + kit, both move
+orders); fights played by live 12e6e563. Result: 43/100 won; talent Ada
+2070 → 2115, Edsger 2073 → 2028, KurtGodel 2075 → 2000, Margaret 1988 →
+1853 (7W/16L) — main −210 in one pool (normal daily sd 50-118 per leek).
+Calibration INVERTED: picks with p ≥ 0.55 won 38%, p < 0.45 won 46%.
+Why: adverse selection. At equal talent, an opponent whose stats/kit look
+weak must be winning some other way (a better AI or player), and the model
+cannot see AI quality — so "weakest-looking at the same talent" selects the
+strongest players. The model's turn-1 AUC (0.85) comes from fights between
+leeks of DIFFERENT strength; it says nothing about who to pick at equal
+talent. Do not use it for opponent selection; the cron's MCP selector
+(recency-weighted danger from our own history) stays.
+
+**Generator updated to upstream (2026-09-29, 120 commits, v3.00 → 0405c2a).**
+Local patches re-applied (Scenario.java boss/map parsing, polyglot debug
+flag + wall-clock override; stash "local-patches-2026-09-29" kept,
+backup patch in the session scratchpad). Upstream data files taken as-is.
+New: public combined isolate jar (libs/, from leek-wars-graal-isolate
+release v25.1.3-combined-4) with the StatementCounter instrument — local
+Python ops are now DETERMINISTIC and identical to prod (value-net eval
+40,924 ops, 10k loop 60,011 — same numbers as the prod spike); local
+objects.py now has System and Debug.log like prod. runtime_classpath.txt
+regenerated with a printRuntimeClasspath init script (keep ONLY the root
+project line — the leekscript subproject prints a second line). Game-rule
+changes upstream (poisons lose a turn instead of vanishing, states drop
+above 50% reduction, plants/ROOTED) → re-measure harness baselines.
