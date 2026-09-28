@@ -2815,6 +2815,13 @@ Paired hpLead: base vs live +7.7 (p=0.054; wins p=0.052), rep vs base
 add vs live +13.0 (p=0.001). The undeployed pricing + lookahead work is
 itself a gain over live, and the model adds a similar step on top.
 
+Ada (STR, pricing/lookahead weights 0 in her profile) vs topac / Yongyong
+clones × 60: live 44.2% (hpLead −11.9), base 41.7% (−12.6), add 44.2%
+(−13.5), rep 50.8% (−4.1; vs base +18/−7 flips, McNemar p=0.043; hpLead
++8.5 p=0.099); Yongyong 70 → 87% (p=0.006), topac flat 13 → 15%; taken/t
+1436 → 1227. 0 errors. Replace mode is the best arm on both leeks → next:
+same-seed challenges vs live, then deploy.
+
 **Prod Python API (V10 language question).** A spike AI (`tools/py_spike`,
 uploaded to 10.0/spike/main.py) showed prod Python AIs get an OBJECT API
 (`Me`, `Fight`, `Entity`, `Weapon.<name>`, `Chip.<name>`, `Cell`, `Field`,
