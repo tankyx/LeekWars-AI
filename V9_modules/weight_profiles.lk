@@ -33,7 +33,9 @@ global STRENGTH_WEIGHTS = [
     // HP pricing + cooldown lookahead (2026-09-28): off until tested
     'debuffHpValue': 0,
     'healHpValue': 0,
-    'lookaheadValue': 0
+    'lookaheadValue': 0,
+    // prod value model: 0 off, 2 rank plans by it (harness 2026-09-28: Edsger 29->59%, Ada 41->44%)
+    'valueNetMode': 2
 ]
 
 global MAGIC_WEIGHTS = [
@@ -63,6 +65,8 @@ global MAGIC_WEIGHTS = [
     'bulbKillBonusBuffer': 1800,
     'bulbKillBonusAttacker': 1000,
     'multiTargetBonus': 623,
+    // prod value model: 0 off, 2 rank plans by it (harness 2026-09-28: Margaret wins 32->32%, hpLead +5)
+    'valueNetMode': 2
 ]
 
 global AGILITY_WEIGHTS = [
@@ -111,7 +115,9 @@ global STRENGTH_SCIENCE_WEIGHTS = [
     // HP pricing + cooldown lookahead (2026-09-28): off until tested
     'debuffHpValue': 0,
     'healHpValue': 0,
-    'lookaheadValue': 0
+    'lookaheadValue': 0,
+    // prod value model: 0 off, 2 rank plans by it (harness 2026-09-28: KurtGodel 65->38% with it on)
+    'valueNetMode': 0
 ]
 
 global TANK_SCI_WEIGHTS = [

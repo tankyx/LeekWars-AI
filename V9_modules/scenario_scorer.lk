@@ -1403,12 +1403,14 @@ class ScenarioScorer {
         // leek only. Mode 1 adds V priced at the model's exchange rate (1 pp
         // of win probability ~ 66 HP at the HP weight); mode 2 ranks by V and
         // keeps the old score only as a tie-break.
-        if (_v9VnMode > 0 && !_isBossFight && this._target != null && count(getAliveEnemies()) <= 3) {
+        // Mode per weight profile ('valueNetMode'); the global flag overrides for A/B arms.
+        var vnMode = (_v9VnMode > 0) ? _v9VnMode : this.getWeight('valueNetMode', 0)
+        if (vnMode > 0 && !_isBossFight && this._target != null && count(getAliveEnemies()) <= 3) {
             var vnOp = vnMainEnemy()
             if (vnOp != null && vnOp == this._target._id) {
                 var vnV = vnScenarioValue(this._player._id, vnOp, simResult)
                 var vnK = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight())) * 6600 * _v9VnScale
-                if (_v9VnMode == 1) {
+                if (vnMode == 1) {
                     score += vnK * vnV
                 } else {
                     score = 10000000 * vnV + score * 0.001
