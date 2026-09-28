@@ -2332,6 +2332,20 @@ same kit both arms; new build in side root `9.0/V9-A`, assigned with
   deployed). If the kit keeps grapple/glove on the live 12e6e563 build,
   that build uses them through its old stray-grapple paths (seen in the
   control arm) — armoring + antidote back is the safer kit.
+- **Axe variant (owner idea, same day):** axe replaced katana; axe MP shackle
+  = round((0.7..0.8) × (1 + MAG/100)), stackable → ~5 MP per hit at MAG 553,
+  ~10 for two. The glove skips entities at range 1 (`getFirstEntity` starts
+  at minRange 2), so the sequence is grapple→adjacent, swap, axe ×2, covid,
+  step back 1 along the line, glove out (27 TP, +1 MP).
+  `createGrappleAxeCovidScenario` (`_v9CitfAxe`). Local: exact execution.
+  Challenges, same 20 seeds: fired in 9 fights (20 axe hits, pushes to
+  3-8); enemy did not move next turn in 6/10 combo turns, but STR opponents
+  still shot from range for 760-2200 in 6/10. Live 12e6e563 with the axe:
+  3/20, 780 dmg/turn, 923 taken/turn; axe combo: 2/20, 706, 933. Not shipped.
+  Live V9 never swings the katana or the axe (0 hits in 40 fights), so the
+  melee slot is inert on the deployed build — the kit swap costs nothing live.
+  Parsing: action 13 carries the weapon id (axe 16), weapon effects are 301,
+  stack updates 14.
 
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 

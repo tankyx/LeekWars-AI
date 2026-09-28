@@ -5,6 +5,7 @@ global _v9StripDive = true
 global _v9VulnStackDive = true
 global _v9PeekRetreat = true
 global _v9CitfCombo = true
+global _v9CitfAxe = true
 global _v9PeekMinRetreat = 2
 class ScenarioCombos extends ScenarioHelpers {
 
@@ -2554,6 +2555,92 @@ class ScenarioCombos extends ScenarioHelpers {
         }
         if (getTurn() <= 30) {
             debugW("CITF_T" + getTurn() + "_fc" + fc + "_d" + best[2] + "_pull" + best[3] + "_push" + best[4] + "_pd" + best[5] + "_glove" + (hasGlove ? 1 : 0) + "_n" + count(acts))
+        }
+        return acts
+    }
+
+    // CITF with a root: grapple the enemy adjacent, axe it (MP shackle, MAG-scaled,
+    // stackable: ~5 MP per hit at MAG 550), covid, step back one cell along the line
+    // (the glove skips entities at range 1), glove it out. The pushed enemy has no MP
+    // to walk back next turn.
+    createGrappleAxeCovidScenario(availableTP, availableMP) {
+        if (!_v9CitfCombo || !_v9CitfAxe || this._target == null) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedWeapons, WEAPON_AXE)) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_COVID)) return null
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BOXING_GLOVE)) return null
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0 || getCooldown(CHIP_COVID, this._player._id) > 0
+            || getCooldown(CHIP_BOXING_GLOVE, this._player._id) > 0) return null
+        var tpG = getCachedChipCost(CHIP_GRAPPLE); var tpC = getCachedChipCost(CHIP_COVID); var tpB = getCachedChipCost(CHIP_BOXING_GLOVE)
+        var tpSwap = (getWeapon() != WEAPON_AXE) ? 1 : 0
+        var tpA = getCachedWeaponCost(WEAPON_AXE, this._arsenal)
+        if (availableTP < tpG + tpSwap + tpA + tpC + tpB) return null
+        var ePos = this._target._cellPos
+        var ex = getCellX(ePos); var ey = getCellY(ePos)
+        var pool = [this._player._cellPos]
+        for (var rc in getReachableCells()) push(pool, rc)
+        var best = null; var bestKey = -999999
+        for (var c in pool) {
+            var mpC = (c == this._player._cellPos) ? 0 : getGraphMPCost(c)
+            if (mpC == null || mpC + 1 > availableMP) continue
+            var cx = getCellX(c); var cy = getCellY(c)
+            if (cx != ex && cy != ey) continue
+            var d0 = getCellDistance(c, ePos)
+            if (d0 == null || d0 < 2 || d0 > 8) continue
+            var dx = (ex > cx) ? 1 : ((ex < cx) ? -1 : 0); var dy = (ey > cy) ? 1 : ((ey < cy) ? -1 : 0)
+            var ok = true; var cur = c; var pullCell = -1
+            for (var k = 1; k < d0; k++) {
+                cur = this._lineStep(cur, dx, dy)
+                if (cur == -1 || isObstacle(cur) || (isEntity(cur) && cur != this._player._cellPos)) { ok = false; break }
+                if (k == 1) pullCell = cur
+            }
+            if (d0 == 2 && ok) pullCell = this._lineStep(c, dx, dy)
+            if (!ok || pullCell == -1) continue
+            // step-back cell: one cell away from the enemy on the same line
+            var stepCell = this._lineStep(c, -dx, -dy)
+            if (stepCell == -1 || isObstacle(stepCell) || (isEntity(stepCell) && stepCell != this._player._cellPos)) continue
+            // push from the pull cell outward, up to glove range 8 from the step cell
+            var farCell = -1; var farD = 2; cur = pullCell
+            for (var k2 = 3; k2 <= 8; k2++) {
+                var nx = this._lineStep(cur, dx, dy)
+                if (nx == -1 || isObstacle(nx) || (isEntity(nx) && nx != ePos)) break
+                cur = nx; farCell = nx; farD = k2
+            }
+            if (farCell == -1) continue
+            var th = getAdversarialThreat(stepCell)
+            var key = farD * 100 - mpC * 20 - floor(th / 50)
+            if (key > bestKey) { bestKey = key; best = [c, mpC, d0, pullCell, farCell, farD, stepCell] }
+        }
+        if (best == null) return null
+        var fc = best[0]; var tp = availableTP
+        var acts = []
+        if (fc != this._player._cellPos) push(acts, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, fc, this._target))
+        push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, best[3], this._target)); tp -= tpG
+        if (tpSwap > 0) { push(acts, new Action(Action.ACTION_WEAPON_SWAP, WEAPON_AXE, -1, -1, this._target)); tp -= tpSwap }
+        push(acts, new Action(Action.ACTION_DIRECT, WEAPON_AXE, -1, best[3], this._target)); tp -= tpA
+        var hits = 1
+        if (tp >= tpA + tpC + tpB) { push(acts, new Action(Action.ACTION_DIRECT, WEAPON_AXE, -1, best[3], this._target)); tp -= tpA; hits = 2 }
+        push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, best[3], this._target)); tp -= tpC
+        push(acts, new Action(Action.MOVEMENT_PAB, -1, -1, best[6], this._target))
+        push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_BOXING_GLOVE, best[4], this._target)); tp -= tpB
+        var endE = best[4]
+        // retreat to cover with the MP left
+        var left = availableMP - best[1] - 1
+        if (left > 0) {
+            var rb = -1; var rT = 999999
+            for (var sc in pool) {
+                if (sc == best[6]) continue
+                if (getCachedLineOfSight(sc, endE)) continue
+                var th2 = getAdversarialThreat(sc)
+                if (th2 >= rT) continue
+                var pl = getCachedPathLength(best[6], sc)
+                if (pl == null || pl <= 0 || pl > left) continue
+                rb = sc; rT = th2
+            }
+            if (rb != -1) push(acts, new Action(Action.MOVEMENT_PAB, -1, -1, rb, this._target))
+        }
+        if (getTurn() <= 30) {
+            debugW("CITFAXE_T" + getTurn() + "_fc" + fc + "_d" + best[2] + "_pull" + best[3] + "_step" + best[6] + "_push" + best[4] + "_pd" + best[5] + "_hits" + hits + "_n" + count(acts))
         }
         return acts
     }

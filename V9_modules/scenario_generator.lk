@@ -228,6 +228,10 @@ class ScenarioGenerator extends ScenarioCombos {
         if (grappleCovid != null) {
             push(scenarios, grappleCovid)
         }
+        var grappleAxe0 = this.createGrappleAxeCovidScenario(availableTP, availableMP)
+        if (grappleAxe0 != null) {
+            push(scenarios, grappleAxe0)
+        }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
@@ -362,6 +366,10 @@ class ScenarioGenerator extends ScenarioCombos {
         var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
         if (grappleCovid != null) {
             push(scenarios, grappleCovid)
+        }
+        var grappleAxe1 = this.createGrappleAxeCovidScenario(availableTP, availableMP)
+        if (grappleAxe1 != null) {
+            push(scenarios, grappleAxe1)
         }
 
         if (getAvailableTeleportChip(this._arsenal, this._player._id) != null) {
@@ -508,6 +516,10 @@ class ScenarioGenerator extends ScenarioCombos {
         if (grappleCovid != null) {
             push(scenarios, grappleCovid)
         }
+        var grappleAxe2 = this.createGrappleAxeCovidScenario(availableTP, availableMP)
+        if (grappleAxe2 != null) {
+            push(scenarios, grappleAxe2)
+        }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
@@ -595,6 +607,10 @@ class ScenarioGenerator extends ScenarioCombos {
         if (grappleCovid != null) {
             push(scenarios, grappleCovid)
         }
+        var grappleAxe3 = this.createGrappleAxeCovidScenario(availableTP, availableMP)
+        if (grappleAxe3 != null) {
+            push(scenarios, grappleAxe3)
+        }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
         if (shieldRotation != null) {
@@ -656,6 +672,10 @@ class ScenarioGenerator extends ScenarioCombos {
         var grappleCovid = this.createGrappleCovidScenario(availableTP, availableMP)
         if (grappleCovid != null) {
             push(scenarios, grappleCovid)
+        }
+        var grappleAxe4 = this.createGrappleAxeCovidScenario(availableTP, availableMP)
+        if (grappleAxe4 != null) {
+            push(scenarios, grappleAxe4)
         }
 
         var shieldRotation = this.createShieldRotationScenario(availableTP, availableMP)
