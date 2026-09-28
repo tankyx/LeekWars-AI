@@ -2910,3 +2910,13 @@ The model's outcome preferences (heal/buff timing) also diverge from what
 wins for him against V8-driven clones. Open question: harness bias (clones
 play V8, not their owners' AIs) vs model bias — only challenges vs real
 opponents can separate them. KurtGodel stays off.
+
+**Candidate 2 = tag `v9-vn-cand2` (19ae9c52, 2026-09-28).** V9 HEAD + value
+model v2, on per weight profile: STRENGTH (Ada) / MAGIC (Margaret) /
+BRUISER_REFLECT (Edsger) valueNetMode 2 (replace), STRENGTH_SCIENCE
+(KurtGodel) 0; global test flag 0, diagnostics off. Wiring verified on the
+harness: replays vn-v2rep exactly for Edsger / Ada / Margaret (0 flips) and
+base exactly for KurtGodel (0 flips over 120 fights). Harness expectation
+vs live on the panels: Margaret 38.5% vs 23.3%, Edsger 56.7% vs 28.3%,
+KurtGodel 65% vs 55%, Ada ≈ live. Next: same-seed challenges vs live, plus a
+small KurtGodel model-on vs model-off challenge A/B (harness vs model bias).
