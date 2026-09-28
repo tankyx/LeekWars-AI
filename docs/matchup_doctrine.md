@@ -2829,3 +2829,16 @@ uploaded to 10.0/spike/main.py) showed prod Python AIs get an OBJECT API
 `debug`) are NameError. The local generator's polyglot runtime is the old
 flat API, so it cannot run prod-API Python AIs. Cost on prod: value-net
 evaluation ≈ 41k ops (LeekScript 56k), loop ≈ 6 ops/iteration, 14M budget.
+
+**Value model replace mode on the STR leeks (harness, 2026-09-28).** Screen
+(base, 9 clones × 20) → mid-band opponents → base / rep / live × 60:
+- Edsger (TheLeaker, Hydrogène, ReauBotcode, topac): 29% / **57%** / 28%;
+  rep vs base +88/−21 flips (p<0.001), hpLead +27.1 (p<0.001); ReauBotcode
+  7 → 55%, topac 22 → 55%; dealt/t 1480 → 2092.
+- Ada (Hydrogène, Yongyong): 55% / 62% / 58%; hpLead +6.0 (p=0.29).
+- **KurtGodel (Hydrogène, topac): 65% / 45% / 55% — rep vs base −17.6
+  hpLead (p=0.004).** Base > live for him (+10pp, p=0.036: the grapple/
+  glove sequence-only gating in HEAD removes his stray pulls).
+Diagnosis: the end-state mapping ignores nova damage (max-HP loss), our own
+buffs (steroid/rage/motivation/elevation) and summons, so replace mode gives
+KurtGodel's STR/SCI plan (nova + buffs) no credit.
