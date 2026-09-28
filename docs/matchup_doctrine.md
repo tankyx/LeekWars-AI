@@ -2237,10 +2237,41 @@ Margaret did better is her own damage type: 770 poison per turn with the
 enemy poisoned 75% of turns, against 659 and 68% now (−15%), while taking
 8% less damage (RES 200 + fortress/wall, both gone from the current build
 and kit). The deploy moved her positioning towards the top-300 profile
-(hidden ends 31 → 50%, end distance 6 → 9) but her firing distance stayed
-at 4 (top MAG 7) and her attack turns kept falling (top MAG: attack-turn
-share correlates +0.46 with talent). For a poison mage the peek-and-retreat
-trade is costing poison uptime without moving the firing cell out.
+(hidden ends 31 → 50%, end distance 6 → 9).
+
+**Correction (same day):** the "fire distance 4 vs top MAG 7" figure counted
+weapon shots only. Counting chip casts, top-300 mages cast poison at a
+median distance of 4 too (arsenic 3-4, plague 1-5 force it; 22% of casts
+from 7+), and Margaret now casts from 7+ on 29% of casts. There is no
+firing-position gap. Of the −15% poison per turn since V8, about half is
+stats (MAG 600 → 553: −6.7% per tick) and half uptime (75% → 68% of turns
+with the enemy poisoned).
+
+### Margaret's poison uptime drop, decomposed (2026-09-28)
+
+Poison-cast turns: V8 73% → V9 pre-deploy 67% → V9 now 64%. By reason
+(share of all turns without poison, V8 → V9 now): enemy visible and
+already poisoned, no stack 1.2 → 3.9; enemy visible and NOT poisoned but
+heal / nothing instead 0.9 → 3.5; enemy hidden and far at turn start
+18.9 → 20.9; own HP < 35% 2.6 → 4.0. Turn 1 is not a factor (same MP use
+and end distance in all eras); the drop concentrates on turns 2-3 (80% →
+60%) where V9 heals at ~67% HP.
+
+Benchmark in identical situations (turn 2+, enemy visible ≤ 10):
+
+| | top-300 MAG | MH V8 | MH V9 pre | MH V9 now |
+|---|---|---|---|---|
+| enemy unpoisoned: poison / heal-only | 62% / 21% | 94% / 3% | 83% / 13% | 78% / 18% |
+| enemy poisoned: poison / heal-only | 65% / 20% | 92% / 3% | 88% / 5% | 80% / 15% |
+| unpoisoned, HP 0.5-0.8 | 62% / 22% | 96% / 2% | 77% / 21% | 74% / 25% |
+
+V9 heals where V8 always poisoned, but top mages heal just as often; V8's
+always-poison is the outlier. No AI mistake is shown, so no AI change.
+Attributable: MAG 600 → 553 (−7% per tick; top-MAG r(MAG, talent) +0.24)
+and +8% damage taken (RES 200 → 15, fortress/wall out of the kit). WIS 500
+enlarges heals, which is part of why the scorer picks them. Build decision
+left to the owner. `tools/top_vs_us.py` now records attack distance for
+chip casts too (`atk_dist`, `poison_dists`).
 
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 

@@ -101,7 +101,7 @@ def analyse(f, owner):
             if cur == mid:
                 t = {'T': T, 'tp': 0, 'mp': 0, 'shots': 0, 'cats': Counter(), 'fired': False,
                      'moved_after': False, 'dealt': 0, 'taken_before': 0, 'end_dist': None, 'end_los': None,
-                     'mp_pre': 0, 'mp_post': 0, 'fire_dist': None, 'start_dist': None, 'start_los': None}
+                     'mp_pre': 0, 'mp_post': 0, 'fire_dist': None, 'atk_dist': None, 'poison_dists': [], 'start_dist': None, 'start_los': None}
                 if geo and pos.get(mid) is not None and pos.get(eid) is not None:
                     try:
                         t['start_dist'] = geo.dist(pos[mid], pos[eid])
@@ -131,8 +131,11 @@ def analyse(f, owner):
         elif c == 16 and cur == mid and t is not None:
             w = D.weapon(held.get(mid, -1)); out['weapons_seen'].add(w)
             t['tp'] += cost(w); t['shots'] += 1
-            if not t['fired'] and geo and pos.get(mid) is not None and pos.get(eid) is not None:
-                try: t['fire_dist'] = geo.dist(pos[mid], pos[eid])
+            if geo and pos.get(mid) is not None and pos.get(eid) is not None:
+                try:
+                    dd = geo.dist(pos[mid], pos[eid])
+                    if not t['fired']: t['fire_dist'] = dd
+                    if t['atk_dist'] is None: t['atk_dist'] = dd
                 except Exception: pass
             if t['fired']:
                 t['mp_post'] = 0
@@ -143,6 +146,12 @@ def analyse(f, owner):
                 out['chips_seen'].add(name)
                 t['tp'] += cost(name); t['cats'][cat] += 1
                 if cat in ('damage', 'poison', 'nova', 'shackle', 'vuln'):
+                    if geo and pos.get(mid) is not None and pos.get(eid) is not None:
+                        try:
+                            dd = geo.dist(pos[mid], pos[eid])
+                            if t['atk_dist'] is None: t['atk_dist'] = dd
+                            if cat == 'poison': t['poison_dists'].append(dd)
+                        except Exception: pass
                     t['fired'] = True; t['moved_after'] = False
                 if T == 1:
                     out['opening'].append(name)
