@@ -1,0 +1,161 @@
+// Cooldown lookahead (2026-09-28).
+//
+// The scorer values one turn. Poisons, shackles and heals all run on uptime,
+// and turns are coupled through cooldowns (covid 7, plague 4, serum 5,
+// toxin/arsenic 2, regeneration once): a plan that burns long-cooldown chips
+// now can leave nothing to refresh with in two turns. This module gives each
+// scored plan a value-to-go: the best value our next _v9LaDepth turns can
+// still produce from the cooldown state the plan leaves, found by a small
+// search over future chip sets (greedy fill + "hold" variants + heal-first).
+// Values are in HP, priced like the scorer's HP terms (poison over its
+// duration x antidote multiplier, shackles as prevented enemy damage, heals
+// capped at missing HP x urgency). Only FUTURE casts are valued, so nothing
+// double counts with the immediate score: plans differ by the opportunity
+// cost of the cooldowns they burn. Position is ignored (chips assumed in
+// range); MP shackles are left to the immediate scorer.
+
+global _v9Lookahead = true
+global _v9LaDepth = 2
+global _v9LaGamma = 0.85
+global _v9LaWidth = 5
+
+global __laTurn = -1
+global __laTarget = -1
+global __laModel = null      // chipId -> [cost, cd, valueHP]
+global __laCache = [:]       // "depth|cd..." -> value
+
+function v9LaChipValue(chipObj, me, tgt, antidoteMult) {
+    var mag = max(0, me._magic)
+    var wis = max(0, me._wisdom)
+    var tStr = max(0, tgt._strength)
+    var tMag = max(0, tgt._magic)
+    var tSum = max(1, tStr + tMag)
+    var tTP = max(1, getTotalTP(tgt._id))
+    var eAvg = _v9ThreatHpScale * tSum * 1.5
+    var missing = max(0, me._maxHealth - me._currHealth)
+    var hpR = me._currHealth / max(1, me._maxHealth)
+    var urg = (hpR < 0.4) ? _v9HealUrgLow : ((hpR < 0.7) ? _v9HealUrgMid : _v9HealUrgHigh)
+    var v = 0
+    for (var eid in mapKeys(chipObj._effects)) {
+        var e = chipObj._effects[eid]
+        var avg = (e._minEffectAmount + e._maxEffectAmount) / 2
+        var d = max(1, e._effectDuration)
+        if (eid == EFFECT_POISON) {
+            v += avg * (1 + mag / 100.0) * d * antidoteMult
+        } else if (eid == EFFECT_SHACKLE_STRENGTH && tStr > 0) {
+            var s = avg * (1 + mag / 100.0)
+            v += (tStr / tSum) * min(s, tStr) / (100.0 + tStr) * eAvg * (1 + _v9DebuffFutureDisc * (d - 1))
+        } else if (eid == EFFECT_SHACKLE_MAGIC && tMag > 0) {
+            var sm = avg * (1 + mag / 100.0)
+            v += (tMag / tSum) * min(sm, tMag) / (100.0 + tMag) * eAvg * (1 + _v9DebuffFutureDisc * (d - 1))
+        } else if (eid == EFFECT_SHACKLE_TP) {
+            var st = avg * (1 + mag / 100.0)
+            v += min(0.9, st / tTP) * eAvg * (1 + _v9DebuffFutureDisc * (d - 1))
+        } else if (eid == EFFECT_HEAL) {
+            v += min(avg * (1 + wis / 100.0) * d, missing) * urg
+        }
+    }
+    return v
+}
+
+function v9LaPrepare(me, tgt, arsenalObj, antidoteMult) {
+    if (__laTurn == getTurn() && __laTarget == tgt._id && __laModel != null) { return }
+    __laTurn = getTurn()
+    __laTarget = tgt._id
+    __laCache = [:]
+    __laModel = [:]
+    for (var c in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (!_isBossFight && (c == CHIP_GRAPPLE || c == CHIP_BOXING_GLOVE)) continue
+        var obj = arsenalObj.playerEquippedChips[c]
+        var val = v9LaChipValue(obj, me, tgt, antidoteMult)
+        if (val <= 0) continue
+        var cd = getChipCooldown(c)
+        if (cd < 0) cd = 999          // once per fight
+        __laModel[c] = [obj._cost, cd, val]
+    }
+}
+
+// Candidate chip sets for one future turn from cooldown map `cdm`.
+function v9LaSets(cdm, tp) {
+    var avail = []
+    for (var c in mapKeys(__laModel)) {
+        var rem = mapContainsKey(cdm, c) ? cdm[c] : 0
+        if (rem > 0) continue
+        push(avail, c)
+    }
+    // order by value per TP (insertion sort; small n)
+    var ord = []
+    for (var a in avail) {
+        var r = __laModel[a][2] / max(1, __laModel[a][0])
+        var k = count(ord)
+        push(ord, a)
+        while (k > 0 && __laModel[ord[k - 1]][2] / max(1, __laModel[ord[k - 1]][0]) < r) {
+            ord[k] = ord[k - 1]; k--
+        }
+        ord[k] = a
+    }
+    var sets = []
+    // greedy fill, then holds (skip one of the top chips), then value-first
+    var skips = [-1]
+    for (var i = 0; i < min(_v9LaWidth - 1, count(ord)); i++) push(skips, ord[i])
+    for (var sk in skips) {
+        var s = []; var left = tp
+        for (var o in ord) {
+            if (o == sk) continue
+            if (__laModel[o][0] <= left) { push(s, o); left -= __laModel[o][0] }
+        }
+        push(sets, s)
+    }
+    return sets
+}
+
+// Cooldown map at the start of the next turn after casting `used` now.
+function v9LaNextCd(cdm, used) {
+    var n = [:]
+    for (var c in mapKeys(cdm)) {
+        if (cdm[c] > 1) n[c] = cdm[c] - 1
+    }
+    for (var u in used) {
+        var cd = __laModel[u][1]
+        if (cd > 1) n[u] = cd - 1
+    }
+    return n
+}
+
+function v9LaKey(cdm, depth) {
+    var k = "" + depth
+    for (var c in mapKeys(__laModel)) {
+        if (mapContainsKey(cdm, c)) k += "|" + c + ":" + cdm[c]
+    }
+    return k
+}
+
+// Best HP value our next `depth` turns can produce from cooldown map `cdm`.
+function v9LaValue(cdm, depth, tp) {
+    if (depth <= 0) return 0
+    var key = v9LaKey(cdm, depth)
+    if (mapContainsKey(__laCache, key)) return __laCache[key]
+    var best = 0
+    for (var s in v9LaSets(cdm, tp)) {
+        var imm = 0
+        for (var c in s) imm += __laModel[c][2]
+        var v = imm + _v9LaGamma * v9LaValue(v9LaNextCd(cdm, s), depth - 1, tp)
+        if (v > best) best = v
+    }
+    __laCache[key] = best
+    return best
+}
+
+// Value-to-go (HP) after executing `scenario` this turn.
+function v9LaValueAfter(scenario, me) {
+    var cdm = [:]
+    for (var c in mapKeys(__laModel)) {
+        var cur = getCooldown(c, me._id)
+        if (cur > 0) cdm[c] = cur
+    }
+    var used = []
+    for (var a in scenario) {
+        if (a.chip != null && a.chip != -1 && mapContainsKey(__laModel, a.chip)) push(used, a.chip)
+    }
+    return _v9LaGamma * v9LaValue(v9LaNextCd(cdm, used), _v9LaDepth, getTotalTP(me._id))
+}

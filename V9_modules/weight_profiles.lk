@@ -42,6 +42,8 @@ global MAGIC_WEIGHTS = [
     // 2026-09-28: prevented / healed HP priced at HP weight (scale %, 0 = old terms)
     'debuffHpValue': 100,
     'healHpValue': 100,
+    // cooldown lookahead value-to-go (scale %, 0 = off)
+    'lookaheadValue': 100,
     'kiteDistance': 145,
     'damageReturn': 0,
     'poisonStacks': 164,

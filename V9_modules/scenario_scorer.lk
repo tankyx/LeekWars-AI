@@ -1153,6 +1153,16 @@ class ScenarioScorer {
             score += dhW * (pNow * dhNext + dhLater) * dhScale
         }
 
+        // Cooldown lookahead: value our next turns can still produce from the
+        // cooldown state this plan leaves (lookahead.lk).
+        var laScale = this.getWeight('lookaheadValue', 0) / 100.0
+        if (_v9Lookahead && laScale > 0 && this._target != null && arsenal != null) {
+            v9LaPrepare(this._player, this._target, arsenal, this.calculateAntidoteMultiplier())
+            var laW = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight()))
+            var laV = v9LaValueAfter(scenario, this._player)
+            score += laW * laV * laScale
+        }
+
         if (dhScale <= 0 && simResult.strShackled > 0) {
             var enemyStr = max(1, this._target._strength)
             var reductionRatio = min(1.0, simResult.strShackled / enemyStr)

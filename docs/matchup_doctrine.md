@@ -2430,6 +2430,28 @@ rate unchanged (38 → 33%): her heals are regeneration (once per fight) and
 serum (cooldown 5); top mages heal with remission (cooldown 1) on ~30% of
 turns — a kit gap, not scoring. Not deployed; challenge A/B next.
 
+**Cooldown lookahead (2026-09-28, `lookahead.lk`, weight `lookaheadValue`).**
+Owner swapped venom → remission (kit now leather_boots, knowledge,
+tranquilizer, slow_down, regeneration, toxin, soporific, manumission,
+wizardry, remission, serum, teleportation, plague, covid, elevation,
+fracture, arsenic). Each scored plan gets hpW × value-to-go: the best HP
+value of the next 2 turns (γ 0.85) from the cooldown state the plan leaves,
+over ≤ 5 chip sets per turn (greedy by value/TP + holds skipping each top
+chip), cached per cooldown state; chip values = poison over duration ×
+antidote multiplier, STR/MAG/TP shackles as prevented damage, heals capped
+at missing HP × urgency (generic from effects — `getExpectedHeal` returns 0
+for serum). Cost ~0.1-0.2M ops/turn. Live-engine A/B vs StrongSTR, 30 each,
+all on 12e6e563 with the new kit:
+live 17/30, dmg per clean bot turn 758, 10.9 turns, any shackle 49%, STR 1%;
++ pricing (V9-P) 15/30, 717, 11.3, 57%, 14%;
++ pricing + lookahead (V9-A) 16/30, 668 (−12%), 12.6, 53%, 24%, poison 64%.
+Wins flat within noise; damage taken falls stepwise. The remission swap
+alone moved the live build to heal on 89% / 79% / 30% of turns (HP < 40 /
+40-70 / > 70) with 26% of TP — top-300 winners 60 / 41 / 25% and 13%.
+Trap: a side-root arm built on 12e6e563 must not call HEAD-only helpers
+(`v9IsSequenceOnlyChip`) — compile failure = the AI does nothing (0 casts,
+0 wins, no 'ours' runtime error in the battery). Check -n 2 before -n 30.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
