@@ -2858,3 +2858,23 @@ replays rep2 exactly for Edsger / Ada / Margaret and base exactly for
 KurtGodel (0 flips on identical seeds). vs live: Margaret +9pp (base's
 pricing + lookahead), Edsger +30pp, KurtGodel +10pp (base's grapple gating),
 Ada ~0.
+
+**KurtGodel vs the value model — diagnosis (2026-09-28).** Same 120 paired
+fights (Hydrogène + topac): base 65%; replace 37-38% (with and without the
+nova/buff mapping, and with non-raw buffs scaled by science like the engine:
+rage is effect 8, 0.55 × (1 + SCI/100) ≈ 3.4 TP at SCI 524); add mode 53%
+(p=0.08); replace with distance/LoS frozen at the current cell 46% — position
+explains ~1/3 of the gap. Behaviour (30 seeds vs topac): with the model Kurt
+casts rage 5.1 vs 3.2/fight, armor/armoring/motivation/boots more,
+teleport/meteorite/lightning less, deals 12% less damage, fights run 11.6 vs
+9.8 turns; flipped fights show T2 buff turns (rage, motivation, steroid,
+armor) where base teleports in and fires. Root cause: the model has no kit
+features — it cannot tell that a position lets US hit next turn (reach,
+weapon ranges), only the average "ending close to the side that acts next is
+bad" — so engage-and-fire plans are under-valued, and replace mode drops
+V9's next-turn/engagement terms that carried them. Also: armor (absolute
+shield) reaches the model as nothing (simulator only credits helmet/shield
+in shieldsGained). Next model iteration: kit/reach features per side (max
+weapon range, can-hit-next-turn = dist ≤ MP + range, weapon damage per TP)
+— from items used in prod fights / getWeapons in game — then retrain.
+KurtGodel stays off (valueNetMode 0) in the candidate until then.
