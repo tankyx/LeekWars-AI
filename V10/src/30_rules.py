@@ -1,0 +1,102 @@
+# ---- 30_rules: expected effect of one item use (engine formulas) ----------
+# damage = (v1 + jet v2)(1 + STR/100)(1 + power/100) x crit, minus rel% and abs
+# shields, capped at life; erosion 5% (+10% on crit) of damage dealt; life
+# steal = dmg x WIS/1000; nova (1 + SCI/100) capped at max - life; poison
+# (1 + MAG/100); heal / vitality (1 + WIS/100); shields (1 + RES/100);
+# shackles (1 + MAG/100); non-raw buffs (1 + SCI/100); crit chance AGI/1000 x1.3.
+NONRAW_BUFF = {E_BUFF_STR: 'strength', E_BUFF_AGI: 'agility', E_BUFF_RES: 'resistance', E_BUFF_WIS: 'wisdom'}
+RAW_BUFF = {E_RAW_STR: 'strength', E_RAW_MAG: 'magic', E_RAW_AGI: 'agility', E_RAW_RES: 'resistance',
+            E_RAW_WIS: 'wisdom', E_RAW_SCI: 'science'}
+
+
+def g_add(side, t, v):
+    g = VN_GROUP_OF.get(t)
+    if g is not None:
+        side['groups'][g] += v
+
+
+def _replaces(it, e, T, S):
+    """Non-stackable effect already applied by this item on this target this
+    turn: the new cast replaces it (no extra value)."""
+    if (e[5] or 0) & 1 or (e[3] or 0) <= 0:
+        return False
+    key = (it.id, e[0], id(T))
+    done = S.setdefault('applied', {})
+    if key in done:
+        return True
+    done[key] = 1
+    return False
+
+
+def apply_item(it, C, T, S):
+    """Apply item `it` cast by side C on target side T (T is C for self casts).
+    S = sim scalars (tp/mp) mutated for TP/MP buffs. Returns direct damage."""
+    cur = C['cur']; pw = 1 + C['power'] / 100.0
+    crit_p = min(1.0, max(0, cur['agility']) / 1000.0)
+    critf = 1 + 0.3 * crit_p
+    dealt = 0.0
+    for e in it.effects:
+        t = e[0]; a = avg(e); turns = e[3] or 0
+        if _replaces(it, e, T, S):
+            continue
+        if t == E_DAMAGE and T is not C:
+            d = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf
+            d = max(0.0, d - d * T['rel'] / 100.0 - T['abs'])
+            d = min(d, max(0, T['life']))
+            T['life'] -= d; dealt += d
+            ero = d * (0.05 + 0.10 * crit_p)
+            T['max'] -= ero; T['burn'] += ero
+            steal = d * max(0, cur['wisdom']) / 1000.0
+            C['life'] = min(C['max'], C['life'] + steal)
+            ret = T['groups'].get('dmg_return', 0)
+            if ret > 0:
+                C['life'] -= d * ret / 100.0
+        elif t == E_POISON and T is not C:
+            p = a * (1 + max(0, cur['magic']) / 100.0) * pw
+            g_add(T, t, p); T['pf'] += p * max(1, turns)
+        elif t == E_NOVA and T is not C:
+            n = min(a * (1 + max(0, cur['science']) / 100.0) * pw, max(0, T['max'] - T['life']))
+            T['max'] -= n; T['burn'] += n
+        elif t in (E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI) and T is not C:
+            g_add(T, t, a * (1 + max(0, cur['magic']) / 100.0))
+        elif t == E_VULN and T is not C:
+            g_add(T, t, a); T['rel'] -= a
+        elif t == E_VULN_ABS and T is not C:
+            g_add(T, t, a); T['abs'] -= a
+        elif t == E_HEAL:
+            h = a * (1 + max(0, cur['wisdom']) / 100.0)
+            if turns > 0:
+                g_add(C, t, h)
+            else:
+                C['life'] = min(C['max'], C['life'] + h)
+        elif t in (E_ABS_SHIELD, E_RAW_ABS):
+            v = a * (1 + max(0, cur['resistance']) / 100.0) if t == E_ABS_SHIELD else a
+            g_add(C, t, v); C['abs'] += v
+        elif t in (E_REL_SHIELD, E_RAW_REL):
+            v = a * (1 + max(0, cur['resistance']) / 100.0) if t == E_REL_SHIELD else a
+            g_add(C, t, v); C['rel'] += v
+        elif t == E_VITALITY:
+            v = a * (1 + max(0, cur['wisdom']) / 100.0)
+            C['max'] += v; C['life'] += v
+        elif t in NONRAW_BUFF or t in (E_BUFF_TP, E_BUFF_MP):
+            v = a * (1 + max(0, cur['science']) / 100.0)
+            g_add(C, t, v)
+            if t in NONRAW_BUFF:
+                cur[NONRAW_BUFF[t]] += v
+            elif t == E_BUFF_TP:
+                S['tp'] += int(v)
+            else:
+                S['mp'] += int(v)
+        elif t in RAW_BUFF or t in (E_RAW_TP, E_RAW_MP, E_RAW_POW):
+            g_add(C, t, a)
+            if t in RAW_BUFF:
+                cur[RAW_BUFF[t]] += a
+            elif t == E_RAW_TP:
+                S['tp'] += int(a)
+            elif t == E_RAW_MP:
+                S['mp'] += int(a)
+            else:
+                C['power'] += a
+        elif t == E_RETURN:
+            g_add(C, t, a * (1 + max(0, cur['agility']) / 100.0))
+    return dealt

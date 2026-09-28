@@ -75,6 +75,8 @@ def materialise(name, ref):
         return 'V9_modules/main.lk'
     if ref == 'V8':
         return 'V8_modules/main.lk'
+    if ref.startswith('path:'):
+        return ref[5:]          # an AI path under the generator dir, e.g. path:V10/main.py
     dst = os.path.join(ARMS_DIR, name)
     shutil.rmtree(dst, ignore_errors=True)
     os.makedirs(dst, exist_ok=True)
@@ -225,7 +227,7 @@ def main():
     c.add_argument('--ai', default='V8_modules/main.lk'); c.add_argument('--account', default='main')
     b = sub.add_parser('ab')
     b.add_argument('--leek', required=True); b.add_argument('--opps', required=True)
-    b.add_argument('--arm', action='append', required=True, help='name=gitref|WORKTREE|V8 (first = baseline)')
+    b.add_argument('--arm', action='append', required=True, help='name=gitref|WORKTREE|V8|path:<ai path> (first = baseline)')
     b.add_argument('--kit', help='JSON {"chips":[..],"weapons":[..]} applied to every arm')
     b.add_argument('--arm-kit', action='append', help='name=JSON kit override for one arm')
     b.add_argument('-n', type=int, default=60); b.add_argument('-j', type=int, default=8)
