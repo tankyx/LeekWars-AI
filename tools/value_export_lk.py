@@ -64,6 +64,7 @@ def main():
         'global __vnS_Mu = ' + sv(m['mu']),
         'global __vnS_Sd = ' + sv(m['sd']),
         'global __vnClip = %s' % num(m['clip']),
+        'global __vnIdx = [' + ', '.join('"%s": %d' % (n, i) for i, n in enumerate(names)) + ']',
         'global __vnCtxIdx = [' + ', '.join(str(i) for i in ctx_idx) + ']',
         'global __vnMonoIdx = [' + ', '.join(str(i) for i in mono_idx) + ']',
         'global __vnS_Sign = ' + sv(m['sign']),

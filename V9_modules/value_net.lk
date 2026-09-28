@@ -185,3 +185,108 @@ function vnLogTurn(enemyId) {
     }
     debugW("VNF_T" + getTurn() + "|" + s + "|" + round(p * 10000) / 10000 + "|ops" + (getOperations() - ops0))
 }
+
+// ---------------------------------------------------------------------------
+// Scenario evaluation (scorer hook). The model predicts for the side ABOUT TO
+// ACT; the end of our turn is the start of the opponent's, so a plan's value
+// is 1 - P(opponent wins | end state seen from the opponent). The turn's base
+// features are built once; per plan only the changed ones are rewritten and
+// the context net (depends on distance / LoS here) is cached per (dist, los).
+// _v9VnMode: 0 off, 1 add (priced at the model's exchange rate), 2 replace
+// (rank by value, old score breaks ties).
+global _v9VnMode = 0
+global _v9VnScale = 1.0
+global __vnTurnKey = -1
+global __vnBase = null
+global __vnCtxCache = [:]
+
+function vnPrepareTurn(me, op) {
+    var key = getTurn() * 100000 + op
+    if (key == __vnTurnKey && __vnBase != null) { return }
+    __vnTurnKey = key
+    vnInit()
+    __vnBase = vnFeatures(op, me, null, null, null, null, [], [], 0, 0)
+    __vnCtxCache = [:]
+}
+
+// Context net output: [base, slope_1..slope_K] (slopes already softplus'd).
+function vnCtxOut(z) {
+    var nC = count(__vnCtxIdx)
+    var h1 = []
+    for (var j = 0; j < count(__vnB1); j++) {
+        var s = __vnB1[j]
+        for (var k = 0; k < nC; k++) s += z[__vnCtxIdx[k]] * __vnW1[k][j]
+        push(h1, vnTanh(s))
+    }
+    var h2 = []
+    for (var j2 = 0; j2 < count(__vnB2); j2++) {
+        var s2 = __vnB2[j2]
+        for (var k2 = 0; k2 < count(h1); k2++) s2 += h1[k2] * __vnW2[k2][j2]
+        push(h2, vnTanh(s2))
+    }
+    var out = []
+    for (var o = 0; o < count(__vnB3); o++) {
+        var s3 = __vnB3[o]
+        for (var k3 = 0; k3 < count(h2); k3++) s3 += h2[k3] * __vnW3[k3][o]
+        push(out, (o == 0) ? s3 : vnSoftplus(s3))
+    }
+    return out
+}
+
+function vnAdd(f, name, v) {
+    f[__vnIdx[name]] += v
+}
+
+function vnScenarioValue(me, op, sim) {
+    vnPrepareTurn(me, op)
+    var opMax = max(1, getTotalLife(op))
+    var opHp = getLife(op) - sim.damageDealt
+    if (opHp <= 0) return 1.0
+    var myMax = max(1, getTotalLife(me))
+    var myHp = min(myMax, getLife(me) + sim.hpGained - sim.reflectTaken)
+    if (myHp <= 0) return 0.0
+    var f = []
+    for (var v in __vnBase) push(f, v)
+    var G = __vnGroupNames
+    // opponent = "me_" block (it acts next)
+    f[__vnIdx["me_hp"]] = opHp / 3000.0
+    f[__vnIdx["me_hpfrac"]] = opHp / opMax
+    if (sim.poisonSourcesUsed > 0 && sim.poisonTurnsQueued > 0 && sim.dotDamageQueued > 0) {
+        var avgDur = sim.poisonTurnsQueued / sim.poisonSourcesUsed
+        vnAdd(f, "me_eff_poison", (sim.dotDamageQueued / max(1, avgDur)) / __vnGScale[__vnGPoison])
+        vnAdd(f, "me_poison_future", sim.dotDamageQueued / 1000.0)
+    }
+    if (sim.strShackleNow > 0) vnAdd(f, "me_eff_shk_str", sim.strShackleNow / __vnGScale[16])
+    if (sim.magShackleNow > 0) vnAdd(f, "me_eff_shk_mag", sim.magShackleNow / __vnGScale[14])
+    if (sim.tpShackleNow > 0) vnAdd(f, "me_eff_shk_tp", sim.tpShackleNow / __vnGScale[17])
+    if (sim.mpShackleNow > 0) vnAdd(f, "me_eff_shk_mp", sim.mpShackleNow / __vnGScale[15])
+    if (sim.vulnerabilityApplied > 0) vnAdd(f, "me_eff_vuln", sim.vulnerabilityApplied / __vnGScale[18])
+    // us = "op_" block
+    f[__vnIdx["op_hp"]] = myHp / 3000.0
+    f[__vnIdx["op_hpfrac"]] = myHp / myMax
+    if (sim.shieldsGained > 0) vnAdd(f, "op_eff_abs_shield", sim.shieldsGained / __vnGScale[0])
+    if (sim.relativeShieldGained > 0) vnAdd(f, "op_eff_rel_shield", sim.relativeShieldGained / __vnGScale[12])
+    // position
+    var fc = (sim.finalPosition != -1) ? sim.finalPosition : getCell(me)
+    var oc = getCell(op)
+    var d = getCellDistance(fc, oc)
+    if (d == null) d = 10
+    var los = lineOfSight(fc, oc, [me, op]) ? 1 : 0
+    f[__vnIdx["dist"]] = d / 20.0
+    f[__vnIdx["los"]] = los
+    var z = []
+    for (var i = 0; i < __vnNFeat; i++) {
+        var zz = (f[i] - __vnMu[i]) / __vnSd[i]
+        if (zz > __vnClip) zz = __vnClip
+        if (zz < -__vnClip) zz = -__vnClip
+        push(z, zz)
+    }
+    var ck = d * 2 + los
+    if (!mapContainsKey(__vnCtxCache, ck)) __vnCtxCache[ck] = vnCtxOut(z)
+    var out = __vnCtxCache[ck]
+    var logit = out[0]
+    for (var m = 0; m < count(__vnMonoIdx); m++) {
+        logit += __vnSign[m] * out[m + 1] * z[__vnMonoIdx[m]]
+    }
+    return 1.0 - 1.0 / (1.0 + exp(-logit))
+}

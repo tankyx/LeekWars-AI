@@ -1399,6 +1399,23 @@ class ScenarioScorer {
             score *= (0.5 + vmP * _v9ValueModelScale / 2000.0)
         }
 
+        // Prod value model (value_net.lk, 2026-09-28): 1v1 vs the enemy main
+        // leek only. Mode 1 adds V priced at the model's exchange rate (1 pp
+        // of win probability ~ 66 HP at the HP weight); mode 2 ranks by V and
+        // keeps the old score only as a tie-break.
+        if (_v9VnMode > 0 && !_isBossFight && this._target != null && count(getAliveEnemies()) <= 3) {
+            var vnOp = vnMainEnemy()
+            if (vnOp != null && vnOp == this._target._id) {
+                var vnV = vnScenarioValue(this._player._id, vnOp, simResult)
+                var vnK = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight())) * 6600 * _v9VnScale
+                if (_v9VnMode == 1) {
+                    score += vnK * vnV
+                } else {
+                    score = 10000000 * vnV + score * 0.001
+                }
+            }
+        }
+
         return score
     }
 

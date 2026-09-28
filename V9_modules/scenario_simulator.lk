@@ -79,6 +79,7 @@ class SimulationResult {
     strShackleNow = 0
     // Per-turn TP / MAG removed next enemy turn, and TP x duration
     tpShackleNow = 0
+    mpShackleNow = 0
     tpShackleTurns = 0
     magShackleNow = 0
     magShackled = 0
@@ -458,6 +459,7 @@ class ScenarioSimulator {
                             if (eff == EFFECT_SHACKLE_TP || eff == EFFECT_SHACKLE_MP) {
                                 result.denialApplied += effScaled
                                 if (eff == EFFECT_SHACKLE_MP) result.mpDenialApplied += effScaled
+                                if (eff == EFFECT_SHACKLE_MP) result.mpShackleNow += effAvg * (1 + simMagic / 100.0)
                                 if (eff == EFFECT_SHACKLE_TP) { result.tpShackleNow += effAvg * (1 + simMagic / 100.0); result.tpShackleTurns += effScaled }
                             } else if (eff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += effScaled
@@ -593,6 +595,7 @@ class ScenarioSimulator {
                             if (wEff == EFFECT_SHACKLE_TP || wEff == EFFECT_SHACKLE_MP) {
                                 result.denialApplied += wEffScaled
                                 if (wEff == EFFECT_SHACKLE_MP) result.mpDenialApplied += wEffScaled
+                                if (wEff == EFFECT_SHACKLE_MP) result.mpShackleNow += wEffAvg * (1 + simMagic / 100.0)
                                 if (wEff == EFFECT_SHACKLE_TP) { result.tpShackleNow += wEffAvg * (1 + simMagic / 100.0); result.tpShackleTurns += wEffScaled }
                             } else if (wEff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += wEffScaled
