@@ -2796,3 +2796,29 @@ Parity: LeekScript vs Python on the same features ≤ 0.0002; ~56k ops per
 evaluation (+~90k once for parsing). Local feature parity differs only on
 local-generator artifacts (fight log `life` ≠ in-game start life; a turn-1
 wisdom buff). `_vnDebug` logs features + value each turn (off by default).
+
+**Value model in the scorer — harness A/B, Margaret (2026-09-28).** Arms:
+live 12e6e563; base = HEAD 6f8eec23 (debug/heal pricing + cooldown lookahead,
+model off); add = vn-add (value priced at the model's exchange rate); rep =
+vn-rep (rank by value, old score tie-break). Margaret (remission kit) vs
+TheLeaker / Hydrogène / BretzelLeekide clones, 60 paired seeds each, 0 errors:
+
+| arm | win | dealt/t | taken/t | hpLead |
+|---|---|---|---|---|
+| live | 23.3% | 680 | 1045 | −36.7 |
+| base | 32.2% | 626 | 951 | −29.0 |
+| add | 35.0% | 698 | 947 | −23.7 |
+| rep | 33.9% | 762 | 967 | −21.2 |
+
+Paired hpLead: base vs live +7.7 (p=0.054; wins p=0.052), rep vs base
++7.8 (p=0.056), add vs base +5.3 (p=0.16), rep vs live +15.6 (p<0.001),
+add vs live +13.0 (p=0.001). The undeployed pricing + lookahead work is
+itself a gain over live, and the model adds a similar step on top.
+
+**Prod Python API (V10 language question).** A spike AI (`tools/py_spike`,
+uploaded to 10.0/spike/main.py) showed prod Python AIs get an OBJECT API
+(`Me`, `Fight`, `Entity`, `Weapon.<name>`, `Chip.<name>`, `Cell`, `Field`,
+`Effect`, `Debug.log`, `System.operations`) — flat names (`getTurn`,
+`debug`) are NameError. The local generator's polyglot runtime is the old
+flat API, so it cannot run prod-API Python AIs. Cost on prod: value-net
+evaluation ≈ 41k ops (LeekScript 56k), loop ≈ 6 ops/iteration, 14M budget.
