@@ -2891,3 +2891,22 @@ far); Ada 41.1 / 43.0 / 43.9%. 2 harness errors = compile-cache race
 ("Truncated class file") on a new arm, not the AI. KurtGodel's loss is not
 explained by missing state features; next: log, per turn, the value and
 simulated outcome of base's chosen plan vs the model's chosen plan.
+
+**KurtGodel plan-level diagnostic (2026-09-28, `_vnDiag`).** Per turn, the
+old scorer's pick vs the model's pick (v2, replace mode), vs topac clone:
+seed 9003 T2 old = teleport + meteorite + quantum rifle (417 dmg + 417
+nova, ends d=8, V=0.236, V with position frozen 0.389) vs model = buffs,
+no damage, ends d=19 (V=0.310 / 0.320); T4 old engage d=6 V 0.172 /
+frozen 0.276. seed 9004 T2 old rage d=18 vs model heal (near full HP) d=25;
+T4 old 908 dmg + nova (V 0.109) vs model regeneration (0.275). Ending in
+the opponent's reach costs 10-15pp in the model — more than a quantum-rifle
+volley earns — and flips the engage turns. Likely prod-data confounding
+(leeks that end in enemy reach are often the ones that could not escape).
+But position is not the whole story: KurtGodel, 120 fights (Hydrogène +
+topac): base 65.0%; v2 replace 32.5%; v2 replace, position frozen 39.2%
+(taken/t 891 vs 766 — no positional judgment left); v2 ADD mode, position
+frozen (V9 positioning + model outcome value) 50.0% (p=0.03; taken/t 901).
+The model's outcome preferences (heal/buff timing) also diverge from what
+wins for him against V8-driven clones. Open question: harness bias (clones
+play V8, not their owners' AIs) vs model bias — only challenges vs real
+opponents can separate them. KurtGodel stays off.
