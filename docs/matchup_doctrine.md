@@ -2842,3 +2842,19 @@ evaluation ≈ 41k ops (LeekScript 56k), loop ≈ 6 ops/iteration, 14M budget.
 Diagnosis: the end-state mapping ignores nova damage (max-HP loss), our own
 buffs (steroid/rage/motivation/elevation) and summons, so replace mode gives
 KurtGodel's STR/SCI plan (nova + buffs) no credit.
+
+**Fixed mapping (nova → opponent max HP, own buffs, vitality; vn-rep2) and
+the per-profile candidate (2026-09-28).** base 6f8eec23 vs rep2, same panels:
+Edsger 29 → 59% (+97/−25 flips, hpLead +29.4, p<0.001; Hydrogène 27 → 60,
+ReauBotcode 7 → 48, topac 22 → 57); Ada 41 → 44% (hpLead −0.2; Yongyong
+70 → 90 p=0.002, Hydrogène 40 → 33, topac 13 → 8); Margaret 32 → 32%
+(hpLead +5.2, p=0.21; dealt/t +21%); KurtGodel 65 → 38% (hpLead −26.7,
+p<0.001 — still negative with the fuller mapping; suspect displacement:
+grapple / glove / inversion kit, end state keeps the enemy on its cell).
+Candidate 275657cf: `valueNetMode` per weight profile — STRENGTH (Ada) 2,
+MAGIC (Margaret) 2, BRUISER_REFLECT (Edsger is build 7: STR 503 / AGI 524 +
+mirror/thorn) 2, STRENGTH_SCIENCE (KurtGodel) 0. Verified on the harness:
+replays rep2 exactly for Edsger / Ada / Margaret and base exactly for
+KurtGodel (0 flips on identical seeds). vs live: Margaret +9pp (base's
+pricing + lookahead), Edsger +30pp, KurtGodel +10pp (base's grapple gating),
+Ada ~0.
