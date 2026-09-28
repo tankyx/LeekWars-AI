@@ -149,10 +149,20 @@ def st_fetch(a):
     print('fetch: %d indexed, %d to fetch' % (len(ids), len(todo)), flush=True)
     t0 = time.time(); done = [0]; lock = threading.Lock()
 
+    bad = [0]
+
     def one(fid):
-        f = api.get('/fight/get/%d' % fid)
-        f = (f or {}).get('fight', f)
-        if not isinstance(f, dict) or not (f.get('data') or {}).get('actions'):
+        try:
+            f = api.get('/fight/get/%d' % fid)
+            if isinstance(f, dict):
+                f = f.get('fight', f)
+            if not isinstance(f, dict) or not isinstance(f.get('data'), dict) or not f['data'].get('actions'):
+                with lock:
+                    bad[0] += 1
+                return
+        except Exception:
+            with lock:
+                bad[0] += 1
             return
         p = fight_path(fid)
         os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -168,7 +178,7 @@ def st_fetch(a):
 
     with ThreadPoolExecutor(max_workers=a.threads) as ex:
         list(ex.map(one, todo))
-    print('fetch done: %d new fights in %.0f min' % (done[0], (time.time() - t0) / 60), flush=True)
+    print('fetch done: %d new fights in %.0f min (%d unusable responses skipped)' % (done[0], (time.time() - t0) / 60, bad[0]), flush=True)
 
 
 def st_stats(a):

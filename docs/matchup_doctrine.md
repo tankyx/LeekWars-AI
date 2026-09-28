@@ -2746,3 +2746,27 @@ status 2 = finished, context 2 garden / 1 challenge / 3 other), fights
 `/fight/get/<id>` stripped + gzipped (~4 KB). 9 req/s token bucket over 4
 threads (LW+ allows 10). First pass: 2,000 leeks, 1,347 at L301 with talent
 ≥ 1500, 16,539 solo fights indexed in 2.5 min (12,853 garden).
+
+**Value model v0 (2026-09-28, `tools/value_dataset.py` + `tools/value_train.py`,
+numpy).** 15,723 prod solo fights (talent ≥ 1500, L301, 12.8k garden) →
+553,230 turn-start samples, 71 in-game-observable features, label = result
+for the leek to act (draw 0.5), each fight weighted 1 (64-turn draws were
+38% of raw samples); summons only count once summoned. Test (10% of fights):
+
+| model | logloss | AUC | acc | AUC T1-2 / 3-5 / 6-10 / 11+ |
+|---|---|---|---|---|
+| HP-fraction diff | 0.659 | 0.646 | 59% | .51 / .62 / .67 / .77 |
+| logistic, 4 HP feats | 0.640 | 0.706 | 64% | .63 / .68 / .71 / .81 |
+| logistic, all | 0.581 | 0.788 | 71% | .73 / .76 / .81 / .87 |
+| MLP 71-32-16 | 0.525 | 0.836 | 75% | .81 / .82 / .85 / .89 |
+
+Exchange rates (mean Δ win-prob on test states T3-15): deal 300 +4.3pp,
+take 300 −3.8pp (≈ symmetric — supports HP-symmetric pricing); opponent
+poison 300/turn with 600 queued +4.8pp (≈ 340 direct — queued poison worth
+~0.55 of face value); being poisoned the same −5.9pp; opponent MP −2 +3.1pp
+(≈ 210 direct), TP −3 +1.9pp; heal 300 +2.4pp; shields +0.5-0.8pp;
++4 cells −1.2pp. **Opponent STR −150 → −1.0pp (wrong sign):** the model is
+correlational — fracture shows up in states selected by who casts it — so
+it cannot drive action choice as-is (search would avoid fracture). Needs
+sign constraints / a hybrid (analytic HP terms + learned correction) before
+use in search.
