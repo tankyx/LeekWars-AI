@@ -2286,10 +2286,16 @@ class Strategy {
                         a.targetEntity._cellPos = getCell(a.targetEntity._id)
                         a.targetEntity.updateEntity()
                         var newEnemyCell = a.targetEntity._cellPos
+                        if (getTurn() <= 20) {
+                            debugW("SLIDE_T" + getTurn() + "_c" + a.chip + "_" + oldEnemyCell + ">" + newEnemyCell + "_d" + getCellDistance(getCell(), newEnemyCell))
+                        }
 
                         if (oldEnemyCell != newEnemyCell) {
                             for (var futureAction in this._actions) {
-                                if (futureAction.targetCell == oldEnemyCell) {
+                                // Grapple/glove aims are direction cells, not the enemy's
+                                // cell (the glove's far cell is often where the enemy was
+                                // pulled from); re-aiming them at the enemy cancels the slide.
+                                if (futureAction.targetCell == oldEnemyCell && futureAction.chip != CHIP_BOXING_GLOVE && futureAction.chip != CHIP_GRAPPLE) {
                                     futureAction.targetCell = newEnemyCell
                                 }
                             }

@@ -2310,6 +2310,29 @@ armoring (+25-30 max HP per cast; top-MAG r(talent) −0.19) and antidote
 (+0.57), teleportation (+0.52), tranquilizer (+0.37), slow_down (+0.35),
 knowledge (+0.28), serum (+0.17) and all poisons.
 
+**CITF + arsenic on real opponents (2026-09-28, challenges).** Owner
+equipped grapple + glove (dropped armoring + antidote). Margaret vs her STR
+testbed (TheLeaker, BretzelLeekide, Hydrogène, ReauBotcode), seeds 1-5,
+same kit both arms; new build in side root `9.0/V9-A`, assigned with
+`/leek/set-ai` `ai_path=` and restored after.
+- First run found an executor bug: the generic post-slide re-aim moved every
+  action aimed at the enemy's old cell onto its new cell — the glove's far
+  cell is usually the cell the enemy was pulled from (grapple fires at 8),
+  so 4/11 gloves were aimed at the enemy itself (zero push direction, no
+  slide). Fixed: grapple/glove aims are exempt; `SLIDE_T..` log added.
+- After the fix, mechanics are exact: 11 combos in 20 fights, grapple lands
+  the enemy at 2 (10/10 logged), covid applied 20/20, glove pushes to 6-8
+  (10/10). Arsenic from cover: 1 of 26 arsenic casts.
+- Result: control (12e6e563) 3/20 W, CITF build 1/20 (both before and after
+  the glove fix); damage dealt/turn 762 → 655. Over the combo turn + 2,
+  summed across the 10 combo fights: taken 25.1k → 26.7k, dealt 25.3k →
+  22.9k. The 14-TP combo displaces heals/poison of equal value and the
+  pushed STR enemy still reaches her at 6-8.
+- **Not shipped.** `_v9CitfCombo` stays in the code (committed, not
+  deployed). If the kit keeps grapple/glove on the live 12e6e563 build,
+  that build uses them through its old stray-grapple paths (seen in the
+  control arm) — armoring + antidote back is the safer kit.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
