@@ -840,6 +840,16 @@ class ScenarioScorer {
             else if (hpRatio < 0.8) healingUrgencyBonus = simResult.hpGained * 0.5 * wisdomMultiplier
         }
 
+        var hvScale = _v9HealHpValue ? this.getWeight('healHpValue', 0) / 100.0 : 0
+        if (hvScale > 0 && simResult.hpGained > 0) {
+            // Replace the per-HP heal terms: healed HP (capped at missing HP)
+            // at the damage HP weight, by urgency band.
+            var hvW = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight()))
+            var hvHeal = min(simResult.hpGained, max(0, maxHP - currentHP))
+            var hvU = (hpRatio < 0.4) ? _v9HealUrgLow : ((hpRatio < 0.7) ? _v9HealUrgMid : _v9HealUrgHigh)
+            healScore = 0
+            healingUrgencyBonus = hvW * hvHeal * hvU * hvScale
+        }
         score += shieldScore + relShieldScore + healScore + healingUrgencyBonus
 
         // Winner-mining rule (2026-08-18, 4,434 fights): top-2000 players WIN
@@ -847,7 +857,7 @@ class ScenarioScorer {
         // cycling (remission/regeneration = biggest loser-side signature).
         // When the race model says LOSING, convert: cut heal value, add
         // weapon urgency — take the trade instead of dying slower.
-        if (_v9WinnerConversionEnabled && __raceVerdict == "LOSING") {
+        if (_v9WinnerConversionEnabled && __raceVerdict == "LOSING" && !(hvScale > 0 && hpRatio < 0.4)) {
             score -= (healScore + healingUrgencyBonus) * 0.7
             score += simResult.damageDealt * damageWeight * 0.3
         }
@@ -1019,7 +1029,7 @@ class ScenarioScorer {
                     }
                 }
                 var strF = 1.0
-                if (_v9StrShackleThreat && !_v9DebuffHpValue && simResult.strShackleNow > 0 && this._target != null
+                if (_v9StrShackleThreat && this.getWeight('debuffHpValue', 0) <= 0 && simResult.strShackleNow > 0 && this._target != null
                     && this._target._strength > this._target._magic) {
                     var tStr = max(1, this._target._strength)
                     strF = max(0.1, 1.0 - min(simResult.strShackleNow, tStr) / (100.0 + tStr))
@@ -1065,7 +1075,8 @@ class ScenarioScorer {
         score += buffScore + debuffScore
 
         // With _v9DebuffHpValue the TP part is priced below; keep MP here.
-        var denialForOld = _v9DebuffHpValue ? simResult.mpDenialApplied : simResult.denialApplied
+        var dhScale = _v9DebuffHpValue ? this.getWeight('debuffHpValue', 0) / 100.0 : 0
+        var denialForOld = (dhScale > 0) ? simResult.mpDenialApplied : simResult.denialApplied
         if (denialForOld > 0) {
             var enemyTP = max(1, this._target._currTp)
             var denialRatio = min(1.0, denialForOld / enemyTP)
@@ -1102,7 +1113,7 @@ class ScenarioScorer {
             }
         }
 
-        if (_v9DebuffHpValue && this._target != null
+        if (dhScale > 0 && this._target != null
             && (simResult.strShackleNow > 0 || simResult.magShackleNow > 0 || simResult.tpShackleNow > 0)
             && simResult.damageDealt < this._target._currHealth) {
             var dhW = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight()))
@@ -1139,10 +1150,10 @@ class ScenarioScorer {
             var xMag = (simResult.magShackleNow > 0) ? max(0, simResult.magShackled / simResult.magShackleNow - 1) : 0
             var xTP = (simResult.tpShackleNow > 0) ? max(0, simResult.tpShackleTurns / simResult.tpShackleNow - 1) : 0
             var dhLater = (pStr * xStr + pMag * xMag + pTP * xTP) * dhAvg * _v9DebuffFutureDisc
-            score += dhW * (pNow * dhNext + dhLater)
+            score += dhW * (pNow * dhNext + dhLater) * dhScale
         }
 
-        if (!_v9DebuffHpValue && simResult.strShackled > 0) {
+        if (dhScale <= 0 && simResult.strShackled > 0) {
             var enemyStr = max(1, this._target._strength)
             var reductionRatio = min(1.0, simResult.strShackled / enemyStr)
             var enemyDPT = enemyStr * 1.5
@@ -1150,7 +1161,7 @@ class ScenarioScorer {
             var statReduceValue = reductionRatio * enemyDPT * 1.09
             score += statReduceValue
         }
-        if (!_v9DebuffHpValue && simResult.magShackled > 0) {
+        if (dhScale <= 0 && simResult.magShackled > 0) {
             var enemyMag = max(1, this._target._magic)
             var reductionRatio = min(1.0, simResult.magShackled / enemyMag)
             var enemyMagDPT = enemyMag * 1.5

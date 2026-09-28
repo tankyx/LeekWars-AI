@@ -31,6 +31,7 @@ def main():
     ap.add_argument('--ai', default='/normal', help="bot AI: /normal or /expert (custom test leeks)")
     ap.add_argument('--root', default='9.0/V9/', help='our AI root on the server')
     ap.add_argument('--account', default='main')
+    ap.add_argument('--dump', help='save the fetched fights (JSON list) for tools/siege_rotation.py --fights')
     a = ap.parse_args()
     D = Decoder(); lw = LWSession(a.account)
     ours = LEEKS.get(a.leek)
@@ -59,6 +60,7 @@ def main():
         time.sleep(0.5)
     time.sleep(8)
     res = Counter(); errs = Counter(); turns = 0; dealt = 0; taken = 0; weap = Counter(); ew = Counter()
+    dumped = []
     for fid in fids:
         f = None
         for _ in range(12):
@@ -66,6 +68,7 @@ def main():
             if isinstance(f, dict) and f.get('data', {}).get('actions') and f.get('winner') is not None:
                 break
             time.sleep(3)
+        dumped.append(f)
         data = f['data']; me = [x for x in data['leeks'] if x['name'] == a.leek][0]; mid = me['id']
         en = [x for x in data['leeks'] if x['team'] != me['team']][0]
         res['W' if f['winner'] == me['team'] else ('D' if f['winner'] == 0 else 'L')] += 1
@@ -97,6 +100,9 @@ def main():
     print('  our weapons/fight %s' % {k: round(v / n, 1) for k, v in weap.items()})
     print('  bot weapons/fight %s' % {k: round(v / n, 1) for k, v in ew.items()})
     print('  runtime errors: ours %d, bot %d' % (errs['ours'], errs['bot']))
+    if a.dump:
+        json.dump(dumped, open(a.dump, 'w'))
+        print('  dumped %d fights to %s' % (len(dumped), a.dump))
     if errs['ours']:
         sys.exit(2)
 

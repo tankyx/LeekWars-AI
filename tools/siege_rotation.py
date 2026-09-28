@@ -230,7 +230,15 @@ def show(o):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--json'); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument('--json')
+    ap.add_argument('--fights', nargs='+', help='battery dumps (JSON lists): summarise these instead')
+    ap.add_argument('--leek', default='MargaretHamilton')
+    a = ap.parse_args()
+    if a.fights:
+        for path in a.fights:
+            rows = [r for r in (analyse(f, owner_name=a.leek) for f in json.load(open(path))) if r]
+            show(summarise(rows, path))
+        return
     top = list(load_top())
     ours = list(load_ours())
     res = [summarise(top, 'TOP-300 MAG vs STR (all)'),

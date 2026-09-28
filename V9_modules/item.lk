@@ -10,6 +10,13 @@ global _v9StrShackleThreat = true
 // shackles on STR leeks ~52% of the time and win 57% vs 36%.
 global _v9DebuffHpValue = true
 global _v9DebuffFutureDisc = 0.7
+// Heals priced as HP at the same HP weight as damage, scaled by how low we
+// are (2026-09-28). Old heal value ~1-5 points/HP vs 224/HP of poison: top
+// mages heal on 64% of turns below 40% HP vs STR, Margaret 34%.
+global _v9HealHpValue = true
+global _v9HealUrgLow = 1.0
+global _v9HealUrgMid = 0.45
+global _v9HealUrgHigh = 0.12
 // Per-chip line-of-sight requirement (2026-09-28). The engine exposes
 // chipNeedLos(); V9 never read it, so every chip check demanded LoS and
 // Arsenic (los=false, range 3-4) could never be planned from cover. Top-300

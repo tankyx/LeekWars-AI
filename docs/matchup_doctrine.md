@@ -2409,6 +2409,27 @@ removals), counted on enemy turns after first damage.
   heal 13, shield 8, STR/TP/MP shackle 4 each. Margaret: poison 32, weapon
   24, buff 15, heal 12, MP shackle 6, TP shackle 4.
 
+**Uptime via pricing, not a scheduler (2026-09-28).** Every shackle in
+Margaret's kit has cooldown <= 1 (fracture/soporific 1, tranquilizer/
+slow_down 0), so a 3-turn chip scheduler has nothing to reserve: each turn
+is independent and the multi-turn value is the effect duration, which
+`_v9DebuffHpValue` now prices. Engine timing (Entity.startTurn): effects
+tick down at the start of the CASTER's turn, so an effect of duration d
+covers the next d enemy turns; a chip with cooldown C cast on turn k is
+usable again on turn k + C. Heals were priced like debuffs (ehpWeight ~1-5
+points/HP vs 224/HP of poison, and cut 70% when the race model says LOSING):
+`_v9HealHpValue` prices healed HP (capped at missing HP) at the HP weight ×
+urgency 1.0 / 0.45 / 0.12 (HP < 40 / 40-70 / > 70%). Both gated by new
+MAGIC_WEIGHTS entries `debuffHpValue` / `healHpValue` (0 elsewhere = old
+terms). Live-engine A/B vs StrongSTR, 30 each, clean variant (12e6e563 +
+pricing only, V9-A): any-shackle uptime 40 → 66%, STR 1 → 27%, TP 17 →
+42%, poison 79 → 80%; damage to Margaret per non-crashed bot turn 853 → 748
+(−12%, ~170 turns each); crash-free fights won 6/23 → 9/18 (bot crashed
+in 9 vs 18 fights, so raw wins 13/30 vs 20/30 are confounded). Low-HP heal
+rate unchanged (38 → 33%): her heals are regeneration (once per fight) and
+serum (cooldown 5); top mages heal with remission (cooldown 1) on ~30% of
+turns — a kit gap, not scoring. Not deployed; challenge A/B next.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
