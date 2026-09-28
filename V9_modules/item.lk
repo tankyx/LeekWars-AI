@@ -1,5 +1,8 @@
 global _v9MaxUsesMagicCap = 0
 global _v9ChipLosAware = true
+// Strength shackles (fracture, boxing glove) cut the enemy's STR-scaled damage
+// next turn by s / (100 + STR); price that in the incoming-HP term.
+global _v9StrShackleThreat = true
 // Per-chip line-of-sight requirement (2026-09-28). The engine exposes
 // chipNeedLos(); V9 never read it, so every chip check demanded LoS and
 // Arsenic (los=false, range 3-4) could never be planned from cover. Top-300

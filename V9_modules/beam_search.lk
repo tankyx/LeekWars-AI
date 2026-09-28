@@ -751,7 +751,10 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 }
             } else {
                 var cBd = arsenalObj.getDamageBreakdown(simStr, simMag, simWis, simSci, chipId)
-                if (cBd['statReduce'] > 0) value += 150 * (1 + simMag / 500)
+                // STR shackle vs a STR target cuts its next-turn damage by
+                // s / (100 + STR): rank it with the denial shackles, not below.
+                if (cBd['statReduce'] > 0 && _v9StrShackleThreat && targetObj._strength > targetObj._magic) value += 350 * (1 + simMag / 500)
+                else if (cBd['statReduce'] > 0) value += 150 * (1 + simMag / 500)
                 else if (cBd['denial'] > 0) value += 150 * (1 + simMag / 500)
                 else value += 80
             }

@@ -1018,7 +1018,13 @@ class ScenarioScorer {
                         else posF = (fdS >= 9) ? 0.72 : 1.0
                     }
                 }
-                var expIn = effectiveEnemyDmg * _v9ThreatHpScale * posF - simResult.shieldsGained
+                var strF = 1.0
+                if (_v9StrShackleThreat && simResult.strShackleNow > 0 && this._target != null
+                    && this._target._strength > this._target._magic) {
+                    var tStr = max(1, this._target._strength)
+                    strF = max(0.1, 1.0 - min(simResult.strShackleNow, tStr) / (100.0 + tStr))
+                }
+                var expIn = effectiveEnemyDmg * _v9ThreatHpScale * posF * strF - simResult.shieldsGained
                 if (expIn > 0) score -= hpW * expIn
             }
 

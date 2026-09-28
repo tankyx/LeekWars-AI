@@ -75,6 +75,8 @@ class SimulationResult {
     // preserved), valued differently from generic action denial.
     mpDenialApplied = 0
     strShackled = 0
+    // STR removed during the enemy's next turn (no duration factor)
+    strShackleNow = 0
     magShackled = 0
 
     // Support: ally-targeted casts (heals/shields/buffs on teammates).
@@ -454,6 +456,7 @@ class ScenarioSimulator {
                                 if (eff == EFFECT_SHACKLE_MP) result.mpDenialApplied += effScaled
                             } else if (eff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += effScaled
+                                result.strShackleNow += effAvg * (1 + simMagic / 100.0)
                             } else if (eff == EFFECT_SHACKLE_MAGIC) {
                                 result.magShackled += effScaled
                             }
@@ -586,6 +589,7 @@ class ScenarioSimulator {
                                 if (wEff == EFFECT_SHACKLE_MP) result.mpDenialApplied += wEffScaled
                             } else if (wEff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += wEffScaled
+                                result.strShackleNow += wEffAvg * (1 + simMagic / 100.0)
                             } else if (wEff == EFFECT_SHACKLE_MAGIC) {
                                 result.magShackled += wEffScaled
                             }

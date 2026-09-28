@@ -2347,6 +2347,22 @@ same kit both arms; new build in side root `9.0/V9-A`, assigned with
   Parsing: action 13 carries the weapon id (axe 16), weapon effects are 301,
   stack updates 14.
 
+**Fracture + manumission instead of grapple/glove (2026-09-28).** Top-300
+MAG vs STR (1,066 fights): win 57% in fights where they cast fracture vs 36%
+where not; manumission 58/46 (n=90); owner equipped both. The deployed
+build cast neither (0 in 12 StrongSTR fights): fracture's only credit was
+statReduce ~200 points and its beam value (150 × (1+MAG/500)) ranked it out
+of the width-20 beam; manumission is valued only while we are shackled
+(correct; STR bots rarely shackle). Built `_v9StrShackleThreat`: simulator
+`strShackleNow` (per-turn STR removed), incoming-HP term × (1 − s/(100+STR))
+vs STR targets, beam value 350 × (1+MAG/500) vs STR targets. Locally the
+adversarial threat cache is 0 for every plan vs the smart bots (no way to
+test the term locally). Clean A/B on the live engine (12e6e563 vs 12e6e563
++ this patch only, side root V9-A), 24 StrongSTR fights each: 18/24 vs 16/24,
+dealt/turn 1113 vs 1076, taken/turn 728 vs 712, fracture 1.4 casts/fight.
+~128 STR off a 752-STR bot = 15% of its damage on ~1 turn in 5: a 2% effect.
+The top-300 correlation is mostly who-plays-well, not the chip. Not shipped.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
