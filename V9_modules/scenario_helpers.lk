@@ -455,7 +455,7 @@ class ScenarioHelpers {
             if (dist < c._minRange || dist > c._maxRange) continue
             if (getCooldown(chipId, this._player._id) > 0) continue
             if (availableTP < c._cost) continue
-            if (!getCachedLineOfSight(fromCell, toCell)) continue
+            if (v9ChipNeedsLos(chipId) && !getCachedLineOfSight(fromCell, toCell)) continue
             if (c._launchType != null && c._launchType > 0 &&
                 !isSimLaunchValid(c._launchType, fromCell, toCell)) continue
             return true
@@ -1909,7 +1909,7 @@ class ScenarioHelpers {
             var chipTargetCell = this._target._cellPos
             var isChipSplash = false
 
-            if (!lineOfSight(simPos, this._target._cellPos)) {
+            if (v9ChipNeedsLos(chipId) && !lineOfSight(simPos, this._target._cellPos)) {
                 if (this._strategy != null) {
                     var chipSplashResult = this._strategy.findAoESplashCell(chipId, this._target._cellPos, simPos)
                     if (chipSplashResult != null) {

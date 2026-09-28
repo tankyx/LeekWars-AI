@@ -1241,6 +1241,80 @@ class ScenarioCombos extends ScenarioHelpers {
     // the farthest in-range cell that still leaves MP to reach a no-LoS cell
     // (or a much safer one). Emits up to two plans; the scorer decides.
     // Retreat step uses MOVEMENT_PAB so picks are identifiable in logs.
+    // No-LoS chip casts from `cell` (e.g. Arsenic from cover), excluding
+    // chips in `used`. Returns [actions, tpSpent].
+    _noLosChipActions(cell, tpLeft, used) {
+        var acts = []
+        var spent = 0
+        if (!_v9ChipLosAware || this._target == null) return [acts, 0]
+        var tPos = this._target._cellPos
+        var d = getCellDistance(cell, tPos)
+        if (d == null) return [acts, 0]
+        for (var cid in mapKeys(this._arsenal.playerEquippedChips)) {
+            if (mapContainsKey(used, cid)) continue
+            if (v9ChipNeedsLos(cid)) continue
+            var co = this._arsenal.playerEquippedChips[cid]
+            if (co == null) continue
+            var isAtk = false
+            for (var dc in [CHIP_ARSENIC]) { if (dc == cid) isAtk = true }
+            if (!isAtk && !isPoisonChip(cid)) continue
+            if (getCooldown(cid, this._player._id) > 0) continue
+            var cost = getCachedChipCost(cid)
+            if (cost > tpLeft - spent) continue
+            if (d < co._minRange || d > co._maxRange) continue
+            if (co._launchType != null && co._launchType > 0 && !isSimLaunchValid(co._launchType, cell, tPos)) continue
+            if (co._aoeType != AREA_POINT && !co._selfImmune && this._fieldMap.wouldAoEHitCell(tPos, co._aoeType, cell, cell)) continue
+            push(acts, new Action(Action.ACTION_DIRECT, -1, cid, tPos, this._target))
+            spent += cost
+        }
+        return [acts, spent]
+    }
+
+    _noLosChipRangeOk(cell) {
+        if (!_v9ChipLosAware || this._target == null) return false
+        var d = getCellDistance(cell, this._target._cellPos)
+        if (d == null) return false
+        for (var cid in mapKeys(this._arsenal.playerEquippedChips)) {
+            if (v9ChipNeedsLos(cid)) continue
+            if (cid != CHIP_ARSENIC && !isPoisonChip(cid)) continue
+            var co = this._arsenal.playerEquippedChips[cid]
+            if (co == null || getCooldown(cid, this._player._id) > 0) continue
+            if (d >= co._minRange && d <= co._maxRange) return true
+        }
+        return false
+    }
+
+    // Cover poison (2026-09-28): move to a reachable cell with NO line of
+    // sight to the target but within range of a no-LoS poison (Arsenic 3-4),
+    // cast it, stay hidden. For the ~20% of Margaret's turns that start with
+    // the enemy hidden and far, where no LoS chip can be cast at all.
+    createCoverPoisonScenario(availableTP, availableMP) {
+        if (!_v9ChipLosAware || this._target == null) return null
+        var tPos = this._target._cellPos
+        var pool = [this._player._cellPos]
+        for (var rc in getReachableCells()) push(pool, rc)
+        var best = -1
+        var bestT = 999999
+        for (var c in pool) {
+            var mpC = (c == this._player._cellPos) ? 0 : getGraphMPCost(c)
+            if (mpC == null || mpC > availableMP) continue
+            if (getCachedLineOfSight(c, tPos)) continue
+            if (!this._noLosChipRangeOk(c)) continue
+            var th = getAdversarialThreat(c)
+            if (th < bestT) { bestT = th; best = c }
+        }
+        if (best == -1) return null
+        var casts = this._noLosChipActions(best, availableTP, [:])
+        if (count(casts[0]) == 0) return null
+        var acts = []
+        if (best != this._player._cellPos) push(acts, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, best, this._target))
+        for (var ca in casts[0]) push(acts, ca)
+        if (getTurn() <= 30) {
+            debugW("COVERPOIS_T" + getTurn() + "_c" + best + "_d" + getCellDistance(best, tPos) + "_thr" + floor(bestT) + "_n" + count(casts[0]))
+        }
+        return acts
+    }
+
     createPeekRetreatScenarios(availableTP, availableMP) {
         var outPR = []
         if (!_v9PeekRetreat || this._target == null) return outPR
@@ -1309,7 +1383,7 @@ class ScenarioCombos extends ScenarioHelpers {
             for (var at in atks) { if (at.type >= Action.MOVEMENT_APPROACH && at.type <= Action.MOVEMENT_PAB) { hasMove = true; break } }
             if (hasMove) continue
             var fThreat = getAdversarialThreat(fc)
-            var best = -1; var bestHid = false; var bestT = 999999; var bestD = -1
+            var best = -1; var bestHid = false; var bestT = 999999; var bestD = -1; var bestArs = false
             for (var sc in pool) {
                 if (sc == fc) continue
                 var dd = getCellDistance(fc, sc)
@@ -1320,16 +1394,33 @@ class ScenarioCombos extends ScenarioHelpers {
                 if (bestHid && !hid) continue
                 var ed = getCellDistance(sc, tPos)
                 if (ed == null) continue
-                if (!(hid && !bestHid) && !(th < bestT || (th == bestT && ed > bestD))) continue
+                // Hidden cells from which a no-LoS poison (Arsenic) still reaches
+                // the target outrank other hidden cells.
+                var ars = hid && this._noLosChipRangeOk(sc)
+                var better = false
+                if (hid && !bestHid) better = true
+                else if (hid == bestHid && ars && !bestArs) better = true
+                else if (hid == bestHid && ars == bestArs && (th < bestT || (th == bestT && ed > bestD))) better = true
+                if (!better) continue
                 var pl = getCachedPathLength(fc, sc)
                 if (pl == null || pl <= 0 || pl > left) continue
-                best = sc; bestHid = hid; bestT = th; bestD = ed
+                best = sc; bestHid = hid; bestT = th; bestD = ed; bestArs = ars
             }
             if (best == -1) continue
             var acts = []
             if (fc != this._player._cellPos) push(acts, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, fc, this._target))
             for (var at2 in atks) push(acts, at2)
             push(acts, new Action(Action.MOVEMENT_PAB, -1, -1, best, this._target))
+            if (bestHid) {
+                var usedC = [:]
+                var tpUsed = (getWeapon() != -1) ? 0 : 0
+                for (var ua in atks) {
+                    if (ua.chip != -1) { usedC[ua.chip] = true; tpUsed += getCachedChipCost(ua.chip) }
+                    else if (ua.weaponId != -1 && mapContainsKey(this._arsenal.playerEquippedWeapons, ua.weaponId)) tpUsed += this._arsenal.playerEquippedWeapons[ua.weaponId]._cost
+                }
+                var tail = this._noLosChipActions(best, availableTP - tpUsed - 1, usedC)
+                for (var ta in tail[0]) push(acts, ta)
+            }
             push(outPR, acts)
             if (getTurn() <= 30) {
                 debugW("PEEK_T" + getTurn() + "_fc" + fc + "_d" + fd + "_rc" + best + "_hid" + (bestHid ? 1 : 0) + "_thr" + floor(fThreat) + ">" + floor(bestT) + "_n" + count(atks))

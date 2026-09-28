@@ -189,6 +189,8 @@ class ScenarioGenerator extends ScenarioCombos {
             for (var prS in this.createPeekRetreatScenarios(availableTP, availableMP)) {
                 push(scenarios, prS)
             }
+            var coverPois = this.createCoverPoisonScenario(availableTP, availableMP)
+            if (coverPois != null) push(scenarios, coverPois)
         }
 
         // Support template: for BUILD_SUPPORT with living teammates, in every

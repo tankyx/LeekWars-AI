@@ -279,7 +279,8 @@ class Strategy {
             return false
         }
 
-        if (!lineOfSight(fromCell, toCell)) {
+        var noLosChip = (action.weaponId == -1 && action.chip != -1 && !v9ChipNeedsLos(action.chip))
+        if (!noLosChip && !lineOfSight(fromCell, toCell)) {
             return false
         }
 
@@ -2273,7 +2274,7 @@ class Strategy {
                     var _chipTpBefore = getTP()
                     var _chipResult = useChipOnCell(a.chip, a.targetCell)
                     if (getTurn() <= 20) {
-                        debugW("EXEC_T" + getTurn() + "_CHIPc" + a.chip + "_t" + a.type + "_r" + _chipResult + "_cd" + _chipCdBefore + "_tp" + _chipTpBefore + ">" + getTP() + "_fc" + currentPos + "_tc" + a.targetCell + "_d" + dist)
+                        debugW("EXEC_T" + getTurn() + "_CHIPc" + a.chip + "_t" + a.type + "_r" + _chipResult + "_cd" + _chipCdBefore + "_tp" + _chipTpBefore + ">" + getTP() + "_fc" + currentPos + "_tc" + a.targetCell + "_d" + dist + "_los" + (lineOfSight(currentPos, a.targetCell) ? 1 : 0))
                     }
 
                     if (a.chip == CHIP_INVERSION && _isBossFight) {

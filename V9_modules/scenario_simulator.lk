@@ -826,7 +826,7 @@ class ScenarioSimulator {
                         if (action.type == Action.ACTION_DIRECT
                             || action.type == Action.ACTION_DOT
                             || action.type == Action.ACTION_DEBUFF) {
-                            if (!lineOfSight(simPos, tCell)) {
+                            if (v9ChipNeedsLos(action.chip) && !lineOfSight(simPos, tCell)) {
                                 return false
                             }
                             if (!isSimLaunchValid(chipObj._launchType, simPos, tCell)) {

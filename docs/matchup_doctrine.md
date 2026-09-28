@@ -2273,6 +2273,43 @@ enlarges heals, which is part of why the scorer picks them. Build decision
 left to the owner. `tools/top_vs_us.py` now records attack distance for
 chip casts too (`atk_dist`, `poison_dists`).
 
+### Arsenic from cover and the grapple → covid → boxing glove combo (2026-09-28)
+
+**Arsenic.** `los: false`, range 3-4, the only no-LoS poison in Margaret's
+kit. Top-300 mages cast 24% of their arsenic without line of sight (6,330
+casts); Margaret 9% on both V8 and V9, all incidental — V9 never read the
+engine's `chipNeedLos()`, so every chip check demanded LoS. Built
+(`_v9ChipLosAware`, `v9ChipNeedsLos` in item.lk): simulator feasibility,
+attack helper chip branch, `hasUsableAttackFromCurrentCell`, and the
+pre-execution filter respect the per-chip rule; peek plans prefer a hidden
+retreat cell within no-LoS-chip range and append the cast; new
+`createCoverPoisonScenario` (move to a hidden cell in range, cast, stay
+hidden) in every combat state; executor chip log now carries `_los`.
+Result: 68 cover plans generated in 24 local fights vs hiding testbeds,
+1 picked (arsenic from cover 2% of casts); live vs StrongSTR / Rex 0 of 23
+(bots never hide). The scorer declines because the cover cell is 3-4 from
+the enemy, where a hidden end still takes 0.9× next-turn damage. Kept as a
+correctness fix, no bonus added. **Not deployed** (talent read to Oct 5).
+
+**Combo mechanics (generator source).** Grapple and boxing glove are area
+FIRST_IN_LINE: the first entity along the aimed line within range is
+affected. Attract slides it TOWARD THE AIMED CELL (`getAttractLastAvailable
+Cell`), push slides it away up to the aimed cell. So: grapple aimed at the
+cell 2 away toward the enemy (enemy lands at 2) → covid (range 0-2) →
+boxing glove (range 2-8) aimed at a far cell on the same line (enemy pushed
+out). 3 + 8 + 3 = 14 TP. V9's `createGrappleCovidScenario` aims grapple at
+the enemy's own cell, which moves nobody, and has no glove step — it can
+never land covid. Nobody in the top-300 data uses grapple/glove as a mage;
+Margaret casts covid in 92% of fights (top mages 16%) and walks into range
+0-2 to do it, against 86% STR opponents.
+
+**Kit (owner decision).** Margaret is at 17/17 chips (RAM 6); farmer owns
+grapple 2399063 and boxing glove 2399042. Weakest evidence among her 17:
+armoring (+25-30 max HP per cast; top-MAG r(talent) −0.19) and antidote
+(r −0.01; 65% of her antidote fights are vs non-mages). Keep soporific
+(+0.57), teleportation (+0.52), tranquilizer (+0.37), slow_down (+0.35),
+knowledge (+0.28), serum (+0.17) and all poisons.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
