@@ -1409,6 +1409,7 @@ class ScenarioScorer {
             var vnOp = vnMainEnemy()
             if (vnOp != null && vnOp == this._target._id) {
                 var vnV = vnScenarioValue(this._player._id, vnOp, simResult)
+                vnDiagRecord(scenario, simResult, score, vnV, vnOp)
                 var vnK = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight())) * 6600 * _v9VnScale
                 if (vnMode == 1) {
                     score += vnK * vnV

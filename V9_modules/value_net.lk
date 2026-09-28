@@ -271,6 +271,7 @@ function vnLogTurn(enemyId) {
 // _v9VnMode: 0 off, 1 add (priced at the model's exchange rate), 2 replace
 // (rank by value, old score breaks ties).
 global _v9VnMode = 0
+global __vnFreezePos = false
 global _v9VnScale = 1.0
 global __vnTurnKey = -1
 global __vnBase = null
@@ -387,6 +388,10 @@ function vnScenarioValue(me, op, sim) {
     var d = getCellDistance(fc, oc)
     if (d == null) d = 10
     var los = lineOfSight(fc, oc, [me, op]) ? 1 : 0
+    if (__vnFreezePos) {
+        d = round(__vnBase[__vnIdx["dist"]] * 20.0)
+        los = (__vnBase[__vnIdx["los"]] > 0.5) ? 1 : 0
+    }
     f[__vnIdx["dist"]] = d / 20.0
     f[__vnIdx["los"]] = los
     f[__vnIdx["op_hp"]] = myHp / 3000.0
@@ -409,4 +414,47 @@ function vnScenarioValue(me, op, sim) {
         logit += __vnSign[m] * out[m + 1] * z[__vnMonoIdx[m]]
     }
     return 1.0 - 1.0 / (1.0 + exp(-logit))
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic (2026-09-28): per turn, the plan the OLD scorer would pick and
+// the plan the model picks, with both scores and the simulated outcome;
+// flushed at the next turn start. _vnDiag off by default.
+global _vnDiag = false
+global __vnDiagTurn = -1
+global __vnDiagOld = null
+global __vnDiagV = null
+
+function vnDiagDesc(scenario, sim, oldS, v, op) {
+    var seq = ""
+    for (var a in scenario) {
+        var tag = "" + a.type
+        if (a.weaponId != null && a.weaponId != -1) tag += "w" + a.weaponId
+        if (a.chip != null && a.chip != -1) tag += "c" + a.chip
+        seq += tag + "."
+    }
+    var fc = (sim.finalPosition != -1) ? sim.finalPosition : getCell()
+    var d = getCellDistance(fc, getCell(op))
+    __vnFreezePos = true
+    var vf = vnScenarioValue(getEntity(), op, sim)
+    __vnFreezePos = false
+    return "old" + round(oldS) + "_V" + round(v * 1000) + "_Vfrozen" + round(vf * 1000) + "_dmg" + round(sim.damageDealt) + "_nova" + round(sim.novaDamageQueued)
+        + "_dot" + round(sim.dotDamageQueued) + "_heal" + round(sim.hpGained) + "_sh" + round(sim.shieldsGained)
+        + "_rsh" + round(sim.relativeShieldGained) + "_nbuf" + count(sim.buffsApplied) + "_tp" + sim.tpSpent + "_d" + d + "_seq" + seq
+}
+
+function vnDiagRecord(scenario, sim, oldS, v, op) {
+    if (!_vnDiag) { return }
+    if (__vnDiagTurn != getTurn()) {
+        __vnDiagTurn = getTurn(); __vnDiagOld = null; __vnDiagV = null
+    }
+    if (__vnDiagOld == null || oldS > __vnDiagOld[0]) __vnDiagOld = [oldS, v, vnDiagDesc(scenario, sim, oldS, v, op)]
+    if (__vnDiagV == null || v > __vnDiagV[1]) __vnDiagV = [oldS, v, vnDiagDesc(scenario, sim, oldS, v, op)]
+}
+
+function vnDiagFlush() {
+    if (!_vnDiag || __vnDiagOld == null) { return }
+    debugW("VNDIAG_T" + __vnDiagTurn + "_OLDPICK_" + __vnDiagOld[2])
+    debugW("VNDIAG_T" + __vnDiagTurn + "_VPICK___" + __vnDiagV[2])
+    __vnDiagOld = null; __vnDiagV = null
 }

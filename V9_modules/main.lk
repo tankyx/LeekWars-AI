@@ -190,6 +190,7 @@ function main() {
     }
 
     if (_vnDebug) vnLogTurn(vnMainEnemy())
+    vnDiagFlush()
     if (getTurn() <= 3) { debugW("BUILD_" + __playerBuildType + "_str" + player._strength + "_agi" + player._agility + "_mir" + (mapContainsKey(arsenal.playerEquippedChips, CHIP_MIRROR) ? 1 : 0) + "_thn" + (mapContainsKey(arsenal.playerEquippedChips, CHIP_THORN) ? 1 : 0)) }
     profileAllEnemies(fieldMap)
 
