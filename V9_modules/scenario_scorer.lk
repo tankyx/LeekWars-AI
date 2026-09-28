@@ -1019,7 +1019,7 @@ class ScenarioScorer {
                     }
                 }
                 var strF = 1.0
-                if (_v9StrShackleThreat && simResult.strShackleNow > 0 && this._target != null
+                if (_v9StrShackleThreat && !_v9DebuffHpValue && simResult.strShackleNow > 0 && this._target != null
                     && this._target._strength > this._target._magic) {
                     var tStr = max(1, this._target._strength)
                     strF = max(0.1, 1.0 - min(simResult.strShackleNow, tStr) / (100.0 + tStr))
@@ -1064,9 +1064,11 @@ class ScenarioScorer {
         var debuffScore = this.evaluateDebuffs(simResult.debuffsApplied) * buffWeight
         score += buffScore + debuffScore
 
-        if (simResult.denialApplied > 0) {
+        // With _v9DebuffHpValue the TP part is priced below; keep MP here.
+        var denialForOld = _v9DebuffHpValue ? simResult.mpDenialApplied : simResult.denialApplied
+        if (denialForOld > 0) {
             var enemyTP = max(1, this._target._currTp)
-            var denialRatio = min(1.0, simResult.denialApplied / enemyTP)
+            var denialRatio = min(1.0, denialForOld / enemyTP)
             var enemyBestDPT = max(1, this._target._strength + this._target._magic) * 1.5
             // Multiplier halved (3.0 → 1.63) to compensate for parser fix that
             // raised denialApplied magnitude ~1.84× across DB-loaded shackles.
@@ -1100,7 +1102,47 @@ class ScenarioScorer {
             }
         }
 
-        if (simResult.strShackled > 0) {
+        if (_v9DebuffHpValue && this._target != null
+            && (simResult.strShackleNow > 0 || simResult.magShackleNow > 0 || simResult.tpShackleNow > 0)
+            && simResult.damageDealt < this._target._currHealth) {
+            var dhW = max(damageWeight, this.getWeight('dotEffects', this.calculateDotWeight()))
+            var dhStr = max(0, this._target._strength)
+            var dhMag = max(0, this._target._magic)
+            var dhTP = max(1, getTotalTP(this._target._id))
+            var dhSum = max(1, dhStr + dhMag)
+            // Enemy damage per turn: average from its stats (0.52 fit, see
+            // _v9ThreatHpScale); next turn from the cache at our end cell.
+            var dhAvg = _v9ThreatHpScale * dhSum * 1.5
+            var dhCell = simResult.finalPosition
+            if (dhCell == -1) dhCell = this._player._cellPos
+            var dhNext = 0.5 * dhAvg
+            if (__adversarialThreatCacheBuilt) {
+                var dhThr = getAdversarialThreat(dhCell)
+                if (dhThr > 0) {
+                    var dhPosF = 1.0
+                    var dhD = getCellDistance(dhCell, this._target._cellPos)
+                    var dhHid = !getCachedLineOfSight(dhCell, this._target._cellPos)
+                    if (dhD != null) {
+                        if (dhHid) dhPosF = (dhD >= 9) ? 0.36 : ((dhD >= 6) ? 0.75 : 0.9)
+                        else dhPosF = (dhD >= 9) ? 0.72 : 1.0
+                    }
+                    dhNext = max(dhNext, dhThr * _v9ThreatHpScale * dhPosF)
+                }
+            }
+            // Fraction of the enemy's damage removed per shackle type
+            var pStr = (dhStr > 0) ? (dhStr / dhSum) * min(simResult.strShackleNow, dhStr) / (100.0 + dhStr) : 0
+            var pMag = (dhMag > 0) ? (dhMag / dhSum) * min(simResult.magShackleNow, dhMag) / (100.0 + dhMag) : 0
+            var pTP = min(0.9, simResult.tpShackleNow / dhTP)
+            var pNow = min(0.9, 1.0 - (1.0 - pStr) * (1.0 - pMag) * (1.0 - pTP))
+            // Remaining duration beyond the next enemy turn
+            var xStr = (simResult.strShackleNow > 0) ? max(0, simResult.strShackled / simResult.strShackleNow - 1) : 0
+            var xMag = (simResult.magShackleNow > 0) ? max(0, simResult.magShackled / simResult.magShackleNow - 1) : 0
+            var xTP = (simResult.tpShackleNow > 0) ? max(0, simResult.tpShackleTurns / simResult.tpShackleNow - 1) : 0
+            var dhLater = (pStr * xStr + pMag * xMag + pTP * xTP) * dhAvg * _v9DebuffFutureDisc
+            score += dhW * (pNow * dhNext + dhLater)
+        }
+
+        if (!_v9DebuffHpValue && simResult.strShackled > 0) {
             var enemyStr = max(1, this._target._strength)
             var reductionRatio = min(1.0, simResult.strShackled / enemyStr)
             var enemyDPT = enemyStr * 1.5
@@ -1108,7 +1150,7 @@ class ScenarioScorer {
             var statReduceValue = reductionRatio * enemyDPT * 1.09
             score += statReduceValue
         }
-        if (simResult.magShackled > 0) {
+        if (!_v9DebuffHpValue && simResult.magShackled > 0) {
             var enemyMag = max(1, this._target._magic)
             var reductionRatio = min(1.0, simResult.magShackled / enemyMag)
             var enemyMagDPT = enemyMag * 1.5

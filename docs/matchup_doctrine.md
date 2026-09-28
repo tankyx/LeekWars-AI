@@ -2363,6 +2363,27 @@ dealt/turn 1113 vs 1076, taken/turn 728 vs 712, fracture 1.4 casts/fight.
 ~128 STR off a 752-STR bot = 15% of its damage on ~1 turn in 5: a 2% effect.
 The top-300 correlation is mostly who-plays-well, not the chip. Not shipped.
 
+**Why V9 never runs the denial game (2026-09-28).** Top-300 mages who cast
+fracture vs STR: 5.7 casts over 18.8-turn fights, first at T4 (right after
+contact), 52% uptime, paired with arsenic/slow_down/soporific/venom; win
+45% / 60% / 62% at uptime < 0.34 / 0.34-0.6 / > 0.6. Margaret vs STR: 8.2
+turns/fight (1,831 fights). Scoring asymmetry: poison = queued HP ×
+dotWeight 224 + duration bonus (venom ~94k points); denial = HP-sized
+numbers with no weight (full enemy turn denied ≤ ~5.5k, fracture ~200) and
+next-turn only. Built `_v9DebuffHpValue` (item.lk): prevented HP priced at
+max(burst, dot) weight — STR/MAG shackle s/(100+stat) × stat share, TP
+shackle TP/total TP — next turn vs the end-cell threat (position factors),
+later turns of the duration at 0.7 × average enemy damage (0.52 ×
+(STR+MAG) × 1.5), none if the plan kills; replaces the old denial-TP /
+statReduce terms (MP tempo kept). New values at MAG 553 vs STR 752:
+fracture ~33k, tranquilizer ~19k, soporific ~37k vs venom ~94k, arsenic
+~217k. Live-engine A/B vs StrongSTR (12e6e563 + patch, V9-A): 21/36 vs
+live 29/36 same day; taken/turn 757 vs 728-788; more debuffs cast
+(tranquilizer 2.1, soporific 0.8, fracture 1.0 per fight). StrongSTR fights
+last 7 turns and the bot crashes in 36-50% of fights, so it cannot show a
+long-fight effect. Not shipped; judge on same-seed challenges vs the STR
+testbed (fresh control arm needed: kit changed to fracture/manumission).
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /

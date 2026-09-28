@@ -3,6 +3,13 @@ global _v9ChipLosAware = true
 // Strength shackles (fracture, boxing glove) cut the enemy's STR-scaled damage
 // next turn by s / (100 + STR); price that in the incoming-HP term.
 global _v9StrShackleThreat = true
+// Debuffs priced as prevented enemy HP at the same HP weight as damage dealt,
+// over their full duration (2026-09-28). The old terms were ~HP-sized numbers
+// with no weight (a whole enemy turn denied ~5k vs one venom ~77k), so V9
+// always poisoned and never kept a shackle up; top mages keep STR/TP/MP
+// shackles on STR leeks ~52% of the time and win 57% vs 36%.
+global _v9DebuffHpValue = true
+global _v9DebuffFutureDisc = 0.7
 // Per-chip line-of-sight requirement (2026-09-28). The engine exposes
 // chipNeedLos(); V9 never read it, so every chip check demanded LoS and
 // Arsenic (los=false, range 3-4) could never be planned from cover. Top-300

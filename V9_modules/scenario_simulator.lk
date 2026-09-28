@@ -77,6 +77,10 @@ class SimulationResult {
     strShackled = 0
     // STR removed during the enemy's next turn (no duration factor)
     strShackleNow = 0
+    // Per-turn TP / MAG removed next enemy turn, and TP x duration
+    tpShackleNow = 0
+    tpShackleTurns = 0
+    magShackleNow = 0
     magShackled = 0
 
     // Support: ally-targeted casts (heals/shields/buffs on teammates).
@@ -454,11 +458,13 @@ class ScenarioSimulator {
                             if (eff == EFFECT_SHACKLE_TP || eff == EFFECT_SHACKLE_MP) {
                                 result.denialApplied += effScaled
                                 if (eff == EFFECT_SHACKLE_MP) result.mpDenialApplied += effScaled
+                                if (eff == EFFECT_SHACKLE_TP) { result.tpShackleNow += effAvg * (1 + simMagic / 100.0); result.tpShackleTurns += effScaled }
                             } else if (eff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += effScaled
                                 result.strShackleNow += effAvg * (1 + simMagic / 100.0)
                             } else if (eff == EFFECT_SHACKLE_MAGIC) {
                                 result.magShackled += effScaled
+                                result.magShackleNow += effAvg * (1 + simMagic / 100.0)
                             }
                         }
                     }
@@ -587,11 +593,13 @@ class ScenarioSimulator {
                             if (wEff == EFFECT_SHACKLE_TP || wEff == EFFECT_SHACKLE_MP) {
                                 result.denialApplied += wEffScaled
                                 if (wEff == EFFECT_SHACKLE_MP) result.mpDenialApplied += wEffScaled
+                                if (wEff == EFFECT_SHACKLE_TP) { result.tpShackleNow += wEffAvg * (1 + simMagic / 100.0); result.tpShackleTurns += wEffScaled }
                             } else if (wEff == EFFECT_SHACKLE_STRENGTH) {
                                 result.strShackled += wEffScaled
                                 result.strShackleNow += wEffAvg * (1 + simMagic / 100.0)
                             } else if (wEff == EFFECT_SHACKLE_MAGIC) {
                                 result.magShackled += wEffScaled
+                                result.magShackleNow += wEffAvg * (1 + simMagic / 100.0)
                             }
                         }
 
