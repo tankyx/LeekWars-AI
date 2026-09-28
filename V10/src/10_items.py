@@ -18,8 +18,9 @@ AREA_RADIUS = {1: 0, 2: 0, 3: 1, 4: 2, 5: 3, 6: 2, 7: 3, 8: 1, 9: 2, 10: 3, 11: 
 
 class Item:
     """One weapon or chip, rules read once from the engine (features, cost...)."""
-    def __init__(self, obj, is_weapon):
+    def __init__(self, obj, is_weapon, owner=None):
         self.obj = obj
+        self.owner = owner
         self.id = obj.id
         self.weapon = is_weapon
         self.name = obj.name
@@ -39,9 +40,12 @@ class Item:
         self.special = bool(types & MOVE_EFFECTS)
 
     def current_cooldown(self):
+        """Cooldown of this chip for its OWNER (enemy chips via currentCooldownOf)."""
         if self.weapon:
             return 0
         try:
+            if self.owner is not None and self.owner != Fight.me.id:
+                return self.obj.currentCooldownOf(self.owner) or 0
             return self.obj.currentCooldown or 0
         except Exception:
             return 0
@@ -51,10 +55,10 @@ def items_of(entity):
     out = []
     for w in (entity.weapons or []):
         if w is not None:
-            out.append(Item(w, True))
+            out.append(Item(w, True, entity.id))
     for c in (entity.chips or []):
         if c is not None:
-            out.append(Item(c, False))
+            out.append(Item(c, False, entity.id))
     return out
 
 

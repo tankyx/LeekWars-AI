@@ -31,6 +31,7 @@ def main():
     ap.add_argument('--ai', default='/normal', help="bot AI: /normal or /expert (custom test leeks)")
     ap.add_argument('--root', default='9.0/V9/', help='our AI root on the server')
     ap.add_argument('--account', default='main')
+    ap.add_argument('--ai-path', help='full AI path on the server (overrides --root), e.g. 10.0/V10/main.py')
     ap.add_argument('--dump', help='save the fetched fights (JSON list) for tools/siege_rotation.py --fights')
     a = ap.parse_args()
     D = Decoder(); lw = LWSession(a.account)
@@ -45,7 +46,7 @@ def main():
         if not m:
             sys.exit('no test leek named %s; have: %s' % (a.opponent, [l['name'] for l in tl]))
         oid = m[0]['id']; bot_ai = a.ai
-    ai_path = a.root.rstrip('/') + '/main.lk'
+    ai_path = a.ai_path or (a.root.rstrip('/') + '/main.lk')
     sid = lw.post('/test-scenario/new', name='bat_%s_%s' % (a.leek, a.opponent))['id']
     lw.post('/test-scenario/update', id=sid, data=json.dumps({'type': 0, 'map': None, 'ai': ai_path}))
     lw.post('/test-scenario/add-leek', scenario_id=sid, leek=ours, team=0, ai=ai_path)

@@ -7,6 +7,9 @@ DMG_BUFFS = {E_BUFF_STR, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_POW, E_BUFF_TP, 
 MAX_ATTACK_CELLS = 18
 MAX_END_CELLS = 10
 MAX_ENEMY_CELLS = 24
+FOLLOW_KILL = 0.9
+FOLLOW_W = 1.0     # weight of the ply-3 follow-up (it is never answered: horizon effect)
+DIAG = False
 
 
 def quick_value(it, C, T):
@@ -67,11 +70,14 @@ class Ctx:
     """Per-turn caches."""
     def __init__(self, A0, B0):
         self.A0 = A0; self.B0 = B0
-        self.b_off = [it for it in B0['items'] if it.offensive and not it.special]
+        # enemy chips ready at the start of their next turn (cooldowns tick then)
+        self.b_off = [it for it in B0['items'] if it.offensive and not it.special and it.current_cooldown() <= 1]
         self.b_vals = {it.id: quick_value(it, B0, A0) for it in self.b_off}
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
         self.b_reach = {}
         self.replies = {}
+        self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
+        self.a_vals = {it.id: quick_value(it, A0, B0) for it in self.a_off}
 
     def enemy_cells(self, mp):
         if mp not in self.b_reach:
@@ -127,7 +133,38 @@ def enemy_reply(cx, A1, B1, our_cell):
     return a, b, ec
 
 
+def follow_up(cx, a, b, our_cell, ec):
+    """Our best attack next turn if we can reach the enemy (MP + range after
+    their shackles on us); applied to copies. Returns the new distance."""
+    A0 = cx.A0
+    d_tp = a['groups']['shk_tp'] - A0['groups']['shk_tp']
+    d_mp = a['groups']['shk_mp'] - A0['groups']['shk_mp']
+    tp = max(0, int(A0['tp_live'] - d_tp)); mp = max(0, int(A0['mp_live'] - d_mp))
+    dist = Field.cellDistance(our_cell, ec) or 0
+    need = max(0, dist - mp)
+    usable = [it for it in cx.a_off if it.minr <= max(need, it.minr) <= it.maxr and cx.a_vals.get(it.id, 0) > 0
+              and need <= it.maxr]
+    if not usable:
+        return dist
+    order = sorted(usable, key=lambda it: -cx.a_vals[it.id] / max(1, it.cost))
+    s = {'tp': 0, 'mp': 0}; used = {}; held = A0['weapon']
+    for it in order:
+        while used.get(it.id, 0) < it.max_uses:
+            if not it.weapon and it.cooldown > 0 and used.get(it.id, 0) > 0:
+                break
+            cost = it.cost + (1 if it.weapon and held != it.id else 0)
+            if cost > tp:
+                break
+            apply_item(it, a, b, s); tp -= cost
+            used[it.id] = used.get(it.id, 0) + 1
+            if it.weapon:
+                held = it.id
+    return max(need, min(it.minr for it in usable))
+
+
 def leaf(cx, A1, B1, our_cell, turn):
+    """Ply 2: enemy reply; ply 3: our follow-up attack; value at the start of
+    the enemy's next turn (1 - their P(win))."""
     a, b, ec = enemy_reply(cx, A1, B1, our_cell)
     if b['life'] <= 0:
         return 1.0
@@ -137,15 +174,33 @@ def leaf(cx, A1, B1, our_cell, turn):
         a['life'] -= dmg; a['max'] -= dmg * 0.10; a['burn'] += dmg * 0.10
     if a['life'] <= 0:
         return 0.0
-    d = Field.cellDistance(our_cell, ec) or 0
-    los = bool(Field.lineOfSight(our_cell, ec))
-    return value(features(turn + 1, d, los, a, b), key=(d, los))
+    d0 = Field.cellDistance(our_cell, ec) or 0
+    los0 = bool(Field.lineOfSight(our_cell, ec))
+    v_no = 1.0 - value(features(turn + 1, d0, los0, b, a), key=('f', d0, los0))
+    if FOLLOW_W <= 0:
+        return v_no
+    a2 = copy_side(a); b2 = copy_side(b)
+    d = follow_up(cx, a2, b2, our_cell, ec)
+    if b2['life'] <= 0:
+        v_f = FOLLOW_KILL      # a kill NEXT turn is likely, not certain (never answered)
+    else:
+        los = los0 if d == d0 else True
+        v_f = 1.0 - value(features(turn + 1, d, los, b2, a2), key=('f', d, los))
+    return FOLLOW_W * v_f + (1.0 - FOLLOW_W) * v_no
 
 
 def end_cells(from_cell, reach, ecell):
-    far = sorted(reach, key=lambda c: -(Field.cellDistance(c, ecell) or 0))
-    hidden = [c for c in far[:40] if not Field.lineOfSight(c, ecell)]
-    return [from_cell] + far[:MAX_END_CELLS] + hidden[:4]
+    """Stay, approach (nearest to the enemy), retreat (farthest) and hidden
+    cells; validated later by real path length."""
+    by_d = sorted(reach, key=lambda c: (Field.cellDistance(c, ecell) or 0))
+    near = by_d[:6]
+    far = by_d[::-1][:6]
+    hidden = [c for c in by_d[::-1][:40] if not Field.lineOfSight(c, ecell)][:4]
+    out = [from_cell]
+    for c in near + far + hidden:
+        if c not in out:
+            out.append(c)
+    return out
 
 
 def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
@@ -172,6 +227,23 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
             for key in ('ratio', 'raw', 'weapons'):
                 att = pack(c, ecell, offensive, tp0 - pre_cost, weapon0, vals, key)
                 plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att])
+    # split plans: chips from one cell, weapons from another (ranges differ)
+    chips_off = [it for it in offensive if not it.weapon]
+    weap_off = [it for it in offensive if it.weapon]
+    if chips_off and weap_off:
+        top = cells[:6]
+        for c1 in top:
+            p1 = pack(c1, ecell, chips_off, tp0, weapon0, vals, 'ratio')
+            if not p1:
+                continue
+            left = tp0 - sum(it.cost for it in p1)
+            for c2 in top:
+                if c2 == c1:
+                    continue
+                p2 = pack(c2, ecell, weap_off, left, weapon0, vals, 'ratio')
+                if p2:
+                    plans.append([('move', c1)] + [('use', it, ecell) for it in p1]
+                                 + [('move', c2)] + [('use', it, ecell) for it in p2])
     if selfish:
         tp = tp0; st = []
         for it in sorted(selfish, key=lambda i: i.cost):
@@ -180,6 +252,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
         plans.append(st)
     plans.append([])
     best = (-1.0, None, None); evaluated = 0; seen = {}
+    diag_best = None
     for plan in plans:
         sig = tuple((s[0], s[1] if s[0] == 'move' else s[1].id) for s in plan)
         if sig in seen:
@@ -198,9 +271,16 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
                 pl = Field.pathLength(c1, e)
                 if pl is None or pl < 0 or pl > sim['mp']:
                     continue
-            v = 1.0 if B1['life'] <= 0 else leaf(cx, A1, B1, e, t)
+            v = 1.1 if B1['life'] <= 0 else leaf(cx, A1, B1, e, t)
+            # tie-break: more damage now (1% of the value range per full enemy HP bar)
+            v += 0.01 * dealt / max(1.0, B['max'])
             evaluated += 1
+            if DIAG and (diag_best is None or dealt > diag_best[1] or (dealt == diag_best[1] and v > diag_best[0])):
+                diag_best = (v, dealt, e, len(plan))
             if v > best[0]:
                 best = (v, plan + ([('move', e)] if e != c1 else []),
                         (dealt, Field.cellDistance(e, ecell), bool(Field.lineOfSight(e, ecell))))
+    if DIAG and diag_best is not None:
+        log('V10DIAG T%d maxdealt plan: V=%.3f dealt=%.0f end=%s (cells=%d plans=%d) | chosen V=%.3f dealt=%.0f' % (
+            t, diag_best[0], diag_best[1], diag_best[2], len(cells), len(plans), best[0], best[2][0] if best[2] else -1))
     return best, evaluated
