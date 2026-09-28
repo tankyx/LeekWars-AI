@@ -85,7 +85,9 @@ def talent(lw, lid):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--dry-run', action='store_true'); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument('--dry-run', action='store_true')
+    ap.add_argument('--accounts', default='main,cure', help='comma list (default both)')
+    a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
     today = datetime.datetime.now(ZoneInfo('Europe/Paris')).date().isoformat()
@@ -94,6 +96,8 @@ def main():
     mcp = None if a.dry_run else MCP()
     try:
         for acct, leeks in LEEKS.items():
+            if acct not in a.accounts.split(','):
+                continue
             lw = LWSession(acct)
             avail = credits(lw)
             print('%s: %d credits' % (acct, avail), flush=True)
