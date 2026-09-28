@@ -29,7 +29,11 @@ global STRENGTH_WEIGHTS = [
     'bulbKillBonusBuffer': 1500,
     'bulbKillBonusAttacker': 800,
     'multiTargetBonus': 500,
-    'noDamagePenalty': -4000
+    'noDamagePenalty': -4000,
+    // HP pricing + cooldown lookahead (2026-09-28): off until tested
+    'debuffHpValue': 0,
+    'healHpValue': 0,
+    'lookaheadValue': 0
 ]
 
 global MAGIC_WEIGHTS = [
@@ -104,6 +108,10 @@ global STRENGTH_SCIENCE_WEIGHTS = [
     'bulbKillBonusAttacker': 800,
     'multiTargetBonus': 500,
     'noDamagePenalty': -4000,
+    // HP pricing + cooldown lookahead (2026-09-28): off until tested
+    'debuffHpValue': 0,
+    'healHpValue': 0,
+    'lookaheadValue': 0
 ]
 
 global TANK_SCI_WEIGHTS = [

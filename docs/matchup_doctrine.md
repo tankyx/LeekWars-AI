@@ -2452,6 +2452,16 @@ Trap: a side-root arm built on 12e6e563 must not call HEAD-only helpers
 (`v9IsSequenceOnlyChip`) — compile failure = the AI does nothing (0 casts,
 0 wins, no 'ours' runtime error in the battery). Check -n 2 before -n 30.
 
+**STR leeks on the pricing + lookahead variant (2026-09-28, side root
+9.0/V9-S).** Lookahead extended to direct damage chips (STR-scaled) and
+shields (relative % × RES scaling, absolute × ~2.5 hits, both as prevented
+damage over their duration); STRENGTH / STRENGTH_SCIENCE profiles carry
+`debuffHpValue` / `healHpValue` / `lookaheadValue` = 0 on HEAD, 100 in V9-S.
+StrongSTR, 20 each (live vs V9-S): Edsger 20/20 vs 19/20 (2.5 turns), Kurt
+19/20 vs 20/20 (3.8 → 4.2), Ada 20/20 vs 20/20 (3.8 → 3.6). No regression,
+no signal: STR leeks kill StrongSTR in 2-4 turns, so it cannot test a
+multi-turn change for them — use challenges vs their nemesis testbeds.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
