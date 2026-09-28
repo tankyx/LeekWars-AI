@@ -2294,6 +2294,17 @@ class Strategy {
                                 }
                             }
                         }
+                        // CITF: follow-up casts were aimed at the planned landing
+                        // cell; if the slide stopped elsewhere, follow the enemy.
+                        if (a.chip == CHIP_GRAPPLE) {
+                            var afterMe = false
+                            for (var fa2 in this._actions) {
+                                if (fa2 == a) { afterMe = true; continue }
+                                if (!afterMe) continue
+                                if (fa2.chip == CHIP_BOXING_GLOVE) break
+                                if (fa2.chip != -1 && fa2.targetEntity == a.targetEntity && fa2.type == Action.ACTION_DIRECT) fa2.targetCell = newEnemyCell
+                            }
+                        }
                     }
 
                     if (a.targetEntity != null && isDead(a.targetEntity._id)) {

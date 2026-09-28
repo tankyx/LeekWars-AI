@@ -5,6 +5,12 @@ global _v9ChipLosAware = true
 // Arsenic (los=false, range 3-4) could never be planned from cover. Top-300
 // mages cast 24% of their Arsenic without LoS; Margaret 9% (incidental).
 global __v9ChipNeedsLosMemo = [:]
+// Grapple / boxing glove only work as an aimed sequence (CITF template);
+// generic loops (beam, mutations, TP recovery) cast them as buffs or spam
+// pulls that drag the enemy onto us. Boss logic keeps full access.
+function v9IsSequenceOnlyChip(chipId) {
+    return !_isBossFight && (chipId == CHIP_GRAPPLE || chipId == CHIP_BOXING_GLOVE)
+}
 function v9ChipNeedsLos(chipId) {
     if (!_v9ChipLosAware || chipId == null || chipId == -1) return true
     if (mapContainsKey(__v9ChipNeedsLosMemo, chipId)) return __v9ChipNeedsLosMemo[chipId]
@@ -361,6 +367,7 @@ class Arsenal {
     getPoisonChipsSorted(str, mag, wis, sci) {
         var arr = []
         for (var cid in mapKeys(this.playerEquippedChips)) {
+            if (v9IsSequenceOnlyChip(cid)) continue
             var chip = this.playerEquippedChips[cid]
             if (!mapContainsKey(chip._effects, EFFECT_POISON)) continue
             var bd = this.getDamageBreakdown(str, mag, wis, sci, cid)

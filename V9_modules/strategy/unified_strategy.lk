@@ -1385,6 +1385,8 @@ function recoverRemainingTP(target) {
         var bestValue = -1
 
         for (var chipId in mapKeys(arsenal.playerEquippedChips)) {
+
+            if (v9IsSequenceOnlyChip(chipId)) continue
             if (chipId == CHIP_PUNISHMENT) continue
             var chipObj = arsenal.playerEquippedChips[chipId]
             if (chipObj._cost > getTP()) continue
@@ -1631,6 +1633,7 @@ function recoverRemainingTP(target) {
         var floorDistToTarget = getCellDistance(floorMyPos, target._cellPos)
         var floorHasLos = (floorDistToTarget != null) ? lineOfSight(floorMyPos, target._cellPos) : false
         for (var chipIdF in mapKeys(arsenal.playerEquippedChips)) {
+            if (v9IsSequenceOnlyChip(chipIdF)) continue
             if (chipIdF == CHIP_PUNISHMENT) continue
             if (chipIdF == CHIP_DOPING && __dopingUsed) continue
             var chipObjF = arsenal.playerEquippedChips[chipIdF]
@@ -1693,6 +1696,7 @@ function recoverRemainingTP(target) {
                 // range+LoS to target are correctly skipped, not "stuck".
                 var hadCapGap = false
                 for (var chipIdC in mapKeys(arsenal.playerEquippedChips)) {
+                    if (v9IsSequenceOnlyChip(chipIdC)) continue
                     if (chipIdC == CHIP_PUNISHMENT) continue
                     if (chipIdC == CHIP_DOPING && __dopingUsed) continue
                     var cObj = arsenal.playerEquippedChips[chipIdC]

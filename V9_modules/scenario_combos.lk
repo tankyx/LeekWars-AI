@@ -4,6 +4,7 @@ global _v9ApproachJumpGate = true
 global _v9StripDive = true
 global _v9VulnStackDive = true
 global _v9PeekRetreat = true
+global _v9CitfCombo = true
 global _v9PeekMinRetreat = 2
 class ScenarioCombos extends ScenarioHelpers {
 
@@ -1251,6 +1252,7 @@ class ScenarioCombos extends ScenarioHelpers {
         var d = getCellDistance(cell, tPos)
         if (d == null) return [acts, 0]
         for (var cid in mapKeys(this._arsenal.playerEquippedChips)) {
+            if (v9IsSequenceOnlyChip(cid)) continue
             if (mapContainsKey(used, cid)) continue
             if (v9ChipNeedsLos(cid)) continue
             var co = this._arsenal.playerEquippedChips[cid]
@@ -1275,6 +1277,7 @@ class ScenarioCombos extends ScenarioHelpers {
         var d = getCellDistance(cell, this._target._cellPos)
         if (d == null) return false
         for (var cid in mapKeys(this._arsenal.playerEquippedChips)) {
+            if (v9IsSequenceOnlyChip(cid)) continue
             if (v9ChipNeedsLos(cid)) continue
             if (cid != CHIP_ARSENIC && !isPoisonChip(cid)) continue
             var co = this._arsenal.playerEquippedChips[cid]
@@ -1614,6 +1617,8 @@ class ScenarioCombos extends ScenarioHelpers {
     }
 
     createGrappleHeavySwordScenario(availableTP, availableMP) {
+        // STR melee pull templates; on a magic build the CITF sequence owns grapple.
+        if (this._player._magic > this._player._strength) return null
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
@@ -1710,6 +1715,8 @@ class ScenarioCombos extends ScenarioHelpers {
     // Axe×2 at melee. Used by close-range STR builds without Heavy Sword
     // (e.g. LeekRain post-loadout-swap vs koe2).
     createGrappleAxeScenario(availableTP, availableMP) {
+        // STR melee pull templates; on a magic build the CITF sequence owns grapple.
+        if (this._player._magic > this._player._strength) return null
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
@@ -1809,6 +1816,8 @@ class ScenarioCombos extends ScenarioHelpers {
     // gets exploited by MAG-poison kiters (Prof2science class) staying out of
     // Magnum's effective AoE while flame_thrower'ing at range.
     createGrappleRangedScenario(availableTP, availableMP) {
+        // STR melee pull templates; on a magic build the CITF sequence owns grapple.
+        if (this._player._magic > this._player._strength) return null
         var actions = []
         var tpBudget = availableTP
         var mpBudget = availableMP
@@ -2354,6 +2363,8 @@ class ScenarioCombos extends ScenarioHelpers {
     }
 
     createGrappleHSRecheckScenario(availableTP, availableMP) {
+        // STR melee pull templates; on a magic build the CITF sequence owns grapple.
+        if (this._player._magic > this._player._strength) return null
         var actions = []
         var tpBudget = availableTP
         var simPos = this._player._cellPos
@@ -2447,138 +2458,104 @@ class ScenarioCombos extends ScenarioHelpers {
         return actions
     }
 
+    // "Cough in the face" (rewritten 2026-09-28 from the engine source).
+    // Grapple / boxing glove are area FIRST_IN_LINE: the first entity along the
+    // aimed line (within range) is affected, LoS ignores that entity, attract
+    // slides it TOWARD THE AIMED CELL and push slides it away up to the aimed
+    // cell. So: grapple aimed 2 cells out -> enemy lands at 2 -> covid (0-2)
+    // -> boxing glove (2-8) aimed at the farthest free cell behind it -> enemy
+    // pushed out; arsenic if it lands at 3-4; retreat to cover with the MP
+    // left. The old template aimed grapple at the enemy's own cell (moves
+    // nobody) and its covid could never simulate in range, so it never fired.
+    _lineStep(c, dx, dy) {
+        var nc = getCellFromXY(getCellX(c) + dx, getCellY(c) + dy)
+        if (nc == null || nc < 0) return -1
+        return nc
+    }
+
     createGrappleCovidScenario(availableTP, availableMP) {
-        var actions = []
-        var tpBudget = availableTP
-        var mpBudget = availableMP
-        var simPos = this._player._cellPos
-
-        var str = this._player._strength
-        var mag = this._player._magic
-        var agi = this._player._agility
-
-        if (!(mag > str && mag > agi)) {
-            return null
-        }
-
+        if (!_v9CitfCombo || this._target == null) return null
         if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE)) return null
-        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0) return null
-
-        var hasCovid = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_COVID) &&
-                      getCooldown(CHIP_COVID, this._player._id) == 0
-
-        if (!hasCovid) return null
-
-        var covidTracker = new CooldownTracker(this._target)
-        var covidAntidoteCD = covidTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
-        if (covidAntidoteCD < 3) return null
-
-        var tpGrapple = getCachedChipCost(CHIP_GRAPPLE)
-        var tpCovid = getCachedChipCost(CHIP_COVID)
-        if (tpBudget < tpGrapple + tpCovid) return null
-
-        var enemyPos = this._target._cellPos
-        var enemyX = getCellX(enemyPos)
-        var enemyY = getCellY(enemyPos)
-
-        var playerX = getCellX(simPos)
-        var playerY = getCellY(simPos)
-        var onAxis = (playerX == enemyX || playerY == enemyY)
-        var dist = getCellDistance(simPos, enemyPos)
-
-        var grappleCell = simPos
-        var moveCost = 0
-
-        if (onAxis && dist != null && dist >= 3 && dist <= 8 && getCachedLineOfSight(simPos, enemyPos)) {
-            grappleCell = simPos
-        } else {
-            var reachableCells = getReachableCells()
-            if (reachableCells == null || count(reachableCells) == 0) return null
-
-            var bestCell = -1
-            var bestScore = -999999
-
-            for (var cellId in reachableCells) {
-                var pathCost = getGraphMPCost(cellId)
-                if (pathCost >= 999 || pathCost > mpBudget) continue
-
-                var cx = getCellX(cellId)
-                var cy = getCellY(cellId)
-                var cellOnAxis = (cx == enemyX || cy == enemyY)
-                if (!cellOnAxis) continue
-
-                var cellDist = getCellDistance(cellId, enemyPos)
-                if (cellDist == null || cellDist < 3 || cellDist > 8) continue
-
-                if (!getCachedLineOfSight(cellId, enemyPos)) continue
-
-                var score = 1000 - pathCost * 50
-                if (cellDist >= 4 && cellDist <= 6) score += 200
-                if (score > bestScore) {
-                    bestScore = score
-                    bestCell = cellId
-                    moveCost = pathCost
-                }
+        if (!mapContainsKey(this._arsenal.playerEquippedChips, CHIP_COVID)) return null
+        if (getCooldown(CHIP_GRAPPLE, this._player._id) > 0 || getCooldown(CHIP_COVID, this._player._id) > 0) return null
+        var hasGlove = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_BOXING_GLOVE) && getCooldown(CHIP_BOXING_GLOVE, this._player._id) == 0
+        var tpG = getCachedChipCost(CHIP_GRAPPLE); var tpC = getCachedChipCost(CHIP_COVID); var tpB = hasGlove ? getCachedChipCost(CHIP_BOXING_GLOVE) : 0
+        if (availableTP < tpG + tpC + tpB) return null
+        var ePos = this._target._cellPos
+        var ex = getCellX(ePos); var ey = getCellY(ePos)
+        var pool = [this._player._cellPos]
+        for (var rc in getReachableCells()) push(pool, rc)
+        var best = null; var bestKey = -999999
+        for (var c in pool) {
+            var mpC = (c == this._player._cellPos) ? 0 : getGraphMPCost(c)
+            if (mpC == null || mpC > availableMP) continue
+            var cx = getCellX(c); var cy = getCellY(c)
+            if (cx != ex && cy != ey) continue
+            var d0 = getCellDistance(c, ePos)
+            if (d0 == null || d0 < 3 || d0 > 8) continue
+            var dx = (ex > cx) ? 1 : ((ex < cx) ? -1 : 0); var dy = (ey > cy) ? 1 : ((ey < cy) ? -1 : 0)
+            // cells between c and the enemy: walkable and empty (enemy is first in line, pull path free)
+            var ok = true; var cur = c; var pullCell = -1
+            for (var k = 1; k < d0; k++) {
+                cur = this._lineStep(cur, dx, dy)
+                if (cur == -1 || isObstacle(cur) || (isEntity(cur) && cur != this._player._cellPos)) { ok = false; break }
+                if (k == 2) pullCell = cur
             }
-
-            if (bestCell == -1) return null
-
-            grappleCell = bestCell
+            if (!ok || pullCell == -1) continue
+            // push: slide from the pull cell outward until blocked, up to range 8 from c
+            var farCell = -1; var farD = 2; cur = pullCell
+            for (var k2 = 3; k2 <= 8; k2++) {
+                var nx = this._lineStep(cur, dx, dy)
+                if (nx == -1 || isObstacle(nx) || (isEntity(nx) && nx != ePos)) break
+                cur = nx; farCell = nx; farD = k2
+            }
+            if (hasGlove && farCell == -1) continue
+            var th = getAdversarialThreat(c)
+            var key = (hasGlove ? farD * 100 : 0) - mpC * 20 - floor(th / 50)
+            if (key > bestKey) { bestKey = key; best = [c, mpC, d0, pullCell, farCell, farD] }
         }
-
-        if (grappleCell != simPos) {
-            push(actions, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, grappleCell, this._target))
-            mpBudget -= moveCost
-            simPos = grappleCell
+        if (best == null) return null
+        var fc = best[0]; var tp = availableTP
+        var acts = []
+        if (fc != this._player._cellPos) push(acts, new Action(Action.MOVEMENT_OFFENSIVE, -1, -1, fc, this._target))
+        var used = [:]
+        // arsenic before the pull when the enemy already sits at 3-4 (no LoS needed)
+        if (best[2] >= 3 && best[2] <= 4 && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ARSENIC)
+            && getCooldown(CHIP_ARSENIC, this._player._id) == 0 && tp >= tpG + tpC + tpB + getCachedChipCost(CHIP_ARSENIC)) {
+            push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, ePos, this._target)); tp -= getCachedChipCost(CHIP_ARSENIC); used[CHIP_ARSENIC] = true
         }
-
-        var grappleDist = getCellDistance(grappleCell, enemyPos)
-        var hasArsenic = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ARSENIC) &&
-                        getCooldown(CHIP_ARSENIC, this._player._id) == 0
-        if (hasArsenic && grappleDist != null && grappleDist >= 3 && grappleDist <= 4) {
-            var tpArsenic = getCachedChipCost(CHIP_ARSENIC)
-            if (tpBudget >= tpGrapple + tpCovid + tpArsenic) {
-                push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, enemyPos, this._target))
-                tpBudget -= tpArsenic
+        push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, best[3], this._target)); tp -= tpG
+        push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, best[3], this._target)); tp -= tpC
+        var endE = best[3]
+        if (hasGlove) {
+            push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_BOXING_GLOVE, best[4], this._target)); tp -= tpB
+            endE = best[4]
+            if (!mapContainsKey(used, CHIP_ARSENIC) && best[5] >= 3 && best[5] <= 4 && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_ARSENIC)
+                && getCooldown(CHIP_ARSENIC, this._player._id) == 0 && tp >= getCachedChipCost(CHIP_ARSENIC)) {
+                push(acts, new Action(Action.ACTION_DIRECT, -1, CHIP_ARSENIC, endE, this._target)); tp -= getCachedChipCost(CHIP_ARSENIC)
             }
         }
-
-        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_GRAPPLE, enemyPos, this._target))
-        tpBudget -= tpGrapple
-
-        push(actions, new Action(Action.ACTION_DIRECT, -1, CHIP_COVID, enemyPos, this._target))
-        tpBudget -= tpCovid
-        var covidBreakdown = this._arsenal.getDamageBreakdown(str, mag, this._player._wisdom, this._player._science, CHIP_COVID)
-
-        var poisonChips = this._arsenal.getPoisonChipsSorted(str, mag, this._player._wisdom, this._player._science)
-        for (var poisonChip in poisonChips) {
-            var chipId = poisonChip._id
-            if (chipId == CHIP_COVID || chipId == CHIP_ARSENIC || chipId == CHIP_GRAPPLE) continue
-            var chipCost = getCachedChipCost(chipId)
-            if (tpBudget < chipCost) continue
-            if (getCooldown(chipId, this._player._id) > 0) continue
-            if (2 < poisonChip._minRange || 2 > poisonChip._maxRange) continue
-            push(actions, new Action(Action.ACTION_DIRECT, -1, chipId, enemyPos, this._target))
-            tpBudget -= chipCost
-        }
-
-        if (tpBudget >= 3) {
-            var attackActions = this.getAttackActions(tpBudget, 1.0, simPos)
-            for (var atk in attackActions) {
-                push(actions, atk)
+        // retreat to cover with the MP left
+        var left = availableMP - best[1]
+        if (left > 0) {
+            var rb = -1; var rT = 999999
+            for (var sc in pool) {
+                if (sc == fc) continue
+                var dd = getCellDistance(fc, sc)
+                if (dd == null || dd > left) continue
+                if (getCachedLineOfSight(sc, endE)) continue
+                var th2 = getAdversarialThreat(sc)
+                if (th2 >= rT) continue
+                var pl = getCachedPathLength(fc, sc)
+                if (pl == null || pl <= 0 || pl > left) continue
+                rb = sc; rT = th2
             }
+            if (rb != -1) push(acts, new Action(Action.MOVEMENT_PAB, -1, -1, rb, this._target))
         }
-
-        var kiteAction = this.getKiteAwayAction(mpBudget)
-        if (kiteAction != null) {
-            push(actions, kiteAction)
+        if (getTurn() <= 30) {
+            debugW("CITF_T" + getTurn() + "_fc" + fc + "_d" + best[2] + "_pull" + best[3] + "_push" + best[4] + "_pd" + best[5] + "_glove" + (hasGlove ? 1 : 0) + "_n" + count(acts))
         }
-
-        var markerAction = new Action(Action.ACTION_CHECKPOINT, -1, -1, -1, this._target)
-        markerAction.checkpointType = "POISON_DUMP"
-        push(actions, markerAction)
-
-        return actions
+        return acts
     }
 
     createPoisonBaitScenario(availableTP, availableMP) {
@@ -2994,7 +2971,9 @@ class ScenarioCombos extends ScenarioHelpers {
         var dumpTracker = new CooldownTracker(this._target)
         var dumpAntidoteCD = dumpTracker.getCooldownRemaining(this._target._id, CooldownTracker.CHIP_ANTIDOTE_ID)
 
-        var hasGrapple = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
+        // Old pull: aimed at the enemy's own cell, which moves nobody. The
+        // CITF template owns grapple now.
+        var hasGrapple = !_v9CitfCombo && mapContainsKey(this._arsenal.playerEquippedChips, CHIP_GRAPPLE) &&
                          getCooldown(CHIP_GRAPPLE, this._player._id) == 0
         var hasCovid = mapContainsKey(this._arsenal.playerEquippedChips, CHIP_COVID) &&
                        getCooldown(CHIP_COVID, this._player._id) == 0 &&

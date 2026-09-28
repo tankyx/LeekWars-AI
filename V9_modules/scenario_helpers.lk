@@ -605,6 +605,8 @@ class ScenarioHelpers {
         }
 
         for (var cid in mapKeys(this._arsenal.playerEquippedChips)) {
+
+            if (v9IsSequenceOnlyChip(cid)) continue
             if (isPoisonChip(cid)) return true
         }
 

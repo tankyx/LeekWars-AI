@@ -88,6 +88,7 @@ function beamEstimateOurDPT(partial, arsenalObj) {
         if (bd != null && bd['direct'] > best) best = bd['direct']
     }
     for (var cid in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(cid)) continue
         var cbd = arsenalObj.getDamageBreakdown(partial['simStr'], partial['simMag'], partial['simWis'], partial['simSci'], cid)
         if (cbd == null) continue
         var chipDpt = cbd['direct'] + cbd['dot'] / 3 + cbd['nova']
@@ -112,6 +113,7 @@ function beamBulbOwnerHittableCheck(fromPos, targetObj, arsenalObj) {
     // Offensive chips count too: casters punish the owner at venom/toxin
     // range without ever entering weapon reach.
     for (var cidB in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(cidB)) continue
         if (isHealingChip(cidB) || isOffensiveBuff(cidB) || isShieldChip(cidB) ||
             isDamageReturnChip(cidB) || isResourceChip(cidB) || isUtilityChip(cidB)) continue
         var cObjB = arsenalObj.playerEquippedChips[cidB]
@@ -299,6 +301,8 @@ function beamGetLegalActions(partial, targetObj, arsenalObj) {
     var dist = getCellDistance(simPos, targetPos)
 
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+
+        if (v9IsSequenceOnlyChip(chipId)) continue
         var chipObj = arsenalObj.playerEquippedChips[chipId]
         var cost = chipObj._cost
         if (cost > simTP) continue
@@ -460,6 +464,7 @@ function beamGetMoveCells(simPos, targetPos, simMP, arsenalObj, partial) {
             }
         }
         for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+            if (v9IsSequenceOnlyChip(chipId)) continue
             if (mapContainsKey(partial['chipUsed'], chipId)) continue
             if (isHealingChip(chipId) || isOffensiveBuff(chipId) || isShieldChip(chipId) ||
                 isDamageReturnChip(chipId) || isResourceChip(chipId) || isUtilityChip(chipId)) continue
@@ -771,6 +776,7 @@ function beamEvaluateAction(actionInfo, partial, targetObj, arsenalObj, playerOb
                 value += 200
                 var shortRangeCount = 0
                 for (var cid in mapKeys(arsenalObj.playerEquippedChips)) {
+                    if (v9IsSequenceOnlyChip(cid)) continue
                     if (mapContainsKey(partial['chipUsed'], cid)) continue
                     var cObj = arsenalObj.playerEquippedChips[cid]
                     if (cObj._maxRange <= 4 && !isHealingChip(cid) && !isOffensiveBuff(cid) &&
@@ -999,6 +1005,7 @@ function beamExtendCandidate(partial, actionInfo, value, targetObj, arsenalObj) 
 function beamCountUnusedPoisonChips(partial, arsenalObj) {
     var count = 0
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(chipId)) continue
         if (isPoisonChip(chipId) && !mapContainsKey(partial['chipUsed'], chipId)) {
             if (getCooldown(chipId, getEntity()) == 0) count++
         }
@@ -1009,6 +1016,7 @@ function beamCountUnusedPoisonChips(partial, arsenalObj) {
 function beamCountUnusedDenialChips(partial, arsenalObj) {
     var count = 0
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(chipId)) continue
         if ((chipId == CHIP_SOPORIFIC || chipId == CHIP_BALL_AND_CHAIN || chipId == CHIP_TRANQUILIZER || chipId == CHIP_SLOW_DOWN) &&
             !mapContainsKey(partial['chipUsed'], chipId)) {
             if (getCooldown(chipId, getEntity()) == 0) count++
@@ -1020,6 +1028,7 @@ function beamCountUnusedDenialChips(partial, arsenalObj) {
 function beamCountUnusedHealChips(partial, arsenalObj) {
     var count = 0
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(chipId)) continue
         if (isHealingChip(chipId) && !mapContainsKey(partial['chipUsed'], chipId)) {
             if (getCooldown(chipId, getEntity()) == 0) count++
         }
@@ -1030,6 +1039,7 @@ function beamCountUnusedHealChips(partial, arsenalObj) {
 function beamCountUnusedReturnChips(partial, arsenalObj) {
     var count = 0
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(chipId)) continue
         if (isDamageReturnChip(chipId) && !mapContainsKey(partial['chipUsed'], chipId)) {
             if (getCooldown(chipId, getEntity()) == 0) count++
         }
@@ -1053,6 +1063,7 @@ function beamHasUnusedNovaWeapon(partial, arsenalObj) {
 function beamCountUnusedShieldChips(partial, arsenalObj) {
     var count = 0
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(chipId)) continue
         if (isShieldChip(chipId) && !mapContainsKey(partial['chipUsed'], chipId)) {
             if (getCooldown(chipId, getEntity()) == 0) count++
         }
@@ -1081,6 +1092,7 @@ function beamCountAttacksFromPos(fromPos, targetPos, arsenalObj, partial) {
         if (dist >= wObj._minRange && dist <= wObj._maxRange) count++
     }
     for (var chipId in mapKeys(arsenalObj.playerEquippedChips)) {
+        if (v9IsSequenceOnlyChip(chipId)) continue
         if (mapContainsKey(partial['chipUsed'], chipId)) continue
         if (isHealingChip(chipId) || isOffensiveBuff(chipId) || isShieldChip(chipId) ||
             isDamageReturnChip(chipId) || isResourceChip(chipId)) continue

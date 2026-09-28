@@ -48,6 +48,12 @@ class ScenarioMutator {
         // Phase 3.3: Prioritize high-value mutation types first.
         // Insertion (new chips) > Substitution (better chips) > Swap (reorder) > Aim shift
         var descriptors = []
+        // Aimed sequences (grapple -> covid -> boxing glove) only work intact:
+        // substituting the grapple or inserting AoE poisons at range 2 broke
+        // every mutated copy in testing. Never mutate them.
+        for (var sqA in scenario) {
+            if (sqA.chip != -1 && v9IsSequenceOnlyChip(sqA.chip)) return descriptors
+        }
 
         var insDescriptors = this.generateInsertionDescriptors(scenario)
         for (var desc in insDescriptors) {
@@ -144,6 +150,7 @@ class ScenarioMutator {
 
             var equippedChips = mapKeys(this._arsenal.playerEquippedChips)
             for (var altChip in equippedChips) {
+                if (v9IsSequenceOnlyChip(altChip)) continue
                 if (altChip == action.chip) continue
                 if (mapContainsKey(usedChips, altChip)) continue
                 if (getCooldown(altChip, this._player._id) != 0) continue
@@ -187,6 +194,7 @@ class ScenarioMutator {
         // gained for 8 TP wasted).
         var equippedChips = mapKeys(this._arsenal.playerEquippedChips)
         for (var chipId in equippedChips) {
+            if (v9IsSequenceOnlyChip(chipId)) continue
             if (mapContainsKey(usedChips, chipId)) continue
             if (getCooldown(chipId, this._player._id) != 0) continue
             if (isHealingChip(chipId)) {
