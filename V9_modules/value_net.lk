@@ -248,9 +248,15 @@ function vnScenarioValue(me, op, sim) {
     var f = []
     for (var v in __vnBase) push(f, v)
     var G = __vnGroupNames
+    // nova damage lowers the opponent's MAX life (current capped to it)
+    if (sim.novaDamageQueued > 0) {
+        opMax = max(1, opMax - sim.novaDamageQueued)
+        opHp = min(opHp, opMax)
+    }
     // opponent = "me_" block (it acts next)
     f[__vnIdx["me_hp"]] = opHp / 3000.0
     f[__vnIdx["me_hpfrac"]] = opHp / opMax
+    f[__vnIdx["me_maxhp"]] = opMax / 3000.0
     if (sim.poisonSourcesUsed > 0 && sim.poisonTurnsQueued > 0 && sim.dotDamageQueued > 0) {
         var avgDur = sim.poisonTurnsQueued / sim.poisonSourcesUsed
         vnAdd(f, "me_eff_poison", (sim.dotDamageQueued / max(1, avgDur)) / __vnGScale[__vnGPoison])
@@ -264,6 +270,32 @@ function vnScenarioValue(me, op, sim) {
     // us = "op_" block
     f[__vnIdx["op_hp"]] = myHp / 3000.0
     f[__vnIdx["op_hpfrac"]] = myHp / myMax
+    // our own buffs (steroid, rage, motivation, elevation, ...): chip effect
+    // amounts into our groups; shields/heals come from the simulator fields
+    if (sim.buffsApplied != null && arsenal != null) {
+        for (var bc in sim.buffsApplied) {
+            if (!mapContainsKey(arsenal.playerEquippedChips, bc)) continue
+            var bEff = arsenal.playerEquippedChips[bc]._effects
+            for (var et in mapKeys(bEff)) {
+                var ba = (bEff[et]._minEffectAmount + bEff[et]._maxEffectAmount) / 2
+                if (et == 12) {
+                    // vitality: +max and +current life (wisdom-scaled)
+                    var vit = ba * (1 + max(0, getWisdom(me)) / 100.0)
+                    myMax += vit
+                    myHp += vit
+                    continue
+                }
+                if (!mapContainsKey(__vnGroupOf, et)) continue
+                var gi = __vnGroupOf[et]
+                var gn = __vnGroupNames[gi]
+                if (gn == "abs_shield" || gn == "rel_shield" || gn == "heal_ot") continue
+                f[__vnIdx["op_eff_" + gn]] += ba / __vnGScale[gi]
+            }
+        }
+        f[__vnIdx["op_hp"]] = myHp / 3000.0
+        f[__vnIdx["op_hpfrac"]] = myHp / myMax
+        f[__vnIdx["op_maxhp"]] = myMax / 3000.0
+    }
     if (sim.shieldsGained > 0) vnAdd(f, "op_eff_abs_shield", sim.shieldsGained / __vnGScale[0])
     if (sim.relativeShieldGained > 0) vnAdd(f, "op_eff_rel_shield", sim.relativeShieldGained / __vnGScale[12])
     // position
