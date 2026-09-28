@@ -2211,6 +2211,37 @@ would show as talent trending up over weeks with the selector, not in
 any 25-fight window; keep reading `talent_history` weekly and stop
 spending garden credits on random-pick windows for that purpose.
 
+### Margaret: V8 era vs V9, same metrics (2026-09-28)
+
+Her 2424 all-time high predates the 30-day history (she was at 1788 on the
+first day of it, after the mid-August boss respec MAG 80 / RES 400 on V8).
+Cached real solo fights, identical per-turn metrics
+(`tools/top_vs_us.py` analyse):
+
+| | V8, Apr-Aug (MAG 600 / RES 200 / WIS 300 / 26 TP) | V9 Sep 7-23 (MAG 553 / RES 15 / WIS 500 / 30 TP) | V9 12e6e563 (Sep 25+) |
+|---|---|---|---|
+| fights | 1410 | 329 | 99 |
+| win % | 50.4 | 51.4 | 51.5 |
+| vs STR (share / win) | 77% / 49% | 74% / 44% | 86% / 48% |
+| poison dmg / turn | **770** | 708 | **659** |
+| turns enemy poisoned | **75%** | 69% | 68% |
+| taken / turn | 594 | 648 | 641 |
+| shield casts / turn | 0.4 (fortress 95%, wall 62%) | 0 | 0 |
+| attack turns | 75% | 70% | 68% |
+| move after fire / hidden end | 8% / 28% | 13% / 31% | 31% / 50% |
+| fire distance / end distance | 4 / 4 | 4 / 6 | 4 / 9 |
+
+Reading: V8 did not win more — the win rate is 50-51% in all three eras
+against the same archetype mix, as a matchmade ladder forces. What V8-era
+Margaret did better is her own damage type: 770 poison per turn with the
+enemy poisoned 75% of turns, against 659 and 68% now (−15%), while taking
+8% less damage (RES 200 + fortress/wall, both gone from the current build
+and kit). The deploy moved her positioning towards the top-300 profile
+(hidden ends 31 → 50%, end distance 6 → 9) but her firing distance stayed
+at 4 (top MAG 7) and her attack turns kept falling (top MAG: attack-turn
+share correlates +0.46 with talent). For a poison mage the peek-and-retreat
+trade is costing poison uptime without moving the firing cell out.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
