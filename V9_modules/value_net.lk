@@ -286,6 +286,11 @@ function vnScenarioValue(me, op, sim) {
                     continue
                 }
                 if (!mapContainsKey(__vnGroupOf, et)) continue
+                // non-raw stat buffs scale with the caster's science (raw ones don't);
+                // training features carry the engine's scaled values
+                if (et == 3 || et == 4 || et == 7 || et == 8 || et == 21 || et == 22) {
+                    ba = ba * (1 + max(0, getScience(me)) / 100.0)
+                }
                 var gi = __vnGroupOf[et]
                 var gn = __vnGroupNames[gi]
                 if (gn == "abs_shield" || gn == "rel_shield" || gn == "heal_ot") continue
