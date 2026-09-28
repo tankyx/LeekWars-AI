@@ -122,7 +122,7 @@ def _one(job):
         e = st.get(eid)
         if not e:
             continue
-        hp = mx - sum(e['taken'].values()) + e['healed']
+        hp = mx - sum(v for k, v in e['taken'].items() if k != 'nova') + e['healed']  # nova lowers max HP only
         pct = 0.0 if e['died'] else 100.0 * min(max(hp, 0), mx) / mx
         if team == 1:
             ours += pct; taken += sum(e['taken'].values())

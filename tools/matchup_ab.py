@@ -99,7 +99,7 @@ def hp_lead(r):
         e = stats.get(eid)
         if not e:
             continue
-        hp = mx - sum(e['taken'].values()) + e['healed']
+        hp = mx - sum(v for k, v in e['taken'].items() if k != 'nova') + e['healed']  # nova lowers max HP only
         pct = 100.0 * min(max(hp, 0), mx) / mx
         if e['died']:
             pct = 0.0

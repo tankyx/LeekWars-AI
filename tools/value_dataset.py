@@ -105,11 +105,16 @@ def fight_samples(f):
                 caster = ent.get(act[1])
                 ent[act[2]] = {'team': caster['team'] if caster else None, 'cell': act[3], 'hp': 1, 'max': 1,
                                'alive': True, 'summon': True, 'l': {}}
-        elif c in (101, 107, 108, 109, 110) and len(act) > 2 and act[1] in ent:
+        elif c in (101, 108, 109, 110) and len(act) > 2 and act[1] in ent:
             e = ent[act[1]]
             e['hp'] -= act[2]
             if len(act) > 3 and act[3]:
                 e['max'] = max(1, e['max'] - act[3])
+        elif c == 107 and len(act) > 2 and act[1] in ent:
+            # nova damage lowers MAX life only (death-consistency check on
+            # 1,308 prod deaths: 100% with this rule, 85% if counted as damage)
+            e = ent[act[1]]
+            e['max'] = max(1, e['max'] - act[2]); e['hp'] = min(e['hp'], e['max'])
         elif c == 103 and len(act) > 2 and act[1] in ent:
             e = ent[act[1]]; e['hp'] = min(e['max'], e['hp'] + act[2])
         elif c in (104, 112) and len(act) > 2 and act[1] in ent:
@@ -137,7 +142,7 @@ def fight_samples(f):
         mt = ent[me]['team']
         y = 0.5 if not winner else (1.0 if winner == mt else 0.0)
         hp_y = (max(0, ent[me]['hp']) / ent[me]['max']) - (max(0, ent[op]['hp']) / ent[op]['max'])
-        rows.append((x, y, hp_y, T))
+        rows.append((x, y, hp_y, T, me))
     return rows
 
 
@@ -183,7 +188,7 @@ def main():
             rows = fight_samples(f)
         except Exception:
             bad += 1; continue
-        for x, y, h, t in rows:
+        for x, y, h, t, _ in rows:
             # each fight weighs 1 in total: 64-turn draws would otherwise swamp the set
             X.append(x); Y.append(y); H.append(h); F.append(f['id']); TT.append(t); W.append(1.0 / len(rows))
         if (i + 1) % 2000 == 0:

@@ -1,0 +1,187 @@
+// Prod value model runtime (2026-09-28): P(win | state at the start of my
+// turn), trained on 15.7k real solo fights with sign constraints (see
+// tools/value_train_mono.py). Weights + feature layout live in the generated
+// value_net_data.lk (tools/value_export_lk.py); the feature order here must
+// match tools/value_dataset.py NAMES:
+//   turn, dist, los, then per side (me, op):
+//   hp, hpfrac, maxhp, level, tp, mp, str, mag, agi, res, wis, sci,
+//   20 effect groups (sorted names), poison_future, summons
+// Stats are the fight-start (unbuffed) stats the model was trained on:
+// current value minus live buffs plus live shackles.
+
+global _vnDebug = false
+global __vnMu = null
+global __vnSd = null
+global __vnSign = null
+global __vnW1 = null
+global __vnB1 = null
+global __vnW2 = null
+global __vnB2 = null
+global __vnW3 = null
+global __vnB3 = null
+
+function vnParseVec(s) {
+    var out = []
+    for (var tok in split(s, ';')) push(out, number(tok))
+    return out
+}
+
+function vnParseMat(s) {
+    var out = []
+    for (var row in split(s, '|')) push(out, vnParseVec(row))
+    return out
+}
+
+function vnInit() {
+    if (__vnW1 == null) {
+        __vnMu = vnParseVec(__vnS_Mu); __vnSd = vnParseVec(__vnS_Sd); __vnSign = vnParseVec(__vnS_Sign)
+        __vnW1 = vnParseMat(__vnS_W1); __vnB1 = vnParseVec(__vnS_B1)
+        __vnW2 = vnParseMat(__vnS_W2); __vnB2 = vnParseVec(__vnS_B2)
+        __vnW3 = vnParseMat(__vnS_W3); __vnB3 = vnParseVec(__vnS_B3)
+    }
+}
+
+function vnTanh(x) {
+    if (x > 15) return 1.0
+    if (x < -15) return -1.0
+    var e = exp(2 * x)
+    return (e - 1) / (e + 1)
+}
+
+function vnSoftplus(x) {
+    if (x > 20) return x
+    return log(1 + exp(x))
+}
+
+// Per-group sums of live effects on `e`, plus poison value x turns left.
+// Returns [groups(array), poisonFuture].
+function vnEffects(e) {
+    var g = []
+    for (var i = 0; i < __vnNGroups; i++) push(g, 0)
+    var pf = 0
+    var effs = getEffects(e)
+    if (effs != null) {
+        for (var ef in effs) {
+            var t = ef[0]
+            if (!mapContainsKey(__vnGroupOf, t)) continue
+            g[__vnGroupOf[t]] += ef[1]
+            if (t == EFFECT_POISON) pf += ef[1] * max(1, ef[3])
+        }
+    }
+    return [g, pf]
+}
+
+function vnSumTypes(e, types) {
+    var s = 0
+    var effs = getEffects(e)
+    if (effs == null) return 0
+    for (var ef in effs) {
+        if (inArray(types, ef[0])) s += ef[1]
+    }
+    return s
+}
+
+// Side block (me or op). hp / addG / addPf let search evaluate a
+// hypothetical state (null / [] / 0 = current).
+function vnSide(f, e, hp, addG, addPf) {
+    var mx = max(1, getTotalLife(e))
+    var h = (hp == null) ? getLife(e) : hp
+    h = max(0, min(mx, h))
+    push(f, h / 3000.0); push(f, h / mx); push(f, mx / 3000.0); push(f, getLevel(e) / 301.0)
+    var tp = getTotalTP(e) - vnSumTypes(e, [8, 32]) + vnSumTypes(e, [18])
+    var mp = getTotalMP(e) - vnSumTypes(e, [7, 31]) + vnSumTypes(e, [17])
+    push(f, tp / 30.0); push(f, mp / 8.0)
+    push(f, (getStrength(e) - vnSumTypes(e, [3, 38]) + vnSumTypes(e, [19])) / 600.0)
+    push(f, (getMagic(e) - vnSumTypes(e, [39]) + vnSumTypes(e, [24])) / 600.0)
+    push(f, (getAgility(e) - vnSumTypes(e, [4, 41]) + vnSumTypes(e, [47])) / 600.0)
+    push(f, (getResistance(e) - vnSumTypes(e, [21, 42])) / 600.0)
+    push(f, (getWisdom(e) - vnSumTypes(e, [22, 44]) + vnSumTypes(e, [48])) / 600.0)
+    push(f, (getScience(e) - vnSumTypes(e, [40])) / 600.0)
+    var eg = vnEffects(e)
+    var g = eg[0]
+    for (var i = 0; i < __vnNGroups; i++) {
+        var v = g[i]
+        if (addG != null && count(addG) > i) v += addG[i]
+        push(f, v / __vnGScale[i])
+    }
+    push(f, (eg[1] + addPf) / 1000.0)
+    var team = (e == getEntity()) ? getAliveAllies() : ((isAlly(e)) ? getAliveAllies() : getAliveEnemies())
+    var sm = 0
+    for (var o in team) {
+        if (isSummon(o)) sm++
+    }
+    push(f, sm / 2.0)
+}
+
+// Feature vector for (me, op). Cells / HP / adds may describe a simulated
+// state; pass null / null / [] / 0 for the current one.
+function vnFeatures(me, op, meCell, opCell, meHp, opHp, meAddG, opAddG, mePf, opPf) {
+    var cm = (meCell == null) ? getCell(me) : meCell
+    var co = (opCell == null) ? getCell(op) : opCell
+    var f = [getTurn() / 30.0]
+    var d = getCellDistance(cm, co)
+    if (d == null) d = 10
+    push(f, d / 20.0)
+    push(f, lineOfSight(cm, co, [me, op]) ? 1.0 : 0.0)
+    vnSide(f, me, meHp, meAddG, mePf)
+    vnSide(f, op, opHp, opAddG, opPf)
+    return f
+}
+
+// Win probability for the side whose features come first.
+function vnValue(f) {
+    vnInit()
+    var z = []
+    for (var i = 0; i < __vnNFeat; i++) {
+        var v = (f[i] - __vnMu[i]) / __vnSd[i]
+        if (v > __vnClip) v = __vnClip
+        if (v < -__vnClip) v = -__vnClip
+        push(z, v)
+    }
+    var nC = count(__vnCtxIdx)
+    var h1 = []
+    for (var j = 0; j < count(__vnB1); j++) {
+        var s = __vnB1[j]
+        for (var k = 0; k < nC; k++) s += z[__vnCtxIdx[k]] * __vnW1[k][j]
+        push(h1, vnTanh(s))
+    }
+    var h2 = []
+    for (var j2 = 0; j2 < count(__vnB2); j2++) {
+        var s2 = __vnB2[j2]
+        for (var k2 = 0; k2 < count(h1); k2++) s2 += h1[k2] * __vnW2[k2][j2]
+        push(h2, vnTanh(s2))
+    }
+    var nO = count(__vnB3)
+    var logit = 0
+    for (var o = 0; o < nO; o++) {
+        var s3 = __vnB3[o]
+        for (var k3 = 0; k3 < count(h2); k3++) s3 += h2[k3] * __vnW3[k3][o]
+        if (o == 0) {
+            logit += s3
+        } else {
+            logit += __vnSign[o - 1] * vnSoftplus(s3) * z[__vnMonoIdx[o - 1]]
+        }
+    }
+    return 1.0 / (1.0 + exp(-logit))
+}
+
+// The enemy main leek (1v1): first alive non-summon enemy.
+function vnMainEnemy() {
+    for (var e in getAliveEnemies()) {
+        if (!isSummon(e)) return e
+    }
+    return null
+}
+
+// Debug: features + value for the current state, logged once per turn.
+function vnLogTurn(enemyId) {
+    if (!_vnDebug || enemyId == null) { return }
+    var ops0 = getOperations()
+    var f = vnFeatures(getEntity(), enemyId, null, null, null, null, [], [], 0, 0)
+    var p = vnValue(f)
+    var s = ""
+    for (var i = 0; i < count(f); i++) {
+        s += (i > 0 ? "," : "") + round(f[i] * 10000) / 10000
+    }
+    debugW("VNF_T" + getTurn() + "|" + s + "|" + round(p * 10000) / 10000 + "|ops" + (getOperations() - ops0))
+}

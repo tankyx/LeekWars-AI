@@ -2770,3 +2770,29 @@ correlational — fracture shows up in states selected by who casts it — so
 it cannot drive action choice as-is (search would avoid fracture). Needs
 sign constraints / a hybrid (analytic HP terms + learned correction) before
 use in search.
+
+**Value model v1: sign-constrained + LeekScript port (2026-09-28).**
+`tools/value_train_mono.py`: logit = base(ctx) + Σ s_k·softplus(h_k(ctx))·z_k;
+21 context features (turn, distance, LoS, levels, TP/MP, stats) feed a
+21-32-24 tanh net that outputs the base and 50 positive slopes; the 50
+actionable features (HP, effects on either side, summons, max HP) enter
+linearly with a fixed sign, so the value is monotone in every one of them by
+construction while a slope can still depend on the matchup. Test AUC 0.836 /
+logloss 0.527 / acc 75% — no loss vs the unconstrained MLP. Exchange rates:
+deal 300 +4.8pp, take 300 −3.9, opponent poison 600 queued +4.3, opponent
+STR −150 +5.1 (was −1.0 unconstrained), TP −3 +2.3, MP −2 +3.0, abs shield
++150 +2.8, rel shield +15% +0.8, STR buff +150 +3.5, +1 summon +2.7.
+HP accounting fix: nova damage (action 107) lowers MAX life only — counting
+it as damage made 15% of prod deaths inconsistent (100% consistent after);
+the same bug was in the harness / matchup_ab end-HP lead (fixed).
+Port: `tools/value_export_lk.py` → `V9_modules/value_net_data.lk` (weights
+as ';'/'|' strings parsed once at init — array literals hit javac's 64 KB
+method cap, error 66 / "Invalid AI"; plain decimals only — LeekScript
+`number()` does not parse '1e-05', one such weight zeroed every output) +
+`V9_modules/value_net.lk` (in-game features: stats = current − live buffs +
+live shackles, effects by group from getEffects, summons, LoS ignoring the
+two leeks; `vnFeatures(...)` also takes a hypothetical state for search).
+Parity: LeekScript vs Python on the same features ≤ 0.0002; ~56k ops per
+evaluation (+~90k once for parsing). Local feature parity differs only on
+local-generator artifacts (fight log `life` ≠ in-game start life; a turn-1
+wisdom buff). `_vnDebug` logs features + value each turn (off by default).
