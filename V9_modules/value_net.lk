@@ -81,17 +81,87 @@ function vnSumTypes(e, types) {
     return s
 }
 
+// v2 features (2026-09-28): max HP burned since first seen (nova/erosion:
+// every decrease of max life between our observations; increases are
+// vitality), kit potential (best single weapon/damage chip per turn at full
+// TP: direct / nova / poison) and reach (dist <= MP + max range).
+global __vnLastMax = [:]
+global __vnBurn = [:]
+global __vnKit = [:]
+
+function vnTrackBurn(e) {
+    var cur = getTotalLife(e)
+    if (mapContainsKey(__vnLastMax, e)) {
+        var dl = cur - __vnLastMax[e]
+        if (dl < 0) {
+            __vnBurn[e] = (mapContainsKey(__vnBurn, e) ? __vnBurn[e] : 0) - dl
+        }
+    }
+    __vnLastMax[e] = cur
+}
+
+function vnBurned(e) {
+    return mapContainsKey(__vnBurn, e) ? __vnBurn[e] : 0
+}
+
+function vnItemKit(effs, cost, uses, tp, stre, mag, sci) {
+    if (effs == null || cost == null || cost < 1) return [0, 0, 0]
+    var u = floor(tp / cost)
+    if (uses != null && uses > 0 && uses < u) u = uses
+    var dm = 0; var nv = 0; var ps = 0
+    for (var ef in effs) {
+        var avg = (ef[1] + ef[2]) / 2
+        if (ef[0] == EFFECT_DAMAGE) dm += avg * (1 + stre / 100.0)
+        else if (ef[0] == EFFECT_NOVA_DAMAGE) nv += avg * (1 + sci / 100.0)
+        else if (ef[0] == EFFECT_POISON) ps += avg * max(1, ef[3]) * (1 + mag / 100.0)
+    }
+    return [dm * u, nv * u, ps * u]
+}
+
+// [maxRange, kdmg, knova, kpois] from equipped weapons + damage chips, with
+// the unbuffed stats / TP the model was trained on; cached per entity.
+function vnKitOf(e, tp, stre, mag, sci) {
+    if (mapContainsKey(__vnKit, e)) return __vnKit[e]
+    var rng = 0; var kd = 0; var kn = 0; var kp = 0
+    var ws = getWeapons(e)
+    if (ws != null) {
+        for (var w in ws) {
+            var r = vnItemKit(getWeaponEffects(w), getWeaponCost(w), getWeaponMaxUses(w), tp, stre, mag, sci)
+            if (r[0] + r[1] + r[2] <= 0) continue
+            var mr = getWeaponMaxRange(w)
+            if (mr != null && mr > rng) rng = mr
+            kd = max(kd, r[0]); kn = max(kn, r[1]); kp = max(kp, r[2])
+        }
+    }
+    var cs = getChips(e)
+    if (cs != null) {
+        for (var c in cs) {
+            var r2 = vnItemKit(getChipEffects(c), getChipCost(c), getChipMaxUses(c), tp, stre, mag, sci)
+            if (r2[0] + r2[1] + r2[2] <= 0) continue
+            var mr2 = getChipMaxRange(c)
+            if (mr2 != null && mr2 > rng) rng = mr2
+            kd = max(kd, r2[0]); kn = max(kn, r2[1]); kp = max(kp, r2[2])
+        }
+    }
+    __vnKit[e] = [rng, kd, kn, kp]
+    return __vnKit[e]
+}
+
 // Side block (me or op). hp / addG / addPf let search evaluate a
 // hypothetical state (null / [] / 0 = current).
-function vnSide(f, e, hp, addG, addPf) {
+function vnSide(f, e, hp, addG, addPf, dist) {
     var mx = max(1, getTotalLife(e))
     var h = (hp == null) ? getLife(e) : hp
     h = max(0, min(mx, h))
-    push(f, h / 3000.0); push(f, h / mx); push(f, mx / 3000.0); push(f, getLevel(e) / 301.0)
+    var burn = vnBurned(e)
+    push(f, h / 3000.0); push(f, h / max(1, mx + burn)); push(f, mx / 3000.0); push(f, getLevel(e) / 301.0)
     var tp = getTotalTP(e) - vnSumTypes(e, [8, 32]) + vnSumTypes(e, [18])
     var mp = getTotalMP(e) - vnSumTypes(e, [7, 31]) + vnSumTypes(e, [17])
     push(f, tp / 30.0); push(f, mp / 8.0)
     push(f, (getStrength(e) - vnSumTypes(e, [3, 38]) + vnSumTypes(e, [19])) / 600.0)
+    var bStr = getStrength(e) - vnSumTypes(e, [3, 38]) + vnSumTypes(e, [19])
+    var bMag = getMagic(e) - vnSumTypes(e, [39]) + vnSumTypes(e, [24])
+    var bSci = getScience(e) - vnSumTypes(e, [40])
     push(f, (getMagic(e) - vnSumTypes(e, [39]) + vnSumTypes(e, [24])) / 600.0)
     push(f, (getAgility(e) - vnSumTypes(e, [4, 41]) + vnSumTypes(e, [47])) / 600.0)
     push(f, (getResistance(e) - vnSumTypes(e, [21, 42])) / 600.0)
@@ -111,6 +181,10 @@ function vnSide(f, e, hp, addG, addPf) {
         if (isSummon(o)) sm++
     }
     push(f, sm / 2.0)
+    var kit = vnKitOf(e, tp, max(0, bStr), max(0, bMag), max(0, bSci))
+    push(f, burn / 3000.0)
+    push(f, kit[0] / 10.0); push(f, kit[1] / 1000.0); push(f, kit[2] / 1000.0); push(f, kit[3] / 1000.0)
+    push(f, (dist <= mp + kit[0]) ? 1.0 : 0.0)
 }
 
 // Feature vector for (me, op). Cells / HP / adds may describe a simulated
@@ -123,8 +197,10 @@ function vnFeatures(me, op, meCell, opCell, meHp, opHp, meAddG, opAddG, mePf, op
     if (d == null) d = 10
     push(f, d / 20.0)
     push(f, lineOfSight(cm, co, [me, op]) ? 1.0 : 0.0)
-    vnSide(f, me, meHp, meAddG, mePf)
-    vnSide(f, op, opHp, opAddG, opPf)
+    vnTrackBurn(me)
+    vnTrackBurn(op)
+    vnSide(f, me, meHp, meAddG, mePf, d)
+    vnSide(f, op, opHp, opAddG, opPf, d)
     return f
 }
 
@@ -248,15 +324,19 @@ function vnScenarioValue(me, op, sim) {
     var f = []
     for (var v in __vnBase) push(f, v)
     var G = __vnGroupNames
-    // nova damage lowers the opponent's MAX life (current capped to it)
+    // nova damage burns the opponent's MAX life (current capped to it); the
+    // burn is attrition the model prices on its own (me_burned)
+    var opBurn = vnBurned(op)
     if (sim.novaDamageQueued > 0) {
         opMax = max(1, opMax - sim.novaDamageQueued)
         opHp = min(opHp, opMax)
+        opBurn += sim.novaDamageQueued
     }
     // opponent = "me_" block (it acts next)
     f[__vnIdx["me_hp"]] = opHp / 3000.0
-    f[__vnIdx["me_hpfrac"]] = opHp / opMax
+    f[__vnIdx["me_hpfrac"]] = opHp / max(1, opMax + opBurn)
     f[__vnIdx["me_maxhp"]] = opMax / 3000.0
+    f[__vnIdx["me_burned"]] = opBurn / 3000.0
     if (sim.poisonSourcesUsed > 0 && sim.poisonTurnsQueued > 0 && sim.dotDamageQueued > 0) {
         var avgDur = sim.poisonTurnsQueued / sim.poisonSourcesUsed
         vnAdd(f, "me_eff_poison", (sim.dotDamageQueued / max(1, avgDur)) / __vnGScale[__vnGPoison])
@@ -269,7 +349,7 @@ function vnScenarioValue(me, op, sim) {
     if (sim.vulnerabilityApplied > 0) vnAdd(f, "me_eff_vuln", sim.vulnerabilityApplied / __vnGScale[18])
     // us = "op_" block
     f[__vnIdx["op_hp"]] = myHp / 3000.0
-    f[__vnIdx["op_hpfrac"]] = myHp / myMax
+    f[__vnIdx["op_hpfrac"]] = myHp / max(1, myMax + vnBurned(me))
     // our own buffs (steroid, rage, motivation, elevation, ...): chip effect
     // amounts into our groups; shields/heals come from the simulator fields
     if (sim.buffsApplied != null && arsenal != null) {
@@ -297,8 +377,6 @@ function vnScenarioValue(me, op, sim) {
                 f[__vnIdx["op_eff_" + gn]] += ba / __vnGScale[gi]
             }
         }
-        f[__vnIdx["op_hp"]] = myHp / 3000.0
-        f[__vnIdx["op_hpfrac"]] = myHp / myMax
         f[__vnIdx["op_maxhp"]] = myMax / 3000.0
     }
     if (sim.shieldsGained > 0) vnAdd(f, "op_eff_abs_shield", sim.shieldsGained / __vnGScale[0])
@@ -311,6 +389,11 @@ function vnScenarioValue(me, op, sim) {
     var los = lineOfSight(fc, oc, [me, op]) ? 1 : 0
     f[__vnIdx["dist"]] = d / 20.0
     f[__vnIdx["los"]] = los
+    f[__vnIdx["op_hp"]] = myHp / 3000.0
+    f[__vnIdx["op_hpfrac"]] = myHp / max(1, myMax + vnBurned(me))
+    // reach from the final cell: can the opponent (acting next) reach us, can we reach it
+    f[__vnIdx["me_reach"]] = (d <= f[__vnIdx["me_mp"]] * 8.0 + f[__vnIdx["me_wrange"]] * 10.0) ? 1.0 : 0.0
+    f[__vnIdx["op_reach"]] = (d <= f[__vnIdx["op_mp"]] * 8.0 + f[__vnIdx["op_wrange"]] * 10.0) ? 1.0 : 0.0
     var z = []
     for (var i = 0; i < __vnNFeat; i++) {
         var zz = (f[i] - __vnMu[i]) / __vnSd[i]

@@ -48,7 +48,32 @@ def names():
         n += ['%s_%s' % (side, s[:3]) for s in STATS]
         n += ['%s_eff_%s' % (side, g) for g in GROUPS]
         n += ['%s_poison_future' % side, '%s_summons' % side]
+        # v2 (2026-09-28): max HP burned since the start (nova/erosion attrition),
+        # kit potential per turn (best single item at full TP) and reach
+        n += ['%s_burned' % side, '%s_wrange' % side, '%s_kdmg' % side, '%s_knova' % side,
+              '%s_kpois' % side, '%s_reach' % side]
     return n
+
+
+def kit_stats(items, l):
+    """(max range, best direct / nova / poison per turn) over the weapons and
+    damage chips a leek uses; per item: value per use x min(max uses, TP // cost)."""
+    tp = max(1, l.get('tp', 20))
+    stre, mag, sci = max(0, l.get('strength', 0)), max(0, l.get('magic', 0)), max(0, l.get('science', 0))
+    rng = 0; kd = kn = kp = 0.0
+    for name in items:
+        info = D.info(name) or {}
+        effs = info.get('effects') or []
+        cost = max(1, info.get('cost') or 1)
+        uses = min(info.get('max_uses') or 99, tp // cost) if (info.get('max_uses') or 0) > 0 else tp // cost
+        dmg = sum((e['value1'] + e['value2'] / 2) for e in effs if e.get('id') == 1) * (1 + stre / 100.0)
+        nova = sum((e['value1'] + e['value2'] / 2) for e in effs if e.get('id') == 30) * (1 + sci / 100.0)
+        pois = sum((e['value1'] + e['value2'] / 2) * max(1, e.get('turns') or 1) for e in effs if e.get('id') == 13) * (1 + mag / 100.0)
+        if dmg + nova + pois <= 0:
+            continue
+        rng = max(rng, info.get('max_range') or 0)
+        kd = max(kd, dmg * uses); kn = max(kn, nova * uses); kp = max(kp, pois * uses)
+    return rng, kd, kn, kp
 
 
 NAMES = names()
@@ -74,6 +99,21 @@ def fight_samples(f):
         ent[l['id']] = {'team': l.get('team'), 'cell': l.get('cellPos'), 'hp': l.get('life', 1),
                         'max': max(1, l.get('life', 1)), 'alive': not l.get('summon'), 'summon': bool(l.get('summon')), 'l': l}
     effects = {}                      # instance id -> [target, type, value, turns_left, caster]
+    # kit = items each entity uses during the fight (in game: equipped items)
+    items = {}
+    pc = None; held = {}
+    for act in d['actions']:
+        if not isinstance(act, list) or not act:
+            continue
+        if act[0] == 7 and len(act) > 1:
+            pc = act[1]
+        elif act[0] == 13 and len(act) > 1 and pc is not None:
+            items.setdefault(pc, set()).add(D.weapon(act[1]))
+        elif act[0] == 12 and len(act) > 1 and pc is not None:
+            items.setdefault(pc, set()).add(D.chip(act[1]))
+    for eid, e in ent.items():
+        e['burn'] = 0
+        e['kit'] = kit_stats(items.get(eid, set()), e['l']) if e['l'] else (0, 0.0, 0.0, 0.0)
     out = []
     cur = None; T = 1
     for act in d['actions']:
@@ -110,11 +150,13 @@ def fight_samples(f):
             e['hp'] -= act[2]
             if len(act) > 3 and act[3]:
                 e['max'] = max(1, e['max'] - act[3])
+                e['burn'] = e.get('burn', 0) + act[3]
         elif c == 107 and len(act) > 2 and act[1] in ent:
             # nova damage lowers MAX life only (death-consistency check on
             # 1,308 prod deaths: 100% with this rule, 85% if counted as damage)
             e = ent[act[1]]
             e['max'] = max(1, e['max'] - act[2]); e['hp'] = min(e['hp'], e['max'])
+            e['burn'] = e.get('burn', 0) + act[2]
         elif c == 103 and len(act) > 2 and act[1] in ent:
             e = ent[act[1]]; e['hp'] = min(e['max'], e['hp'] + act[2])
         elif c in (104, 112) and len(act) > 2 and act[1] in ent:
@@ -124,7 +166,9 @@ def fight_samples(f):
             for k in [k for k, e in effects.items() if e[0] == act[1]]:
                 effects.pop(k)
         elif c in (301, 302) and len(act) > 7:
-            effects[act[2]] = [act[4], act[5], act[6] or 0, act[7] if act[7] and act[7] > 0 else 1, cur]
+            # duration -1 = permanent (passives / permanent buffs): never tick down
+            left = act[7] if (act[7] and act[7] > 0) else (10 ** 6 if act[7] == -1 else 1)
+            effects[act[2]] = [act[4], act[5], act[6] or 0, left, cur]
         elif c == 14 and len(act) > 2 and act[1] in effects:
             effects[act[1]][2] += act[2]
         elif c == 304 and len(act) > 2 and act[1] in effects:
@@ -158,7 +202,8 @@ def snapshot(T, me, op, ent, effects, geo):
     x += [(dist or 0) / 20.0, los]
     for side in (me, op):
         e = ent[side]; l = e['l']
-        x += [max(0, e['hp']) / 3000.0, max(0, e['hp']) / e['max'], e['max'] / 3000.0, l.get('level', 301) / 301.0,
+        # hpfrac vs max HP before attrition, so nova/erosion don't raise it
+        x += [max(0, e['hp']) / 3000.0, max(0, e['hp']) / max(1, e['max'] + e.get('burn', 0)), e['max'] / 3000.0, l.get('level', 301) / 301.0,
               l.get('tp', 20) / 30.0, l.get('mp', 6) / 8.0]
         x += [l.get(s, 0) / 600.0 for s in STATS]
         g = dict.fromkeys(GROUPS, 0.0); pf = 0.0
@@ -167,11 +212,15 @@ def snapshot(T, me, op, ent, effects, geo):
                 continue
             g[GROUP[typ]] += val
             if typ == 13:
-                pf += val * left
+                pf += val * min(left, 64)
         x += [g[k] / GSCALE.get(k, 100.0) for k in GROUPS]
         team = e['team']
         summons = sum(1 for o in ent.values() if o['alive'] and o['summon'] and o['team'] == team)
         x += [pf / 1000.0, summons / 2.0]
+        rng, kd, kn, kp = e['kit']
+        other = ent[op] if side == me else ent[me]
+        reach = 1.0 if (dist is not None and dist <= l.get('mp', 6) + rng) else 0.0
+        x += [e.get('burn', 0) / 3000.0, rng / 10.0, kd / 1000.0, kn / 1000.0, kp / 1000.0, reach]
     return x
 
 

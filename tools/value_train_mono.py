@@ -30,9 +30,9 @@ OUT = os.path.join(ROOT, 'data', 'prod', 'value_mono.json')
 rng = np.random.default_rng(0)
 
 CTX_BASE = ['turn', 'dist', 'los']
-CTX_SIDE = ['level', 'tp', 'mp', 'str', 'mag', 'agi', 'res', 'wis', 'sci']
+CTX_SIDE = ['level', 'tp', 'mp', 'str', 'mag', 'agi', 'res', 'wis', 'sci', 'wrange', 'kdmg', 'knova', 'kpois', 'reach']
 # sign for "me" side; the "op" side gets the opposite sign
-GOOD_FOR_OWNER = {'hp': +1, 'hpfrac': +1, 'maxhp': +1, 'summons': +1,
+GOOD_FOR_OWNER = {'burned': -1, 'hp': +1, 'hpfrac': +1, 'maxhp': +1, 'summons': +1,
                   'eff_abs_shield': +1, 'eff_rel_shield': +1, 'eff_heal_ot': +1, 'eff_dmg_return': +1,
                   'eff_buf_str': +1, 'eff_buf_mag': +1, 'eff_buf_agi': +1, 'eff_buf_tp': +1, 'eff_buf_mp': +1,
                   'eff_buf_res': +1, 'eff_buf_wis': +1, 'eff_buf_pow': +1,
@@ -135,9 +135,10 @@ def main():
 
     def dmg(side, amt):
         def g(Y):
-            hp = Y[:, ix(side + '_hp')] * 3000; mx = Y[:, ix(side + '_maxhp')] * 3000
+            hp = Y[:, ix(side + '_hp')] * 3000
+            base = (Y[:, ix(side + '_maxhp')] + Y[:, ix(side + '_burned')]) * 3000   # max before attrition
             hp2 = np.maximum(0, hp - amt)
-            Y[:, ix(side + '_hp')] = hp2 / 3000; Y[:, ix(side + '_hpfrac')] = hp2 / np.maximum(1, mx)
+            Y[:, ix(side + '_hp')] = hp2 / 3000; Y[:, ix(side + '_hpfrac')] = hp2 / np.maximum(1, base)
         return g
 
     def add(*kv):
@@ -157,6 +158,15 @@ def main():
     rate('my STR buff +150', add(('me_eff_buf_str', 1.5)))
     rate('+1 summon for me', add(('me_summons', 0.5)))
     rate('distance +4 cells', add(('dist', 0.2)))
+
+    def nova(amt):
+        def g(Y):
+            Y[:, ix('op_maxhp')] -= amt / 3000.0
+            Y[:, ix('op_burned')] += amt / 3000.0
+        return g
+    rate('nova: burn 450 of opponent max HP', nova(450))
+    rate('opponent can no longer reach me', lambda Y: Y.__setitem__((slice(None), ix('op_reach')), 0.0))
+    rate('I can reach the opponent next turn', lambda Y: Y.__setitem__((slice(None), ix('me_reach')), 1.0))
 
     json.dump({'kind': 'mono', 'names': names, 'ctx': ctx, 'mono': mono, 'sign': S.tolist(),
                'mu': mu.tolist(), 'sd': sd.tolist(), 'clip': 6,
