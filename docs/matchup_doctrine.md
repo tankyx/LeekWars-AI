@@ -2384,6 +2384,31 @@ last 7 turns and the bot crashes in 36-50% of fights, so it cannot show a
 long-fight effect. Not shipped; judge on same-seed challenges vs the STR
 testbed (fresh control arm needed: kit changed to fracture/manumission).
 
+**Siege rotation, measured (2026-09-28, `tools/siege_rotation.py`).** Exact
+effect lifetimes on the enemy (301/302 adds by instance id, 303/307/308
+removals), counted on enemy turns after first damage.
+
+| vs STR | n | win | turns | poison up | STR shackle up | TP shackle up | MP shackle up | any shackle | heal @HP<40% / 40-70 / >70 |
+|---|---|---|---|---|---|---|---|---|---|
+| top-300 MAG, all | 1048 | 46% | 17.5 | 72% | 28% | 27% | 12% | 44% | 64 / 46 / 28% |
+| top-300 MAG, wins | 487 | — | 16.7 | 83% | 38% | 31% | 18% | 55% | 60 / 41 / 25% |
+| top-300 MAG, losses | 561 | — | 18.1 | 63% | 21% | 24% | 8% | 35% | 67 / 51 / 31% |
+| Margaret V9 | 263 | 44% | 8.7 | 81% | 0% | 28% | 38% | 46% | 34 / 34 / 18% |
+
+- Top mages win vs STR no more often than Margaret (46% vs 44%); long
+  fights are not wins (winners 16.7 turns, losers 18.1).
+- What separates top winners from top losers is uptime from contact:
+  poison 83 vs 63%, STR shackle 38 vs 21%, any shackle 55 vs 35%. Winners
+  cast fracture on ~30% of turns from contact on (+0..+12), i.e. recast as
+  it lapses; losers start it later and cast it on 16-19% of turns.
+- Margaret already matches the winners' poison uptime (81%); her shackle
+  uptime is mostly MP (slow_down on ~45% of turns; top 12-18%) and she had
+  no STR shackle. Venom on 60-80% of her turns (top 25-30%).
+- Heal timing: top mages heal on 64% of turns below 40% HP, Margaret 34%.
+- TP composition after contact (top winners): weapon 25, poison 20, buff 13,
+  heal 13, shield 8, STR/TP/MP shackle 4 each. Margaret: poison 32, weapon
+  24, buff 15, heal 12, MP shackle 6, TP shackle 4.
+
 ### Ada, long-range kit vs current kit on the deployed build (2026-09-24)
 
 Motivation: within the top-300 STR leeks, lightninger / quantum rifle /
