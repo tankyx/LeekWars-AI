@@ -2920,3 +2920,20 @@ base exactly for KurtGodel (0 flips over 120 fights). Harness expectation
 vs live on the panels: Margaret 38.5% vs 23.3%, Edsger 56.7% vs 28.3%,
 KurtGodel 65% vs 55%, Ada ≈ live. Next: same-seed challenges vs live, plus a
 small KurtGodel model-on vs model-off challenge A/B (harness vs model bias).
+
+**Candidate 2 on real opponents — challenges (2026-09-29 pool, garden
+skipped).** Same seeds (1-5) per opponent, live 12e6e563 (9.0/V9) vs
+v9-vn-cand2 (9.0/V9-A); logs confirm each arm ran its own code, 0 AI errors.
+- Edsger (TheLeaker, Hydrogène, ReauBotcode, topac): live 8/20, cand 6/20
+  (+1/−3); ReauBotcode 0/5 both (harness said 7 → 48%); dealt/t 1145 → 1034.
+- Margaret (TheLeaker, Bretzel, Hydrogène, ReauBotcode): 1/20 vs 1/20;
+  dealt/t 515 → 633 (+23%), taken/t 932 → 814 (−13%), turns 11.8 → 13.4.
+- Ada (Yongyong, Hydrogène): 5/10 vs 4/10; Yongyong 2 → 4 (as the harness
+  said), Hydrogène 3 → 0.
+**The harness's big Edsger gain (+30pp vs V8-driven clones) did not appear
+against the real leeks** (−2 of 20). The clones' V8 AI is the likely reason:
+plans the value model prefers beat V8's play, not their owners'. So the
+harness is not a reliable judge of value-model changes (or other large
+behaviour changes); it validated on a sort-fix change but misses here. Not
+deployed. Margaret's mechanism moved the right way (more dealt, less taken)
+without wins on a testbed where both arms win 1/20.
