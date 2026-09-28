@@ -2715,3 +2715,34 @@ Not yet written. Each needs a stabilised testbed first (`matchup_stability.py`),
 because a doctrine measured on an unstable matchup is indistinguishable from
 noise. `ladder_sepignouf` (poison, weaker) and `ladder_ludaskia` (direct) exist
 as opponents but have not been through the stability check.
+
+## Phase 0: evaluation harness + prod crawler (2026-09-28)
+
+**Harness (`tools/harness.py`).** Paired local A/B of any git refs (or
+WORKTREE / V8), optional per-arm kit, against clones of real leeks fetched
+from `/leek/get` — use the `total_*` fields (plain `strength`/`life`/`tp`
+are base stats without equipment; `fetch_ladder_opponents.py` had this bug,
+so the 31 older `live_*` clones are under-powered). Clones run V8 (no mirror).
+Also found: `smart_str` had weapon ids instead of item ids → fought unarmed
+(fixed); that is why local threat read 0 vs smart_str.
+
+Validation vs challenge truths:
+- Margaret control (12e6e563) vs CITF (9114bef2), old kit, 4 STR clones × 60:
+  32% vs 37% (p=0.10), dmg dealt/t 933 vs 973, taken/t 1021 vs 987. The
+  challenge truth (3/20 vs 1/20) was itself not significant — inconclusive.
+  Opponent difficulty ordering matches challenges (Bretzel easiest,
+  ReauBotcode hardest) but local win rates run ~2x the real ones.
+- Ada d832f7e9 vs 12e6e563, 5 nemesis clones × 50: topac 4% → 20%
+  (p=0.04; challenges 0/15 → 3/5), rotulet 0/0 (the known wall),
+  HerculeNsjtt 100/100, grinhaire 0/0 — saturated; pooled 35 → 38%.
+Verdict: direction right on mid-band opponents, magnitudes compressed,
+saturated opponents blind. Use as a filter/ranker with a panel of 20-80%
+opponents; challenges and talent stay the truth.
+
+**Prod crawler (`tools/prod_crawler.py`, data/prod/, git-ignored).**
+Ranking `/ranking/get/leek/talent/<page>/null` (50 per page; page 40 ≈
+talent 1427), histories `/history/get-leek-history/<id>` (solo = type 0,
+status 2 = finished, context 2 garden / 1 challenge / 3 other), fights
+`/fight/get/<id>` stripped + gzipped (~4 KB). 9 req/s token bucket over 4
+threads (LW+ allows 10). First pass: 2,000 leeks, 1,347 at L301 with talent
+≥ 1500, 16,539 solo fights indexed in 2.5 min (12,853 garden).
