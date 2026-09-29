@@ -15,7 +15,6 @@ sys.path.insert(0, HERE)
 from lw_api import LWSession
 
 LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}
-LIBERATION = 34
 
 
 def stats(lw, lid, since, until):
@@ -40,8 +39,6 @@ def stats(lw, lid, since, until):
                 pos[a[1]] = a[2]
             elif a[0] == 16 and cur in foes:
                 aimed_other = a[1] != pos.get(mine['id'])
-            elif a[0] == 12 and cur == mine['id'] and a[1] == LIBERATION:
-                m['lib'] += 1
             elif a[0] in (101, 110):
                 if a[1] == mine['id']:
                     m['taken'] += a[2]
@@ -56,6 +53,8 @@ def stats(lw, lid, since, until):
         logs = (lw.get('/fight/get-logs/%d' % f0['id']) or {}).get('18035') or {}
         txt = [str(e[2]) for k in sorted(logs, key=int) for e in logs[k] if len(e) > 2]
         for i, t in enumerate(txt):
+            if t.startswith('V10X T'):      # executed actions: 'libera:1' / 'libera:2' = cast (normal / critical)
+                m['lib'] += t.count('libera:1') + t.count('libera:2')
             if not t.startswith('V10 T'):
                 continue
             m['turns'] += 1
