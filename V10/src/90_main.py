@@ -43,6 +43,8 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     """Leftover TP after the plan: attacks the engine says are legal from the
     final cell, then ready self chips. Returns a compact trace."""
     m = me(); trace = []
+    if enemy.cell is None or (enemy.life or 0) <= 0:
+        return 'enemy dead'
     _GEO.clear()                       # we moved: LoS between cells may have changed
     ecell = enemy.cell.id
     for _ in range(12):

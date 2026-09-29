@@ -99,9 +99,31 @@ def train(C, M, S, y, w, Cv, Mv, yv, wv, h=(32, 24), l2=1e-5, epochs=60, patienc
     return best[1]
 
 
+def relevance(talent, center, width, floor):
+    """Fight weight multiplier: 1 inside our talent band, decaying (Gaussian)
+    outside it down to `floor`; unknown talent (0) counts as `floor`."""
+    r = np.exp(-0.5 * (np.maximum(0, np.abs(talent - center) - width / 2) / (width / 2)) ** 2)
+    return np.where(talent > 0, np.maximum(floor, r), floor)
+
+
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--hidden', default='32,24', help='context net hidden sizes')
+    ap.add_argument('--band', default='', help='talent band center,width,floor for relevance weights (e.g. 2050,700,0.3)')
+    ap.add_argument('--out', default=OUT)
+    a = ap.parse_args()
+    hid = tuple(int(v) for v in a.hidden.split(','))
     d = np.load(DS)
     X, y, w, fid, turn = d['X'].astype(np.float64), d['y'].astype(np.float64), d['w'].astype(np.float64), d['fid'], d['turn']
+    talent = d['talent'].astype(np.float64) if 'talent' in d.files else np.zeros(len(y))
+    inband = np.zeros(len(y), bool)
+    if a.band:
+        c, wd, fl = (float(v) for v in a.band.split(','))
+        w = w * relevance(talent, c, wd, fl)
+        inband = np.abs(talent - c) <= wd / 2
+        print('relevance weights: band %.0f +- %.0f, floor %.2f; %.0f%% of fights in band' % (
+            c, wd / 2, fl, 100 * float(np.mean(inband))))
     names = [str(n) for n in d['names']]
     ctx, mono, S = split_features(names)
     ci = [names.index(n) for n in ctx]; mi = [names.index(n) for n in mono]
@@ -111,13 +133,17 @@ def main():
     Z = np.clip((X - mu) / sd, -6, 6)
     C, M = Z[:, ci], Z[:, mi]
     print('context %d features, monotone %d features' % (len(ctx), len(mono)))
-    P = train(C[tr], M[tr], S, y[tr], w[tr], C[va], M[va], y[va], w[va])
+    P = train(C[tr], M[tr], S, y[tr], w[tr], C[va], M[va], y[va], w[va], h=hid)
     p = forward(C, M, P, S)[0]
     buckets = [('T1-2', turn <= 2), ('T3-5', (turn >= 3) & (turn <= 5)), ('T6-10', (turn >= 6) & (turn <= 10)), ('T11+', turn >= 11)]
     ll, br, auc, acc = metrics(p[te], y[te], w[te])
     by = [metrics(p[te & m], y[te & m], w[te & m])[2] for _, m in buckets]
     print('\nTEST mono: logloss %.4f  brier %.4f  AUC %.3f  acc %.3f | AUC by turn %s' % (
         ll, br, auc, acc, '  '.join('%.3f' % v for v in by)))
+    if inband.any():
+        ib = te & inband
+        llb, _, aucb, accb = metrics(p[ib], y[ib], d['w'].astype(np.float64)[ib])
+        print('TEST in band (%d samples): logloss %.4f  AUC %.3f  acc %.3f' % (ib.sum(), llb, aucb, accb))
 
     # exchange rates on test states T3-15
     sel = te & (turn >= 3) & (turn <= 15)
@@ -170,8 +196,8 @@ def main():
 
     json.dump({'kind': 'mono', 'names': names, 'ctx': ctx, 'mono': mono, 'sign': S.tolist(),
                'mu': mu.tolist(), 'sd': sd.tolist(), 'clip': 6,
-               'layers': [[q.tolist() for q in P[i:i + 2]] for i in (0, 2, 4)]}, open(OUT, 'w'))
-    print('\nexported %s' % OUT)
+               'layers': [[q.tolist() for q in P[i:i + 2]] for i in (0, 2, 4)]}, open(a.out, "w"))
+    print('\nexported %s' % a.out)
 
 
 if __name__ == '__main__':

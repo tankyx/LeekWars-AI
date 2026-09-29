@@ -229,7 +229,7 @@ def main():
     files = sorted(glob.glob(os.path.join(ROOT, 'data', 'prod', 'fights', '*', '*.json.gz')))
     if a.limit:
         files = files[:a.limit]
-    X, Y, H, F, TT, W = [], [], [], [], [], []
+    X, Y, H, F, TT, W, TA, CT = [], [], [], [], [], [], [], []
     bad = 0
     for i, p in enumerate(files):
         try:
@@ -237,7 +237,10 @@ def main():
             rows = fight_samples(f)
         except Exception:
             bad += 1; continue
+        tal = [l.get('talent') for l in (f.get('leeks1') or []) + (f.get('leeks2') or []) if l.get('talent') is not None]
+        tal = sum(tal) / len(tal) if tal else 0.0
         for x, y, h, t, _ in rows:
+            TA.append(tal); CT.append(f.get('context') or 0)
             # each fight weighs 1 in total: 64-turn draws would otherwise swamp the set
             X.append(x); Y.append(y); H.append(h); F.append(f['id']); TT.append(t); W.append(1.0 / len(rows))
         if (i + 1) % 2000 == 0:
@@ -245,6 +248,7 @@ def main():
     X = np.asarray(X, dtype=np.float32)
     np.savez_compressed(OUT, X=X, y=np.asarray(Y, np.float32), hp_y=np.asarray(H, np.float32),
                         fid=np.asarray(F, np.int64), turn=np.asarray(TT, np.int32), w=np.asarray(W, np.float32),
+                        talent=np.asarray(TA, np.float32), context=np.asarray(CT, np.int8),
                         names=np.asarray(NAMES))
     print('fights %d (skipped %d)  samples %d  features %d -> %s' % (len(files), bad, len(X), X.shape[1] if len(X) else 0, OUT))
     if len(X):

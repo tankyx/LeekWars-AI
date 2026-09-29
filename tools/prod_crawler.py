@@ -93,7 +93,8 @@ def st_index(a):
                 continue
             seen.add(r['id'])
             done_leeks.add(r.get('src'))
-    todo = [i for i in todo if i not in done_leeks]
+    if not a.rescan:
+        todo = [i for i in todo if i not in done_leeks]
     print('index: %d leeks to scan, %d fights already indexed' % (len(todo), len(seen)), flush=True)
     lock = threading.Lock()
     out = open(INDEX, 'a')
@@ -142,7 +143,7 @@ def st_fetch(a):
             r = json.loads(line)
         except ValueError:
             continue
-        if r['id'] > 0 and (a.context is None or r.get('context') == a.context):
+        if r['id'] > 0 and (a.all_contexts or r.get('context') == a.context):
             ids.append(r['id'])
     ids = sorted(set(ids), reverse=True)            # newest first
     todo = [i for i in ids if not os.path.exists(fight_path(i))][:a.max]
@@ -181,6 +182,89 @@ def st_fetch(a):
     print('fetch done: %d new fights in %.0f min (%d unusable responses skipped)' % (done[0], (time.time() - t0) / 60, bad[0]), flush=True)
 
 
+def st_opponents(a):
+    """Add leeks met in stored fights but absent from the ranking pages
+    (talent / level from the fight headers, latest fight wins)."""
+    leeks = json.load(open(LEEKS)) if os.path.exists(LEEKS) else {}
+    found = {}
+    for dp, _, fs in os.walk(FIGHTS):
+        for fn in fs:
+            if not fn.endswith('.json.gz'):
+                continue
+            try:
+                f = json.load(gzip.open(os.path.join(dp, fn), 'rt'))
+            except Exception:
+                continue
+            for l in (f.get('leeks1') or []) + (f.get('leeks2') or []):
+                k = str(l.get('id'))
+                if k in leeks or l.get('talent') is None:
+                    continue
+                if k not in found or (f.get('date') or 0) > found[k][0]:
+                    found[k] = (f.get('date') or 0, {'talent': l['talent'], 'level': l.get('level', 0),
+                                                      'name': l.get('name'), 'rank': None})
+    for k, (_, v) in found.items():
+        leeks[k] = v
+    json.dump(leeks, open(LEEKS, 'w'))
+    print('opponents: %d leeks added, %d total' % (len(found), len(leeks)))
+
+
+def st_walk(a):
+    """Walk fight ids backwards (histories only reach ~1 week back) and keep
+    finished solo fights whose leeks are all level >= --min-level. Resumable:
+    data/prod/walk_state.json holds the next id to try."""
+    state_p = os.path.join(OUT, 'walk_state.json')
+    nxt = json.load(open(state_p))['next'] if os.path.exists(state_p) else a.start
+    stop = nxt - a.count
+    api = API(a.rate)
+    lock = threading.Lock(); st = {'kept': 0, 'seen': 0, 'lo': nxt}
+    t0 = time.time()
+    out = open(INDEX, 'a')
+
+    def one(fid):
+        if os.path.exists(fight_path(fid)):
+            return
+        try:
+            f = api.get('/fight/get/%d' % fid)
+            if isinstance(f, dict):
+                f = f.get('fight', f)
+        except Exception:
+            f = None
+        keep = False
+        if isinstance(f, dict) and f.get('type') == 0 and f.get('status') == 2 and f.get('context') in (1, 2, 3) \
+                and isinstance(f.get('data'), dict) \
+                and f['data'].get('actions'):
+            ls = (f.get('leeks1') or []) + (f.get('leeks2') or [])
+            keep = bool(ls) and all((l.get('level') or 0) >= a.min_level for l in ls)
+        if keep:
+            p = fight_path(fid)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with gzip.open(p + '.tmp', 'wt') as g:
+                json.dump(strip(f), g)
+            os.replace(p + '.tmp', p)
+        with lock:
+            st['seen'] += 1
+            if keep:
+                st['kept'] += 1
+                out.write(json.dumps({'id': fid, 'src': 'walk', 'date': f.get('date'), 'context': f.get('context'),
+                                      'leeks1': f.get('leeks1'), 'leeks2': f.get('leeks2'), 'winner': f.get('winner')}) + '\n')
+            if st['seen'] % 1000 == 0:
+                out.flush()
+                el = time.time() - t0
+                print('  walk %d ids, kept %d (%.1f%%)  %.1f ids/s' % (st['seen'], st['kept'], 100.0 * st['kept'] / st['seen'],
+                                                                   st['seen'] / el), flush=True)
+
+    # chunks so the state file only moves past fully processed ids
+    cur = nxt
+    with ThreadPoolExecutor(max_workers=a.threads) as ex:
+        while cur > stop:
+            lo = max(stop, cur - 2000)
+            list(ex.map(one, range(cur, lo, -1)))
+            cur = lo
+            json.dump({'next': cur}, open(state_p, 'w'))
+    out.close()
+    print('walk done: %d ids, kept %d, next %d' % (st['seen'], st['kept'], cur), flush=True)
+
+
 def st_stats(a):
     n = sum(1 for _ in open(INDEX)) if os.path.exists(INDEX) else 0
     files = 0; size = 0
@@ -199,11 +283,16 @@ def main():
     sub = ap.add_subparsers(dest='cmd', required=True)
     s = sub.add_parser('leeks'); s.add_argument('--pages', default='1-40')
     s = sub.add_parser('index'); s.add_argument('--talent', default='1500-5000'); s.add_argument('--min-level', type=int, default=301)
+    s.add_argument('--rescan', action='store_true', help='scan leeks again for fights played since the last scan')
+    s = sub.add_parser('opponents')
+    s = sub.add_parser('walk'); s.add_argument('--start', type=int, default=53700000); s.add_argument('--count', type=int, default=300000)
+    s.add_argument('--min-level', type=int, default=301)
     s = sub.add_parser('fetch'); s.add_argument('--max', type=int, default=60000); s.add_argument('--context', type=int, default=2)
+    s.add_argument('--all-contexts', action='store_true')
     sub.add_parser('stats')
     a = ap.parse_args()
     os.makedirs(FIGHTS, exist_ok=True)
-    {'leeks': st_leeks, 'index': st_index, 'fetch': st_fetch, 'stats': st_stats}[a.cmd](a)
+    {'leeks': st_leeks, 'index': st_index, 'fetch': st_fetch, 'stats': st_stats, 'opponents': st_opponents, 'walk': st_walk}[a.cmd](a)
 
 
 if __name__ == '__main__':

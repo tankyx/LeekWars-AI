@@ -11,8 +11,8 @@ sys.path.insert(0, HERE)
 import value_dataset as vd
 
 SRC = os.path.join(ROOT, 'V10', 'src')
-OUT = os.path.join(ROOT, 'V10', 'v10.py')
-MODEL = os.path.join(ROOT, 'data', 'prod', 'value_mono.json')
+OUT = os.environ.get('V10_OUT') or os.path.join(ROOT, 'V10', 'v10.py')
+MODEL = os.environ.get('V10_MODEL') or os.path.join(ROOT, 'data', 'prod', 'value_mono.json')
 GEN = '/home/ubuntu/leek-wars-generator'
 
 
