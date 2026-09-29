@@ -14,7 +14,7 @@ AGGR = 0.3        # value of certain damage now, per full enemy HP bar
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizon effect)
 DIAG = False
-LAST_CX = [None]
+LAST_CX: list = [None]
 
 
 def quick_value(it, C, T):
@@ -100,6 +100,9 @@ class Ctx:
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
         self.b_reach = {}
         self.replies = {}
+        self.last_reply = 0.0
+        self.last_leaf: object = None
+        self.best_leaf: object = None
         self.plen = {}         # (from, to) -> path length
         self.ends = None       # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]

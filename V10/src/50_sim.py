@@ -6,7 +6,7 @@ _GEO = {}      # (from, to) -> (dist, los, line, diag); cleared every turn (LoS 
 def cxy(c):
     xy = _XY.get(c)
     if xy is None:
-        cell = Cell(c)
+        cell = Cell.get(c)
         xy = (cell.x, cell.y)
         _XY[c] = xy
     return xy

@@ -16,7 +16,7 @@ def execute(plan):
     m = me(); trace = []
     for st in plan:
         if st[0] == 'move':
-            r = m.moveToward(Cell(st[1]))
+            r = m.moveToward(Cell.get(st[1]))
             trace.append('M%s' % r)
         else:
             it, tgt = st[1], st[2]

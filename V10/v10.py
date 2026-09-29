@@ -17,13 +17,13 @@ COLD_FRAC = 0.04
 WARM_FRAC = 0.06
 SAFE_FRAC = 0.02
 OPS_STOP = 560000       # refreshed each turn from System.maxOperations (see refresh_budget)
-_LOADED_AT = [None]     # Fight.turn of the first turn() since this module was loaded
+_LOADED_AT = [0]        # Fight.turn (0 = not yet) of the first turn() since this module was loaded
 
 
 def refresh_budget():
     global OPS_STOP
     t = Fight.turn
-    if _LOADED_AT[0] is None:
+    if _LOADED_AT[0] == 0:
         _LOADED_AT[0] = t
     if _LOADED_AT[0] > 1:
         frac = SAFE_FRAC
@@ -413,7 +413,7 @@ _GEO = {}      # (from, to) -> (dist, los, line, diag); cleared every turn (LoS 
 def cxy(c):
     xy = _XY.get(c)
     if xy is None:
-        cell = Cell(c)
+        cell = Cell.get(c)
         xy = (cell.x, cell.y)
         _XY[c] = xy
     return xy
@@ -554,7 +554,7 @@ AGGR = 0.3        # value of certain damage now, per full enemy HP bar
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizon effect)
 DIAG = False
-LAST_CX = [None]
+LAST_CX: list = [None]
 
 
 def quick_value(it, C, T):
@@ -640,6 +640,9 @@ class Ctx:
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
         self.b_reach = {}
         self.replies = {}
+        self.last_reply = 0.0
+        self.last_leaf: object = None
+        self.best_leaf: object = None
         self.plen = {}         # (from, to) -> path length
         self.ends = None       # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
@@ -986,7 +989,7 @@ def execute(plan):
     m = me(); trace = []
     for st in plan:
         if st[0] == 'move':
-            r = m.moveToward(Cell(st[1]))
+            r = m.moveToward(Cell.get(st[1]))
             trace.append('M%s' % r)
         else:
             it, tgt = st[1], st[2]
