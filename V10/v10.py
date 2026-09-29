@@ -768,6 +768,12 @@ class Ctx:
                            and any(e[0] == E_ANTIDOTE for e in it.effects)]
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
         self.b_area = [it for it in self.b_off if has_area(it)]   # enemy items that splash
+        # their ready self heals (instant, over time, vitality), best HP per TP first
+        wis = 1 + max(0, B0['cur']['wisdom']) / 100.0
+        heals = [it for it in B0['items'] if not it.weapon and not it.offensive and not it.special
+                 and it.current_cooldown() <= 1 and any(e[0] in (E_HEAL, E_VITALITY) for e in it.effects)]
+        self.b_heals = sorted(heals, key=lambda it: -sum(avg(e) * max(1, e[3] or 0) for e in it.effects
+                                                          if e[0] in (E_HEAL, E_VITALITY)) * wis / max(1, it.cost))
         self.b_reach = {}
         self.replies = {}
         self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
@@ -781,11 +787,17 @@ class Ctx:
         self.ends: list = []   # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
         self.a_vals = {it.id: quick_value(it, A0, B0) for it in self.a_off}
+        # one turn of DIRECT damage (chase mode / kill reach): queued poison and
+        # shackles in a_vals are not damage this turn
+        direct = {}
+        for it in self.a_off:
+            c = copy_side(A0); t = copy_side(B0)
+            direct[it.id] = apply_item(it, c, t, {'tp': 0, 'mp': 0})
         tp = A0['tp_live']; kd = 0.0
-        for it in sorted(self.a_off, key=lambda i: -self.a_vals[i.id] / max(1, i.cost)):
+        for it in sorted(self.a_off, key=lambda i: -direct[i.id] / max(1, i.cost)):
             n = 0
-            while n < it.max_uses and it.cost <= tp and self.a_vals[it.id] > 0:
-                kd += self.a_vals[it.id]; tp -= it.cost; n += 1
+            while n < it.max_uses and it.cost <= tp and direct[it.id] > 0:
+                kd += direct[it.id]; tp -= it.cost; n += 1
         self.kill_dmg = kd
 
     def enemy_cells(self, mp):
@@ -838,6 +850,42 @@ def enemy_options(cx, our_cell, tp, mp):
     return opts
 
 
+G_HEAL_OT = VN_GROUP_OF.get(E_HEAL)
+
+
+def acts_cost(acts, weapon):
+    c = 0; held = weapon
+    for it in acts:
+        c += it.cost
+        if it.weapon and it.id != held:
+            c += 1; held = it.id
+    return c
+
+
+def enemy_heals(cx, t, tp):
+    """Their ready heals on themselves within `tp` TP (best HP per TP first,
+    each item once), while HP is missing. Applied to `t`; returns TP spent."""
+    spent = 0; s = {'tp': 0, 'mp': 0}
+    for it in cx.b_heals:
+        if t['max'] - t['life'] < 1:
+            break
+        if it.cost > tp - spent:
+            continue
+        apply_item(it, t, t, s); spent += it.cost
+    return spent
+
+
+def reply_net(a, b, ta, tb):
+    """Enemy's view of a reply: what they take off us (direct damage, max-HP
+    erosion, queued poison, shackles; valued like our own attacks) plus what
+    they gain (heal now + one tick of heal over time) minus what they lose
+    (damage return / life steal)."""
+    shk = sum(ta['groups'][k] - a['groups'][k] for k in ('shk_str', 'shk_mag', 'shk_tp', 'shk_mp'))
+    hot = (tb['groups'].get(G_HEAL_OT, 0) - b['groups'].get(G_HEAL_OT, 0)) if G_HEAL_OT else 0.0
+    return (a['life'] - ta['life']) + (ta['burn'] - a['burn']) + 0.55 * (ta['pf'] - a['pf']) + 2.0 * shk \
+        + (tb['life'] - b['life']) + hot
+
+
 def enemy_reply(cx, A1, B1, our_cell):
     """Apply the enemy's best reply to copies; returns (A2, B2, enemy_cell)."""
     a = copy_side(A1); b = copy_side(B1)
@@ -849,6 +897,9 @@ def enemy_reply(cx, A1, B1, our_cell):
         b['life'] -= dmg; b['max'] -= dmg * 0.10; b['burn'] += dmg * 0.10
     if b['life'] <= 0:
         return a, b, b['cell']
+    hot = b['groups'].get('heal_ot', 0)          # their heal over time ticks too
+    if hot > 0:
+        b['life'] = min(b['max'], b['life'] + hot)
     # antidote: clears every poison on them (+ its heal) when enough is queued
     anti_cost = 0
     if cx.b_antidote and b['pf'] >= ANTIDOTE_TRIGGER:
@@ -862,34 +913,52 @@ def enemy_reply(cx, A1, B1, our_cell):
     tp = max(0, int(B0['tp_live'] - d_tp - anti_cost)); mp = max(0, int(B0['mp_live'] - d_mp))
     b['cur']['strength'] -= d_str
     ret = int(a['groups'].get('dmg_return', 0))
-    key = (our_cell, tp, mp, int(d_str), ret, int(a['abs']), int(a['rel']))
+    key = (our_cell, tp, mp, int(d_str), ret, int(a['abs']), int(a['rel']), int((b['max'] - b['life']) // 100))
     rep = cx.replies.get(key)
     if rep is None:
-        # rational enemy: maximise (HP they take off us) - (HP they lose to our
-        # damage return / our life steal); not attacking (net 0) is always allowed
-        best = (0.0, B0['cell'], [], 1.0)       # (net, enemy cell, items, area factor)
+        # rational enemy: best of (heal only), (attack, then heal with the TP
+        # left) and (heal first, then attack with the TP left), valued by reply_net
         sab = (state_sig(a), state_sig(b))
+        tb = copy_side(b); enemy_heals(cx, tb, tp)
+        best = (reply_net(a, b, a, tb), B0['cell'], [], 1.0, False)   # (net, cell, items, factor, heal first)
+        heal_tp = 0
+        if cx.b_heals and b['max'] - b['life'] >= 1:
+            hb = copy_side(b); heal_tp = enemy_heals(cx, hb, tp)
         for sig, ec, acts, f in enemy_options(cx, our_cell, tp, mp):
-            nk = (sig, sab)
-            net = _NETS.get(nk)
-            if net is None:
-                ta = copy_side(a); tb = copy_side(b); ts = {'tp': 0, 'mp': 0}
-                for it in acts:
-                    if it.offensive:
-                        apply_item(it, tb, ta, ts, f)
-                net = (a['life'] - ta['life']) - (b['life'] - tb['life'])
-                _NETS[nk] = net
-            if net > best[0]:
-                best = (net, ec, acts, f)
-        rep = (best[1], best[2], best[3])
+            variants = [(False, acts)]
+            if heal_tp and f == 1.0:
+                acts2 = pack(ec, our_cell, cx.b_off, tp - heal_tp, B0['weapon'], cx.b_vals, 'raw', tag='enemy')
+                if acts2:
+                    variants.append((True, acts2))
+            for heal_first, av in variants:
+                nk = (heal_first, tuple(it.id for it in av), f, tp, sab)
+                net = _NETS.get(nk)
+                if net is None:
+                    ta = copy_side(a); tb = copy_side(b); ts = {'tp': 0, 'mp': 0}
+                    if heal_first:
+                        enemy_heals(cx, tb, tp)
+                    for it in av:
+                        if it.offensive:
+                            apply_item(it, tb, ta, ts, f)
+                    if not heal_first:
+                        enemy_heals(cx, tb, tp - acts_cost(av, B0['weapon']))
+                    net = reply_net(a, b, ta, tb)
+                    _NETS[nk] = net
+                if net > best[0]:
+                    best = (net, ec, av, f, heal_first)
+        rep = best[1:]
         cx.replies[key] = rep
-    ec, acts, f = rep
+    ec, acts, f, heal_first = rep
     s = {'tp': 0, 'mp': 0}
+    if heal_first:
+        enemy_heals(cx, b, tp)
     for it in acts:
         if it.offensive:
             apply_item(it, b, a, s, f)
         else:
             apply_item(it, b, b, s)
+    if not heal_first:
+        enemy_heals(cx, b, tp - acts_cost(acts, B0['weapon']))
     b['cell'] = ec
     return a, b, ec
 
