@@ -867,7 +867,7 @@ def enemy_reply(cx, A1, B1, our_cell):
     if rep is None:
         # rational enemy: maximise (HP they take off us) - (HP they lose to our
         # damage return / our life steal); not attacking (net 0) is always allowed
-        best = (0.0, B0['cell'], [])
+        best = (0.0, B0['cell'], [], 1.0)       # (net, enemy cell, items, area factor)
         sab = (state_sig(a), state_sig(b))
         for sig, ec, acts, f in enemy_options(cx, our_cell, tp, mp):
             nk = (sig, sab)
@@ -881,7 +881,7 @@ def enemy_reply(cx, A1, B1, our_cell):
                 _NETS[nk] = net
             if net > best[0]:
                 best = (net, ec, acts, f)
-        rep = (best[1], best[2], best[3] if len(best) > 3 else 1.0)
+        rep = (best[1], best[2], best[3])
         cx.replies[key] = rep
     ec, acts, f = rep
     s = {'tp': 0, 'mp': 0}
