@@ -14,7 +14,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from lw_api import LWSession
 
-LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}
+ACCOUNTS = {'main': ('18035', {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}),
+            'cure': ('17389', {'LeekRain': 19703, 'DawnFall': 21175, 'DuskHope': 129801, 'ProdigalSon': 130236})}
+LEEKS = dict(ACCOUNTS['main'][1]); FARMER = ['18035']
 
 
 def stats(lw, lid, since, until):
@@ -50,7 +52,7 @@ def stats(lw, lid, since, until):
                     m['dealt'] += a[2]
                     if a[1] in bulbs:
                         m['bulb_hits'] += 1
-        logs = (lw.get('/fight/get-logs/%d' % f0['id']) or {}).get('18035') or {}
+        logs = (lw.get('/fight/get-logs/%d' % f0['id']) or {}).get(FARMER[0]) or {}
         txt = [str(e[2]) for k in sorted(logs, key=int) for e in logs[k] if len(e) > 2]
         for i, t in enumerate(txt):
             if t.startswith('V10X T'):      # executed actions: 'libera:1' / 'libera:2' = cast (normal / critical)
@@ -73,10 +75,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--since', type=int, required=True)
     ap.add_argument('--until', type=int, default=2 ** 40)
-    ap.add_argument('--leeks', default=','.join(LEEKS))
+    ap.add_argument('--account', default='main', choices=sorted(ACCOUNTS))
+    ap.add_argument('--leeks', default='')
     a = ap.parse_args()
-    lw = LWSession('main')
-    for name in a.leeks.split(','):
+    global LEEKS
+    FARMER[0], LEEKS = ACCOUNTS[a.account]
+    lw = LWSession(a.account)
+    for name in (a.leeks.split(',') if a.leeks else list(LEEKS)):
         m = stats(lw, LEEKS[name], a.since, a.until)
         n, t = max(1, m['n']), max(1, m['turns'])
         print('%-17s %3d fights %5.1f%% W | no attack near %3d/%-3d (%4.1f%%) | splash %4.1f%% of weapon dmg taken | '

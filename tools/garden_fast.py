@@ -23,7 +23,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from lw_api import LWSession
 
-LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}
+ACCOUNTS = {'main': {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296},
+            'cure': {'LeekRain': 19703, 'DawnFall': 21175, 'DuskHope': 129801, 'ProdigalSon': 130236}}
+LEEKS = dict(ACCOUNTS['main'])
 BEATABLE, DANGEROUS, WINDOW, DECAY, SESSION_LOSS_LIMIT = 0.7, 0.45, 10, 0.8, 2
 
 
@@ -119,8 +121,8 @@ def select(db, opponents, banned):
     return random.choices(pool, weights=weights)[0]
 
 
-def run_leek(name, lid, n, inflight, bucket, lock, out):
-    lw = LWSession('main'); db = DB(lid)
+def run_leek(name, lid, n, inflight, bucket, lock, out, account='main'):
+    lw = LWSession(account); db = DB(lid)
 
     def get(path):
         bucket.take(); return lw.get(path)
@@ -177,12 +179,15 @@ def run_leek(name, lid, n, inflight, bucket, lock, out):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--per-leek', type=int, default=25)
-    ap.add_argument('--leeks', default=','.join(LEEKS))
+    ap.add_argument('--account', default='main', choices=sorted(ACCOUNTS))
+    ap.add_argument('--leeks', default='')
     ap.add_argument('--inflight', type=int, default=4, help='fights generating at once per leek')
     ap.add_argument('--rate', type=float, default=9.0)
     a = ap.parse_args()
-    lw = LWSession('main')
-    names = a.leeks.split(',')
+    global LEEKS
+    LEEKS = ACCOUNTS[a.account]
+    lw = LWSession(a.account)
+    names = a.leeks.split(',') if a.leeks else list(LEEKS)
 
     def talent(lid):
         l = lw.get('/leek/get/%d' % lid); l = l.get('leek', l); return int(l.get('talent', 0))
@@ -190,7 +195,7 @@ def main():
     g = lw.get('/garden/get'); g = g.get('garden', g)
     print('credits %s' % g.get('fights'), flush=True)
     t0 = time.time(); bucket = Bucket(a.rate); lock = threading.Lock(); out = {}
-    th = [threading.Thread(target=run_leek, args=(n, LEEKS[n], a.per_leek, a.inflight, bucket, lock, out)) for n in names]
+    th = [threading.Thread(target=run_leek, args=(n, LEEKS[n], a.per_leek, a.inflight, bucket, lock, out, a.account)) for n in names]
     for t in th:
         t.start()
     for t in th:
