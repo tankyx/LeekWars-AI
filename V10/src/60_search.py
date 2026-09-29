@@ -116,11 +116,17 @@ class Ctx:
         self.ends: list = []   # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
         self.a_vals = {it.id: quick_value(it, A0, B0) for it in self.a_off}
+        # one turn of DIRECT damage (chase mode / kill reach): queued poison and
+        # shackles in a_vals are not damage this turn
+        direct = {}
+        for it in self.a_off:
+            c = copy_side(A0); t = copy_side(B0)
+            direct[it.id] = apply_item(it, c, t, {'tp': 0, 'mp': 0})
         tp = A0['tp_live']; kd = 0.0
-        for it in sorted(self.a_off, key=lambda i: -self.a_vals[i.id] / max(1, i.cost)):
+        for it in sorted(self.a_off, key=lambda i: -direct[i.id] / max(1, i.cost)):
             n = 0
-            while n < it.max_uses and it.cost <= tp and self.a_vals[it.id] > 0:
-                kd += self.a_vals[it.id]; tp -= it.cost; n += 1
+            while n < it.max_uses and it.cost <= tp and direct[it.id] > 0:
+                kd += direct[it.id]; tp -= it.cost; n += 1
         self.kill_dmg = kd
 
     def enemy_cells(self, mp):
