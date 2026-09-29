@@ -716,6 +716,7 @@ STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 
 PRESSURE_T0 = 20
 IDLE = [0]          # consecutive turns in which neither side lost HP (set in turn())
 STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pressure
+HEALABLE_W = 0.6   # share of healable direct damage discounted (their ready heals would undo it)
 ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
 
@@ -816,6 +817,24 @@ class Ctx:
         self.b_antidote = [it for it in B0['items'] if not it.weapon and it.current_cooldown() <= 1
                            and any(e[0] == E_ANTIDOTE for e in it.effects)]
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
+        # their healing capacity next turn: ready heal / vitality chips (cooldown
+        # <= 1, from the engine), wisdom-scaled, best HP per TP within their TP.
+        # Values our damage by what survives it (burst when their heals are down).
+        wis = 1 + max(0, B0['cur'].get('wisdom', 0)) / 100.0
+        hl = []
+        for it in B0['items']:
+            if it.weapon or it.offensive or it.special or it.current_cooldown() > 1:
+                continue
+            if it.cooldown < 0:          # once per fight (regeneration...): no window to play around
+                continue
+            amt = sum(avg(e) for e in it.effects if e[0] in (E_HEAL, E_VITALITY)) * wis
+            if amt > 0:
+                hl.append((amt, it.cost))
+        tp = B0['tp_live']; hn = 0.0
+        for amt, cost in sorted(hl, key=lambda x: -x[0] / max(1, x[1])):
+            if cost <= tp:
+                hn += amt; tp -= cost
+        self.b_heal_next = hn
         self.b_area = [it for it in self.b_off if has_area(it)]   # enemy items that splash
         self.b_reach = {}
         self.replies = {}
@@ -1280,7 +1299,9 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             # play our strengths: lasting damage counts too (queued poison at half,
             # max HP burned by nova / erosion in full), not only direct hits
             lasting = 0.5 * max(0.0, B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
-            v += AGGR * pr * (dealt + lasting) / max(1.0, B['max'])
+            # direct damage their ready heals can undo next turn counts less
+            healable = min(dealt, cx.b_heal_next)
+            v += AGGR * pr * (dealt - HEALABLE_W * healable + lasting) / max(1.0, B['max'])
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
             de = dist(e, ecell)
             if de > maxr:
@@ -1453,6 +1474,8 @@ def turn():
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
         cxl = LAST_CX
+        if cxl is not None:
+            log('V10H T%d their heal capacity next turn %.0f' % (Fight.turn, cxl.b_heal_next))
         if cxl is not None and info and info[0] <= 0:
             log('V10A T%d no damage chosen; attacking plans evaluated=%d best=%.3f dealt=%.0f | %s' % (
                 Fight.turn, cxl.n_atk, cxl.best_atk[0], cxl.best_atk[1], cxl.best_atk[2]))

@@ -140,6 +140,8 @@ def turn():
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
         cxl = LAST_CX
+        if cxl is not None:
+            log('V10H T%d their heal capacity next turn %.0f' % (Fight.turn, cxl.b_heal_next))
         if cxl is not None and info and info[0] <= 0:
             log('V10A T%d no damage chosen; attacking plans evaluated=%d best=%.3f dealt=%.0f | %s' % (
                 Fight.turn, cxl.n_atk, cxl.best_atk[0], cxl.best_atk[1], cxl.best_atk[2]))
