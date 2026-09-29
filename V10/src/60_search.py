@@ -561,7 +561,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
                     continue
             v = 1.1 if B1['life'] <= 0 else leaf(cx, A1, B1, e, t)
             # certain damage now is worth more than the model's uncertain future
-            v += AGGR * dealt / max(1.0, B['max'])
+            # play our strengths: lasting damage counts too (queued poison at half,
+            # max HP burned by nova / erosion in full), not only direct hits
+            lasting = 0.5 * max(0.0, B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
+            v += AGGR * (dealt + lasting) / max(1.0, B['max'])
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
             de = dist(e, ecell)
             if de > maxr:
