@@ -105,7 +105,11 @@ def fallback(enemy):
         log('V10 fallback error ' + type(ex).__name__ + ': ' + str(ex)[:200])
 
 
+LAST_LIVES = (-1, -1)      # (our life, enemy life) at our previous turn; -1 = none yet
+
+
 def turn():
+    global LAST_LIVES
     enemy = main_enemy()
     if enemy is None:
         return
@@ -116,6 +120,13 @@ def turn():
         mine = [x for x in Fight.getAliveAllies()]
         theirs = [x for x in Fight.getAliveEnemies()]
         track_burn(m); track_burn(enemy)
+        # standoff tracker: turns in a row where neither we nor the enemy lost HP
+        lives = (m.life, enemy.life)
+        if LAST_LIVES[0] >= 0 and lives[0] >= LAST_LIVES[0] and lives[1] >= LAST_LIVES[1]:
+            IDLE[0] += 1
+        else:
+            IDLE[0] = 0
+        LAST_LIVES = lives
         A = snapshot(m, mine)
         B = snapshot(enemy, theirs)
         w = m.weapon

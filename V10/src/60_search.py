@@ -13,6 +13,16 @@ FOLLOW_KILL = 0.9
 CHASE_KILL = 0.95
 AGGR = 0.3        # value of certain damage now, per full enemy HP bar
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
+# draw breaking: at turn 64 both alive = draw, so waiting loses value as the
+# fight drags on. Pressure multiplies the damage-now and anti-stall terms:
+# 1 until PRESSURE_T0, then +1 per 10 turns (x5 at turn 60), +0.5 per idle turn
+PRESSURE_T0 = 20
+IDLE = [0]          # consecutive turns in which neither side lost HP (set in turn())
+STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pressure
+
+
+def pressure(t):
+    return 1.0 + max(0.0, (t - PRESSURE_T0) / 10.0) + 0.5 * min(IDLE[0], 6)
 FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizon effect)
 DIAG = False
 LAST_CX = None     # Ctx of the last search (read by leftover spending)
@@ -545,6 +555,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             break
         k += 1
     best = (-1.0, None, None); evaluated = 0
+    pr = pressure(t)
     diag_best = None
     for _, _, _, plan, r in order:
         if over():
@@ -570,11 +581,14 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             # play our strengths: lasting damage counts too (queued poison at half,
             # max HP burned by nova / erosion in full), not only direct hits
             lasting = 0.5 * max(0.0, B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
-            v += AGGR * (dealt + lasting) / max(1.0, B['max'])
+            v += AGGR * pr * (dealt + lasting) / max(1.0, B['max'])
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
             de = dist(e, ecell)
             if de > maxr:
-                v -= STALL_W * (de - maxr) * min(1.0, t / 8.0)
+                v -= STALL_W * pr * (de - maxr) * min(1.0, t / 8.0)
+            # standoff (nobody lost HP for 2+ turns): hiding without dealing damage costs more
+            if IDLE[0] >= 2 and dealt <= 0 and not geo(e, ecell)[1]:
+                v -= STANDOFF_W * pr
             evaluated += 1
             if dealt > 0:
                 cx.n_atk += 1
