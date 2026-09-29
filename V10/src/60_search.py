@@ -360,7 +360,11 @@ def useful_now(it, A, B, cx):
     return True
 
 
-def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
+MAX_BULB_TARGETS = 3
+MAX_BULB_CELLS = 8
+
+
+def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
     t = Fight.turn
     cx = Ctx(A, B)
     global LAST_CX
@@ -444,6 +448,23 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
                     plans.append([('move', c1)] + [('use', it, ecell) for it in p1]
                                  + [('move', c2)] + [('use', it, ecell) for it in p2])
                     groups.append('split')
+    # enemy summons as targets: they block LoS to the summoner and hit us
+    bulb_map = {}
+    if bulbs:
+        by_steps = sorted(reach.items(), key=lambda kv: kv[1])
+        for bs in sorted(bulbs, key=lambda s: dist(cell0, s['cell']))[:MAX_BULB_TARGETS]:
+            bc = bs['cell']; bulb_map[bc] = bs; n = 0
+            for c, st in by_steps:
+                if n >= MAX_BULB_CELLS or over(0.5):
+                    break
+                if dist(c, bc) > maxr:
+                    continue
+                att = pack(c, bc, offensive, tp0, weapon0, vals, 'ratio', tag='bulb')
+                if not att:
+                    continue
+                n += 1
+                plans.append(([('move', c)] if c != cell0 else []) + [('use', it, bc) for it in att])
+                groups.append('bulb')
     if selfish:
         tp = tp0; st = []
         for it in sorted(selfish, key=lambda i: i.cost):
@@ -463,7 +484,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
         seen[sig] = 1
         if ops() > p1_stop and groups[i] != 'none':
             continue
-        r = run_plan(plan, A, B, cell0, tp0, mp0, weapon0)
+        r = run_plan(plan, A, B, cell0, tp0, mp0, weapon0, bulb_map)
         if r is None:
             continue
         by_g.setdefault(groups[i], []).append((0 if r[1]['life'] <= 0 else 1, -r[3], i, plan, r))

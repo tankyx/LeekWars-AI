@@ -102,12 +102,15 @@ def self_hit(it, frm, tgt):
     return r > 0 and dist(frm, tgt) <= r
 
 
-def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0):
+BULB_W = 0.5    # damage to a summon counts half as "damage dealt" (a kill also lowers their summon count)
+
+
+def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
     """Apply plan steps to copies. Returns (A, B, end_cell, dealt) or None if
     any step is illegal."""
     A = copy_side(A0); B = copy_side(B0)
     sim = {'tp': tp0, 'mp': mp0, 'weapon': weapon0, 'uses': {}}
-    cell = cell0; dealt = 0.0
+    cell = cell0; dealt = 0.0; hit = {}
     for st in plan:
         if st[0] == 'move':
             if st[1] == cell:
@@ -128,6 +131,19 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0):
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
                 dealt += apply_item(it, A, B, sim)
+            elif bulbs and tgt in bulbs and it.offensive:
+                if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
+                    return None
+                bs = hit.get(tgt)
+                if bs is None:
+                    bs = copy_side(bulbs[tgt]); hit[tgt] = bs
+                if bs['life'] <= 0:
+                    return None            # already dead: the shot would be wasted
+                before = bs['life']
+                apply_item(it, A, bs, sim)
+                dealt += BULB_W * (before - bs['life'])
+                if bs['life'] <= 0:
+                    B['summons'] = max(0, B['summons'] - 1)
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell

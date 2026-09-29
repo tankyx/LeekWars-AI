@@ -229,6 +229,14 @@ def snapshot(ent, team_alive):
             'weapon': (ent.weapon.id if ent.weapon is not None else -1)}
 
 
+def bulb_side(ent):
+    """Light state of an enemy summon, as a target only (HP, shields, effect
+    groups); its own kit is not modelled."""
+    return {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life or 0, 'max': ent.maxLife or 1,
+            'abs': ent.absoluteShield or 0, 'rel': ent.relativeShield or 0,
+            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0}
+
+
 def copy_side(s):
     c = s.copy()
     c['groups'] = s['groups'].copy()
@@ -522,12 +530,15 @@ def self_hit(it, frm, tgt):
     return r > 0 and dist(frm, tgt) <= r
 
 
-def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0):
+BULB_W = 0.5    # damage to a summon counts half as "damage dealt" (a kill also lowers their summon count)
+
+
+def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
     """Apply plan steps to copies. Returns (A, B, end_cell, dealt) or None if
     any step is illegal."""
     A = copy_side(A0); B = copy_side(B0)
     sim = {'tp': tp0, 'mp': mp0, 'weapon': weapon0, 'uses': {}}
-    cell = cell0; dealt = 0.0
+    cell = cell0; dealt = 0.0; hit = {}
     for st in plan:
         if st[0] == 'move':
             if st[1] == cell:
@@ -548,6 +559,19 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0):
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
                 dealt += apply_item(it, A, B, sim)
+            elif bulbs and tgt in bulbs and it.offensive:
+                if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
+                    return None
+                bs = hit.get(tgt)
+                if bs is None:
+                    bs = copy_side(bulbs[tgt]); hit[tgt] = bs
+                if bs['life'] <= 0:
+                    return None            # already dead: the shot would be wasted
+                before = bs['life']
+                apply_item(it, A, bs, sim)
+                dealt += BULB_W * (before - bs['life'])
+                if bs['life'] <= 0:
+                    B['summons'] = max(0, B['summons'] - 1)
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell
@@ -916,7 +940,11 @@ def useful_now(it, A, B, cx):
     return True
 
 
-def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
+MAX_BULB_TARGETS = 3
+MAX_BULB_CELLS = 8
+
+
+def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
     t = Fight.turn
     cx = Ctx(A, B)
     global LAST_CX
@@ -1000,6 +1028,23 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
                     plans.append([('move', c1)] + [('use', it, ecell) for it in p1]
                                  + [('move', c2)] + [('use', it, ecell) for it in p2])
                     groups.append('split')
+    # enemy summons as targets: they block LoS to the summoner and hit us
+    bulb_map = {}
+    if bulbs:
+        by_steps = sorted(reach.items(), key=lambda kv: kv[1])
+        for bs in sorted(bulbs, key=lambda s: dist(cell0, s['cell']))[:MAX_BULB_TARGETS]:
+            bc = bs['cell']; bulb_map[bc] = bs; n = 0
+            for c, st in by_steps:
+                if n >= MAX_BULB_CELLS or over(0.5):
+                    break
+                if dist(c, bc) > maxr:
+                    continue
+                att = pack(c, bc, offensive, tp0, weapon0, vals, 'ratio', tag='bulb')
+                if not att:
+                    continue
+                n += 1
+                plans.append(([('move', c)] if c != cell0 else []) + [('use', it, bc) for it in att])
+                groups.append('bulb')
     if selfish:
         tp = tp0; st = []
         for it in sorted(selfish, key=lambda i: i.cost):
@@ -1019,7 +1064,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
         seen[sig] = 1
         if ops() > p1_stop and groups[i] != 'none':
             continue
-        r = run_plan(plan, A, B, cell0, tp0, mp0, weapon0)
+        r = run_plan(plan, A, B, cell0, tp0, mp0, weapon0, bulb_map)
         if r is None:
             continue
         by_g.setdefault(groups[i], []).append((0 if r[1]['life'] <= 0 else 1, -r[3], i, plan, r))
@@ -1130,36 +1175,40 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     if enemy.cell is None or (enemy.life or 0) <= 0:
         return 'enemy dead'
     _GEO.clear()                       # we moved: LoS between cells may have changed
-    ecell = enemy.cell.id
-    for _ in range(12):
-        done = False
-        for it in sorted([i for i in items if i.offensive and not i.special], key=lambda i: -i.cost):
-            if it.cost > m.tp:
-                continue
-            # range / launch line / LoS / self-hit first: a weapon switch costs 1 TP
-            if not usable_from(m.cell.id, ecell, [it]):
-                continue
-            if used is not None and used.get(it.id, 0) >= it.max_uses:
-                continue
-            if it.weapon:
-                if (m.weapon is None or m.weapon.id != it.id):
-                    if it.cost + 1 > m.tp:
-                        continue
-                    m.setWeapon(it.obj)
-                if m.canUseWeapon(enemy):
-                    r = m.useWeapon(enemy)
-                    if used is not None:
-                        used[it.id] = used.get(it.id, 0) + 1
+    # the main enemy first, then its summons (nearest first)
+    targets = [enemy] + sorted([x for x in Fight.getAliveEnemies() if x.summoned and x.cell is not None],
+                               key=lambda x: me().distance(x) or 99)
+    for tgt_ent in targets:
+        ecell = tgt_ent.cell.id
+        for _ in range(12):
+            done = False
+            for it in sorted([i for i in items if i.offensive and not i.special], key=lambda i: -i.cost):
+                if it.cost > m.tp:
+                    continue
+                # range / launch line / LoS / self-hit first: a weapon switch costs 1 TP
+                if not usable_from(m.cell.id, ecell, [it]):
+                    continue
+                if used is not None and used.get(it.id, 0) >= it.max_uses:
+                    continue
+                if it.weapon:
+                    if (m.weapon is None or m.weapon.id != it.id):
+                        if it.cost + 1 > m.tp:
+                            continue
+                        m.setWeapon(it.obj)
+                    if m.canUseWeapon(tgt_ent):
+                        r = m.useWeapon(tgt_ent)
+                        if used is not None:
+                            used[it.id] = used.get(it.id, 0) + 1
+                        if r is not None and r > 0:
+                            trace.append('+%s:%s' % (it.name[:6], r)); done = True
+                            break
+                elif it.current_cooldown() == 0 and m.canUseChip(it.obj, tgt_ent):
+                    r = m.useChip(it.obj, tgt_ent)
                     if r is not None and r > 0:
                         trace.append('+%s:%s' % (it.name[:6], r)); done = True
                         break
-            elif it.current_cooldown() == 0 and m.canUseChip(it.obj, enemy):
-                r = m.useChip(it.obj, enemy)
-                if r is not None and r > 0:
-                    trace.append('+%s:%s' % (it.name[:6], r)); done = True
-                    break
-        if not done:
-            break
+            if not done:
+                break
     for it in [i for i in items if i.self_cast and not i.special]:
         if A is not None and not useful_now(it, A, B, cx):
             continue
@@ -1199,7 +1248,8 @@ def turn():
         A = snapshot(m, mine)
         B = snapshot(enemy, theirs)
         w = m.weapon
-        best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'])
+        bulbs = [bulb_side(x) for x in theirs if x.summoned and (x.life or 0) > 0 and x.cell is not None]
+        best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs)
         v, plan, info = best
         if plan is None:
             fallback(enemy)
