@@ -87,6 +87,7 @@ def talent(lw, lid):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--accounts', default='main,cure', help='comma list (default both)')
+    ap.add_argument('--cap', type=int, default=100, help='max fights per account per run (bought fights stay for manual batches)')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
@@ -100,7 +101,8 @@ def main():
                 continue
             lw = LWSession(acct)
             avail = credits(lw)
-            print('%s: %d credits' % (acct, avail), flush=True)
+            print('%s: %d credits, spending up to %d' % (acct, avail, a.cap), flush=True)
+            avail = min(avail, a.cap)
             per = {lid: avail // len(leeks) + (1 if k < avail % len(leeks) else 0) for k, (_, lid) in enumerate(leeks)}
             for name, lid in leeks:
                 tot = [0, 0, 0, 0]

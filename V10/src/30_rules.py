@@ -27,16 +27,20 @@ def _replaces(it, t, T, S):
     return False
 
 
-def apply_item(it, C, T, S):
+def apply_item(it, C, T, S, f=1.0):
     """Apply item `it` cast by side C on target side T (T is C for self casts).
-    S = sim scalars (tp/mp) mutated for TP/MP buffs. Returns direct damage."""
+    S = sim scalars (tp/mp) mutated for TP/MP buffs; f = area power factor on
+    T (1 - 0.2 x distance to the aimed cell). Returns direct damage."""
     cur = C['cur']; pw = 1 + C['power'] / 100.0
     crit_p = min(1.0, max(0, cur['agility']) / 1000.0)
     critf = 1 + 0.3 * crit_p
     dealt = 0.0
+    scaled = f != 1.0 and T is not C
     for t, a, turns, nonstack in it.fx:
         if nonstack and _replaces(it, t, T, S):
             continue
+        if scaled:
+            a = a * f
         if t == E_DAMAGE and T is not C:
             d = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf
             d = max(0.0, d - d * T['rel'] / 100.0 - T['abs'])

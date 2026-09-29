@@ -7,6 +7,7 @@ DMG_BUFFS = {E_BUFF_STR, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_POW, E_BUFF_TP, 
 MAX_ATTACK_CELLS = 32
 MAX_END_CELLS = 10
 MAX_ENEMY_CELLS = 40
+MAX_SPLASH_CELLS = 12   # cells per side tried for an area shot aimed next to the target
 ANTIDOTE_TRIGGER = 250   # queued poison (HP) at which a rational enemy spends its antidote
 FOLLOW_KILL = 0.9
 CHASE_KILL = 0.95
@@ -37,8 +38,7 @@ def usable_from(cell, tcell, items):
             continue
         if it.los and not los:
             continue
-        r = AREA_RADIUS.get(it.area, 0)
-        if r > 0 and d <= r:       # the area would hit the caster
+        if has_area(it) and in_area(it.area, tcell, cell) > 0:   # the area would hit the caster
             continue
         out.append(it)
     return out
@@ -98,6 +98,7 @@ class Ctx:
         self.b_antidote = [it for it in B0['items'] if not it.weapon and it.current_cooldown() <= 1
                            and any(e[0] == E_ANTIDOTE for e in it.effects)]
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
+        self.b_area = [it for it in self.b_off if has_area(it)]   # enemy items that splash
         self.b_reach = {}
         self.replies = {}
         self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
@@ -134,26 +135,36 @@ def enemy_options(cx, our_cell, tp, mp):
     opts = cx.b_opts.get(ok)
     if opts is not None:
         return opts
-    opts = []; tried = {}; seen_geo = {}; n = 0
+    opts = []; tried = {}; seen_geo = {}; n = 0; ns = 0
     ox, oy = cxy(our_cell); maxr = cx.b_maxr
+    area = cx.b_area
+    reach = maxr + (2 if area else 0)
     for ec, ex, ey in cx.enemy_cells(mp):
         if n >= MAX_ENEMY_CELLS or (n & 7 == 0 and over()):
             break
-        if abs(ex - ox) + abs(ey - oy) > maxr:
+        d = abs(ex - ox) + abs(ey - oy)
+        if d > reach:
             continue
         n += 1
-        g = geo(ec, our_cell)
-        if g in seen_geo:              # same distance / LoS / line: same attack
-            continue
-        seen_geo[g] = 1
-        acts = pack(ec, our_cell, cx.b_off, tp, cx.B0['weapon'], cx.b_vals, 'raw', tag='enemy')
+        acts = None; f = 1.0
+        if d <= maxr:
+            g = geo(ec, our_cell)
+            if g not in seen_geo:          # same distance / LoS / line: same attack
+                seen_geo[g] = 1
+                acts = pack(ec, our_cell, cx.b_off, tp, cx.B0['weapon'], cx.b_vals, 'raw', tag='enemy')
+        if not acts and area and ns < MAX_SPLASH_CELLS:
+            # no direct shot: an area item aimed next to us still catches us
+            ns += 1
+            sp = splash_pack(ec, our_cell, area, tp, cx.B0['weapon'], cx.b_vals, 'raw', 'esplash')
+            if sp:
+                f, acts = sp[1], sp[2]
         if not acts:
             continue
-        sig = tuple(it.id for it in acts)
+        sig = (f,) + tuple(it.id for it in acts)
         if sig in tried:           # same attack from a farther cell
             continue
         tried[sig] = 1
-        opts.append((sig, ec, acts))
+        opts.append((sig, ec, acts, f))
     cx.b_opts[ok] = opts
     return opts
 
@@ -189,25 +200,25 @@ def enemy_reply(cx, A1, B1, our_cell):
         # damage return / our life steal); not attacking (net 0) is always allowed
         best = (0.0, B0['cell'], [])
         sab = (state_sig(a), state_sig(b))
-        for sig, ec, acts in enemy_options(cx, our_cell, tp, mp):
+        for sig, ec, acts, f in enemy_options(cx, our_cell, tp, mp):
             nk = (sig, sab)
             net = _NETS.get(nk)
             if net is None:
                 ta = copy_side(a); tb = copy_side(b); ts = {'tp': 0, 'mp': 0}
                 for it in acts:
                     if it.offensive:
-                        apply_item(it, tb, ta, ts)
+                        apply_item(it, tb, ta, ts, f)
                 net = (a['life'] - ta['life']) - (b['life'] - tb['life'])
                 _NETS[nk] = net
             if net > best[0]:
-                best = (net, ec, acts)
-        rep = (best[1], best[2])
+                best = (net, ec, acts, f)
+        rep = (best[1], best[2], best[3] if len(best) > 3 else 1.0)
         cx.replies[key] = rep
-    ec, acts = rep
+    ec, acts, f = rep
     s = {'tp': 0, 'mp': 0}
     for it in acts:
         if it.offensive:
-            apply_item(it, b, a, s)
+            apply_item(it, b, a, s, f)
         else:
             apply_item(it, b, b, s)
     b['cell'] = ec
@@ -448,6 +459,23 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
                     plans.append([('move', c1)] + [('use', it, ecell) for it in p1]
                                  + [('move', c2)] + [('use', it, ecell) for it in p2])
                     groups.append('split')
+    # area items aimed next to the enemy from cells with no direct shot
+    # (behind an obstacle or a summon, the splash still reaches it)
+    area_ours = [it for it in offensive if has_area(it)]
+    if area_ours:
+        direct = {c: 1 for c in cells}; tries = 0
+        for c, st in sorted(reach.items(), key=lambda kv: kv[1]):
+            if tries >= MAX_SPLASH_CELLS or over(0.5):
+                break
+            if c in direct or dist(c, ecell) > maxr + 2:
+                continue
+            tries += 1
+            for pre in prefixes[:2]:
+                pre_cost = sum(s_[1].cost for s_ in pre)
+                sp = splash_pack(c, ecell, area_ours, tp0 - pre_cost, weapon0, vals, 'ratio', 'splash')
+                if sp:
+                    plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, sp[0]) for it in sp[2]])
+                    groups.append('splash')
     # enemy summons as targets: they block LoS to the summoner and hit us
     bulb_map = {}
     if bulbs:

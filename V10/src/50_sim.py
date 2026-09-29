@@ -97,9 +97,69 @@ def can_use(it, frm, tgt, sim):
     return True
 
 
+def in_area(area, t, c):
+    """Power factor of cell `c` in the area of an item aimed at `t` (engine:
+    1 - 0.2 x distance to the aimed cell), 0 when `c` is outside the area.
+    Laser lines and special areas count as single-cell here."""
+    tx, ty = cxy(t); qx, qy = cxy(c)
+    dx = abs(tx - qx); dy = abs(ty - qy); m = dx + dy
+    if area in (3, 4, 5):
+        ok = m <= area - 2
+    elif area in (6, 7):
+        ok = (dx == 0 or dy == 0) and m <= area - 4
+    elif area in (8, 9, 10):
+        ok = dx == dy and dx <= area - 7
+    elif area in (11, 12):
+        ok = max(dx, dy) <= area - 10
+    else:
+        ok = m == 0
+    return max(0.0, 1.0 - 0.2 * m) if ok else 0.0
+
+
+_AIMS = {}     # cell -> [(aim cell, distance)] within 2 cells, walls excluded (static per fight)
+
+
+def aim_cells(c):
+    """Cells an area item could be aimed at to catch `c` (distance 1-2,
+    nearest first, obstacles excluded)."""
+    r = _AIMS.get(c)
+    if r is None:
+        x, y = cxy(c); r = []
+        for dx in (-2, -1, 0, 1, 2):
+            for dy in (-2, -1, 0, 1, 2):
+                m = abs(dx) + abs(dy)
+                if m == 0 or m > 2:
+                    continue
+                n = Field.cellFromXY(x + dx, y + dy)
+                if n is None or n.obstacle:
+                    continue
+                _XY[n.id] = (x + dx, y + dy)
+                r.append((n.id, m))
+        r.sort(key=lambda p: p[1])
+        _AIMS[c] = r
+    return r
+
+
+def splash_pack(frm, target, items, tp, weapon, vals, key, tag):
+    """Best area attack on `target` aimed at a nearby cell from `frm` (used when
+    no direct shot exists): (aim cell, factor, items) or None."""
+    for t, m in aim_cells(target):
+        its = [it for it in items if in_area(it.area, t, target) > 0]
+        if not its or dist(frm, t) > max(it.maxr for it in its):
+            continue
+        att = pack(frm, t, its, tp, weapon, vals, key, tag=(tag, tuple(i.id for i in its)))
+        if att:
+            return t, in_area(att[0].area, t, target), att
+    return None
+
+
+def has_area(it):
+    return it.area in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+
+
 def self_hit(it, frm, tgt):
     r = AREA_RADIUS.get(it.area, 0)
-    return r > 0 and dist(frm, tgt) <= r
+    return r > 0 and has_area(it) and in_area(it.area, tgt, frm) > 0
 
 
 BULB_W = 0.5    # damage to a summon counts half as "damage dealt" (a kill also lowers their summon count)
@@ -144,6 +204,14 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
                 dealt += BULB_W * (before - bs['life'])
                 if bs['life'] <= 0:
                     B['summons'] = max(0, B['summons'] - 1)
+            elif it.offensive and has_area(it):
+                # aimed next to the enemy: the area catches it at reduced power
+                f = in_area(it.area, tgt, B['cell'])
+                if f <= 0:
+                    return None
+                if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
+                    return None
+                dealt += apply_item(it, A, B, sim, f)
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell

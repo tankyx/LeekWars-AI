@@ -64,6 +64,9 @@ def main():
             sub = [p for p in ok if p[idx] == v]
             print('  %-8s %-20s A %4.1f  B %4.1f  / %d' % (key, v, sum(p[3] for p in sub), sum(p[4] for p in sub), len(sub)))
     bw = sum(1 for p in ok if p[4] > p[3]); aw = sum(1 for p in ok if p[3] > p[4])
+    for p in ok:
+        if p[3] != p[4]:
+            print('  discordant: %s vs %s seed %d  A %.1f  B %.1f' % p)
     print('discordant pairs: B better %d, A better %d  -> sign test p = %.3f' % (bw, aw, sign_test(bw, bw + aw)))
 
 

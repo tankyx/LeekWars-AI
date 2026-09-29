@@ -55,13 +55,38 @@ def main():
     ap.add_argument('--seeds', type=int, default=4)
     ap.add_argument('--a', required=True); ap.add_argument('--b', required=True)
     ap.add_argument('--account', default='main')
+    ap.add_argument('--interleave', action='store_true', help='A then B per (opponent, seed): pairs stay complete if the challenge allowance runs out')
     a = ap.parse_args()
     lw = LWSession(a.account)
     orig = leek_ai(lw, a.leek)
     opps = [int(x) for x in a.opps.split(',')]
     fights = {}; res = {}
     try:
-        for arm, path in (('A', a.a), ('B', a.b)):
+        if a.interleave:
+            stop = False
+            for o in opps:
+                for s in range(1, a.seeds + 1):
+                    for arm, path in (('A', a.a), ('B', a.b)):
+                        post(lw, '/leek/set-ai', {'leek_id': a.leek, 'ai_path': path})
+                        r = post(lw, '/garden/start-solo-challenge', {'leek_id': a.leek, 'target_id': o, 'seed': s, 'side': 0})
+                        fid = r if isinstance(r, int) else (r.get('fight') if isinstance(r, dict) else None)
+                        if not fid:
+                            print('  %s opp %d seed %d: %s' % (arm, o, s, str(r)[:120]), flush=True)
+                            stop = 'not_enought' in str(r)
+                            break
+                        fights[(arm, o, s)] = fid
+                        for _ in range(60):
+                            rr = result(lw, fid, a.leek)
+                            if rr is not None:
+                                res[(arm, o, s)] = rr
+                                break
+                            time.sleep(3)
+                    if stop:
+                        break
+                if stop:
+                    break
+            print('%d challenges played' % len(fights), flush=True)
+        for arm, path in (() if a.interleave else (('A', a.a), ('B', a.b))):
             post(lw, '/leek/set-ai', {'leek_id': a.leek, 'ai_path': path})
             if leek_ai(lw, a.leek) != path:
                 sys.exit('could not set %s' % path)
