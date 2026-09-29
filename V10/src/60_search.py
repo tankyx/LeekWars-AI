@@ -105,10 +105,10 @@ class Ctx:
         self.last_reply = 0.0
         self.last_leaf: object = None
         self.best_leaf: object = None
-        self.best_atk = (-1.0, 0.0, '')   # best plan that deals damage: (value, dealt, desc)
+        self.best_atk: tuple = (-1.0, 0.0, '')   # best plan that deals damage: (value, dealt, desc)
         self.n_atk = 0                    # attacking plans evaluated
         self.plen = {}         # (from, to) -> path length
-        self.ends = None       # (near, far, hidden) end cells, independent of the plan
+        self.ends: list = []   # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
         self.a_vals = {it.id: quick_value(it, A0, B0) for it in self.a_off}
         tp = A0['tp_live']; kd = 0.0
@@ -325,7 +325,7 @@ def _leaf(cx, A1, B1, our_cell, turn):
 def end_cells(cx, from_cell, reach, ecell):
     """Stay, approach (nearest to the enemy), retreat (farthest) and hidden
     cells; validated later by real path length."""
-    if cx.ends is None:
+    if not cx.ends:
         by_d = sorted(reach, key=lambda c: dist(c, ecell))
         hidden = [c for c in by_d[::-1][:60] if not Field.lineOfSight(c, ecell)][:8]
         cx.ends = by_d[:10] + by_d[::-1][:8] + hidden
