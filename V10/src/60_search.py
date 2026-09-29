@@ -7,6 +7,7 @@ DMG_BUFFS = {E_BUFF_STR, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_POW, E_BUFF_TP, 
 MAX_ATTACK_CELLS = 18
 MAX_END_CELLS = 10
 MAX_ENEMY_CELLS = 24
+ANTIDOTE_TRIGGER = 250   # queued poison (HP) at which a rational enemy spends its antidote
 FOLLOW_KILL = 0.9
 CHASE_KILL = 0.95
 AGGR = 0.3        # value of certain damage now, per full enemy HP bar
@@ -25,29 +26,43 @@ def quick_value(it, C, T):
 
 
 def usable_from(cell, tcell, items):
-    out = []
-    d = Field.cellDistance(cell, tcell)
+    d, los, line, diag = geo(cell, tcell)
     if d is None:
-        return out
-    los = None
+        return []
+    out = []
     for it in items:
         if d < it.minr or d > it.maxr:
             continue
-        if cell != tcell and not launch_ok(it, cell, tcell):
+        if cell != tcell and not launch_geo(it.launch, line, diag):
             continue
-        if it.los and cell != tcell:
-            if los is None:
-                los = bool(Field.lineOfSight(cell, tcell))
-            if not los:
-                continue
-        if self_hit(it, cell, tcell):
+        if it.los and not los:
+            continue
+        r = AREA_RADIUS.get(it.area, 0)
+        if r > 0 and d <= r:       # the area would hit the caster
             continue
         out.append(it)
     return out
 
 
-def pack(cell, tcell, items, tp, weapon, vals, key):
-    """Greedy packing of `items` usable from `cell` on `tcell` under `tp`."""
+_PACKS = {}    # geometry-keyed pack cache, cleared every turn
+
+
+def pack(cell, tcell, items, tp, weapon, vals, key, tag=None):
+    """Greedy packing of `items` usable from `cell` on `tcell` under `tp`.
+    With `tag` the result is cached by geometry (usability only depends on
+    distance, LoS and line/diagonal), shared across cells."""
+    if tag is not None:
+        g = geo(cell, tcell)
+        ck = (tag, key, tp, weapon, g[0], g[1], g[2], g[3], cell == tcell)
+        r = _PACKS.get(ck)
+        if r is None:
+            r = _pack(cell, tcell, items, tp, weapon, vals, key)
+            _PACKS[ck] = r
+        return r
+    return _pack(cell, tcell, items, tp, weapon, vals, key)
+
+
+def _pack(cell, tcell, items, tp, weapon, vals, key):
     usable = [it for it in usable_from(cell, tcell, items) if vals.get(it.id, 0) > 0]
     if key == 'ratio':
         order = sorted(usable, key=lambda it: -vals[it.id] / max(1, it.cost))
@@ -80,9 +95,13 @@ class Ctx:
         # enemy chips ready at the start of their next turn (cooldowns tick then)
         self.b_off = [it for it in B0['items'] if it.offensive and not it.special and it.current_cooldown() <= 1]
         self.b_vals = {it.id: quick_value(it, B0, A0) for it in self.b_off}
+        self.b_antidote = [it for it in B0['items'] if not it.weapon and it.current_cooldown() <= 1
+                           and any(e[0] == E_ANTIDOTE for e in it.effects)]
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
         self.b_reach = {}
         self.replies = {}
+        self.plen = {}         # (from, to) -> path length
+        self.ends = None       # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
         self.a_vals = {it.id: quick_value(it, A0, B0) for it in self.a_off}
         tp = A0['tp_live']; kd = 0.0
@@ -93,8 +112,10 @@ class Ctx:
         self.kill_dmg = kd
 
     def enemy_cells(self, mp):
+        """[(cell, x, y)] the enemy reaches with `mp`, nearest (in steps) first."""
         if mp not in self.b_reach:
-            self.b_reach[mp] = reachable(self.B0['cell'], mp)
+            r = reachable(self.B0['cell'], mp)
+            self.b_reach[mp] = [(c,) + cxy(c) for c, st in sorted(r.items(), key=lambda kv: kv[1])]
         return self.b_reach[mp]
 
 
@@ -109,10 +130,17 @@ def enemy_reply(cx, A1, B1, our_cell):
         b['life'] -= dmg; b['max'] -= dmg * 0.10; b['burn'] += dmg * 0.10
     if b['life'] <= 0:
         return a, b, b['cell']
+    # antidote: clears every poison on them (+ its heal) when enough is queued
+    anti_cost = 0
+    if cx.b_antidote and b['pf'] >= ANTIDOTE_TRIGGER:
+        it = cx.b_antidote[0]
+        apply_item(it, b, b, {'tp': 0, 'mp': 0})
+        b['groups']['poison'] = 0.0; b['pf'] = 0.0
+        anti_cost = it.cost
     d_tp = b['groups']['shk_tp'] - B0['groups']['shk_tp']
     d_mp = b['groups']['shk_mp'] - B0['groups']['shk_mp']
     d_str = b['groups']['shk_str'] - B0['groups']['shk_str']
-    tp = max(0, int(B0['tp_live'] - d_tp)); mp = max(0, int(B0['mp_live'] - d_mp))
+    tp = max(0, int(B0['tp_live'] - d_tp - anti_cost)); mp = max(0, int(B0['mp_live'] - d_mp))
     b['cur']['strength'] -= d_str
     ret = int(a['groups'].get('dmg_return', 0))
     key = (our_cell, tp, mp, int(d_str), ret, int(a['abs']), int(a['rel']))
@@ -121,18 +149,21 @@ def enemy_reply(cx, A1, B1, our_cell):
         # rational enemy: maximise (HP they take off us) - (HP they lose to our
         # damage return / our life steal); not attacking (net 0) is always allowed
         best = (0.0, B0['cell'], [])
-        cells = sorted(cx.enemy_cells(mp).items(), key=lambda kv: kv[1])
-        n = 0
-        for ec, steps in cells:
-            if n >= MAX_ENEMY_CELLS or ops() > OPS_STOP:
+        n = 0; tried = {}
+        ox, oy = cxy(our_cell); maxr = cx.b_maxr
+        for ec, ex, ey in cx.enemy_cells(mp):
+            if n >= MAX_ENEMY_CELLS or over():
                 break
-            dd = Field.cellDistance(ec, our_cell)
-            if dd is None or dd > cx.b_maxr:
+            if abs(ex - ox) + abs(ey - oy) > maxr:
                 continue
             n += 1
-            acts = pack(ec, our_cell, cx.b_off, tp, B0['weapon'], cx.b_vals, 'raw')
+            acts = pack(ec, our_cell, cx.b_off, tp, B0['weapon'], cx.b_vals, 'raw', tag='enemy')
             if not acts:
                 continue
+            sig = tuple(it.id for it in acts)
+            if sig in tried:           # same attack from a farther cell: same net
+                continue
+            tried[sig] = 1
             ta = copy_side(a); tb = copy_side(b); ts = {'tp': 0, 'mp': 0}
             for it in acts:
                 if it.offensive:
@@ -220,15 +251,15 @@ def leaf(cx, A1, B1, our_cell, turn):
     return w * v_f + (1.0 - w) * v_no
 
 
-def end_cells(from_cell, reach, ecell):
+def end_cells(cx, from_cell, reach, ecell):
     """Stay, approach (nearest to the enemy), retreat (farthest) and hidden
     cells; validated later by real path length."""
-    by_d = sorted(reach, key=lambda c: (Field.cellDistance(c, ecell) or 0))
-    near = by_d[:6]
-    far = by_d[::-1][:6]
-    hidden = [c for c in by_d[::-1][:40] if not Field.lineOfSight(c, ecell)][:4]
+    if cx.ends is None:
+        by_d = sorted(reach, key=lambda c: (Field.cellDistance(c, ecell) or 0))
+        hidden = [c for c in by_d[::-1][:40] if not Field.lineOfSight(c, ecell)][:4]
+        cx.ends = by_d[:6] + by_d[::-1][:6] + hidden
     out = [from_cell]
-    for c in near + far + hidden:
+    for c in cx.ends:
         if c not in out:
             out.append(c)
     return out
@@ -282,55 +313,97 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
             prefixes.append([('use', it, cell0) for it in best_heal + buffs])
     if shields:
         prefixes.append([('use', it, cell0) for it in shields[:2]])
-    plans = []
-    for pre in prefixes:
+    plans = []; groups = []
+    pcache = {}
+
+    def packed(c, key, tp):
+        k = (c, key, tp)
+        if k not in pcache:
+            pcache[k] = pack(c, ecell, offensive, tp, weapon0, vals, key, tag='ours')
+        return pcache[k]
+    for gi, pre in enumerate(prefixes):
         pre_cost = sum(st[1].cost for st in pre)
         for c in cells:
+            if over(0.5):
+                break
             for key in ('ratio', 'raw', 'weapons'):
-                att = pack(c, ecell, offensive, tp0 - pre_cost, weapon0, vals, key)
+                att = packed(c, key, tp0 - pre_cost)
                 plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att])
+                groups.append(gi)
     # split plans: chips from one cell, weapons from another (ranges differ)
     chips_off = [it for it in offensive if not it.weapon]
     weap_off = [it for it in offensive if it.weapon]
     if chips_off and weap_off:
         top = cells[:6]
         for c1 in top:
-            p1 = pack(c1, ecell, chips_off, tp0, weapon0, vals, 'ratio')
+            if over(0.5):
+                break
+            p1 = pack(c1, ecell, chips_off, tp0, weapon0, vals, 'ratio', tag='chips')
             if not p1:
                 continue
             left = tp0 - sum(it.cost for it in p1)
             for c2 in top:
                 if c2 == c1:
                     continue
-                p2 = pack(c2, ecell, weap_off, left, weapon0, vals, 'ratio')
+                p2 = pack(c2, ecell, weap_off, left, weapon0, vals, 'ratio', tag='weapons')
                 if p2:
                     plans.append([('move', c1)] + [('use', it, ecell) for it in p1]
                                  + [('move', c2)] + [('use', it, ecell) for it in p2])
+                    groups.append('split')
     if selfish:
         tp = tp0; st = []
         for it in sorted(selfish, key=lambda i: i.cost):
             if it.cost <= tp:
                 st.append(('use', it, cell0)); tp -= it.cost
-        plans.append(st)
-    plans.append([])
-    best = (-1.0, None, None); evaluated = 0; seen = {}
-    diag_best = None
-    for plan in plans:
+        plans.append(st); groups.append('self')
+    plans.append([]); groups.append('none')
+    # phase 1: simulate every plan (cheap); phase 2: leaf-evaluate them
+    # round-robin across groups, each group kills first then by damage dealt,
+    # so a tight budget still sees the best plan of every kind
+    seen = {}; by_g = {}
+    p1_stop = ops() + OPS_STOP * 0.2
+    for i, plan in enumerate(plans):
         sig = tuple((s[0], s[1] if s[0] == 'move' else s[1].id) for s in plan)
         if sig in seen:
             continue
         seen[sig] = 1
-        if ops() > OPS_STOP:
-            break
+        if ops() > p1_stop and groups[i] != 'none':
+            continue
         r = run_plan(plan, A, B, cell0, tp0, mp0, weapon0)
         if r is None:
             continue
+        by_g.setdefault(groups[i], []).append((0 if r[1]['life'] <= 0 else 1, -r[3], i, plan, r))
+    for g in by_g:
+        by_g[g].sort(key=lambda x: (x[0], x[1], x[2]))
+    order = []
+    k = 0
+    while True:
+        added = False
+        for g in by_g:
+            if k < len(by_g[g]):
+                order.append(by_g[g][k]); added = True
+        if not added:
+            break
+        k += 1
+    best = (-1.0, None, None); evaluated = 0
+    diag_best = None
+    for _, _, _, plan, r in order:
+        if over():
+            break
         A1, B1, c1, dealt, sim = r
-        for e in end_cells(c1, reach, ecell):
-            if ops() > OPS_STOP:
+        for e in end_cells(cx, c1, reach, ecell):
+            if over():
                 break
             if e != c1:
-                pl = Field.pathLength(c1, e)
+                if c1 == cell0:
+                    pl = reach.get(e)
+                elif (Field.cellDistance(c1, e) or 0) > sim['mp']:
+                    continue
+                else:
+                    pk = (c1, e)
+                    if pk not in cx.plen:
+                        cx.plen[pk] = Field.pathLength(c1, e)
+                    pl = cx.plen[pk]
                 if pl is None or pl < 0 or pl > sim['mp']:
                     continue
             v = 1.1 if B1['life'] <= 0 else leaf(cx, A1, B1, e, t)

@@ -1,21 +1,34 @@
 # ---- 50_sim: geometry + applying a plan to a state copy -------------------
+_XY = {}
+_GEO = {}      # (from, to) -> (dist, los, line, diag); cleared every turn (LoS depends on entities)
+
+
 def cxy(c):
-    cell = Cell(c)
-    return cell.x, cell.y
+    xy = _XY.get(c)
+    if xy is None:
+        cell = Cell(c)
+        xy = (cell.x, cell.y)
+        _XY[c] = xy
+    return xy
 
 
-def launch_ok(it, a, b):
-    lt = 7
-    try:
-        lt = it.obj.launchType or 7
-    except Exception:
-        pass
+def geo(a, b):
+    g = _GEO.get((a, b))
+    if g is None:
+        d = Field.cellDistance(a, b)
+        if d is None:
+            g = (None, False, False, False)
+        else:
+            ax, ay = cxy(a); bx, by = cxy(b)
+            dx, dy = abs(ax - bx), abs(ay - by)
+            g = (d, a == b or bool(Field.lineOfSight(a, b)), dx == 0 or dy == 0, dx == dy)
+        _GEO[(a, b)] = g
+    return g
+
+
+def launch_geo(lt, line, diag):
     if lt == 7:
         return True
-    ax, ay = cxy(a); bx, by = cxy(b)
-    dx, dy = abs(ax - bx), abs(ay - by)
-    line = dx == 0 or dy == 0
-    diag = dx == dy
     if lt == 1:
         return line
     if lt == 2:
@@ -29,6 +42,13 @@ def launch_ok(it, a, b):
     if lt == 6:
         return not line
     return True
+
+
+def launch_ok(it, a, b):
+    if it.launch == 7:
+        return True
+    g = geo(a, b)
+    return launch_geo(it.launch, g[2], g[3])
 
 
 def reachable(start, mp):
@@ -64,12 +84,12 @@ def can_use(it, frm, tgt, sim):
         return False
     if not it.weapon and (it.current_cooldown() > 0 or (it.cooldown > 0 and sim['uses'].get(it.id, 0) > 0)):
         return False
-    d = Field.cellDistance(frm, tgt)
+    d, los, line, diag = geo(frm, tgt)
     if d is None or d < it.minr or d > it.maxr:
         return False
-    if frm != tgt and not launch_ok(it, frm, tgt):
+    if frm != tgt and not launch_geo(it.launch, line, diag):
         return False
-    if it.los and frm != tgt and not Field.lineOfSight(frm, tgt):
+    if it.los and not los:
         return False
     return True
 

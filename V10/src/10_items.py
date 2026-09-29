@@ -31,6 +31,10 @@ class Item:
         self.area = obj.area or 1
         self.max_uses = obj.maxUses if (obj.maxUses and obj.maxUses > 0) else 99
         self.cooldown = 0 if is_weapon else (obj.cooldown or 0)
+        try:
+            self.launch = obj.launchType or 7
+        except Exception:
+            self.launch = 7
         self.effects = []
         for f in obj.features:
             self.effects.append((f.type, f.minValue, f.maxValue, f.turns, f.targets, f.modifiers))
