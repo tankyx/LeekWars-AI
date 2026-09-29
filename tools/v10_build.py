@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bundle V10/src/*.py (+ generated value-model weights) into V10/main.py.
+"""Bundle V10/src/*.py (+ generated value-model weights) into V10/v10.py.
 
     python3 tools/v10_build.py          # build + syntax check + link into the generator
 """
@@ -11,7 +11,7 @@ sys.path.insert(0, HERE)
 import value_dataset as vd
 
 SRC = os.path.join(ROOT, 'V10', 'src')
-OUT = os.path.join(ROOT, 'V10', 'main.py')
+OUT = os.path.join(ROOT, 'V10', 'v10.py')
 MODEL = os.path.join(ROOT, 'data', 'prod', 'value_mono.json')
 GEN = '/home/ubuntu/leek-wars-generator'
 

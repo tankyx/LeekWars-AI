@@ -31,7 +31,7 @@ def main():
     ap.add_argument('--ai', default='/normal', help="bot AI: /normal or /expert (custom test leeks)")
     ap.add_argument('--root', default='9.0/V9/', help='our AI root on the server')
     ap.add_argument('--account', default='main')
-    ap.add_argument('--ai-path', help='full AI path on the server (overrides --root), e.g. 10.0/V10/main.py')
+    ap.add_argument('--ai-path', help='full AI path on the server (overrides --root), e.g. 10.0/V10/v10.py')
     ap.add_argument('--dump', help='save the fetched fights (JSON list) for tools/siege_rotation.py --fights')
     a = ap.parse_args()
     D = Decoder(); lw = LWSession(a.account)

@@ -87,6 +87,7 @@ def turn():
     if enemy is None:
         return
     try:
+        refresh_budget()
         _ctx_cache.clear()
         m = me()
         mine = [x for x in Fight.getAliveAllies()]

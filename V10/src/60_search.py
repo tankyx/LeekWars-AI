@@ -8,6 +8,7 @@ MAX_ATTACK_CELLS = 18
 MAX_END_CELLS = 10
 MAX_ENEMY_CELLS = 24
 FOLLOW_KILL = 0.9
+CHASE_KILL = 0.95
 AGGR = 0.3        # value of certain damage now, per full enemy HP bar
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizon effect)
@@ -84,6 +85,12 @@ class Ctx:
         self.replies = {}
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
         self.a_vals = {it.id: quick_value(it, A0, B0) for it in self.a_off}
+        tp = A0['tp_live']; kd = 0.0
+        for it in sorted(self.a_off, key=lambda i: -self.a_vals[i.id] / max(1, i.cost)):
+            n = 0
+            while n < it.max_uses and it.cost <= tp and self.a_vals[it.id] > 0:
+                kd += self.a_vals[it.id]; tp -= it.cost; n += 1
+        self.kill_dmg = kd
 
     def enemy_cells(self, mp):
         if mp not in self.b_reach:
@@ -192,19 +199,25 @@ def leaf(cx, A1, B1, our_cell, turn):
     los0 = bool(Field.lineOfSight(our_cell, ec))
     # after the enemy's reply it is OUR turn: score from our side as the actor
     v_no = value(features(turn + 1, d0, los0, a, b), key=('o', d0, los0))
-    if FOLLOW_W <= 0:
+    # chase mode: the enemy is within our one-turn damage -> the follow-up
+    # counts fully and a follow-up kill is (nearly) a win
+    chase = b['life'] <= cx.kill_dmg
+    w = 1.0 if chase else FOLLOW_W
+    if w <= 0:
         return v_no
     a2 = copy_side(a); b2 = copy_side(b)
     d = follow_up(cx, a2, b2, our_cell, ec)
-    # a follow-up "kill" is optimistic (no LoS / movement / reply): clamp the
-    # enemy at 1 HP and let the model score it, so plans stay differentiated
-    if b2['life'] <= 0:
-        b2['life'] = 1.0
     los = los0 if d == d0 else True
-    v_f = 1.0 - value(features(turn + 1, d, los, b2, a2), key=('f', d, los))
+    if b2['life'] <= 0 and chase:
+        v_f = CHASE_KILL
+    else:
+        # outside chase mode a follow-up "kill" is optimistic: clamp at 1 HP
+        if b2['life'] <= 0:
+            b2['life'] = 1.0
+        v_f = 1.0 - value(features(turn + 1, d, los, b2, a2), key=('f', d, los))
     if DIAG:
         cx.last_leaf = (a['life'], b['life'], d0, los0, v_no, v_f, b2['life'])
-    return FOLLOW_W * v_f + (1.0 - FOLLOW_W) * v_no
+    return w * v_f + (1.0 - w) * v_no
 
 
 def end_cells(from_cell, reach, ecell):

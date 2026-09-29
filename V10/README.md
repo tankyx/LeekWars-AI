@@ -1,9 +1,9 @@
 # V10 — Python AI (object API)
 
 Sources live in `src/` (numbered for bundle order); `python3 tools/v10_build.py`
-concatenates them (plus the generated value-model weights) into `V10/main.py`,
+concatenates them (plus the generated value-model weights) into `V10/v10.py`,
 the single file that runs locally (polyglot generator) and on prod
-(`10.0/V10/main.py`).
+(`10.0/V10/v10.py`).
 
 Only the OBJECT API is used (`Fight`, `Field`, `Cell`, `Weapon`, `Chip`,
 `Effect`...): prod Python AIs do not expose the flat LeekScript functions.

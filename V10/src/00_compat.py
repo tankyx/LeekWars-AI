@@ -1,26 +1,26 @@
-# ---- 00_compat: prod object API vs local polyglot differences ------------
+# ---- 00_compat: runtime helpers (object API only) --------------------------
+# System / Debug / Fight exist both on prod and in the updated local generator
+# (objects.py), so no flat-API fallback is needed.
 import math
-OPS_BUDGET = 14000000
-OPS_STOP = 8500000          # stop searching past this; execution needs headroom
+
+OPS_STOP_FRAC = 0.6     # stop searching past this share of the budget; execution needs headroom
+OPS_STOP = 8500000      # refreshed each turn from System.maxOperations (see refresh_budget)
+
+
+def refresh_budget():
+    global OPS_STOP
+    try:
+        OPS_STOP = int(System.maxOperations * OPS_STOP_FRAC)
+    except Exception:
+        pass
 
 
 def ops():
-    try:
-        return System.operations
-    except NameError:
-        return getOperations()
+    return System.operations
 
 
 def log(msg):
-    try:
-        Debug.log(msg)
-        return
-    except Exception:
-        pass
-    try:
-        debug(msg)
-    except Exception:
-        pass
+    Debug.log(msg)
 
 
 def me():

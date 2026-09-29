@@ -76,7 +76,7 @@ def materialise(name, ref):
     if ref == 'V8':
         return 'V8_modules/main.lk'
     if ref.startswith('path:'):
-        return ref[5:]          # an AI path under the generator dir, e.g. path:V10/main.py
+        return ref[5:]          # an AI path under the generator dir, e.g. path:V10/v10.py
     dst = os.path.join(ARMS_DIR, name)
     shutil.rmtree(dst, ignore_errors=True)
     os.makedirs(dst, exist_ok=True)
