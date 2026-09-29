@@ -14,7 +14,7 @@ AGGR = 0.3        # value of certain damage now, per full enemy HP bar
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizon effect)
 DIAG = False
-LAST_CX: list = [None]
+LAST_CX = None     # Ctx of the last search (read by leftover spending)
 
 
 def quick_value(it, C, T):
@@ -288,7 +288,8 @@ def useful_now(it, A, B, cx):
 def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
     t = Fight.turn
     cx = Ctx(A, B)
-    LAST_CX[0] = cx
+    global LAST_CX
+    LAST_CX = cx
     if DIAG and t <= 2:
         d0 = Field.cellDistance(A['cell'], B['cell']) or 0
         log('V10REACH T%d d=%s our_mp=%s their_mp=%s their_maxr=%s' % (t, d0, A['mp_live'], B['mp_live'], cx.b_maxr))

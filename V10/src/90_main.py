@@ -105,7 +105,7 @@ def turn():
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
         tr = execute(plan)
-        tr += ' | left: ' + spend_leftover(enemy, A['items'], A, B, LAST_CX[0])
+        tr += ' | left: ' + spend_leftover(enemy, A['items'], A, B, LAST_CX)
         log('V10X T%d %s | cell %s tp %s mp %s' % (Fight.turn, tr, m.cell.id, m.tp, m.mp))
     except Exception as ex:
         log('V10 error ' + type(ex).__name__ + ': ' + str(ex)[:300])
