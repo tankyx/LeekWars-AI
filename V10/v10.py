@@ -643,6 +643,8 @@ class Ctx:
         self.last_reply = 0.0
         self.last_leaf: object = None
         self.best_leaf: object = None
+        self.best_atk = (-1.0, 0.0, '')   # best plan that deals damage: (value, dealt, desc)
+        self.n_atk = 0                    # attacking plans evaluated
         self.plen = {}         # (from, to) -> path length
         self.ends = None       # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
@@ -819,6 +821,13 @@ def useful_now(it, A, B, cx):
         return missing > 0.3 * amt
     if E_ANTIDOTE in types:
         return A['groups'].get('poison', 0) > 0
+    if E_REMOVE_SHK in types:
+        # a cleanse (manumission / liberation-style) only matters when shackled
+        return sum(v for k, v in A['groups'].items() if k.startswith('shk_')) > 0
+    if types <= {E_BUFF_TP, E_RAW_TP}:
+        # TP for this turn only is a loss unless it returns more than it costs
+        gain = sum(avg(e) for e in it.effects if (e[3] or 0) > 1)
+        return gain * 2 > it.cost
     if types & {E_RETURN, E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL}:
         d = Field.cellDistance(A['cell'], B['cell']) or 0
         return d <= B['mp_live'] + cx.b_maxr
@@ -841,8 +850,23 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
     reach = reachable(cell0, mp0)
     ecell = B['cell']
     maxr = max([it.maxr for it in offensive] + [0])
-    cells = [c for c, st in sorted(reach.items(), key=lambda kv: kv[1])
-             if (Field.cellDistance(c, ecell) or 99) <= maxr][:MAX_ATTACK_CELLS]
+    # attack cells: only cells from which some attack is really usable (range,
+    # launch line, LoS); the nearest ones plus the ones with the strongest shot
+    ex, ey = cxy(ecell)
+    cand = []
+    for c, st in sorted(reach.items(), key=lambda kv: kv[1]):
+        cx_, cy_ = cxy(c)
+        if abs(cx_ - ex) + abs(cy_ - ey) > maxr:
+            continue
+        us = usable_from(c, ecell, offensive)
+        if us:
+            cand.append((c, st, max(vals.get(i.id, 0) for i in us)))
+    cells = [x[0] for x in cand[:MAX_ATTACK_CELLS - 6]]
+    for x in sorted(cand, key=lambda x: (-x[2], x[1])):
+        if len(cells) >= MAX_ATTACK_CELLS:
+            break
+        if x[0] not in cells:
+            cells.append(x[0])
     if cell0 not in cells:
         cells.insert(0, cell0)
     heals = [it for it in selfish if any(e[0] in (E_HEAL, E_VITALITY) for e in it.effects)]
@@ -958,6 +982,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
             if de > maxr:
                 v -= STALL_W * (de - maxr) * min(1.0, t / 8.0)
             evaluated += 1
+            if dealt > 0:
+                cx.n_atk += 1
+                if v > cx.best_atk[0]:
+                    cx.best_atk = (v, dealt, ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name[:6] for s in plan) + (' M%d' % e if e != c1 else ''))
             if DIAG and (diag_best is None or dealt > diag_best[1] or (dealt == diag_best[1] and v > diag_best[0])):
                 diag_best = (v, dealt, e, len(plan), getattr(cx, 'last_leaf', None))
             if DIAG and v > best[0]:
@@ -1005,14 +1033,29 @@ def execute(plan):
     return ' '.join(trace)
 
 
-def spend_leftover(enemy, items, A=None, B=None, cx=None):
+def plan_uses(plan):
+    used = {}
+    for st in plan:
+        if st[0] == 'use':
+            used[st[1].id] = used.get(st[1].id, 0) + 1
+    return used
+
+
+def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     """Leftover TP after the plan: attacks the engine says are legal from the
     final cell, then ready self chips. Returns a compact trace."""
     m = me(); trace = []
+    _GEO.clear()                       # we moved: LoS between cells may have changed
+    ecell = enemy.cell.id
     for _ in range(12):
         done = False
         for it in sorted([i for i in items if i.offensive and not i.special], key=lambda i: -i.cost):
             if it.cost > m.tp:
+                continue
+            # range / launch line / LoS / self-hit first: a weapon switch costs 1 TP
+            if not usable_from(m.cell.id, ecell, [it]):
+                continue
+            if used is not None and used.get(it.id, 0) >= it.max_uses:
                 continue
             if it.weapon:
                 if (m.weapon is None or m.weapon.id != it.id):
@@ -1021,6 +1064,8 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None):
                     m.setWeapon(it.obj)
                 if m.canUseWeapon(enemy):
                     r = m.useWeapon(enemy)
+                    if used is not None:
+                        used[it.id] = used.get(it.id, 0) + 1
                     if r is not None and r > 0:
                         trace.append('+%s:%s' % (it.name[:6], r)); done = True
                         break
@@ -1078,8 +1123,12 @@ def turn():
         desc = ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name for s in plan)
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
+        cxl = LAST_CX
+        if cxl is not None and info and info[0] <= 0:
+            log('V10A T%d no damage chosen; attacking plans evaluated=%d best=%.3f dealt=%.0f | %s' % (
+                Fight.turn, cxl.n_atk, cxl.best_atk[0], cxl.best_atk[1], cxl.best_atk[2]))
         tr = execute(plan)
-        tr += ' | left: ' + spend_leftover(enemy, A['items'], A, B, LAST_CX)
+        tr += ' | left: ' + spend_leftover(enemy, A['items'], A, B, LAST_CX, plan_uses(plan))
         log('V10X T%d %s | cell %s tp %s mp %s' % (Fight.turn, tr, m.cell.id, m.tp, m.mp))
     except Exception as ex:
         log('V10 error ' + type(ex).__name__ + ': ' + str(ex)[:300])

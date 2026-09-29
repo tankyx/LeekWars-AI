@@ -103,6 +103,8 @@ class Ctx:
         self.last_reply = 0.0
         self.last_leaf: object = None
         self.best_leaf: object = None
+        self.best_atk = (-1.0, 0.0, '')   # best plan that deals damage: (value, dealt, desc)
+        self.n_atk = 0                    # attacking plans evaluated
         self.plen = {}         # (from, to) -> path length
         self.ends = None       # (near, far, hidden) end cells, independent of the plan
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
@@ -279,6 +281,13 @@ def useful_now(it, A, B, cx):
         return missing > 0.3 * amt
     if E_ANTIDOTE in types:
         return A['groups'].get('poison', 0) > 0
+    if E_REMOVE_SHK in types:
+        # a cleanse (manumission / liberation-style) only matters when shackled
+        return sum(v for k, v in A['groups'].items() if k.startswith('shk_')) > 0
+    if types <= {E_BUFF_TP, E_RAW_TP}:
+        # TP for this turn only is a loss unless it returns more than it costs
+        gain = sum(avg(e) for e in it.effects if (e[3] or 0) > 1)
+        return gain * 2 > it.cost
     if types & {E_RETURN, E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL}:
         d = Field.cellDistance(A['cell'], B['cell']) or 0
         return d <= B['mp_live'] + cx.b_maxr
@@ -301,8 +310,23 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
     reach = reachable(cell0, mp0)
     ecell = B['cell']
     maxr = max([it.maxr for it in offensive] + [0])
-    cells = [c for c, st in sorted(reach.items(), key=lambda kv: kv[1])
-             if (Field.cellDistance(c, ecell) or 99) <= maxr][:MAX_ATTACK_CELLS]
+    # attack cells: only cells from which some attack is really usable (range,
+    # launch line, LoS); the nearest ones plus the ones with the strongest shot
+    ex, ey = cxy(ecell)
+    cand = []
+    for c, st in sorted(reach.items(), key=lambda kv: kv[1]):
+        cx_, cy_ = cxy(c)
+        if abs(cx_ - ex) + abs(cy_ - ey) > maxr:
+            continue
+        us = usable_from(c, ecell, offensive)
+        if us:
+            cand.append((c, st, max(vals.get(i.id, 0) for i in us)))
+    cells = [x[0] for x in cand[:MAX_ATTACK_CELLS - 6]]
+    for x in sorted(cand, key=lambda x: (-x[2], x[1])):
+        if len(cells) >= MAX_ATTACK_CELLS:
+            break
+        if x[0] not in cells:
+            cells.append(x[0])
     if cell0 not in cells:
         cells.insert(0, cell0)
     heals = [it for it in selfish if any(e[0] in (E_HEAL, E_VITALITY) for e in it.effects)]
@@ -418,6 +442,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
             if de > maxr:
                 v -= STALL_W * (de - maxr) * min(1.0, t / 8.0)
             evaluated += 1
+            if dealt > 0:
+                cx.n_atk += 1
+                if v > cx.best_atk[0]:
+                    cx.best_atk = (v, dealt, ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name[:6] for s in plan) + (' M%d' % e if e != c1 else ''))
             if DIAG and (diag_best is None or dealt > diag_best[1] or (dealt == diag_best[1] and v > diag_best[0])):
                 diag_best = (v, dealt, e, len(plan), getattr(cx, 'last_leaf', None))
             if DIAG and v > best[0]:

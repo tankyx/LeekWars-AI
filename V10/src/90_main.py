@@ -31,14 +31,29 @@ def execute(plan):
     return ' '.join(trace)
 
 
-def spend_leftover(enemy, items, A=None, B=None, cx=None):
+def plan_uses(plan):
+    used = {}
+    for st in plan:
+        if st[0] == 'use':
+            used[st[1].id] = used.get(st[1].id, 0) + 1
+    return used
+
+
+def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     """Leftover TP after the plan: attacks the engine says are legal from the
     final cell, then ready self chips. Returns a compact trace."""
     m = me(); trace = []
+    _GEO.clear()                       # we moved: LoS between cells may have changed
+    ecell = enemy.cell.id
     for _ in range(12):
         done = False
         for it in sorted([i for i in items if i.offensive and not i.special], key=lambda i: -i.cost):
             if it.cost > m.tp:
+                continue
+            # range / launch line / LoS / self-hit first: a weapon switch costs 1 TP
+            if not usable_from(m.cell.id, ecell, [it]):
+                continue
+            if used is not None and used.get(it.id, 0) >= it.max_uses:
                 continue
             if it.weapon:
                 if (m.weapon is None or m.weapon.id != it.id):
@@ -47,6 +62,8 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None):
                     m.setWeapon(it.obj)
                 if m.canUseWeapon(enemy):
                     r = m.useWeapon(enemy)
+                    if used is not None:
+                        used[it.id] = used.get(it.id, 0) + 1
                     if r is not None and r > 0:
                         trace.append('+%s:%s' % (it.name[:6], r)); done = True
                         break
@@ -104,8 +121,12 @@ def turn():
         desc = ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name for s in plan)
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
+        cxl = LAST_CX
+        if cxl is not None and info and info[0] <= 0:
+            log('V10A T%d no damage chosen; attacking plans evaluated=%d best=%.3f dealt=%.0f | %s' % (
+                Fight.turn, cxl.n_atk, cxl.best_atk[0], cxl.best_atk[1], cxl.best_atk[2]))
         tr = execute(plan)
-        tr += ' | left: ' + spend_leftover(enemy, A['items'], A, B, LAST_CX)
+        tr += ' | left: ' + spend_leftover(enemy, A['items'], A, B, LAST_CX, plan_uses(plan))
         log('V10X T%d %s | cell %s tp %s mp %s' % (Fight.turn, tr, m.cell.id, m.tp, m.mp))
     except Exception as ex:
         log('V10 error ' + type(ex).__name__ + ': ' + str(ex)[:300])
