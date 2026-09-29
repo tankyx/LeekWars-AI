@@ -4,9 +4,9 @@
 # best reachable cell, best packing of their own kit on our end cell) -> our
 # poison tick -> value model from OUR side at the start of our next turn.
 DMG_BUFFS = {E_BUFF_STR, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_POW, E_BUFF_TP, E_RAW_TP}
-MAX_ATTACK_CELLS = 18
+MAX_ATTACK_CELLS = 32
 MAX_END_CELLS = 10
-MAX_ENEMY_CELLS = 24
+MAX_ENEMY_CELLS = 40
 ANTIDOTE_TRIGGER = 250   # queued poison (HP) at which a rational enemy spends its antidote
 FOLLOW_KILL = 0.9
 CHASE_KILL = 0.95
@@ -261,8 +261,8 @@ def end_cells(cx, from_cell, reach, ecell):
     cells; validated later by real path length."""
     if cx.ends is None:
         by_d = sorted(reach, key=lambda c: (Field.cellDistance(c, ecell) or 0))
-        hidden = [c for c in by_d[::-1][:40] if not Field.lineOfSight(c, ecell)][:4]
-        cx.ends = by_d[:6] + by_d[::-1][:6] + hidden
+        hidden = [c for c in by_d[::-1][:60] if not Field.lineOfSight(c, ecell)][:8]
+        cx.ends = by_d[:10] + by_d[::-1][:8] + hidden
     out = [from_cell]
     for c in cx.ends:
         if c not in out:
@@ -321,7 +321,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
         us = usable_from(c, ecell, offensive)
         if us:
             cand.append((c, st, max(vals.get(i.id, 0) for i in us)))
-    cells = [x[0] for x in cand[:MAX_ATTACK_CELLS - 6]]
+    cells = [x[0] for x in cand[:MAX_ATTACK_CELLS - 10]]
     for x in sorted(cand, key=lambda x: (-x[2], x[1])):
         if len(cells) >= MAX_ATTACK_CELLS:
             break
