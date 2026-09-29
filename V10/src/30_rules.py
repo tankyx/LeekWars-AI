@@ -15,12 +15,11 @@ def g_add(side, t, v):
         side['groups'][g] += v
 
 
-def _replaces(it, e, T, S):
+def _replaces(it, t, T, S):
     """Non-stackable effect already applied by this item on this target this
-    turn: the new cast replaces it (no extra value)."""
-    if (e[5] or 0) & 1 or (e[3] or 0) <= 0:
-        return False
-    key = (it.id, e[0], id(T))
+    turn: the new cast replaces it (no extra value). Only called for
+    non-stackable lasting effects (Item.fx flag)."""
+    key = (it.id, t, id(T))
     done = S.setdefault('applied', {})
     if key in done:
         return True
@@ -35,9 +34,8 @@ def apply_item(it, C, T, S):
     crit_p = min(1.0, max(0, cur['agility']) / 1000.0)
     critf = 1 + 0.3 * crit_p
     dealt = 0.0
-    for e in it.effects:
-        t = e[0]; a = avg(e); turns = e[3] or 0
-        if _replaces(it, e, T, S):
+    for t, a, turns, nonstack in it.fx:
+        if nonstack and _replaces(it, t, T, S):
             continue
         if t == E_DAMAGE and T is not C:
             d = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf

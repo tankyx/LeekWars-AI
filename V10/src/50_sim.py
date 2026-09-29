@@ -12,16 +12,19 @@ def cxy(c):
     return xy
 
 
+def dist(a, b):
+    """Cell distance = Manhattan distance on the cell coordinates (checked
+    against Field.cellDistance on 4144 pairs)."""
+    ax, ay = cxy(a); bx, by = cxy(b)
+    return abs(ax - bx) + abs(ay - by)
+
+
 def geo(a, b):
     g = _GEO.get((a, b))
     if g is None:
-        d = Field.cellDistance(a, b)
-        if d is None:
-            g = (None, False, False, False)
-        else:
-            ax, ay = cxy(a); bx, by = cxy(b)
-            dx, dy = abs(ax - bx), abs(ay - by)
-            g = (d, a == b or bool(Field.lineOfSight(a, b)), dx == 0 or dy == 0, dx == dy)
+        ax, ay = cxy(a); bx, by = cxy(b)
+        dx, dy = abs(ax - bx), abs(ay - by)
+        g = (dx + dy, a == b or bool(Field.lineOfSight(a, b)), dx == 0 or dy == 0, dx == dy)
         _GEO[(a, b)] = g
     return g
 
@@ -96,7 +99,7 @@ def can_use(it, frm, tgt, sim):
 
 def self_hit(it, frm, tgt):
     r = AREA_RADIUS.get(it.area, 0)
-    return r > 0 and Field.cellDistance(frm, tgt) <= r
+    return r > 0 and dist(frm, tgt) <= r
 
 
 def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0):

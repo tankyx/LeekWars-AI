@@ -38,6 +38,9 @@ class Item:
         self.effects = []
         for f in obj.features:
             self.effects.append((f.type, f.minValue, f.maxValue, f.turns, f.targets, f.modifiers))
+        # (type, average value, turns, non-stackable lasting effect) for the simulator
+        self.fx = [(e[0], (e[1] + e[2]) / 2.0, e[3] or 0, (e[3] or 0) > 0 and not ((e[5] or 0) & 1))
+                   for e in self.effects]
         types = {e[0] for e in self.effects}
         self.offensive = bool(types & OFFENSIVE)
         self.self_cast = bool(types) and types <= SELF_ONLY

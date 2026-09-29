@@ -101,6 +101,7 @@ class Ctx:
         self.b_reach = {}
         self.replies = {}
         self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
+        self.fu = {}           # (tp, need) -> our follow-up attack sequence
         self.last_reply = 0.0
         self.last_leaf: object = None
         self.best_leaf: object = None
@@ -133,14 +134,18 @@ def enemy_options(cx, our_cell, tp, mp):
     opts = cx.b_opts.get(ok)
     if opts is not None:
         return opts
-    opts = []; tried = {}; n = 0
+    opts = []; tried = {}; seen_geo = {}; n = 0
     ox, oy = cxy(our_cell); maxr = cx.b_maxr
     for ec, ex, ey in cx.enemy_cells(mp):
-        if n >= MAX_ENEMY_CELLS or over():
+        if n >= MAX_ENEMY_CELLS or (n & 7 == 0 and over()):
             break
         if abs(ex - ox) + abs(ey - oy) > maxr:
             continue
         n += 1
+        g = geo(ec, our_cell)
+        if g in seen_geo:              # same distance / LoS / line: same attack
+            continue
+        seen_geo[g] = 1
         acts = pack(ec, our_cell, cx.b_off, tp, cx.B0['weapon'], cx.b_vals, 'raw', tag='enemy')
         if not acts:
             continue
@@ -216,26 +221,38 @@ def follow_up(cx, a, b, our_cell, ec):
     d_tp = a['groups']['shk_tp'] - A0['groups']['shk_tp']
     d_mp = a['groups']['shk_mp'] - A0['groups']['shk_mp']
     tp = max(0, int(A0['tp_live'] - d_tp)); mp = max(0, int(A0['mp_live'] - d_mp))
-    dist = Field.cellDistance(our_cell, ec) or 0
-    need = max(0, dist - mp)
-    usable = [it for it in cx.a_off if it.minr <= max(need, it.minr) <= it.maxr and cx.a_vals.get(it.id, 0) > 0
-              and need <= it.maxr]
-    if not usable:
-        return dist
-    order = sorted(usable, key=lambda it: -cx.a_vals[it.id] / max(1, it.cost))
-    s = {'tp': 0, 'mp': 0}; used = {}; held = A0['weapon']
-    for it in order:
-        while used.get(it.id, 0) < it.max_uses:
-            if not it.weapon and it.cooldown > 0 and used.get(it.id, 0) > 0:
-                break
-            cost = it.cost + (1 if it.weapon and held != it.id else 0)
-            if cost > tp:
-                break
-            apply_item(it, a, b, s); tp -= cost
-            used[it.id] = used.get(it.id, 0) + 1
-            if it.weapon:
-                held = it.id
-    return max(need, min(it.minr for it in usable))
+    d = dist(our_cell, ec)
+    need = max(0, d - mp)
+    # the attack sequence only depends on (tp, need): cached per turn
+    fk = (tp, need)
+    fu = cx.fu.get(fk)
+    if fu is None:
+        usable = [it for it in cx.a_off if it.minr <= max(need, it.minr) <= it.maxr and cx.a_vals.get(it.id, 0) > 0
+                  and need <= it.maxr]
+        if not usable:
+            fu = ([], -1)
+        else:
+            order = sorted(usable, key=lambda it: -cx.a_vals[it.id] / max(1, it.cost))
+            steps = []; used = {}; held = A0['weapon']
+            for it in order:
+                while used.get(it.id, 0) < it.max_uses:
+                    if not it.weapon and it.cooldown > 0 and used.get(it.id, 0) > 0:
+                        break
+                    cost = it.cost + (1 if it.weapon and held != it.id else 0)
+                    if cost > tp:
+                        break
+                    steps.append(it); tp -= cost
+                    used[it.id] = used.get(it.id, 0) + 1
+                    if it.weapon:
+                        held = it.id
+            fu = (steps, max(need, min(it.minr for it in usable)))
+        cx.fu[fk] = fu
+    if fu[1] < 0:
+        return d
+    s = {'tp': 0, 'mp': 0}
+    for it in fu[0]:
+        apply_item(it, a, b, s)
+    return fu[1]
 
 
 # fields the leaf reads (not our plan's cell or held weapon: the leaf uses the
@@ -280,8 +297,8 @@ def _leaf(cx, A1, B1, our_cell, turn):
         a['life'] -= dmg; a['max'] -= dmg * 0.10; a['burn'] += dmg * 0.10
     if a['life'] <= 0:
         return 0.0
-    d0 = Field.cellDistance(our_cell, ec) or 0
-    los0 = bool(Field.lineOfSight(our_cell, ec))
+    d0 = dist(our_cell, ec)
+    los0 = geo(our_cell, ec)[1]
     # after the enemy's reply it is OUR turn: score from our side as the actor
     v_no = value(features(turn + 1, d0, los0, a, b), key=('o', d0, los0))
     # chase mode: the enemy is within our one-turn damage -> the follow-up
@@ -309,7 +326,7 @@ def end_cells(cx, from_cell, reach, ecell):
     """Stay, approach (nearest to the enemy), retreat (farthest) and hidden
     cells; validated later by real path length."""
     if cx.ends is None:
-        by_d = sorted(reach, key=lambda c: (Field.cellDistance(c, ecell) or 0))
+        by_d = sorted(reach, key=lambda c: dist(c, ecell))
         hidden = [c for c in by_d[::-1][:60] if not Field.lineOfSight(c, ecell)][:8]
         cx.ends = by_d[:10] + by_d[::-1][:8] + hidden
     out = [from_cell]
@@ -474,7 +491,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
             if e != c1:
                 if c1 == cell0:
                     pl = reach.get(e)
-                elif (Field.cellDistance(c1, e) or 0) > sim['mp']:
+                elif dist(c1, e) > sim['mp']:
                     continue
                 else:
                     pk = (c1, e)
@@ -487,7 +504,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items):
             # certain damage now is worth more than the model's uncertain future
             v += AGGR * dealt / max(1.0, B['max'])
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
-            de = Field.cellDistance(e, ecell) or 0
+            de = dist(e, ecell)
             if de > maxr:
                 v -= STALL_W * (de - maxr) * min(1.0, t / 8.0)
             evaluated += 1
