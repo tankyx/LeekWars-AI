@@ -167,6 +167,9 @@ def run_leek(name, lid, n, inflight, bucket, lock, out, account='main'):
                 err = r.get('error') if isinstance(r, dict) else r
                 if err in ('too_many_fights', 'no_more_fights'):
                     n = started; break
+                if err == 'rate_limit':            # shared 10 req/s (crawler): wait, not an error
+                    time.sleep((r.get('retry_after') or 1) + 0.5); continue
+                print('  %s: start failed %s' % (name, str(r)[:120]), flush=True)
                 errors += 1; time.sleep(1); continue
             pending[fid] = tgt; started += 1
         if errors >= 10 and not pending:
