@@ -61,6 +61,19 @@ def apply_item(it, C, T, S, f=1.0):
             T['max'] -= n; T['burn'] += n
         elif t in (E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI) and T is not C:
             g_add(T, t, a * (1 + max(0, cur['magic']) / 100.0))
+        elif t == E_DEBUFF and T is not C:
+            # liberation: every effect on the target x (1 - value%): its shields,
+            # buffs, damage return, heal over time, but also our poison / shackles
+            k = max(0.0, 1.0 - a * critf / 100.0)
+            T['abs'] *= k; T['rel'] *= k; T['pf'] *= k; T['power'] *= k
+            g = T['groups']
+            for key in g:
+                g[key] *= k
+            cur_t = T['cur']
+            for key in cur_t:
+                base = T.get(key)
+                if isinstance(base, (int, float)):
+                    cur_t[key] = base + (cur_t[key] - base) * k
         elif t == E_VULN and T is not C:
             g_add(T, t, a); T['rel'] -= a
         elif t == E_VULN_ABS and T is not C:

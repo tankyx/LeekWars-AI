@@ -23,7 +23,11 @@ def quick_value(it, C, T):
     c = copy_side(C); t = copy_side(T); s = {'tp': 0, 'mp': 0}
     d = apply_item(it, c, t, s)
     shk = sum(t['groups'][k] - T['groups'][k] for k in ('shk_str', 'shk_mag', 'shk_tp', 'shk_mp'))
-    return d + (t['burn'] - T['burn']) + 0.55 * (t['pf'] - T['pf']) + 2.0 * shk
+    # shields / damage return taken off the target (liberation): abs shield blocks
+    # each hit (~4 hits), rel % of ~2 turns of damage, return % of the same
+    stripped = 4.0 * max(0.0, T['abs'] - t['abs']) + 20.0 * max(0.0, T['rel'] - t['rel']) \
+        + 10.0 * max(0.0, T['groups'].get('dmg_return', 0) - t['groups'].get('dmg_return', 0))
+    return d + (t['burn'] - T['burn']) + 0.55 * (t['pf'] - T['pf']) + 2.0 * shk + stripped
 
 
 def usable_from(cell, tcell, items):

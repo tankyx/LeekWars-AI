@@ -81,7 +81,7 @@ E_ANTIDOTE, E_SHK_MAG, E_VULN, E_VULN_ABS, E_NOVA = 23, 24, 26, 27, 30
 E_RAW_MP, E_RAW_TP, E_RAW_ABS, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_AGI, E_RAW_RES = 31, 32, 37, 38, 39, 40, 41, 42
 E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL, E_STEAL = 44, 46, 47, 49, 51, 52, 54, 61
 
-OFFENSIVE = {E_DAMAGE, E_POISON, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS}
+OFFENSIVE = {E_DAMAGE, E_POISON, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS, E_DEBUFF}
 SELF_ONLY = {E_HEAL, E_BUFF_STR, E_BUFF_AGI, E_REL_SHIELD, E_ABS_SHIELD, E_BUFF_MP, E_BUFF_TP, E_VITALITY,
              E_RETURN, E_BUFF_RES, E_BUFF_WIS, E_RAW_MP, E_RAW_TP, E_RAW_ABS, E_RAW_STR, E_RAW_MAG, E_RAW_SCI,
              E_RAW_AGI, E_RAW_RES, E_RAW_WIS, E_RAW_POW, E_RAW_REL, E_ANTIDOTE, E_REMOVE_SHK}
@@ -307,6 +307,19 @@ def apply_item(it, C, T, S, f=1.0):
             T['max'] -= n; T['burn'] += n
         elif t in (E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI) and T is not C:
             g_add(T, t, a * (1 + max(0, cur['magic']) / 100.0))
+        elif t == E_DEBUFF and T is not C:
+            # liberation: every effect on the target x (1 - value%): its shields,
+            # buffs, damage return, heal over time, but also our poison / shackles
+            k = max(0.0, 1.0 - a * critf / 100.0)
+            T['abs'] *= k; T['rel'] *= k; T['pf'] *= k; T['power'] *= k
+            g = T['groups']
+            for key in g:
+                g[key] *= k
+            cur_t = T['cur']
+            for key in cur_t:
+                base = T.get(key)
+                if isinstance(base, (int, float)):
+                    cur_t[key] = base + (cur_t[key] - base) * k
         elif t == E_VULN and T is not C:
             g_add(T, t, a); T['rel'] -= a
         elif t == E_VULN_ABS and T is not C:
@@ -675,7 +688,11 @@ def quick_value(it, C, T):
     c = copy_side(C); t = copy_side(T); s = {'tp': 0, 'mp': 0}
     d = apply_item(it, c, t, s)
     shk = sum(t['groups'][k] - T['groups'][k] for k in ('shk_str', 'shk_mag', 'shk_tp', 'shk_mp'))
-    return d + (t['burn'] - T['burn']) + 0.55 * (t['pf'] - T['pf']) + 2.0 * shk
+    # shields / damage return taken off the target (liberation): abs shield blocks
+    # each hit (~4 hits), rel % of ~2 turns of damage, return % of the same
+    stripped = 4.0 * max(0.0, T['abs'] - t['abs']) + 20.0 * max(0.0, T['rel'] - t['rel']) \
+        + 10.0 * max(0.0, T['groups'].get('dmg_return', 0) - t['groups'].get('dmg_return', 0))
+    return d + (t['burn'] - T['burn']) + 0.55 * (t['pf'] - T['pf']) + 2.0 * shk + stripped
 
 
 def usable_from(cell, tcell, items):
