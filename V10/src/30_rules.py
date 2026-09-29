@@ -46,6 +46,17 @@ def apply_item(it, C, T, S, f=1.0):
             d = max(0.0, d - d * T['rel'] / 100.0 - T['abs'])
             d = min(d, max(0, T['life']))
             T['life'] -= d; dealt += d
+            pa = T.get('pas')
+            if pa and d > 0:
+                # target passives (e.g. mysterious electrisor): % of direct damage
+                # taken -> permanent raw abs shield / STR / RES
+                if pa[0]:
+                    v = d * pa[0] / 100.0
+                    T['abs'] += v; T['groups']['abs_shield'] += v
+                if pa[1] and 'strength' in T['cur']:
+                    T['cur']['strength'] += d * pa[1] / 100.0
+                if pa[2] and 'resistance' in T['cur']:
+                    T['cur']['resistance'] += d * pa[2] / 100.0
             ero = d * (0.05 + 0.10 * crit_p)
             T['max'] -= ero; T['burn'] += ero
             steal = d * max(0, cur['wisdom']) / 1000.0

@@ -46,6 +46,27 @@ def kit_of(items, st):
     return (rng, kd, kn, kp)
 
 
+PASSIVE_ABS, PASSIVE_STR, PASSIVE_RES = 34, 35, 63   # engine: % of direct damage taken -> raw abs shield / STR / RES
+
+
+def passives_of(ent):
+    """(abs %, str %, res %) from the entity's passive effects (the engine adds
+    every carried weapon's passives, held or not)."""
+    p = [0.0, 0.0, 0.0]
+    try:
+        for f in (ent.passiveEffects or []):
+            t = f.type; v = f.minValue or 0
+            if t == PASSIVE_ABS:
+                p[0] += v
+            elif t == PASSIVE_STR:
+                p[1] += v
+            elif t == PASSIVE_RES:
+                p[2] += v
+    except Exception:
+        pass
+    return tuple(p)
+
+
 def snapshot(ent, team_alive):
     effs = ent.effects or []
     sums = {}
@@ -75,7 +96,7 @@ def snapshot(ent, team_alive):
             'science': st['science'], 'cur': cur, 'power': ent.power or 0,
             'abs': ent.absoluteShield or 0, 'rel': ent.relativeShield or 0,
             'groups': groups, 'pf': pf, 'burn': _burn.get(ent.id, 0), 'summons': summons,
-            'items': items, 'kit': kit_of(items, st),
+            'items': items, 'kit': kit_of(items, st), 'pas': passives_of(ent),
             'tp_live': ent.maxTP, 'mp_live': ent.maxMP,
             'weapon': (ent.weapon.id if ent.weapon is not None else -1)}
 
@@ -85,7 +106,7 @@ def bulb_side(ent):
     groups); its own kit is not modelled."""
     return {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life or 0, 'max': ent.maxLife or 1,
             'abs': ent.absoluteShield or 0, 'rel': ent.relativeShield or 0,
-            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0}
+            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0, 'pas': (0.0, 0.0, 0.0)}
 
 
 def copy_side(s):

@@ -27,6 +27,12 @@ def quick_value(it, C, T):
     # each hit (~4 hits), rel % of ~2 turns of damage, return % of the same
     stripped = 4.0 * max(0.0, T['abs'] - t['abs']) + 20.0 * max(0.0, T['rel'] - t['rel']) \
         + 10.0 * max(0.0, T['groups'].get('dmg_return', 0) - t['groups'].get('dmg_return', 0))
+    # vulnerability: the extra damage it enables over its ~2 turns, from the
+    # caster's direct damage potential (kit) - % vuln and absolute vuln per hit
+    kd = C['kit'][1] if C.get('kit') else 0.0
+    dv = t['groups'].get('vuln', 0) - T['groups'].get('vuln', 0)
+    dva = t['groups'].get('vuln_abs', 0) - T['groups'].get('vuln_abs', 0)
+    stripped += 2.0 * (kd * max(0.0, dv) / 100.0 + 4.0 * max(0.0, dva))
     return d + (t['burn'] - T['burn']) + 0.55 * (t['pf'] - T['pf']) + 2.0 * shk + stripped
 
 
