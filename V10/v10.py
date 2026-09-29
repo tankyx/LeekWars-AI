@@ -716,6 +716,7 @@ STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 
 PRESSURE_T0 = 20
 IDLE = [0]          # consecutive turns in which neither side lost HP (set in turn())
 STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pressure
+ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
 
 def pressure(t):
@@ -1253,6 +1254,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
         k += 1
     best = (-1.0, None, None); evaluated = 0
     pr = pressure(t)
+    d_now = dist(cell0, ecell)
     diag_best = None
     for _, _, _, plan, r in order:
         if over():
@@ -1286,6 +1288,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             # standoff (nobody lost HP for 2+ turns): hiding without dealing damage costs more
             if IDLE[0] >= 2 and dealt <= 0 and not geo(e, ecell)[1]:
                 v -= STANDOFF_W * pr
+            # engagement drive: a standoff that lasts (3+ idle turns) while we are
+            # out of range is broken by closing in, more strongly as the fight drags on
+            if IDLE[0] >= 3 and d_now > maxr:
+                v += ENGAGE_W * pr * (d_now - de)
             evaluated += 1
             if dealt > 0:
                 cx.n_atk += 1
