@@ -21,7 +21,8 @@ from lw_api import LWSession
 from lw_decode import Decoder
 
 BOTS = {'domingo': -1, 'tuxo': -2, 'bibol': -3, 'jean': -4, 'hachess': -5, 'rex': -6}
-LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}
+LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296,
+         'LeekRain': 19703, 'DawnFall': 21175, 'DuskHope': 129801, 'ProdigalSon': 130236}   # main + cure
 
 
 def main():
