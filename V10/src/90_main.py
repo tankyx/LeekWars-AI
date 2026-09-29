@@ -105,7 +105,7 @@ def turn():
         return
     try:
         refresh_budget()
-        _ctx_cache.clear(); _GEO.clear(); _PACKS.clear()
+        _ctx_cache.clear(); _GEO.clear(); _PACKS.clear(); _LEAVES.clear(); _NETS.clear()
         m = me()
         mine = [x for x in Fight.getAliveAllies()]
         theirs = [x for x in Fight.getAliveEnemies()]

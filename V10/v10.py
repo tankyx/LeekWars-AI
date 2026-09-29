@@ -340,20 +340,25 @@ def apply_item(it, C, T, S):
 # ---- 40_value: prod value model (P(win) for the side about to act) --------
 # Feature layout = tools/value_dataset.NAMES; weights in 05_value_data.
 _ctx_cache = {}
+_MUL = float.__mul__
+
+
+_SF_INV = [1 / 3000.0, 1.0, 1 / 3000.0, 1 / 301.0, 1 / 30.0, 1 / 8.0] + [1 / 600.0] * 6
+_G_INV = [1.0 / VN_GSCALE[i] for i in range(len(VN_GROUPS))]
+_TAIL_INV = [1 / 1000.0, 1 / 2.0, 1 / 3000.0, 1 / 10.0, 1 / 1000.0, 1 / 1000.0, 1 / 1000.0, 1.0]
 
 
 def side_features(S, dist):
+    """Features of one side (layout = tools/value_dataset.NAMES), scaled with
+    native map chains."""
     hp = max(0.0, S['life'])
-    x = [hp / 3000.0, hp / max(1.0, S['max'] + S['burn']), S['max'] / 3000.0, S['level'] / 301.0,
-         S['tp'] / 30.0, S['mp'] / 8.0]
-    x += [S['strength'] / 600.0, S['magic'] / 600.0, S['agility'] / 600.0,
-          S['resistance'] / 600.0, S['wisdom'] / 600.0, S['science'] / 600.0]
-    g = S['groups']
-    x += [g[k] / VN_GSCALE[i] for i, k in enumerate(VN_GROUPS)]
-    x += [S['pf'] / 1000.0, S['summons'] / 2.0]
     rng, kd, kn, kp = S['kit']
-    x += [S['burn'] / 3000.0, rng / 10.0, kd / 1000.0, kn / 1000.0, kp / 1000.0,
-          1.0 if dist <= S['mp'] + rng else 0.0]
+    x = list(map(_MUL, map(float, (hp, hp / max(1.0, S['max'] + S['burn']), S['max'], S['level'], S['tp'], S['mp'],
+                                    S['strength'], S['magic'], S['agility'], S['resistance'], S['wisdom'],
+                                    S['science'])), _SF_INV))
+    x += map(_MUL, map(float, map(S['groups'].__getitem__, VN_GROUPS)), _G_INV)
+    x += map(_MUL, map(float, (S['pf'], S['summons'], S['burn'], rng, kd, kn, kp,
+                               1.0 if dist <= S['mp'] + rng else 0.0)), _TAIL_INV)
     return x
 
 
@@ -367,7 +372,6 @@ def features(turn, dist, los, A, B):
 _W1T = [[float(VN_W1[k][j]) for k in range(len(VN_CI))] for j in range(len(VN_B1))]
 _W2T = [[float(VN_W2[k][j]) for k in range(len(VN_B1))] for j in range(len(VN_B2))]
 _W3T = [[float(VN_W3[k][o]) for k in range(len(VN_B2))] for o in range(len(VN_B3))]
-_MUL = float.__mul__
 
 
 def _ctx_out(z):
@@ -382,18 +386,25 @@ def _ctx_out(z):
     return out
 
 
+_MU = [float(v) for v in VN_MU]
+_ISD = [1.0 / float(v) for v in VN_SD]
+_LO = [-6.0] * len(VN_MU)
+_HI = [6.0] * len(VN_MU)
+_SIGNF = [float(v) for v in VN_SIGN]
+_SUB = float.__sub__
+
+
 def value(x, key=None):
     """P(win) for the first side of the feature vector. `key` caches the
-    context net (it only reads non-actionable features)."""
-    z = [max(-6.0, min(6.0, (x[i] - VN_MU[i]) / VN_SD[i])) for i in range(len(x))]
+    context net (it only reads non-actionable features). Normalisation and
+    the sign-constrained slopes run as native map/sum chains."""
+    z = list(map(min, _HI, map(max, _LO, map(_MUL, map(_SUB, map(float, x), _MU), _ISD))))
     out = _ctx_cache.get(key) if key is not None else None
     if out is None:
         out = _ctx_out(z)
         if key is not None:
             _ctx_cache[key] = out
-    logit = out[0]
-    for m in range(len(VN_MI)):
-        logit += VN_SIGN[m] * out[m + 1] * z[VN_MI[m]]
+    logit = out[0] + sum(map(_MUL, map(_MUL, _SIGNF, out[1:]), map(z.__getitem__, VN_MI)))
     return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, logit))))
 
 
@@ -641,6 +652,7 @@ class Ctx:
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
         self.b_reach = {}
         self.replies = {}
+        self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
         self.last_reply = 0.0
         self.last_leaf: object = None
         self.best_leaf: object = None
@@ -663,6 +675,34 @@ class Ctx:
             r = reachable(self.B0['cell'], mp)
             self.b_reach[mp] = [(c,) + cxy(c) for c, st in sorted(r.items(), key=lambda kv: kv[1])]
         return self.b_reach[mp]
+
+
+def enemy_options(cx, our_cell, tp, mp):
+    """Distinct attacks the enemy can make on `our_cell` with `tp` / `mp`:
+    [(signature, from cell, items)], nearest cell kept per signature. Only
+    geometry matters, so it is cached per (our cell, tp, mp)."""
+    ok = (our_cell, tp, mp)
+    opts = cx.b_opts.get(ok)
+    if opts is not None:
+        return opts
+    opts = []; tried = {}; n = 0
+    ox, oy = cxy(our_cell); maxr = cx.b_maxr
+    for ec, ex, ey in cx.enemy_cells(mp):
+        if n >= MAX_ENEMY_CELLS or over():
+            break
+        if abs(ex - ox) + abs(ey - oy) > maxr:
+            continue
+        n += 1
+        acts = pack(ec, our_cell, cx.b_off, tp, cx.B0['weapon'], cx.b_vals, 'raw', tag='enemy')
+        if not acts:
+            continue
+        sig = tuple(it.id for it in acts)
+        if sig in tried:           # same attack from a farther cell
+            continue
+        tried[sig] = 1
+        opts.append((sig, ec, acts))
+    cx.b_opts[ok] = opts
+    return opts
 
 
 def enemy_reply(cx, A1, B1, our_cell):
@@ -695,26 +735,17 @@ def enemy_reply(cx, A1, B1, our_cell):
         # rational enemy: maximise (HP they take off us) - (HP they lose to our
         # damage return / our life steal); not attacking (net 0) is always allowed
         best = (0.0, B0['cell'], [])
-        n = 0; tried = {}
-        ox, oy = cxy(our_cell); maxr = cx.b_maxr
-        for ec, ex, ey in cx.enemy_cells(mp):
-            if n >= MAX_ENEMY_CELLS or over():
-                break
-            if abs(ex - ox) + abs(ey - oy) > maxr:
-                continue
-            n += 1
-            acts = pack(ec, our_cell, cx.b_off, tp, B0['weapon'], cx.b_vals, 'raw', tag='enemy')
-            if not acts:
-                continue
-            sig = tuple(it.id for it in acts)
-            if sig in tried:           # same attack from a farther cell: same net
-                continue
-            tried[sig] = 1
-            ta = copy_side(a); tb = copy_side(b); ts = {'tp': 0, 'mp': 0}
-            for it in acts:
-                if it.offensive:
-                    apply_item(it, tb, ta, ts)
-            net = (a['life'] - ta['life']) - (b['life'] - tb['life'])
+        sab = (state_sig(a), state_sig(b))
+        for sig, ec, acts in enemy_options(cx, our_cell, tp, mp):
+            nk = (sig, sab)
+            net = _NETS.get(nk)
+            if net is None:
+                ta = copy_side(a); tb = copy_side(b); ts = {'tp': 0, 'mp': 0}
+                for it in acts:
+                    if it.offensive:
+                        apply_item(it, tb, ta, ts)
+                net = (a['life'] - ta['life']) - (b['life'] - tb['life'])
+                _NETS[nk] = net
             if net > best[0]:
                 best = (net, ec, acts)
         rep = (best[1], best[2])
@@ -759,7 +790,36 @@ def follow_up(cx, a, b, our_cell, ec):
     return max(need, min(it.minr for it in usable))
 
 
+# fields the leaf reads (not our plan's cell or held weapon: the leaf uses the
+# end cell, the follow-up starts from the turn's weapon)
+_SIGK = ('life', 'max', 'burn', 'pf', 'abs', 'rel', 'tp', 'mp', 'power', 'strength',
+         'magic', 'agility', 'wisdom', 'science', 'resistance', 'summons')
+_R3 = [3] * 64
+_NETS = {}     # (enemy attack signature, (our state, their state)) -> net HP swing; cleared every turn
+_LEAVES = {}   # (our state, their state, our end cell) -> (value, reply damage); cleared every turn
+
+
+def state_sig(S):
+    """Hashable state, rounded to 3 decimals so the same attacks applied in
+    another order (float noise) share an entry."""
+    return (tuple(map(round, map(S.__getitem__, _SIGK), _R3)), tuple(map(round, S['groups'].values(), _R3)),
+            tuple(map(round, S['cur'].values(), _R3)))
+
+
 def leaf(cx, A1, B1, our_cell, turn):
+    """Memoised: different plans often reach the same state (same attacks
+    from different cells) and share end cells."""
+    k = (state_sig(A1), state_sig(B1), B1['cell'], our_cell)
+    r = _LEAVES.get(k)
+    if r is None:
+        v = _leaf(cx, A1, B1, our_cell, turn)
+        r = (v, cx.last_reply, cx.last_leaf)
+        _LEAVES[k] = r
+    cx.last_reply = r[1]; cx.last_leaf = r[2]
+    return r[0]
+
+
+def _leaf(cx, A1, B1, our_cell, turn):
     """Ply 2: enemy reply; ply 3: our follow-up attack; value at the start of
     the enemy's next turn (1 - their P(win))."""
     a, b, ec = enemy_reply(cx, A1, B1, our_cell)
@@ -1108,7 +1168,7 @@ def turn():
         return
     try:
         refresh_budget()
-        _ctx_cache.clear(); _GEO.clear(); _PACKS.clear()
+        _ctx_cache.clear(); _GEO.clear(); _PACKS.clear(); _LEAVES.clear(); _NETS.clear()
         m = me()
         mine = [x for x in Fight.getAliveAllies()]
         theirs = [x for x in Fight.getAliveEnemies()]

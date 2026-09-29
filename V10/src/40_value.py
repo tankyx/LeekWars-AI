@@ -1,20 +1,25 @@
 # ---- 40_value: prod value model (P(win) for the side about to act) --------
 # Feature layout = tools/value_dataset.NAMES; weights in 05_value_data.
 _ctx_cache = {}
+_MUL = float.__mul__
+
+
+_SF_INV = [1 / 3000.0, 1.0, 1 / 3000.0, 1 / 301.0, 1 / 30.0, 1 / 8.0] + [1 / 600.0] * 6
+_G_INV = [1.0 / VN_GSCALE[i] for i in range(len(VN_GROUPS))]
+_TAIL_INV = [1 / 1000.0, 1 / 2.0, 1 / 3000.0, 1 / 10.0, 1 / 1000.0, 1 / 1000.0, 1 / 1000.0, 1.0]
 
 
 def side_features(S, dist):
+    """Features of one side (layout = tools/value_dataset.NAMES), scaled with
+    native map chains."""
     hp = max(0.0, S['life'])
-    x = [hp / 3000.0, hp / max(1.0, S['max'] + S['burn']), S['max'] / 3000.0, S['level'] / 301.0,
-         S['tp'] / 30.0, S['mp'] / 8.0]
-    x += [S['strength'] / 600.0, S['magic'] / 600.0, S['agility'] / 600.0,
-          S['resistance'] / 600.0, S['wisdom'] / 600.0, S['science'] / 600.0]
-    g = S['groups']
-    x += [g[k] / VN_GSCALE[i] for i, k in enumerate(VN_GROUPS)]
-    x += [S['pf'] / 1000.0, S['summons'] / 2.0]
     rng, kd, kn, kp = S['kit']
-    x += [S['burn'] / 3000.0, rng / 10.0, kd / 1000.0, kn / 1000.0, kp / 1000.0,
-          1.0 if dist <= S['mp'] + rng else 0.0]
+    x = list(map(_MUL, map(float, (hp, hp / max(1.0, S['max'] + S['burn']), S['max'], S['level'], S['tp'], S['mp'],
+                                    S['strength'], S['magic'], S['agility'], S['resistance'], S['wisdom'],
+                                    S['science'])), _SF_INV))
+    x += map(_MUL, map(float, map(S['groups'].__getitem__, VN_GROUPS)), _G_INV)
+    x += map(_MUL, map(float, (S['pf'], S['summons'], S['burn'], rng, kd, kn, kp,
+                               1.0 if dist <= S['mp'] + rng else 0.0)), _TAIL_INV)
     return x
 
 
@@ -28,7 +33,6 @@ def features(turn, dist, los, A, B):
 _W1T = [[float(VN_W1[k][j]) for k in range(len(VN_CI))] for j in range(len(VN_B1))]
 _W2T = [[float(VN_W2[k][j]) for k in range(len(VN_B1))] for j in range(len(VN_B2))]
 _W3T = [[float(VN_W3[k][o]) for k in range(len(VN_B2))] for o in range(len(VN_B3))]
-_MUL = float.__mul__
 
 
 def _ctx_out(z):
@@ -43,18 +47,25 @@ def _ctx_out(z):
     return out
 
 
+_MU = [float(v) for v in VN_MU]
+_ISD = [1.0 / float(v) for v in VN_SD]
+_LO = [-6.0] * len(VN_MU)
+_HI = [6.0] * len(VN_MU)
+_SIGNF = [float(v) for v in VN_SIGN]
+_SUB = float.__sub__
+
+
 def value(x, key=None):
     """P(win) for the first side of the feature vector. `key` caches the
-    context net (it only reads non-actionable features)."""
-    z = [max(-6.0, min(6.0, (x[i] - VN_MU[i]) / VN_SD[i])) for i in range(len(x))]
+    context net (it only reads non-actionable features). Normalisation and
+    the sign-constrained slopes run as native map/sum chains."""
+    z = list(map(min, _HI, map(max, _LO, map(_MUL, map(_SUB, map(float, x), _MU), _ISD))))
     out = _ctx_cache.get(key) if key is not None else None
     if out is None:
         out = _ctx_out(z)
         if key is not None:
             _ctx_cache[key] = out
-    logit = out[0]
-    for m in range(len(VN_MI)):
-        logit += VN_SIGN[m] * out[m + 1] * z[VN_MI[m]]
+    logit = out[0] + sum(map(_MUL, map(_MUL, _SIGNF, out[1:]), map(z.__getitem__, VN_MI)))
     return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, logit))))
 
 
