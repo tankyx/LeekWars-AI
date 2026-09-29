@@ -11,6 +11,7 @@ V10 hit its exception fallback, and turns with no V10 decision log. Appends a
 row per leek to data/ladder/v10_garden.csv.
 """
 import argparse, csv, datetime, os, sys, time
+from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -51,27 +52,33 @@ def main():
     t_start = int(time.time()) - 5
     before = {i: talent(lw, i) for _, i in leeks}
     print('credits %d' % credits(lw), flush=True)
-    mcp = MCP()
     rows = []
-    try:
-        for name, lid in leeks:
+
+    def play(name, lid):
+        """One leek, its own MCP session (leeks run in parallel: the time is
+        fight generation, not API calls)."""
+        mcp = MCP(); lw_l = LWSession('main')
+        try:
             tot = [0, 0, 0, 0]; need = a.per_leek; tries = 0
-            while need > 0 and tries < 8 and credits(lw) > 0:
+            while need > 0 and tries < 8 and credits(lw_l) > 0:
                 tries += 1
                 done, w, l, d, _ = mcp.solo('main', lid, need)
                 tot[0] += done; tot[1] += w; tot[2] += l; tot[3] += d
                 need -= done
                 if done == 0:
                     time.sleep(5)
-            after = talent(lw, lid)
-            n, cut, fb, turns = audit(lw, lid, t_start, farmer_key)
-            print('  %-17s %2d fights %2dW/%2dL/%dD  talent %d -> %d (%+d) | audited %d fights: %d V10 turns, '
-                  '%d watchdog cuts, %d fallbacks' % (name, tot[0], tot[1], tot[2], tot[3], before[lid], after,
-                                                     after - before[lid], n, turns, cut, fb), flush=True)
-            rows.append([datetime.datetime.now().isoformat(timespec='seconds'), name, tot[0], tot[1], tot[2], tot[3],
-                         before[lid], after, turns, cut, fb])
-    finally:
-        mcp.close()
+        finally:
+            mcp.close()
+        after = talent(lw_l, lid)
+        n, cut, fb, turns = audit(lw_l, lid, t_start, farmer_key)
+        print('  %-17s %2d fights %2dW/%2dL/%dD  talent %d -> %d (%+d) | audited %d fights: %d V10 turns, '
+              '%d watchdog cuts, %d fallbacks' % (name, tot[0], tot[1], tot[2], tot[3], before[lid], after,
+                                                 after - before[lid], n, turns, cut, fb), flush=True)
+        return [datetime.datetime.now().isoformat(timespec='seconds'), name, tot[0], tot[1], tot[2], tot[3],
+                before[lid], after, turns, cut, fb]
+
+    with ThreadPoolExecutor(max_workers=len(leeks)) as ex:
+        rows = list(ex.map(lambda nl: play(*nl), leeks))
     new = not os.path.exists(LOG)
     with open(LOG, 'a', newline='') as fh:
         wr = csv.writer(fh)
