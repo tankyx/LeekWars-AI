@@ -36,6 +36,7 @@ def apply_item(it, C, T, S, f=1.0):
     critf = 1 + 0.3 * crit_p
     dealt = 0.0
     scaled = f != 1.0 and T is not C
+    prev = 0.0                      # value of the previous effect (steal-shield copies it)
     for t, a, turns, nonstack in it.fx:
         if nonstack and _replaces(it, t, T, S):
             continue
@@ -88,7 +89,11 @@ def apply_item(it, C, T, S, f=1.0):
         elif t == E_VULN and T is not C:
             g_add(T, t, a); T['rel'] -= a
         elif t == E_VULN_ABS and T is not C:
-            g_add(T, t, a); T['abs'] -= a
+            g_add(T, t, a); T['abs'] -= a; prev = a
+        elif t == E_STEAL_ABS:
+            # engine EffectStealAbsoluteShield: the caster gains the previous effect's value as abs shield
+            if prev > 0:
+                C['abs'] += prev; C['groups']['abs_shield'] += prev
         elif t == E_HEAL:
             h = a * (1 + max(0, cur['wisdom']) / 100.0)
             if turns > 0:

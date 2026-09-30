@@ -80,6 +80,7 @@ E_SUMMON, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_RETURN, E_BUFF_RES, E_BUFF_WIS = 14, 
 E_ANTIDOTE, E_SHK_MAG, E_VULN, E_VULN_ABS, E_NOVA = 23, 24, 26, 27, 30
 E_RAW_MP, E_RAW_TP, E_RAW_ABS, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_AGI, E_RAW_RES = 31, 32, 37, 38, 39, 40, 41, 42
 E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL, E_STEAL = 44, 46, 47, 49, 51, 52, 54, 61
+E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
 
 OFFENSIVE = {E_DAMAGE, E_POISON, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS, E_DEBUFF}
 SELF_ONLY = {E_HEAL, E_BUFF_STR, E_BUFF_AGI, E_REL_SHIELD, E_ABS_SHIELD, E_BUFF_MP, E_BUFF_TP, E_VITALITY,
@@ -303,6 +304,7 @@ def apply_item(it, C, T, S, f=1.0):
     critf = 1 + 0.3 * crit_p
     dealt = 0.0
     scaled = f != 1.0 and T is not C
+    prev = 0.0                      # value of the previous effect (steal-shield copies it)
     for t, a, turns, nonstack in it.fx:
         if nonstack and _replaces(it, t, T, S):
             continue
@@ -355,7 +357,11 @@ def apply_item(it, C, T, S, f=1.0):
         elif t == E_VULN and T is not C:
             g_add(T, t, a); T['rel'] -= a
         elif t == E_VULN_ABS and T is not C:
-            g_add(T, t, a); T['abs'] -= a
+            g_add(T, t, a); T['abs'] -= a; prev = a
+        elif t == E_STEAL_ABS:
+            # engine EffectStealAbsoluteShield: the caster gains the previous effect's value as abs shield
+            if prev > 0:
+                C['abs'] += prev; C['groups']['abs_shield'] += prev
         elif t == E_HEAL:
             h = a * (1 + max(0, cur['wisdom']) / 100.0)
             if turns > 0:
