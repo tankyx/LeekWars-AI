@@ -66,7 +66,7 @@ def stats(lw, lid, since, until):
                 continue
             if d <= 10:
                 m['near'] += 1
-                if i + 1 < len(txt) and 'attacking plans evaluated=0' in txt[i + 1]:
+                if any('attacking plans evaluated=0' in x for x in txt[i + 1:i + 3]):   # V10H may sit in between
                     m['noatk'] += 1
     return m
 
