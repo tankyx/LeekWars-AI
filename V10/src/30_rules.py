@@ -27,6 +27,33 @@ def _replaces(it, t, T, S):
     return False
 
 
+HOSTILE = {E_DAMAGE, E_POISON, E_NOVA, E_VULN, E_VULN_ABS, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI}
+
+
+def self_harm(t, a, turns, C, pw, critf):
+    """A hostile effect flagged on-caster hits the caster itself (engine
+    MODIFIER_ON_CASTER): damage through its own shields, vulnerability,
+    poison or shackles on its own state. Never counts as damage dealt."""
+    cur = C['cur']
+    if t == E_DAMAGE:
+        d = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf
+        d = max(0.0, d - d * C['rel'] / 100.0 - C['abs'])
+        d = min(d, max(0, C['life']))
+        C['life'] -= d; C['max'] -= d * 0.05; C['burn'] += d * 0.05
+    elif t == E_VULN:
+        g_add(C, t, a); C['rel'] -= a
+    elif t == E_VULN_ABS:
+        g_add(C, t, a); C['abs'] -= a
+    elif t == E_POISON:
+        p = a * (1 + max(0, cur['magic']) / 100.0) * pw
+        g_add(C, t, p); C['pf'] += p * max(1, turns)
+    elif t == E_NOVA:
+        n = min(a * (1 + max(0, cur['science']) / 100.0) * pw, max(0, C['max'] - C['life']))
+        C['max'] -= n; C['burn'] += n
+    else:
+        g_add(C, t, a * (1 + max(0, cur['magic']) / 100.0))
+
+
 def apply_item(it, C, T, S, f=1.0):
     """Apply item `it` cast by side C on target side T (T is C for self casts).
     S = sim scalars (tp/mp) mutated for TP/MP buffs; f = area power factor on
@@ -37,7 +64,10 @@ def apply_item(it, C, T, S, f=1.0):
     dealt = 0.0
     scaled = f != 1.0 and T is not C
     prev = 0.0                      # value of the previous effect (steal-shield copies it)
-    for t, a, turns, nonstack in it.fx:
+    for t, a, turns, nonstack, on_caster in it.fx:
+        if on_caster and t in HOSTILE:
+            self_harm(t, a, turns, C, pw, critf)
+            continue
         if nonstack and _replaces(it, t, T, S):
             continue
         if scaled:
