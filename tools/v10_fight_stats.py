@@ -52,6 +52,8 @@ def stats(lw, lid, since, until):
                     m['dealt'] += a[2]
                     if a[1] in bulbs:
                         m['bulb_hits'] += 1
+            elif a[0] in (107, 108) and a[1] in foes:
+                m['dealt'] += a[2]            # nova (107) and damage return / reflect (108), which lands on their turn
         logs = (lw.get('/fight/get-logs/%d' % f0['id']) or {}).get(FARMER[0]) or {}
         txt = [str(e[2]) for k in sorted(logs, key=int) for e in logs[k] if len(e) > 2]
         for i, t in enumerate(txt):
