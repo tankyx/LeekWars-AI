@@ -120,15 +120,15 @@ _AIMS = {}     # cell -> [(aim cell, distance)] within 2 cells, walls excluded (
 
 
 def aim_cells(c):
-    """Cells an area item could be aimed at to catch `c` (distance 1-2,
-    nearest first, obstacles excluded)."""
+    """Cells an area item could be aimed at to catch `c` (distance 1-3 - circle 3
+    / plus 3 / X 3 areas reach 3 cells -, nearest first, obstacles excluded)."""
     r = _AIMS.get(c)
     if r is None:
         x, y = cxy(c); r = []
-        for dx in (-2, -1, 0, 1, 2):
-            for dy in (-2, -1, 0, 1, 2):
+        for dx in (-3, -2, -1, 0, 1, 2, 3):
+            for dy in (-3, -2, -1, 0, 1, 2, 3):
                 m = abs(dx) + abs(dy)
-                if m == 0 or m > 2:
+                if m == 0 or m > 3:
                     continue
                 n = Field.cellFromXY(x + dx, y + dy)
                 if n is None or n.obstacle:

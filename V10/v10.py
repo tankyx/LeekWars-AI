@@ -635,15 +635,15 @@ _AIMS = {}     # cell -> [(aim cell, distance)] within 2 cells, walls excluded (
 
 
 def aim_cells(c):
-    """Cells an area item could be aimed at to catch `c` (distance 1-2,
-    nearest first, obstacles excluded)."""
+    """Cells an area item could be aimed at to catch `c` (distance 1-3 - circle 3
+    / plus 3 / X 3 areas reach 3 cells -, nearest first, obstacles excluded)."""
     r = _AIMS.get(c)
     if r is None:
         x, y = cxy(c); r = []
-        for dx in (-2, -1, 0, 1, 2):
-            for dy in (-2, -1, 0, 1, 2):
+        for dx in (-3, -2, -1, 0, 1, 2, 3):
+            for dy in (-3, -2, -1, 0, 1, 2, 3):
                 m = abs(dx) + abs(dy)
-                if m == 0 or m > 2:
+                if m == 0 or m > 3:
                     continue
                 n = Field.cellFromXY(x + dx, y + dy)
                 if n is None or n.obstacle:
@@ -773,7 +773,17 @@ def quick_value(it, C, T):
     """HP-equivalent of one use of `it` by C on T (packing order only)."""
     c = copy_side(C); t = copy_side(T); s = {'tp': 0, 'mp': 0}
     d = apply_item(it, c, t, s)
-    shk = sum(t['groups'][k] - T['groups'][k] for k in ('shk_str', 'shk_mag', 'shk_tp', 'shk_mp'))
+    shk = sum(t['groups'][k] - T['groups'][k] for k in ('shk_str', 'shk_mag'))
+    # TP / MP shackles: the damage they deny - target's damage per TP (kit: direct +
+    # discounted poison) x TP removed x duration; MP denies movement, valued at a
+    # quarter of that per MP point
+    turns = max([e[3] or 1 for e in it.effects if e[0] in (E_SHK_TP, E_SHK_MP)] + [1])
+    tk = T.get('kit') or (0, 0.0, 0.0, 0.0)
+    t_dpt = tk[1] + 0.55 * tk[3]
+    per_tp = t_dpt / max(1.0, T.get('tp_live') or T.get('tp') or 1)
+    d_tp = t['groups']['shk_tp'] - T['groups']['shk_tp']
+    d_mp = t['groups']['shk_mp'] - T['groups']['shk_mp']
+    denied = turns * (per_tp * max(0.0, d_tp) + 0.25 * per_tp * max(0.0, d_mp))
     # shields / damage return taken off the target (liberation): abs shield blocks
     # each hit (~4 hits), rel % of ~2 turns of damage, return % of the same
     stripped = 4.0 * max(0.0, T['abs'] - t['abs']) + 20.0 * max(0.0, T['rel'] - t['rel']) \
@@ -784,7 +794,7 @@ def quick_value(it, C, T):
     dv = t['groups'].get('vuln', 0) - T['groups'].get('vuln', 0)
     dva = t['groups'].get('vuln_abs', 0) - T['groups'].get('vuln_abs', 0)
     stripped += 2.0 * (kd * max(0.0, dv) / 100.0 + 4.0 * max(0.0, dva))
-    return d + (t['burn'] - T['burn']) + 0.55 * (t['pf'] - T['pf']) + 2.0 * shk + stripped
+    return d + (t['burn'] - T['burn']) + 0.55 * (t['pf'] - T['pf']) + 2.0 * shk + denied + stripped
 
 
 def usable_from(cell, tcell, items):
@@ -952,6 +962,16 @@ def enemy_options(cx, our_cell, tp, mp):
         opts.append((sig, ec, acts, f))
     cx.b_opts[ok] = opts
     return opts
+
+
+def acts_cost(acts, weapon):
+    """TP of using `acts` in order, weapon switches included."""
+    c = 0; held = weapon
+    for it in acts:
+        c += it.cost
+        if it.weapon and it.id != held:
+            c += 1; held = it.id
+    return c
 
 
 def enemy_reply(cx, A1, B1, our_cell):
@@ -1217,6 +1237,36 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
         if k not in pcache:
             pcache[k] = pack(c, ecell, offensive, tp, weapon0, vals, key, tag='ours')
         return pcache[k]
+    area_all = [it for it in offensive if has_area(it)]
+    # positions for long-range area items (e.g. plutonium bazooka: diagonal 8-12,
+    # circle 3): cell c we can reach and aim cell t near the enemy with the launch
+    # rule and range met (coordinates first, LoS only on survivors)
+    far_shots = []
+    for it in area_all:
+        if it.maxr < 8:
+            continue
+        found = []
+        for t_, m_ in aim_cells(ecell) + [(ecell, 0)]:
+            fct = in_area(it.area, t_, ecell)
+            if fct <= 0:
+                continue
+            tx, ty = cxy(t_)
+            for c_, st_ in reach.items():
+                qx, qy = cxy(c_)
+                dx = abs(qx - tx); dy = abs(qy - ty); dd = dx + dy
+                if dd < it.minr or dd > it.maxr or not launch_geo(it.launch, dx == 0 or dy == 0, dx == dy):
+                    continue
+                if in_area(it.area, t_, c_) > 0:          # would hit ourselves
+                    continue
+                found.append((-fct, st_, c_, t_))
+        found.sort()
+        n_ok = 0
+        for nf, st_, c_, t_ in found:
+            if n_ok >= 6 or over(0.4):
+                break
+            if it.los and not geo(c_, t_)[1]:
+                continue
+            far_shots.append((c_, t_, it)); n_ok += 1
     for gi, pre in enumerate(prefixes):
         pre_cost = sum(st[1].cost for st in pre)
         for c in cells:
@@ -1224,8 +1274,40 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
                 break
             for key in ('ratio', 'raw', 'weapons'):
                 att = packed(c, key, tp0 - pre_cost)
-                plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att])
+                base = pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
+                plans.append(base)
                 groups.append(gi)
+                # top up with an area shot aimed near the enemy (e.g. a diagonal-only
+                # bazooka whose circle-3 splash still catches it) with the TP left
+                rest = [it for it in area_all if it not in att]
+                if rest:
+                    left = tp0 - pre_cost - acts_cost(att, weapon0)
+                    if left >= min(it.cost for it in rest):
+                        held = next((it.id for it in reversed(att) if it.weapon), weapon0)
+                        sp = splash_pack(c, ecell, rest, left, held, vals, 'ratio', 'topup')
+                        if sp:
+                            plans.append(base + [('use', it, sp[0]) for it in sp[2]])
+                            groups.append(gi)
+            # (far area shots are planned below, from their own cells)
+            # splash shot first, then the best direct attacks with the TP left
+            if area_all:
+                sp = splash_pack(c, ecell, area_all, tp0 - pre_cost, weapon0, vals, 'ratio', 'first')
+                if sp:
+                    held = next((it.id for it in reversed(sp[2]) if it.weapon), weapon0)
+                    rest_tp = tp0 - pre_cost - acts_cost(sp[2], weapon0)
+                    att = [it for it in packed(c, 'ratio', rest_tp) if it not in sp[2]]
+                    plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, sp[0]) for it in sp[2]]
+                                 + [('use', it, ecell) for it in att])
+                    groups.append(gi)
+    for c_, t_, it in far_shots:
+        for gi, pre in enumerate(prefixes[:2]):
+            pre_cost = sum(st[1].cost for st in pre)
+            if it.cost + (1 if it.weapon and it.id != weapon0 else 0) > tp0 - pre_cost:
+                continue
+            rest_tp = tp0 - pre_cost - acts_cost([it], weapon0)
+            att = [x for x in packed(c_, 'ratio', rest_tp) if x is not it]
+            plans.append(pre + ([('move', c_)] if c_ != cell0 else []) + [('use', it, t_)] + [('use', x, ecell) for x in att])
+            groups.append('far')
     # split plans: chips from one cell, weapons from another (ranges differ)
     chips_off = [it for it in offensive if not it.weapon]
     weap_off = [it for it in offensive if it.weapon]
