@@ -24,7 +24,8 @@ def side_features(S, dist):
 
 
 def features(turn, dist, los, A, B):
-    return [turn / 30.0, dist / 20.0, 1.0 if los else 0.0] + side_features(A, dist) + side_features(B, dist)
+    lf = los if isinstance(los, float) else (1.0 if los else 0.0)
+    return [turn / 30.0, dist / 20.0, lf] + side_features(A, dist) + side_features(B, dist)
 
 
 # transposed weights (one row per output unit) so each unit is one native

@@ -19,6 +19,10 @@ STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 
 PRESSURE_T0 = 20
 IDLE = [0]          # consecutive turns in which neither side lost HP (set in turn())
 STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pressure
+# leaf LoS: in prod data LoS at the actor's turn start rewards the actor (usually the
+# opponent's positioning mistake); in V10 it is our own end-cell choice, already
+# charged by the enemy-reply simulation. True = leaf scored at the average LoS.
+LOS_NEUTRAL = False
 HEALABLE_W = 0.6   # share of healable direct damage discounted (their ready heals would undo it)
 ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
@@ -357,7 +361,8 @@ def _leaf(cx, A1, B1, our_cell, turn):
     d0 = dist(our_cell, ec)
     los0 = geo(our_cell, ec)[1]
     # after the enemy's reply it is OUR turn: score from our side as the actor
-    v_no = value(features(turn + 1, d0, los0, a, b), key=('o', d0, los0))
+    lq0 = 0.5 if LOS_NEUTRAL else los0
+    v_no = value(features(turn + 1, d0, lq0, a, b), key=('o', d0, lq0))
     # chase mode: the enemy is within our one-turn damage -> the follow-up
     # counts fully and a follow-up kill is (nearly) a win
     chase = b['life'] <= cx.kill_dmg
@@ -373,7 +378,8 @@ def _leaf(cx, A1, B1, our_cell, turn):
         # outside chase mode a follow-up "kill" is optimistic: clamp at 1 HP
         if b2['life'] <= 0:
             b2['life'] = 1.0
-        v_f = 1.0 - value(features(turn + 1, d, los, b2, a2), key=('f', d, los))
+        lq = 0.5 if LOS_NEUTRAL else los
+        v_f = 1.0 - value(features(turn + 1, d, lq, b2, a2), key=('f', d, lq))
     if DIAG:
         cx.last_leaf = (a['life'], b['life'], d0, los0, v_no, v_f, b2['life'])
     return w * v_f + (1.0 - w) * v_no
