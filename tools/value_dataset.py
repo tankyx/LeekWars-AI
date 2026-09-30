@@ -230,6 +230,16 @@ def main():
     if a.limit:
         files = files[:a.limit]
     X, Y, H, F, TT, W, TA, CT = [], [], [], [], [], [], [], []
+    CH = {k: [] for k in 'XYHFTWAC'}      # float32 / int chunks: Python float lists of 2M+ rows do not fit in RAM
+    def flush():
+        if not X:
+            return
+        CH['X'].append(np.asarray(X, np.float32)); CH['Y'].append(np.asarray(Y, np.float32))
+        CH['H'].append(np.asarray(H, np.float32)); CH['F'].append(np.asarray(F, np.int64))
+        CH['T'].append(np.asarray(TT, np.int32)); CH['W'].append(np.asarray(W, np.float32))
+        CH['A'].append(np.asarray(TA, np.float32)); CH['C'].append(np.asarray(CT, np.int8))
+        for lst in (X, Y, H, F, TT, W, TA, CT):
+            lst.clear()
     bad = 0
     for i, p in enumerate(files):
         try:
@@ -244,11 +254,14 @@ def main():
             # each fight weighs 1 in total: 64-turn draws would otherwise swamp the set
             X.append(x); Y.append(y); H.append(h); F.append(f['id']); TT.append(t); W.append(1.0 / len(rows))
         if (i + 1) % 2000 == 0:
-            print('  %d/%d fights, %d samples' % (i + 1, len(files), len(X)), flush=True)
-    X = np.asarray(X, dtype=np.float32)
-    np.savez_compressed(OUT, X=X, y=np.asarray(Y, np.float32), hp_y=np.asarray(H, np.float32),
-                        fid=np.asarray(F, np.int64), turn=np.asarray(TT, np.int32), w=np.asarray(W, np.float32),
-                        talent=np.asarray(TA, np.float32), context=np.asarray(CT, np.int8),
+            flush()
+            print('  %d/%d fights, %d samples' % (i + 1, len(files), sum(len(c) for c in CH['X'])), flush=True)
+    flush()
+    cat = lambda k: np.concatenate(CH[k]) if CH[k] else np.zeros(0)
+    X = cat('X'); Y = cat('Y'); W = cat('W')
+    np.savez_compressed(OUT, X=X, y=Y, hp_y=cat('H'),
+                        fid=cat('F'), turn=cat('T'), w=W,
+                        talent=cat('A'), context=cat('C'),
                         names=np.asarray(NAMES))
     print('fights %d (skipped %d)  samples %d  features %d -> %s' % (len(files), bad, len(X), X.shape[1] if len(X) else 0, OUT))
     if len(X):

@@ -115,7 +115,7 @@ def main():
     a = ap.parse_args()
     hid = tuple(int(v) for v in a.hidden.split(','))
     d = np.load(DS)
-    X, y, w, fid, turn = d['X'].astype(np.float64), d['y'].astype(np.float64), d['w'].astype(np.float64), d['fid'], d['turn']
+    X, y, w, fid, turn = d['X'].astype(np.float32), d['y'].astype(np.float64), d['w'].astype(np.float64), d['fid'], d['turn']
     talent = d['talent'].astype(np.float64) if 'talent' in d.files else np.zeros(len(y))
     inband = np.zeros(len(y), bool)
     if a.band:
@@ -130,11 +130,12 @@ def main():
     part = fid % 10; tr, va, te = part < 8, part == 8, part == 9
     mu = np.average(X[tr], axis=0, weights=w[tr])
     sd = np.sqrt(np.average((X[tr] - mu) ** 2, axis=0, weights=w[tr])) + 1e-6
-    Z = np.clip((X - mu) / sd, -6, 6)
+    Z = np.clip((X - mu.astype(np.float32)) / sd.astype(np.float32), -6, 6)
     C, M = Z[:, ci], Z[:, mi]
     print('context %d features, monotone %d features' % (len(ctx), len(mono)))
     P = train(C[tr], M[tr], S, y[tr], w[tr], C[va], M[va], y[va], w[va], h=hid)
-    p = forward(C, M, P, S)[0]
+    # predict in chunks: one float64 pass over 3M+ rows does not fit in memory
+    p = np.concatenate([forward(C[i:i + 200000], M[i:i + 200000], P, S)[0] for i in range(0, len(C), 200000)])
     buckets = [('T1-2', turn <= 2), ('T3-5', (turn >= 3) & (turn <= 5)), ('T6-10', (turn >= 6) & (turn <= 10)), ('T11+', turn >= 11)]
     ll, br, auc, acc = metrics(p[te], y[te], w[te])
     by = [metrics(p[te & m], y[te & m], w[te & m])[2] for _, m in buckets]
