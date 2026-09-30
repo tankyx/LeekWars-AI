@@ -577,6 +577,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
     best = (-1.0, None, None); evaluated = 0
     pr = pressure(t)
     d_now = dist(cell0, ecell)
+    reach_next = A['mp_live'] + maxr
     diag_best = None
     for _, _, _, plan, r in order:
         if over():
@@ -612,6 +613,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             # standoff (nobody lost HP for 2+ turns): hiding without dealing damage costs more
             if IDLE[0] >= 2 and dealt <= 0 and not geo(e, ecell)[1]:
                 v -= STANDOFF_W * pr
+            # a healer left out of our reach heals for free: ending beyond our
+            # next-turn strike reach (our MP + max range) costs their heal capacity
+            if cx.b_heal_next > 0 and de > reach_next:
+                v -= AGGR * pr * cx.b_heal_next / max(1.0, B['max'])
             # engagement drive: a standoff that lasts (3+ idle turns) while we are
             # out of range is broken by closing in, more strongly as the fight drags on
             if IDLE[0] >= 3 and d_now > maxr:
