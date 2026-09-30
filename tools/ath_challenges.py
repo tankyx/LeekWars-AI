@@ -161,7 +161,7 @@ def main():
     fh = open(OUT, 'a', newline=''); w = csv.DictWriter(fh, FIELDS)
     if new:
         w.writeheader()
-    lock = threading.Lock(); stop = threading.Event(); today = time.strftime('%Y-%m-%d')
+    lock = threading.Lock(); today = time.strftime('%Y-%m-%d')
 
     def result(fid, lid):
         bucket.take(); f = lw.get('/fight/get/%d' % fid); f = f.get('fight', f) if isinstance(f, dict) else {}
@@ -175,6 +175,7 @@ def main():
         todo = [(o, s) for s in range(1, a.seeds + 1) for o in opps   # seed-major: every opponent gets seed 1 first
                 if (n, o['id'], s) not in done]
         pending = []
+        stop = threading.Event()           # per leek: the allowance may be per leek or per account
         while (todo or pending) and not (stop.is_set() and not pending):
             while todo and len(pending) < a.inflight and not stop.is_set():
                 o, s = todo.pop(0)
