@@ -433,10 +433,12 @@ function weaponReach(target) {
 // within a class (the kill order of the squads that win). Crystals once the army is dead.
 function classOf(e) {
     var n = getName(e)
-    if (n == 'fennel_squire') { return 0 }
+    // who hurts us: king 49%, scribe 25%, knights 24%, squires 2% -> scribe (6k, heals/buffs the army)
+    // first, then knights (4k), then the king; squires last
+    if (n == 'fennel_scribe') { return 0 }
     if (n == 'fennel_knight') { return 1 }
-    if (n == 'fennel_scribe') { return 2 }
-    if (n == 'fennel_king') { return 3 }
+    if (n == 'fennel_king') { return 2 }
+    if (n == 'fennel_squire') { return 3 }
     return 4
 }
 
@@ -548,7 +550,7 @@ function tankTurn() {
     castSelf(CHIP_SOLIDIFICATION)
     var covered = 0
     for (var m in mates) { if (getCellDistance(getCell(), getCell(m)) <= 3) { covered++ } }
-    if (covered > 0 && count(army()) > 0) { castSelf(CHIP_DOME) }
+    if (covered >= min(2, count(mates)) && count(army()) > 0) { if (castSelf(CHIP_DOME)) { note('flip DOME covers ' + covered) } }
     var keyed = []
     for (var m in mates) { push(keyed, [-(threatOn(m) * 10 + (1 - getLife(m) / getTotalLife(m)) * 5 + (roleOf(m) == 'striker' ? 3 : 0)), m]) }
     keyed = arraySort(keyed, function(x, y) { return x[0] - y[0] })
@@ -559,6 +561,21 @@ function tankTurn() {
     if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var tg = pickTarget()
     if (tg != null && ready(CHIP_LIBERATION) && (getAbsoluteShield(tg) > 100 || getRelativeShield(tg) > 15)) { castOn(CHIP_LIBERATION, tg) }
+}
+
+// Puzzle phase (army still invulnerable): carapace / rampart / fortress on the most threatened
+// allies, own shields; the dome is saved for the turn the graal dies.
+function tankShieldsOnly() {
+    var keyed = []
+    for (var m in getAliveAllies()) {
+        if (m == me() || isSummon(m)) { continue }
+        push(keyed, [-(threatOn(m) * 10 + (1 - getLife(m) / getTotalLife(m)) * 5), m])
+    }
+    keyed = arraySort(keyed, function(x, y) { return x[0] - y[0] })
+    for (var k in keyed) { if (castOn(CHIP_CARAPACE, k[1])) { break } }
+    for (var k in keyed) { if (castOn(CHIP_RAMPART, k[1])) { break } }
+    for (var k in keyed) { if (castOn(CHIP_FORTRESS, k[1])) { break } }
+    castSelf(CHIP_WALL); castSelf(CHIP_ARMOR)
 }
 
 // Buffer: stay within reach of the strikers, bark the tank, ferocity on one striker (sticky),
@@ -954,11 +971,8 @@ function puzzleTurnSquad() {
 }
 
 function puzzleTurn() {
-    if (count(squad('tank')) > 0) {
-        if (getTurn() <= 2) { note('rally ' + rallyCell() + ' at ' + getCell() + ' d=' + getCellDistance(getCell(), rallyCell())) }
-        puzzleTurnSquad()
-        return
-    }
+    // dive and retreat (what the winning squads do); the squad-hold variant (puzzleTurnSquad) lost leeks
+    // at the graal before the flip
     if (getTurn() <= 2) { note('tp=' + getTP() + ' res=' + has(CHIP_RESURRECTION) + '/' + getCooldown(CHIP_RESURRECTION) + ' tele=' + has(CHIP_TELEPORTATION) + ' spark=' + has(CHIP_SPARK) + ' tp=' + getTP() + ' mp=' + getMP() + ' at ' + getCell() + ' mine=' + myCrystal()) }
     saveDeadCrystals()
     if (getTurn() == 1) {
@@ -977,12 +991,9 @@ function puzzleTurn() {
     // after my solve: tank shields / buffer buffs, strikers stay out of the army's reach
     if (!ready(CHIP_RESURRECTION)) {
         var role = myRole()
-        if (role == 'tank') { tankTurn() }
-        else if (role == 'buffer') { bufferTurn() }
-        else {
-            var a = army()
-            if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
-        }
+        if (role == 'tank') { tankShieldsOnly() }
+        var a = army()
+        if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
     }
 }
 
