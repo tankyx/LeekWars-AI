@@ -287,15 +287,27 @@ function trySolveOne() {
     return true
 }
 
-// Teleport straight onto a revive cell t that is within spark range of the crystal,
-// then spark and resurrect from t (reaches crystals no path leads to).
-function teleFirstOptions(c) {
+// Teleport to F, spark the crystal from F, walk F -> t, resurrect onto g (farmer 68355's
+// turn-2 sequence). F = t when no walk is needed. Reaches crystals no path leads to.
+function teleWalkOptions(c, mp) {
     var out = []
     var cc = getCell(c)
+    var sr = getChipMaxRange(CHIP_SPARK); var tr = getChipMaxRange(CHIP_TELEPORTATION)
     for (var g in goalCells(_crystals[c])) {
         for (var t in standCells(g)) {
-            if (t == getCell() || getCellDistance(t, cc) > getChipMaxRange(CHIP_SPARK)) { continue }
-            push(out, [t, g])
+            var tx = getCellX(t); var ty = getCellY(t)
+            var bestF = null; var bd = 999
+            for (var dx = -mp; dx <= mp; dx++) {
+                for (var dy = -mp + abs(dx); dy <= mp - abs(dx); dy++) {
+                    var f = getCellFromXY(tx + dx, ty + dy)
+                    if (f == null || f == getCell() || isObstacle(f) || !isEmptyCell(f)) { continue }
+                    var dm = getCellDistance(getCell(), f)
+                    if (dm < 1 || dm > tr || getCellDistance(f, cc) > sr) { continue }
+                    var dt = getCellDistance(f, t)
+                    if (dt < bd) { bd = dt; bestF = f }
+                }
+            }
+            if (bestF != null) { push(out, [bestF, t, g, bd]) }
         }
     }
     return out
@@ -305,26 +317,44 @@ function teleFirst(tpAvail) {
     if (!ready(CHIP_TELEPORTATION)) { return false }
     var need = getChipCost(CHIP_TELEPORTATION) + getChipCost(CHIP_SPARK) + getChipCost(CHIP_RESURRECTION)
     if (tpAvail < need) { return false }
-    var best = null; var bs = 999999
+    var cands = []
     for (var c : var axis in _crystals) {
         if (!isAlive(c) || solved(c) || getLife(c) > 8 || getAbsoluteShield(c) > 0) { continue }
-        for (var o in teleFirstOptions(c)) {
-            var d = getCellDistance(getCell(), o[0])
-            if (d < 1 || d > getChipMaxRange(CHIP_TELEPORTATION)) { continue }
-            var sc = threatAt(o[0]) * 10 + getCellDistance(o[1], _graalCell) * 0.1
-            if (sc < bs) { bs = sc; best = [c, o[0], o[1]] }
+        for (var o in teleWalkOptions(c, getMP())) {
+            push(cands, [threatAt(o[1]) * 10 + o[3] * 0.5 + getCellDistance(o[2], _graalCell) * 0.1, c, o])
         }
     }
-    if (best == null) { return false }
-    var c = best[0]; var t = best[1]; var g = best[2]
-    if (getTP() < need && ready(CHIP_ADRENALINE)) { useChip(CHIP_ADRENALINE, me()) }
-    if (getTP() < need) { return false }
-    if (!ok(useChipOnCell(CHIP_TELEPORTATION, t)) || getCell() != t) { note('tele-first failed ' + t); return false }
-    var r = useChip(CHIP_SPARK, c)
-    if (isAlive(c)) { note('tele-first spark did not kill ' + getName(c) + ' r=' + r); return false }
-    note('KR-T ' + getName(c) + ' tele ' + t + ' -> ' + g)
-    execRevive(c, [t, g, false])
-    return true
+    cands = arraySort(cands, function(a, b) { return a[0] - b[0] })
+    var tries = 0
+    for (var k in cands) {
+        if (tries++ >= 6) { break }
+        var c = k[1]; var f = k[2][0]; var t = k[2][1]; var g = k[2][2]
+        if (f != t) {
+            var pl = getPathLength(f, t)
+            if (pl == null || pl > getMP()) { continue }
+        }
+        if (getTP() < need && ready(CHIP_ADRENALINE)) { useChip(CHIP_ADRENALINE, me()) }
+        if (getTP() < need) { return false }
+        if (!ok(useChipOnCell(CHIP_TELEPORTATION, f)) || getCell() != f) { note('tele failed ' + f); return false }
+        var r = useChip(CHIP_SPARK, c)
+        if (isAlive(c)) { note('tele-walk spark did not kill ' + getName(c) + ' r=' + r); return false }
+        note('KR-TW ' + getName(c) + ' tele ' + f + ' walk ' + t + ' -> ' + g)
+        execRevive(c, [t, g, false])
+        return true
+    }
+    return false
+}
+
+// Nearest (by straight distance) revive cell for crystal c, for staging.
+function nearestStand(c) {
+    var best = null; var bd = 999
+    for (var g in goalCells(_crystals[c])) {
+        for (var t in standCells(g)) {
+            var d = getCellDistance(getCell(), t)
+            if (d < bd) { bd = d; best = t }
+        }
+    }
+    return best
 }
 
 function castSelf(chip) {
@@ -488,62 +518,54 @@ function myCrystal() {
     return usedL[me()]
 }
 
-// Walk to the reachable cell that best stages next turn's solve: within spark
-// range of my crystal and within teleport reach of its axis, away from the army.
+// Stage for next turn's solve: get within teleport + walk reach of a revive cell of my
+// crystal (walk, then jump closer), else the old spark-range staging.
 function approach() {
     var c = myCrystal()
     if (c == null) { return }
-    var cc = getCell(c)
-    var goals = goalCells(_crystals[c])
-    var g = null; var gd = 999
-    for (var x in goals) { var d = getCellDistance(x, cc); if (d < gd) { gd = d; g = x } }
-    // a staging cell (spark range of the crystal, teleport reach of its axis) by real path length
-    var cx = getCellX(cc); var cy = getCellY(cc)
-    var tgt = null; var tgtF = 999999
-    for (var dx = -9; dx <= 9; dx++) {
-        for (var dy = -9 + abs(dx); dy <= 9 - abs(dx); dy++) {
-            var cell = getCellFromXY(cx + dx, cy + dy)
-            if (cell == null || isObstacle(cell) || (!isEmptyCell(cell) && cell != getCell())) { continue }
-            if (g != null && getCellDistance(cell, g) > 12) { continue }
-            var pl = (cell == getCell()) ? 0 : getPathLength(getCell(), cell)
-            if (pl == null) { continue }
-            var f = pl + threatAt(cell) * 3
-            if (f < tgtF) { tgtF = f; tgt = cell }
+    var t = nearestStand(c)
+    if (t != null) {
+        if (count(teleWalkOptions(c, getTotalMP())) > 0) { note('in reach ' + getName(c)); return }
+        // crystal far from its axis: stage within spark range of the crystal instead
+        var cc = getCell(c)
+        var dest = (getCellDistance(getCell(), cc) > 9) ? cc : t
+        var mp0 = getMP()
+        if (dest == cc) { moveToward(c) } else { moveTowardCell(dest) }
+        if (getMP() == mp0 && mp0 > 0) {
+            // no path (walled area): walk to the reachable cell closest to it in straight line
+            var rc = reachable(); var bc = getCell(); var bcd = getCellDistance(getCell(), dest)
+            for (var cell : var st in rc) { var dd = getCellDistance(cell, dest); if (dd < bcd || (dd == bcd && st < rc[bc])) { bcd = dd; bc = cell } }
+            if (bc != getCell()) { moveTowardCell(bc) }
         }
-    }
-    // tele-first staging: within teleport range of a revive cell that sees the crystal,
-    // only for a leek that can afford teleport + spark + resurrect next turn
-    var teleNeed = getChipCost(CHIP_TELEPORTATION) + getChipCost(CHIP_SPARK) + getChipCost(CHIP_RESURRECTION)
-    var nextTP = getTotalTP() + (has(CHIP_ADRENALINE) && getCooldown(CHIP_ADRENALINE) <= 1 ? 4 : 0)
-    if ((ready(CHIP_TELEPORTATION) || getCooldown(CHIP_TELEPORTATION) <= 1) && nextTP >= teleNeed) {
-        var tn = null; var tnd = 999
-        for (var o in teleFirstOptions(c)) { var d2 = getCellDistance(getCell(), o[0]); if (d2 < tnd) { tnd = d2; tn = o[0] } }
-        if (tn != null) {
-            if (tnd <= getChipMaxRange(CHIP_TELEPORTATION)) { note('tele-first ready ' + getName(c)); return }
-            var pl2 = getPathLength(getCell(), tn)
-            if (pl2 != null && (tgt == null || pl2 - getChipMaxRange(CHIP_TELEPORTATION) < tgtF)) {
-                moveTowardCell(tn); note('stage-T ' + getName(c) + ' toward ' + tn + ' d=' + getCellDistance(getCell(), tn)); return
+        if (has(CHIP_JUMP) && getCooldown(CHIP_JUMP) == 0 && getTP() >= getChipCost(CHIP_JUMP)) {
+            var bj = null; var bjd = getCellDistance(getCell(), dest)
+            var x = getCellX(getCell()); var y = getCellY(getCell())
+            for (var dx = -3; dx <= 3; dx++) {
+                for (var dy = -3 + abs(dx); dy <= 3 - abs(dx); dy++) {
+                    var j = getCellFromXY(x + dx, y + dy)
+                    if (j == null || isObstacle(j) || !isEmptyCell(j)) { continue }
+                    var d = getCellDistance(j, dest)
+                    if (d < bjd && canUseChipOnCell(CHIP_JUMP, j)) { bjd = d; bj = j }
+                }
             }
+            if (bj != null) { useChipOnCell(CHIP_JUMP, bj) }
         }
-    }
-    if (tgt != null) {
-        if (tgt != getCell()) { moveTowardCell(tgt); note('stage ' + getName(c) + ' -> ' + tgt + ' path ' + tgtF) }
+        note('stage ' + getName(c) + ' toward ' + (dest == cc ? 'crystal ' : 'stand ') + dest + ' now d=' + getCellDistance(getCell(), dest) + ' (walked ' + (mp0 - getMP()) + ')')
         return
     }
-    var rc = reachable()
-    var best = getCell(); var bestF = 999999
-    for (var cell : var st in rc) {
-        var f = max(0, getCellDistance(cell, cc) - 9) * 3 + (g == null ? 0 : max(0, getCellDistance(cell, g) - 12) * 2) + threatAt(cell) * 2 + st * 0.05
-        if (f < bestF) { bestF = f; best = cell }
-    }
-    if (best != getCell()) { moveTowardCell(best); note('stage ' + getName(c) + ' -> ' + best + ' f=' + bestF) }
+    note('no revive cell for ' + getName(c))
 }
 
 function puzzleTurn() {
-    if (getTurn() <= 2) { note('res=' + has(CHIP_RESURRECTION) + '/' + getCooldown(CHIP_RESURRECTION) + ' tele=' + has(CHIP_TELEPORTATION) + ' spark=' + has(CHIP_SPARK) + ' tp=' + getTP() + ' mp=' + getMP() + ' at ' + getCell() + ' mine=' + myCrystal()) }
+    if (getTurn() <= 2) { note('tp=' + getTP() + ' res=' + has(CHIP_RESURRECTION) + '/' + getCooldown(CHIP_RESURRECTION) + ' tele=' + has(CHIP_TELEPORTATION) + ' spark=' + has(CHIP_SPARK) + ' tp=' + getTP() + ' mp=' + getMP() + ' at ' + getCell() + ' mine=' + myCrystal()) }
     saveDeadCrystals()
     if (getTurn() == 1) {
-        if (!trySolveOne()) { approach() }   // walk-in solve if one is already in reach
+        castSelf(CHIP_MOTIVATION)
+        castSelf(CHIP_LEATHER_BOOTS)
+        if (!trySolveOne()) {
+            castSelf(CHIP_ARMOR); castSelf(CHIP_WALL); castSelf(CHIP_SHIELD)
+            approach()
+        }
         selfStack()
         return
     }

@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import local_boss_v9 as lb
 import local_test as lt
 
-KIT = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'rage', 'seven_league_boots', 'fortress',
+KIT = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots', 'jump', 'shield', 'fortress',
        'wall', 'armor', 'solidification', 'regeneration', 'remission', 'knowledge', 'elevation', 'liberation']
 
 
