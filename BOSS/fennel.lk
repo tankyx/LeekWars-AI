@@ -952,7 +952,15 @@ function myCrystal() {
         for (var c : var axis in _crystals) {
             if (!isAlive(c) || solved(c)) { continue }
             var d = getCellDistance(getCell(l), getCell(c))
-            push(pairs, [d <= 10 ? 0 : d, l, c])
+            var cost = d <= 10 ? 0 : d
+            if (roleOf(l) == 'buffer') {
+                var gs = goalCells(_crystals[c])
+                if (count(gs) > 0) {
+                    var kc = kingCell()
+                    cost += (_tankCell != -1 ? getCellDistance(gs[0], _tankCell) * 0.5 : 0) - (kc != -1 ? min(getCellDistance(gs[0], kc), 12) : 0)
+                }
+            }
+            push(pairs, [cost, l, c])
         }
     }
     pairs = arraySort(pairs, function(a, b) { return a[0] != b[0] ? a[0] - b[0] : (a[1] != b[1] ? a[1] - b[1] : a[2] - b[2]) })
@@ -1215,6 +1223,16 @@ function puzzleTurnSquad() {
     if (getLife() < getTotalLife() * 0.4) { castSelf(CHIP_REMISSION) }
 }
 
+// Tank, puzzle: rampart + carapace on the fragile ally (RES < 200) who still has to dive.
+function shieldDiverFirst() {
+    if (myRole() != 'tank') { return }
+    var fa = fragileAlly()
+    if (fa == null || getCooldown(CHIP_RESURRECTION, fa) > 0) { return }
+    if (getCellDistance(getCell(), getCell(fa)) > 7 && getMP() > 0) { moveToward(fa, getCellDistance(getCell(), getCell(fa)) - 6) }
+    if (castOn(CHIP_RAMPART, fa)) { note('pre-dive rampart ' + getName(fa)) }
+    if (castOn(CHIP_CARAPACE, fa)) { note('pre-dive carapace ' + getName(fa)) }
+}
+
 function puzzleTurn() {
     // dive and retreat (what the winning squads do); the squad-hold variant (puzzleTurnSquad) lost leeks
     // at the graal before the flip
@@ -1230,7 +1248,11 @@ function puzzleTurn() {
         selfStack()
         return
     }
-    var solvedNow = trySolveOne()
+    if (getTurn() >= 2) { shieldDiverFirst() }
+    // the fragile buffer dives once the tank's shields are on her (fallback turn 3)
+    var holdDive = myRole() == 'buffer' && getTurn() < 3 && !hasEffectFrom(me(), CHIP_RAMPART) && !hasEffectFrom(me(), CHIP_CARAPACE) && count(squad('tank')) > 0
+    var solvedNow = holdDive ? false : trySolveOne()
+    if (holdDive) { note('waiting for the tank shields') }
     if (!solvedNow && ready(CHIP_RESURRECTION)) {
         approach()
         if (myRole() == 'buffer') { castSelf(CHIP_RAGE); castSelf(CHIP_SEVEN_LEAGUE_BOOTS) }
