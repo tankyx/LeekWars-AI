@@ -703,7 +703,12 @@ function tankTurn() {
         var rc = reachable(); var best = getCell(); var bs = -999
         for (var c : var st in rc) {
             var cov = 0
-            for (var m in mates) { if (getCellDistance(c, getCell(m)) <= 3) { cov += (roleOf(m) == 'striker' ? 3 : 1) } }
+            for (var m in mates) {
+                if (getCellDistance(c, getCell(m)) <= 3) {
+                    cov += (roleOf(m) == 'striker' ? 3 : 1)
+                    if (getTurn() <= GUARD_UNTIL && getResistance(m) < 200) { cov += 6 }
+                }
+            }
             var sc = cov * 10 - threatAt(c) * 2 - st * 0.1
             if (sc > bs) { bs = sc; best = c }
         }
@@ -766,20 +771,25 @@ function tankStepBack() {
     var fa = fragileAlly()
     var rc = reachable(); var best = getCell(); var bs = -999
     for (var c : var st in rc) {
-        if (fa != null && getCellDistance(c, getCell(fa)) > 7) { continue }
+        if (fa != null && getCellDistance(c, getCell(fa)) > (getTurn() <= GUARD_UNTIL ? 3 : 7)) { continue }
         var sc = min(getCellDistance(c, kc), 9) * 3 - threatAt(c)
         if (sc > bs) { bs = sc; best = c }
     }
     if (best != getCell()) { moveTowardCell(best) }
 }
 
+// Turns 2-8: the tank guards the fragile ally (Margaret died by turn 5 in 23/50 farm fights).
+global GUARD_UNTIL = 8
+function guardRange() { return getTurn() <= GUARD_UNTIL ? 3 : 6 }
+
 function tankShieldsOnly() {
     cleanse()
     // stay within fortress range (3) of the fragile ally, else within rampart/carapace range (6)
     tankSelfFirst()
     var fa = fragileAlly()
-    if (fa != null && getMP() > 0 && getCellDistance(getCell(), getCell(fa)) > 6) {
-        moveToward(fa, max(0, getCellDistance(getCell(), getCell(fa)) - 6))
+    var gr = guardRange()
+    if (fa != null && getMP() > 0 && getCellDistance(getCell(), getCell(fa)) > gr) {
+        moveToward(fa, max(0, getCellDistance(getCell(), getCell(fa)) - gr))
     }
     var keyed = []
     for (var m in getAliveAllies()) {
