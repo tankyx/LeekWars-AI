@@ -1,0 +1,504 @@
+// Fennel King boss AI — kill+resurrect doctrine copied from the 4-leek squads
+// that clear the boss (farmer 33552, graal down on turn 4-5, data/boss_fights).
+//
+// PUZZLE (graal alive, army under Divine Protection):
+//   T1     self-stack: rage, seven league boots, fortress, wall, armor,
+//          solidification, knowledge (teleport is on its initial cooldown).
+//   T2+    every leek that still holds resurrection solves ONE crystal in one
+//          turn: [adrenaline] -> spark the crystal (range 10, no LoS) ->
+//          teleport (or walk) next to a cell on the crystal's graal axis ->
+//          resurrect the crystal on that cell. Any crystal found dead at the
+//          start of a turn is revived first (the graal casts Apocalypse on a
+//          dead crystal at its turn).
+//   Never damages the army (invulnerable) and never touches solved crystals.
+// COMBAT (graal dead): shields/heals, then focus the weakest reachable army
+//   unit (scribe first on ties) with weapons and damage chips; crystals last.
+
+global AXIS = ['red_crystal': 'south', 'blue_crystal': 'east', 'yellow_crystal': 'west', 'green_crystal': 'north']
+global _graal = -1
+global _gx = 0
+global _gy = 0
+global _graalCell = -1
+global _crystals = [:]       // crystal id -> axis (dead crystals leave getAliveEnemies)
+global _combat = false
+global _usedRegen = false
+global _log = []
+
+function me() { return getEntity() }
+function has(chip) { return inArray(getChips(), chip) }
+function ready(chip) { return has(chip) && getCooldown(chip) == 0 }
+function ok(r) { return r == USE_SUCCESS || r == USE_CRITICAL }
+function note(s) { push(_log, s) }
+
+function isCrystal(e) { return AXIS[getName(e)] != null }
+function isArmy(e) {
+    var n = getName(e)
+    if (n == 'graal' || AXIS[n] != null) { return false }
+    if (indexOf(n, 'chest') != -1) { return false }
+    return true
+}
+function army() {
+    var out = []
+    for (var e in getAliveEnemies()) { if (isArmy(e)) { push(out, e) } }
+    return out
+}
+function aliveIds() {
+    var ids = []
+    for (var e in getAliveEnemies()) { push(ids, e) }
+    for (var a in getAliveAllies()) { push(ids, a) }
+    return ids
+}
+
+function scan() {
+    for (var e in getEnemies()) {
+        var n = getName(e)
+        if (n == 'graal') { _graal = e }
+        if (AXIS[n] != null) { _crystals[e] = AXIS[n] }
+    }
+    _graalCell = -1
+    if (_graal != -1 && isAlive(_graal)) {
+        var c = getCell(_graal)
+        if (c != null && c >= 0 && getLife(_graal) > 0) {
+            _graalCell = c; _gx = getCellX(c); _gy = getCellY(c)
+        }
+    }
+    if (_graalCell == -1) { _combat = true }   // graal dead (or a fight without one)
+    if (!_combat && getTurn() > 1 && !armyProtected()) { _combat = true }
+}
+
+function armyProtected() {
+    var seen = false
+    for (var e in army()) {
+        seen = true
+        var effs = getEffects(e)
+        if (effs != null) {
+            for (var f in effs) { if (f[0] == 59) { return true } }
+        }
+    }
+    return !seen
+}
+
+function onAxis(cell, axis) {
+    var x = getCellX(cell); var y = getCellY(cell)
+    if (axis == 'north') { return x == _gx && y < _gy }
+    if (axis == 'south') { return x == _gx && y > _gy }
+    if (axis == 'east') { return y == _gy && x > _gx }
+    if (axis == 'west') { return y == _gy && x < _gx }
+    return false
+}
+
+function solved(c) {
+    if (!isAlive(c)) { return false }
+    var cell = getCell(c)
+    if (cell == null || cell < 0) { return false }
+    return onAxis(cell, _crystals[c]) && lineOfSight(cell, _graalCell, aliveIds())
+}
+
+// Empty cells on the axis, nearest the graal first; the ray stops at the first obstacle.
+function goalCells(axis) {
+    var out = []
+    for (var d = 1; d <= 20; d++) {
+        var x = _gx; var y = _gy
+        if (axis == 'north') { y = _gy - d }
+        if (axis == 'south') { y = _gy + d }
+        if (axis == 'east') { x = _gx + d }
+        if (axis == 'west') { x = _gx - d }
+        var c = getCellFromXY(x, y)
+        if (c == null) { break }
+        if (isObstacle(c)) { break }
+        if (isEmptyCell(c)) { push(out, c) }
+    }
+    return out
+}
+
+function threatAt(cell) {
+    var n = 0
+    for (var e in army()) { if (getCellDistance(cell, getCell(e)) <= 7) { n++ } }
+    return n
+}
+
+// Cells t (1-2 from g, resurrection range) I can stand on to revive onto g.
+function standCells(g) {
+    var out = []
+    var gx = getCellX(g); var gy = getCellY(g)
+    for (var dx = -2; dx <= 2; dx++) {
+        for (var dy = -2; dy <= 2; dy++) {
+            var t = getCellFromXY(gx + dx, gy + dy)
+            if (t == null || t == g || isObstacle(t)) { continue }
+            var d = getCellDistance(t, g)
+            if (d < 1 || d > 2) { continue }
+            if (t != getCell() && !isEmptyCell(t)) { continue }
+            if (!lineOfSight(t, g, me())) { continue }
+            push(out, t)
+        }
+    }
+    return out
+}
+
+// First cell on my path from which spark reaches crystal cell cc (current cell if already in range).
+function sparkCells(cc, rc) {
+    var r = getChipMaxRange(CHIP_SPARK)
+    var out = []
+    for (var c : var st in rc) { if (getCellDistance(c, cc) <= r) { push(out, c) } }
+    return out
+}
+
+// Cells I can walk to this turn: [cell: steps], BFS over empty cells.
+function reachable() {
+    var start = getCell(); var mp = getMP()
+    var dist = [:]; dist[start] = 0
+    var frontier = [start]
+    for (var step = 1; step <= mp; step++) {
+        var next = []
+        for (var c in frontier) {
+            var x = getCellX(c); var y = getCellY(c)
+            for (var d in [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                var n = getCellFromXY(x + d[0], y + d[1])
+                if (n == null || dist[n] != null || isObstacle(n) || !isEmptyCell(n)) { continue }
+                dist[n] = step; push(next, n)
+            }
+        }
+        frontier = next
+    }
+    return dist
+}
+
+function freeNeighbours(cc) {
+    var out = []
+    var x = getCellX(cc); var y = getCellY(cc)
+    for (var d in [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        var n = getCellFromXY(x + d[0], y + d[1])
+        if (n != null && !isObstacle(n) && (isEmptyCell(n) || n == getCell())) { push(out, n) }
+    }
+    return out
+}
+
+// Best way to put crystal c back on its axis this turn: [stand, goal, teleport?] or null.
+global _why = [:]
+function revivePlan(c, tpBudget, fromCell, usedSteps) {
+    _why = ['stand': 0, 'nopath': 0, 'teleCd': 0, 'teleRange': 0, 'tp': 0]
+    var best = null; var bestScore = 999999999
+    for (var g in goalCells(_crystals[c])) {
+        var stands = standCells(g)
+        _why['stand'] += count(stands)
+        for (var t in stands) {
+            var walk = (t == fromCell) ? 0 : getPathLength(fromCell, t)
+            var used = usedSteps
+            var tele = false
+            if (walk == null || walk + used > getMP()) {
+                if (!ready(CHIP_TELEPORTATION)) { _why['teleCd']++; continue }
+                var td = getCellDistance(fromCell, t)
+                if (td < 1 || td > 12 || t == fromCell) { _why['teleRange']++; continue }
+                tele = true
+            }
+            var cost = getChipCost(CHIP_RESURRECTION) + (tele ? getChipCost(CHIP_TELEPORTATION) : 0)
+            if (cost > tpBudget) { _why['tp']++; continue }
+            var score = threatAt(t) * 10 + (tele ? 5 : 0) + getCellDistance(g, _graalCell) * 0.1
+            if (score < bestScore) { bestScore = score; best = [t, g, tele] }
+        }
+    }
+    return best
+}
+
+function execRevive(c, plan) {
+    var t = plan[0]; var g = plan[1]; var tele = plan[2]
+    if (tele) {
+        if (!ok(useChipOnCell(CHIP_TELEPORTATION, t))) { note('tele fail ' + t); }
+    } else if (t != getCell()) {
+        moveTowardCell(t)
+    }
+    var r = resurrect(c, g)
+    if (ok(r) && isAlive(c)) { note('revived ' + getName(c) + '@' + g); return true }
+    // fallback: any goal cell I can reach from where I ended
+    for (var g2 in goalCells(_crystals[c])) {
+        if (getCellDistance(getCell(), g2) <= 2 && lineOfSight(getCell(), g2, me())) {
+            if (ok(resurrect(c, g2)) && isAlive(c)) { note('revived2 ' + getName(c) + '@' + g2); return true }
+        }
+    }
+    note('revive FAILED ' + getName(c))
+    return false
+}
+
+// Revive crystals that died before our turn (Apocalypse guard).
+function saveDeadCrystals() {
+    if (!ready(CHIP_RESURRECTION)) { return }
+    for (var c : var axis in _crystals) {
+        if (isAlive(c)) { continue }
+        var tp = getTP() + (ready(CHIP_ADRENALINE) ? 4 : 0)
+        var plan = revivePlan(c, tp, getCell(), 0)
+        if (plan == null) { continue }
+        if (getTP() < getChipCost(CHIP_RESURRECTION) + (plan[2] ? getChipCost(CHIP_TELEPORTATION) : 0)) {
+            useChip(CHIP_ADRENALINE, me())
+        }
+        execRevive(c, plan)
+        return
+    }
+}
+
+function trySolveOne() {
+    if (!ready(CHIP_RESURRECTION) || !has(CHIP_SPARK)) { return false }
+    var tpAvail = getTP() + (ready(CHIP_ADRENALINE) ? 4 : 0)
+    var budget = tpAvail - getChipCost(CHIP_SPARK)
+    var rc = reachable()
+    var best = null; var bestScore = 999999999
+    for (var c : var axis in _crystals) {
+        if (!isAlive(c) || solved(c)) { continue }
+        var cc = getCell(c)
+        if (getLife(c) > 8 || getAbsoluteShield(c) > 0) { note(getName(c) + ' tough ' + getLife(c)); continue }
+        var froms = sparkCells(cc, rc)
+        if (count(froms) == 0) { continue }
+        // try the from-cells closest to the crystal's axis first (teleport reach), at most 10
+        var goals = goalCells(axis)
+        if (count(goals) == 0) { continue }
+        var g0 = goals[0]
+        var keyed = []
+        for (var f in froms) { push(keyed, [getCellDistance(f, g0) * 10 + rc[f], f]) }
+        keyed = arraySort(keyed, function(a, b) { return a[0] - b[0] })
+        var tries = 0
+        for (var kf in keyed) {
+            if (tries++ >= 10) { break }
+            var from = kf[1]
+            var plan = revivePlan(c, budget, from, rc[from])
+            if (plan == null) { continue }
+            var score = threatAt(plan[0]) * 10 + (plan[2] ? 5 : 0) + rc[from] * 0.2
+            if (score < bestScore) { bestScore = score; best = [c, plan, from] }
+            break
+        }
+    }
+    if (best == null) { return false }
+    var c = best[0]; var plan = best[1]; var from = best[2]
+    var need = getChipCost(CHIP_SPARK) + getChipCost(CHIP_RESURRECTION) + (plan[2] ? getChipCost(CHIP_TELEPORTATION) : 0)
+    if (getTP() < need && ready(CHIP_ADRENALINE)) { useChip(CHIP_ADRENALINE, me()) }
+    if (getTP() < need) { return false }
+    if (from != getCell()) { moveTowardCell(from) }
+    if (getCellDistance(getCell(), getCell(c)) > getChipMaxRange(CHIP_SPARK)) { note('could not reach spark range'); return false }
+    if (!plan[2] && plan[0] != getCell()) {
+        var pl = getPathLength(getCell(), plan[0])
+        if (pl == null || pl > getMP()) { note('walk plan broke'); return false }
+    }
+    var r = useChip(CHIP_SPARK, c)
+    if (isAlive(c)) { note('spark did not kill ' + getName(c) + ' r=' + r); return false }
+    note('KR ' + getName(c) + ' from ' + from + (plan[2] ? ' tele ' : ' walk ') + plan[0] + ' -> ' + plan[1])
+    execRevive(c, plan)
+    return true
+}
+
+function castSelf(chip) {
+    if (ready(chip) && getTP() >= getChipCost(chip)) { return ok(useChip(chip, me())) }
+    return false
+}
+
+function selfStack() {
+    castSelf(CHIP_RAGE)
+    castSelf(CHIP_SEVEN_LEAGUE_BOOTS)
+    castSelf(CHIP_FORTRESS)
+    castSelf(CHIP_WALL)
+    castSelf(CHIP_ARMOR)
+    castSelf(CHIP_SOLIDIFICATION)
+    castSelf(CHIP_KNOWLEDGE)
+}
+
+function sustain() {
+    var life = getLife(); var total = getTotalLife()
+    if (life < total * 0.5 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
+    if (life < total * 0.6) { castSelf(CHIP_ELEVATION) }
+    if (total - getLife() > 250) { castSelf(CHIP_REMISSION) }
+    var near = 0
+    for (var e in army()) { if (getCellDistance(getCell(), getCell(e)) <= 10) { near++ } }
+    if (near > 0) {
+        castSelf(CHIP_FORTRESS); castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); castSelf(CHIP_SOLIDIFICATION)
+        if (has(CHIP_RAMPART) && getCooldown(CHIP_RAMPART) == 0 && getTP() >= getChipCost(CHIP_RAMPART)) {
+            // rampart min range 2: give it to the most hurt ally in range
+            var tgt = null; var worst = 1.0
+            for (var a in getAliveAllies()) {
+                if (a == me() || isSummon(a)) { continue }
+                var f = getLife(a) / getTotalLife(a)
+                if (f < worst && canUseChip(CHIP_RAMPART, a)) { worst = f; tgt = a }
+            }
+            if (tgt != null) { useChip(CHIP_RAMPART, tgt) }
+        }
+    }
+    if (total - getLife() > 400) { castSelf(CHIP_SERUM) }
+}
+
+// ---------------- COMBAT ----------------
+function areaHitsAlly(cells) {
+    if (cells == null) { return false }
+    for (var c in cells) {
+        var e = getEntityOnCell(c)
+        if (e != null && e != -1 && isAlly(e)) { return true }
+    }
+    return false
+}
+
+function offensive(effects) {
+    for (var f in effects) {
+        if (f[0] == EFFECT_DAMAGE || f[0] == EFFECT_POISON || f[0] == EFFECT_NOVA_DAMAGE) { return true }
+    }
+    return false
+}
+
+// Shortest walk to a cell from which some weapon hits the target, or null.
+function weaponReach(target) {
+    var best = null
+    for (var w in getWeapons()) {
+        var cells = getCellsToUseWeapon(w, target)
+        if (cells == null) { continue }
+        for (var c in cells) {
+            var d = (c == getCell()) ? 0 : getPathLength(getCell(), c)
+            if (d == null || d > getMP()) { continue }
+            if (best == null || d < best[1]) { best = [c, d, w] }
+        }
+    }
+    return best
+}
+
+function pickTarget() {
+    var cands = army()
+    if (count(cands) == 0) {
+        for (var e in getAliveEnemies()) { if (isCrystal(e) || getName(e) == 'graal') { push(cands, e) } }
+    }
+    var best = null; var bestScore = 999999999999
+    for (var e in cands) {
+        var r = weaponReach(e)
+        var eff = getLife(e) + getAbsoluteShield(e)
+        if (getName(e) == 'fennel_scribe') { eff = eff * 0.6 }
+        var score = eff + (r == null ? 100000 + getCellDistance(getCell(), getCell(e)) * 100 : r[1] * 50)
+        if (score < bestScore) { bestScore = score; best = e }
+    }
+    return best
+}
+
+function attack(target) {
+    castSelf(CHIP_STEROID); castSelf(CHIP_PROTEIN)
+    if ((getAbsoluteShield(target) > 150 || getRelativeShield(target) > 25) && ready(CHIP_LIBERATION) && canUseChip(CHIP_LIBERATION, target)) {
+        useChip(CHIP_LIBERATION, target)
+    }
+    var r = weaponReach(target)
+    if (r == null) {
+        moveToward(target)
+    } else {
+        if (r[0] != getCell()) { moveTowardCell(r[0]) }
+        var w = r[2]
+        if (getWeapon() != w) { setWeapon(w) }
+        for (var i = 0; i < 8; i++) {
+            if (!canUseWeapon(w, target)) { break }
+            if (areaHitsAlly(getWeaponEffectiveArea(w, getCell(target)))) { break }
+            if (!ok(useWeapon(target)) || !isAlive(target)) { break }
+        }
+    }
+    // other weapons that still reach without moving
+    for (var w2 in getWeapons()) {
+        if (!isAlive(target)) { break }
+        if (getWeaponCost(w2) + (getWeapon() == w2 ? 0 : 1) > getTP()) { continue }
+        if (!canUseWeapon(w2, target)) { continue }
+        if (areaHitsAlly(getWeaponEffectiveArea(w2, getCell(target)))) { continue }
+        if (getWeapon() != w2) { setWeapon(w2) }
+        for (var j = 0; j < 8; j++) {
+            if (!canUseWeapon(w2, target) || !ok(useWeapon(target)) || !isAlive(target)) { break }
+        }
+    }
+    for (var ch in getChips()) {
+        if (!isAlive(target)) { break }
+        if (ch == CHIP_SPARK && !isArmy(target) && count(army()) > 0) { continue }
+        if (!offensive(getChipEffects(ch))) { continue }
+        if (!canUseChip(ch, target)) { continue }
+        if (areaHitsAlly(getChipEffectiveArea(ch, getCell(target)))) { continue }
+        useChip(ch, target)
+    }
+}
+
+function combatTurn() {
+    sustain()
+    var t = pickTarget()
+    if (t != null) { attack(t) }
+    sustain()
+}
+
+// Crystal assignment shared by every leek: greedy on the globally closest
+// (leek, crystal) pairs among leeks whose resurrection is ready; a leek already
+// within spark range of a crystal keeps it (distance counted as 0).
+function myCrystal() {
+    var leeks = []
+    for (var a in getAliveAllies()) {
+        if (isSummon(a)) { continue }
+        var cs = getChips(a)
+        if (cs == null || !inArray(cs, CHIP_RESURRECTION)) { continue }
+        if (getCooldown(CHIP_RESURRECTION, a) > 0) { continue }
+        push(leeks, a)
+    }
+    var pairs = []
+    for (var l in leeks) {
+        for (var c : var axis in _crystals) {
+            if (!isAlive(c) || solved(c)) { continue }
+            var d = getCellDistance(getCell(l), getCell(c))
+            push(pairs, [d <= 10 ? 0 : d, l, c])
+        }
+    }
+    pairs = arraySort(pairs, function(a, b) { return a[0] != b[0] ? a[0] - b[0] : (a[1] != b[1] ? a[1] - b[1] : a[2] - b[2]) })
+    var usedL = [:]; var usedC = [:]
+    for (var p in pairs) {
+        if (usedL[p[1]] != null || usedC[p[2]] != null) { continue }
+        usedL[p[1]] = p[2]; usedC[p[2]] = p[1]
+    }
+    return usedL[me()]
+}
+
+// Walk to the reachable cell that best stages next turn's solve: within spark
+// range of my crystal and within teleport reach of its axis, away from the army.
+function approach() {
+    var c = myCrystal()
+    if (c == null) { return }
+    var cc = getCell(c)
+    var goals = goalCells(_crystals[c])
+    var g = null; var gd = 999
+    for (var x in goals) { var d = getCellDistance(x, cc); if (d < gd) { gd = d; g = x } }
+    // a staging cell (spark range of the crystal, teleport reach of its axis) by real path length
+    var cx = getCellX(cc); var cy = getCellY(cc)
+    var tgt = null; var tgtF = 999999
+    for (var dx = -9; dx <= 9; dx++) {
+        for (var dy = -9 + abs(dx); dy <= 9 - abs(dx); dy++) {
+            var cell = getCellFromXY(cx + dx, cy + dy)
+            if (cell == null || isObstacle(cell) || (!isEmptyCell(cell) && cell != getCell())) { continue }
+            if (g != null && getCellDistance(cell, g) > 12) { continue }
+            var pl = (cell == getCell()) ? 0 : getPathLength(getCell(), cell)
+            if (pl == null) { continue }
+            var f = pl + threatAt(cell) * 3
+            if (f < tgtF) { tgtF = f; tgt = cell }
+        }
+    }
+    if (tgt != null) {
+        if (tgt != getCell()) { moveTowardCell(tgt); note('stage ' + getName(c) + ' -> ' + tgt + ' path ' + tgtF) }
+        return
+    }
+    var rc = reachable()
+    var best = getCell(); var bestF = 999999
+    for (var cell : var st in rc) {
+        var f = max(0, getCellDistance(cell, cc) - 9) * 3 + (g == null ? 0 : max(0, getCellDistance(cell, g) - 12) * 2) + threatAt(cell) * 2 + st * 0.05
+        if (f < bestF) { bestF = f; best = cell }
+    }
+    if (best != getCell()) { moveTowardCell(best); note('stage ' + getName(c) + ' -> ' + best + ' f=' + bestF) }
+}
+
+function puzzleTurn() {
+    if (getTurn() <= 3) { note('res=' + has(CHIP_RESURRECTION) + '/' + getCooldown(CHIP_RESURRECTION) + ' tele=' + has(CHIP_TELEPORTATION) + ' spark=' + has(CHIP_SPARK) + ' tp=' + getTP() + ' mp=' + getMP() + ' at ' + getCell() + ' mine=' + myCrystal()) }
+    saveDeadCrystals()
+    if (getTurn() == 1) {
+        if (!trySolveOne()) { approach() }   // walk-in solve if one is already in reach
+        selfStack()
+        return
+    }
+    var solvedNow = trySolveOne()
+    if (!solvedNow && ready(CHIP_RESURRECTION)) { approach() }
+    sustain()
+    // after my solve (or without one to do), stay out of the army's reach
+    if (!ready(CHIP_RESURRECTION)) {
+        var a = army()
+        if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
+    }
+}
+
+scan()
+if (_combat) { combatTurn() } else { puzzleTurn() }
+if (count(_log) > 0) { debug('BOSS T' + getTurn() + ' ' + getName(me()) + ': ' + join(_log, ' | ')) }
+_log = []
