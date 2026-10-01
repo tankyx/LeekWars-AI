@@ -95,7 +95,30 @@ function solved(c) {
 }
 
 // Empty cells on the axis, nearest the graal first; the ray stops at the first obstacle.
+function chestCells() {
+    var out = []
+    for (var e in getAliveEnemies()) { if (indexOf(getName(e), 'chest') != -1) { push(out, getCell(e)) } }
+    for (var e in getAllies()) { if (isAlive(e) && indexOf(getName(e), 'chest') != -1) { push(out, getCell(e)) } }
+    return out
+}
+
+function nearChest(c, chests) {
+    for (var k in chests) { if (getCellDistance(c, k) <= 7) { return true } }
+    return false
+}
+
+// Revive cells on the axis: cells out of a chest's reach first, then the rest (last resort).
 function goalCells(axis) {
+    var all = goalCellsRaw(axis)
+    var chests = chestCells()
+    if (count(chests) == 0) { return all }
+    var safe = []; var risky = []
+    for (var c in all) { if (nearChest(c, chests)) { push(risky, c) } else { push(safe, c) } }
+    for (var c in risky) { push(safe, c) }
+    return safe
+}
+
+function goalCellsRaw(axis) {
     var out = []
     for (var d = 1; d <= 20; d++) {
         var x = _gx; var y = _gy
@@ -359,7 +382,7 @@ function teleFirst(tpAvail) {
     cands = arraySort(cands, function(a, b) { return a[0] - b[0] })
     var tries = 0
     for (var k in cands) {
-        if (tries++ >= 6) { break }
+        if (tries++ >= 15) { break }
         var c = k[1]; var f = k[2][0]; var t = k[2][1]; var g = k[2][2]
         if (f != t) {
             var pl = getPathLength(f, t)
@@ -775,6 +798,7 @@ function tankShieldsOnly() {
 // Buffer: stay within reach of the strikers, bark the tank, ferocity on one striker (sticky),
 // doping / rage / seven league boots centred on the strikers, steroid / protein / acceleration.
 global _ferTarget = -1
+global _inReachTurns = 0
 global _tankCell = -1
 function refreshTank() {
     _tankCell = -1
@@ -947,7 +971,13 @@ function approach() {
     if (c == null) { return }
     var t = nearestStand(c)
     if (t != null) {
-        if (count(teleWalkOptions(c, getTotalMP())) > 0) { note('in reach ' + getName(c)); return }
+        if (count(teleWalkOptions(c, getTotalMP())) > 0 && _inReachTurns < 1) { _inReachTurns++; note('in reach ' + getName(c)); return }
+        if (_inReachTurns >= 1) {
+            // straight-line reach is not a real path: walk toward the revive cell anyway
+            note('in reach but no dive, closing in on ' + t)
+            goTo(t)
+            return
+        }
         // crystal far from its axis: stage within spark range of the crystal instead
         var cc = getCell(c)
         var dest = (getCellDistance(getCell(), cc) > 9) ? cc : t
