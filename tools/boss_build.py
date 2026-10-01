@@ -40,7 +40,7 @@ def capital(base):
 PUZZLE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots', 'jump']
 # hybrid strikers (own RES 400 / WIS 300 to survive the dive): own shields instead of damage chips
 STRIKER = PUZZLE + ['steroid', 'antidote', 'regeneration', 'remission', 'liberation', 'armor',
-                    'fortress', 'wall', 'solidification', 'shield']
+                    'fortress', 'wall', 'solidification', 'hemorrhage']
 TANK = PUZZLE + ['dome', 'rampart', 'fortress', 'wall', 'carapace', 'solidification', 'armor', 'shield',
                  'liberation', 'antidote']
 BUFFER = PUZZLE + ['rage', 'seven_league_boots', 'ferocity', 'doping', 'bark', 'acceleration', 'steroid', 'protein',

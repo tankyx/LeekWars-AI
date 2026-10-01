@@ -531,6 +531,16 @@ function attack(target) {
     if ((getAbsoluteShield(target) > 100 || getRelativeShield(target) > 15) && ready(CHIP_LIBERATION) && canUseChip(CHIP_LIBERATION, target)) {
         useChip(CHIP_LIBERATION, target)
     }
+    // Hemorrhage (unhealable 1 turn): the army's remissions saved the scribe/knights 10-20k per fight
+    if (has(CHIP_HEMORRHAGE) && getCooldown(CHIP_HEMORRHAGE) == 0 && getTP() >= getChipCost(CHIP_HEMORRHAGE) + 8 && classOf(target) <= 1) {
+        if (getCellDistance(getCell(), getCell(target)) > 2 && getMP() > 0) {
+            var hc = getCellsToUseChip(CHIP_HEMORRHAGE, target)
+            var bh = null; var bhd = 999
+            if (hc != null) { for (var c in hc) { var pl = (c == getCell()) ? 0 : getPathLength(getCell(), c); if (pl != null && pl <= getMP() && pl < bhd) { bhd = pl; bh = c } } }
+            if (bh != null) { moveTowardCell(bh) }
+        }
+        if (canUseChip(CHIP_HEMORRHAGE, target) && ok(useChip(CHIP_HEMORRHAGE, target))) { note('hemorrhage ' + getName(target)) }
+    }
     var r = weaponReach(target)
     if (r == null) {
         moveToward(target)
@@ -736,6 +746,24 @@ function bufferTurn() {
     if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var a2 = army()
     if (count(a2) > 0 && getMP() > 0 && threatAt(getCell()) > 2) { moveAwayFromEntities(a2) }
+}
+
+// Striker after its dive (army still protected): wait out of the king's reach (> 6) but within
+// weapon range (<= 10) of the scribe, so the first turn after the flip is all shots on her.
+function strikerStage() {
+    if (getMP() <= 0) { return }
+    var kc = kingCell()
+    var sc = -1
+    for (var e in getAliveEnemies()) { if (getName(e) == 'fennel_scribe') { sc = getCell(e) } }
+    if (sc == -1) { var a = army(); if (count(a) > 0) { moveAwayFromEntities(a) } return }
+    var rc = reachable(); var best = getCell(); var bs = -9999
+    for (var c : var st in rc) {
+        var ds = getCellDistance(c, sc)
+        var dk = kc == -1 ? 20 : getCellDistance(c, kc)
+        var v = (ds <= 10 ? 50 - abs(ds - 8) : -ds * 3) + min(dk, 9) * 4 - threatAt(c) * 2
+        if (v > bs) { bs = v; best = c }
+    }
+    if (best != getCell()) { moveTowardCell(best) }
 }
 
 // Striker: shots first from a cell inside the tank's dome radius when possible.
@@ -1109,8 +1137,11 @@ function puzzleTurn() {
     if (!ready(CHIP_RESURRECTION)) {
         var role = myRole()
         if (role == 'tank') { tankShieldsOnly() }
-        var a = army()
-        if (role != 'tank' && count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
+        else if (role == 'striker') { strikerStage() }
+        else {
+            var a = army()
+            if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
+        }
     }
 }
 
