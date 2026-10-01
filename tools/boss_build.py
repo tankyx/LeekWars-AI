@@ -54,9 +54,9 @@ PLANS = {
 }
 # Boss weapons (item ids); the forgotten weapon goes IN the weapons list — the server
 # files it under forgotten_weapons itself (a separate forgotten_weapons field is ignored).
-WEAPONS = {'AdaLovelace': [428, 47, 180, 225],       # quantum rifle, m_laser, lightninger, enhanced lightninger
-           'EdsgerDijkstra': [428, 47, 180, 118],    # quantum rifle, m_laser, lightninger, unbridled gazor
-           'KurtGodel': [428, 47, 153, 187],         # quantum rifle, m_laser, rhino, dark katana
+WEAPONS = {'AdaLovelace': [47, 180, 153, 225],        # m_laser, lightninger, rhino, enhanced lightninger
+           'EdsgerDijkstra': [47, 180, 153, 118],     # m_laser, lightninger, rhino, unbridled gazor
+           'KurtGodel': [47, 180, 153, 187],          # m_laser, lightninger, rhino, dark katana (quantum rifle is half SCI nova: no SCI here)
            'MargaretHamilton': [48, 46, 39, 506]}    # gazor, flame thrower, double gun, plutonium bazooka
 LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}
 
