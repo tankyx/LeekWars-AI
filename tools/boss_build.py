@@ -41,16 +41,16 @@ PUZZLE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 
 # hybrid strikers (own RES 400 / WIS 300 to survive the dive): own shields instead of damage chips
 STRIKER = PUZZLE + ['steroid', 'antidote', 'regeneration', 'remission', 'liberation', 'armor',
                     'fortress', 'wall', 'solidification', 'hemorrhage']
-TANK = PUZZLE + ['dome', 'rampart', 'fortress', 'wall', 'carapace', 'solidification', 'armor', 'shield',
+TANK = PUZZLE + ['dome', 'rampart', 'fortress', 'wall', 'carapace', 'solidification', 'armor', 'prototaxite',
                  'liberation', 'antidote']
-BUFFER = PUZZLE + ['rage', 'seven_league_boots', 'ferocity', 'doping', 'bark', 'acceleration', 'steroid', 'protein',
+BUFFER = PUZZLE + ['rage', 'seven_league_boots', 'ferocity', 'doping', 'bark', 'corn', 'steroid', 'protein',
                    'wall', 'armor', 'liberation', 'antidote']
 # one copy of a component per leek (add-component -> already_equipped)
 PLANS = {
-    'AdaLovelace': dict(short='AL', base=dict(strength=450, wisdom=170, resistance=320, tp=20, mp=6, life=2540),
+    'AdaLovelace': dict(short='AL', base=dict(strength=510, resistance=320, tp=20, mp=6, life=2435),
                         comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'soursop'],
                         chips=STRIKER),
-    'EdsgerDijkstra': dict(short='ED', base=dict(strength=440, wisdom=220, resistance=275, tp=20, mp=7, life=2390),
+    'EdsgerDijkstra': dict(short='ED', base=dict(strength=500, resistance=275, tp=20, mp=7, life=2390),
                            comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'copper_spring'],
                            chips=STRIKER),
     'KurtGodel': dict(short='KG', base=dict(resistance=560, tp=20, mp=7, life=2555),
@@ -62,8 +62,8 @@ PLANS = {
 }
 # Boss weapons (item ids); the forgotten weapon goes IN the weapons list — the server
 # files it under forgotten_weapons itself (a separate forgotten_weapons field is ignored).
-WEAPONS = {'AdaLovelace': [47, 180, 153, 225],        # m_laser, lightninger, rhino, enhanced lightninger
-           'EdsgerDijkstra': [47, 180, 153, 118],     # m_laser, lightninger, rhino, unbridled gazor
+WEAPONS = {'AdaLovelace': [47, 180, 278, 225],        # m_laser, lightninger, heavy sword (+60 abs vulnerability), enhanced lightninger
+           'EdsgerDijkstra': [47, 180, 278, 118],     # m_laser, lightninger, heavy sword, unbridled gazor
            'KurtGodel': [47, 180, 153, 187],          # m_laser, lightninger, rhino, dark katana (quantum rifle is half SCI nova: no SCI here)
            'MargaretHamilton': [48, 46, 39, 506]}    # gazor, flame thrower, double gun, plutonium bazooka
 LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}

@@ -580,6 +580,76 @@ function attack(target) {
 }
 
 
+
+// ---------------- PLANTS (summons run this function on their own turn) ----------------
+// Corn heals (sugar on the most hurt ally in range, popcorn around itself); Prototaxite has no chips.
+function plantAI() {
+    var best = null; var bf = 1.0
+    for (var a in getAliveAllies()) {
+        if (isSummon(a)) { continue }
+        var f = getLife(a) / getTotalLife(a)
+        if (f < bf) { bf = f; best = a }
+    }
+    for (var ch in getChips()) {
+        if (getCooldown(ch) > 0 || getTP() < getChipCost(ch)) { continue }
+        if (best != null && canUseChip(ch, best)) { useChip(ch, best) }
+        else if (canUseChip(ch, getEntity())) { useChip(ch, getEntity()) }
+    }
+}
+
+// Tank: a Prototaxite wall on the line between the king and the ally it threatens most.
+function placeWall() {
+    if (!has(CHIP_PROTOTAXITE) || getCooldown(CHIP_PROTOTAXITE) > 0 || getTP() < getChipCost(CHIP_PROTOTAXITE)) { return false }
+    var kc = kingCell()
+    if (kc == -1) { return false }
+    var prot = null; var bd = 99
+    for (var a in getAliveAllies()) {
+        if (isSummon(a)) { continue }
+        var d = getCellDistance(getCell(a), kc) - (getResistance(a) < 200 ? 3 : 0)
+        if (d < bd) { bd = d; prot = a }
+    }
+    if (prot == null || getCellDistance(getCell(prot), kc) > 12) { return false }
+    var pc = getCell(prot)
+    var best = null; var bs = 999
+    var x = getCellX(pc); var y = getCellY(pc)
+    for (var dx = -4; dx <= 4; dx++) {
+        for (var dy = -4 + abs(dx); dy <= 4 - abs(dx); dy++) {
+            var c = getCellFromXY(x + dx, y + dy)
+            if (c == null || isObstacle(c) || !isEmptyCell(c)) { continue }
+            var dp = getCellDistance(c, pc)
+            if (dp < 1 || dp > 3) { continue }
+            if (!canUseChipOnCell(CHIP_PROTOTAXITE, c)) { continue }
+            var sc = getCellDistance(c, kc) + dp - getCellDistance(pc, kc)   // 0 when c sits on the king-ally line
+            if (sc < bs) { bs = sc; best = c }
+        }
+    }
+    if (best == null) { return false }
+    var r = summon(CHIP_PROTOTAXITE, best, plantAI)
+    if (ok(r)) { note('wall at ' + best + ' for ' + getName(prot)); return true }
+    return false
+}
+
+// Buffer: a Corn where its popcorn (radius 3) covers the most allies.
+function placeCorn() {
+    if (!has(CHIP_CORN) || getCooldown(CHIP_CORN) > 0 || getTP() < getChipCost(CHIP_CORN)) { return false }
+    var best = null; var bs = 0
+    var x = getCellX(getCell()); var y = getCellY(getCell())
+    for (var dx = -5; dx <= 5; dx++) {
+        for (var dy = -5 + abs(dx); dy <= 5 - abs(dx); dy++) {
+            var c = getCellFromXY(x + dx, y + dy)
+            if (c == null || isObstacle(c) || !isEmptyCell(c) || !canUseChipOnCell(CHIP_CORN, c)) { continue }
+            var n = 0
+            for (var a in getAliveAllies()) { if (!isSummon(a) && getCellDistance(c, getCell(a)) <= 3) { n++ } }
+            var sc = n * 10 - threatAt(c)
+            if (n >= 2 && sc > bs) { bs = sc; best = c }
+        }
+    }
+    if (best == null) { return false }
+    var r = summon(CHIP_CORN, best, plantAI)
+    if (ok(r)) { note('corn at ' + best); return true }
+    return false
+}
+
 // ---------------- ROLES (tank = carries dome, buffer = carries ferocity, else striker) ----------------
 function roleOf(a) {
     var cs = getChips(a)
@@ -628,6 +698,7 @@ function tankTurn() {
     for (var k in keyed) { if (castOn(CHIP_CARAPACE, k[1])) { break } }
     for (var k in keyed) { if (castOn(CHIP_FORTRESS, k[1])) { break } }
     castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); castSelf(CHIP_SHIELD)
+    placeWall()
     tankStepBack()
     if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var tg = pickTarget()
@@ -697,6 +768,7 @@ function tankShieldsOnly() {
     for (var k in keyed) { if (castOn(CHIP_RAMPART, k[1])) { break } }
     for (var k in keyed) { if (castOn(CHIP_FORTRESS, k[1])) { break } }
     castSelf(CHIP_WALL); castSelf(CHIP_ARMOR)
+    placeWall()
     tankStepBack()
 }
 
@@ -742,6 +814,7 @@ function bufferTurn() {
         castOn(CHIP_DOPING, centre); castOn(CHIP_RAGE, centre); castOn(CHIP_SEVEN_LEAGUE_BOOTS, centre)
         for (var m in st) { castOn(CHIP_STEROID, m); castOn(CHIP_PROTEIN, m); castOn(CHIP_ACCELERATION, m) }
     }
+    placeCorn()
     castSelf(CHIP_WALL); castSelf(CHIP_ARMOR)
     if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var a2 = army()
