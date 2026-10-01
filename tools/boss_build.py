@@ -2,7 +2,7 @@
 """Create (or reuse) a "<XX> Boss" loadout per main leek and apply it.
 
 Stats are capital per stat (computed from the target base values with the
-capital cost curve), weapons copied from the leek's Solo loadout, boss chip
+capital cost curve), boss weapons (WEAPONS), boss chip
 kit + components as listed here.
 
     python3 tools/boss_build.py --dry-run
@@ -52,6 +52,12 @@ PLANS = {
                              comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'obsidian_plate', 'strawberry', 'hylocereus'],
                              chips=CORE + ['antidote', 'knowledge']),
 }
+# Boss weapons (item ids); the forgotten weapon goes IN the weapons list — the server
+# files it under forgotten_weapons itself (a separate forgotten_weapons field is ignored).
+WEAPONS = {'AdaLovelace': [428, 47, 180, 225],       # quantum rifle, m_laser, lightninger, enhanced lightninger
+           'EdsgerDijkstra': [428, 47, 180, 118],    # quantum rifle, m_laser, lightninger, unbridled gazor
+           'KurtGodel': [428, 47, 153, 187],         # quantum rifle, m_laser, rhino, dark katana
+           'MargaretHamilton': [48, 46, 39, 506]}    # gazor, flame thrower, double gun, plutonium bazooka
 LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296}
 
 
@@ -69,18 +75,16 @@ def main():
         chips = [item['chip_' + c] for c in p['chips']]
         comps = [{'index': i, 'template': item['component_' + c]} for i, c in enumerate(p['comps'])]
         name = '%s Boss' % p['short']
-        print('%s: capital %d %s\n   chips %d, comps %s, weapons %s forgotten %s' % (
-            name, sum(stats.values()), stats, len(chips), p['comps'], solo['weapons'], solo.get('forgotten_weapons')))
+        print('%s: capital %d %s\n   chips %d, comps %s, weapons %s' % (
+            name, sum(stats.values()), stats, len(chips), p['comps'], WEAPONS[n]))
         if a.dry_run:
             continue
         if name in loads:
             sid = loads[name]['id']
-            r = lw.post('/loadout/update', set_id=sid, name=name, icon='', weapons=json.dumps(solo['weapons']),
-                        forgotten_weapons=json.dumps(solo.get('forgotten_weapons') or []), chips=json.dumps(chips),
+            r = lw.call('PUT', '/loadout/update', set_id=sid, name=name, icon='', weapons=json.dumps(WEAPONS[n]), chips=json.dumps(chips),
                         components=json.dumps(comps), stats=json.dumps(stats))
         else:
-            r = lw.post('/loadout/create', name=name, icon='', weapons=json.dumps(solo['weapons']),
-                        forgotten_weapons=json.dumps(solo.get('forgotten_weapons') or []), chips=json.dumps(chips),
+            r = lw.post('/loadout/create', name=name, icon='', weapons=json.dumps(WEAPONS[n]), chips=json.dumps(chips),
                         components=json.dumps(comps), stats=json.dumps(stats))
             sid = (r.get('set') or {}).get('id') if isinstance(r, dict) else None
         print('   loadout', sid, str(r)[:160])
