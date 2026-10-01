@@ -420,7 +420,7 @@ function cleanse() {
     var best = null; var bp = 150
     for (var a in getAliveAllies()) {
         if (isSummon(a)) { continue }
-        var p = poisonOn(a) * (a == me() ? 1.2 : 1)
+        var p = poisonOn(a) * (a == me() ? (poisonOn(a) >= 300 ? 3 : 1.2) : 1)
         if (p > bp && canUseChip(CHIP_ANTIDOTE, a)) { bp = p; best = a }
     }
     if (best == null) { return false }
@@ -613,10 +613,12 @@ function tankTurn() {
     var keyed = []
     for (var m in mates) { push(keyed, [-(protectScore(m) + (roleOf(m) == 'striker' ? 3 : 0)), m]) }
     keyed = arraySort(keyed, function(x, y) { return x[0] - y[0] })
+    tankSelfFirst()
     for (var k in keyed) { if (castOn(CHIP_RAMPART, k[1])) { break } }
     for (var k in keyed) { if (castOn(CHIP_CARAPACE, k[1])) { break } }
     for (var k in keyed) { if (castOn(CHIP_FORTRESS, k[1])) { break } }
     castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); castSelf(CHIP_SHIELD)
+    tankStepBack()
     if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var tg = pickTarget()
     if (tg != null && ready(CHIP_LIBERATION) && (getAbsoluteShield(tg) > 100 || getRelativeShield(tg) > 15)) { castOn(CHIP_LIBERATION, tg) }
@@ -640,12 +642,40 @@ function fragileAlly() {
     return best
 }
 
+function kingCell() {
+    for (var e in getAliveEnemies()) { if (getName(e) == 'fennel_king') { return getCell(e) } }
+    return -1
+}
+
+// Tank under pressure (king within 7 or 2+ units within 8): fortress + wall on itself first.
+function tankSelfFirst() {
+    var kc = kingCell()
+    if ((kc != -1 && getCellDistance(getCell(), kc) <= 7) || threatOn(me()) >= 2) {
+        castSelf(CHIP_FORTRESS); castSelf(CHIP_WALL)
+    }
+}
+
+// Leftover MP: out of the king's reach (6), staying within rampart range (7) of the fragile ally.
+function tankStepBack() {
+    var kc = kingCell()
+    if (kc == -1 || getMP() <= 0 || getCellDistance(getCell(), kc) > 6) { return }
+    var fa = fragileAlly()
+    var rc = reachable(); var best = getCell(); var bs = -999
+    for (var c : var st in rc) {
+        if (fa != null && getCellDistance(c, getCell(fa)) > 7) { continue }
+        var sc = min(getCellDistance(c, kc), 9) * 3 - threatAt(c)
+        if (sc > bs) { bs = sc; best = c }
+    }
+    if (best != getCell()) { moveTowardCell(best) }
+}
+
 function tankShieldsOnly() {
     cleanse()
     // stay within fortress range (3) of the fragile ally, else within rampart/carapace range (6)
+    tankSelfFirst()
     var fa = fragileAlly()
-    if (fa != null && getMP() > 0 && getCellDistance(getCell(), getCell(fa)) > 3) {
-        moveToward(fa, max(0, getCellDistance(getCell(), getCell(fa)) - 3))
+    if (fa != null && getMP() > 0 && getCellDistance(getCell(), getCell(fa)) > 6) {
+        moveToward(fa, max(0, getCellDistance(getCell(), getCell(fa)) - 6))
     }
     var keyed = []
     for (var m in getAliveAllies()) {
@@ -657,6 +687,7 @@ function tankShieldsOnly() {
     for (var k in keyed) { if (castOn(CHIP_RAMPART, k[1])) { break } }
     for (var k in keyed) { if (castOn(CHIP_FORTRESS, k[1])) { break } }
     castSelf(CHIP_WALL); castSelf(CHIP_ARMOR)
+    tankStepBack()
 }
 
 // Buffer: stay within reach of the strikers, bark the tank, ferocity on one striker (sticky),
