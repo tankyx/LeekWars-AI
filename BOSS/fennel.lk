@@ -874,18 +874,28 @@ function puzzleTurnSquad() {
         var others = count(getAliveAllies()) - 1
         var g = gatheredAround(getCell())
         // dome only when divers can use it (teleport is on cooldown on turn 1) and near the rally cell
-        if (ready(CHIP_DOME) && getTurn() >= 2 && g >= 1 && (g >= min(2, others) || getTurn() >= 4) && getCellDistance(getCell(), R) <= 4) {
+        // dome for the regroup (its 3 turns must cover turns 4-6, when the army arrives in full)
+        var nSolved = 0
+        for (var c : var ax in _crystals) { if (solved(c)) { nSolved++ } }
+        if (ready(CHIP_DOME) && g >= min(2, others) && (nSolved >= 3 || getTurn() >= 4)) {
             castSelf(CHIP_SOLIDIFICATION)
             if (castSelf(CHIP_DOME)) { _domeCastTurn = getTurn(); note('DOME covers ' + g) }
         }
         // the tank dives once the dome is down (before spending TP on single-target shields)
-        if (ready(CHIP_RESURRECTION) && !ready(CHIP_DOME) && getTurn() - _domeCastTurn >= 1) {
+        if (ready(CHIP_RESURRECTION) && getTurn() >= 3 && !ready(CHIP_DOME) && getTurn() - _domeCastTurn >= 1) {
             if (trySolveOne()) { note('tank dived'); goTo(R) }
         } else if (ready(CHIP_RESURRECTION) && getTurn() >= 4) {
             if (trySolveOne()) { note('tank dived (late)'); goTo(R) }
         }
-        for (var a in getAliveAllies()) { if (a != me() && !isSummon(a) && roleOf(a) == 'striker') { if (castOn(CHIP_CARAPACE, a)) { break } } }
-        for (var a in getAliveAllies()) { if (a != me() && !isSummon(a) && roleOf(a) == 'striker') { if (castOn(CHIP_RAMPART, a)) { break } } }
+        var prot = []
+        for (var a in getAliveAllies()) {
+            if (a == me() || isSummon(a)) { continue }
+            var diver = getCooldown(CHIP_RESURRECTION, a) == 0 && inArray(getChips(a), CHIP_RESURRECTION)
+            push(prot, [-(threatOn(a) * 5 + (diver ? 20 : 0) + (roleOf(a) == 'striker' ? 3 : 0)), a])
+        }
+        prot = arraySort(prot, function(x, y) { return x[0] - y[0] })
+        for (var k in prot) { if (castOn(CHIP_CARAPACE, k[1])) { break } }
+        for (var k in prot) { if (castOn(CHIP_RAMPART, k[1])) { break } }
         castSelf(CHIP_FORTRESS); castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); castSelf(CHIP_SHIELD)
         return
     }
@@ -895,7 +905,7 @@ function puzzleTurnSquad() {
         castOn(CHIP_RAGE, me()); castOn(CHIP_SEVEN_LEAGUE_BOOTS, me())
     }
     // divers: dive only while carrying the dome (fallback from turn 4), then regroup
-    if (ready(CHIP_RESURRECTION) && getTurn() >= 2 && (teamDomed() || getTurn() >= 3)) {
+    if (ready(CHIP_RESURRECTION) && getTurn() >= 2) {
         if (trySolveOne()) { note('dived'); goTo(_tankCell != -1 ? _tankCell : R); castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); return }
     }
     var tkc = _tankCell != -1 ? _tankCell : R
