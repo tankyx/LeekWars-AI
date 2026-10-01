@@ -422,7 +422,8 @@ function weaponReach(target) {
             if (c != getCell() && getCellDistance(getCell(), c) > getMP()) { continue }
             var d = (c == getCell()) ? 0 : getPathLength(getCell(), c)
             if (d == null || d > getMP()) { continue }
-            if (best == null || d < best[1]) { best = [c, d, w] }
+            var pen = (_tankCell != -1 && getCellDistance(c, _tankCell) > 3) ? 3 : 0
+            if (best == null || d + pen < best[1] + best[3]) { best = [c, d, w, pen] }
         }
     }
     return best
@@ -508,6 +509,115 @@ function attack(target) {
     }
 }
 
+
+// ---------------- ROLES (tank = carries dome, buffer = carries ferocity, else striker) ----------------
+function roleOf(a) {
+    var cs = getChips(a)
+    if (cs == null) { return 'striker' }
+    if (inArray(cs, CHIP_DOME)) { return 'tank' }
+    if (inArray(cs, CHIP_FEROCITY)) { return 'buffer' }
+    return 'striker'
+}
+function myRole() { return roleOf(me()) }
+function squad(role) {
+    var out = []
+    for (var a in getAliveAllies()) { if (!isSummon(a) && roleOf(a) == role) { push(out, a) } }
+    return out
+}
+function threatOn(a) {
+    var n = 0
+    for (var e in army()) { if (getCellDistance(getCell(a), getCell(e)) <= 8) { n++ } }
+    return n
+}
+
+// Tank: stand where the dome (radius 3, allies only) covers the most strikers, then
+// solidification -> dome -> rampart / carapace on the most threatened ally -> own shields.
+function tankTurn() {
+    var mates = []
+    for (var a in getAliveAllies()) { if (!isSummon(a) && a != me()) { push(mates, a) } }
+    if (count(mates) > 0 && getMP() > 0) {
+        var rc = reachable(); var best = getCell(); var bs = -999
+        for (var c : var st in rc) {
+            var cov = 0
+            for (var m in mates) { if (getCellDistance(c, getCell(m)) <= 3) { cov += (roleOf(m) == 'striker' ? 3 : 1) } }
+            var sc = cov * 10 - threatAt(c) * 2 - st * 0.1
+            if (sc > bs) { bs = sc; best = c }
+        }
+        if (best != getCell()) { moveTowardCell(best) }
+    }
+    castSelf(CHIP_SOLIDIFICATION)
+    var covered = 0
+    for (var m in mates) { if (getCellDistance(getCell(), getCell(m)) <= 3) { covered++ } }
+    if (covered > 0 && count(army()) > 0) { castSelf(CHIP_DOME) }
+    var keyed = []
+    for (var m in mates) { push(keyed, [-(threatOn(m) * 10 + (1 - getLife(m) / getTotalLife(m)) * 5 + (roleOf(m) == 'striker' ? 3 : 0)), m]) }
+    keyed = arraySort(keyed, function(x, y) { return x[0] - y[0] })
+    for (var k in keyed) { if (castOn(CHIP_RAMPART, k[1])) { break } }
+    for (var k in keyed) { if (castOn(CHIP_CARAPACE, k[1])) { break } }
+    for (var k in keyed) { if (castOn(CHIP_FORTRESS, k[1])) { break } }
+    castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); castSelf(CHIP_SHIELD)
+    if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
+    var tg = pickTarget()
+    if (tg != null && ready(CHIP_LIBERATION) && (getAbsoluteShield(tg) > 100 || getRelativeShield(tg) > 15)) { castOn(CHIP_LIBERATION, tg) }
+}
+
+// Buffer: stay within reach of the strikers, bark the tank, ferocity on one striker (sticky),
+// doping / rage / seven league boots centred on the strikers, steroid / protein / acceleration.
+global _ferTarget = -1
+global _tankCell = -1
+function refreshTank() {
+    _tankCell = -1
+    if (myRole() == 'tank') { return }
+    var tk = squad('tank')
+    if (count(tk) > 0) { _tankCell = getCell(tk[0]) }
+}
+function bufferTurn() {
+    var st = squad('striker')
+    var tanks = squad('tank')
+    if (count(st) > 0 && getMP() > 0) {
+        var rc = reachable(); var best = getCell(); var bs = -999
+        for (var c : var stp in rc) {
+            var sc = 0
+            for (var m in st) { var d = getCellDistance(c, getCell(m)); if (d <= 5) { sc += 10 } else { sc -= d } }
+            for (var t in tanks) { if (getCellDistance(c, getCell(t)) <= 6) { sc += 4 } }
+            sc -= threatAt(c) * 3
+            if (sc > bs) { bs = sc; best = c }
+        }
+        if (best != getCell()) { moveTowardCell(best) }
+    }
+    for (var t in tanks) { castOn(CHIP_BARK, t) }
+    if (_ferTarget == -1 || !isAlive(_ferTarget)) {
+        _ferTarget = -1; var bl = -1
+        for (var m in st) { if (getTotalLife(m) > bl) { bl = getTotalLife(m); _ferTarget = m } }
+    }
+    if (_ferTarget != -1) { castOn(CHIP_FEROCITY, _ferTarget) }
+    // area buffs centred on the striker with the most allies around it
+    var centre = null; var cn = -1
+    for (var m in st) {
+        var n = 0
+        for (var a in getAliveAllies()) { if (!isSummon(a) && getCellDistance(getCell(a), getCell(m)) <= 2) { n++ } }
+        if (n > cn) { cn = n; centre = m }
+    }
+    if (centre != null) {
+        castOn(CHIP_DOPING, centre); castOn(CHIP_RAGE, centre); castOn(CHIP_SEVEN_LEAGUE_BOOTS, centre)
+        for (var m in st) { castOn(CHIP_STEROID, m); castOn(CHIP_PROTEIN, m); castOn(CHIP_ACCELERATION, m) }
+    }
+    castSelf(CHIP_WALL); castSelf(CHIP_ARMOR)
+    if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
+    var a2 = army()
+    if (count(a2) > 0 && getMP() > 0 && threatAt(getCell()) > 2) { moveAwayFromEntities(a2) }
+}
+
+// Striker: shots first from a cell inside the tank's dome radius when possible.
+function strikerTurn() {
+    if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
+    var t = pickTarget()
+    if (t != null) { attack(t) }
+    sustain()
+    var tanks = squad('tank')
+    if (count(tanks) > 0 && getMP() > 0 && getCellDistance(getCell(), getCell(tanks[0])) > 3) { moveTowardCell(getCell(tanks[0]), getMP()) }
+}
+
 // Squad healer: the leek whose damage stat is magic (poison is wasted on this boss).
 function isHealer() { return getMagic() > getStrength() }
 
@@ -558,6 +668,10 @@ function healerTurn() {
 
 // Strikers: emergency heal only, then buffs + every shot, then shields/heals with what is left.
 function combatTurn() {
+    var r = myRole()
+    if (r == 'tank') { tankTurn(); return }
+    if (r == 'buffer') { bufferTurn(); return }
+    if (count(squad('tank')) > 0) { strikerTurn(); return }
     if (isHealer()) { healerTurn(); return }
     if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var t = pickTarget()
@@ -648,14 +762,20 @@ function puzzleTurn() {
     var solvedNow = trySolveOne()
     if (!solvedNow && ready(CHIP_RESURRECTION)) { approach() }
     sustain()
-    // after my solve (or without one to do), stay out of the army's reach
+    // after my solve: tank shields / buffer buffs, strikers stay out of the army's reach
     if (!ready(CHIP_RESURRECTION)) {
-        var a = army()
-        if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
+        var role = myRole()
+        if (role == 'tank') { tankTurn() }
+        else if (role == 'buffer') { bufferTurn() }
+        else {
+            var a = army()
+            if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
+        }
     }
 }
 
 scan()
+refreshTank()
 if (_combat) { combatTurn() } else { puzzleTurn() }
 if (count(_log) > 0) { debug('BOSS T' + getTurn() + ' ' + getName(me()) + ': ' + join(_log, ' | ')) }
 _log = []

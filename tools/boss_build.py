@@ -36,21 +36,28 @@ def capital(base):
     return out
 
 
-CORE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots', 'jump',
-        'fortress', 'wall', 'armor', 'solidification', 'liberation', 'regeneration', 'remission', 'serum']
+# Role-split boss team (2026-10-01): Kurt tank (RES, dome), Margaret buffer (SCI), Ada + Edsger strikers (STR).
+PUZZLE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots', 'jump']
+STRIKER = PUZZLE + ['steroid', 'protein', 'regeneration', 'remission', 'liberation', 'antidote', 'armor',
+                    'iceberg', 'meteorite', 'lightning']
+TANK = PUZZLE + ['dome', 'rampart', 'fortress', 'wall', 'carapace', 'solidification', 'armor', 'shield',
+                 'liberation', 'antidote']
+BUFFER = PUZZLE + ['rage', 'seven_league_boots', 'ferocity', 'doping', 'bark', 'acceleration', 'steroid', 'protein',
+                   'wall', 'armor', 'liberation', 'antidote']
+# one copy of a component per leek (add-component -> already_equipped)
 PLANS = {
-    'AdaLovelace': dict(short='AL', base=dict(strength=430, wisdom=320, resistance=320, tp=20, mp=7, life=2015),
-                        comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'strawberry'],
-                        chips=CORE + ['steroid', 'protein']),
-    'EdsgerDijkstra': dict(short='ED', base=dict(strength=430, wisdom=320, resistance=320, tp=20, mp=7, life=2015),
-                           comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'strawberry'],
-                           chips=CORE + ['steroid', 'protein']),
-    'KurtGodel': dict(short='KG', base=dict(strength=460, wisdom=320, resistance=320, tp=19, mp=7, life=2060),
-                      comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'strawberry'],
-                      chips=CORE + ['steroid', 'protein', 'antidote', 'shield']),
-    'MargaretHamilton': dict(short='MH', base=dict(magic=460, wisdom=360, resistance=320, tp=20, mp=7, life=1620),
-                             comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'obsidian_plate', 'strawberry', 'hylocereus'],
-                             chips=CORE + ['antidote', 'shield']),
+    'AdaLovelace': dict(short='AL', base=dict(strength=600, tp=20, mp=6, life=2555),
+                        comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'soursop'],
+                        chips=STRIKER),
+    'EdsgerDijkstra': dict(short='ED', base=dict(strength=600, tp=20, mp=7, life=2315),
+                           comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'copper_spring'],
+                           chips=STRIKER),
+    'KurtGodel': dict(short='KG', base=dict(resistance=560, tp=20, mp=7, life=2555),
+                      comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'obsidian_plate', 'amazonite_plate', 'strawberry'],
+                      chips=TANK),
+    'MargaretHamilton': dict(short='MH', base=dict(science=500, tp=17, mp=7, life=3363),
+                             comps=['core3', 'neural_core_pro', 'neural_core', 'motherboard2', 'ram3', 'nuclear_core', 'ssd', 'power_supply'],
+                             chips=BUFFER),
 }
 # Boss weapons (item ids); the forgotten weapon goes IN the weapons list — the server
 # files it under forgotten_weapons itself (a separate forgotten_weapons field is ignored).
