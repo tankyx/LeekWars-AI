@@ -404,7 +404,33 @@ function selfStack() {
     castSelf(CHIP_KNOWLEDGE)
 }
 
+// Poison per turn on an entity (poison ignores shields: the King's Excalibur + the scribe's venom
+// were the main killer, 800-1,600 per turn).
+function poisonOn(e) {
+    var effs = getEffects(e)
+    if (effs == null) { return 0 }
+    var p = 0
+    for (var f in effs) { if (f[0] == EFFECT_POISON) { p += f[1] } }
+    return p
+}
+
+// Antidote (cd 4, range 0-4): on myself if poisoned, else on the most poisoned ally in range.
+function cleanse() {
+    if (!has(CHIP_ANTIDOTE) || getCooldown(CHIP_ANTIDOTE) > 0 || getTP() < getChipCost(CHIP_ANTIDOTE)) { return false }
+    var best = null; var bp = 150
+    for (var a in getAliveAllies()) {
+        if (isSummon(a)) { continue }
+        var p = poisonOn(a) * (a == me() ? 1.2 : 1)
+        if (p > bp && canUseChip(CHIP_ANTIDOTE, a)) { bp = p; best = a }
+    }
+    if (best == null) { return false }
+    var ok1 = ok(useChip(CHIP_ANTIDOTE, best))
+    if (ok1) { note('antidote ' + getName(best) + ' (' + round(bp) + '/turn)') }
+    return ok1
+}
+
 function sustain() {
+    cleanse()
     var life = getLife(); var total = getTotalLife()
     if (life < total * 0.5 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     if (life < total * 0.6) { castSelf(CHIP_ELEVATION) }
@@ -567,6 +593,7 @@ function threatOn(a) {
 // Tank: stand where the dome (radius 3, allies only) covers the most strikers, then
 // solidification -> dome -> rampart / carapace on the most threatened ally -> own shields.
 function tankTurn() {
+    cleanse()
     var mates = []
     for (var a in getAliveAllies()) { if (!isSummon(a) && a != me()) { push(mates, a) } }
     if (count(mates) > 0 && getMP() > 0) {
@@ -598,6 +625,7 @@ function tankTurn() {
 // Puzzle phase (army still invulnerable): carapace / rampart / fortress on the most threatened
 // allies, own shields; the dome is saved for the turn the graal dies.
 function tankShieldsOnly() {
+    cleanse()
     var keyed = []
     for (var m in getAliveAllies()) {
         if (m == me() || isSummon(m)) { continue }
@@ -621,6 +649,7 @@ function refreshTank() {
     if (count(tk) > 0) { _tankCell = getCell(tk[0]) }
 }
 function bufferTurn() {
+    cleanse()
     var st = squad('striker')
     var tanks = squad('tank')
     if (count(st) > 0 && getMP() > 0) {
@@ -659,6 +688,7 @@ function bufferTurn() {
 
 // Striker: shots first from a cell inside the tank's dome radius when possible.
 function strikerTurn() {
+    cleanse()
     if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var t = pickTarget()
     if (t != null) { attack(t) }

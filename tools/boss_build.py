@@ -39,7 +39,7 @@ def capital(base):
 # Role-split boss team (2026-10-01): Kurt tank (RES, dome), Margaret buffer (SCI), Ada + Edsger strikers (STR).
 PUZZLE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots', 'jump']
 # hybrid strikers (own RES 400 / WIS 300 to survive the dive): own shields instead of damage chips
-STRIKER = PUZZLE + ['steroid', 'protein', 'regeneration', 'remission', 'liberation', 'armor',
+STRIKER = PUZZLE + ['steroid', 'antidote', 'regeneration', 'remission', 'liberation', 'armor',
                     'fortress', 'wall', 'solidification', 'shield']
 TANK = PUZZLE + ['dome', 'rampart', 'fortress', 'wall', 'carapace', 'solidification', 'armor', 'shield',
                  'liberation', 'antidote']
