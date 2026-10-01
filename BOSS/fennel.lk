@@ -719,7 +719,7 @@ function bufferTurn() {
         for (var c : var stp in rc) {
             var sc = 0
             for (var m in st) { var d = getCellDistance(c, getCell(m)); if (d <= 5) { sc += 10 } else { sc -= d } }
-            for (var t in tanks) { if (getCellDistance(c, getCell(t)) <= 6) { sc += 4 } }
+            for (var t in tanks) { var dt = getCellDistance(c, getCell(t)); if (dt <= 3) { sc += 15 } else if (dt <= 6) { sc += 6 } }
             sc -= threatAt(c) * 3
             if (sc > bs) { bs = sc; best = c }
         }
@@ -1138,6 +1138,10 @@ function puzzleTurn() {
         var role = myRole()
         if (role == 'tank') { tankShieldsOnly() }
         else if (role == 'striker') { strikerStage() }
+        else if (role == 'buffer' && _tankCell != -1) {
+            // the buffer has no shields of her own (RES 12): stay inside the tank's shield range
+            if (getCellDistance(getCell(), _tankCell) > 3) { goTo(_tankCell) }
+        }
         else {
             var a = army()
             if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
