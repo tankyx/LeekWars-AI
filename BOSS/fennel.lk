@@ -611,7 +611,7 @@ function tankTurn() {
     for (var m in mates) { if (getCellDistance(getCell(), getCell(m)) <= 3) { covered++ } }
     if (covered >= min(2, count(mates)) && count(army()) > 0) { if (castSelf(CHIP_DOME)) { note('flip DOME covers ' + covered) } }
     var keyed = []
-    for (var m in mates) { push(keyed, [-(threatOn(m) * 10 + (1 - getLife(m) / getTotalLife(m)) * 5 + (roleOf(m) == 'striker' ? 3 : 0)), m]) }
+    for (var m in mates) { push(keyed, [-(protectScore(m) + (roleOf(m) == 'striker' ? 3 : 0)), m]) }
     keyed = arraySort(keyed, function(x, y) { return x[0] - y[0] })
     for (var k in keyed) { if (castOn(CHIP_RAMPART, k[1])) { break } }
     for (var k in keyed) { if (castOn(CHIP_CARAPACE, k[1])) { break } }
@@ -624,12 +624,33 @@ function tankTurn() {
 
 // Puzzle phase (army still invulnerable): carapace / rampart / fortress on the most threatened
 // allies, own shields; the dome is saved for the turn the graal dies.
+// Who needs the tank's shields: allies with low own RES (their own shields are worthless: Margaret)
+// first, then the most threatened / hurt.
+function protectScore(m) {
+    return (getResistance(m) < 200 ? 40 : 0) + threatOn(m) * 10 + (1 - getLife(m) / getTotalLife(m)) * 5
+}
+
+function fragileAlly() {
+    var best = null; var bs = -1
+    for (var m in getAliveAllies()) {
+        if (m == me() || isSummon(m) || getResistance(m) >= 200) { continue }
+        var sc = protectScore(m)
+        if (sc > bs) { bs = sc; best = m }
+    }
+    return best
+}
+
 function tankShieldsOnly() {
     cleanse()
+    // stay within fortress range (3) of the fragile ally, else within rampart/carapace range (6)
+    var fa = fragileAlly()
+    if (fa != null && getMP() > 0 && getCellDistance(getCell(), getCell(fa)) > 3) {
+        moveToward(fa, max(0, getCellDistance(getCell(), getCell(fa)) - 3))
+    }
     var keyed = []
     for (var m in getAliveAllies()) {
         if (m == me() || isSummon(m)) { continue }
-        push(keyed, [-(threatOn(m) * 10 + (1 - getLife(m) / getTotalLife(m)) * 5), m])
+        push(keyed, [-protectScore(m), m])
     }
     keyed = arraySort(keyed, function(x, y) { return x[0] - y[0] })
     for (var k in keyed) { if (castOn(CHIP_CARAPACE, k[1])) { break } }
@@ -1058,7 +1079,7 @@ function puzzleTurn() {
         var role = myRole()
         if (role == 'tank') { tankShieldsOnly() }
         var a = army()
-        if (count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
+        if (role != 'tank' && count(a) > 0 && getMP() > 0) { moveAwayFromEntities(a) }
     }
 }
 
