@@ -19,10 +19,11 @@ from lw_api import LWSession
 LEEKS = {19703: 'LeekRain', 21175: 'DawnFall', 129801: 'DuskHope', 130236: 'ProdigalSon'}
 # stat targets on TOTAL stats, in order; the first one not reached receives the new capital
 CAPITAL_PLAN = {
-    'LeekRain':    [('strength', 600), ('science', 450), ('life', 99999)],
-    'DawnFall':    [('magic', 600), ('wisdom', 350), ('life', 99999)],
-    'DuskHope':    [('magic', 600), ('wisdom', 350), ('life', 99999)],
-    'ProdigalSon': [('strength', 600), ('wisdom', 300), ('life', 99999)],
+    # main stat target, then TP (decides shots per turn) and MP, then secondary stats / life
+    'LeekRain':    [('strength', 600), ('tp', 24), ('mp', 6), ('science', 450), ('life', 99999)],
+    'DawnFall':    [('magic', 600), ('tp', 24), ('mp', 6), ('wisdom', 350), ('life', 99999)],
+    'DuskHope':    [('magic', 600), ('tp', 24), ('mp', 6), ('wisdom', 350), ('life', 99999)],
+    'ProdigalSon': [('strength', 600), ('tp', 24), ('mp', 6), ('wisdom', 300), ('life', 99999)],
 }
 LOG = os.path.join(ROOT, 'data', 'ladder', 'xp_farm.csv')
 UNLOCKS = os.path.join(ROOT, 'data', 'ladder', 'xp_farm_unlocks.json')
@@ -56,8 +57,10 @@ def point_cost(stat, base):
     if stat == 'life':
         inv = base - 100  # base life at level 1 is ~100 + level gains; use tiers on invested points
         return 0.25 if base < 2000 else (1 / 3.0 if base < 3000 else 0.5)
-    if stat in ('tp', 'mp'):
-        return 999
+    if stat == 'tp':   # the n-th invested TP point costs 30 + 5n (base TP is 10)
+        return 30 + 5 * (base - 10)
+    if stat == 'mp':   # the n-th invested MP point costs 20n (base MP is 3)
+        return 20 * (base - 3 + 1)
     return 0.5 if base < 200 else (1 if base < 400 else (2 if base < 600 else 3))
 
 
@@ -73,6 +76,10 @@ def spend_capital(lw, lid, name):
         base = l.get(stat) or 0
         c = point_cost(stat, base)
         pts = int(cap / c)
+        if stat in ('tp', 'mp'):
+            if pts <= 0:
+                break          # save the capital for the next TP/MP point
+            pts = 1
         if pts <= 0:
             # remaining capital too small for this stat's tier: put it in life (cheapest)
             stat, c = 'life', point_cost('life', l.get('life') or 0)
