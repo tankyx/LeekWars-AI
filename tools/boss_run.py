@@ -9,7 +9,10 @@ import argparse, json, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from lw_api import LWSession
-LEEKS = [129296, 129295, 20443, 129288]
+# Participant order = spawn slot: slot 1 -> cell 228 (next to the king's spawn, 170), slot 2 -> 491,
+# slot 3 -> 563, slot 4 -> 588 (back pocket). Margaret (RES 12) spawned at 228 and took ~790 from the
+# king on turn 2 on average (died turns 4-5 in 23/49 fights): the tank takes slot 1, Margaret the pocket.
+LEEKS = [129295, 20443, 129288, 129296]
 OURS = {129295: 'Kur', 20443: 'Ada', 129296: 'Mar', 129288: 'Eds'}
 
 
