@@ -800,6 +800,38 @@ function rallyCell() {
     return best
 }
 
+// Hold cell: off-axis, next to the graal, closest to the four revive sites. Divers end their
+// dive around here, so the squad regroups where they land (same cell for every leek: static data).
+global _hold = -1
+function holdCell() {
+    if (_hold != -1) { return _hold }
+    var g0s = []
+    for (var axis in ['north', 'south', 'east', 'west']) {
+        for (var d = 1; d <= 6; d++) {
+            var x = _gx; var y = _gy
+            if (axis == 'north') { y = _gy - d }
+            if (axis == 'south') { y = _gy + d }
+            if (axis == 'east') { x = _gx + d }
+            if (axis == 'west') { x = _gx - d }
+            var gc = getCellFromXY(x, y)
+            if (gc != null && !isObstacle(gc)) { push(g0s, gc); break }
+        }
+    }
+    var best = _graalCell; var bs = 999999
+    for (var dx = -6; dx <= 6; dx++) {
+        for (var dy = -6 + abs(dx); dy <= 6 - abs(dx); dy++) {
+            var cell = getCellFromXY(_gx + dx, _gy + dy)
+            if (cell == null || isObstacle(cell) || getCellDistance(cell, _graalCell) < 2) { continue }
+            if (getCellX(cell) == _gx || getCellY(cell) == _gy) { continue }
+            var sc = 0
+            for (var g in g0s) { sc += getCellDistance(cell, g) }
+            if (sc < bs || (sc == bs && cell < best)) { bs = sc; best = cell }
+        }
+    }
+    _hold = best
+    return best
+}
+
 function hasEffectFrom(e, chip) {
     var effs = getEffects(e)
     if (effs == null) { return false }
@@ -846,19 +878,19 @@ function teamDomed() {
 
 function puzzleTurnSquad() {
     var role = myRole()
-    var R = rallyCell()
+    var R = holdCell()
     saveDeadCrystals()
     castSelf(CHIP_MOTIVATION)
     if (getTurn() == 1) { castSelf(CHIP_LEATHER_BOOTS) }
     // tank: dome as soon as the squad is gathered (or from turn 3 whoever is close)
     if (role == 'tank') {
         // walk to the rally cell; near it, shift to the cell whose dome covers the most allies
-        if (getCellDistance(getCell(), R) > 2) {
+        if (getCellDistance(getCell(), R) > 4) {
             goTo(R)
         } else {
             var rc = reachable(); var bestC = getCell(); var bestS = -999
             for (var c : var st in rc) {
-                if (getCellDistance(c, R) > 3) { continue }
+                if (getCellDistance(c, R) > 5) { continue }
                 var cov = 0
                 for (var a in getAliveAllies()) { if (a != me() && !isSummon(a) && getCellDistance(c, getCell(a)) <= 3) { cov++ } }
                 var sc = cov * 100 - getCellDistance(c, R) - st * 0.01
@@ -906,10 +938,14 @@ function puzzleTurnSquad() {
     }
     // divers: dive only while carrying the dome (fallback from turn 4), then regroup
     if (ready(CHIP_RESURRECTION) && getTurn() >= 2) {
-        if (trySolveOne()) { note('dived'); goTo(_tankCell != -1 ? _tankCell : R); castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); return }
+        if (trySolveOne()) {
+            note('dived, hold at ' + getCell() + ' dH ' + getCellDistance(getCell(), R))
+            if (getCellDistance(getCell(), R) > 2) { goTo(R) }
+            castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); return
+        }
     }
-    var tkc = _tankCell != -1 ? _tankCell : R
-    if (getCellDistance(getCell(), tkc) > 2) { goTo(tkc) }
+    // already dived: close in on the tank; not yet: move toward the hold cell (shorter dives)
+    if (getCellDistance(getCell(), R) > 2) { goTo(R) }
     if (role == 'buffer') {
         for (var m in squad('striker')) { castOn(CHIP_PROTEIN, m) }
     }
