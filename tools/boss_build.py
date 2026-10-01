@@ -38,25 +38,26 @@ def capital(base):
 
 # Role-split boss team (2026-10-01): Kurt tank (RES, dome), Margaret buffer (SCI), Ada + Edsger strikers (STR).
 PUZZLE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots', 'jump']
-STRIKER = PUZZLE + ['steroid', 'protein', 'regeneration', 'remission', 'liberation', 'antidote', 'armor',
-                    'iceberg', 'meteorite', 'lightning']
+# hybrid strikers (own RES 400 / WIS 300 to survive the dive): own shields instead of damage chips
+STRIKER = PUZZLE + ['steroid', 'protein', 'regeneration', 'remission', 'liberation', 'armor',
+                    'fortress', 'wall', 'solidification', 'shield']
 TANK = PUZZLE + ['dome', 'rampart', 'fortress', 'wall', 'carapace', 'solidification', 'armor', 'shield',
                  'liberation', 'antidote']
 BUFFER = PUZZLE + ['rage', 'seven_league_boots', 'ferocity', 'doping', 'bark', 'acceleration', 'steroid', 'protein',
                    'wall', 'armor', 'liberation', 'antidote']
 # one copy of a component per leek (add-component -> already_equipped)
 PLANS = {
-    'AdaLovelace': dict(short='AL', base=dict(strength=600, tp=20, mp=6, life=2555),
+    'AdaLovelace': dict(short='AL', base=dict(strength=450, wisdom=170, resistance=320, tp=20, mp=6, life=2540),
                         comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'soursop'],
                         chips=STRIKER),
-    'EdsgerDijkstra': dict(short='ED', base=dict(strength=600, tp=20, mp=7, life=2315),
+    'EdsgerDijkstra': dict(short='ED', base=dict(strength=440, wisdom=220, resistance=275, tp=20, mp=7, life=2390),
                            comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'copper_spring'],
                            chips=STRIKER),
     'KurtGodel': dict(short='KG', base=dict(resistance=560, tp=20, mp=7, life=2555),
-                      comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'obsidian_plate', 'amazonite_plate', 'strawberry'],
+                      comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'obsidian_plate', 'amazonite_plate', 'watercooling'],
                       chips=TANK),
     'MargaretHamilton': dict(short='MH', base=dict(science=500, tp=17, mp=7, life=3363),
-                             comps=['core3', 'neural_core_pro', 'neural_core', 'motherboard2', 'ram3', 'nuclear_core', 'ssd', 'power_supply'],
+                             comps=['core3', 'neural_core_pro', 'ram2', 'motherboard2', 'ram3', 'nuclear_core', 'ssd', 'power_supply'],
                              chips=BUFFER),
 }
 # Boss weapons (item ids); the forgotten weapon goes IN the weapons list — the server
@@ -69,13 +70,16 @@ LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'M
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--dry-run', action='store_true'); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument('--dry-run', action='store_true')
+    ap.add_argument('--only', default='', help='comma list of leek names (default: all four)'); a = ap.parse_args()
     lw = LWSession('main')
     I = lw.get('/item/get-all')
     item = {v['name']: int(k) for k, v in I.items()}
     item.update({'component_' + v['name']: int(k) for k, v in I.items() if v.get('type') == 8})
     loads = {l['name']: l for l in lw.get('/loadout/get-all')['loadouts']}
     for n, p in PLANS.items():
+        if a.only and n not in a.only.split(','):
+            continue
         stats = capital(p['base'])
         assert sum(stats.values()) <= 1780, (n, sum(stats.values()))
         solo = loads['%s Solo' % p['short']]
