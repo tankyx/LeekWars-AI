@@ -29,6 +29,28 @@ UNLOCKS = os.path.join(ROOT, 'data', 'ladder', 'xp_farm_unlocks.json')
 L300 = 14078968
 
 
+class Limited:
+    """LWSession wrapper: every call waits its turn under a shared requests/second budget."""
+    def __init__(self, lw, rate):
+        self.lw, self.gap, self.next, self.lock = lw, 1.0 / rate, time.time(), threading.Lock()
+
+    def _wait(self):
+        with self.lock:
+            now = time.time(); w = self.next - now
+            self.next = max(now, self.next) + self.gap
+        if w > 0:
+            time.sleep(w)
+
+    def get(self, *a, **k):
+        self._wait(); return self.lw.get(*a, **k)
+
+    def post(self, *a, **k):
+        self._wait(); return self.lw.post(*a, **k)
+
+    def leek(self, lid):
+        self._wait(); return self.lw.leek(lid)
+
+
 def spend_capital(lw, lid, name):
     spent = []
     for _ in range(30):
@@ -63,11 +85,12 @@ def unlocks(lw, items, lid, level, prev_level):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--fights', type=int, default=200)
-    ap.add_argument('--inflight', type=int, default=3)
+    ap.add_argument('--inflight', type=int, default=25)
+    ap.add_argument('--rate', type=float, default=9.0, help='API requests per second (limit 10)')
     ap.add_argument('--check', type=int, default=25)
     ap.add_argument('--boss', type=int, default=1)
     a = ap.parse_args()
-    lw = LWSession('cure')
+    lw = Limited(LWSession('cure'), a.rate)
     items = lw.get('/item/get-all')
     levels = {lid: lw.leek(lid)['level'] for lid in LEEKS}
     new = not os.path.exists(LOG)
@@ -75,7 +98,7 @@ def main():
     if new:
         w.writerow(['time', 'fight', 'win', 'turns'] + ['%s_xp' % n for n in LEEKS.values()] + ['%s_level' % n for n in LEEKS.values()])
     found = json.load(open(UNLOCKS)) if os.path.exists(UNLOCKS) else []
-    pending = []; started = 0; done = 0; wins = 0; t0 = time.time()
+    pending = []; started = 0; done = 0; wins = 0; t0 = time.time(); polled = {}
     while done < a.fights:
         while started < a.fights and len(pending) < a.inflight:
             r = lw.post('/garden/start-boss-fight', boss_id=a.boss, participants=json.dumps(list(LEEKS)))
@@ -87,8 +110,11 @@ def main():
                 time.sleep(3)
                 break
             pending.append(fid); started += 1
-        time.sleep(2)
+        time.sleep(0.5)
         for fid in list(pending):
+            if time.time() - polled.get(fid, 0) < 3:
+                continue
+            polled[fid] = time.time()
             g = lw.get('/fight/get/%d' % fid); g = g.get('fight', g) if isinstance(g, dict) else {}
             if g.get('status') != 2:
                 continue
