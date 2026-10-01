@@ -111,9 +111,13 @@ function goalCells(axis) {
     return out
 }
 
+// Army pressure on a cell: units within their walk + weapon reach (~11), closer counts more.
 function threatAt(cell) {
     var n = 0
-    for (var e in army()) { if (getCellDistance(cell, getCell(e)) <= 7) { n++ } }
+    for (var e in army()) {
+        var d = getCellDistance(cell, getCell(e))
+        if (d <= 11) { n += (12 - d) / 6 }
+    }
     return n
 }
 
@@ -507,8 +511,11 @@ function approach() {
             if (f < tgtF) { tgtF = f; tgt = cell }
         }
     }
-    // tele-first staging: within teleport range of a revive cell that sees the crystal
-    if (ready(CHIP_TELEPORTATION) || getCooldown(CHIP_TELEPORTATION) <= 1) {
+    // tele-first staging: within teleport range of a revive cell that sees the crystal,
+    // only for a leek that can afford teleport + spark + resurrect next turn
+    var teleNeed = getChipCost(CHIP_TELEPORTATION) + getChipCost(CHIP_SPARK) + getChipCost(CHIP_RESURRECTION)
+    var nextTP = getTotalTP() + (has(CHIP_ADRENALINE) && getCooldown(CHIP_ADRENALINE) <= 1 ? 4 : 0)
+    if ((ready(CHIP_TELEPORTATION) || getCooldown(CHIP_TELEPORTATION) <= 1) && nextTP >= teleNeed) {
         var tn = null; var tnd = 999
         for (var o in teleFirstOptions(c)) { var d2 = getCellDistance(getCell(), o[0]); if (d2 < tnd) { tnd = d2; tn = o[0] } }
         if (tn != null) {
@@ -533,7 +540,7 @@ function approach() {
 }
 
 function puzzleTurn() {
-    if (getTurn() <= 3) { note('res=' + has(CHIP_RESURRECTION) + '/' + getCooldown(CHIP_RESURRECTION) + ' tele=' + has(CHIP_TELEPORTATION) + ' spark=' + has(CHIP_SPARK) + ' tp=' + getTP() + ' mp=' + getMP() + ' at ' + getCell() + ' mine=' + myCrystal()) }
+    if (getTurn() <= 2) { note('res=' + has(CHIP_RESURRECTION) + '/' + getCooldown(CHIP_RESURRECTION) + ' tele=' + has(CHIP_TELEPORTATION) + ' spark=' + has(CHIP_SPARK) + ' tp=' + getTP() + ' mp=' + getMP() + ' at ' + getCell() + ' mine=' + myCrystal()) }
     saveDeadCrystals()
     if (getTurn() == 1) {
         if (!trySolveOne()) { approach() }   // walk-in solve if one is already in reach
