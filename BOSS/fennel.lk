@@ -419,6 +419,7 @@ function weaponReach(target) {
         var cells = getCellsToUseWeapon(w, target)
         if (cells == null) { continue }
         for (var c in cells) {
+            if (c != getCell() && getCellDistance(getCell(), c) > getMP()) { continue }
             var d = (c == getCell()) ? 0 : getPathLength(getCell(), c)
             if (d == null || d > getMP()) { continue }
             if (best == null || d < best[1]) { best = [c, d, w] }
@@ -427,30 +428,55 @@ function weaponReach(target) {
     return best
 }
 
-function pickTarget() {
+// Squad focus (same for every leek): squires -> knights -> scribe -> king, lowest HP+shield first
+// within a class (the kill order of the squads that win). Crystals once the army is dead.
+function classOf(e) {
+    var n = getName(e)
+    if (n == 'fennel_squire') { return 0 }
+    if (n == 'fennel_knight') { return 1 }
+    if (n == 'fennel_scribe') { return 2 }
+    if (n == 'fennel_king') { return 3 }
+    return 4
+}
+
+function focusOrder() {
     var cands = army()
     if (count(cands) == 0) {
-        for (var e in getAliveEnemies()) { if (isCrystal(e) || getName(e) == 'graal') { push(cands, e) } }
+        for (var e in getAliveEnemies()) { if (isCrystal(e)) { push(cands, e) } }
     }
-    var best = null; var bestScore = 999999999999
-    for (var e in cands) {
-        var r = weaponReach(e)
-        var eff = getLife(e) + getAbsoluteShield(e)
-        if (getName(e) == 'fennel_scribe') { eff = eff * 0.6 }
-        var score = eff + (r == null ? 100000 + getCellDistance(getCell(), getCell(e)) * 100 : r[1] * 50)
-        if (score < bestScore) { bestScore = score; best = e }
+    var keyed = []
+    for (var e in cands) { push(keyed, [classOf(e) * 100000 + getLife(e) + getAbsoluteShield(e), e]) }
+    keyed = arraySort(keyed, function(a, b) { return a[0] - b[0] })
+    var out = []
+    for (var k in keyed) { push(out, k[1]) }
+    return out
+}
+
+function pickTarget() {
+    var order = focusOrder()
+    if (count(order) == 0) { return null }
+    // the squad focus if I can hit it this turn, else the first one in focus order I can hit
+    var n = 0
+    for (var e in order) {
+        if (n++ >= 3) { break }
+        if (getCellDistance(getCell(), getCell(e)) > getMP() + 12) { continue }
+        if (weaponReach(e) != null) { return e }
     }
-    return best
+    return order[0]
 }
 
 function attack(target) {
     castSelf(CHIP_STEROID); castSelf(CHIP_PROTEIN)
-    if ((getAbsoluteShield(target) > 150 || getRelativeShield(target) > 25) && ready(CHIP_LIBERATION) && canUseChip(CHIP_LIBERATION, target)) {
+    if ((getAbsoluteShield(target) > 100 || getRelativeShield(target) > 15) && ready(CHIP_LIBERATION) && canUseChip(CHIP_LIBERATION, target)) {
         useChip(CHIP_LIBERATION, target)
     }
     var r = weaponReach(target)
     if (r == null) {
         moveToward(target)
+        // liberation may be in range after the move
+        if ((getAbsoluteShield(target) > 100 || getRelativeShield(target) > 15) && ready(CHIP_LIBERATION) && canUseChip(CHIP_LIBERATION, target)) {
+            useChip(CHIP_LIBERATION, target)
+        }
     } else {
         if (r[0] != getCell()) { moveTowardCell(r[0]) }
         var w = r[2]
@@ -474,7 +500,7 @@ function attack(target) {
     }
     for (var ch in getChips()) {
         if (!isAlive(target)) { break }
-        if (ch == CHIP_SPARK && !isArmy(target) && count(army()) > 0) { continue }
+        if (ch == CHIP_SPARK) { continue }
         if (!offensive(getChipEffects(ch))) { continue }
         if (!canUseChip(ch, target)) { continue }
         if (areaHitsAlly(getChipEffectiveArea(ch, getCell(target)))) { continue }

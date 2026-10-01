@@ -37,7 +37,7 @@ def capital(base):
 
 
 CORE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots', 'jump',
-        'fortress', 'wall', 'armor', 'solidification', 'shield', 'regeneration', 'remission', 'serum']
+        'fortress', 'wall', 'armor', 'solidification', 'liberation', 'regeneration', 'remission', 'serum']
 PLANS = {
     'AdaLovelace': dict(short='AL', base=dict(strength=430, wisdom=320, resistance=320, tp=20, mp=7, life=2015),
                         comps=['core3', 'motherboard2', 'ram2', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'strawberry'],
@@ -47,10 +47,10 @@ PLANS = {
                            chips=CORE + ['steroid', 'protein']),
     'KurtGodel': dict(short='KG', base=dict(strength=460, wisdom=320, resistance=320, tp=19, mp=7, life=2060),
                       comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'ssd', 'obsidian_plate', 'strawberry'],
-                      chips=CORE + ['steroid', 'protein', 'antidote', 'knowledge']),
+                      chips=CORE + ['steroid', 'protein', 'antidote', 'shield']),
     'MargaretHamilton': dict(short='MH', base=dict(magic=460, wisdom=360, resistance=320, tp=20, mp=7, life=1620),
                              comps=['core3', 'motherboard2', 'ram3', 'power_supply', 'nuclear_core', 'obsidian_plate', 'strawberry', 'hylocereus'],
-                             chips=CORE + ['antidote', 'knowledge']),
+                             chips=CORE + ['antidote', 'shield']),
 }
 # Boss weapons (item ids); the forgotten weapon goes IN the weapons list — the server
 # files it under forgotten_weapons itself (a separate forgotten_weapons field is ignored).
