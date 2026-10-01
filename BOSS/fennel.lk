@@ -230,7 +230,39 @@ function saveDeadCrystals() {
         if (isAlive(c)) { continue }
         var tp = getTP() + (ready(CHIP_ADRENALINE) ? 4 : 0)
         var plan = revivePlan(c, tp, getCell(), 0)
-        if (plan == null) { continue }
+        if (plan == null) {
+            // teleport to F, walk to a revive cell t, resurrect onto its goal (crystal killed by the chest etc.)
+            if (!ready(CHIP_TELEPORTATION) || tp < getChipCost(CHIP_TELEPORTATION) + getChipCost(CHIP_RESURRECTION)) { continue }
+            var opts = []
+            var tr = getChipMaxRange(CHIP_TELEPORTATION); var mp = getMP()
+            for (var g in goalCells(axis)) {
+                for (var t in standCells(g)) {
+                    var tx = getCellX(t); var ty = getCellY(t)
+                    for (var dx = -mp; dx <= mp; dx++) {
+                        for (var dy = -mp + abs(dx); dy <= mp - abs(dx); dy++) {
+                            var f = getCellFromXY(tx + dx, ty + dy)
+                            if (f == null || f == getCell() || isObstacle(f) || !isEmptyCell(f)) { continue }
+                            var dm = getCellDistance(getCell(), f)
+                            if (dm < 1 || dm > tr) { continue }
+                            push(opts, [getCellDistance(f, t), f, t, g])
+                        }
+                    }
+                }
+            }
+            opts = arraySort(opts, function(x, y) { return x[0] - y[0] })
+            var n = 0
+            for (var o in opts) {
+                if (n++ >= 6) { break }
+                var pl = (o[1] == o[2]) ? 0 : getPathLength(o[1], o[2])
+                if (pl == null || pl > getMP()) { continue }
+                if (getTP() < getChipCost(CHIP_TELEPORTATION) + getChipCost(CHIP_RESURRECTION)) { useChip(CHIP_ADRENALINE, me()) }
+                if (!ok(useChipOnCell(CHIP_TELEPORTATION, o[1]))) { break }
+                note('SAVE ' + getName(c) + ' tele ' + o[1] + ' walk ' + o[2])
+                execRevive(c, [o[2], o[3], false])
+                return
+            }
+            continue
+        }
         if (getTP() < getChipCost(CHIP_RESURRECTION) + (plan[2] ? getChipCost(CHIP_TELEPORTATION) : 0)) {
             useChip(CHIP_ADRENALINE, me())
         }
@@ -986,7 +1018,10 @@ function puzzleTurn() {
         return
     }
     var solvedNow = trySolveOne()
-    if (!solvedNow && ready(CHIP_RESURRECTION)) { approach() }
+    if (!solvedNow && ready(CHIP_RESURRECTION)) {
+        approach()
+        if (myRole() == 'buffer') { castSelf(CHIP_RAGE); castSelf(CHIP_SEVEN_LEAGUE_BOOTS) }
+    }
     sustain()
     // after my solve: tank shields / buffer buffs, strikers stay out of the army's reach
     if (!ready(CHIP_RESURRECTION)) {
