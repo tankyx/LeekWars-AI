@@ -15,6 +15,11 @@ KIT = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'le
        'wall', 'armor', 'solidification', 'regeneration', 'remission', 'knowledge', 'elevation', 'liberation']
 
 
+# role chips like the live boss builds (tools/boss_build.py)
+ROLE_KIT = {'KurtGodel': ['dome', 'rampart', 'carapace', 'solidification', 'shield'],
+            'MargaretHamilton': ['ferocity', 'bark', 'rage', 'seven_league_boots', 'doping', 'acceleration']}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--fight', type=int, default=None)
@@ -29,7 +34,8 @@ def main():
         scn = lb.build(configs, a.seed + k, a.fight)
         for e in scn['entities'][0]:
             e['ai'] = 'BOSS/fennel.lk'
-            e['chips'] = list(dict.fromkeys(list(e['chips']) + [ids[n] for n in KIT]))
+            role = ROLE_KIT.get(e['name'], [])
+            e['chips'] = list(dict.fromkeys([ids[n] for n in KIT + role] + list(e['chips'])))[:30]
         data = lb.run(scn)
         fight = data.get('fight', data)
         names = {l['id']: l['name'] for l in fight['leeks']}

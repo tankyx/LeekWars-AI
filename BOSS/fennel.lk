@@ -746,7 +746,168 @@ function approach() {
     note('no revive cell for ' + getName(c))
 }
 
+// ---------------- GATHER -> DOME -> DIVE -> REGROUP ----------------
+global _rally = -1
+// Same cell for every leek: computed from the graal and the crystals' spawn cells only (obstacles,
+// no entity occupancy), so the squad converges without messaging.
+global MSG_RALLY = 911
+// First leek to act picks the rally cell by real walking distance from every ally and broadcasts
+// it (messages reach teammates at once, cleared after their own turn); the others adopt it.
+function rallyCell() {
+    if (_rally != -1) { return _rally }
+    for (var m in getMessages()) {
+        if (getMessageType(m) == MSG_RALLY) { _rally = getMessageParams(m); return _rally }
+    }
+    var cs = []
+    for (var c : var axis in _crystals) {
+        if (!isAlive(c)) { continue }
+        push(cs, getCell(c))
+    }
+    var mates = []
+    for (var a in getAliveAllies()) { if (!isSummon(a)) { push(mates, getCell(a)) } }
+    // shortlist by straight distance, then rank by walking distance
+    var shortlist = []
+    for (var dx = -16; dx <= 16; dx++) {
+        for (var dy = -16 + abs(dx); dy <= 16 - abs(dx); dy++) {
+            var cell = getCellFromXY(_gx + dx, _gy + dy)
+            if (cell == null || isObstacle(cell) || !isEmptyCell(cell) || getCellDistance(cell, _graalCell) <= 3) { continue }
+            if (getCellX(cell) == _gx || getCellY(cell) == _gy) { continue }   // keep the crystal axes free
+            var sc = 0; var far = 0
+            for (var sp in mates) { var ds = getCellDistance(cell, sp); sc += ds; if (ds > far) { far = ds } }
+            sc += far * 2
+            for (var cc in cs) { sc += getCellDistance(cell, cc) * 0.5 }
+            push(shortlist, [sc, cell])
+        }
+    }
+    shortlist = arraySort(shortlist, function(x, y) { return x[0] - y[0] })
+    var best = count(shortlist) > 0 ? shortlist[0][1] : getCell(); var bs = 999999
+    var n = 0
+    for (var k in shortlist) {
+        if (n++ >= 40) { break }
+        var cell = k[1]; var sc = 0; var far = 0; var okp = true
+        for (var sp in mates) {
+            var pl = (sp == cell) ? 0 : getPathLength(sp, cell)
+            if (pl == null) { okp = false; break }
+            sc += pl; if (pl > far) { far = pl }
+        }
+        if (!okp) { continue }
+        sc += far * 2
+        for (var cc in cs) { sc += getCellDistance(cell, cc) * 0.5 }
+        if (sc < bs) { bs = sc; best = cell }
+    }
+    _rally = best
+    sendAll(MSG_RALLY, best)
+    return best
+}
+
+function hasEffectFrom(e, chip) {
+    var effs = getEffects(e)
+    if (effs == null) { return false }
+    for (var f in effs) { if (count(f) > 5 && f[5] == chip) { return true } }
+    return false
+}
+
+// Walk (then jump) toward cell dest; falls back to the reachable cell closest in straight line.
+function goTo(dest) {
+    if (dest == null || dest == -1 || getCell() == dest) { return }
+    var mp0 = getMP()
+    if (getCellDistance(getCell(), dest) > 1) { moveTowardCell(dest) }
+    if (getMP() == mp0 && mp0 > 0) {
+        var rc = reachable(); var bc = getCell(); var bcd = getCellDistance(getCell(), dest)
+        for (var cell : var st in rc) { var dd = getCellDistance(cell, dest); if (dd < bcd) { bcd = dd; bc = cell } }
+        if (bc != getCell()) { moveTowardCell(bc) }
+    }
+    if (getCellDistance(getCell(), dest) > 3 && has(CHIP_JUMP) && getCooldown(CHIP_JUMP) == 0 && getTP() >= getChipCost(CHIP_JUMP)) {
+        var bj = null; var bjd = getCellDistance(getCell(), dest)
+        var x = getCellX(getCell()); var y = getCellY(getCell())
+        for (var ddx = -3; ddx <= 3; ddx++) {
+            for (var ddy = -3 + abs(ddx); ddy <= 3 - abs(ddx); ddy++) {
+                var j = getCellFromXY(x + ddx, y + ddy)
+                if (j == null || isObstacle(j) || !isEmptyCell(j)) { continue }
+                var d = getCellDistance(j, dest)
+                if (d < bjd && canUseChipOnCell(CHIP_JUMP, j)) { bjd = d; bj = j }
+            }
+        }
+        if (bj != null) { useChipOnCell(CHIP_JUMP, bj) }
+    }
+}
+
+function gatheredAround(cell) {
+    var n = 0
+    for (var a in getAliveAllies()) { if (!isSummon(a) && a != me() && getCellDistance(getCell(a), cell) <= 3) { n++ } }
+    return n
+}
+
+global _domeCastTurn = -99
+function teamDomed() {
+    // a dome effect on me, or (tank) my own dome cast this turn / last turn
+    return hasEffectFrom(me(), CHIP_DOME) || (myRole() == 'tank' && getTurn() - _domeCastTurn <= 1)
+}
+
+function puzzleTurnSquad() {
+    var role = myRole()
+    var R = rallyCell()
+    saveDeadCrystals()
+    castSelf(CHIP_MOTIVATION)
+    if (getTurn() == 1) { castSelf(CHIP_LEATHER_BOOTS) }
+    // tank: dome as soon as the squad is gathered (or from turn 3 whoever is close)
+    if (role == 'tank') {
+        // stand where the dome covers the most allies right now (tie: closest to the rally cell)
+        var rc = reachable(); var bestC = getCell(); var bestS = -999
+        for (var c : var st in rc) {
+            var cov = 0
+            for (var a in getAliveAllies()) { if (a != me() && !isSummon(a) && getCellDistance(c, getCell(a)) <= 3) { cov++ } }
+            var sc = (cov >= 2 ? cov * 100 : 0) - getCellDistance(c, R) * 2 - st * 0.01
+            if (sc > bestS) { bestS = sc; bestC = c }
+        }
+        var mvd = (bestC != getCell()) ? moveTowardCell(bestC) : 0
+        if (getTurn() <= 4) {
+            var pos = []
+            for (var a in getAliveAllies()) { if (a != me()) { push(pos, getName(a) + '@' + getCell(a) + '/d' + getCellDistance(getCell(), getCell(a))) } }
+            note('tank want ' + bestC + ' cov ' + floor(bestS / 100) + ' moved ' + mvd + ' now ' + getCell() + ' mp ' + getMP() + ' ' + join(pos, ','))
+        }
+        if (gatheredAround(getCell()) == 0) { goTo(R) }
+        var others = count(getAliveAllies()) - 1
+        var g = gatheredAround(getCell())
+        if (ready(CHIP_DOME) && g >= 1 && (g >= min(2, others) || getTurn() >= 3)) {
+            castSelf(CHIP_SOLIDIFICATION)
+            if (castSelf(CHIP_DOME)) { _domeCastTurn = getTurn(); note('DOME covers ' + g) }
+        }
+        // the tank dives once the dome is down (before spending TP on single-target shields)
+        if (ready(CHIP_RESURRECTION) && !ready(CHIP_DOME) && getTurn() - _domeCastTurn >= 1) {
+            if (trySolveOne()) { note('tank dived'); goTo(R) }
+        } else if (ready(CHIP_RESURRECTION) && getTurn() >= 4) {
+            if (trySolveOne()) { note('tank dived (late)'); goTo(R) }
+        }
+        for (var a in getAliveAllies()) { if (a != me() && !isSummon(a) && roleOf(a) == 'striker') { if (castOn(CHIP_CARAPACE, a)) { break } } }
+        for (var a in getAliveAllies()) { if (a != me() && !isSummon(a) && roleOf(a) == 'striker') { if (castOn(CHIP_RAMPART, a)) { break } } }
+        castSelf(CHIP_FORTRESS); castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); castSelf(CHIP_SHIELD)
+        return
+    }
+    if (role == 'buffer') {
+        var tk = squad('tank')
+        for (var t in tk) { castOn(CHIP_BARK, t) }
+        castOn(CHIP_RAGE, me()); castOn(CHIP_SEVEN_LEAGUE_BOOTS, me())
+    }
+    // divers: dive only while carrying the dome (fallback from turn 4), then regroup
+    if (ready(CHIP_RESURRECTION) && getTurn() >= 2 && (teamDomed() || getTurn() >= 4)) {
+        if (trySolveOne()) { note('dived'); goTo(_tankCell != -1 ? _tankCell : R); castSelf(CHIP_WALL); castSelf(CHIP_ARMOR); return }
+    }
+    var tkc = _tankCell != -1 ? _tankCell : R
+    if (getCellDistance(getCell(), tkc) > 2) { goTo(tkc) }
+    if (role == 'buffer') {
+        for (var m in squad('striker')) { castOn(CHIP_PROTEIN, m) }
+    }
+    castSelf(CHIP_WALL); castSelf(CHIP_ARMOR)
+    if (getLife() < getTotalLife() * 0.4) { castSelf(CHIP_REMISSION) }
+}
+
 function puzzleTurn() {
+    if (count(squad('tank')) > 0) {
+        if (getTurn() <= 2) { note('rally ' + rallyCell() + ' at ' + getCell() + ' d=' + getCellDistance(getCell(), rallyCell())) }
+        puzzleTurnSquad()
+        return
+    }
     if (getTurn() <= 2) { note('tp=' + getTP() + ' res=' + has(CHIP_RESURRECTION) + '/' + getCooldown(CHIP_RESURRECTION) + ' tele=' + has(CHIP_TELEPORTATION) + ' spark=' + has(CHIP_SPARK) + ' tp=' + getTP() + ' mp=' + getMP() + ' at ' + getCell() + ' mine=' + myCrystal()) }
     saveDeadCrystals()
     if (getTurn() == 1) {
