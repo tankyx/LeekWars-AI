@@ -51,19 +51,45 @@ class Limited:
         self._wait(); return self.lw.leek(lid)
 
 
+# spend-capital takes POINTS: cost per point by the BASE (invested) value of the stat
+def point_cost(stat, base):
+    if stat == 'life':
+        inv = base - 100  # base life at level 1 is ~100 + level gains; use tiers on invested points
+        return 0.25 if base < 2000 else (1 / 3.0 if base < 3000 else 0.5)
+    if stat in ('tp', 'mp'):
+        return 999
+    return 0.5 if base < 200 else (1 if base < 400 else (2 if base < 600 else 3))
+
+
 def spend_capital(lw, lid, name):
+    """Spend all capital, point by point within tiers, on the first unmet target of the plan."""
     spent = []
-    for _ in range(30):
+    for _ in range(40):
         l = lw.leek(lid)
         cap = l.get('capital') or 0
         if cap <= 0:
             break
         stat = next((s for s, t in CAPITAL_PLAN[name] if (l.get('total_' + s) or 0) < t), 'life')
-        r = lw.post('/leek/spend-capital', leek_id=lid, characteristics=json.dumps({stat: cap}))
-        if isinstance(r, dict) and r.get('error'):
-            # try a smaller chunk (tier limits)
-            r = lw.post('/leek/spend-capital', leek_id=lid, characteristics=json.dumps({stat: 1}))
-            if isinstance(r, dict) and r.get('error'):
+        base = l.get(stat) or 0
+        c = point_cost(stat, base)
+        pts = int(cap / c)
+        if pts <= 0:
+            # remaining capital too small for this stat's tier: put it in life (cheapest)
+            stat, c = 'life', point_cost('life', l.get('life') or 0)
+            pts = int(cap / c)
+            if pts <= 0:
+                break
+        r = lw.post('/leek/spend-capital', leek_id=lid, characteristics=json.dumps({stat: pts}))
+        if not (r == [] or r == {} or (isinstance(r, dict) and not r.get('error'))):
+            # a tier boundary inside the chunk: retry with fewer points
+            done = False
+            for p in (pts // 2, pts // 4, 1):
+                if p <= 0:
+                    continue
+                r = lw.post('/leek/spend-capital', leek_id=lid, characteristics=json.dumps({stat: p}))
+                if r == [] or r == {} or (isinstance(r, dict) and not r.get('error')):
+                    done = True; break
+            if not done:
                 print('   spend-capital %s %s failed: %s' % (name, stat, r), flush=True)
                 break
         spent.append(stat)
