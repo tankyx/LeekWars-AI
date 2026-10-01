@@ -508,8 +508,58 @@ function attack(target) {
     }
 }
 
+// Squad healer: the leek whose damage stat is magic (poison is wasted on this boss).
+function isHealer() { return getMagic() > getStrength() }
+
+function hurtScore(a) {
+    var near = 0
+    for (var e in army()) { if (getCellDistance(getCell(a), getCell(e)) <= 7) { near++ } }
+    return (1 - getLife(a) / getTotalLife(a)) * 10 + near
+}
+
+function castOn(chip, a) {
+    if (!has(chip) || getCooldown(chip) > 0 || getTP() < getChipCost(chip)) { return false }
+    if (!canUseChip(chip, a)) { return false }
+    return ok(useChip(chip, a))
+}
+
+function healerTurn() {
+    var allies = []
+    for (var a in getAliveAllies()) { if (!isSummon(a)) { push(allies, a) } }
+    var keyed = []
+    for (var a in allies) { push(keyed, [-hurtScore(a), a]) }
+    keyed = arraySort(keyed, function(x, y) { return x[0] - y[0] })
+    var t = count(keyed) > 0 ? keyed[0][1] : me()
+    // get within 3 of the ally that needs it (chip ranges 3-7), else stay
+    if (t != me() && getCellDistance(getCell(), getCell(t)) > 3) { moveToward(t, max(0, getCellDistance(getCell(), getCell(t)) - 3)) }
+    if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
+    var hurt = getTotalLife(t) - getLife(t)
+    if (hurt > 250) { castOn(CHIP_REMISSION, t) }
+    if (hurt > 400) { castOn(CHIP_SERUM, t) }
+    castOn(CHIP_FORTRESS, t); castOn(CHIP_WALL, t); castOn(CHIP_ARMOR, t); castOn(CHIP_SHIELD, t)
+    // second ally
+    if (count(keyed) > 1) {
+        var t2 = keyed[1][1]
+        if (getTotalLife(t2) - getLife(t2) > 250) { castOn(CHIP_REMISSION, t2) }
+        castOn(CHIP_WALL, t2); castOn(CHIP_ARMOR, t2)
+    }
+    // leftover TP: own shields, then whatever the weapons reach
+    if (count(army()) > 0) { castSelf(CHIP_WALL); castSelf(CHIP_FORTRESS) }
+    var tg = pickTarget()
+    if (tg != null && getTP() >= 4) {
+        for (var w in getWeapons()) {
+            if (getWeaponCost(w) + (getWeapon() == w ? 0 : 1) > getTP()) { continue }
+            if (!canUseWeapon(w, tg) || areaHitsAlly(getWeaponEffectiveArea(w, getCell(tg)))) { continue }
+            if (getWeapon() != w) { setWeapon(w) }
+            for (var j = 0; j < 4; j++) { if (!canUseWeapon(w, tg) || !ok(useWeapon(tg))) { break } }
+        }
+    }
+}
+
+// Strikers: emergency heal only, then buffs + every shot, then shields/heals with what is left.
 function combatTurn() {
-    sustain()
+    if (isHealer()) { healerTurn(); return }
+    if (getLife() < getTotalLife() * 0.35 && !_usedRegen && castSelf(CHIP_REGENERATION)) { _usedRegen = true }
     var t = pickTarget()
     if (t != null) { attack(t) }
     sustain()
