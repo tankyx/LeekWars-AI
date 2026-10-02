@@ -24,9 +24,6 @@ STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pre
 # charged by the enemy-reply simulation. True = leaf scored at the average LoS.
 LOS_NEUTRAL = False
 HEALABLE_W = 0.6   # share of healable direct damage discounted (their ready heals would undo it)
-TEAM_CELLS = []   # our other living leeks' cells (multi-leek fights), set by the turn loop
-FORM_R = 5        # formation: no cost within 5 cells of the nearest ally
-FORM_W = 0.008    # per cell beyond FORM_R; doubled on turns 1-2 (approach as a group)
 ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
 
@@ -707,11 +704,6 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             # out of range is broken by closing in, more strongly as the fight drags on
             if IDLE[0] >= 3 and d_now > maxr:
                 v += ENGAGE_W * pr * (d_now - de)
-            # formation: in team fights, ending away from every ally makes us the one they pick off
-            if TEAM_CELLS:
-                da = min(dist(e, c) for c in TEAM_CELLS)
-                if da > FORM_R:
-                    v -= FORM_W * (2.0 if t <= 2 else 1.0) * (da - FORM_R)
             evaluated += 1
             if dealt > 0:
                 cx.n_atk += 1

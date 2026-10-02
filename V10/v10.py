@@ -759,9 +759,6 @@ STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pre
 # charged by the enemy-reply simulation. True = leaf scored at the average LoS.
 LOS_NEUTRAL = False
 HEALABLE_W = 0.6   # share of healable direct damage discounted (their ready heals would undo it)
-TEAM_CELLS = []   # our other living leeks' cells (multi-leek fights), set by the turn loop
-FORM_R = 5        # formation: no cost within 5 cells of the nearest ally
-FORM_W = 0.008    # per cell beyond FORM_R; doubled on turns 1-2 (approach as a group)
 ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
 
@@ -1442,11 +1439,6 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             # out of range is broken by closing in, more strongly as the fight drags on
             if IDLE[0] >= 3 and d_now > maxr:
                 v += ENGAGE_W * pr * (d_now - de)
-            # formation: in team fights, ending away from every ally makes us the one they pick off
-            if TEAM_CELLS:
-                da = min(dist(e, c) for c in TEAM_CELLS)
-                if da > FORM_R:
-                    v -= FORM_W * (2.0 if t <= 2 else 1.0) * (da - FORM_R)
             evaluated += 1
             if dealt > 0:
                 cx.n_atk += 1
@@ -1478,10 +1470,6 @@ def main_enemy():
     return best
 
 
-ALLY_SUPPORT = False   # step 2 / 2b: neutral in A/B (13 vs 14, 12 vs 14 of 20) - kept off
-MAG_FOCUS_W = 1.0      # 1.5 tested neutral
-
-
 def focus_enemy():
     """Team focus target (farmer / team fights): every one of our leeks picks the same enemy so the
     damage lands on one leek at a time. Score = effective HP (life + absolute shield, relative shield
@@ -1498,87 +1486,14 @@ def focus_enemy():
         rel = min(max(e.relativeShield or 0, 0), 80)
         eff = eff / max(0.2, 1.0 - rel / 100.0)
         reach = sum(1 for a in mine if dist(a.cell.id, e.cell.id) <= (a.maxMP or 6) + 10)
-        # poison ignores our shields: losses had 1.4 magic leeks per fight vs 0.5 in wins
-        dmg = (e.strength or 0) + MAG_FOCUS_W * (e.magic or 0)
+        dmg = (e.strength or 0) + (e.magic or 0)
         sc = eff / (1.0 + 0.5 * reach) / (1.0 + dmg / 1000.0)
         if best is None or bs is None or sc < bs - 1e-9 or (abs(sc - bs) <= 1e-9 and e.id < best.id):
             bs, best = sc, e
     m = me()
     if best is not None and dist(m.cell.id, best.cell.id) <= (m.maxMP or 6) + 12:
         return best
-    near = main_enemy()
-    if near is not None and near.cell is not None and dist(m.cell.id, near.cell.id) <= (m.maxMP or 6) + 12:
-        return near
-    return best          # nobody in reach yet: everyone walks toward the same enemy
-
-
-def _poison_of(ent):
-    p = 0
-    for e in (ent.effects or []):
-        if e.type == E_POISON:
-            p += e.value or 0
-    return p
-
-
-def _ally_castable(it):
-    """Chip whose effects may target allies (targets bit 2), never offensive or a move."""
-    if it.weapon or it.offensive or it.special:
-        return False
-    return any((e[4] or 0) & 2 for e in it.effects)
-
-
-def ally_support(items):
-    """Team layer step 2: before planning its own turn, the leek spends up to a third of its TP
-    on an ally who needs it more: antidote on the most poisoned (>= 200/turn), a heal on the most
-    hurt (< 50%), a shield on the most endangered (< 70% with enemies near). Multi-leek fights only."""
-    m = me()
-    allies = [a for a in Fight.getAliveAllies() if not a.summoned and a.id != m.id and a.cell is not None and (a.life or 0) > 0]
-    if not allies:
-        return ''
-    budget = max(0, (m.tp or 0) // 3)
-    if budget <= 0:
-        return ''
-    foes = [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None]
-    trace = []
-
-    def frac(a):
-        return (a.life or 0) / float(max(1, a.maxLife or 1))
-
-    def near(a):
-        return sum(1 for e in foes if dist(a.cell.id, e.cell.id) <= 8)
-
-    def cast(kind, target):
-        nonlocal budget
-        for it in sorted([i for i in items if _ally_castable(i)], key=lambda i: i.cost):
-            types = {e[0] for e in it.effects}
-            if kind == 'antidote' and E_ANTIDOTE not in types:
-                continue
-            if kind == 'heal' and E_HEAL not in types:
-                continue
-            if kind == 'shield' and not (types & {E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL}):
-                continue
-            if it.cost > budget or it.cost > (m.tp or 0) or it.current_cooldown() != 0:
-                continue
-            try:
-                if not m.canUseChip(it.obj, target):
-                    continue
-                r = m.useChip(it.obj, target)
-            except Exception:
-                continue
-            if r is not None and r > 0:
-                budget -= it.cost
-                trace.append('%s>%s' % (it.name[:6], target.name[:5]))
-                return True
-        return False
-
-    # step 2b: only serious poison on an ally (>= 300/turn or >= 15% of its current life); routine
-    # heals / shields cost shots and did not win more fights (13/20 vs 14/20)
-    pois = sorted(allies, key=lambda a: -_poison_of(a))
-    if pois:
-        p0 = _poison_of(pois[0])
-        if (p0 >= 300 or p0 >= 0.15 * (pois[0].life or 1)) and p0 > _poison_of(m):
-            cast('antidote', pois[0])
-    return ' '.join(trace)
+    return main_enemy()
 
 
 def execute(plan):
@@ -1698,11 +1613,6 @@ def turn():
         else:
             IDLE[0] = 0
         LAST_LIVES = lives
-        sup = ally_support(items_of(m)) if ALLY_SUPPORT and len([a for a in mine if not a.summoned]) > 1 else ''
-        # formation: cells of our other living leeks, for the cohesion term in choose_plan
-        TEAM_CELLS[:] = [a.cell.id for a in mine if not a.summoned and a.id != m.id and a.cell is not None]
-        if sup:
-            log('V10S T%d ally support: %s' % (Fight.turn, sup))
         A = snapshot(m, mine)
         B = snapshot(enemy, theirs)
         w = m.weapon
