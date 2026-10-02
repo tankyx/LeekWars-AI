@@ -175,7 +175,8 @@ def turn():
         B = snapshot(enemy, theirs)
         w = m.weapon
         bulbs = [bulb_side(x) for x in theirs if x.summoned and (x.life or 0) > 0 and x.cell is not None]
-        best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs)
+        others = [snapshot(x, theirs) for x in theirs if not x.summoned and x.id != enemy.id and alive(x)]
+        best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs, others)
         v, plan, info = best
         if plan is None:
             fallback(enemy)
@@ -183,6 +184,10 @@ def turn():
         desc = ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name for s in plan)
         if len([a for a in mine if not a.summoned]) > 1:
             log('V10F T%d focus %s (%d)' % (Fight.turn, enemy.name, enemy.life or 0))
+        if others and LAST_CX is not None and plan:
+            end = next((s[1] for s in reversed(plan) if s[0] == 'move'), A['cell'])
+            log('V10D T%d others %d threat here %.0f at end %.0f' % (
+                Fight.turn, len(others), others_threat(LAST_CX, A, A['cell']), others_threat(LAST_CX, A, end)))
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
         cxl = LAST_CX
