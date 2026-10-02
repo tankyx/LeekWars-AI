@@ -36,16 +36,28 @@ def focus_enemy():
     return main_enemy()
 
 
-def execute(plan):
+def alive(e):
+    return e is not None and e.cell is not None and (e.life or 0) > 0
+
+
+def execute(plan, enemy=None):
     """Run the plan; returns a compact trace of engine return codes
-    (1 success, 2 critical, 0 failed, negatives = invalid)."""
+    (1 success, 2 critical, 0 failed, negatives = invalid). An attack is skipped
+    ('x') when the enemy standing on its target cell at plan start has died, or
+    when the planned enemy is dead and no living enemy stands on the cell."""
     m = me(); trace = []
+    on_cell = {x.cell.id: x for x in Fight.getAliveEnemies() if x.cell is not None}
     for st in plan:
         if st[0] == 'move':
             r = m.moveToward(Cell.get(st[1]))
             trace.append('M%s' % r)
         else:
             it, tgt = st[1], st[2]
+            if it.offensive:
+                f = on_cell.get(tgt)
+                if (f is not None and not alive(f)) or (f is None and enemy is not None and not alive(enemy)):
+                    trace.append('%s:x' % it.name[:6])
+                    continue
             if it.weapon:
                 w = m.weapon
                 if w is None or w.id != it.id:
@@ -69,15 +81,19 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     """Leftover TP after the plan: attacks the engine says are legal from the
     final cell, then ready self chips. Returns a compact trace."""
     m = me(); trace = []
-    if enemy.cell is None or (enemy.life or 0) <= 0:
+    if not alive(enemy):
         return 'enemy dead'
     _GEO.clear()                       # we moved: LoS between cells may have changed
     # the main enemy first, then its summons (nearest first)
     targets = [enemy] + sorted([x for x in Fight.getAliveEnemies() if x.summoned and x.cell is not None],
                                key=lambda x: me().distance(x) or 99)
     for tgt_ent in targets:
+        if not alive(tgt_ent):
+            continue
         ecell = tgt_ent.cell.id
         for _ in range(12):
+            if not alive(tgt_ent):
+                break
             done = False
             for it in sorted([i for i in items if i.offensive and not i.special], key=lambda i: -i.cost):
                 if it.cost > m.tp:
@@ -124,6 +140,8 @@ def fallback(enemy):
         if ws and (m.weapon is None or m.weapon.id != ws[0].id):
             m.setWeapon(ws[0])
         for _ in range(4):
+            if not alive(enemy):
+                break
             r = m.useWeapon(enemy)
             if r is None or r <= 0:
                 break
@@ -173,8 +191,15 @@ def turn():
         if cxl is not None and info and info[0] <= 0:
             log('V10A T%d no damage chosen; attacking plans evaluated=%d best=%.3f dealt=%.0f | %s' % (
                 Fight.turn, cxl.n_atk, cxl.best_atk[0], cxl.best_atk[1], cxl.best_atk[2]))
-        tr = execute(plan)
-        tr += ' | left: ' + spend_leftover(enemy, A['items'], A, B, LAST_CX, plan_uses(plan))
+        tr = execute(plan, enemy)
+        tgt = enemy
+        if not alive(tgt):
+            # focus died during the plan: spend what is left on the next one
+            tgt = focus_enemy()
+            if tgt is not None and alive(tgt):
+                tr += ' | retarget %s' % tgt.name
+        tr += ' | left: ' + (spend_leftover(tgt, A['items'], A, B, LAST_CX, plan_uses(plan))
+                             if tgt is not None else 'no enemy')
         log('V10X T%d %s | cell %s tp %s mp %s' % (Fight.turn, tr, m.cell.id, m.tp, m.mp))
     except Exception as ex:
         log('V10 error ' + type(ex).__name__ + ': ' + str(ex)[:300])
