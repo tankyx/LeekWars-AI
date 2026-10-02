@@ -1486,7 +1486,8 @@ def focus_enemy():
         rel = min(max(e.relativeShield or 0, 0), 80)
         eff = eff / max(0.2, 1.0 - rel / 100.0)
         reach = sum(1 for a in mine if dist(a.cell.id, e.cell.id) <= (a.maxMP or 6) + 10)
-        dmg = (e.strength or 0) + (e.magic or 0)
+        # poison ignores our shields: losses had 1.4 magic leeks per fight vs 0.5 in wins
+        dmg = (e.strength or 0) + 1.5 * (e.magic or 0)
         sc = eff / (1.0 + 0.5 * reach) / (1.0 + dmg / 1000.0)
         if bs is None or sc < bs - 1e-9 or (abs(sc - bs) <= 1e-9 and e.id < best.id):
             bs, best = sc, e
@@ -1558,15 +1559,13 @@ def ally_support(items):
                 return True
         return False
 
+    # step 2b: only serious poison on an ally (>= 300/turn or >= 15% of its current life); routine
+    # heals / shields cost shots and did not win more fights (13/20 vs 14/20)
     pois = sorted(allies, key=lambda a: -_poison_of(a))
-    if pois and _poison_of(pois[0]) >= 200 and _poison_of(pois[0]) > _poison_of(m):
-        cast('antidote', pois[0])
-    hurt = sorted(allies, key=frac)
-    if hurt and frac(hurt[0]) < 0.5 and frac(hurt[0]) < frac(m):
-        cast('heal', hurt[0])
-    danger = sorted([a for a in allies if frac(a) < 0.7 and near(a) > 0], key=lambda a: (frac(a), -near(a)))
-    if danger:
-        cast('shield', danger[0])
+    if pois:
+        p0 = _poison_of(pois[0])
+        if (p0 >= 300 or p0 >= 0.15 * (pois[0].life or 1)) and p0 > _poison_of(m):
+            cast('antidote', pois[0])
     return ' '.join(trace)
 
 
