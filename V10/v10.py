@@ -1493,7 +1493,81 @@ def focus_enemy():
     m = me()
     if best is not None and dist(m.cell.id, best.cell.id) <= (m.maxMP or 6) + 12:
         return best
-    return main_enemy()
+    near = main_enemy()
+    if near is not None and near.cell is not None and dist(m.cell.id, near.cell.id) <= (m.maxMP or 6) + 12:
+        return near
+    return best          # nobody in reach yet: everyone walks toward the same enemy
+
+
+def _poison_of(ent):
+    p = 0
+    for e in (ent.effects or []):
+        if e.type == E_POISON:
+            p += e.value or 0
+    return p
+
+
+def _ally_castable(it):
+    """Chip whose effects may target allies (targets bit 2), never offensive or a move."""
+    if it.weapon or it.offensive or it.special:
+        return False
+    return any((e[4] or 0) & 2 for e in it.effects)
+
+
+def ally_support(items):
+    """Team layer step 2: before planning its own turn, the leek spends up to a third of its TP
+    on an ally who needs it more: antidote on the most poisoned (>= 200/turn), a heal on the most
+    hurt (< 50%), a shield on the most endangered (< 70% with enemies near). Multi-leek fights only."""
+    m = me()
+    allies = [a for a in Fight.getAliveAllies() if not a.summoned and a.id != m.id and a.cell is not None and (a.life or 0) > 0]
+    if not allies:
+        return ''
+    budget = max(0, (m.tp or 0) // 3)
+    if budget <= 0:
+        return ''
+    foes = [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None]
+    trace = []
+
+    def frac(a):
+        return (a.life or 0) / float(max(1, a.maxLife or 1))
+
+    def near(a):
+        return sum(1 for e in foes if dist(a.cell.id, e.cell.id) <= 8)
+
+    def cast(kind, target):
+        nonlocal budget
+        for it in sorted([i for i in items if _ally_castable(i)], key=lambda i: i.cost):
+            types = {e[0] for e in it.effects}
+            if kind == 'antidote' and E_ANTIDOTE not in types:
+                continue
+            if kind == 'heal' and E_HEAL not in types:
+                continue
+            if kind == 'shield' and not (types & {E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL}):
+                continue
+            if it.cost > budget or it.cost > (m.tp or 0) or it.current_cooldown() != 0:
+                continue
+            try:
+                if not m.canUseChip(it.obj, target):
+                    continue
+                r = m.useChip(it.obj, target)
+            except Exception:
+                continue
+            if r is not None and r > 0:
+                budget -= it.cost
+                trace.append('%s>%s' % (it.name[:6], target.name[:5]))
+                return True
+        return False
+
+    pois = sorted(allies, key=lambda a: -_poison_of(a))
+    if pois and _poison_of(pois[0]) >= 200 and _poison_of(pois[0]) > _poison_of(m):
+        cast('antidote', pois[0])
+    hurt = sorted(allies, key=frac)
+    if hurt and frac(hurt[0]) < 0.5 and frac(hurt[0]) < frac(m):
+        cast('heal', hurt[0])
+    danger = sorted([a for a in allies if frac(a) < 0.7 and near(a) > 0], key=lambda a: (frac(a), -near(a)))
+    if danger:
+        cast('shield', danger[0])
+    return ' '.join(trace)
 
 
 def execute(plan):
@@ -1613,6 +1687,9 @@ def turn():
         else:
             IDLE[0] = 0
         LAST_LIVES = lives
+        sup = ally_support(items_of(m)) if len([a for a in mine if not a.summoned]) > 1 else ''
+        if sup:
+            log('V10S T%d ally support: %s' % (Fight.turn, sup))
         A = snapshot(m, mine)
         B = snapshot(enemy, theirs)
         w = m.weapon
