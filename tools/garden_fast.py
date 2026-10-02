@@ -17,7 +17,7 @@ MCP tool and the nightly cron keep one history.
     python3 tools/garden_fast.py --per-leek 25                  # all four main leeks
     python3 tools/garden_fast.py --per-leek 25 --leeks KurtGodel --inflight 4
 """
-import argparse, datetime, os, random, sqlite3, sys, threading, time
+import argparse, datetime, json, os, random, sqlite3, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -27,6 +27,61 @@ ACCOUNTS = {'main': {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel'
             'cure': {'LeekRain': 19703, 'DawnFall': 21175, 'DuskHope': 129801, 'ProdigalSon': 130236}}
 LEEKS = dict(ACCOUNTS['main'])
 BEATABLE, DANGEROUS, WINDOW, DECAY, SESSION_LOSS_LIMIT = 0.7, 0.45, 10, 0.8, 2
+# talent is Elo-like: a win is worth G0 + GK x (their talent - ours), a loss costs G0 - GK x gap
+# (fit on 24k cached garden fights: 14.5 at equal talent, ~11 / ~17 at -/+100)
+G0, GK = 13.84, 0.0279
+PICKS_LOG = os.path.join(os.path.dirname(HERE), 'data', 'ladder', 'garden_picks.jsonl')
+try:
+    from garden_model import Model, STATS as MSTATS
+    MODEL = Model()
+except Exception:                     # no trained model: the history selector below is used
+    MODEL = None
+
+
+def expected_talent(p, gap):
+    return p * (G0 + GK * gap) - (1.0 - p) * (G0 - GK * gap)
+
+
+class Profiles:
+    """Opponent profiles (/leek/get real totals), cached in tools/opponent_profiles.db for 2 days."""
+    TTL = 2 * 86400
+
+    def __init__(self):
+        self.c = sqlite3.connect(os.path.join(HERE, 'opponent_profiles.db'), check_same_thread=False)
+        self.c.execute('CREATE TABLE IF NOT EXISTS profile (id INTEGER PRIMARY KEY, data TEXT, t REAL)')
+        self.lock = threading.Lock()
+
+    def get(self, oid, fetch):
+        with self.lock:
+            r = self.c.execute('SELECT data, t FROM profile WHERE id=?', (oid,)).fetchone()
+        if r and time.time() - r[1] < self.TTL:
+            return json.loads(r[0])
+        l = fetch('/leek/get/%d' % oid) or {}
+        l = l.get('leek', l) if isinstance(l, dict) else {}
+        if not l.get('id'):
+            return json.loads(r[0]) if r else {}
+        d = {k: l.get('total_' + k, 0) or 0 for k in MSTATS}
+        d['talent'] = l.get('talent', 0); d['level'] = l.get('level', 301)
+        with self.lock:
+            self.c.execute('INSERT OR REPLACE INTO profile VALUES (?,?,?)', (oid, json.dumps(d), time.time()))
+            self.c.commit()
+        return d
+
+
+def model_pick(db, prof, name, my_talent, opponents, banned, fetch):
+    """Best opponent by expected talent: (opponent, expected talent, P(win)) or None."""
+    elig = [o for o in opponents if o['id'] not in banned] or opponents
+    best = None
+    for o in elig:
+        hist = [r for (r,) in db.c.execute('SELECT result FROM fight_history WHERE opponent_id=? ORDER BY timestamp',
+                                            (o['id'],))]
+        opp = dict(prof.get(o['id'], fetch))
+        opp['talent'] = o.get('talent') or opp.get('talent', my_talent); opp['level'] = o.get('level') or opp.get('level', 301)
+        p = MODEL.p(name, my_talent, opp, hist)
+        ev = expected_talent(p, opp['talent'] - my_talent)
+        if best is None or ev > best[1]:
+            best = (o, ev, p)
+    return best
 
 
 class Bucket:
@@ -179,6 +234,103 @@ def run_leek(name, lid, n, inflight, bucket, lock, out, account='main'):
         out[name] = (started, rec)
 
 
+def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0.0):
+    """One shared pool of `total` fights: each start goes to the leek whose best offered
+    opponent has the highest expected talent (model + history); a leek whose offer is
+    all bad simply waits. Returns {name: (started, rec, talent_now)}."""
+    lw = LWSession(account); prof = Profiles()
+
+    def get(path):
+        bucket.take(); return lw.get(path)
+
+    def post(path, data):
+        bucket.take(); return lw.s.post('https://leekwars.com/api' + path, data=data).json()
+    st = {}
+    for n in names:
+        lid = leeks[n]; db = DB(lid)
+        try:
+            fixed = reconcile(lw, db, lid, get)
+            if fixed:
+                print('  %s: %d unrecorded fights added to the history DB' % (n, fixed), flush=True)
+        except Exception as ex:
+            print('  %s: reconcile failed %s' % (n, ex), flush=True)
+        l = get('/leek/get/%d' % lid); l = l.get('leek', l)
+        st[n] = {'lid': lid, 'db': db, 'pending': {}, 'rec': {'W': 0, 'L': 0, 'D': 0}, 'losses': {}, 'banned': set(),
+                 'talent': int(l.get('talent', 0)), 'offer': None, 'started': 0, 'ev': 0.0, 'p': 0.0}
+    logf = open(PICKS_LOG, 'a')
+    started = 0; errors = 0; out_of_fights = False
+    deadline = time.time() + 60.0 * wait_min
+    while True:
+        for n, s in st.items():
+            for fid, (opp, p, ev) in list(s['pending'].items()):
+                f = get('/fight/get/%d' % fid); f = f.get('fight', f) if isinstance(f, dict) else {}
+                if f.get('status') != 2:
+                    continue
+                team = 1 if any(l['id'] == s['lid'] for l in f.get('leeks1') or []) else 2
+                res = 'DRAW' if f.get('winner') == 0 else ('WIN' if f.get('winner') == team else 'LOSS')
+                try:
+                    s['db'].record(fid, opp, res)
+                except Exception as ex:
+                    print('  %s: could not record %d (%s)' % (n, fid, ex), flush=True)
+                for l in ((f.get('report') or {}).get('leeks1' if team == 1 else 'leeks2') or []):
+                    if l.get('id') == s['lid'] and l.get('talent'):
+                        s['talent'] = int(l['talent'])
+                del s['pending'][fid]; s['rec'][res[0]] += 1
+                logf.write(json.dumps({'fight': fid, 'leek': n, 'opp': opp['id'], 'opp_talent': opp.get('talent'),
+                                       'p': round(p, 3), 'ev': round(ev, 2), 'result': res}) + '\n'); logf.flush()
+                if res == 'LOSS':
+                    s['losses'][opp['id']] = s['losses'].get(opp['id'], 0) + 1
+                    if s['losses'][opp['id']] >= SESSION_LOSS_LIMIT:
+                        s['banned'].add(opp['id'])
+        progressed = False
+        while started < total and not out_of_fights and errors < 20:
+            cands = []
+            for n, s in st.items():
+                if len(s['pending']) >= inflight:
+                    continue
+                if s['offer'] is None:
+                    ops = (get('/garden/get-leek-opponents/%d' % s['lid']) or {}).get('opponents') or []
+                    s['offer'] = model_pick(s['db'], prof, n, s['talent'], ops, s['banned'], get) if ops else False
+                if s['offer']:
+                    cands.append((s['offer'][1], n))
+            if not cands:
+                break
+            ev, n = max(cands)
+            if min_ev is not None and ev < min_ev:
+                break
+            s = st[n]; tgt, ev, p = s['offer']
+            r = post('/garden/start-solo-fight', {'leek_id': s['lid'], 'target_id': tgt['id']})
+            fid = r.get('fight') if isinstance(r, dict) else (r if isinstance(r, int) else None)
+            if not fid:
+                err = r.get('error') if isinstance(r, dict) else r
+                if err in ('too_many_fights', 'no_more_fights'):
+                    out_of_fights = True; break
+                if err == 'rate_limit':
+                    time.sleep((r.get('retry_after') or 1) + 0.5); continue
+                print('  %s: start failed %s' % (n, str(r)[:120]), flush=True)
+                s['offer'] = None; errors += 1; time.sleep(1); continue
+            s['pending'][fid] = (tgt, p, ev); s['offer'] = None; s['started'] += 1
+            s['ev'] += ev; s['p'] += p; started += 1; progressed = True
+        busy = any(s['pending'] for s in st.values())
+        if (not busy and not progressed and started < total and not out_of_fights and errors < 20
+                and min_ev is not None and time.time() < deadline):
+            # every offer is below --min-ev: offers drift on their own, look again in 5 minutes
+            best = max([s['offer'][1] for s in st.values() if s['offer']] + [-99])
+            print('  %s best offer %+.1f < %.1f, %d/%d used; waiting 5 min' % (
+                time.strftime('%H:%M'), best, min_ev, started, total), flush=True)
+            time.sleep(300)
+            for s in st.values():
+                s['offer'] = None
+            continue
+        if not busy and (started >= total or out_of_fights or errors >= 20 or not progressed):
+            if not progressed and started < total and not out_of_fights and errors < 20:
+                # every offer is below --min-ev and nothing is in flight: nothing more to gain now
+                print('  no offer above min-ev %.1f; stopping with %d of %d fights used' % (min_ev or 0, started, total), flush=True)
+            break
+        time.sleep(1)
+    return {n: (s['started'], s['rec'], s['talent'], s['ev'], s['p']) for n, s in st.items()}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--per-leek', type=int, default=25)
@@ -186,6 +338,10 @@ def main():
     ap.add_argument('--leeks', default='')
     ap.add_argument('--inflight', type=int, default=4, help='fights generating at once per leek')
     ap.add_argument('--rate', type=float, default=9.0)
+    ap.add_argument('--total', type=int, default=0,
+                    help='shared pool: each fight goes to the leek with the best expected talent (needs the model)')
+    ap.add_argument('--min-ev', type=float, default=None, help='with --total: never start a fight below this expected talent')
+    ap.add_argument('--wait', type=float, default=0.0, help='with --min-ev: minutes to keep re-checking offers (every 5 min)')
     a = ap.parse_args()
     global LEEKS
     LEEKS = ACCOUNTS[a.account]
@@ -198,6 +354,18 @@ def main():
     g = lw.get('/garden/get'); g = g.get('garden', g)
     print('credits %s' % g.get('fights'), flush=True)
     t0 = time.time(); bucket = Bucket(a.rate); lock = threading.Lock(); out = {}
+    if a.total > 0:
+        if MODEL is None or any(n not in MODEL.leeks for n in names):
+            print('no garden model for these leeks (python3 tools/garden_model.py build --account %s)' % a.account); return
+        res = run_alloc(names, LEEKS, a.total, a.inflight, bucket, a.account, a.min_ev, a.wait)
+        for n in names:
+            st, rec, tal, sev, sp = res[n]
+            aft = talent(LEEKS[n])
+            print('  %-17s %3d fights %3dW/%3dL/%dD  talent %d -> %d (%+d)  predicted win %.0f%%  expected %+.0f' % (
+                n, st, rec['W'], rec['L'], rec['D'], before[n], aft, aft - before[n], 100 * sp / max(1, st), sev), flush=True)
+        g = lw.get('/garden/get'); g = g.get('garden', g)
+        print('credits left %s  (%.0f s)' % (g.get('fights'), time.time() - t0), flush=True)
+        return
     th = [threading.Thread(target=run_leek, args=(n, LEEKS[n], a.per_leek, a.inflight, bucket, lock, out, a.account)) for n in names]
     for t in th:
         t.start()
