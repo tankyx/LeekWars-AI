@@ -759,6 +759,9 @@ STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pre
 # charged by the enemy-reply simulation. True = leaf scored at the average LoS.
 LOS_NEUTRAL = False
 HEALABLE_W = 0.6   # share of healable direct damage discounted (their ready heals would undo it)
+TEAM_CELLS = []   # our other living leeks' cells (multi-leek fights), set by the turn loop
+FORM_R = 5        # formation: no cost within 5 cells of the nearest ally
+FORM_W = 0.008    # per cell beyond FORM_R; doubled on turns 1-2 (approach as a group)
 ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
 
@@ -1439,6 +1442,11 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
             # out of range is broken by closing in, more strongly as the fight drags on
             if IDLE[0] >= 3 and d_now > maxr:
                 v += ENGAGE_W * pr * (d_now - de)
+            # formation: in team fights, ending away from every ally makes us the one they pick off
+            if TEAM_CELLS:
+                da = min(dist(e, c) for c in TEAM_CELLS)
+                if da > FORM_R:
+                    v -= FORM_W * (2.0 if t <= 2 else 1.0) * (da - FORM_R)
             evaluated += 1
             if dealt > 0:
                 cx.n_atk += 1
@@ -1470,6 +1478,10 @@ def main_enemy():
     return best
 
 
+ALLY_SUPPORT = False   # step 2 / 2b: neutral in A/B (13 vs 14, 12 vs 14 of 20) - kept off
+MAG_FOCUS_W = 1.0      # 1.5 tested neutral
+
+
 def focus_enemy():
     """Team focus target (farmer / team fights): every one of our leeks picks the same enemy so the
     damage lands on one leek at a time. Score = effective HP (life + absolute shield, relative shield
@@ -1487,7 +1499,7 @@ def focus_enemy():
         eff = eff / max(0.2, 1.0 - rel / 100.0)
         reach = sum(1 for a in mine if dist(a.cell.id, e.cell.id) <= (a.maxMP or 6) + 10)
         # poison ignores our shields: losses had 1.4 magic leeks per fight vs 0.5 in wins
-        dmg = (e.strength or 0) + 1.5 * (e.magic or 0)
+        dmg = (e.strength or 0) + MAG_FOCUS_W * (e.magic or 0)
         sc = eff / (1.0 + 0.5 * reach) / (1.0 + dmg / 1000.0)
         if bs is None or sc < bs - 1e-9 or (abs(sc - bs) <= 1e-9 and e.id < best.id):
             bs, best = sc, e
@@ -1686,7 +1698,9 @@ def turn():
         else:
             IDLE[0] = 0
         LAST_LIVES = lives
-        sup = ally_support(items_of(m)) if len([a for a in mine if not a.summoned]) > 1 else ''
+        sup = ally_support(items_of(m)) if ALLY_SUPPORT and len([a for a in mine if not a.summoned]) > 1 else ''
+        # formation: cells of our other living leeks, for the cohesion term in choose_plan
+        TEAM_CELLS[:] = [a.cell.id for a in mine if not a.summoned and a.id != m.id and a.cell is not None]
         if sup:
             log('V10S T%d ally support: %s' % (Fight.turn, sup))
         A = snapshot(m, mine)

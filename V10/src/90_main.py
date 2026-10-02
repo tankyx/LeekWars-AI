@@ -10,6 +10,10 @@ def main_enemy():
     return best
 
 
+ALLY_SUPPORT = False   # step 2 / 2b: neutral in A/B (13 vs 14, 12 vs 14 of 20) - kept off
+MAG_FOCUS_W = 1.0      # 1.5 tested neutral
+
+
 def focus_enemy():
     """Team focus target (farmer / team fights): every one of our leeks picks the same enemy so the
     damage lands on one leek at a time. Score = effective HP (life + absolute shield, relative shield
@@ -27,7 +31,7 @@ def focus_enemy():
         eff = eff / max(0.2, 1.0 - rel / 100.0)
         reach = sum(1 for a in mine if dist(a.cell.id, e.cell.id) <= (a.maxMP or 6) + 10)
         # poison ignores our shields: losses had 1.4 magic leeks per fight vs 0.5 in wins
-        dmg = (e.strength or 0) + 1.5 * (e.magic or 0)
+        dmg = (e.strength or 0) + MAG_FOCUS_W * (e.magic or 0)
         sc = eff / (1.0 + 0.5 * reach) / (1.0 + dmg / 1000.0)
         if bs is None or sc < bs - 1e-9 or (abs(sc - bs) <= 1e-9 and e.id < best.id):
             bs, best = sc, e
@@ -226,7 +230,9 @@ def turn():
         else:
             IDLE[0] = 0
         LAST_LIVES = lives
-        sup = ally_support(items_of(m)) if len([a for a in mine if not a.summoned]) > 1 else ''
+        sup = ally_support(items_of(m)) if ALLY_SUPPORT and len([a for a in mine if not a.summoned]) > 1 else ''
+        # formation: cells of our other living leeks, for the cohesion term in choose_plan
+        TEAM_CELLS[:] = [a.cell.id for a in mine if not a.summoned and a.id != m.id and a.cell is not None]
         if sup:
             log('V10S T%d ally support: %s' % (Fight.turn, sup))
         A = snapshot(m, mine)
