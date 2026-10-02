@@ -1501,7 +1501,7 @@ def focus_enemy():
         # poison ignores our shields: losses had 1.4 magic leeks per fight vs 0.5 in wins
         dmg = (e.strength or 0) + MAG_FOCUS_W * (e.magic or 0)
         sc = eff / (1.0 + 0.5 * reach) / (1.0 + dmg / 1000.0)
-        if bs is None or sc < bs - 1e-9 or (abs(sc - bs) <= 1e-9 and e.id < best.id):
+        if best is None or bs is None or sc < bs - 1e-9 or (abs(sc - bs) <= 1e-9 and e.id < best.id):
             bs, best = sc, e
     m = me()
     if best is not None and dist(m.cell.id, best.cell.id) <= (m.maxMP or 6) + 12:
