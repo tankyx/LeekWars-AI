@@ -1470,6 +1470,32 @@ def main_enemy():
     return best
 
 
+def focus_enemy():
+    """Team focus target (farmer / team fights): every one of our leeks picks the same enemy so the
+    damage lands on one leek at a time. Score = effective HP (life + absolute shield, relative shield
+    applied) / (1 + 0.5 x our leeks that reach it this turn) / (1 + its STR+MAG / 1000); lowest wins,
+    ties by id. A leek that cannot reach the focus this turn keeps its nearest enemy. Solo fights
+    (one leek on our side) are unchanged."""
+    mine = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
+    foes = [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None and (e.life or 0) > 0]
+    if len(mine) <= 1 or len(foes) <= 1:
+        return main_enemy()
+    best = None; bs = None
+    for e in foes:
+        eff = (e.life or 0) + (e.absoluteShield or 0)
+        rel = min(max(e.relativeShield or 0, 0), 80)
+        eff = eff / max(0.2, 1.0 - rel / 100.0)
+        reach = sum(1 for a in mine if dist(a.cell.id, e.cell.id) <= (a.maxMP or 6) + 10)
+        dmg = (e.strength or 0) + (e.magic or 0)
+        sc = eff / (1.0 + 0.5 * reach) / (1.0 + dmg / 1000.0)
+        if bs is None or sc < bs - 1e-9 or (abs(sc - bs) <= 1e-9 and e.id < best.id):
+            bs, best = sc, e
+    m = me()
+    if best is not None and dist(m.cell.id, best.cell.id) <= (m.maxMP or 6) + 12:
+        return best
+    return main_enemy()
+
+
 def execute(plan):
     """Run the plan; returns a compact trace of engine return codes
     (1 success, 2 critical, 0 failed, negatives = invalid)."""
@@ -1570,7 +1596,7 @@ LAST_LIVES = (-1, -1)      # (our life, enemy life) at our previous turn; -1 = n
 
 def turn():
     global LAST_LIVES
-    enemy = main_enemy()
+    enemy = focus_enemy()
     if enemy is None:
         return
     try:
@@ -1597,6 +1623,8 @@ def turn():
             fallback(enemy)
             return
         desc = ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name for s in plan)
+        if len([a for a in mine if not a.summoned]) > 1:
+            log('V10F T%d focus %s (%d)' % (Fight.turn, enemy.name, enemy.life or 0))
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
         cxl = LAST_CX
