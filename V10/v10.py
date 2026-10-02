@@ -765,6 +765,11 @@ ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed towa
 def pressure(t):
     return 1.0 + max(0.0, (t - PRESSURE_T0) / 10.0) + 0.5 * min(IDLE[0], 6)
 FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizon effect)
+# team fights: the enemy leeks other than the focus also shoot. Their threat on a
+# cell (best packing of the items whose range + their MP reach it, LoS ignored) is
+# taken off our HP after the focus' reply; they spread over our team, so only a share
+OTHERS_W = 0.6
+MAX_SAFE_CELLS = 6
 DIAG = False
 LAST_CX = None     # Ctx of the last search (read by leftover spending)
 
@@ -893,6 +898,9 @@ class Ctx:
         self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
         self.fu = {}           # (tp, need) -> our follow-up attack sequence
         self.last_reply = 0.0
+        self.others = []       # (snapshot, offensive items) of the non-focus enemy leeks
+        self.oth = {}          # (enemy index, distance, our abs, our rel) -> threat
+        self.oth_dm = {}       # (enemy index, our abs, our rel) -> {item id: damage on us}
         self.last_leaf: object = None
         self.best_leaf: object = None
         self.best_atk: tuple = (-1.0, 0.0, '')   # best plan that deals damage: (value, dealt, desc)
@@ -920,6 +928,39 @@ class Ctx:
             r = reachable(self.B0['cell'], mp)
             self.b_reach[mp] = [(c,) + cxy(c) for c, st in sorted(r.items(), key=lambda kv: kv[1])]
         return self.b_reach[mp]
+
+
+def others_threat(cx, a, cell):
+    """Expected damage the non-focus enemy leeks put on `cell` next turn (x OTHERS_W).
+    Per enemy: items whose max range + its MP reach the cell, packed greedily by
+    damage per TP (direct damage + one poison tick) under its TP. 0 in solo fights."""
+    if not cx.others:
+        return 0.0
+    tot = 0.0
+    ab, rl = int(a['abs']), int(a['rel'])
+    for k, (O, offs) in enumerate(cx.others):
+        d = dist(O['cell'], cell)
+        key = (k, d, ab, rl)
+        v = cx.oth.get(key)
+        if v is None:
+            dk = (k, ab, rl)
+            dm = cx.oth_dm.get(dk)
+            if dm is None:
+                dm = {}
+                for it in offs:
+                    ta = copy_side(a); to = copy_side(O)
+                    hit = apply_item(it, to, ta, {'tp': 0, 'mp': 0})
+                    dm[it.id] = hit + max(0.0, ta['groups'].get('poison', 0) - a['groups'].get('poison', 0))
+                cx.oth_dm[dk] = dm
+            v = 0.0; tp = O['tp_live']; mp = O['mp_live']
+            for it in sorted([i for i in offs if d <= mp + i.maxr and dm.get(i.id, 0) > 0],
+                             key=lambda i: -dm[i.id] / max(1, i.cost)):
+                n = 0
+                while n < it.max_uses and it.cost <= tp and (n == 0 or it.weapon or it.cooldown == 0):
+                    v += dm[it.id]; tp -= it.cost; n += 1
+            cx.oth[key] = v
+        tot += v
+    return OTHERS_W * tot
 
 
 def enemy_options(cx, our_cell, tp, mp):
@@ -1104,9 +1145,15 @@ def _leaf(cx, A1, B1, our_cell, turn):
     """Ply 2: enemy reply; ply 3: our follow-up attack; value at the start of
     the enemy's next turn (1 - their P(win))."""
     a, b, ec = enemy_reply(cx, A1, B1, our_cell)
-    cx.last_reply = A1['life'] - a['life']
     if b['life'] <= 0:
+        cx.last_reply = A1['life'] - a['life']
         return 1.0
+    oth = others_threat(cx, A1, our_cell)
+    if oth > 0:
+        a['life'] -= min(a['life'], oth)
+    cx.last_reply = A1['life'] - a['life']
+    if a['life'] <= 0:
+        return 0.0
     tick = a['groups'].get('poison', 0)
     if tick > 0:
         dmg = min(a['life'], tick)
@@ -1147,6 +1194,10 @@ def end_cells(cx, from_cell, reach, ecell):
         by_d = sorted(reach, key=lambda c: dist(c, ecell))
         hidden = [c for c in by_d[::-1][:60] if not Field.lineOfSight(c, ecell)][:8]
         cx.ends = by_d[:10] + by_d[::-1][:8] + hidden
+        if cx.others:
+            # the cells the other enemy leeks threaten least (nearest to the focus first on ties)
+            safe = sorted(reach, key=lambda c: (others_threat(cx, cx.A0, c), dist(c, ecell)))[:MAX_SAFE_CELLS]
+            cx.ends += [c for c in safe if c not in cx.ends]
     out = [from_cell]
     for c in cx.ends:
         if c not in out:
@@ -1174,7 +1225,7 @@ def useful_now(it, A, B, cx):
         return gain * 2 > it.cost
     if types & {E_RETURN, E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL}:
         d = Field.cellDistance(A['cell'], B['cell']) or 0
-        return d <= B['mp_live'] + cx.b_maxr
+        return d <= B['mp_live'] + cx.b_maxr or others_threat(cx, A, A['cell']) > 0
     return True
 
 
@@ -1182,9 +1233,11 @@ MAX_BULB_TARGETS = 3
 MAX_BULB_CELLS = 8
 
 
-def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None):
+def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     t = Fight.turn
     cx = Ctx(A, B)
+    cx.others = [(O, [it for it in O['items'] if it.offensive and not it.special and it.current_cooldown() <= 1])
+                 for O in (others or [])]
     global LAST_CX
     LAST_CX = cx
     if DIAG and t <= 2:
@@ -1635,7 +1688,8 @@ def turn():
         B = snapshot(enemy, theirs)
         w = m.weapon
         bulbs = [bulb_side(x) for x in theirs if x.summoned and (x.life or 0) > 0 and x.cell is not None]
-        best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs)
+        others = [snapshot(x, theirs) for x in theirs if not x.summoned and x.id != enemy.id and alive(x)]
+        best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs, others)
         v, plan, info = best
         if plan is None:
             fallback(enemy)
@@ -1643,6 +1697,10 @@ def turn():
         desc = ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name for s in plan)
         if len([a for a in mine if not a.summoned]) > 1:
             log('V10F T%d focus %s (%d)' % (Fight.turn, enemy.name, enemy.life or 0))
+        if others and LAST_CX is not None and plan:
+            end = next((s[1] for s in reversed(plan) if s[0] == 'move'), A['cell'])
+            log('V10D T%d others %d threat here %.0f at end %.0f' % (
+                Fight.turn, len(others), others_threat(LAST_CX, A, A['cell']), others_threat(LAST_CX, A, end)))
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
         cxl = LAST_CX
