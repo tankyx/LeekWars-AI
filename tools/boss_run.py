@@ -39,13 +39,55 @@ def analyze(f):
     return graal, revives, dead, dmg, rnd
 
 
+def run_queued(lw, a, out):
+    gap = 1.0 / a.rate; last = [0.0]
+
+    def call(fn, *x, **k):
+        w = last[0] + gap - time.time()
+        if w > 0:
+            time.sleep(w)
+        last[0] = time.time()
+        return fn(*x, **k)
+    pending = []; started = 0; wins = 0; graals = 0; done = 0; t0 = time.time(); refused = 0
+    while started < a.n or pending:
+        if started < a.n:
+            r = call(lw.post, '/garden/start-boss-fight', boss_id=a.boss, participants=json.dumps(LEEKS))
+            fid = r.get('fight') if isinstance(r, dict) else None
+            if fid:
+                pending.append(fid); started += 1; refused = 0
+                continue
+            refused += 1
+            if 'not_enough' in str(r) or refused > 30:
+                print('start refused (%s): stopping at %d started' % (str(r)[:80], started), flush=True)
+                a.n = started
+            else:
+                time.sleep(2)
+        for fid in list(pending)[:20]:
+            g = call(lw.get, '/fight/get/%d' % fid); g = g.get('fight', g) if isinstance(g, dict) else {}
+            if g.get('status') != 2:
+                continue
+            pending.remove(fid); done += 1
+            json.dump(g, open(os.path.join(out, 'ours_%d.json' % fid), 'w'))
+            graal, rev, dead, dmg, turns = analyze(g)
+            win = g.get('winner') == 1; wins += win; graals += graal is not None
+            print('%d: %s turns %d | graal %s | army dmg %d   [%d done, %d queued, %.0f s]' % (
+                fid, 'WIN ' if win else 'loss', turns, ('T%d' % graal) if graal else '-', dmg, done, len(pending), time.time() - t0), flush=True)
+        if not pending and started >= a.n:
+            break
+    print('== %d/%d wins, %d graal deaths (%.0f s)' % (wins, done, graals, time.time() - t0))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('n', type=int)
     ap.add_argument('--boss', type=int, default=2)
+    ap.add_argument('--queue', action='store_true', help='start fights at --rate requests/s and let the server queue them')
+    ap.add_argument('--rate', type=float, default=9.0)
     a = ap.parse_args()
     lw = LWSession('main')
     out = os.path.join(ROOT, 'data', 'boss_fights')
+    if a.queue:
+        return run_queued(lw, a, out)
     wins = 0; graals = 0
     for i in range(a.n):
         r = lw.post('/garden/start-boss-fight', boss_id=a.boss, participants=json.dumps(LEEKS))
