@@ -2,16 +2,17 @@
 """Daily garden run for the talent read (crontab 22:17 UTC: credits refresh at
 22:00 UTC, i.e. midnight Paris; installed 2026-09-25, moved 2026-09-26).
 
-Spends every garden credit on both accounts through the MCP server's own
-`leekwars_solo_fight` smart selector (the same opponent picks as a manual
-run), splitting each account's credits evenly across its leeks and
-re-requesting the fights the selector drops (~40% "errors" per call). Then
-appends one row per leek to data/ladder/talent_log.csv:
+Since 2026-10-03 it uses garden_fast's model selector (tools/garden_model.py), both
+accounts in parallel: all day it only starts fights with positive expected talent
+(each fight goes to the leek whose best offered opponent is worth the most; offers
+are re-checked every 5 minutes), and at --dump-at (23:00 Paris, before the next pool)
+it spends what is left on the best offers. --selector mcp restores the old MCP
+`leekwars_solo_fight` path. Then appends one row per leek to data/ladder/talent_log.csv:
     date, account, leek, talent, fights, wins, losses, draws
 
 It never uploads code or changes kits: the build under test stays fixed.
 
-    python3 tools/daily_garden.py            # run
+    python3 tools/daily_garden.py            # run (lasts until the dump, ~23 h)
     python3 tools/daily_garden.py --dry-run  # credits + talent only
 """
 import argparse, csv, datetime, json, os, re, subprocess, sys, time
@@ -84,57 +85,97 @@ def talent(lw, lid):
     return int(l.get('talent', 0))
 
 
+def run_model(acct, leeks, cap, dump_at, min_ev, out):
+    """garden_fast allocation for one account; out[acct] = {leek: (fights, W, L, D)}."""
+    import garden_fast as gf
+    from garden_model import Model
+    lw = LWSession(acct)
+    avail = min(credits(lw), cap)
+    print('%s: %d credits to spend (model selector, min-ev %+.1f, dump %s Paris)' % (acct, avail, min_ev, dump_at), flush=True)
+    if avail <= 0:
+        out[acct] = {}
+        return
+    try:
+        model = Model(acct)
+    except Exception as ex:            # no model for this account yet: old MCP selector
+        print('%s: no garden model (%s) - MCP selector instead' % (acct, ex), flush=True)
+        return run_mcp(acct, leeks, cap, out)
+    names = [n for n, _ in leeks]; ids = dict(leeks)
+    res = gf.run_alloc(names, ids, avail, 4, gf.Bucket(4.5), acct, min_ev, 0.0, gf.paris_ts(dump_at), model)
+    out[acct] = {n: (r[0], r[1]['W'], r[1]['L'], r[1]['D']) for n, r in res.items()}
+    print('%s: %d credits left' % (acct, credits(lw)), flush=True)
+
+
+def run_mcp(acct, leeks, cap, out):
+    lw = LWSession(acct)
+    avail = credits(lw)
+    print('%s: %d credits, spending up to %d (MCP selector)' % (acct, avail, cap), flush=True)
+    avail = min(avail, cap)
+    per = {lid: avail // len(leeks) + (1 if k < avail % len(leeks) else 0) for k, (_, lid) in enumerate(leeks)}
+    mcp = MCP(); out[acct] = {}
+    try:
+        for name, lid in leeks:
+            tot = [0, 0, 0, 0]; need = per[lid]; tries = 0
+            while need > 0 and tries < 8:
+                tries += 1
+                done, w, l, d, _ = mcp.solo(acct, lid, need)
+                tot[0] += done; tot[1] += w; tot[2] += l; tot[3] += d
+                need -= done
+                if done == 0:
+                    time.sleep(5)
+                if credits(lw) == 0:
+                    break
+            out[acct][name] = tuple(tot)
+    finally:
+        mcp.close()
+
+
 def main():
+    import threading
     ap = argparse.ArgumentParser(); ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--accounts', default='main,cure', help='comma list (default both)')
     ap.add_argument('--cap', type=int, default=100, help='max fights per account per run (bought fights stay for manual batches)')
+    ap.add_argument('--selector', default='model', choices=['model', 'mcp'])
+    ap.add_argument('--dump-at', default='23:00', help='Paris time: spend the remaining credits on the best offers')
+    ap.add_argument('--min-ev', type=float, default=0.0, help='expected talent a fight needs before the dump')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
     today = datetime.datetime.now(ZoneInfo('Europe/Paris')).date().isoformat()
-    print('=== daily_garden %s' % datetime.datetime.now().isoformat(timespec='seconds'), flush=True)
+    print('=== daily_garden %s (%s selector)' % (datetime.datetime.now().isoformat(timespec='seconds'), a.selector), flush=True)
+    accts = [x for x in LEEKS if x in a.accounts.split(',')]
+    out = {}
+    if not a.dry_run:
+        if a.selector == 'model':
+            th = [threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out)) for x in accts]
+        else:
+            th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], a.cap, out)) for x in accts]
+        for t in th:
+            t.start()
+        for t in th:
+            t.join()
     rows = []
-    mcp = None if a.dry_run else MCP()
-    try:
-        for acct, leeks in LEEKS.items():
-            if acct not in a.accounts.split(','):
-                continue
-            lw = LWSession(acct)
-            avail = credits(lw)
-            print('%s: %d credits, spending up to %d' % (acct, avail, a.cap), flush=True)
-            avail = min(avail, a.cap)
-            per = {lid: avail // len(leeks) + (1 if k < avail % len(leeks) else 0) for k, (_, lid) in enumerate(leeks)}
-            for name, lid in leeks:
-                tot = [0, 0, 0, 0]
-                if not a.dry_run:
-                    need = per[lid]; tries = 0
-                    while need > 0 and tries < 8:
-                        tries += 1
-                        done, w, l, d, _ = mcp.solo(acct, lid, need)
-                        tot[0] += done; tot[1] += w; tot[2] += l; tot[3] += d
-                        need -= done
-                        if done == 0:
-                            time.sleep(5)
-                        if credits(lw) == 0:
-                            break
-                t = talent(lw, lid)
-                print('  %-17s fights %2d  %dW/%dL/%dD  talent %d' % (name, tot[0], tot[1], tot[2], tot[3], t), flush=True)
-                rows.append([today, acct, name, t] + tot)
-            print('%s: %d credits left' % (acct, credits(lw)), flush=True)
-    finally:
-        if mcp:
-            mcp.close()
-    if not a.dry_run and sum(r[4] for r in rows) == 0:
+    for acct in accts:
+        lw = LWSession(acct)
+        for name, lid in LEEKS[acct]:
+            tot = list(out.get(acct, {}).get(name, (0, 0, 0, 0)))
+            t = talent(lw, lid)
+            print('  %-17s fights %2d  %dW/%dL/%dD  talent %d' % (name, tot[0], tot[1], tot[2], tot[3], t), flush=True)
+            rows.append([today, acct, name, t] + tot)
+    if a.dry_run:
+        for acct in accts:
+            print('%s: %d credits' % (acct, credits(LWSession(acct))), flush=True)
+        return
+    if sum(r[4] for r in rows) == 0:
         print('no fights played (no credits) - nothing logged', flush=True)
         return
-    if not a.dry_run:
-        new = not os.path.exists(LOG_CSV)
-        with open(LOG_CSV, 'a', newline='') as fh:
-            wr = csv.writer(fh)
-            if new:
-                wr.writerow(['date', 'account', 'leek', 'talent', 'fights', 'wins', 'losses', 'draws'])
-            wr.writerows(rows)
-        print('appended %d rows to %s' % (len(rows), LOG_CSV), flush=True)
+    new = not os.path.exists(LOG_CSV)
+    with open(LOG_CSV, 'a', newline='') as fh:
+        wr = csv.writer(fh)
+        if new:
+            wr.writerow(['date', 'account', 'leek', 'talent', 'fights', 'wins', 'losses', 'draws'])
+        wr.writerows(rows)
+    print('appended %d rows to %s' % (len(rows), LOG_CSV), flush=True)
 
 
 if __name__ == '__main__':

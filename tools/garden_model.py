@@ -23,7 +23,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CACHE = os.path.join(ROOT, 'data', 'fight_cache')
-OUT = os.path.join(HERE, 'garden_model.json')
+OUT = os.path.join(HERE, 'garden_model.json')          # main account
+
+
+def model_path(account='main'):
+    return OUT if account == 'main' else os.path.join(HERE, 'garden_model_%s.json' % account)
 sys.path.insert(0, HERE)
 
 ACCOUNTS = {'main': {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296},
@@ -75,8 +79,8 @@ def names_of(leek_names):
 
 
 class Model:
-    def __init__(self, path=OUT):
-        d = json.load(open(path))
+    def __init__(self, account='main'):
+        d = json.load(open(model_path(account)))
         self.w = np.array(d['w']); self.mu = np.array(d['mu']); self.sd = np.array(d['sd'])
         self.leeks = d['leeks']
 
@@ -216,9 +220,9 @@ def build(a):
         for m in [(p_cal >= lo) & (p_cal < lo + 0.2)] if m.sum()))
     w = fit(Z, y, a.l2)
     json.dump({'w': w.tolist(), 'mu': mu.tolist(), 'sd': sd.tolist(), 'leeks': names, 'names': names_of(names),
-               'n': len(rows), 'since': a.since, 'l2': a.l2}, open(OUT, 'w'), indent=1)
+               'n': len(rows), 'since': a.since, 'l2': a.l2}, open(model_path(a.account), 'w'), indent=1)
     top = sorted(zip(names_of(names), w), key=lambda t: -abs(t[1]))[:14]
-    print('saved %s; strongest weights: %s' % (OUT, ', '.join('%s %+.2f' % t for t in top)))
+    print('saved %s; strongest weights: %s' % (model_path(a.account), ', '.join('%s %+.2f' % t for t in top)))
 
 
 def main():
