@@ -22,13 +22,18 @@ BASE = 'https://leekwars.com/api'
 
 class LWSession:
     def __init__(self, account='main', timeout=25, retries=8):
-        self.timeout, self.retries = timeout, retries
-        email, pw = load_credentials(account)
+        self.timeout, self.retries, self.account = timeout, retries, account
+        self.login()
+
+    def login(self):
+        """(Re)log in: long-running tools lose their token after some hours."""
+        timeout = self.timeout
+        email, pw = load_credentials(self.account)
         self.s = requests.Session()
         j = self.s.post(f'{BASE}/farmer/login-token',
                         data={'login': email, 'password': pw}, timeout=timeout).json()
         if 'farmer' not in j:
-            raise RuntimeError(f'login failed for {account}: {str(j)[:200]}')
+            raise RuntimeError(f'login failed for {self.account}: {str(j)[:200]}')
         self.farmer = j['farmer']
         self.token = j['token']
         self.s.headers['Authorization'] = 'Bearer ' + self.token
@@ -51,6 +56,14 @@ class LWSession:
                 continue
             if isinstance(d, dict) and d.get('error') == 'rate_limit':
                 time.sleep(float(d.get('retry_after', 1)) + 0.3)
+                continue
+            err = str(d.get('error', '')) if isinstance(d, dict) else ''
+            if (r.status_code in (401, 403) or any(k in err for k in ('token', 'connected', 'login', 'auth'))) \
+                    and attempt < self.retries - 1:
+                try:
+                    self.login()
+                except Exception:
+                    time.sleep(5)
                 continue
             return d
         return d

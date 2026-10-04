@@ -301,16 +301,24 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                         s['banned'].add(opp['id'])
         progressed = False
         while started < total and not out_of_fights and errors < 20:
-            cands = []
+            cands = []; empty = 0
             for n, s in st.items():
                 if len(s['pending']) >= inflight:
                     continue
                 if s['offer'] is None:
                     ops = (get('/garden/get-leek-opponents/%d' % s['lid']) or {}).get('opponents') or []
+                    empty += not ops
                     s['offer'] = model_pick(s['db'], prof, n, s['talent'], ops, s['banned'], get, model) if ops else False
                 if s['offer']:
                     cands.append((s['offer'][1], n))
             if not cands:
+                if empty and empty == sum(1 for x in st.values() if x['offer'] is False):
+                    # no offer at all for anyone while fights remain: stale session (seen after ~2 h)
+                    print('  %s no offers returned - logging in again' % time.strftime('%H:%M'), flush=True)
+                    try:
+                        lw.login()
+                    except Exception as ex:
+                        print('  re-login failed: %s' % ex, flush=True)
                 break
             ev, n = max(cands)
             if min_ev is not None and ev < min_ev:

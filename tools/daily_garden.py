@@ -5,8 +5,9 @@
 Since 2026-10-03 it uses garden_fast's model selector (tools/garden_model.py), both
 accounts in parallel: all day it only starts fights with positive expected talent
 (each fight goes to the leek whose best offered opponent is worth the most; offers
-are re-checked every 5 minutes), and at --dump-at (23:00 Paris, before the next pool)
-it spends what is left on the best offers. --selector mcp restores the old MCP
+are re-checked every 5 minutes) until 23:55 Paris;
+it can spend what is left (--dump-at; off by default since 2026-10-04: dump fights won 29%).
+--selector mcp restores the old MCP
 `leekwars_solo_fight` path. Then appends one row per leek to data/ladder/talent_log.csv:
     date, account, leek, talent, fights, wins, losses, draws
 
@@ -91,7 +92,8 @@ def run_model(acct, leeks, cap, dump_at, min_ev, out):
     from garden_model import Model
     lw = LWSession(acct)
     avail = min(credits(lw), cap)
-    print('%s: %d credits to spend (model selector, min-ev %+.1f, dump %s Paris)' % (acct, avail, min_ev, dump_at), flush=True)
+    print('%s: %d credits available (model selector, min-ev %+.1f, %s)' % (
+        acct, avail, min_ev, ('dump at %s Paris' % dump_at) if dump_at else 'no dump: unspent credits lapse'), flush=True)
     if avail <= 0:
         out[acct] = {}
         return
@@ -101,7 +103,12 @@ def run_model(acct, leeks, cap, dump_at, min_ev, out):
         print('%s: no garden model (%s) - MCP selector instead' % (acct, ex), flush=True)
         return run_mcp(acct, leeks, cap, out)
     names = [n for n, _ in leeks]; ids = dict(leeks)
-    res = gf.run_alloc(names, ids, avail, 4, gf.Bucket(4.5), acct, min_ev, 0.0, gf.paris_ts(dump_at), model)
+    if dump_at:
+        res = gf.run_alloc(names, ids, avail, 4, gf.Bucket(4.5), acct, min_ev, 0.0, gf.paris_ts(dump_at), model)
+    else:
+        # positive offers only, until just before the next pool opens; the rest lapses
+        wait = max(1.0, (gf.paris_ts('23:55') - time.time()) / 60.0)
+        res = gf.run_alloc(names, ids, avail, 4, gf.Bucket(4.5), acct, min_ev, wait, None, model)
     out[acct] = {n: (r[0], r[1]['W'], r[1]['L'], r[1]['D']) for n, r in res.items()}
     print('%s: %d credits left' % (acct, credits(lw)), flush=True)
 
@@ -136,7 +143,8 @@ def main():
     ap.add_argument('--accounts', default='main,cure', help='comma list (default both)')
     ap.add_argument('--cap', type=int, default=100, help='max fights per account per run (bought fights stay for manual batches)')
     ap.add_argument('--selector', default='model', choices=['model', 'mcp'])
-    ap.add_argument('--dump-at', default='23:00', help='Paris time: spend the remaining credits on the best offers')
+    ap.add_argument('--dump-at', default=None, help='Paris time to spend the remaining credits anyway (default: never; '
+                    'dump fights won 29%% on 2026-10-03, talent is the metric)')
     ap.add_argument('--min-ev', type=float, default=0.0, help='expected talent a fight needs before the dump')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
