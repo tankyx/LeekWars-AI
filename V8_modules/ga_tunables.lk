@@ -9,16 +9,16 @@
 // Defaults must exactly reproduce the historical literals.
 global GA_TUNE = [
     // Kill-probability damage multiplier: damageWeight *= 1 + coef * p^2
-    'killProbCoef': 6.2143311913090615,
+    'killProbCoef': 6.893210476606081,
     // Predicted-death penalties (adversarial threat at final position)
-    'deathPenalty': 12131,
+    'deathPenalty': 10138,
     'dyingSoonPenalty': 10000,
     // Survival-urgency whole-score multiplier tiers (hp<30 / <40 / <45)
-    'survivalMultLow': 22.749023109262406,
-    'survivalMultMid': 49.875859631824845,
-    'survivalMultHigh': 12.274544392735951,
+    'survivalMultLow': 22.713385566862236,
+    'survivalMultMid': 43.2524348926487,
+    'survivalMultHigh': 7.105709034663061,
     // Time-pressure urgency cap
-    'urgencyCap': 10.569823684788394,
+    'urgencyCap': 11.84786397033166,
     // B5 strike-window per-chip hold penalty
-    'b5HoldPenalty': 109
+    'b5HoldPenalty': 0
 ]
