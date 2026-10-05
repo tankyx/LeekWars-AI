@@ -86,14 +86,15 @@ def talent(lw, lid):
     return int(l.get('talent', 0))
 
 
-def run_model(acct, leeks, cap, dump_at, min_ev, out):
+def run_model(acct, leeks, cap, dump_at, min_ev, out, reroll_ev=None, reroll_after=60.0):
     """garden_fast allocation for one account; out[acct] = {leek: (fights, W, L, D)}."""
     import garden_fast as gf
     from garden_model import Model
     lw = LWSession(acct)
     avail = min(credits(lw), cap)
-    print('%s: %d credits available (model selector, min-ev %+.1f, %s)' % (
-        acct, avail, min_ev, ('dump at %s Paris' % dump_at) if dump_at else 'no dump: unspent credits lapse'), flush=True)
+    print('%s: %d credits available (model selector, min-ev %+.1f, reroll >= %s after %.0f min, %s)' % (
+        acct, avail, min_ev, reroll_ev, reroll_after,
+        ('dump at %s Paris' % dump_at) if dump_at else 'no dump: unspent credits lapse'), flush=True)
     if avail <= 0:
         out[acct] = {}
         return
@@ -108,7 +109,8 @@ def run_model(acct, leeks, cap, dump_at, min_ev, out):
     else:
         # positive offers only, until just before the next pool opens; the rest lapses
         wait = max(1.0, (gf.paris_ts('23:55') - time.time()) / 60.0)
-        res = gf.run_alloc(names, ids, avail, 4, gf.Bucket(4.5), acct, min_ev, wait, None, model)
+        res = gf.run_alloc(names, ids, avail, 4, gf.Bucket(4.5), acct, min_ev, wait, None, model,
+                           reroll_ev, reroll_after)
     out[acct] = {n: (r[0], r[1]['W'], r[1]['L'], r[1]['D']) for n, r in res.items()}
     print('%s: %d credits left' % (acct, credits(lw)), flush=True)
 
@@ -146,6 +148,9 @@ def main():
     ap.add_argument('--dump-at', default=None, help='Paris time to spend the remaining credits anyway (default: never; '
                     'dump fights won 29%% on 2026-10-03, talent is the metric)')
     ap.add_argument('--min-ev', type=float, default=0.0, help='expected talent a fight needs before the dump')
+    ap.add_argument('--reroll-ev', type=float, default=-1.5,
+                    help='a leek whose list has been stale for --reroll-after min takes an offer >= this (refreshes its list)')
+    ap.add_argument('--reroll-after', type=float, default=60.0)
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
@@ -155,7 +160,8 @@ def main():
     out = {}
     if not a.dry_run:
         if a.selector == 'model':
-            th = [threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out)) for x in accts]
+            th = [threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out,
+                                                           a.reroll_ev, a.reroll_after)) for x in accts]
         else:
             th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], a.cap, out)) for x in accts]
         for t in th:

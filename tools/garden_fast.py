@@ -251,10 +251,13 @@ def run_leek(name, lid, n, inflight, bucket, lock, out, account='main'):
         out[name] = (started, rec)
 
 
-def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0.0, dump_ts=None, model=None):
+def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0.0, dump_ts=None, model=None,
+              reroll_ev=None, reroll_after=60.0):
     """One shared pool of `total` fights: each start goes to the leek whose best offered
     opponent has the highest expected talent (model + history); a leek whose offer is
-    all bad simply waits. Returns {name: (started, rec, talent_now)}."""
+    all bad simply waits. Reroll: a leek whose list has not changed for `reroll_after`
+    minutes and whose best offer is >= `reroll_ev` (slightly negative) takes it anyway,
+    because a fight is what regenerates its five offers. Returns {name: (started, rec, talent_now)}."""
     lw = LWSession(account); prof = Profiles()
 
     def get(path):
@@ -273,13 +276,14 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
             print('  %s: reconcile failed %s' % (n, ex), flush=True)
         l = get('/leek/get/%d' % lid); l = l.get('leek', l)
         st[n] = {'lid': lid, 'db': db, 'pending': {}, 'rec': {'W': 0, 'L': 0, 'D': 0}, 'losses': {}, 'banned': set(),
-                 'talent': int(l.get('talent', 0)), 'offer': None, 'started': 0, 'ev': 0.0, 'p': 0.0}
+                 'talent': int(l.get('talent', 0)), 'offer': None, 'started': 0, 'ev': 0.0, 'p': 0.0,
+                 'ids': None, 'since': time.time(), 'rerolls': 0}
     logf = open(PICKS_LOG, 'a')
     started = 0; errors = 0; out_of_fights = False
     deadline = dump_ts if dump_ts else time.time() + 60.0 * wait_min
     while True:
         for n, s in st.items():
-            for fid, (opp, p, ev) in list(s['pending'].items()):
+            for fid, (opp, p, ev, rr) in list(s['pending'].items()):
                 f = get('/fight/get/%d' % fid); f = f.get('fight', f) if isinstance(f, dict) else {}
                 if f.get('status') != 2:
                     continue
@@ -294,7 +298,7 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                         s['talent'] = int(l['talent'])
                 del s['pending'][fid]; s['rec'][res[0]] += 1
                 logf.write(json.dumps({'fight': fid, 'leek': n, 'opp': opp['id'], 'opp_talent': opp.get('talent'),
-                                       'p': round(p, 3), 'ev': round(ev, 2), 'result': res}) + '\n'); logf.flush()
+                                       'p': round(p, 3), 'ev': round(ev, 2), 'result': res, 'reroll': rr}) + '\n'); logf.flush()
                 if res == 'LOSS':
                     s['losses'][opp['id']] = s['losses'].get(opp['id'], 0) + 1
                     if s['losses'][opp['id']] >= SESSION_LOSS_LIMIT:
@@ -309,8 +313,16 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                     ops = (get('/garden/get-leek-opponents/%d' % s['lid']) or {}).get('opponents') or []
                     empty += not ops
                     s['offer'] = model_pick(s['db'], prof, n, s['talent'], ops, s['banned'], get, model) if ops else False
+                    ids = frozenset(o['id'] for o in ops)
+                    if ops and ids != s['ids']:
+                        s['ids'] = ids; s['since'] = time.time()
                 if s['offer']:
-                    cands.append((s['offer'][1], n))
+                    ev_ = s['offer'][1]
+                    if min_ev is None or ev_ >= min_ev:
+                        cands.append((1, ev_, n))
+                    elif (reroll_ev is not None and ev_ >= reroll_ev
+                          and time.time() - s['since'] >= 60.0 * reroll_after):
+                        cands.append((0, ev_, n))     # reroll: only when no positive offer anywhere
             if not cands:
                 if empty and empty == sum(1 for x in st.values() if x['offer'] is False):
                     # no offer at all for anyone while fights remain: stale session (seen after ~2 h)
@@ -320,10 +332,12 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                     except Exception as ex:
                         print('  re-login failed: %s' % ex, flush=True)
                 break
-            ev, n = max(cands)
-            if min_ev is not None and ev < min_ev:
-                break
+            good, ev, n = max(cands)
             s = st[n]; tgt, ev, p = s['offer']
+            if not good:
+                s['rerolls'] += 1
+                print('  %s reroll %s: best offer %+.1f, list unchanged %.0f min' % (
+                    time.strftime('%H:%M'), n, ev, (time.time() - s['since']) / 60.0), flush=True)
             r = post('/garden/start-solo-fight', {'leek_id': s['lid'], 'target_id': tgt['id']})
             fid = r.get('fight') if isinstance(r, dict) else (r if isinstance(r, int) else None)
             if not fid:
@@ -334,7 +348,7 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                     time.sleep((r.get('retry_after') or 1) + 0.5); continue
                 print('  %s: start failed %s' % (n, str(r)[:120]), flush=True)
                 s['offer'] = None; errors += 1; time.sleep(1); continue
-            s['pending'][fid] = (tgt, p, ev); s['offer'] = None; s['started'] += 1
+            s['pending'][fid] = (tgt, p, ev, not good); s['offer'] = None; s['started'] += 1
             s['ev'] += ev; s['p'] += p; started += 1; progressed = True
         busy = any(s['pending'] for s in st.values())
         if min_ev is not None and dump_ts and time.time() >= dump_ts:
@@ -376,6 +390,8 @@ def main():
     ap.add_argument('--min-ev', type=float, default=None, help='with --total: never start a fight below this expected talent')
     ap.add_argument('--wait', type=float, default=0.0, help='with --min-ev: minutes to keep re-checking offers (every 5 min)')
     ap.add_argument('--dump-at', default=None, help='with --min-ev: HH:MM Paris time at which the remaining fights are spent anyway')
+    ap.add_argument('--reroll-ev', type=float, default=None, help='with --min-ev: take an offer >= this when the list is stale')
+    ap.add_argument('--reroll-after', type=float, default=60.0, help='minutes a leek list must stay unchanged before a reroll')
     a = ap.parse_args()
     global LEEKS
     LEEKS = ACCOUNTS[a.account]
@@ -393,7 +409,7 @@ def main():
         if MODEL is None or any(n not in MODEL.leeks for n in names):
             print('no garden model for these leeks (python3 tools/garden_model.py build --account %s)' % a.account); return
         res = run_alloc(names, LEEKS, a.total, a.inflight, bucket, a.account, a.min_ev, a.wait,
-                        paris_ts(a.dump_at) if a.dump_at else None)
+                        paris_ts(a.dump_at) if a.dump_at else None, None, a.reroll_ev, a.reroll_after)
         for n in names:
             st, rec, tal, sev, sp = res[n]
             aft = talent(LEEKS[n])
