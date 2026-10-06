@@ -13,6 +13,7 @@ network faults AND the 5-req/sec rate limiter with backoff.
 """
 import time
 
+import json
 import requests
 
 from config_loader import load_credentials
@@ -25,18 +26,28 @@ class LWSession:
         self.timeout, self.retries, self.account = timeout, retries, account
         self.login()
 
-    def login(self):
-        """(Re)log in: long-running tools lose their token after some hours."""
+    def login(self, tries=6):
+        """(Re)log in: long-running tools lose their token after some hours. Retries with
+        backoff; the reply is parsed leniently (a malformed body was seen during an outage)."""
         timeout = self.timeout
         email, pw = load_credentials(self.account)
-        self.s = requests.Session()
-        j = self.s.post(f'{BASE}/farmer/login-token',
-                        data={'login': email, 'password': pw}, timeout=timeout).json()
-        if 'farmer' not in j:
-            raise RuntimeError(f'login failed for {self.account}: {str(j)[:200]}')
-        self.farmer = j['farmer']
-        self.token = j['token']
-        self.s.headers['Authorization'] = 'Bearer ' + self.token
+        last = None
+        for k in range(tries):
+            try:
+                s = requests.Session()
+                r = s.post(f'{BASE}/farmer/login-token', data={'login': email, 'password': pw}, timeout=timeout)
+                j, _ = json.JSONDecoder().raw_decode(r.text.lstrip())
+                if isinstance(j, dict) and 'farmer' in j and 'token' in j:
+                    self.s = s
+                    self.farmer = j['farmer']
+                    self.token = j['token']
+                    self.s.headers['Authorization'] = 'Bearer ' + self.token
+                    return
+                last = str(j)[:200]
+            except Exception as ex:
+                last = '%s: %s' % (type(ex).__name__, ex)
+            time.sleep(min(60, 5 * 2 ** k))
+        raise RuntimeError(f'login failed for {self.account}: {last}')
 
     def call(self, method, path, **data):
         d = {'error': 'not_attempted'}

@@ -94,7 +94,7 @@ def run_model(acct, leeks, cap, dump_at, min_ev, out, reroll_ev=None, reroll_aft
     avail = min(credits(lw), cap)
     print('%s: %d credits available (model selector, min-ev %+.1f, reroll >= %s after %.0f min, %s)' % (
         acct, avail, min_ev, reroll_ev, reroll_after,
-        ('dump at %s Paris' % dump_at) if dump_at else 'no dump: unspent credits lapse'), flush=True)
+        ('dump at %s Paris' % dump_at) if dump_at else 'no dump: unspent credits carry over'), flush=True)
     if avail <= 0:
         out[acct] = {}
         return
@@ -148,9 +148,9 @@ def main():
     ap.add_argument('--dump-at', default=None, help='Paris time to spend the remaining credits anyway (default: never; '
                     'dump fights won 29%% on 2026-10-03, talent is the metric)')
     ap.add_argument('--min-ev', type=float, default=0.0, help='expected talent a fight needs before the dump')
-    ap.add_argument('--reroll-ev', type=float, default=-1.5,
+    ap.add_argument('--reroll-ev', type=float, default=-2.5,
                     help='a leek whose list has been stale for --reroll-after min takes an offer >= this (refreshes its list)')
-    ap.add_argument('--reroll-after', type=float, default=60.0)
+    ap.add_argument('--reroll-after', type=float, default=45.0)
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
