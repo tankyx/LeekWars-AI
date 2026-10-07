@@ -66,7 +66,7 @@ def leek_bias(name):
         rows = [json.loads(l) for l in open(PICKS_LOG)]
     except Exception:
         return 0.0
-    rows = [r for r in rows if r.get('leek') == name][-BIAS_WINDOW:]
+    rows = [r for r in rows if r.get('leek') == name and not r.get('crash')][-BIAS_WINDOW:]
     if not rows:
         return 0.0
     d = sum((1.0 if r['result'] == 'WIN' else (0.5 if r['result'] == 'DRAW' else 0.0)) - r['p'] for r in rows)
@@ -339,7 +339,8 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                     if l.get('id') == s['lid'] and l.get('talent'):
                         s['talent'] = int(l['talent'])
                 del s['pending'][fid]; s['rec'][res[0]] += 1
-                if ai_crashed(f, s['lid']):
+                crashed = ai_crashed(f, s['lid'])
+                if crashed:
                     s['crash'] += 1
                     print('  %s %s: AI did nothing in fight %d (crash %d in a row)' % (
                         time.strftime('%H:%M'), n, fid, s['crash']), flush=True)
@@ -349,7 +350,8 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                 else:
                     s['crash'] = 0
                 logf.write(json.dumps({'fight': fid, 'leek': n, 'opp': opp['id'], 'opp_talent': opp.get('talent'),
-                                       'p': round(p, 3), 'ev': round(ev, 2), 'result': res, 'reroll': rr}) + '\n'); logf.flush()
+                                       'p': round(p, 3), 'ev': round(ev, 2), 'result': res, 'reroll': rr,
+                                       'crash': crashed}) + '\n'); logf.flush()
                 if res == 'LOSS':
                     s['losses'][opp['id']] = s['losses'].get(opp['id'], 0) + 1
                     if s['losses'][opp['id']] >= SESSION_LOSS_LIMIT:
