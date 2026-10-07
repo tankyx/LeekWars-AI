@@ -55,6 +55,24 @@ def paris_ts(hhmm):
     return t.timestamp()
 
 
+BIAS_PRIOR, BIAS_WINDOW, MAX_SHARE = 40.0, 200, 0.35
+
+
+def leek_bias(name):
+    """Actual - predicted win rate of this leek's recent picks (data/ladder/garden_picks.jsonl),
+    shrunk toward 0 with BIAS_PRIOR pseudo-picks. Picking the best-rated offer selects the
+    model's optimistic errors (2026-10-06: Edsger predicted 60%, won 45% over 137 picks)."""
+    try:
+        rows = [json.loads(l) for l in open(PICKS_LOG)]
+    except Exception:
+        return 0.0
+    rows = [r for r in rows if r.get('leek') == name][-BIAS_WINDOW:]
+    if not rows:
+        return 0.0
+    d = sum((1.0 if r['result'] == 'WIN' else (0.5 if r['result'] == 'DRAW' else 0.0)) - r['p'] for r in rows)
+    return d / (len(rows) + BIAS_PRIOR)
+
+
 def expected_talent(p, gap):
     return p * (G0 + GK * gap) - (1.0 - p) * (G0 - GK * gap)
 
@@ -85,7 +103,7 @@ class Profiles:
         return d
 
 
-def model_pick(db, prof, name, my_talent, opponents, banned, fetch, model=None):
+def model_pick(db, prof, name, my_talent, opponents, banned, fetch, model=None, bias=0.0):
     """Best opponent by expected talent: (opponent, expected talent, P(win)) or None."""
     elig = [o for o in opponents if o['id'] not in banned] or opponents
     best = None
@@ -94,7 +112,7 @@ def model_pick(db, prof, name, my_talent, opponents, banned, fetch, model=None):
                                             (o['id'],))]
         opp = dict(prof.get(o['id'], fetch))
         opp['talent'] = o.get('talent') or opp.get('talent', my_talent); opp['level'] = o.get('level') or opp.get('level', 301)
-        p = (model or MODEL).p(name, my_talent, opp, hist)
+        p = min(0.97, max(0.03, (model or MODEL).p(name, my_talent, opp, hist) + bias))
         ev = expected_talent(p, opp['talent'] - my_talent)
         if best is None or ev > best[1]:
             best = (o, ev, p)
@@ -277,10 +295,13 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
         l = get('/leek/get/%d' % lid); l = l.get('leek', l)
         st[n] = {'lid': lid, 'db': db, 'pending': {}, 'rec': {'W': 0, 'L': 0, 'D': 0}, 'losses': {}, 'banned': set(),
                  'talent': int(l.get('talent', 0)), 'offer': None, 'started': 0, 'ev': 0.0, 'p': 0.0,
-                 'ids': None, 'since': time.time(), 'rerolls': 0}
+                 'ids': None, 'since': time.time(), 'rerolls': 0, 'bias': leek_bias(n)}
     logf = open(PICKS_LOG, 'a')
     started = 0; errors = 0; out_of_fights = False
     deadline = dump_ts if dump_ts else time.time() + 60.0 * wait_min
+    cap = max(1, int(MAX_SHARE * total + 0.999)) if len(st) > 1 else total
+    print('  %s: per-leek cap %d; pick bias %s' % (account, cap, ', '.join(
+        '%s %+.3f' % (n, s['bias']) for n, s in st.items())), flush=True)
     while True:
         for n, s in st.items():
             for fid, (opp, p, ev, rr) in list(s['pending'].items()):
@@ -307,12 +328,12 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
         while started < total and not out_of_fights and errors < 20:
             cands = []; empty = 0
             for n, s in st.items():
-                if len(s['pending']) >= inflight:
+                if len(s['pending']) >= inflight or s['started'] >= cap:
                     continue
                 if s['offer'] is None:
                     ops = (get('/garden/get-leek-opponents/%d' % s['lid']) or {}).get('opponents') or []
                     empty += not ops
-                    s['offer'] = model_pick(s['db'], prof, n, s['talent'], ops, s['banned'], get, model) if ops else False
+                    s['offer'] = model_pick(s['db'], prof, n, s['talent'], ops, s['banned'], get, model, s['bias']) if ops else False
                     ids = frozenset(o['id'] for o in ops)
                     if ops and ids != s['ids']:
                         s['ids'] = ids; s['since'] = time.time()
