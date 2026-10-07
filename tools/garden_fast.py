@@ -73,6 +73,27 @@ def leek_bias(name):
     return d / (len(rows) + BIAS_PRIOR)
 
 
+def ai_crashed(f, lid):
+    """True when our leek's AI did nothing in this fight: no weapon/chip use and 2+ BUG
+    actions (1002). 2026-10-07 the server's Python runtime ran out of heap ('Invalid AI')
+    and Kurt lost ~20 garden fights in a row without acting."""
+    data = f.get('data') or {}
+    me = next((l for l in (f.get('leeks1') or []) + (f.get('leeks2') or []) if l.get('id') == lid), None)
+    ent = next((e['id'] for e in data.get('leeks') or [] if me and e.get('name') == me.get('name')), None)
+    if ent is None:
+        return False
+    cur = None; uses = bugs = 0
+    for a in data.get('actions') or []:
+        if a and a[0] == 7:
+            cur = a[1]
+        elif cur == ent:
+            if a[0] in (12, 16):
+                uses += 1
+            elif a[0] == 1002:
+                bugs += 1
+    return uses == 0 and bugs >= 2
+
+
 def expected_talent(p, gap):
     return p * (G0 + GK * gap) - (1.0 - p) * (G0 - GK * gap)
 
@@ -295,7 +316,7 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
         l = get('/leek/get/%d' % lid); l = l.get('leek', l)
         st[n] = {'lid': lid, 'db': db, 'pending': {}, 'rec': {'W': 0, 'L': 0, 'D': 0}, 'losses': {}, 'banned': set(),
                  'talent': int(l.get('talent', 0)), 'offer': None, 'started': 0, 'ev': 0.0, 'p': 0.0,
-                 'ids': None, 'since': time.time(), 'rerolls': 0, 'bias': leek_bias(n)}
+                 'ids': None, 'since': time.time(), 'rerolls': 0, 'bias': leek_bias(n), 'crash': 0, 'paused': False}
     logf = open(PICKS_LOG, 'a')
     started = 0; errors = 0; out_of_fights = False
     deadline = dump_ts if dump_ts else time.time() + 60.0 * wait_min
@@ -318,6 +339,15 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                     if l.get('id') == s['lid'] and l.get('talent'):
                         s['talent'] = int(l['talent'])
                 del s['pending'][fid]; s['rec'][res[0]] += 1
+                if ai_crashed(f, s['lid']):
+                    s['crash'] += 1
+                    print('  %s %s: AI did nothing in fight %d (crash %d in a row)' % (
+                        time.strftime('%H:%M'), n, fid, s['crash']), flush=True)
+                    if s['crash'] >= 2 and not s['paused']:
+                        s['paused'] = True
+                        print('  %s %s: PAUSED - its AI is crashing' % (time.strftime('%H:%M'), n), flush=True)
+                else:
+                    s['crash'] = 0
                 logf.write(json.dumps({'fight': fid, 'leek': n, 'opp': opp['id'], 'opp_talent': opp.get('talent'),
                                        'p': round(p, 3), 'ev': round(ev, 2), 'result': res, 'reroll': rr}) + '\n'); logf.flush()
                 if res == 'LOSS':
@@ -328,7 +358,7 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
         while started < total and not out_of_fights and errors < 20:
             cands = []; empty = 0
             for n, s in st.items():
-                if len(s['pending']) >= inflight or s['started'] >= cap:
+                if len(s['pending']) >= inflight or s['started'] >= cap or s['paused']:
                     continue
                 if s['offer'] is None:
                     ops = (get('/garden/get-leek-opponents/%d' % s['lid']) or {}).get('opponents') or []
@@ -372,6 +402,10 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
             s['pending'][fid] = (tgt, p, ev, not good); s['offer'] = None; s['started'] += 1
             s['ev'] += ev; s['p'] += p; started += 1; progressed = True
         busy = any(s['pending'] for s in st.values())
+        if sum(1 for x in st.values() if x['paused']) >= min(2, len(st)) and not out_of_fights:
+            print('  %s %d leeks crashing on %s - server-side AI failure? stopping the run' % (
+                time.strftime('%H:%M'), sum(1 for x in st.values() if x['paused']), account), flush=True)
+            out_of_fights = True
         if min_ev is not None and dump_ts and time.time() >= dump_ts:
             # end of the credit day: spend what is left on the best offers available
             print('  %s dump time: spending the remaining %d fights on the best offers' % (
