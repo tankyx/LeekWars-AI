@@ -94,6 +94,44 @@ def ai_crashed(f, lid):
     return uses == 0 and bugs >= 2
 
 
+BAD_LOG = ('too_much_ops', 'heap size exceeded', 'Invalid AI', 'MemoryError')
+PROBE_AI, PROBE_EVERY = '10.0/V10/v10.py', 900
+
+
+def fight_degraded(get, fid):
+    """True when the fight log shows the server cutting or failing our Python AI."""
+    try:
+        s = json.dumps(get('/fight/get-logs/%d' % fid))
+    except Exception:
+        return False
+    return any(k in s for k in BAD_LOG)
+
+
+def health_probe(lw, leek_id):
+    """Free test fight of V10 vs Domingo; True when its log shows no cut / heap / invalid-AI.
+    2026-10-07/08 the server's Python runtime degraded for hours: every garden fight had
+    1-3 cut turns and V10 played crippled (Margaret 5W/32L)."""
+    try:
+        sid = lw.post('/test-scenario/new', name='health_%d' % (int(time.time()) % 100000)).get('id')
+        lw.post('/test-scenario/update', id=sid, data=json.dumps({'type': 0, 'map': None, 'ai': PROBE_AI}))
+        lw.post('/test-scenario/add-leek', scenario_id=sid, leek=leek_id, team=0, ai=PROBE_AI)
+        lw.post('/test-scenario/add-leek', scenario_id=sid, leek=-1, team=1, ai=-2)
+        r = lw.post('/ai/test-scenario', scenario_id=sid, ai_id=PROBE_AI)
+        fid = r.get('fight') if isinstance(r, dict) else None
+        ok = False
+        if fid:
+            for w in (3, 4, 6, 8, 10, 12, 15):
+                time.sleep(w)
+                f = lw.get('/fight/get/%d' % fid); f = f.get('fight', f)
+                if f.get('status') == 2:
+                    ok = not fight_degraded(lw.get, fid)
+                    break
+        lw.call('DELETE', '/test-scenario/delete', id=sid)
+        return ok
+    except Exception:
+        return False
+
+
 def expected_talent(p, gap):
     return p * (G0 + GK * gap) - (1.0 - p) * (G0 - GK * gap)
 
@@ -321,6 +359,10 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
     started = 0; errors = 0; out_of_fights = False
     deadline = dump_ts if dump_ts else time.time() + 60.0 * wait_min
     cap = max(1, int(MAX_SHARE * total + 0.999)) if len(st) > 1 else total
+    recent = []                  # degraded flags of the account's last finished fights
+    probe_leek = st[names[0]]['lid']
+    healthy = health_probe(lw, probe_leek); last_probe = time.time()
+    print('  %s: server health probe %s' % (account, 'OK' if healthy else 'DEGRADED - waiting'), flush=True)
     print('  %s: per-leek cap %d; pick bias %s' % (account, cap, ', '.join(
         '%s %+.3f' % (n, s['bias']) for n, s in st.items())), flush=True)
     while True:
@@ -340,6 +382,11 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                         s['talent'] = int(l['talent'])
                 del s['pending'][fid]; s['rec'][res[0]] += 1
                 crashed = ai_crashed(f, s['lid'])
+                recent = (recent + [crashed or fight_degraded(get, fid)])[-6:]
+                if healthy and sum(recent) >= 3:
+                    healthy = False; last_probe = time.time()
+                    print('  %s %s: %d of the last %d fights had cut/failed AI turns - pausing until a probe passes' % (
+                        time.strftime('%H:%M'), account, sum(recent), len(recent)), flush=True)
                 if crashed:
                     s['crash'] += 1
                     print('  %s %s: AI did nothing in fight %d (crash %d in a row)' % (
@@ -357,7 +404,13 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
                     if s['losses'][opp['id']] >= SESSION_LOSS_LIMIT:
                         s['banned'].add(opp['id'])
         progressed = False
-        while started < total and not out_of_fights and errors < 20:
+        if not healthy and time.time() - last_probe >= PROBE_EVERY:
+            healthy = health_probe(lw, probe_leek); last_probe = time.time()
+            print('  %s %s: health probe %s' % (time.strftime('%H:%M'), account, 'OK - resuming' if healthy else 'still degraded'),
+                  flush=True)
+            if healthy:
+                recent = []
+        while healthy and started < total and not out_of_fights and errors < 20:
             cands = []; empty = 0
             for n, s in st.items():
                 if len(s['pending']) >= inflight or s['started'] >= cap or s['paused']:
@@ -415,6 +468,9 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
             min_ev = None
             for s in st.values():
                 s['offer'] = None
+            continue
+        if not healthy and not busy and not out_of_fights and time.time() < deadline:
+            time.sleep(max(5, min(60, deadline - time.time())))
             continue
         if (not busy and not progressed and started < total and not out_of_fights and errors < 20
                 and min_ev is not None and time.time() < deadline):
