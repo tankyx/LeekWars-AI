@@ -350,8 +350,15 @@ def follow_up(cx, a, b, our_cell, ec):
     fu = cx.fu.get(fk)
     if fu is None:
         usable = [it for it in cx.a_off if it.minr <= max(need, it.minr) <= it.maxr and cx.a_vals.get(it.id, 0) > 0
-                  and need <= it.maxr]
-        if not usable:
+                  and need <= it.maxr and not any(e[0] == E_SUPERINF for e in it.effects)]
+        # superinfection next turn: off cooldown by then and in range -> keep its TP and cast it
+        # LAST, after the poisons (a nuke follow-up), whatever its start-of-turn value
+        si_f = [it for it in cx.a_off if any(e[0] == E_SUPERINF for e in it.effects)
+                and it.current_cooldown() <= 1 and it.minr <= max(need, it.minr) <= it.maxr and need <= it.maxr]
+        si_f = si_f[:1] if si_f and si_f[0].cost <= tp else []
+        if si_f:
+            tp -= si_f[0].cost
+        if not usable and not si_f:
             fu = ([], -1)
         else:
             order = sorted(usable, key=lambda it: -cx.a_vals[it.id] / max(1, it.cost))
@@ -367,7 +374,8 @@ def follow_up(cx, a, b, our_cell, ec):
                     used[it.id] = used.get(it.id, 0) + 1
                     if it.weapon:
                         held = it.id
-            fu = (steps, max(need, min(it.minr for it in usable)))
+            steps += si_f
+            fu = (steps, max(need, min(it.minr for it in (usable + si_f))))
         cx.fu[fk] = fu
     if fu[1] < 0:
         return d
@@ -439,7 +447,12 @@ def _leaf(cx, A1, B1, our_cell, turn):
     a2 = copy_side(a); b2 = copy_side(b)
     d = follow_up(cx, a2, b2, our_cell, ec)
     los = los0 if d == d0 else True
-    if b2['life'] <= 0 and chase:
+    # one-turn kill through poison: their poisons tick at the START of their turn, before they
+    # can act or cleanse, so life <= next tick after our follow-up is a kill
+    otk = b2['life'] > 0 and b2['life'] - b2['groups'].get('poison', 0) <= 0
+    if otk:
+        w = 1.0
+    if (b2['life'] <= 0 and chase) or otk:
         v_f = CHASE_KILL
     else:
         # outside chase mode a follow-up "kill" is optimistic: clamp at 1 HP
