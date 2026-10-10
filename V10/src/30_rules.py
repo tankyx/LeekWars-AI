@@ -98,6 +98,17 @@ def apply_item(it, C, T, S, f=1.0):
         elif t == E_POISON and T is not C:
             p = a * (1 + max(0, cur['magic']) / 100.0) * pw
             g_add(T, t, p); T['pf'] += p * max(1, turns)
+        elif t == E_SUPERINF and T is not C:
+            # engine EffectSuperinfection: value1% (x1.3 on crit) of the sum of the target's
+            # poisons' per-turn values, now, as poison damage (10% erosion); each poison then
+            # loses one turn, i.e. one tick comes off the queued total. Half a tick now for a
+            # full tick later: only worth it to finish a kill or to beat an antidote.
+            tick = T['groups'].get('poison', 0)
+            if tick > 0:
+                d = min(tick * min(1.0, a / 100.0 * critf), max(0, T['life']))
+                T['life'] -= d; T['pf'] = max(0.0, T['pf'] - tick)
+                T['max'] -= d * 0.10; T['burn'] += d * 0.10
+                dealt += d
         elif t == E_NOVA and T is not C:
             n = min(a * (1 + max(0, cur['science']) / 100.0) * pw, max(0, T['max'] - T['life']))
             T['max'] -= n; T['burn'] += n

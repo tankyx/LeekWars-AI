@@ -81,8 +81,9 @@ E_ANTIDOTE, E_SHK_MAG, E_VULN, E_VULN_ABS, E_NOVA = 23, 24, 26, 27, 30
 E_RAW_MP, E_RAW_TP, E_RAW_ABS, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_AGI, E_RAW_RES = 31, 32, 37, 38, 39, 40, 41, 42
 E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL, E_STEAL = 44, 46, 47, 49, 51, 52, 54, 61
 E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
+E_SUPERINF = 64    # superinfection: value1% of the target's per-turn poison sum now, every poison loses one turn
 
-OFFENSIVE = {E_DAMAGE, E_POISON, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS, E_DEBUFF}
+OFFENSIVE = {E_DAMAGE, E_POISON, E_SUPERINF, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS, E_DEBUFF}
 SELF_ONLY = {E_HEAL, E_BUFF_STR, E_BUFF_AGI, E_REL_SHIELD, E_ABS_SHIELD, E_BUFF_MP, E_BUFF_TP, E_VITALITY,
              E_RETURN, E_BUFF_RES, E_BUFF_WIS, E_RAW_MP, E_RAW_TP, E_RAW_ABS, E_RAW_STR, E_RAW_MAG, E_RAW_SCI,
              E_RAW_AGI, E_RAW_RES, E_RAW_WIS, E_RAW_POW, E_RAW_REL, E_ANTIDOTE, E_REMOVE_SHK}
@@ -367,6 +368,17 @@ def apply_item(it, C, T, S, f=1.0):
         elif t == E_POISON and T is not C:
             p = a * (1 + max(0, cur['magic']) / 100.0) * pw
             g_add(T, t, p); T['pf'] += p * max(1, turns)
+        elif t == E_SUPERINF and T is not C:
+            # engine EffectSuperinfection: value1% (x1.3 on crit) of the sum of the target's
+            # poisons' per-turn values, now, as poison damage (10% erosion); each poison then
+            # loses one turn, i.e. one tick comes off the queued total. Half a tick now for a
+            # full tick later: only worth it to finish a kill or to beat an antidote.
+            tick = T['groups'].get('poison', 0)
+            if tick > 0:
+                d = min(tick * min(1.0, a / 100.0 * critf), max(0, T['life']))
+                T['life'] -= d; T['pf'] = max(0.0, T['pf'] - tick)
+                T['max'] -= d * 0.10; T['burn'] += d * 0.10
+                dealt += d
         elif t == E_NOVA and T is not C:
             n = min(a * (1 + max(0, cur['science']) / 100.0) * pw, max(0, T['max'] - T['life']))
             T['max'] -= n; T['burn'] += n
