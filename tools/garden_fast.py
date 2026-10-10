@@ -114,21 +114,28 @@ def health_probe(lw, leek_id):
     try:
         sid = lw.post('/test-scenario/new', name='health_%d' % (int(time.time()) % 100000)).get('id')
         lw.post('/test-scenario/update', id=sid, data=json.dumps({'type': 0, 'map': None, 'ai': PROBE_AI}))
-        lw.post('/test-scenario/add-leek', scenario_id=sid, leek=leek_id, team=0, ai=PROBE_AI)
+        lw.post('/test-scenario/add-leek', scenario_id=sid, leek=abs(leek_id), team=0, ai=PROBE_AI)
         lw.post('/test-scenario/add-leek', scenario_id=sid, leek=-1, team=1, ai=-2)
         r = lw.post('/ai/test-scenario', scenario_id=sid, ai_id=PROBE_AI)
         fid = r.get('fight') if isinstance(r, dict) else None
-        ok = False
+        ok = None                      # None = the test fight never finished: inconclusive
         if fid:
-            for w in (3, 4, 6, 8, 10, 12, 15):
+            for w in (3, 4, 6, 8, 10, 12, 15, 20, 25, 30, 30):
                 time.sleep(w)
                 f = lw.get('/fight/get/%d' % fid); f = f.get('fight', f)
                 if f.get('status') == 2:
                     ok = not fight_degraded(lw.get, fid)
+                    if not ok:
+                        ls = json.dumps(lw.get('/fight/get-logs/%d' % fid))
+                        print('  probe fight %d degraded: %s' % (fid, {k: ls.count(k) for k in BAD_LOG if k in ls}), flush=True)
                     break
         lw.call('DELETE', '/test-scenario/delete', id=sid)
+        if ok is None:                 # slow queue, not a failed AI: ask once more
+            print('  probe fight %s did not finish in time' % fid, flush=True)
+            return health_probe(lw, -leek_id) if leek_id > 0 else False
         return ok
-    except Exception:
+    except Exception as ex:
+        print('  probe error %s: %s' % (type(ex).__name__, ex), flush=True)
         return False
 
 
@@ -358,7 +365,7 @@ def run_alloc(names, leeks, total, inflight, bucket, account, min_ev, wait_min=0
     logf = open(PICKS_LOG, 'a')
     started = 0; errors = 0; out_of_fights = False
     deadline = dump_ts if dump_ts else time.time() + 60.0 * wait_min
-    cap = max(1, int(MAX_SHARE * total + 0.999)) if len(st) > 1 else total
+    cap = max(1, int(max(MAX_SHARE, 1.2 / len(st)) * total + 0.999)) if len(st) > 1 else total
     recent = []                  # degraded flags of the account's last finished fights
     probe_leek = st[names[0]]['lid']
     healthy = health_probe(lw, probe_leek); last_probe = time.time()
