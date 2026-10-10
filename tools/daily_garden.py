@@ -115,6 +115,40 @@ def run_model(acct, leeks, cap, dump_at, min_ev, out, reroll_ev=None, reroll_aft
     print('%s: %d credits left' % (acct, credits(lw)), flush=True)
 
 
+def run_xp(acct, leeks, out, inflight=2):
+    """XP mode (Cure, levelling toward 300 for the Pumpkin): spend EVERY credit, best offer each
+    time (no expected-talent floor), on the leeks still under level 300, then spend new capital
+    with the xp_farm plans. Same health gate / crash guard / cut pause as the talent mode."""
+    import garden_fast as gf
+    import xp_farm as xf
+    from garden_model import Model
+    lw = LWSession(acct)
+    avail = credits(lw)
+    todo = [(n, lid) for n, lid in leeks if (lw.leek(lid).get('level') or 0) < 300]
+    print('%s: XP mode, %d credits, leeks under 300: %s' % (acct, avail, [n for n, _ in todo]), flush=True)
+    out[acct] = {}
+    if avail <= 0 or not todo:
+        return
+    try:
+        model = Model(acct)
+    except Exception:
+        model = None
+    if model is None:
+        print('%s: no garden model - XP mode needs one' % acct, flush=True); return
+    names = [n for n, _ in todo]; ids = dict(todo)
+    res = gf.run_alloc(names, ids, avail, inflight, gf.Bucket(4.5), acct, None, 30.0, None, model)
+    out[acct] = {n: (r[0], r[1]['W'], r[1]['L'], r[1]['D']) for n, r in res.items()}
+    xl = xf.Limited(lw, 4.0)
+    for n, lid in todo:
+        try:
+            sp = xf.spend_capital(xl, lid, n)
+            l = lw.leek(lid)
+            print('  %s level %s, capital spent on %s' % (n, l.get('level'), sorted(set(sp)) or '-'), flush=True)
+        except Exception as ex:
+            print('  %s capital spending failed: %s' % (n, ex), flush=True)
+    print('%s: %d credits left' % (acct, credits(lw)), flush=True)
+
+
 def run_mcp(acct, leeks, cap, out):
     lw = LWSession(acct)
     avail = credits(lw)
@@ -151,6 +185,7 @@ def main():
     ap.add_argument('--reroll-ev', type=float, default=-2.5,
                     help='a leek whose list has been stale for --reroll-after min takes an offer >= this (refreshes its list)')
     ap.add_argument('--reroll-after', type=float, default=45.0)
+    ap.add_argument('--xp-accounts', default='cure', help='accounts run in XP mode (spend all credits, level <300 leeks)')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
@@ -159,8 +194,10 @@ def main():
     accts = [x for x in LEEKS if x in a.accounts.split(',')]
     out = {}
     if not a.dry_run:
+        xp = [x for x in a.xp_accounts.split(',') if x]
         if a.selector == 'model':
-            th = [threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out,
+            th = [threading.Thread(target=run_xp, args=(x, LEEKS[x], out)) if x in xp else
+                  threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out,
                                                            a.reroll_ev, a.reroll_after)) for x in accts]
         else:
             th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], a.cap, out)) for x in accts]
