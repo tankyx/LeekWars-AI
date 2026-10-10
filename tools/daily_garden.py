@@ -149,6 +149,65 @@ def run_xp(acct, leeks, out, inflight=2):
     print('%s: %d credits left' % (acct, credits(lw)), flush=True)
 
 
+def run_xp_farmer(acct, leeks, out, inflight=2):
+    """XP mode with FARMER fights: one credit levels all the account's leeks at once
+    (main's farmer fights: ~33k XP per credit across 4 leeks, vs ~3.8k for a solo fight).
+    Opponent = weakest offered farmer (safest win). Health probe + cut pause as in garden_fast.
+    Logs XP per fight to data/ladder/xp_farmer.jsonl."""
+    import garden_fast as gf
+    import xp_farm as xf
+    lw = LWSession(acct); ids = {lid for _, lid in leeks}
+    avail = credits(lw)
+    print('%s: XP mode (farmer fights), %d credits' % (acct, avail), flush=True)
+    out[acct] = {}
+    if avail <= 0:
+        return
+    if not gf.health_probe(lw, leeks[0][1]):
+        print('%s: health probe DEGRADED - no farmer fights now' % acct, flush=True); return
+    logf = open(os.path.join(ROOT, 'data', 'ladder', 'xp_farmer.jsonl'), 'a')
+    pend = {}; started = done = xp_tot = 0; rec = [0, 0, 0]; recent = []; fails = 0
+    while (started < avail or pend) and fails < 10:
+        while started < avail and len(pend) < inflight:
+            ops = (lw.get('/garden/get-farmer-opponents') or {}).get('opponents') or []
+            if not ops:
+                fails += 1; time.sleep(5); break
+            o = min(ops, key=lambda x: x.get('talent') or 0)
+            r = lw.post('/garden/start-farmer-fight', target_id=o['id'])
+            fid = r if isinstance(r, int) else (r.get('fight') if isinstance(r, dict) else None)
+            if not fid:
+                err = r.get('error') if isinstance(r, dict) else r
+                if err in ('too_many_fights', 'no_more_fights'):
+                    avail = started; break
+                fails += 1; time.sleep(2); continue
+            pend[fid] = o; started += 1
+        time.sleep(3)
+        for fid in list(pend):
+            f = lw.get('/fight/get/%d' % fid); f = f.get('fight', f)
+            if f.get('status') != 2:
+                continue
+            o = pend.pop(fid); rp = f.get('report') or {}
+            ours1 = any(l.get('id') in ids for l in f.get('leeks1') or [])
+            w = f.get('winner'); res = 'D' if w == 0 else ('W' if w == (1 if ours1 else 2) else 'L')
+            rec['WLD'.index(res)] += 1
+            xp = sum(l.get('xp') or 0 for side in ('leeks1', 'leeks2') for l in rp.get(side) or [] if l.get('id') in ids)
+            xp_tot += xp; done += 1
+            bad = gf.fight_degraded(lw.get, fid); recent = (recent + [bad])[-6:]
+            logf.write(json.dumps({'fight': fid, 'opp': o.get('name'), 'opp_talent': o.get('talent'), 'result': res,
+                                   'xp': xp, 'degraded': bad}) + '\n'); logf.flush()
+            if sum(recent) >= 3:
+                print('  %s farmer fights degraded (3 of last 6) - stopping' % acct, flush=True)
+                avail = started
+    print('%s: %d farmer fights %dW/%dL/%dD, %.0f XP per fight' % (acct, done, rec[0], rec[1], rec[2], xp_tot / max(1, done)), flush=True)
+    out[acct] = {n: (done, rec[0], rec[1], rec[2]) for n, _ in leeks}
+    xl = xf.Limited(lw, 4.0)
+    for n, lid in leeks:
+        try:
+            sp = xf.spend_capital(xl, lid, n); l = lw.leek(lid)
+            print('  %s level %s, capital spent on %s' % (n, l.get('level'), sorted(set(sp)) or '-'), flush=True)
+        except Exception as ex:
+            print('  %s capital spending failed: %s' % (n, ex), flush=True)
+
+
 def run_mcp(acct, leeks, cap, out):
     lw = LWSession(acct)
     avail = credits(lw)
@@ -185,7 +244,8 @@ def main():
     ap.add_argument('--reroll-ev', type=float, default=-2.5,
                     help='a leek whose list has been stale for --reroll-after min takes an offer >= this (refreshes its list)')
     ap.add_argument('--reroll-after', type=float, default=45.0)
-    ap.add_argument('--xp-accounts', default='cure', help='accounts run in XP mode (spend all credits, level <300 leeks)')
+    ap.add_argument('--xp-accounts', default='cure', help='accounts run in XP mode (spend all credits)')
+    ap.add_argument('--xp-mode', default='farmer', choices=['farmer', 'solo'], help='XP mode fight type (farmer levels all leeks per credit)')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
@@ -196,7 +256,7 @@ def main():
     if not a.dry_run:
         xp = [x for x in a.xp_accounts.split(',') if x]
         if a.selector == 'model':
-            th = [threading.Thread(target=run_xp, args=(x, LEEKS[x], out)) if x in xp else
+            th = [threading.Thread(target=(run_xp_farmer if a.xp_mode == 'farmer' else run_xp), args=(x, LEEKS[x], out)) if x in xp else
                   threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out,
                                                            a.reroll_ev, a.reroll_after)) for x in accts]
         else:
