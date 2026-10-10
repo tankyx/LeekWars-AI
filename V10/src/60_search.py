@@ -663,6 +663,33 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 if sp:
                     plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, sp[0]) for it in sp[2]])
                     groups.append('splash')
+    # nuke plans (superinfection): boost (TP / MAG buffs, the TP-buff usefulness rule does not
+    # apply here), stack the strongest poisons from a cell within superinfection range, then
+    # detonate LAST so this turn's poisons count. Packing order alone puts superinfection by
+    # its start-of-turn value, i.e. before the new poisons.
+    si = [it for it in offensive if any(e[0] == E_SUPERINF for e in it.effects)]
+    if si:
+        s_it = si[0]
+        poisons = [it for it in offensive if it is not s_it and any(e[0] == E_POISON for e in it.effects)]
+        boost = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
+                 and any(e[0] in (E_BUFF_TP, E_RAW_TP, E_RAW_MAG) for e in it.effects)]
+        gain = sum(int(e[1]) for it in boost for e in it.fx if e[0] in (E_BUFF_TP, E_RAW_TP))
+        si_cells = [c for c, st in sorted(reach.items(), key=lambda kv: kv[1])
+                    if dist(c, ecell) <= s_it.maxr and usable_from(c, ecell, [s_it])][:10]
+        for pre in ([], [('use', it, cell0) for it in boost]):
+            pre_cost = sum(st_[1].cost for st_ in pre)
+            budget = tp0 - pre_cost + (gain if pre else 0) - s_it.cost
+            if budget < 0 or not poisons:
+                continue
+            for c in si_cells:
+                if over(0.5):
+                    break
+                att = pack(c, ecell, poisons, budget, weapon0, vals, 'raw')
+                if not att:
+                    continue
+                plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
+                             + [('use', s_it, ecell)])
+                groups.append('nuke')
     # enemy summons as targets: they block LoS to the summoner and hit us
     bulb_map = {}
     if bulbs:
@@ -742,7 +769,9 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             # certain damage now is worth more than the model's uncertain future
             # play our strengths: lasting damage counts too (queued poison at half,
             # max HP burned by nova / erosion in full), not only direct hits
-            lasting = 0.5 * max(0.0, B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
+            # queued poison REMOVED by our plan (superinfection burns a tick of every poison,
+            # liberation shrinks them) is lost future damage: no clip at 0 on pf
+            lasting = 0.5 * (B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
             # direct damage their ready heals can undo next turn counts less
             healable = min(dealt, cx.b_heal_next)
             v += AGGR * pr * (dealt - HEALABLE_W * healable + lasting) / max(1.0, B['max'])
