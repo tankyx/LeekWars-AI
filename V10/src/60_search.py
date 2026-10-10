@@ -509,6 +509,9 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
         d0 = Field.cellDistance(A['cell'], B['cell']) or 0
         log('V10REACH T%d d=%s our_mp=%s their_mp=%s their_maxr=%s' % (t, d0, A['mp_live'], B['mp_live'], cx.b_maxr))
     offensive = [it for it in items if it.offensive and not it.special and it.current_cooldown() == 0]
+    # superinfection only ever fires as the finale of a nuke combo (below), never as filler
+    si_all = [it for it in items if any(e[0] == E_SUPERINF for e in it.effects)]
+    offensive = [it for it in offensive if it not in si_all]
     selfish = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
                and useful_now(it, A, B, cx)]
     buffs = [it for it in selfish if any(e[0] in DMG_BUFFS for e in it.effects)]
@@ -663,33 +666,49 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 if sp:
                     plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, sp[0]) for it in sp[2]])
                     groups.append('splash')
-    # nuke plans (superinfection): boost (TP / MAG buffs, the TP-buff usefulness rule does not
-    # apply here), stack the strongest poisons from a cell within superinfection range, then
-    # detonate LAST so this turn's poisons count. Packing order alone puts superinfection by
-    # its start-of-turn value, i.e. before the new poisons.
-    si = [it for it in offensive if any(e[0] == E_SUPERINF for e in it.effects)]
-    if si:
-        s_it = si[0]
-        poisons = [it for it in offensive if it is not s_it and any(e[0] == E_POISON for e in it.effects)]
+    # nuke combo (superinfection), owner's rules (2026-10-10):
+    #  - never on turn 1 (turn 1 = the max-HP buff);
+    #  - superinfection reachable THIS turn: boost (TP / MAG buffs, the TP-buff usefulness rule
+    #    does not apply), move in, stack the strongest poisons, detonate LAST;
+    #  - reachable only NEXT turn (our MP now + next turn + its range) and off cooldown by then:
+    #    setup turn = boost, move toward the enemy, stack poisons (no detonation yet);
+    #  - otherwise no combo.
+    if si_all and t > 1:
+        s_it = si_all[0]
+        poisons = [it for it in offensive if any(e[0] == E_POISON for e in it.effects)]
         boost = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
                  and any(e[0] in (E_BUFF_TP, E_RAW_TP, E_RAW_MAG) for e in it.effects)]
         gain = sum(int(e[1]) for it in boost for e in it.fx if e[0] in (E_BUFF_TP, E_RAW_TP))
-        si_cells = [c for c, st in sorted(reach.items(), key=lambda kv: kv[1])
-                    if dist(c, ecell) <= s_it.maxr and usable_from(c, ecell, [s_it])][:10]
-        for pre in ([], [('use', it, cell0) for it in boost]):
-            pre_cost = sum(st_[1].cost for st_ in pre)
-            budget = tp0 - pre_cost + (gain if pre else 0) - s_it.cost
-            if budget < 0 or not poisons:
-                continue
-            for c in si_cells:
-                if over(0.5):
-                    break
-                att = pack(c, ecell, poisons, budget, weapon0, vals, 'raw')
-                if not att:
+        by_steps = sorted(reach.items(), key=lambda kv: kv[1])
+        now_cells = []
+        if s_it.current_cooldown() == 0:
+            now_cells = [c for c, st_ in by_steps if dist(c, ecell) <= s_it.maxr and usable_from(c, ecell, [s_it])][:10]
+        closest = min((dist(c, ecell) for c in reach), default=99)
+        next_turn = (not now_cells and s_it.current_cooldown() <= 1
+                     and closest <= A['mp_live'] + s_it.maxr)
+        if now_cells or next_turn:
+            if now_cells:
+                cells_c = now_cells
+            else:
+                # setup: the cells nearest the enemy from which some poison lands
+                cells_c = sorted([c for c in reach if usable_from(c, ecell, poisons)],
+                                 key=lambda c: (dist(c, ecell), reach[c]))[:8]
+            for pre in ([], [('use', it, cell0) for it in boost]):
+                pre_cost = sum(st_[1].cost for st_ in pre)
+                budget = tp0 - pre_cost + (gain if pre else 0) - (s_it.cost if now_cells else 0)
+                if budget < 0 or not poisons:
                     continue
-                plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
-                             + [('use', s_it, ecell)])
-                groups.append('nuke')
+                for c in cells_c:
+                    if over(0.5):
+                        break
+                    att = pack(c, ecell, poisons, budget, weapon0, vals, 'raw')
+                    if not att:
+                        continue
+                    plan = pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
+                    if now_cells:
+                        plan = plan + [('use', s_it, ecell)]
+                    plans.append(plan)
+                    groups.append('nuke' if now_cells else 'nuke_setup')
     # enemy summons as targets: they block LoS to the summoner and hit us
     bulb_map = {}
     if bulbs:
@@ -714,6 +733,13 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 st.append(('use', it, cell0)); tp -= it.cost
         plans.append(st); groups.append('self')
     plans.append([]); groups.append('none')
+    if t == 1:
+        vit = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
+               and any(e[0] == E_VITALITY for e in it.effects)]
+        if vit:
+            v_it = vit[0]
+            plans = [p if any(st_[0] == 'use' and st_[1] is v_it for st_ in p) else [('use', v_it, cell0)] + p
+                     for p in plans]
     # phase 1: simulate every plan (cheap); phase 2: leaf-evaluate them
     # round-robin across groups, each group kills first then by damage dealt,
     # so a tight budget still sees the best plan of every kind
@@ -746,13 +772,17 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     pr = pressure(t)
     d_now = dist(cell0, ecell)
     diag_best = None
-    for _, _, _, plan, r in order:
+    setup_reach = (A['mp_live'] + max([it.maxr for it in si_all] + [0])) if si_all else 0
+    for _, _, gi, plan, r in order:
         if over():
             break
         A1, B1, c1, dealt, sim = r
+        is_setup = groups[gi] == 'nuke_setup'
         for e in end_cells(cx, c1, reach, ecell):
             if over():
                 break
+            if is_setup and dist(e, ecell) > setup_reach:
+                continue           # a setup turn must leave the detonation reachable next turn
             if e != c1:
                 if c1 == cell0:
                     pl = reach.get(e)

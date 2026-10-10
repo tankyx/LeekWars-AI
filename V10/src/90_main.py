@@ -95,7 +95,8 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
             if not alive(tgt_ent):
                 break
             done = False
-            for it in sorted([i for i in items if i.offensive and not i.special], key=lambda i: -i.cost):
+            for it in sorted([i for i in items if i.offensive and not i.special
+                              and not any(e[0] == E_SUPERINF for e in i.effects)], key=lambda i: -i.cost):
                 if it.cost > m.tp:
                     continue
                 # range / launch line / LoS / self-hit first: a weapon switch costs 1 TP
