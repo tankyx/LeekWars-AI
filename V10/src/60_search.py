@@ -679,11 +679,22 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
         boost = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
                  and any(e[0] in (E_BUFF_TP, E_RAW_TP, E_RAW_MAG) for e in it.effects)]
         gain = sum(int(e[1]) for it in boost for e in it.fx if e[0] in (E_BUFF_TP, E_RAW_TP))
-        by_steps = sorted(reach.items(), key=lambda kv: kv[1])
-        now_cells = []
+        # MP buffs extend "a cell in range can be reached" (leather boots: raw +2 MP)
+        mp_boost = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
+                    and any(e[0] in (E_BUFF_MP, E_RAW_MP) for e in it.effects)]
+        sci = max(0, A['cur'].get('science', 0))
+        mp_gain = sum(int(e[1]) if e[0] == E_RAW_MP else int(e[1] * (1 + sci / 100.0))
+                      for it in mp_boost for e in it.fx if e[0] in (E_BUFF_MP, E_RAW_MP))
+        mp_boost = mp_boost if mp_gain > 0 else []
+        reach_b = reachable(cell0, mp0 + mp_gain) if mp_boost else reach
+        now_cells = []; need_mp = {}
         if s_it.current_cooldown() == 0:
-            now_cells = [c for c, st_ in by_steps if dist(c, ecell) <= s_it.maxr and usable_from(c, ecell, [s_it])][:10]
-        closest = min((dist(c, ecell) for c in reach), default=99)
+            for c, st_ in sorted(reach_b.items(), key=lambda kv: kv[1]):
+                if dist(c, ecell) <= s_it.maxr and usable_from(c, ecell, [s_it]):
+                    now_cells.append(c); need_mp[c] = c not in reach
+                    if len(now_cells) >= 10:
+                        break
+        closest = min((dist(c, ecell) for c in reach_b), default=99)
         next_turn = (not now_cells and s_it.current_cooldown() <= 1
                      and closest <= A['mp_live'] + s_it.maxr)
         if now_cells or next_turn:
@@ -693,18 +704,20 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 # setup: the cells nearest the enemy from which some poison lands
                 cells_c = sorted([c for c in reach if usable_from(c, ecell, poisons)],
                                  key=lambda c: (dist(c, ecell), reach[c]))[:8]
+            pre_mp = [('use', it, cell0) for it in mp_boost]
             for pre in ([], [('use', it, cell0) for it in boost]):
-                pre_cost = sum(st_[1].cost for st_ in pre)
-                budget = tp0 - pre_cost + (gain if pre else 0) - (s_it.cost if now_cells else 0)
-                if budget < 0 or not poisons:
-                    continue
                 for c in cells_c:
                     if over(0.5):
                         break
+                    full = (pre_mp if need_mp.get(c) else []) + pre
+                    pre_cost = sum(st_[1].cost for st_ in full)
+                    budget = tp0 - pre_cost + (gain if pre else 0) - (s_it.cost if now_cells else 0)
+                    if budget < 0 or not poisons:
+                        continue
                     att = pack(c, ecell, poisons, budget, weapon0, vals, 'raw')
                     if not att:
                         continue
-                    plan = pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
+                    plan = full + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
                     if now_cells:
                         plan = plan + [('use', s_it, ecell)]
                     plans.append(plan)
