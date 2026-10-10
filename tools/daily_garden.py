@@ -11,6 +11,9 @@ it can spend what is left (--dump-at; off by default since 2026-10-04: dump figh
 `leekwars_solo_fight` path. Then appends one row per leek to data/ladder/talent_log.csv:
     date, account, leek, talent, fights, wins, losses, draws
 
+Team fights (both accounts, separate daily pool) run on their own thread through the MCP
+leekwars_team_fights tool (--no-team to skip).
+
 It never uploads code or changes kits: the build under test stays fixed.
 
     python3 tools/daily_garden.py            # run (lasts until the dump, ~23 h)
@@ -68,6 +71,17 @@ class MCP:
         done = int(m.group(1)) if m else 0
         w, l, d = (int(x) for x in rec.groups()) if rec else (0, 0, 0)
         return done, w, l, d, text
+
+    def team(self, account):
+        """leekwars_team_fights (smart): drains every composition's daily team pool, one fight
+        at a time. Returns (fights, wins, losses, draws, text)."""
+        r = self.call('tools/call', {'name': 'leekwars_team_fights', 'arguments': {'account': account, 'strategy': 'smart'}})
+        text = ''.join(c.get('text', '') for c in (r or {}).get('content', []))
+        m = re.search(r'Total fights:\s*(\d+)', text)
+        rec = re.search(r'Record:\s*(\d+)W\s*/\s*(\d+)L\s*/\s*(\d+)D', text)
+        n = int(m.group(1)) if m else 0
+        w, l, d = (int(x) for x in rec.groups()) if rec else (0, 0, 0)
+        return n, w, l, d, text
 
     def close(self):
         try:
@@ -208,6 +222,24 @@ def run_xp_farmer(acct, leeks, out, inflight=2):
             print('  %s capital spending failed: %s' % (n, ex), flush=True)
 
 
+def run_team(accts, out):
+    """Team fights for every account (separate daily pool, ~28k XP per fight on Cure)."""
+    try:
+        mcp = MCP()
+    except Exception as ex:
+        print('team fights: MCP unavailable (%s)' % ex, flush=True); return
+    try:
+        for acct in accts:
+            try:
+                n, w, l, d, text = mcp.team(acct)
+                out[acct] = (n, w, l, d)
+                print('%s: team fights %d  %dW/%dL/%dD' % (acct, n, w, l, d), flush=True)
+            except Exception as ex:
+                print('%s: team fights failed (%s)' % (acct, ex), flush=True)
+    finally:
+        mcp.close()
+
+
 def run_mcp(acct, leeks, cap, out):
     lw = LWSession(acct)
     avail = credits(lw)
@@ -246,6 +278,7 @@ def main():
     ap.add_argument('--reroll-after', type=float, default=45.0)
     ap.add_argument('--xp-accounts', default='cure', help='accounts run in XP mode (spend all credits)')
     ap.add_argument('--xp-mode', default='farmer', choices=['farmer', 'solo'], help='XP mode fight type (farmer levels all leeks per credit)')
+    ap.add_argument('--no-team', action='store_true', help='skip the daily team fights')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
@@ -261,6 +294,9 @@ def main():
                                                            a.reroll_ev, a.reroll_after)) for x in accts]
         else:
             th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], a.cap, out)) for x in accts]
+        team_out = {}
+        if not a.no_team:
+            th.append(threading.Thread(target=run_team, args=(accts, team_out)))
         for t in th:
             t.start()
         for t in th:
