@@ -157,6 +157,19 @@ class Ctx:
             if cost <= tp:
                 hn += amt; tp -= cost
         self.b_heal_next = hn
+        # heals they would actually cast next turn (reply simulation): once-per-fight ones
+        # (regeneration) included while unused - the big heal hemorrhage exists to deny
+        self.b_heals = []
+        for it in B0['items']:
+            if it.weapon or it.offensive or it.special:
+                continue
+            if it.current_cooldown() > (0 if it.cooldown < 0 else 1):
+                continue
+            amt = sum(avg(e) for e in it.effects if e[0] == E_HEAL) * wis
+            if amt > 0:
+                self.b_heals.append((amt, it.cost))
+        self.b_heals.sort(key=lambda x: -x[0] / max(1, x[1]))
+        self.b_heal_full = sum(x[0] for x in self.b_heals)
         self.b_area = [it for it in self.b_off if has_area(it)]   # enemy items that splash
         self.b_reach = {}
         self.replies = {}
@@ -302,9 +315,19 @@ def enemy_reply(cx, A1, B1, our_cell):
     d_mp = b['groups']['shk_mp'] - B0['groups']['shk_mp']
     d_str = b['groups']['shk_str'] - B0['groups']['shk_str']
     tp = max(0, int(B0['tp_live'] - d_tp - anti_cost)); mp = max(0, int(B0['mp_live'] - d_mp))
+    # a damaged enemy heals first (ready heal chips, best HP per TP, no overheal), with the TP
+    # it would otherwise attack with; Unhealable (our hemorrhage) blocks it for this turn
+    uh = bool(b.get('unheal'))
+    if not uh:
+        for amt, cost in cx.b_heals:
+            missing = b['max'] - b['life']
+            if missing <= 0.5 * amt or cost > tp:
+                continue
+            b['life'] += min(amt, missing); tp -= cost
+    b['unheal'] = False
     b['cur']['strength'] -= d_str
     ret = int(a['groups'].get('dmg_return', 0))
-    key = (our_cell, tp, mp, int(d_str), ret, int(a['abs']), int(a['rel']))
+    key = (our_cell, tp, mp, int(d_str), ret, int(a['abs']), int(a['rel']), int(b['life'] // 100), uh)
     rep = cx.replies.get(key)
     if rep is None:
         # rational enemy: maximise (HP they take off us) - (HP they lose to our
@@ -404,7 +427,7 @@ def state_sig(S):
 def leaf(cx, A1, B1, our_cell, turn):
     """Memoised: different plans often reach the same state (same attacks
     from different cells) and share end cells."""
-    k = (state_sig(A1), state_sig(B1), B1['cell'], our_cell)
+    k = (state_sig(A1), state_sig(B1), B1['cell'], our_cell, bool(B1.get('unheal')))
     r = _LEAVES.get(k)
     if r is None:
         v = _leaf(cx, A1, B1, our_cell, turn)
@@ -529,6 +552,9 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                and useful_now(it, A, B, cx)]
     buffs = [it for it in selfish if any(e[0] in DMG_BUFFS for e in it.effects)]
     vals = {it.id: quick_value(it, A, B) for it in offensive}
+    for it in offensive:            # hemorrhage: worth the heal it denies on their next turn
+        if any(e[0] == E_ADD_STATE and int(e[1] or 0) == ST_UNHEALABLE for e in it.effects):
+            vals[it.id] = min(cx.b_heal_full, max(0.0, B['max'] - B['life']) + 0.3 * B['max'])
     reach = reachable(cell0, mp0)
     ecell = B['cell']
     maxr = max([it.maxr for it in offensive] + [0])
@@ -829,7 +855,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             # liberation shrinks them) is lost future damage: no clip at 0 on pf
             lasting = 0.5 * (B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
             # direct damage their ready heals can undo next turn counts less
-            healable = min(dealt, cx.b_heal_next)
+            healable = 0.0 if B1.get('unheal') else min(dealt, cx.b_heal_next)
             v += AGGR * pr * (dealt - HEALABLE_W * healable + lasting) / max(1.0, B['max'])
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
             de = dist(e, ecell)

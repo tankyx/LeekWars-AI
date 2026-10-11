@@ -8,6 +8,7 @@ E_RAW_MP, E_RAW_TP, E_RAW_ABS, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_AGI, E_RAW
 E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL, E_STEAL = 44, 46, 47, 49, 51, 52, 54, 61
 E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
 E_SUPERINF = 64    # superinfection: value1% of the target's per-turn poison sum now, every poison loses one turn
+E_ADD_STATE, ST_UNHEALABLE = 59, 2   # hemorrhage: state 2 = Unhealable (no heal, life steal, vitality, regen) for 1 turn
 
 OFFENSIVE = {E_DAMAGE, E_POISON, E_SUPERINF, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS, E_DEBUFF}
 SELF_ONLY = {E_HEAL, E_BUFF_STR, E_BUFF_AGI, E_REL_SHIELD, E_ABS_SHIELD, E_BUFF_MP, E_BUFF_TP, E_VITALITY,
@@ -45,7 +46,8 @@ class Item:
         self.fx = [(e[0], (e[1] + e[2]) / 2.0, e[3] or 0, (e[3] or 0) > 0 and not ((e[5] or 0) & 1),
                     bool((e[5] or 0) & 4)) for e in self.effects]
         types = {e[0] for e in self.effects}
-        self.offensive = bool(types & OFFENSIVE)
+        self.offensive = bool(types & OFFENSIVE) or any(e[0] == E_ADD_STATE and int(e[1] or 0) == ST_UNHEALABLE
+                                                          for e in self.effects)
         self.self_cast = bool(types) and types <= SELF_ONLY
         self.special = bool(types & MOVE_EFFECTS)
 

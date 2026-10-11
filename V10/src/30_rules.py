@@ -98,6 +98,8 @@ def apply_item(it, C, T, S, f=1.0):
         elif t == E_POISON and T is not C:
             p = a * (1 + max(0, cur['magic']) / 100.0) * pw
             g_add(T, t, p); T['pf'] += p * max(1, turns)
+        elif t == E_ADD_STATE and int(a) == ST_UNHEALABLE and T is not C:
+            T['unheal'] = True         # their next turn: no healing at all (engine EffectHeal & co)
         elif t == E_SUPERINF and T is not C:
             # engine EffectSuperinfection: value1% (x1.3 on crit) of the sum of the target's
             # poisons' per-turn values, now, as poison damage (10% erosion); each poison then
