@@ -345,8 +345,12 @@ def apply_item(it, C, T, S, f=1.0):
         if scaled:
             a = a * f
         if t == E_DAMAGE and T is not C:
-            d = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf
-            d = max(0.0, d - d * T['rel'] / 100.0 - T['abs'])
+            raw = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf
+            # engine EffectDamage: return = RAW damage (before the target's shields) x return %,
+            # hitting the caster's life directly (no shields), only capped at its life
+            ret = T['groups'].get('dmg_return', 0)
+            back = min(max(0.0, C['life']), raw * ret / 100.0) if ret > 0 else 0.0
+            d = max(0.0, raw - raw * T['rel'] / 100.0 - T['abs'])
             d = min(d, max(0, T['life']))
             T['life'] -= d; dealt += d
             pa = T.get('pas')
@@ -364,9 +368,8 @@ def apply_item(it, C, T, S, f=1.0):
             T['max'] -= ero; T['burn'] += ero
             steal = d * max(0, cur['wisdom']) / 1000.0
             C['life'] = min(C['max'], C['life'] + steal)
-            ret = T['groups'].get('dmg_return', 0)
-            if ret > 0:
-                C['life'] -= d * ret / 100.0
+            if back > 0:
+                C['life'] -= back; C['max'] -= back * 0.05; C['burn'] += back * 0.05
         elif t == E_POISON and T is not C:
             p = a * (1 + max(0, cur['magic']) / 100.0) * pw
             g_add(T, t, p); T['pf'] += p * max(1, turns)
@@ -719,9 +722,13 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             sim['tp'] -= it.cost
             sim['uses'][it.id] = sim['uses'].get(it.id, 0) + 1
             if tgt == B['cell'] and it.offensive:
+                if B['life'] <= 0:
+                    continue               # enemy already dead: execution skips the shot
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
                 dealt += apply_item(it, A, B, sim)
+                if A['life'] <= 0 and B['life'] > 0:
+                    return None            # damage return would kill us on our own turn
             elif bulbs and tgt in bulbs and it.offensive:
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
@@ -743,6 +750,8 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
                 dealt += apply_item(it, A, B, sim, f)
+                if A['life'] <= 0 and B['life'] > 0:
+                    return None
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell
@@ -1608,6 +1617,11 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             # direct damage their ready heals can undo next turn counts less
             healable = 0.0 if B1.get('unheal') else min(dealt, cx.b_heal_next)
             v += AGGR * pr * (dealt - HEALABLE_W * healable + lasting) / max(1.0, B['max'])
+            # our own HP lost during our turn (damage return - e.g. a bramble at ~260% -, self-harm)
+            # weighs like the damage we deal: attacking into a reflect is no longer "free" here
+            self_lost = max(0.0, A['life'] - A1['life'])
+            if self_lost > 0:
+                v -= AGGR * pr * self_lost / max(1.0, A['max'])
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
             de = dist(e, ecell)
             if de > maxr:
@@ -1680,6 +1694,23 @@ def alive(e):
     return e is not None and e.cell is not None and (e.life or 0) > 0
 
 
+def return_kills(it, tgt_ent):
+    """Live guard: would this attack's WORST-case damage return (max roll, crit) kill us?
+    Engine: return = raw damage before the target's shields x its damage return %."""
+    try:
+        ret = (tgt_ent.damageReturn or 0) if tgt_ent is not None else 0
+    except Exception:
+        ret = 0
+    if ret <= 0:
+        return False
+    m = me()
+    raw = 0.0
+    for e in it.effects:
+        if e[0] == E_DAMAGE and not ((e[5] or 0) & 4):
+            raw += (e[2] or e[1] or 0) * (1 + max(0, m.strength or 0) / 100.0) * (1 + (m.power or 0) / 100.0) * 1.3
+    return raw * ret / 100.0 >= (m.life or 0)
+
+
 def execute(plan, enemy=None):
     """Run the plan; returns a compact trace of engine return codes
     (1 success, 2 critical, 0 failed, negatives = invalid). An attack is skipped
@@ -1693,6 +1724,9 @@ def execute(plan, enemy=None):
             trace.append('M%s' % r)
         else:
             it, tgt = st[1], st[2]
+            if it.offensive and return_kills(it, on_cell.get(tgt)):
+                trace.append('%s:R' % it.name[:6])      # skipped: the return would kill us
+                continue
             if it.offensive:
                 f = on_cell.get(tgt)
                 if (f is not None and not alive(f)) or (f is None and enemy is not None and not alive(enemy)):
@@ -1743,6 +1777,8 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
                 if not usable_from(m.cell.id, ecell, [it]):
                     continue
                 if used is not None and used.get(it.id, 0) >= it.max_uses:
+                    continue
+                if return_kills(it, tgt_ent):
                     continue
                 if it.weapon:
                     if (m.weapon is None or m.weapon.id != it.id):
