@@ -107,6 +107,7 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     # the main enemy first, then its summons (nearest first)
     targets = [enemy] + sorted([x for x in Fight.getAliveEnemies() if x.summoned and x.cell is not None],
                                key=lambda x: me().distance(x) or 99)
+    attacks = sorted([i for i in items if i.offensive and not i.special and not i.is_si], key=lambda i: -i.cost)
     for tgt_ent in targets:
         if not alive(tgt_ent):
             continue
@@ -115,8 +116,7 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
             if not alive(tgt_ent):
                 break
             done = False
-            for it in sorted([i for i in items if i.offensive and not i.special
-                              and not any(e[0] == E_SUPERINF for e in i.effects)], key=lambda i: -i.cost):
+            for it in attacks:
                 if it.cost > m.tp:
                     continue
                 # range / launch line / LoS / self-hit first: a weapon switch costs 1 TP
@@ -138,7 +138,7 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
                         if r is not None and r > 0:
                             trace.append('+%s:%s' % (it.name[:6], r)); done = True
                             break
-                elif it.current_cooldown() == 0 and m.canUseChip(it.obj, tgt_ent):
+                elif it.cooldown_now() == 0 and m.canUseChip(it.obj, tgt_ent):   # live: the plan cast chips
                     r = m.useChip(it.obj, tgt_ent)
                     if r is not None and r > 0:
                         trace.append('+%s:%s' % (it.name[:6], r)); done = True
@@ -148,7 +148,7 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     for it in [i for i in items if i.self_cast and not i.special]:
         if A is not None and not useful_now(it, A, B, cx):
             continue
-        if it.cost <= m.tp and it.current_cooldown() == 0:
+        if it.cost <= m.tp and it.cooldown_now() == 0:
             r = m.useChipOnCell(it.obj, m.cell.id) if not it.weapon else None
             if r is not None and r > 0:
                 trace.append('+%s:%s' % (it.name[:6], r))
@@ -182,7 +182,8 @@ def turn():
         return
     try:
         refresh_budget()
-        _ctx_cache.clear(); _GEO.clear(); _PACKS.clear(); _LEAVES.clear(); _NETS.clear()
+        for c in (_ctx_cache, _GEO, _PL, _SPL, _PACKS, _LEAVES, _NETS):
+            c.clear()
         m = me()
         mine = [x for x in Fight.getAliveAllies()]
         theirs = [x for x in Fight.getAliveEnemies()]

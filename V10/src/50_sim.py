@@ -1,6 +1,7 @@
 # ---- 50_sim: geometry + applying a plan to a state copy -------------------
 _XY = {}
 _GEO = {}      # (from, to) -> (dist, los, line, diag); cleared every turn (LoS depends on entities)
+_PL = {}       # (from, to) -> Field.pathLength; cleared every turn (entities block paths)
 
 
 def cxy(c):
@@ -15,43 +16,35 @@ def cxy(c):
 def dist(a, b):
     """Cell distance = Manhattan distance on the cell coordinates (checked
     against Field.cellDistance on 4144 pairs)."""
-    ax, ay = cxy(a); bx, by = cxy(b)
-    return abs(ax - bx) + abs(ay - by)
+    p = _XY.get(a) or cxy(a); q = _XY.get(b) or cxy(b)
+    return abs(p[0] - q[0]) + abs(p[1] - q[1])
 
 
 def geo(a, b):
     g = _GEO.get((a, b))
     if g is None:
-        ax, ay = cxy(a); bx, by = cxy(b)
-        dx, dy = abs(ax - bx), abs(ay - by)
+        p = _XY.get(a) or cxy(a); q = _XY.get(b) or cxy(b)
+        dx, dy = abs(p[0] - q[0]), abs(p[1] - q[1])
         g = (dx + dy, a == b or bool(Field.lineOfSight(a, b)), dx == 0 or dy == 0, dx == dy)
         _GEO[(a, b)] = g
     return g
 
 
+# engine launch types: 1 line, 2 diagonal, 3 line or diagonal, 4 neither, 5 not diagonal, 6 not line, 7 any
+_LAUNCH = {1: lambda l, d: l, 2: lambda l, d: d, 3: lambda l, d: l or d, 4: lambda l, d: not (l or d),
+           5: lambda l, d: not d, 6: lambda l, d: not l}
+
+
 def launch_geo(lt, line, diag):
-    if lt == 7:
-        return True
-    if lt == 1:
-        return line
-    if lt == 2:
-        return diag
-    if lt == 3:
-        return line or diag
-    if lt == 4:
-        return not (line or diag)
-    if lt == 5:
-        return not diag
-    if lt == 6:
-        return not line
-    return True
+    f = _LAUNCH.get(lt)
+    return True if f is None else f(line, diag)
 
 
-def launch_ok(it, a, b):
-    if it.launch == 7:
-        return True
-    g = geo(a, b)
-    return launch_geo(it.launch, g[2], g[3])
+def path_len(a, b):
+    pl = _PL.get((a, b))
+    if pl is None:
+        pl = _PL[(a, b)] = Field.pathLength(a, b)
+    return pl
 
 
 def reachable(start, mp):
@@ -88,7 +81,7 @@ def can_use(it, frm, tgt, sim):
     if not it.weapon and (it.current_cooldown() > 0 or (it.cooldown > 0 and sim['uses'].get(it.id, 0) > 0)):
         return False
     d, los, line, diag = geo(frm, tgt)
-    if d is None or d < it.minr or d > it.maxr:
+    if d < it.minr or d > it.maxr:
         return False
     if frm != tgt and not launch_geo(it.launch, line, diag):
         return False
@@ -140,26 +133,42 @@ def aim_cells(c):
     return r
 
 
+_SPL = {}      # (target, (owner, item id)s) -> [(aim cell, x, y, items catching target, their max range, ids, factor by area)]
+
+
+def splash_aims(target, items):
+    """Aim cells around `target` and the items whose area catches it from there: independent
+    of the caster's cell, so computed once per (target, items) per turn (cleared every turn)."""
+    k = (target, tuple((it.owner, it.id) for it in items))    # owner: our items and theirs can share ids
+    r = _SPL.get(k)
+    if r is None:
+        r = []
+        for t, m in aim_cells(target):
+            its = [it for it in items if in_area(it.area, t, target) > 0]
+            if its:
+                tx, ty = cxy(t)
+                r.append((t, tx, ty, its, max(it.maxr for it in its), tuple(i.id for i in its),
+                          {it.area: in_area(it.area, t, target) for it in its}))
+        _SPL[k] = r
+    return r
+
+
 def splash_pack(frm, target, items, tp, weapon, vals, key, tag):
     """Best area attack on `target` aimed at a nearby cell from `frm` (used when
     no direct shot exists): (aim cell, factor, items) or None."""
-    for t, m in aim_cells(target):
-        its = [it for it in items if in_area(it.area, t, target) > 0]
-        if not its or dist(frm, t) > max(it.maxr for it in its):
+    fx, fy = _XY.get(frm) or cxy(frm)
+    for t, tx, ty, its, maxr, ids, fac in splash_aims(target, items):
+        if abs(fx - tx) + abs(fy - ty) > maxr:      # dist(frm, t), inlined (hottest loop)
             continue
-        att = pack(frm, t, its, tp, weapon, vals, key, tag=(tag, tuple(i.id for i in its)))
+        att = pack(frm, t, its, tp, weapon, vals, key, tag=(tag, ids))
         if att:
-            return t, in_area(att[0].area, t, target), att
+            return t, fac[att[0].area], att
     return None
 
 
-def has_area(it):
-    return it.area in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
-
-
 def self_hit(it, frm, tgt):
-    r = AREA_RADIUS.get(it.area, 0)
-    return r > 0 and has_area(it) and in_area(it.area, tgt, frm) > 0
+    """The item's area, aimed at `tgt`, would catch its caster standing on `frm`."""
+    return it.splash and in_area(it.area, tgt, frm) > 0
 
 
 BULB_W = 0.5    # damage to a summon counts half as "damage dealt" (a kill also lowers their summon count)
@@ -175,7 +184,7 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
         if st[0] == 'move':
             if st[1] == cell:
                 continue
-            pl = Field.pathLength(cell, st[1])
+            pl = path_len(cell, st[1])
             if pl is None or pl < 0 or pl > sim['mp']:
                 return None
             sim['mp'] -= pl; cell = st[1]
@@ -190,13 +199,13 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             if tgt == B['cell'] and it.offensive:
                 if B['life'] <= 0:
                     continue               # enemy already dead: execution skips the shot
-                if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
+                if it.harms and self_hit(it, cell, tgt):
                     return None
                 dealt += apply_item(it, A, B, sim)
                 if A['life'] <= 0 and B['life'] > 0:
                     return None            # damage return would kill us on our own turn
             elif bulbs and tgt in bulbs and it.offensive:
-                if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
+                if it.harms and self_hit(it, cell, tgt):
                     return None
                 bs = hit.get(tgt)
                 if bs is None:
@@ -208,12 +217,10 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
                 dealt += BULB_W * (before - bs['life'])
                 if bs['life'] <= 0:
                     B['summons'] = max(0, B['summons'] - 1)
-            elif it.offensive and has_area(it):
+            elif it.offensive and it.splash:
                 # aimed next to the enemy: the area catches it at reduced power
                 f = in_area(it.area, tgt, B['cell'])
-                if f <= 0:
-                    return None
-                if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
+                if f <= 0 or (it.harms and self_hit(it, cell, tgt)):
                     return None
                 dealt += apply_item(it, A, B, sim, f)
                 if A['life'] <= 0 and B['life'] > 0:

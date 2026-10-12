@@ -69,11 +69,3 @@ def value(x, key=None):
     logit = out[0] + sum(map(_MUL, map(_MUL, _SIGNF, out[1:]), map(z.__getitem__, VN_MI)))
     return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, logit))))
 
-
-def our_value(turn, dist, los, A, B):
-    """Our P(win) at the end of our turn: the opponent acts next."""
-    if B['life'] <= 0:
-        return 1.0
-    if A['life'] <= 0:
-        return 0.0
-    return 1.0 - value(features(turn, dist, los, B, A), key=(dist, los))

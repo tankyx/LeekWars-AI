@@ -5,11 +5,9 @@
 # poison tick -> value model from OUR side at the start of our next turn.
 DMG_BUFFS = {E_BUFF_STR, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_POW, E_BUFF_TP, E_RAW_TP}
 MAX_ATTACK_CELLS = 32
-MAX_END_CELLS = 10
 MAX_ENEMY_CELLS = 40
 MAX_SPLASH_CELLS = 12   # cells per side tried for an area shot aimed next to the target
 ANTIDOTE_TRIGGER = 250   # queued poison (HP) at which a rational enemy spends its antidote
-FOLLOW_KILL = 0.9
 CHASE_KILL = 0.95
 AGGR = 0.3        # value of certain damage now, per full enemy HP bar
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
@@ -19,10 +17,6 @@ STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 
 PRESSURE_T0 = 20
 IDLE = [0]          # consecutive turns in which neither side lost HP (set in turn())
 STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pressure
-# leaf LoS: in prod data LoS at the actor's turn start rewards the actor (usually the
-# opponent's positioning mistake); in V10 it is our own end-cell choice, already
-# charged by the enemy-reply simulation. True = leaf scored at the average LoS.
-LOS_NEUTRAL = False
 HEALABLE_W = 0.6   # share of healable direct damage discounted (their ready heals would undo it)
 ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
@@ -35,7 +29,6 @@ FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizo
 # taken off our HP after the focus' reply; they spread over our team, so only a share
 OTHERS_W = 0.6
 MAX_SAFE_CELLS = 6
-DIAG = False
 LAST_CX = None     # Ctx of the last search (read by leftover spending)
 
 
@@ -69,8 +62,6 @@ def quick_value(it, C, T):
 
 def usable_from(cell, tcell, items):
     d, los, line, diag = geo(cell, tcell)
-    if d is None:
-        return []
     out = []
     for it in items:
         if d < it.minr or d > it.maxr:
@@ -79,7 +70,7 @@ def usable_from(cell, tcell, items):
             continue
         if it.los and not los:
             continue
-        if has_area(it) and in_area(it.area, tcell, cell) > 0:   # the area would hit the caster
+        if it.splash and in_area(it.area, tcell, cell) > 0:   # the area would hit the caster
             continue
         out.append(it)
     return out
@@ -113,9 +104,7 @@ def _pack(cell, tcell, items, tp, weapon, vals, key):
         order = sorted([it for it in usable if it.weapon], key=lambda it: -vals[it.id] / max(1, it.cost))
     steps = []; held = weapon; used = {}
     for it in order:
-        cap = it.max_uses
-        if all(e[0] != E_DAMAGE and (e[3] or 0) > 0 and not ((e[5] or 0) & 1) for e in it.effects):
-            cap = 1        # a repeat only replaces the same non-stackable effect
+        cap = it.rep_cap
         while used.get(it.id, 0) < cap:
             if not it.weapon and (it.cooldown > 0 and used.get(it.id, 0) > 0):
                 break
@@ -137,40 +126,35 @@ class Ctx:
         self.b_off = [it for it in B0['items'] if it.offensive and not it.special and it.current_cooldown() <= 1]
         self.b_vals = {it.id: quick_value(it, B0, A0) for it in self.b_off}
         self.b_antidote = [it for it in B0['items'] if not it.weapon and it.current_cooldown() <= 1
-                           and any(e[0] == E_ANTIDOTE for e in it.effects)]
+                           and E_ANTIDOTE in it.types]
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
         # their healing capacity next turn: ready heal / vitality chips (cooldown
         # <= 1, from the engine), wisdom-scaled, best HP per TP within their TP.
         # Values our damage by what survives it (burst when their heals are down).
+        # self.b_heals = the heals they would actually cast next turn (reply simulation): once-per-
+        # fight ones (regeneration) included while unused - the big heal hemorrhage exists to deny
         wis = 1 + max(0, B0['cur'].get('wisdom', 0)) / 100.0
-        hl = []
+        hl = []; self.b_heals = []
         for it in B0['items']:
-            if it.weapon or it.offensive or it.special or it.current_cooldown() > 1:
+            if it.weapon or it.offensive or it.special:
                 continue
-            if it.cooldown < 0:          # once per fight (regeneration...): no window to play around
-                continue
-            amt = sum(avg(e) for e in it.effects if e[0] in (E_HEAL, E_VITALITY)) * wis
-            if amt > 0:
-                hl.append((amt, it.cost))
+            cd = it.current_cooldown()
+            if cd <= 1 and it.cooldown >= 0:   # once per fight (regeneration...): no window to play around
+                amt = sum(avg(e) for e in it.effects if e[0] in (E_HEAL, E_VITALITY)) * wis
+                if amt > 0:
+                    hl.append((amt, it.cost))
+            if cd <= (0 if it.cooldown < 0 else 1):
+                amt = sum(avg(e) for e in it.effects if e[0] == E_HEAL) * wis
+                if amt > 0:
+                    self.b_heals.append((amt, it.cost))
         tp = B0['tp_live']; hn = 0.0
         for amt, cost in sorted(hl, key=lambda x: -x[0] / max(1, x[1])):
             if cost <= tp:
                 hn += amt; tp -= cost
         self.b_heal_next = hn
-        # heals they would actually cast next turn (reply simulation): once-per-fight ones
-        # (regeneration) included while unused - the big heal hemorrhage exists to deny
-        self.b_heals = []
-        for it in B0['items']:
-            if it.weapon or it.offensive or it.special:
-                continue
-            if it.current_cooldown() > (0 if it.cooldown < 0 else 1):
-                continue
-            amt = sum(avg(e) for e in it.effects if e[0] == E_HEAL) * wis
-            if amt > 0:
-                self.b_heals.append((amt, it.cost))
         self.b_heals.sort(key=lambda x: -x[0] / max(1, x[1]))
         self.b_heal_full = sum(x[0] for x in self.b_heals)
-        self.b_area = [it for it in self.b_off if has_area(it)]   # enemy items that splash
+        self.b_area = [it for it in self.b_off if it.splash]   # enemy items that splash
         self.b_reach = {}
         self.replies = {}
         self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
@@ -179,12 +163,9 @@ class Ctx:
         self.others = []       # (snapshot, offensive items) of the non-focus enemy leeks
         self.oth = {}          # (enemy index, distance, our abs, our rel) -> threat
         self.oth_dm = {}       # (enemy index, our abs, our rel) -> {item id: damage on us}
-        self.last_leaf: object = None
-        self.best_leaf: object = None
         self.best_atk: tuple = (-1.0, 0.0, '')   # best plan that deals damage: (value, dealt, desc)
         self.n_atk = 0                    # attacking plans evaluated
-        self.plen = {}         # (from, to) -> path length
-        self.ends: list = []   # (near, far, hidden) end cells, independent of the plan
+        self.ends: list = []   # (near, far, hidden) end cells, independent of the plan, deduplicated
         self.a_off = [it for it in A0['items'] if it.offensive and not it.special]
         self.a_vals = {it.id: quick_value(it, A0, B0) for it in self.a_off}
         # one turn of DIRECT damage (chase mode / kill reach): queued poison and
@@ -373,10 +354,10 @@ def follow_up(cx, a, b, our_cell, ec):
     fu = cx.fu.get(fk)
     if fu is None:
         usable = [it for it in cx.a_off if it.minr <= max(need, it.minr) <= it.maxr and cx.a_vals.get(it.id, 0) > 0
-                  and need <= it.maxr and not any(e[0] == E_SUPERINF for e in it.effects)]
+                  and need <= it.maxr and not it.is_si]
         # superinfection next turn: off cooldown by then and in range -> keep its TP and cast it
         # LAST, after the poisons (a nuke follow-up), whatever its start-of-turn value
-        si_f = [it for it in cx.a_off if any(e[0] == E_SUPERINF for e in it.effects)
+        si_f = [it for it in cx.a_off if it.is_si
                 and it.current_cooldown() <= 1 and it.minr <= max(need, it.minr) <= it.maxr and need <= it.maxr]
         si_f = si_f[:1] if si_f and si_f[0].cost <= tp else []
         if si_f:
@@ -424,16 +405,15 @@ def state_sig(S):
             tuple(map(round, S['cur'].values(), _R3)))
 
 
-def leaf(cx, A1, B1, our_cell, turn):
+def leaf(cx, A1, B1, our_cell, turn, sig):
     """Memoised: different plans often reach the same state (same attacks
-    from different cells) and share end cells."""
-    k = (state_sig(A1), state_sig(B1), B1['cell'], our_cell, bool(B1.get('unheal')))
+    from different cells) and share end cells. `sig` = the plan's
+    (state_sig(A1), state_sig(B1), B1 cell, unhealable), computed once per plan."""
+    k = (sig, our_cell)
     r = _LEAVES.get(k)
     if r is None:
-        v = _leaf(cx, A1, B1, our_cell, turn)
-        r = (v, cx.last_reply, cx.last_leaf)
-        _LEAVES[k] = r
-    cx.last_reply = r[1]; cx.last_leaf = r[2]
+        r = _LEAVES[k] = (_leaf(cx, A1, B1, our_cell, turn), cx.last_reply)
+    cx.last_reply = r[1]
     return r[0]
 
 
@@ -459,14 +439,11 @@ def _leaf(cx, A1, B1, our_cell, turn):
     d0 = dist(our_cell, ec)
     los0 = geo(our_cell, ec)[1]
     # after the enemy's reply it is OUR turn: score from our side as the actor
-    lq0 = 0.5 if LOS_NEUTRAL else los0
-    v_no = value(features(turn + 1, d0, lq0, a, b), key=('o', d0, lq0))
+    v_no = value(features(turn + 1, d0, los0, a, b), key=('o', d0, los0))
     # chase mode: the enemy is within our one-turn damage -> the follow-up
     # counts fully and a follow-up kill is (nearly) a win
     chase = b['life'] <= cx.kill_dmg
     w = 1.0 if chase else FOLLOW_W
-    if w <= 0:
-        return v_no
     a2 = copy_side(a); b2 = copy_side(b)
     d = follow_up(cx, a2, b2, our_cell, ec)
     los = los0 if d == d0 else True
@@ -481,10 +458,7 @@ def _leaf(cx, A1, B1, our_cell, turn):
         # outside chase mode a follow-up "kill" is optimistic: clamp at 1 HP
         if b2['life'] <= 0:
             b2['life'] = 1.0
-        lq = 0.5 if LOS_NEUTRAL else los
-        v_f = 1.0 - value(features(turn + 1, d, lq, b2, a2), key=('f', d, lq))
-    if DIAG:
-        cx.last_leaf = (a['life'], b['life'], d0, los0, v_no, v_f, b2['life'])
+        v_f = 1.0 - value(features(turn + 1, d, los, b2, a2), key=('f', d, los))
     return w * v_f + (1.0 - w) * v_no
 
 
@@ -494,23 +468,23 @@ def end_cells(cx, from_cell, reach, ecell):
     if not cx.ends:
         by_d = sorted(reach, key=lambda c: dist(c, ecell))
         hidden = [c for c in by_d[::-1][:60] if not Field.lineOfSight(c, ecell)][:8]
-        cx.ends = by_d[:10] + by_d[::-1][:8] + hidden
+        ends = by_d[:10] + by_d[::-1][:8] + hidden
         if cx.others:
             # the cells the other enemy leeks threaten least (nearest to the focus first on ties)
             safe = sorted(reach, key=lambda c: (others_threat(cx, cx.A0, c), dist(c, ecell)))[:MAX_SAFE_CELLS]
-            cx.ends += [c for c in safe if c not in cx.ends]
-    out = [from_cell]
-    for c in cx.ends:
-        if c not in out:
-            out.append(c)
-    return out
+            ends += [c for c in safe if c not in ends]
+        cx.ends = []                 # deduplicated, first occurrence kept (dict / set builtins are bridged in prod)
+        for c in ends:
+            if c not in cx.ends:
+                cx.ends.append(c)
+    return [from_cell] + [c for c in cx.ends if c != from_cell]
 
 
 def useful_now(it, A, B, cx):
     """A self item is only offered when it can matter now: heals when HP is
     missing, antidote when poisoned, reflect / shields when the enemy can
     reach our current cell next turn (their MP + range)."""
-    types = {e[0] for e in it.effects}
+    types = it.types
     missing = A['max'] - A['life']
     if E_HEAL in types and not (types - {E_HEAL}):
         amt = sum(avg(e) for e in it.effects if e[0] == E_HEAL) * (1 + max(0, A['cur']['wisdom']) / 100.0)
@@ -541,19 +515,15 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                  for O in (others or [])]
     global LAST_CX
     LAST_CX = cx
-    if DIAG and t <= 2:
-        d0 = Field.cellDistance(A['cell'], B['cell']) or 0
-        log('V10REACH T%d d=%s our_mp=%s their_mp=%s their_maxr=%s' % (t, d0, A['mp_live'], B['mp_live'], cx.b_maxr))
-    offensive = [it for it in items if it.offensive and not it.special and it.current_cooldown() == 0]
     # superinfection only ever fires as the finale of a nuke combo (below), never as filler
-    si_all = [it for it in items if any(e[0] == E_SUPERINF for e in it.effects)]
-    offensive = [it for it in offensive if it not in si_all]
-    selfish = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
-               and useful_now(it, A, B, cx)]
-    buffs = [it for it in selfish if any(e[0] in DMG_BUFFS for e in it.effects)]
+    si_all = [it for it in items if it.is_si]
+    offensive = [it for it in items if it.offensive and not it.special and it.current_cooldown() == 0 and not it.is_si]
+    ready_self = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0]
+    selfish = [it for it in ready_self if useful_now(it, A, B, cx)]
+    buffs = [it for it in selfish if it.types & DMG_BUFFS]
     vals = {it.id: quick_value(it, A, B) for it in offensive}
     for it in offensive:            # hemorrhage: worth the heal it denies on their next turn
-        if any(e[0] == E_ADD_STATE and int(e[1] or 0) == ST_UNHEALABLE for e in it.effects):
+        if it.unheal:
             vals[it.id] = min(cx.b_heal_full, max(0.0, B['max'] - B['life']) + 0.3 * B['max'])
     reach = reachable(cell0, mp0)
     ecell = B['cell']
@@ -577,8 +547,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             cells.append(x[0])
     if cell0 not in cells:
         cells.insert(0, cell0)
-    heals = [it for it in selfish if any(e[0] in (E_HEAL, E_VITALITY) for e in it.effects)]
-    shields = [it for it in selfish if any(e[0] in (E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL, E_RETURN) for e in it.effects)]
+    heals = [it for it in selfish if it.types & {E_HEAL, E_VITALITY}]
+    shields = [it for it in selfish if it.types & {E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL, E_RETURN}]
     best_heal = sorted(heals, key=lambda i: -sum(avg(e) for e in i.effects if e[0] in (E_HEAL, E_VITALITY)) / max(1, i.cost))[:1]
     prefixes = [[]]
     if buffs:
@@ -589,15 +559,25 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             prefixes.append([('use', it, cell0) for it in best_heal + buffs])
     if shields:
         prefixes.append([('use', it, cell0) for it in shields[:2]])
+    pre_costs = [sum(st[1].cost for st in pre) for pre in prefixes]
     plans = []; groups = []
     pcache = {}
+
+    def mv(c):                     # move step, unless we are already there
+        return [('move', c)] if c != cell0 else []
+
+    def at(its, tgt):              # use steps
+        return [('use', it, tgt) for it in its]
+
+    def add(plan, g):
+        plans.append(plan); groups.append(g)
 
     def packed(c, key, tp):
         k = (c, key, tp)
         if k not in pcache:
             pcache[k] = pack(c, ecell, offensive, tp, weapon0, vals, key, tag='ours')
         return pcache[k]
-    area_all = [it for it in offensive if has_area(it)]
+    area_all = [it for it in offensive if it.splash]
     # positions for long-range area items (e.g. plutonium bazooka: diagonal 8-12,
     # circle 3): cell c we can reach and aim cell t near the enemy with the launch
     # rule and range met (coordinates first, LoS only on survivors)
@@ -628,15 +608,14 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 continue
             far_shots.append((c_, t_, it)); n_ok += 1
     for gi, pre in enumerate(prefixes):
-        pre_cost = sum(st[1].cost for st in pre)
+        pre_cost = pre_costs[gi]
         for c in cells:
             if over(0.5):
                 break
             for key in ('ratio', 'raw', 'weapons'):
                 att = packed(c, key, tp0 - pre_cost)
-                base = pre + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
-                plans.append(base)
-                groups.append(gi)
+                base = pre + mv(c) + at(att, ecell)
+                add(base, gi)
                 # top up with an area shot aimed near the enemy (e.g. a diagonal-only
                 # bazooka whose circle-3 splash still catches it) with the TP left
                 rest = [it for it in area_all if it not in att]
@@ -646,8 +625,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                         held = next((it.id for it in reversed(att) if it.weapon), weapon0)
                         sp = splash_pack(c, ecell, rest, left, held, vals, 'ratio', 'topup')
                         if sp:
-                            plans.append(base + [('use', it, sp[0]) for it in sp[2]])
-                            groups.append(gi)
+                            add(base + at(sp[2], sp[0]), gi)
             # (far area shots are planned below, from their own cells)
             # splash shot first, then the best direct attacks with the TP left
             if area_all:
@@ -656,18 +634,15 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                     held = next((it.id for it in reversed(sp[2]) if it.weapon), weapon0)
                     rest_tp = tp0 - pre_cost - acts_cost(sp[2], weapon0)
                     att = [it for it in packed(c, 'ratio', rest_tp) if it not in sp[2]]
-                    plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, sp[0]) for it in sp[2]]
-                                 + [('use', it, ecell) for it in att])
-                    groups.append(gi)
+                    add(pre + mv(c) + at(sp[2], sp[0]) + at(att, ecell), gi)
     for c_, t_, it in far_shots:
         for gi, pre in enumerate(prefixes[:2]):
-            pre_cost = sum(st[1].cost for st in pre)
+            pre_cost = pre_costs[gi]
             if it.cost + (1 if it.weapon and it.id != weapon0 else 0) > tp0 - pre_cost:
                 continue
             rest_tp = tp0 - pre_cost - acts_cost([it], weapon0)
             att = [x for x in packed(c_, 'ratio', rest_tp) if x is not it]
-            plans.append(pre + ([('move', c_)] if c_ != cell0 else []) + [('use', it, t_)] + [('use', x, ecell) for x in att])
-            groups.append('far')
+            add(pre + mv(c_) + [('use', it, t_)] + at(att, ecell), 'far')
     # split plans: chips from one cell, weapons from another (ranges differ)
     chips_off = [it for it in offensive if not it.weapon]
     weap_off = [it for it in offensive if it.weapon]
@@ -685,13 +660,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                     continue
                 p2 = pack(c2, ecell, weap_off, left, weapon0, vals, 'ratio', tag='weapons')
                 if p2:
-                    plans.append([('move', c1)] + [('use', it, ecell) for it in p1]
-                                 + [('move', c2)] + [('use', it, ecell) for it in p2])
-                    groups.append('split')
+                    add([('move', c1)] + at(p1, ecell) + [('move', c2)] + at(p2, ecell), 'split')
     # area items aimed next to the enemy from cells with no direct shot
     # (behind an obstacle or a summon, the splash still reaches it)
-    area_ours = [it for it in offensive if has_area(it)]
-    if area_ours:
+    if area_all:
         direct = {c: 1 for c in cells}; tries = 0
         for c, st in sorted(reach.items(), key=lambda kv: kv[1]):
             if tries >= MAX_SPLASH_CELLS or over(0.5):
@@ -699,12 +671,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             if c in direct or dist(c, ecell) > maxr + 2:
                 continue
             tries += 1
-            for pre in prefixes[:2]:
-                pre_cost = sum(s_[1].cost for s_ in pre)
-                sp = splash_pack(c, ecell, area_ours, tp0 - pre_cost, weapon0, vals, 'ratio', 'splash')
+            for gi, pre in enumerate(prefixes[:2]):
+                sp = splash_pack(c, ecell, area_all, tp0 - pre_costs[gi], weapon0, vals, 'ratio', 'splash')
                 if sp:
-                    plans.append(pre + ([('move', c)] if c != cell0 else []) + [('use', it, sp[0]) for it in sp[2]])
-                    groups.append('splash')
+                    add(pre + mv(c) + at(sp[2], sp[0]), 'splash')
     # nuke combo (superinfection), owner's rules (2026-10-10):
     #  - never on turn 1 (turn 1 = the max-HP buff);
     #  - superinfection reachable THIS turn: boost (TP / MAG buffs, the TP-buff usefulness rule
@@ -714,13 +684,11 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     #  - otherwise no combo.
     if si_all and t > 1:
         s_it = si_all[0]
-        poisons = [it for it in offensive if any(e[0] == E_POISON for e in it.effects)]
-        boost = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
-                 and any(e[0] in (E_BUFF_TP, E_RAW_TP, E_RAW_MAG) for e in it.effects)]
+        poisons = [it for it in offensive if E_POISON in it.types]
+        boost = [it for it in ready_self if it.types & {E_BUFF_TP, E_RAW_TP, E_RAW_MAG}]
         gain = sum(int(e[1]) for it in boost for e in it.fx if e[0] in (E_BUFF_TP, E_RAW_TP))
         # MP buffs extend "a cell in range can be reached" (leather boots: raw +2 MP)
-        mp_boost = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
-                    and any(e[0] in (E_BUFF_MP, E_RAW_MP) for e in it.effects)]
+        mp_boost = [it for it in ready_self if it.types & {E_BUFF_MP, E_RAW_MP}]
         sci = max(0, A['cur'].get('science', 0))
         mp_gain = sum(int(e[1]) if e[0] == E_RAW_MP else int(e[1] * (1 + sci / 100.0))
                       for it in mp_boost for e in it.fx if e[0] in (E_BUFF_MP, E_RAW_MP))
@@ -756,11 +724,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                     att = pack(c, ecell, poisons, budget, weapon0, vals, 'raw')
                     if not att:
                         continue
-                    plan = full + ([('move', c)] if c != cell0 else []) + [('use', it, ecell) for it in att]
-                    if now_cells:
-                        plan = plan + [('use', s_it, ecell)]
-                    plans.append(plan)
-                    groups.append('nuke' if now_cells else 'nuke_setup')
+                    add(full + mv(c) + at(att, ecell) + ([('use', s_it, ecell)] if now_cells else []),
+                        'nuke' if now_cells else 'nuke_setup')
     # enemy summons as targets: they block LoS to the summoner and hit us
     bulb_map = {}
     if bulbs:
@@ -776,18 +741,16 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 if not att:
                     continue
                 n += 1
-                plans.append(([('move', c)] if c != cell0 else []) + [('use', it, bc) for it in att])
-                groups.append('bulb')
+                add(mv(c) + at(att, bc), 'bulb')
     if selfish:
         tp = tp0; st = []
         for it in sorted(selfish, key=lambda i: i.cost):
             if it.cost <= tp:
                 st.append(('use', it, cell0)); tp -= it.cost
-        plans.append(st); groups.append('self')
-    plans.append([]); groups.append('none')
+        add(st, 'self')
+    add([], 'none')
     if t == 1:
-        vit = [it for it in items if it.self_cast and not it.special and it.current_cooldown() == 0
-               and any(e[0] == E_VITALITY for e in it.effects)]
+        vit = [it for it in ready_self if E_VITALITY in it.types]
         if vit:
             v_it = vit[0]
             plans = [p if any(st_[0] == 'use' and st_[1] is v_it for st_ in p) else [('use', v_it, cell0)] + p
@@ -810,30 +773,33 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
         by_g.setdefault(groups[i], []).append((0 if r[1]['life'] <= 0 else 1, -r[3], i, plan, r))
     for g in by_g:
         by_g[g].sort(key=lambda x: (x[0], x[1], x[2]))
-    order = []
-    k = 0
-    while True:
-        added = False
-        for g in by_g:
-            if k < len(by_g[g]):
-                order.append(by_g[g][k]); added = True
-        if not added:
-            break
-        k += 1
+    order = []; k = 0
+    while any(k < len(v) for v in by_g.values()):
+        order += [v[k] for v in by_g.values() if k < len(v)]; k += 1
     best = (-1.0, None, None); evaluated = 0
     pr = pressure(t)
+    k_aggr = AGGR * pr
+    b_max = max(1.0, B['max']); a_max = max(1.0, A['max'])
+    stall = STALL_W * pr; ramp = min(1.0, t / 8.0)
     d_now = dist(cell0, ecell)
-    diag_best = None
     setup_reach = (A['mp_live'] + max([it.maxr for it in si_all] + [0])) if si_all else 0
     for _, _, gi, plan, r in order:
         if over():
             break
         A1, B1, c1, dealt, sim = r
         is_setup = groups[gi] == 'nuke_setup'
+        sig = None                 # memo key part shared by the plan's end cells, built at the first leaf
+        # plan-level terms: the same for every end cell of this plan
+        lasting = 0.5 * (B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
+        healable = 0.0 if B1.get('unheal') else min(dealt, cx.b_heal_next)
+        self_lost = max(0.0, A['life'] - A1['life'])
+        n_end = 0
         for e in end_cells(cx, c1, reach, ecell):
-            if over():
+            n_end += 1
+            if n_end & 3 == 0 and over():      # the budget check is an engine call: every 4th cell
                 break
-            if is_setup and dist(e, ecell) > setup_reach:
+            de = dist(e, ecell)
+            if is_setup and de > setup_reach:
                 continue           # a setup turn must leave the detonation reachable next turn
             if e != c1:
                 if c1 == cell0:
@@ -841,31 +807,27 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 elif dist(c1, e) > sim['mp']:
                     continue
                 else:
-                    pk = (c1, e)
-                    if pk not in cx.plen:
-                        cx.plen[pk] = Field.pathLength(c1, e)
-                    pl = cx.plen[pk]
+                    pl = path_len(c1, e)
                 if pl is None or pl < 0 or pl > sim['mp']:
                     continue
-            v = 1.1 if B1['life'] <= 0 else leaf(cx, A1, B1, e, t)
-            # certain damage now is worth more than the model's uncertain future
-            # play our strengths: lasting damage counts too (queued poison at half,
-            # max HP burned by nova / erosion in full), not only direct hits
-            # queued poison REMOVED by our plan (superinfection burns a tick of every poison,
-            # liberation shrinks them) is lost future damage: no clip at 0 on pf
-            lasting = 0.5 * (B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
+            if B1['life'] <= 0:
+                v = 1.1
+            else:
+                if sig is None:
+                    sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')))
+                v = leaf(cx, A1, B1, e, t, sig)
+            # certain damage now is worth more than the model's uncertain future; lasting damage
+            # counts too (queued poison at half - REMOVED poison (superinfection, liberation) is
+            # lost future damage, so no clip at 0 -, max HP burned by nova / erosion in full);
             # direct damage their ready heals can undo next turn counts less
-            healable = 0.0 if B1.get('unheal') else min(dealt, cx.b_heal_next)
-            v += AGGR * pr * (dealt - HEALABLE_W * healable + lasting) / max(1.0, B['max'])
+            v += k_aggr * (dealt - HEALABLE_W * healable + lasting) / b_max
             # our own HP lost during our turn (damage return - e.g. a bramble at ~260% -, self-harm)
-            # weighs like the damage we deal: attacking into a reflect is no longer "free" here
-            self_lost = max(0.0, A['life'] - A1['life'])
+            # weighs like the damage we deal: attacking into a reflect is not "free"
             if self_lost > 0:
-                v -= AGGR * pr * self_lost / max(1.0, A['max'])
+                v -= k_aggr * self_lost / a_max
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
-            de = dist(e, ecell)
             if de > maxr:
-                v -= STALL_W * pr * (de - maxr) * min(1.0, t / 8.0)
+                v -= stall * (de - maxr) * ramp
             # standoff (nobody lost HP for 2+ turns): hiding without dealing damage costs more
             if IDLE[0] >= 2 and dealt <= 0 and not geo(e, ecell)[1]:
                 v -= STANDOFF_W * pr
@@ -878,15 +840,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 cx.n_atk += 1
                 if v > cx.best_atk[0]:
                     cx.best_atk = (v, dealt, ' '.join((s[0] == 'move' and 'M%d' % s[1]) or s[1].name[:6] for s in plan) + (' M%d' % e if e != c1 else ''))
-            if DIAG and (diag_best is None or dealt > diag_best[1] or (dealt == diag_best[1] and v > diag_best[0])):
-                diag_best = (v, dealt, e, len(plan), getattr(cx, 'last_leaf', None))
-            if DIAG and v > best[0]:
-                cx.best_leaf = getattr(cx, 'last_leaf', None)
             if v > best[0]:
                 best = (v, plan + ([('move', e)] if e != c1 else []),
-                        (dealt, Field.cellDistance(e, ecell), bool(Field.lineOfSight(e, ecell)), getattr(cx, 'last_reply', 0)))
-    if DIAG and diag_best is not None:
-        fmt = lambda L: 'none' if L is None else 'ourHP %.0f enHP %.0f d %s los %s v_no %.3f v_f %.3f enHP_after_follow %.0f' % L
-        log('V10DIAG T%d MAXDMG V=%.3f dealt=%.0f [%s] || CHOSEN V=%.3f dealt=%.0f [%s]' % (
-            t, diag_best[0], diag_best[1], fmt(diag_best[4]), best[0], best[2][0] if best[2] else -1, fmt(getattr(cx, 'best_leaf', None))))
+                        (dealt, Field.cellDistance(e, ecell), bool(Field.lineOfSight(e, ecell)), cx.last_reply))
     return best, evaluated
