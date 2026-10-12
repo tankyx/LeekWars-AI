@@ -66,10 +66,10 @@ def main():
         mine1 = any(l.get('id') == a.leek for l in f.get('leeks1') or [])
         w = f.get('winner'); res = 0.5 if w == 0 else (1.0 if w == (1 if mine1 else 2) else 0.0)
         s = json.dumps(lw.get('/fight/get-logs/%d' % fid))
-        return (fid, res, s.count('too_much_ops'), s.count('superi')), None
+        return (fid, res, s.count('too_much_ops'), s.count('superi'), s.count('hemorr')), None
 
     new = not os.path.exists(OUT); fh = open(OUT, 'a', newline=''); wr = csv.writer(fh)
-    if new: wr.writerow(['date', 'leek', 'arm', 'chip', 'opp_id', 'opp_talent', 'seed', 'fight', 'result', 'cuts', 'si_logs'])
+    if new: wr.writerow(['date', 'leek', 'arm', 'chip', 'opp_id', 'opp_talent', 'seed', 'fight', 'result', 'cuts', 'si_logs', 'hem_logs'])
     res = {'A': [], 'B': []}; pairs = 0
     try:
         if a.ai: lw.post('/leek/set-ai', leek_id=a.leek, ai_path=a.ai)
@@ -87,7 +87,7 @@ def main():
                 got[arm] = out
                 wr.writerow([time.strftime('%Y-%m-%d %H:%M'), me['name'], arm, chip, o['id'], o['talent'], seed] + list(out)); fh.flush()
             res['A'].append(got['A'][1]); res['B'].append(got['B'][1]); pairs += 1
-            print('pair %2d vs %-16s (%s): A %s  B %s   cuts %d/%d' % (pairs, o['name'][:16], o['talent'], got['A'][1], got['B'][1], got['A'][2], got['B'][2]), flush=True)
+            print('pair %2d vs %-16s (%s): A %s  B %s   cuts %d/%d  hem %d/%d' % (pairs, o['name'][:16], o['talent'], got['A'][1], got['B'][1], got['A'][2], got['B'][2], got['A'][4], got['B'][4]), flush=True)
     except StopIteration:
         pass
     finally:

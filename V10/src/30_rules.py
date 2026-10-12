@@ -73,8 +73,12 @@ def apply_item(it, C, T, S, f=1.0):
         if scaled:
             a = a * f
         if t == E_DAMAGE and T is not C:
-            d = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf
-            d = max(0.0, d - d * T['rel'] / 100.0 - T['abs'])
+            raw = a * (1 + max(0, cur['strength']) / 100.0) * pw * critf
+            # engine EffectDamage: return = RAW damage (before the target's shields) x return %,
+            # hitting the caster's life directly (no shields), only capped at its life
+            ret = T['groups'].get('dmg_return', 0)
+            back = min(max(0.0, C['life']), raw * ret / 100.0) if ret > 0 else 0.0
+            d = max(0.0, raw - raw * T['rel'] / 100.0 - T['abs'])
             d = min(d, max(0, T['life']))
             T['life'] -= d; dealt += d
             pa = T.get('pas')
@@ -92,9 +96,8 @@ def apply_item(it, C, T, S, f=1.0):
             T['max'] -= ero; T['burn'] += ero
             steal = d * max(0, cur['wisdom']) / 1000.0
             C['life'] = min(C['max'], C['life'] + steal)
-            ret = T['groups'].get('dmg_return', 0)
-            if ret > 0:
-                C['life'] -= d * ret / 100.0
+            if back > 0:
+                C['life'] -= back; C['max'] -= back * 0.05; C['burn'] += back * 0.05
         elif t == E_POISON and T is not C:
             p = a * (1 + max(0, cur['magic']) / 100.0) * pw
             g_add(T, t, p); T['pf'] += p * max(1, turns)

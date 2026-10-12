@@ -188,9 +188,13 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             sim['tp'] -= it.cost
             sim['uses'][it.id] = sim['uses'].get(it.id, 0) + 1
             if tgt == B['cell'] and it.offensive:
+                if B['life'] <= 0:
+                    continue               # enemy already dead: execution skips the shot
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
                 dealt += apply_item(it, A, B, sim)
+                if A['life'] <= 0 and B['life'] > 0:
+                    return None            # damage return would kill us on our own turn
             elif bulbs and tgt in bulbs and it.offensive:
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
@@ -212,6 +216,8 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
                 if self_hit(it, cell, tgt) and any(e[0] in (E_DAMAGE, E_POISON) for e in it.effects):
                     return None
                 dealt += apply_item(it, A, B, sim, f)
+                if A['life'] <= 0 and B['life'] > 0:
+                    return None
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell

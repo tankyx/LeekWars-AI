@@ -40,6 +40,23 @@ def alive(e):
     return e is not None and e.cell is not None and (e.life or 0) > 0
 
 
+def return_kills(it, tgt_ent):
+    """Live guard: would this attack's WORST-case damage return (max roll, crit) kill us?
+    Engine: return = raw damage before the target's shields x its damage return %."""
+    try:
+        ret = (tgt_ent.damageReturn or 0) if tgt_ent is not None else 0
+    except Exception:
+        ret = 0
+    if ret <= 0:
+        return False
+    m = me()
+    raw = 0.0
+    for e in it.effects:
+        if e[0] == E_DAMAGE and not ((e[5] or 0) & 4):
+            raw += (e[2] or e[1] or 0) * (1 + max(0, m.strength or 0) / 100.0) * (1 + (m.power or 0) / 100.0) * 1.3
+    return raw * ret / 100.0 >= (m.life or 0)
+
+
 def execute(plan, enemy=None):
     """Run the plan; returns a compact trace of engine return codes
     (1 success, 2 critical, 0 failed, negatives = invalid). An attack is skipped
@@ -53,6 +70,9 @@ def execute(plan, enemy=None):
             trace.append('M%s' % r)
         else:
             it, tgt = st[1], st[2]
+            if it.offensive and return_kills(it, on_cell.get(tgt)):
+                trace.append('%s:R' % it.name[:6])      # skipped: the return would kill us
+                continue
             if it.offensive:
                 f = on_cell.get(tgt)
                 if (f is not None and not alive(f)) or (f is None and enemy is not None and not alive(enemy)):
@@ -103,6 +123,8 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
                 if not usable_from(m.cell.id, ecell, [it]):
                     continue
                 if used is not None and used.get(it.id, 0) >= it.max_uses:
+                    continue
+                if return_kills(it, tgt_ent):
                     continue
                 if it.weapon:
                     if (m.weapon is None or m.weapon.id != it.id):

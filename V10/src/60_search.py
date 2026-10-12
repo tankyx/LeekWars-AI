@@ -857,6 +857,11 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             # direct damage their ready heals can undo next turn counts less
             healable = 0.0 if B1.get('unheal') else min(dealt, cx.b_heal_next)
             v += AGGR * pr * (dealt - HEALABLE_W * healable + lasting) / max(1.0, B['max'])
+            # our own HP lost during our turn (damage return - e.g. a bramble at ~260% -, self-harm)
+            # weighs like the damage we deal: attacking into a reflect is no longer "free" here
+            self_lost = max(0.0, A['life'] - A1['life'])
+            if self_lost > 0:
+                v -= AGGR * pr * self_lost / max(1.0, A['max'])
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
             de = dist(e, ecell)
             if de > maxr:
