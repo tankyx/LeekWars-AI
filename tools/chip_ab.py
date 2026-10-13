@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Paired challenge A/B of one chip slot on one leek: arm A with chip A equipped, arm B with
-chip B, same opponent / seed / side for both arms (seeded challenges do not move talent).
+"""Paired challenge A/B of one chip (or weapon: names starting with weapon_) slot on one leek: arm A
+with item A equipped, arm B with item B, same opponent / seed / side for both arms (seeded challenges do not move talent).
 Opponents = real leeks the leek met in the garden, talent within +-band of its own.
 Pairs alternate the arm order (AB, BA, ...) so one chip swap serves each pair. Stops at the
 daily challenge allowance. The leek's chip and AI path are restored at the end.
 
     python3 tools/chip_ab.py --leek 129296 --a chip_superinfection --b chip_jump --ai 10.0/probe/v10_fix.py --pairs 40
+    python3 tools/chip_ab.py --leek 20443 --a weapon_j_laser --b weapon_glowing_saber --track glowing_saber --pairs 50
 """
 import argparse, csv, json, math, os, random, sqlite3, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE); sys.path.insert(0, HERE)
@@ -20,25 +21,36 @@ def main():
     ap.add_argument('--ai', default=None, help='AI path for both arms (restored after)')
     ap.add_argument('--ai-a', default=None, help='AI path for arm A only'); ap.add_argument('--ai-b', default=None, help='AI path for arm B only')
     ap.add_argument('--skip', type=int, default=0, help='skip the first N opponents (resume)')
+    ap.add_argument('--opp-ids', default=None, help='JSON file or comma list of opponent leek ids (instead of the garden history)')
+    ap.add_argument('--seeds', type=int, default=1, help='seeds per opponent')
     ap.add_argument('--pairs', type=int, default=40); ap.add_argument('--band', type=int, default=150)
     ap.add_argument('--account', default='main'); ap.add_argument('--seed', type=int, default=7)
+    ap.add_argument('--track', default='hemorr', help='substring counted in our AI logs (last CSV column, "hem" in the printout)')
     a = ap.parse_args()
     lw = LWSession(a.account); I = lw.get('/item/get-all'); nm = lambda t: I.get(str(t), {}).get('name', t)
     rng = random.Random(a.seed)
     me = lw.leek(a.leek); talent = me['talent']; ai0 = me['ai']['path']
     db = sqlite3.connect(os.path.join(HERE, 'fight_history_%d.db' % a.leek))
-    ids = [r[0] for r in db.execute('SELECT DISTINCT opponent_id FROM fight_history ORDER BY timestamp DESC LIMIT 400')]
-    rng.shuffle(ids); opps = []
+    if a.opp_ids:
+        ids = json.load(open(a.opp_ids)) if os.path.exists(a.opp_ids) else [int(x) for x in a.opp_ids.split(',')]
+        band = 10 ** 9                       # a chosen opponent list is played whatever its talent
+    else:
+        ids = [r[0] for r in db.execute('SELECT DISTINCT opponent_id FROM fight_history ORDER BY timestamp DESC LIMIT 400')]
+        rng.shuffle(ids); band = a.band
+    opps = []
     for oid in ids:
         if len(opps) >= a.pairs: break
         o = lw.leek(oid)
-        if o.get('id') and abs((o.get('talent') or 0) - talent) <= a.band and (o.get('level') or 0) >= 290:
-            opps.append({'id': oid, 'name': o.get('name'), 'talent': o.get('talent')})
+        if o.get('id') and abs((o.get('talent') or 0) - talent) <= band and (o.get('level') or 0) >= 290:
+            for k in range(a.seeds):
+                opps.append({'id': oid, 'name': o.get('name'), 'talent': o.get('talent'), 'k': k})
     print('%s (talent %d): %d opponents within +-%d' % (me['name'], talent, len(opps), a.band), flush=True)
+
+    kind = 'weapons' if a.a.startswith('weapon_') else 'chips'      # both items must be of the same kind
 
     def chip_inv(name):
         f = lw.get('/farmer/get-from-token'); f = f.get('farmer', f)
-        return next(x['id'] for x in f.get('chips') or [] if nm(x['template']) == name)
+        return next(x['id'] for x in f.get(kind) or [] if nm(x['template']) == name)
 
     def set_ai(arm):
         path = (a.ai_a if arm == 'A' else a.ai_b) or a.ai
@@ -46,11 +58,16 @@ def main():
 
     def equip(want, other):
         l = lw.leek(a.leek)
-        names = {nm(c['template']): c['id'] for c in l['chips']}
+        names = {nm(c['template']): c['id'] for c in l[kind]}
         if want in names: return
-        if other in names:
-            lw.call('DELETE', '/leek/remove-chip', leek_id=a.leek, chip_id=names[other])
-        r = lw.post('/leek/add-chip', leek_id=a.leek, chip_id=chip_inv(want))
+        if kind == 'weapons':
+            if other in names:
+                lw.call('DELETE', '/leek/remove-weapon', weapon_id=names[other])
+            r = lw.post('/leek/add-weapon', leek_id=a.leek, weapon_id=chip_inv(want))
+        else:
+            if other in names:
+                lw.call('DELETE', '/leek/remove-chip', leek_id=a.leek, chip_id=names[other])
+            r = lw.post('/leek/add-chip', leek_id=a.leek, chip_id=chip_inv(want))
         if not (isinstance(r, dict) and r.get('id')):
             raise RuntimeError('could not equip %s: %s' % (want, r))
 
@@ -66,7 +83,7 @@ def main():
         mine1 = any(l.get('id') == a.leek for l in f.get('leeks1') or [])
         w = f.get('winner'); res = 0.5 if w == 0 else (1.0 if w == (1 if mine1 else 2) else 0.0)
         s = json.dumps(lw.get('/fight/get-logs/%d' % fid))
-        return (fid, res, s.count('too_much_ops'), s.count('superi'), s.count('hemorr')), None
+        return (fid, res, s.count('too_much_ops'), s.count('superi'), s.count(a.track)), None
 
     new = not os.path.exists(OUT); fh = open(OUT, 'a', newline=''); wr = csv.writer(fh)
     if new: wr.writerow(['date', 'leek', 'arm', 'chip', 'opp_id', 'opp_talent', 'seed', 'fight', 'result', 'cuts', 'si_logs', 'hem_logs'])
@@ -75,7 +92,7 @@ def main():
         if a.ai: lw.post('/leek/set-ai', leek_id=a.leek, ai_path=a.ai)
         for i, o in enumerate(opps):
             if i < a.skip: continue
-            seed = 1000 + i
+            seed = 1000 + i + 7919 * o.get('k', 0)
             order = ('A', 'B') if i % 2 == 0 else ('B', 'A')
             got = {}
             for arm in order:
