@@ -277,7 +277,9 @@ def main():
                     help='a leek whose list has been stale for --reroll-after min takes an offer >= this (refreshes its list)')
     ap.add_argument('--reroll-after', type=float, default=45.0)
     ap.add_argument('--xp-accounts', default='cure', help='accounts run in XP mode (spend all credits)')
-    ap.add_argument('--xp-mode', default='farmer', choices=['farmer', 'solo'], help='XP mode fight type (farmer levels all leeks per credit)')
+    ap.add_argument('--xp-mode', default='auto', choices=['auto', 'farmer', 'solo'],
+                    help='XP mode fight type: farmer levels all leeks per credit; auto = farmer while 2+ leeks are under '
+                         '300, solo on the last one, talent mode once all are 300')
     ap.add_argument('--no-team', action='store_true', help='skip the daily team fights')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
@@ -288,8 +290,19 @@ def main():
     out = {}
     if not a.dry_run:
         xp = [x for x in a.xp_accounts.split(',') if x]
+
+        def xp_runner(acct):
+            """Farmer fights share a credit's XP across all 4 leeks (~11k per fight, 2026-10 log), solo gives
+            one leek ~3.5k: farmer pays while 2+ leeks still level, solo once only one does."""
+            if a.xp_mode != 'auto':
+                return run_xp_farmer if a.xp_mode == 'farmer' else run_xp
+            lw = LWSession(acct)
+            under = [n for n, lid in LEEKS[acct] if (lw.leek(lid).get('level') or 0) < 300]
+            print('%s: leeks under 300: %s' % (acct, under or 'none - back to talent mode'), flush=True)
+            return run_xp_farmer if len(under) >= 2 else (run_xp if under else None)
+        runners = {x: xp_runner(x) if x in xp else None for x in accts}
         if a.selector == 'model':
-            th = [threading.Thread(target=(run_xp_farmer if a.xp_mode == 'farmer' else run_xp), args=(x, LEEKS[x], out)) if x in xp else
+            th = [threading.Thread(target=runners[x], args=(x, LEEKS[x], out)) if runners[x] else
                   threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out,
                                                            a.reroll_ev, a.reroll_after)) for x in accts]
         else:
