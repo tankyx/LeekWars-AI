@@ -9,6 +9,8 @@ E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL = 44
 E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
 E_SUPERINF = 64    # superinfection: value1% of the target's per-turn poison sum now, every poison loses one turn
 E_ADD_STATE, ST_UNHEALABLE = 59, 2   # hemorrhage: state 2 = Unhealable (no heal, life steal, vitality, regen) for 1 turn
+ST_AMPUTATED = 13   # glowing saber: the target drops its weapon and cannot use or re-equip one until the
+                    # state ends (start of the caster's next turn); chips still work (engine State.useWeapon)
 
 OFFENSIVE = {E_DAMAGE, E_POISON, E_SUPERINF, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS, E_DEBUFF}
 SELF_ONLY = {E_HEAL, E_BUFF_STR, E_BUFF_AGI, E_REL_SHIELD, E_ABS_SHIELD, E_BUFF_MP, E_BUFF_TP, E_VITALITY,

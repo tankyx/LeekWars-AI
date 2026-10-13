@@ -83,6 +83,8 @@ E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL = 44
 E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
 E_SUPERINF = 64    # superinfection: value1% of the target's per-turn poison sum now, every poison loses one turn
 E_ADD_STATE, ST_UNHEALABLE = 59, 2   # hemorrhage: state 2 = Unhealable (no heal, life steal, vitality, regen) for 1 turn
+ST_AMPUTATED = 13   # glowing saber: the target drops its weapon and cannot use or re-equip one until the
+                    # state ends (start of the caster's next turn); chips still work (engine State.useWeapon)
 
 OFFENSIVE = {E_DAMAGE, E_POISON, E_SUPERINF, E_NOVA, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI, E_VULN, E_VULN_ABS, E_DEBUFF}
 SELF_ONLY = {E_HEAL, E_BUFF_STR, E_BUFF_AGI, E_REL_SHIELD, E_ABS_SHIELD, E_BUFF_MP, E_BUFF_TP, E_VITALITY,
@@ -248,6 +250,10 @@ def snapshot(ent, team_alive):
     st['tp'] = ent.maxTP - sums.get(E_BUFF_TP, 0) - sums.get(E_RAW_TP, 0) + sums.get(E_SHK_TP, 0)
     st['mp'] = ent.maxMP - sums.get(E_BUFF_MP, 0) - sums.get(E_RAW_MP, 0) + sums.get(E_SHK_MP, 0)
     items = items_of(ent)
+    # Amputated (glowing saber): no weapon can be used or re-equipped this turn, chips only
+    amp = any(e.type == E_ADD_STATE and int(e.value or 0) == ST_AMPUTATED for e in effs)
+    if amp:
+        items = [it for it in items if not it.weapon]
     summons = sum(1 for o in team_alive if o.summoned)
     return {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life, 'max': ent.maxLife, 'level': ent.level,
             'tp': st['tp'], 'mp': st['mp'], 'strength': st['strength'], 'magic': st['magic'],
@@ -257,7 +263,7 @@ def snapshot(ent, team_alive):
             'groups': groups, 'pf': pf, 'burn': _burn.get(ent.id, 0), 'summons': summons,
             'items': items, 'kit': kit_of(items, st), 'pas': passives_of(ent),
             'tp_live': ent.maxTP, 'mp_live': ent.maxMP,
-            'weapon': (ent.weapon.id if ent.weapon is not None else -1)}
+            'weapon': (ent.weapon.id if ent.weapon is not None else -1), 'amputated': amp}
 
 
 def bulb_side(ent):
@@ -347,6 +353,7 @@ def apply_item(it, C, T, S, f=1.0):
             continue
         if nonstack and _replaces(it, t, T, S):
             continue
+        sid = int(a)                    # an add-state effect's value is the state id (never area-scaled)
         if scaled:
             a = a * f
         if t == E_DAMAGE and T is not C:
@@ -378,8 +385,11 @@ def apply_item(it, C, T, S, f=1.0):
         elif t == E_POISON and T is not C:
             p = a * (1 + max(0, cur['magic']) / 100.0) * pw
             g_add(T, t, p); T['pf'] += p * max(1, turns)
-        elif t == E_ADD_STATE and int(a) == ST_UNHEALABLE and T is not C:
-            T['unheal'] = True         # their next turn: no healing at all (engine EffectHeal & co)
+        elif t == E_ADD_STATE and T is not C:
+            if sid == ST_UNHEALABLE:
+                T['unheal'] = True     # their next turn: no healing at all (engine EffectHeal & co)
+            elif sid == ST_AMPUTATED:
+                T['amputated'] = True  # their next turn: weapon dropped, chips only
         elif t == E_SUPERINF and T is not C:
             # engine EffectSuperinfection: value1% (x1.3 on crit) of the sum of the target's
             # poisons' per-turn values, now, as poison damage (10% erosion); each poison then
@@ -889,6 +899,7 @@ class Ctx:
         # enemy chips ready at the start of their next turn (cooldowns tick then)
         self.b_off = [it for it in B0['items'] if it.offensive and not it.special and it.current_cooldown() <= 1]
         self.b_vals = {it.id: quick_value(it, B0, A0) for it in self.b_off}
+        self.b_off_nw = [it for it in self.b_off if not it.weapon]        # amputated: chips only
         self.b_antidote = [it for it in B0['items'] if not it.weapon and it.current_cooldown() <= 1
                            and E_ANTIDOTE in it.types]
         self.b_maxr = max([it.maxr for it in self.b_off] + [0])
@@ -986,17 +997,18 @@ def others_threat(cx, a, cell):
     return OTHERS_W * tot
 
 
-def enemy_options(cx, our_cell, tp, mp):
+def enemy_options(cx, our_cell, tp, mp, amp=False):
     """Distinct attacks the enemy can make on `our_cell` with `tp` / `mp`:
     [(signature, from cell, items)], nearest cell kept per signature. Only
-    geometry matters, so it is cached per (our cell, tp, mp)."""
-    ok = (our_cell, tp, mp)
+    geometry matters, so it is cached per (our cell, tp, mp, amputated)."""
+    ok = (our_cell, tp, mp, amp)
     opts = cx.b_opts.get(ok)
     if opts is not None:
         return opts
     opts = []; tried = {}; seen_geo = {}; n = 0; ns = 0
-    ox, oy = cxy(our_cell); maxr = cx.b_maxr
-    area = cx.b_area
+    off = cx.b_off_nw if amp else cx.b_off
+    ox, oy = cxy(our_cell); maxr = max([it.maxr for it in off] + [0]) if amp else cx.b_maxr
+    area = [it for it in cx.b_area if not it.weapon] if amp else cx.b_area
     reach = maxr + (2 if area else 0)
     for ec, ex, ey in cx.enemy_cells(mp):
         if n >= MAX_ENEMY_CELLS or (n & 7 == 0 and over()):
@@ -1010,7 +1022,7 @@ def enemy_options(cx, our_cell, tp, mp):
             g = geo(ec, our_cell)
             if g not in seen_geo:          # same distance / LoS / line: same attack
                 seen_geo[g] = 1
-                acts = pack(ec, our_cell, cx.b_off, tp, cx.B0['weapon'], cx.b_vals, 'raw', tag='enemy')
+                acts = pack(ec, our_cell, off, tp, cx.B0['weapon'], cx.b_vals, 'raw', tag=('enemy', amp))
         if not acts and area and ns < MAX_SPLASH_CELLS:
             # no direct shot: an area item aimed next to us still catches us
             ns += 1
@@ -1042,6 +1054,7 @@ def enemy_reply(cx, A1, B1, our_cell):
     """Apply the enemy's best reply to copies; returns (A2, B2, enemy_cell)."""
     a = copy_side(A1); b = copy_side(B1)
     B0 = cx.B0
+    a['amputated'] = False          # an amputation on us ends as its caster's (their) turn starts
     # their turn start: poison ticks (erosion 10%)
     tick = b['groups'].get('poison', 0)
     if tick > 0:
@@ -1070,16 +1083,18 @@ def enemy_reply(cx, A1, B1, our_cell):
                 continue
             b['life'] += min(amt, missing); tp -= cost
     b['unheal'] = False
+    amp = bool(b.get('amputated'))  # our glowing saber: their weapon is dropped for this whole reply
+    b['amputated'] = False
     b['cur']['strength'] -= d_str
     ret = int(a['groups'].get('dmg_return', 0))
-    key = (our_cell, tp, mp, int(d_str), ret, int(a['abs']), int(a['rel']), int(b['life'] // 100), uh)
+    key = (our_cell, tp, mp, int(d_str), ret, int(a['abs']), int(a['rel']), int(b['life'] // 100), uh, amp)
     rep = cx.replies.get(key)
     if rep is None:
         # rational enemy: maximise (HP they take off us) - (HP they lose to our
         # damage return / our life steal); not attacking (net 0) is always allowed
         best = (0.0, B0['cell'], [], 1.0)       # (net, enemy cell, items, area factor)
         sab = (state_sig(a), state_sig(b))
-        for sig, ec, acts, f in enemy_options(cx, our_cell, tp, mp):
+        for sig, ec, acts, f in enemy_options(cx, our_cell, tp, mp, amp):
             nk = (sig, sab)
             net = _NETS.get(nk)
             if net is None:
@@ -1114,11 +1129,12 @@ def follow_up(cx, a, b, our_cell, ec):
     d = dist(our_cell, ec)
     need = max(0, d - mp)
     # the attack sequence only depends on (tp, need): cached per turn
-    fk = (tp, need)
+    amp = bool(a.get('amputated'))   # their reply amputated us: our next turn has no weapon
+    fk = (tp, need, amp)
     fu = cx.fu.get(fk)
     if fu is None:
         usable = [it for it in cx.a_off if it.minr <= max(need, it.minr) <= it.maxr and cx.a_vals.get(it.id, 0) > 0
-                  and need <= it.maxr and not it.is_si]
+                  and need <= it.maxr and not it.is_si and not (amp and it.weapon)]
         # superinfection next turn: off cooldown by then and in range -> keep its TP and cast it
         # LAST, after the poisons (a nuke follow-up), whatever its start-of-turn value
         si_f = [it for it in cx.a_off if it.is_si
@@ -1578,7 +1594,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 v = 1.1
             else:
                 if sig is None:
-                    sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')))
+                    sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')), bool(B1.get('amputated')))
                 v = leaf(cx, A1, B1, e, t, sig)
             # certain damage now is worth more than the model's uncertain future; lasting damage
             # counts too (queued poison at half - REMOVED poison (superinfection, liberation) is

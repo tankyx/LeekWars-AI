@@ -70,6 +70,7 @@ def apply_item(it, C, T, S, f=1.0):
             continue
         if nonstack and _replaces(it, t, T, S):
             continue
+        sid = int(a)                    # an add-state effect's value is the state id (never area-scaled)
         if scaled:
             a = a * f
         if t == E_DAMAGE and T is not C:
@@ -101,8 +102,11 @@ def apply_item(it, C, T, S, f=1.0):
         elif t == E_POISON and T is not C:
             p = a * (1 + max(0, cur['magic']) / 100.0) * pw
             g_add(T, t, p); T['pf'] += p * max(1, turns)
-        elif t == E_ADD_STATE and int(a) == ST_UNHEALABLE and T is not C:
-            T['unheal'] = True         # their next turn: no healing at all (engine EffectHeal & co)
+        elif t == E_ADD_STATE and T is not C:
+            if sid == ST_UNHEALABLE:
+                T['unheal'] = True     # their next turn: no healing at all (engine EffectHeal & co)
+            elif sid == ST_AMPUTATED:
+                T['amputated'] = True  # their next turn: weapon dropped, chips only
         elif t == E_SUPERINF and T is not C:
             # engine EffectSuperinfection: value1% (x1.3 on crit) of the sum of the target's
             # poisons' per-turn values, now, as poison damage (10% erosion); each poison then

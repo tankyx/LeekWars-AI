@@ -89,6 +89,10 @@ def snapshot(ent, team_alive):
     st['tp'] = ent.maxTP - sums.get(E_BUFF_TP, 0) - sums.get(E_RAW_TP, 0) + sums.get(E_SHK_TP, 0)
     st['mp'] = ent.maxMP - sums.get(E_BUFF_MP, 0) - sums.get(E_RAW_MP, 0) + sums.get(E_SHK_MP, 0)
     items = items_of(ent)
+    # Amputated (glowing saber): no weapon can be used or re-equipped this turn, chips only
+    amp = any(e.type == E_ADD_STATE and int(e.value or 0) == ST_AMPUTATED for e in effs)
+    if amp:
+        items = [it for it in items if not it.weapon]
     summons = sum(1 for o in team_alive if o.summoned)
     return {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life, 'max': ent.maxLife, 'level': ent.level,
             'tp': st['tp'], 'mp': st['mp'], 'strength': st['strength'], 'magic': st['magic'],
@@ -98,7 +102,7 @@ def snapshot(ent, team_alive):
             'groups': groups, 'pf': pf, 'burn': _burn.get(ent.id, 0), 'summons': summons,
             'items': items, 'kit': kit_of(items, st), 'pas': passives_of(ent),
             'tp_live': ent.maxTP, 'mp_live': ent.maxMP,
-            'weapon': (ent.weapon.id if ent.weapon is not None else -1)}
+            'weapon': (ent.weapon.id if ent.weapon is not None else -1), 'amputated': amp}
 
 
 def bulb_side(ent):
