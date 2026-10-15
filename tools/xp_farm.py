@@ -21,8 +21,9 @@ LEEKS = {19703: 'LeekRain', 21175: 'DawnFall', 129801: 'DuskHope', 130236: 'Prod
 CAPITAL_PLAN = {
     # main stat target, then TP (decides shots per turn) and MP, then secondary stats / life
     'LeekRain':    [('strength', 600), ('tp', 24), ('mp', 6), ('science', 450), ('life', 99999)],
-    'DawnFall':    [('magic', 600), ('tp', 24), ('mp', 6), ('wisdom', 350), ('life', 99999)],
-    'DuskHope':    [('magic', 600), ('tp', 24), ('mp', 6), ('wisdom', 350), ('life', 99999)],
+    # 2026-10-15 respec to the top-magic shape (TP 35-49% of capital, no resistance): TP / MP first
+    'DawnFall':    [('tp', 24), ('mp', 6), ('magic', 600), ('wisdom', 300), ('life', 99999)],
+    'DuskHope':    [('tp', 24), ('mp', 6), ('magic', 600), ('wisdom', 300), ('life', 99999)],
     'ProdigalSon': [('strength', 600), ('tp', 24), ('mp', 6), ('wisdom', 300), ('life', 99999)],
 }
 LOG = os.path.join(ROOT, 'data', 'ladder', 'xp_farm.csv')
