@@ -252,8 +252,6 @@ def snapshot(ent, team_alive):
     items = items_of(ent)
     # Amputated (glowing saber): no weapon can be used or re-equipped this turn, chips only
     amp = any(e.type == E_ADD_STATE and int(e.value or 0) == ST_AMPUTATED for e in effs)
-    rets = [e for e in effs if e.type == E_RETURN]
-    ret_short = bool(rets) and all((e.turns or 0) <= 1 for e in rets)   # reflect gone before our next turn
     if amp:
         items = [it for it in items if not it.weapon]
     summons = sum(1 for o in team_alive if o.summoned)
@@ -265,8 +263,7 @@ def snapshot(ent, team_alive):
             'groups': groups, 'pf': pf, 'burn': _burn.get(ent.id, 0), 'summons': summons,
             'items': items, 'kit': kit_of(items, st), 'pas': passives_of(ent),
             'tp_live': ent.maxTP, 'mp_live': ent.maxMP,
-            'weapon': (ent.weapon.id if ent.weapon is not None else -1), 'amputated': amp,
-            'ret_short': ret_short}
+            'weapon': (ent.weapon.id if ent.weapon is not None else -1), 'amputated': amp}
 
 
 def bulb_side(ent):
@@ -716,7 +713,6 @@ def self_hit(it, frm, tgt):
 
 
 BULB_W = 0.5    # damage to a summon counts half as "damage dealt" (a kill also lowers their summon count)
-RET_CAP = 0.25  # max share of our life a plan may lose to damage return while the enemy survives it
 
 
 def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
@@ -773,12 +769,6 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell
-    # damage return (bramble / mirror / reflexes...): a plan that leaves the enemy alive may not trade more than
-    # RET_CAP of our life into it - a short reflect is waited out for free. 2026-10-15 tournament final (fight
-    # 54138737): one meteorite into a 351% return cost Kirby54 2234 of 2924 HP, a poison burst finished it.
-    # only for a SHORT reflect (gone before our next turn): a lasting one cannot be waited out
-    if B0.get('ret_short') and B['life'] > 0 and A0['life'] - A['life'] > RET_CAP * A0['life']:
-        return None
     return A, B, cell, dealt, sim
 
 
@@ -1678,13 +1668,8 @@ def alive(e):
     return e is not None and e.cell is not None and (e.life or 0) > 0
 
 
-RET_LIVE = 0.4   # skip a hit whose worst-case return costs this share of our life and cannot kill the target
-
-
-def return_kills(it, tgt_ent, kill_plan=False):
-    """Live guard: skip this attack if its WORST-case damage return (max roll, crit) would kill us,
-    or would cost RET_LIVE of our life on a hit that cannot finish the target (wait the reflect out) -
-    not inside a kill plan: aborting a planned kill mid-sequence hands the enemy the fight.
+def return_kills(it, tgt_ent):
+    """Live guard: would this attack's WORST-case damage return (max roll, crit) kill us?
     Engine: return = raw damage before the target's shields x its damage return %."""
     try:
         ret = (tgt_ent.damageReturn or 0) if tgt_ent is not None else 0
@@ -1697,18 +1682,10 @@ def return_kills(it, tgt_ent, kill_plan=False):
     for e in it.effects:
         if e[0] == E_DAMAGE and not ((e[5] or 0) & 4):
             raw += (e[2] or e[1] or 0) * (1 + max(0, m.strength or 0) / 100.0) * (1 + (m.power or 0) / 100.0) * 1.3
-    back = raw * ret / 100.0; life = m.life or 0
-    if back >= life:
-        return True
-    try:
-        rets = [e for e in (tgt_ent.effects or []) if e.type == E_RETURN]
-        short = bool(rets) and all((e.turns or 0) <= 1 for e in rets)
-    except Exception:
-        short = False
-    return (not kill_plan) and short and back >= RET_LIVE * life and (tgt_ent.life or 0) > raw
+    return raw * ret / 100.0 >= (m.life or 0)
 
 
-def execute(plan, enemy=None, kill_plan=False):
+def execute(plan, enemy=None):
     """Run the plan; returns a compact trace of engine return codes
     (1 success, 2 critical, 0 failed, negatives = invalid). An attack is skipped
     ('x') when the enemy standing on its target cell at plan start has died, or
@@ -1721,7 +1698,7 @@ def execute(plan, enemy=None, kill_plan=False):
             trace.append('M%s' % r)
         else:
             it, tgt = st[1], st[2]
-            if it.offensive and return_kills(it, on_cell.get(tgt), kill_plan):
+            if it.offensive and return_kills(it, on_cell.get(tgt)):
                 trace.append('%s:R' % it.name[:6])      # skipped: the return would kill us
                 continue
             if it.offensive:
@@ -1871,7 +1848,7 @@ def turn():
         if cxl is not None and info and info[0] <= 0:
             log('V10A T%d no damage chosen; attacking plans evaluated=%d best=%.3f dealt=%.0f | %s' % (
                 Fight.turn, cxl.n_atk, cxl.best_atk[0], cxl.best_atk[1], cxl.best_atk[2]))
-        tr = execute(plan, enemy, info[0] >= B['life'] - 0.5)   # kill plan: the sim kills the enemy this turn
+        tr = execute(plan, enemy)
         tgt = enemy
         if not alive(tgt):
             # focus died during the plan: spend what is left on the next one

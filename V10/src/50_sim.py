@@ -172,7 +172,6 @@ def self_hit(it, frm, tgt):
 
 
 BULB_W = 0.5    # damage to a summon counts half as "damage dealt" (a kill also lowers their summon count)
-RET_CAP = 0.25  # max share of our life a plan may lose to damage return while the enemy survives it
 
 
 def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
@@ -229,10 +228,4 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell
-    # damage return (bramble / mirror / reflexes...): a plan that leaves the enemy alive may not trade more than
-    # RET_CAP of our life into it - a short reflect is waited out for free. 2026-10-15 tournament final (fight
-    # 54138737): one meteorite into a 351% return cost Kirby54 2234 of 2924 HP, a poison burst finished it.
-    # only for a SHORT reflect (gone before our next turn): a lasting one cannot be waited out
-    if B0.get('ret_short') and B['life'] > 0 and A0['life'] - A['life'] > RET_CAP * A0['life']:
-        return None
     return A, B, cell, dealt, sim

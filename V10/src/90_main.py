@@ -40,13 +40,8 @@ def alive(e):
     return e is not None and e.cell is not None and (e.life or 0) > 0
 
 
-RET_LIVE = 0.4   # skip a hit whose worst-case return costs this share of our life and cannot kill the target
-
-
-def return_kills(it, tgt_ent, kill_plan=False):
-    """Live guard: skip this attack if its WORST-case damage return (max roll, crit) would kill us,
-    or would cost RET_LIVE of our life on a hit that cannot finish the target (wait the reflect out) -
-    not inside a kill plan: aborting a planned kill mid-sequence hands the enemy the fight.
+def return_kills(it, tgt_ent):
+    """Live guard: would this attack's WORST-case damage return (max roll, crit) kill us?
     Engine: return = raw damage before the target's shields x its damage return %."""
     try:
         ret = (tgt_ent.damageReturn or 0) if tgt_ent is not None else 0
@@ -59,18 +54,10 @@ def return_kills(it, tgt_ent, kill_plan=False):
     for e in it.effects:
         if e[0] == E_DAMAGE and not ((e[5] or 0) & 4):
             raw += (e[2] or e[1] or 0) * (1 + max(0, m.strength or 0) / 100.0) * (1 + (m.power or 0) / 100.0) * 1.3
-    back = raw * ret / 100.0; life = m.life or 0
-    if back >= life:
-        return True
-    try:
-        rets = [e for e in (tgt_ent.effects or []) if e.type == E_RETURN]
-        short = bool(rets) and all((e.turns or 0) <= 1 for e in rets)
-    except Exception:
-        short = False
-    return (not kill_plan) and short and back >= RET_LIVE * life and (tgt_ent.life or 0) > raw
+    return raw * ret / 100.0 >= (m.life or 0)
 
 
-def execute(plan, enemy=None, kill_plan=False):
+def execute(plan, enemy=None):
     """Run the plan; returns a compact trace of engine return codes
     (1 success, 2 critical, 0 failed, negatives = invalid). An attack is skipped
     ('x') when the enemy standing on its target cell at plan start has died, or
@@ -83,7 +70,7 @@ def execute(plan, enemy=None, kill_plan=False):
             trace.append('M%s' % r)
         else:
             it, tgt = st[1], st[2]
-            if it.offensive and return_kills(it, on_cell.get(tgt), kill_plan):
+            if it.offensive and return_kills(it, on_cell.get(tgt)):
                 trace.append('%s:R' % it.name[:6])      # skipped: the return would kill us
                 continue
             if it.offensive:
@@ -233,7 +220,7 @@ def turn():
         if cxl is not None and info and info[0] <= 0:
             log('V10A T%d no damage chosen; attacking plans evaluated=%d best=%.3f dealt=%.0f | %s' % (
                 Fight.turn, cxl.n_atk, cxl.best_atk[0], cxl.best_atk[1], cxl.best_atk[2]))
-        tr = execute(plan, enemy, info[0] >= B['life'] - 0.5)   # kill plan: the sim kills the enemy this turn
+        tr = execute(plan, enemy)
         tgt = enemy
         if not alive(tgt):
             # focus died during the plan: spend what is left on the next one
