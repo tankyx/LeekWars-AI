@@ -173,6 +173,7 @@ def fallback(enemy):
 
 
 LAST_LIVES = (-1, -1)      # (our life, enemy life) at our previous turn; -1 = none yet
+LAMA = [False]             # lama() once per fight, with leftover TP only (cosmetic, 1 TP)
 
 
 def turn():
@@ -229,6 +230,11 @@ def turn():
                 tr += ' | retarget %s' % tgt.name
         tr += ' | left: ' + (spend_leftover(tgt, A['items'], A, B, LAST_CX, plan_uses(plan))
                              if tgt is not None else 'no enemy')
+        if not LAMA[0] and (m.tp or 0) >= 1:
+            try:
+                m.lama(); LAMA[0] = True; tr += ' | lama'
+            except Exception:
+                LAMA[0] = True          # not available here: never retry
         log('V10X T%d %s | cell %s tp %s mp %s' % (Fight.turn, tr, m.cell.id, m.tp, m.mp))
     except Exception as ex:
         log('V10 error ' + type(ex).__name__ + ': ' + str(ex)[:300])
