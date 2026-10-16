@@ -18,6 +18,7 @@ PRESSURE_T0 = 20
 IDLE = [0]          # consecutive turns in which neither side lost HP (set in turn())
 STANDOFF_W = 0.05  # hidden, no damage, while a standoff lasts: extra cost x pressure
 HEALABLE_W = 0.6   # share of healable direct damage discounted (their ready heals would undo it)
+POISON_REPLY_W = 0.5   # enemy reply choice: queued poison beyond the next tick, at the weight of our own lasting poison
 ENGAGE_W = 0.03   # standoff (3+ idle turns, out of range): per cell closed toward the enemy x pressure
 
 
@@ -329,6 +330,12 @@ def enemy_reply(cx, A1, B1, our_cell):
                     if it.offensive:
                         apply_item(it, tb, ta, ts, f)
                 net = (a['life'] - ta['life']) - (b['life'] - tb['life'])
+                # poison they stack on us counts: the next tick lands at the START of our turn (certain), the rest
+                # of the queue at half. Without this a mage's 'best' reply was its direct damage only
+                # (2026-10-15 final 54138737: predicted 390, real ~1650 - three poisons + superinfection)
+                t_add = ta['groups'].get('poison', 0) - a['groups'].get('poison', 0)
+                if t_add > 0:
+                    net += t_add + POISON_REPLY_W * max(0.0, (ta['pf'] - a['pf']) - t_add)
                 _NETS[nk] = net
             if net > best[0]:
                 best = (net, ec, acts, f)
