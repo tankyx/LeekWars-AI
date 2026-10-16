@@ -1642,6 +1642,986 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     return best, evaluated
 
 
+# ---- 80_boss: Fennel King boss mode (ported from BOSS/fennel.lk) ------------
+# PUZZLE (graal alive, army under Divine Protection): scripted kill+resurrect doctrine - every leek
+#   holding resurrection solves ONE crystal per turn: [adrenaline] -> spark the crystal -> teleport or
+#   walk next to a cell on its graal axis -> resurrect it there; dead crystals are revived first (the
+#   graal casts Apocalypse on a dead crystal). Never damages the (invulnerable) army.
+# COMBAT (graal dead): tank / buffer / healer keep their scripted roles; strikers run the V10 search on
+#   the boss focus (scribe -> knights -> king -> squires, lowest life first; crystals once the army is
+#   dead), the rest of the army feeding the danger map.
+AXIS = {'red_crystal': 'south', 'blue_crystal': 'east', 'yellow_crystal': 'west', 'green_crystal': 'north'}
+BOSS = {'on': None, 'combat': False, 'gcell': None, 'gx': 0, 'gy': 0, 'crystals': {}, 'regen': False,
+        'in_reach': 0, 'fer': None, 'tank_cell': None, 'mine': None, 'claims': {}}
+CLAIM_MSG = 13          # MESSAGE_CUSTOM: params [CLAIM_TAG, crystal entity id or -1]
+CLAIM_TAG = 7101
+BLOG = []
+_ARMY_RANK = {'fennel_scribe': 0, 'fennel_knight': 1, 'fennel_king': 2, 'fennel_squire': 3}
+
+
+def bnote(s):
+    BLOG.append(s)
+
+
+def ename(e):
+    try:
+        return e.name or ''
+    except Exception:
+        return ''
+
+
+def boss_on():
+    """A Fennel boss fight (graal / crystals among the enemies), decided once per fight."""
+    if BOSS['on'] is None:
+        try:
+            names = {ename(e) for e in Fight.getEnemies()}
+            BOSS['on'] = 'graal' in names or any(n in AXIS for n in names)
+        except Exception:
+            BOSS['on'] = False
+    return BOSS['on']
+
+
+def is_army(e):
+    n = ename(e)
+    return n != 'graal' and n not in AXIS and 'chest' not in n
+
+
+def army():
+    return [e for e in Fight.getAliveEnemies() if is_army(e) and e.cell is not None]
+
+
+def army_protected():
+    """Divine Protection: the army carries an add-state effect while the graal lives."""
+    seen = False
+    for e in army():
+        seen = True
+        for f in (e.effects or []):
+            if f.type == E_ADD_STATE:
+                return True
+    return not seen
+
+
+def boss_scan():
+    cr = {}; graal = None
+    for e in Fight.getEnemies():
+        n = ename(e)
+        if n == 'graal':
+            graal = e
+        elif n in AXIS:
+            cr[e.id] = (e, AXIS[n])
+    BOSS['crystals'] = cr
+    g = None
+    try:
+        # ghost-graal guard: after self-destructing it can linger with no cell
+        if graal is not None and graal.alive and (graal.life or 0) > 0 and graal.cell is not None and graal.cell.id >= 0:
+            g = graal.cell.id
+    except Exception:
+        g = None
+    BOSS['gcell'] = g
+    if g is not None:
+        BOSS['gx'], BOSS['gy'] = cxy(g)
+    if g is None:
+        BOSS['combat'] = True
+    elif not BOSS['combat'] and Fight.turn > 1 and not army_protected():
+        BOSS['combat'] = True
+    tk = squad('tank')
+    BOSS['tank_cell'] = tk[0].cell.id if tk and my_role() != 'tank' else None
+
+
+# ---- kit helpers ---------------------------------------------------------------
+def my_chips():
+    return {c.name: c for c in (me().chips or [])}
+
+
+def has(n):
+    return n in my_chips()
+
+
+def ready(n):
+    c = my_chips().get(n)
+    return c is not None and (c.currentCooldown or 0) == 0
+
+
+def ccost(n):
+    c = my_chips().get(n)
+    return (c.cost or 0) if c is not None else 99
+
+
+def ok(r):
+    return r is not None and r > 0
+
+
+def cast_self(n):
+    c = my_chips().get(n)
+    if c is not None and (c.currentCooldown or 0) == 0 and (me().tp or 0) >= (c.cost or 0):
+        return ok(me().useChip(c, me()))
+    return False
+
+
+def cast_on(n, a):
+    c = my_chips().get(n)
+    if c is None or (c.currentCooldown or 0) > 0 or (me().tp or 0) < (c.cost or 0):
+        return False
+    try:
+        if not me().canUseChip(c, a):
+            return False
+    except Exception:
+        return False
+    return ok(me().useChip(c, a))
+
+
+def role_of(a):
+    try:
+        cs = {c.name for c in (a.chips or [])}
+    except Exception:
+        return 'striker'
+    if 'dome' in cs:
+        return 'tank'
+    if 'ferocity' in cs:
+        return 'buffer'
+    return 'striker'
+
+
+def my_role():
+    return role_of(me())
+
+
+def squad(role):
+    return [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and role_of(a) == role]
+
+
+# ---- geometry ------------------------------------------------------------------
+def cell_at(x, y):
+    c = Field.cellFromXY(x, y)
+    if c is not None:
+        _XY[c.id] = (x, y)
+    return c
+
+
+def alive_ids():
+    return [e for e in Fight.getAliveEnemies()] + [a for a in Fight.getAliveAllies()]
+
+
+def on_axis(cell, axis):
+    x, y = cxy(cell); gx, gy = BOSS['gx'], BOSS['gy']
+    if axis == 'north':
+        return x == gx and y < gy
+    if axis == 'south':
+        return x == gx and y > gy
+    if axis == 'east':
+        return y == gy and x > gx
+    if axis == 'west':
+        return y == gy and x < gx
+    return False
+
+
+def solved(cid):
+    e, axis = BOSS['crystals'][cid]
+    if not e.alive or e.cell is None:
+        return False
+    c = e.cell.id
+    # the crystal ray passes through entities: only obstacles block it
+    return on_axis(c, axis) and bool(Field.lineOfSight(c, BOSS['gcell'], alive_ids()))
+
+
+def chest_cells():
+    out = []
+    for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies()):
+        if 'chest' in ename(e) and e.cell is not None:
+            out.append(e.cell.id)
+    return out
+
+
+def goal_cells_raw(axis):
+    out = []; gx, gy = BOSS['gx'], BOSS['gy']
+    for d in range(1, 21):
+        x, y = gx, gy
+        if axis == 'north':
+            y = gy - d
+        elif axis == 'south':
+            y = gy + d
+        elif axis == 'east':
+            x = gx + d
+        elif axis == 'west':
+            x = gx - d
+        c = cell_at(x, y)
+        if c is None or c.obstacle:
+            break
+        if c.empty:
+            out.append(c.id)
+    return out
+
+
+def goal_cells(axis):
+    """Revive cells on the axis, nearest the graal first; out of a chest's reach (7) first."""
+    allc = goal_cells_raw(axis)
+    chests = chest_cells()
+    if not chests:
+        return allc
+    safe = [c for c in allc if all(dist(c, k) > 7 for k in chests)]
+    return safe + [c for c in allc if c not in safe]
+
+
+def threat_at(cell):
+    n = 0.0
+    for e in army():
+        d = dist(cell, e.cell.id)
+        if d <= 11:
+            n += (12 - d) / 6.0
+    return n
+
+
+def stand_cells(g):
+    """Cells 1-2 from g (resurrection range) I can stand on to revive onto g."""
+    out = []; gx, gy = cxy(g); mine = me().cell.id
+    for dx in range(-2, 3):
+        for dy in range(-2, 3):
+            t = cell_at(gx + dx, gy + dy)
+            if t is None or t.id == g or t.obstacle:
+                continue
+            d = dist(t.id, g)
+            if d < 1 or d > 2:
+                continue
+            if t.id != mine and not t.empty:
+                continue
+            if not Field.lineOfSight(t.id, g, [me()]):
+                continue
+            out.append(t.id)
+    return out
+
+
+def path_ok(a, b, mp):
+    if a == b:
+        return 0
+    pl = Field.pathLength(a, b)
+    return pl if (pl is not None and 0 <= pl <= mp) else None
+
+
+# ---- the kill + resurrect solve --------------------------------------------------
+def revive_plan(cid, tp_budget, frm, used):
+    """Best way to put crystal cid back on its axis this turn: (stand, goal, teleport?) or None."""
+    best = None; bs = 1e18
+    tele = my_chips().get('teleportation')
+    tele_ready = tele is not None and (tele.currentCooldown or 0) == 0
+    tr = (tele.maxRange or 12) if tele is not None else 0
+    for g in goal_cells(BOSS['crystals'][cid][1]):
+        for t in stand_cells(g):
+            walk = 0 if t == frm else Field.pathLength(frm, t)
+            jump = False
+            if walk is None or walk < 0 or walk + used > (me().mp or 0):
+                if not tele_ready:
+                    continue
+                td = dist(frm, t)
+                if td < 1 or td > tr or t == frm:
+                    continue
+                jump = True
+            cost = ccost('resurrection') + (ccost('teleportation') if jump else 0)
+            if cost > tp_budget:
+                continue
+            sc = threat_at(t) * 10 + (5 if jump else 0) + dist(g, BOSS['gcell']) * 0.1
+            if sc < bs:
+                bs, best = sc, (t, g, jump)
+    return best
+
+
+def exec_revive(cid, plan):
+    e, axis = BOSS['crystals'][cid]
+    t, g, jump = plan
+    m = me()
+    if jump:
+        if not ok(m.useChipOnCell(my_chips()['teleportation'], t)):
+            bnote('tele fail %d' % t)
+    elif t != m.cell.id:
+        m.moveToward(Cell.get(t))
+    if ok(m.resurrect(e, g)) and e.alive:
+        bnote('revived %s@%d' % (ename(e), g)); return True
+    for g2 in goal_cells(axis):           # fallback: any goal cell reachable from where I ended
+        if dist(m.cell.id, g2) <= 2 and Field.lineOfSight(m.cell.id, g2, [m]):
+            if ok(m.resurrect(e, g2)) and e.alive:
+                bnote('revived2 %s@%d' % (ename(e), g2)); return True
+    bnote('revive FAILED %s' % ename(e))
+    return False
+
+
+def adrenaline_if(need):
+    if (me().tp or 0) < need and ready('adrenaline'):
+        cast_self('adrenaline')
+
+
+def save_dead_crystals():
+    """Revive a crystal that died before our turn (Apocalypse guard)."""
+    if not ready('resurrection'):
+        return
+    m = me()
+    for cid, (e, axis) in BOSS['crystals'].items():
+        if e.alive:
+            continue
+        tp = (m.tp or 0) + (4 if ready('adrenaline') else 0)
+        plan = revive_plan(cid, tp, m.cell.id, 0)
+        if plan is None:
+            # teleport to F, walk to a revive cell t, resurrect onto its goal
+            tele = my_chips().get('teleportation')
+            if tele is None or (tele.currentCooldown or 0) > 0 or tp < ccost('teleportation') + ccost('resurrection'):
+                continue
+            opts = []; tr = tele.maxRange or 12; mp = m.mp or 0
+            for g in goal_cells(axis):
+                for t in stand_cells(g):
+                    tx, ty = cxy(t)
+                    for dx in range(-mp, mp + 1):
+                        for dy in range(-mp + abs(dx), mp - abs(dx) + 1):
+                            f = cell_at(tx + dx, ty + dy)
+                            if f is None or f.id == m.cell.id or f.obstacle or not f.empty:
+                                continue
+                            dm = dist(m.cell.id, f.id)
+                            if 1 <= dm <= tr:
+                                opts.append((dist(f.id, t), f.id, t, g))
+            opts.sort()
+            for _, f, t, g in opts[:6]:
+                if path_ok(f, t, m.mp or 0) is None:
+                    continue
+                adrenaline_if(ccost('teleportation') + ccost('resurrection'))
+                if not ok(m.useChipOnCell(tele, f)):
+                    break
+                bnote('SAVE %s tele %d walk %d' % (ename(e), f, t))
+                exec_revive(cid, (t, g, False))
+                return
+            continue
+        adrenaline_if(ccost('resurrection') + (ccost('teleportation') if plan[2] else 0))
+        exec_revive(cid, plan)
+        return
+
+
+def try_solve_one():
+    if not ready('resurrection') or not has('spark'):
+        return False
+    m = me(); spark = my_chips()['spark']
+    tp_avail = (m.tp or 0) + (4 if ready('adrenaline') else 0)
+    budget = tp_avail - ccost('spark')
+    rc = reachable(m.cell.id, m.mp or 0)
+    sr = spark.maxRange or 10
+    best = None; bs = 1e18
+    for cid, (e, axis) in BOSS['crystals'].items():
+        if not e.alive or e.cell is None or solved(cid):
+            continue
+        if (e.life or 0) > 8 or (e.absoluteShield or 0) > 0:
+            bnote('%s tough %s' % (ename(e), e.life)); continue
+        cc = e.cell.id
+        froms = [c for c in rc if dist(c, cc) <= sr]
+        goals = goal_cells(axis)
+        if not froms or not goals:
+            continue
+        g0 = goals[0]
+        for f in sorted(froms, key=lambda f: dist(f, g0) * 10 + rc[f])[:10]:
+            plan = revive_plan(cid, budget, f, rc[f])
+            if plan is None:
+                continue
+            sc = threat_at(plan[0]) * 10 + (5 if plan[2] else 0) + rc[f] * 0.2 + claim_cost(cid)
+            if sc < bs:
+                bs, best = sc, (cid, plan, f)
+            break
+    if best is None:
+        return tele_first(tp_avail)
+    cid, plan, frm = best
+    e = BOSS['crystals'][cid][0]
+    need = ccost('spark') + ccost('resurrection') + (ccost('teleportation') if plan[2] else 0)
+    adrenaline_if(need)
+    if (m.tp or 0) < need:
+        return False
+    if frm != m.cell.id:
+        m.moveToward(Cell.get(frm))
+    if dist(m.cell.id, e.cell.id) > sr:
+        bnote('could not reach spark range'); return False
+    if not plan[2] and plan[0] != m.cell.id and path_ok(m.cell.id, plan[0], m.mp or 0) is None:
+        bnote('walk plan broke'); return False
+    r = m.useChip(spark, e)
+    if e.alive:
+        bnote('spark did not kill %s r=%s' % (ename(e), r)); return False
+    bnote('KR %s from %d %s %d -> %d' % (ename(e), frm, 'tele' if plan[2] else 'walk', plan[0], plan[1]))
+    exec_revive(cid, plan)
+    return True
+
+
+def tele_walk_options(cid, mp):
+    """(F, t, g, |F-t|): teleport to F within spark range of the crystal, walk to t, revive onto g."""
+    out = []; m = me(); e, axis = BOSS['crystals'][cid]
+    if e.cell is None:
+        return out
+    cc = e.cell.id
+    sr = my_chips()['spark'].maxRange or 10
+    tele = my_chips().get('teleportation'); tr = (tele.maxRange or 12) if tele else 0
+    for g in goal_cells(axis):
+        for t in stand_cells(g):
+            tx, ty = cxy(t); bf = None; bd = 999
+            for dx in range(-mp, mp + 1):
+                for dy in range(-mp + abs(dx), mp - abs(dx) + 1):
+                    f = cell_at(tx + dx, ty + dy)
+                    if f is None or f.id == m.cell.id or f.obstacle or not f.empty:
+                        continue
+                    dm = dist(m.cell.id, f.id)
+                    if dm < 1 or dm > tr or dist(f.id, cc) > sr:
+                        continue
+                    dt = dist(f.id, t)
+                    if dt < bd:
+                        bd, bf = dt, f.id
+            if bf is not None:
+                out.append((bf, t, g, bd))
+    return out
+
+
+def tele_first(tp_avail):
+    if not ready('teleportation') or not has('spark'):
+        return False
+    need = ccost('teleportation') + ccost('spark') + ccost('resurrection')
+    if tp_avail < need:
+        return False
+    m = me(); cands = []
+    for cid, (e, axis) in BOSS['crystals'].items():
+        if not e.alive or e.cell is None or solved(cid) or (e.life or 0) > 8 or (e.absoluteShield or 0) > 0:
+            continue
+        for o in tele_walk_options(cid, m.mp or 0):
+            cands.append((threat_at(o[1]) * 10 + o[3] * 0.5 + dist(o[2], BOSS['gcell']) * 0.1 + claim_cost(cid), cid, o))
+    cands.sort(key=lambda k: k[0])
+    for _, cid, (f, t, g, _d) in cands[:15]:
+        if f != t and path_ok(f, t, m.mp or 0) is None:
+            continue
+        adrenaline_if(need)
+        if (m.tp or 0) < need:
+            return False
+        e = BOSS['crystals'][cid][0]
+        if not ok(m.useChipOnCell(my_chips()['teleportation'], f)) or m.cell.id != f:
+            bnote('tele failed %d' % f); return False
+        r = m.useChip(my_chips()['spark'], e)
+        if e.alive:
+            bnote('tele-walk spark did not kill %s r=%s' % (ename(e), r)); return False
+        bnote('KR-TW %s tele %d walk %d -> %d' % (ename(e), f, t, g))
+        exec_revive(cid, (t, g, False))
+        return True
+    return False
+
+
+def nearest_stand(cid):
+    best = None; bd = 999; mine = me().cell.id
+    for g in goal_cells(BOSS['crystals'][cid][1]):
+        for t in stand_cells(g):
+            d = dist(mine, t)
+            if d < bd:
+                bd, best = d, t
+    return best
+
+
+def read_claims():
+    """Crystal claims of the allies who played since my last turn (messages are cleared after each of
+    my turns, so the batch holds every ally's latest word): author id -> crystal id (-1 = released)."""
+    cl = {}
+    try:
+        for msg in Network.getMessages() or []:
+            if msg.type != CLAIM_MSG:
+                continue
+            p = msg.params
+            if p is None or len(p) < 2 or int(p[0]) != CLAIM_TAG:
+                continue
+            a = msg.author
+            if a is not None:
+                cl[a.id] = int(p[1])
+    except Exception as ex:
+        bnote('claims read failed %s' % ex)
+    BOSS['claims'] = cl
+    return cl
+
+
+def send_claim(cid):
+    try:
+        Network.sendAll(CLAIM_MSG, [CLAIM_TAG, -1 if cid is None else cid])
+    except Exception as ex:
+        bnote('claim send failed %s' % ex)
+
+
+def claim_cost(cid):
+    """Solve preference: my crystal first, an ally's claimed crystal last (still solvable - solved is solved)."""
+    if cid == BOSS['mine']:
+        return 0
+    al = set(a.id for a in Fight.getAliveAllies())
+    return 6 if any(c == cid and a in al for a, c in BOSS['claims'].items()) else 2
+
+
+def _crystal_open(cid):
+    c = BOSS['crystals'].get(cid)
+    return c is not None and c[0].alive and c[0].cell is not None and not solved(cid)
+
+
+def my_crystal():
+    """My crystal, sticky until it is solved: allies announce their crystal every turn (Network
+    messages), so a crystal claimed by another leek is never chased twice and leeks no longer swap
+    targets mid-route. A free leek picks by greedy closest (leek, crystal) pairs over unclaimed
+    crystals and unclaimed leeks whose resurrection is ready (within spark range counts as 0)."""
+    if BOSS.get('mine_turn') == Fight.turn:
+        return BOSS['mine']
+    BOSS['mine_turn'] = Fight.turn
+    claims = read_claims()
+    alive = set(a.id for a in Fight.getAliveAllies())
+    taken = set(c for a, c in claims.items() if c >= 0 and a in alive and _crystal_open(c))
+    mid = me().id
+    cur = BOSS['mine']
+    if cur is not None and (not _crystal_open(cur) or cur in taken or not ready('resurrection')):
+        bnote('release %s' % ename(BOSS['crystals'][cur][0]) if cur in BOSS['crystals'] else 'release')
+        cur = None
+    if cur is None:
+        leeks = []
+        for a in Fight.getAliveAllies():
+            if a.summoned or a.cell is None:
+                continue
+            if a.id != mid and claims.get(a.id, -1) in taken:
+                continue
+            rez = next((c for c in (a.chips or []) if c.name == 'resurrection'), None)
+            if rez is None:
+                continue
+            try:
+                if (rez.currentCooldownOf(a) or 0) > 0:
+                    continue
+            except Exception:
+                pass
+            leeks.append(a)
+        kc = king_cell(); tc = BOSS['tank_cell']; pairs = []
+        for l in leeks:
+            for cid, (e, axis) in BOSS['crystals'].items():
+                if cid in taken or not _crystal_open(cid):
+                    continue
+                d = dist(l.cell.id, e.cell.id)
+                cost = 0 if d <= 10 else d
+                if role_of(l) == 'buffer':
+                    gs = goal_cells(axis)
+                    if gs:
+                        cost += (dist(gs[0], tc) * 0.5 if tc is not None else 0) - (min(dist(gs[0], kc), 12) if kc is not None else 0)
+                pairs.append((cost, l.id, cid))
+        pairs.sort()
+        used_l = {}; used_c = set()
+        for cost, lid, cid in pairs:
+            if lid in used_l or cid in used_c:
+                continue
+            used_l[lid] = cid; used_c.add(cid)
+        cur = used_l.get(mid)
+        if cur is not None:
+            bnote('claim %s' % ename(BOSS['crystals'][cur][0]))
+    BOSS['mine'] = cur
+    return cur
+
+
+def go_to(dest):
+    m = me()
+    if dest is None or m.cell.id == dest:
+        return
+    mp0 = m.mp or 0
+    if dist(m.cell.id, dest) > 1:
+        m.moveToward(Cell.get(dest))
+    if (m.mp or 0) == mp0 and mp0 > 0:
+        rc = reachable(m.cell.id, mp0); bc = m.cell.id; bd = dist(bc, dest)
+        for c in rc:
+            if dist(c, dest) < bd:
+                bd, bc = dist(c, dest), c
+        if bc != m.cell.id:
+            m.moveToward(Cell.get(bc))
+
+
+def approach():
+    """Stage for next turn's solve: within teleport + walk reach of a revive cell of my crystal."""
+    cid = my_crystal()
+    if cid is None:
+        return
+    e = BOSS['crystals'][cid][0]
+    t = nearest_stand(cid)
+    if t is None:
+        bnote('no revive cell for %s' % ename(e)); return
+    if tele_walk_options(cid, me().maxMP or 0) and BOSS['in_reach'] < 1:
+        BOSS['in_reach'] += 1; bnote('in reach %s' % ename(e)); return
+    if BOSS['in_reach'] >= 1:
+        bnote('in reach but no dive, closing in on %d' % t); go_to(t); return
+    cc = e.cell.id
+    dest = cc if dist(me().cell.id, cc) > 9 else t
+    go_to(dest)
+    bnote('stage %s toward %d (d=%d)' % (ename(e), dest, dist(me().cell.id, dest)))
+
+
+# ---- sustain / roles -------------------------------------------------------------
+def poison_on(a):
+    return sum((f.value or 0) for f in (a.effects or []) if f.type == E_POISON)
+
+
+def cleanse():
+    if not ready('antidote') or (me().tp or 0) < ccost('antidote'):
+        return False
+    best = None; bp = 150
+    for a in Fight.getAliveAllies():
+        if a.summoned:
+            continue
+        p = poison_on(a) * ((3 if poison_on(a) >= 300 else 1.2) if a.id == me().id else 1)
+        if p > bp:
+            try:
+                if not me().canUseChip(my_chips()['antidote'], a):
+                    continue
+            except Exception:
+                continue
+            bp, best = p, a
+    if best is None:
+        return False
+    r = cast_on('antidote', best)
+    if r:
+        bnote('antidote %s (%d/turn)' % (ename(best), bp))
+    return r
+
+
+def sustain():
+    m = me()
+    cleanse()
+    life = m.life or 0; tot = m.maxLife or 1
+    if life < tot * 0.5 and not BOSS['regen'] and cast_self('regeneration'):
+        BOSS['regen'] = True
+    if life < tot * 0.6:
+        cast_self('elevation')
+    if tot - (m.life or 0) > 250:
+        cast_self('remission')
+    if any(dist(m.cell.id, e.cell.id) <= 10 for e in army()):
+        for n in ('fortress', 'wall', 'armor', 'solidification'):
+            cast_self(n)
+        if ready('rampart') and (m.tp or 0) >= ccost('rampart'):
+            tgt = None; worst = 1.0
+            for a in Fight.getAliveAllies():
+                if a.id == m.id or a.summoned:
+                    continue
+                fr = (a.life or 0) / max(1, a.maxLife or 1)
+                if fr < worst:
+                    try:
+                        if me().canUseChip(my_chips()['rampart'], a):
+                            worst, tgt = fr, a
+                    except Exception:
+                        pass
+            if tgt is not None:
+                cast_on('rampart', tgt)
+    if tot - (m.life or 0) > 400:
+        cast_self('serum')
+
+
+def self_stack():
+    for n in ('rage', 'seven_league_boots', 'fortress', 'wall', 'armor', 'solidification', 'knowledge'):
+        cast_self(n)
+
+
+def king_cell():
+    for e in Fight.getAliveEnemies():
+        if ename(e) == 'fennel_king' and e.cell is not None:
+            return e.cell.id
+    return None
+
+
+def threat_on(a):
+    return sum(1 for e in army() if dist(a.cell.id, e.cell.id) <= 8)
+
+
+def protect_score(a):
+    return (40 if (a.resistance or 0) < 200 else 0) + threat_on(a) * 10 + (1 - (a.life or 0) / max(1, a.maxLife or 1)) * 5
+
+
+def fragile_ally():
+    best = None; bs = -1
+    for a in Fight.getAliveAllies():
+        if a.id == me().id or a.summoned or a.cell is None or (a.resistance or 0) >= 200:
+            continue
+        s = protect_score(a)
+        if s > bs:
+            bs, best = s, a
+    return best
+
+
+def has_effect_from(a, n):
+    c = my_chips().get(n)
+    if c is None:
+        return False
+    for f in (a.effects or []):
+        try:
+            if f.raw[5] == c.id:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def tank_self_first():
+    kc = king_cell()
+    if (kc is not None and dist(me().cell.id, kc) <= 7) or threat_on(me()) >= 2:
+        cast_self('fortress'); cast_self('wall')
+
+
+def tank_step_back():
+    """Leftover MP: out of the king's reach (6), within rampart range (7) of the fragile ally."""
+    m = me(); kc = king_cell()
+    if kc is None or (m.mp or 0) <= 0 or dist(m.cell.id, kc) > 6:
+        return
+    fa = fragile_ally(); best = m.cell.id; bs = -999
+    for c in reachable(m.cell.id, m.mp or 0):
+        if fa is not None and dist(c, fa.cell.id) > 7:
+            continue
+        s = min(dist(c, kc), 9) * 3 - threat_at(c)
+        if s > bs:
+            bs, best = s, c
+    if best != m.cell.id:
+        m.moveToward(Cell.get(best))
+
+
+def allies_by_protect():
+    return sorted([a for a in Fight.getAliveAllies() if a.id != me().id and not a.summoned and a.cell is not None],
+                  key=lambda a: -protect_score(a))
+
+
+def tank_shields_only():
+    cleanse(); tank_self_first()
+    m = me(); fa = fragile_ally()
+    if fa is not None and (m.mp or 0) > 0 and dist(m.cell.id, fa.cell.id) > 6:
+        m.moveToward(fa, max(0, dist(m.cell.id, fa.cell.id) - 6))
+    keyed = allies_by_protect()
+    for n in ('carapace', 'rampart', 'fortress'):
+        for a in keyed:
+            if cast_on(n, a):
+                break
+    cast_self('wall'); cast_self('armor')
+    tank_step_back()
+
+
+def shield_diver_first():
+    if my_role() != 'tank':
+        return
+    fa = fragile_ally()
+    if fa is None:
+        return
+    rez = next((c for c in (fa.chips or []) if c.name == 'resurrection'), None)
+    try:
+        if rez is None or (rez.currentCooldownOf(fa) or 0) > 0:
+            return
+    except Exception:
+        return
+    m = me()
+    if dist(m.cell.id, fa.cell.id) > 7 and (m.mp or 0) > 0:
+        m.moveToward(fa, dist(m.cell.id, fa.cell.id) - 6)
+    if cast_on('rampart', fa):
+        bnote('pre-dive rampart %s' % ename(fa))
+    if cast_on('carapace', fa):
+        bnote('pre-dive carapace %s' % ename(fa))
+
+
+def striker_stage():
+    """After its dive: out of the king's reach (> 6) but within weapon range (<= 10) of the scribe."""
+    m = me()
+    if (m.mp or 0) <= 0:
+        return
+    kc = king_cell()
+    sc = next((e.cell.id for e in Fight.getAliveEnemies() if ename(e) == 'fennel_scribe' and e.cell is not None), None)
+    if sc is None:
+        a = army()
+        if a:
+            m.moveAwayFromEntities(a)
+        return
+    best = m.cell.id; bs = -9999
+    for c, st in reachable(m.cell.id, m.mp or 0).items():
+        ds = dist(c, sc); dk = 20 if kc is None else dist(c, kc)
+        v = (50 - abs(ds - 8) if ds <= 10 else -ds * 3) + min(dk, 9) * 4 - threat_at(c) * 2
+        if v > bs:
+            bs, best = v, c
+    if best != m.cell.id:
+        m.moveToward(Cell.get(best))
+
+
+def puzzle_turn():
+    my_crystal()            # reads the allies' claims once per turn
+    try:
+        puzzle_play()
+    finally:
+        cur = BOSS['mine']
+        send_claim(cur if cur is not None and _crystal_open(cur) and ready('resurrection') else None)
+
+
+def puzzle_play():
+    save_dead_crystals()
+    m = me()
+    if Fight.turn == 1:
+        cast_self('motivation'); cast_self('leather_boots')
+        if not try_solve_one():
+            cast_self('armor'); cast_self('wall'); cast_self('shield')
+            approach()
+        self_stack()
+        return
+    shield_diver_first()
+    # the fragile buffer dives once the tank's shields are on her (fallback turn 3)
+    hold = my_role() == 'buffer' and Fight.turn < 3 and not has_effect_from(m, 'rampart') and \
+        not has_effect_from(m, 'carapace') and len(squad('tank')) > 0
+    solved_now = False if hold else try_solve_one()
+    if hold:
+        bnote('waiting for the tank shields')
+    if not solved_now and ready('resurrection'):
+        approach()
+        if my_role() == 'buffer':
+            cast_self('rage'); cast_self('seven_league_boots')
+    sustain()
+    if not ready('resurrection'):
+        role = my_role()
+        if role == 'tank':
+            tank_shields_only()
+        elif role == 'striker':
+            striker_stage()
+        elif role == 'buffer' and BOSS['tank_cell'] is not None:
+            if dist(m.cell.id, BOSS['tank_cell']) > 3:
+                go_to(BOSS['tank_cell'])
+        else:
+            a = army()
+            if a and (m.mp or 0) > 0:
+                m.moveAwayFromEntities(a)
+
+
+# ---- combat ----------------------------------------------------------------------
+def boss_focus():
+    """Squad focus: scribe -> knights -> king -> squires, lowest life + shield first; crystals once the
+    army is dead. The first of the top 3 I can reach this turn, else the head of the order."""
+    cands = army()
+    if not cands:
+        cands = [e for e in Fight.getAliveEnemies() if ename(e) in AXIS and e.cell is not None]
+    if not cands:
+        cands = [e for e in Fight.getAliveEnemies() if e.cell is not None]
+    order = sorted(cands, key=lambda e: _ARMY_RANK.get(ename(e), 4) * 100000 + (e.life or 0) + (e.absoluteShield or 0))
+    m = me()
+    for e in order[:3]:
+        if dist(m.cell.id, e.cell.id) <= (m.mp or 0) + 12:
+            return e
+    return order[0] if order else None
+
+
+def tank_turn():
+    cleanse()
+    m = me(); mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.id != m.id and a.cell is not None]
+    if mates and (m.mp or 0) > 0:
+        best = m.cell.id; bs = -999
+        for c, st in reachable(m.cell.id, m.mp or 0).items():
+            cov = sum((3 if role_of(a) == 'striker' else 1) for a in mates if dist(c, a.cell.id) <= 3)
+            s = cov * 10 - threat_at(c) * 2 - st * 0.1
+            if s > bs:
+                bs, best = s, c
+        if best != m.cell.id:
+            m.moveToward(Cell.get(best))
+    cast_self('solidification')
+    covered = sum(1 for a in mates if dist(m.cell.id, a.cell.id) <= 3)
+    if covered >= min(2, len(mates)) and army() and cast_self('dome'):
+        bnote('flip DOME covers %d' % covered)
+    keyed = sorted(mates, key=lambda a: -(protect_score(a) + (3 if role_of(a) == 'striker' else 0)))
+    tank_self_first()
+    for n in ('rampart', 'carapace', 'fortress'):
+        for a in keyed:
+            if cast_on(n, a):
+                break
+    cast_self('wall'); cast_self('armor'); cast_self('shield')
+    tank_step_back()
+    if (m.life or 0) < (m.maxLife or 1) * 0.35 and not BOSS['regen'] and cast_self('regeneration'):
+        BOSS['regen'] = True
+    tg = boss_focus()
+    if tg is not None and ready('liberation') and ((tg.absoluteShield or 0) > 100 or (tg.relativeShield or 0) > 15):
+        cast_on('liberation', tg)
+
+
+def buffer_turn():
+    cleanse()
+    m = me(); st = squad('striker'); tanks = squad('tank')
+    if st and (m.mp or 0) > 0:
+        best = m.cell.id; bs = -999
+        for c in reachable(m.cell.id, m.mp or 0):
+            s = 0
+            for a in st:
+                d = dist(c, a.cell.id); s += 10 if d <= 5 else -d
+            for t in tanks:
+                dt = dist(c, t.cell.id); s += 15 if dt <= 3 else (6 if dt <= 6 else 0)
+            s -= threat_at(c) * 3
+            if s > bs:
+                bs, best = s, c
+        if best != m.cell.id:
+            m.moveToward(Cell.get(best))
+    for t in tanks:
+        cast_on('bark', t)
+    fer = BOSS['fer']
+    if fer is None or not any(a.id == fer for a in st):
+        fer = max(st, key=lambda a: a.maxLife or 0).id if st else None
+        BOSS['fer'] = fer
+    if fer is not None:
+        tgt = next((a for a in st if a.id == fer), None)
+        if tgt is not None:
+            cast_on('ferocity', tgt)
+    centre = None; cn = -1
+    for a in st:
+        n = sum(1 for b in Fight.getAliveAllies() if not b.summoned and b.cell is not None and dist(b.cell.id, a.cell.id) <= 2)
+        if n > cn:
+            cn, centre = n, a
+    if centre is not None:
+        for n in ('doping', 'rage', 'seven_league_boots'):
+            cast_on(n, centre)
+        for a in st:
+            for n in ('steroid', 'protein', 'acceleration'):
+                cast_on(n, a)
+    cast_self('wall'); cast_self('armor')
+    if (m.life or 0) < (m.maxLife or 1) * 0.35 and not BOSS['regen'] and cast_self('regeneration'):
+        BOSS['regen'] = True
+    a2 = army()
+    if a2 and (m.mp or 0) > 0 and threat_at(m.cell.id) > 2:
+        m.moveAwayFromEntities(a2)
+
+
+def is_healer():
+    return (me().magic or 0) > (me().strength or 0)
+
+
+def healer_turn():
+    m = me()
+    allies = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
+
+    def hurt(a):
+        return (1 - (a.life or 0) / max(1, a.maxLife or 1)) * 10 + sum(1 for e in army() if dist(a.cell.id, e.cell.id) <= 7)
+    keyed = sorted(allies, key=lambda a: -hurt(a))
+    t = keyed[0] if keyed else m
+    if t.id != m.id and dist(m.cell.id, t.cell.id) > 3:
+        m.moveToward(t, max(0, dist(m.cell.id, t.cell.id) - 3))
+    if (m.life or 0) < (m.maxLife or 1) * 0.35 and not BOSS['regen'] and cast_self('regeneration'):
+        BOSS['regen'] = True
+    lost = (t.maxLife or 0) - (t.life or 0)
+    if lost > 250:
+        cast_on('remission', t)
+    if lost > 400:
+        cast_on('serum', t)
+    for n in ('fortress', 'wall', 'armor', 'shield'):
+        cast_on(n, t)
+    if len(keyed) > 1:
+        t2 = keyed[1]
+        if (t2.maxLife or 0) - (t2.life or 0) > 250:
+            cast_on('remission', t2)
+        cast_on('wall', t2); cast_on('armor', t2)
+    if army():
+        cast_self('wall'); cast_self('fortress')
+
+
+def boss_turn():
+    """Run the boss mode for this turn. Returns the focus enemy when V10's search should play the turn
+    (striker in the combat phase), None when the turn was played here."""
+    boss_scan()
+    if not BOSS['combat']:
+        puzzle_turn()
+        return None
+    r = my_role()
+    if r == 'tank':
+        tank_turn(); return None
+    if r == 'buffer':
+        buffer_turn(); return None
+    if not squad('tank') and is_healer():
+        healer_turn(); return None
+    return boss_focus()
+
+
+def boss_flush():
+    if BLOG:
+        log('BOSS T%d %s %s: %s' % (Fight.turn, 'combat' if BOSS['combat'] else 'puzzle', ename(me()), ' | '.join(BLOG)))
+        del BLOG[:]
+
+
 # ---- 90_main: turn loop -----------------------------------------------------
 def main_enemy():
     best = None; bd = 9999
@@ -1822,7 +2802,23 @@ LAMA = [False]             # lama() once per fight, with leftover TP only (cosme
 
 def turn():
     global LAST_LIVES
-    enemy = focus_enemy()
+    boss = boss_on()
+    if boss:
+        # Fennel boss: the puzzle and the tank / buffer / healer roles are played by 80_boss; strikers in
+        # the combat phase get the boss focus and run the normal search below
+        try:
+            enemy = boss_turn()
+        except Exception as ex:
+            log('BOSS error ' + type(ex).__name__ + ': ' + str(ex)[:300])
+            enemy = None
+            try:
+                if BOSS['combat']:
+                    enemy = boss_focus()
+            except Exception:
+                enemy = None
+        boss_flush()
+    else:
+        enemy = focus_enemy()
     if enemy is None:
         return
     try:
@@ -1844,7 +2840,8 @@ def turn():
         B = snapshot(enemy, theirs)
         w = m.weapon
         bulbs = [bulb_side(x) for x in theirs if x.summoned and (x.life or 0) > 0 and x.cell is not None]
-        others = [snapshot(x, theirs) for x in theirs if not x.summoned and x.id != enemy.id and alive(x)]
+        others = [snapshot(x, theirs) for x in theirs if not x.summoned and x.id != enemy.id and alive(x)
+                  and (not boss or is_army(x))]        # boss: graal / crystals / chests do not attack
         best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs, others)
         v, plan, info = best
         if plan is None:

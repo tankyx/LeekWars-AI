@@ -178,7 +178,23 @@ LAMA = [False]             # lama() once per fight, with leftover TP only (cosme
 
 def turn():
     global LAST_LIVES
-    enemy = focus_enemy()
+    boss = boss_on()
+    if boss:
+        # Fennel boss: the puzzle and the tank / buffer / healer roles are played by 80_boss; strikers in
+        # the combat phase get the boss focus and run the normal search below
+        try:
+            enemy = boss_turn()
+        except Exception as ex:
+            log('BOSS error ' + type(ex).__name__ + ': ' + str(ex)[:300])
+            enemy = None
+            try:
+                if BOSS['combat']:
+                    enemy = boss_focus()
+            except Exception:
+                enemy = None
+        boss_flush()
+    else:
+        enemy = focus_enemy()
     if enemy is None:
         return
     try:
@@ -200,7 +216,8 @@ def turn():
         B = snapshot(enemy, theirs)
         w = m.weapon
         bulbs = [bulb_side(x) for x in theirs if x.summoned and (x.life or 0) > 0 and x.cell is not None]
-        others = [snapshot(x, theirs) for x in theirs if not x.summoned and x.id != enemy.id and alive(x)]
+        others = [snapshot(x, theirs) for x in theirs if not x.summoned and x.id != enemy.id and alive(x)
+                  and (not boss or is_army(x))]        # boss: graal / crystals / chests do not attack
         best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs, others)
         v, plan, info = best
         if plan is None:
