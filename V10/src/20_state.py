@@ -110,7 +110,8 @@ def bulb_side(ent):
     groups); its own kit is not modelled."""
     return {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life or 0, 'max': ent.maxLife or 1,
             'abs': ent.absoluteShield or 0, 'rel': ent.relativeShield or 0,
-            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0, 'pas': (0.0, 0.0, 0.0)}
+            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0, 'pas': (0.0, 0.0, 0.0),
+            'bulb': True}
 
 
 def copy_side(s):

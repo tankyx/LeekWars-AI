@@ -64,7 +64,8 @@ def apply_item(it, C, T, S, f=1.0):
     dealt = 0.0
     scaled = f != 1.0 and T is not C
     prev = 0.0                      # value of the previous effect (steal-shield copies it)
-    for t, a, turns, nonstack, on_caster in it.fx:
+    fxs = it.fx_self if T is C else (it.fx_bulb if T.get('bulb') else it.fx_leek)   # target flags
+    for t, a, turns, nonstack, on_caster in fxs:
         if on_caster and t in HOSTILE:
             self_harm(t, a, turns, C, pw, critf)
             continue

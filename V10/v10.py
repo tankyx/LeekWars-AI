@@ -83,6 +83,7 @@ E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL = 44
 E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
 E_SUPERINF = 64    # superinfection: value1% of the target's per-turn poison sum now, every poison loses one turn
 E_ADD_STATE, ST_UNHEALABLE = 59, 2   # hemorrhage: state 2 = Unhealable (no heal, life steal, vitality, regen) for 1 turn
+T_ENEMY, T_ALLY, T_CASTER, T_LEEK, T_SUMMON = 1, 2, 4, 8, 16   # effect target flags (engine Effect.TARGET_*)
 ST_AMPUTATED = 13   # glowing saber: the target drops its weapon and cannot use or re-equip one until the
                     # state ends (start of the caster's next turn); chips still work (engine State.useWeapon)
 
@@ -118,6 +119,12 @@ class Item:
         # simulator; modifier bit 4 = MODIFIER_ON_CASTER (e.g. dark katana's self damage)
         self.fx = [(e[0], (e[1] + e[2]) / 2.0, e[3] or 0, (e[3] or 0) > 0 and not ((e[5] or 0) & 1),
                     bool((e[5] or 0) & 4)) for e in self.effects]
+        # engine Attack.filterTarget: an effect only lands on targets its flags allow (1 enemies, 2 allies,
+        # 4 caster, 8 non-summons, 16 summons). burning (17) only hits summons; on-caster effects always apply
+        tg = [(e[4] if e[4] is not None else 31) for e in self.effects]
+        self.fx_leek = [x for x, g in zip(self.fx, tg) if x[4] or ((g & T_ENEMY) and (g & T_LEEK))]
+        self.fx_bulb = [x for x, g in zip(self.fx, tg) if x[4] or ((g & T_ENEMY) and (g & T_SUMMON))]
+        self.fx_self = [x for x, g in zip(self.fx, tg) if x[4] or (g & T_CASTER)]
         self.types = types = {e[0] for e in self.effects}
         self.unheal = any(e[0] == E_ADD_STATE and int(e[1] or 0) == ST_UNHEALABLE for e in self.effects)
         self.offensive = bool(types & OFFENSIVE) or self.unheal
@@ -271,7 +278,8 @@ def bulb_side(ent):
     groups); its own kit is not modelled."""
     return {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life or 0, 'max': ent.maxLife or 1,
             'abs': ent.absoluteShield or 0, 'rel': ent.relativeShield or 0,
-            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0, 'pas': (0.0, 0.0, 0.0)}
+            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0, 'pas': (0.0, 0.0, 0.0),
+            'bulb': True}
 
 
 def copy_side(s):
@@ -347,7 +355,8 @@ def apply_item(it, C, T, S, f=1.0):
     dealt = 0.0
     scaled = f != 1.0 and T is not C
     prev = 0.0                      # value of the previous effect (steal-shield copies it)
-    for t, a, turns, nonstack, on_caster in it.fx:
+    fxs = it.fx_self if T is C else (it.fx_bulb if T.get('bulb') else it.fx_leek)   # target flags
+    for t, a, turns, nonstack, on_caster in fxs:
         if on_caster and t in HOSTILE:
             self_harm(t, a, turns, C, pw, critf)
             continue
