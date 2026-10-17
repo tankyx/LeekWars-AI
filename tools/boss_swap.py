@@ -85,7 +85,7 @@ def state(l):
     return {'base': {k: l.get(k) for k in BASE}, 'total': {k: l.get(k) for k in TOTAL},
             'chips': sorted(c['template'] for c in l['chips']),
             'weapons': sorted(w['template'] for w in l['weapons']),
-            'components': [(c['template'], c['id']) if c else None for c in (l.get('components') or [])],
+            'components': [[c['template'], c['id']] if c else None for c in (l.get('components') or [])],
             'ai': (l.get('ai') or {}).get('path'), 'max_chips': l['max_chips']}
 
 
