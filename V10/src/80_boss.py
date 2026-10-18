@@ -10,7 +10,7 @@ AXIS = {'red_crystal': 'south', 'blue_crystal': 'east', 'yellow_crystal': 'west'
 BOSS = {'on': None, 'combat': False, 'gcell': None, 'gx': 0, 'gy': 0, 'crystals': {}, 'regen': False,
         'in_reach': 0, 'fer': None, 'tank_cell': None, 'mine': None, 'claims': {}}
 BOSS_PZ_DISARM = True       # disarm also during the puzzle (after the dive): 15/20 wins with it vs 6/20 without (2026-10-18)
-BOSS_PRE_DISARM = 'parity'  # a leek that could not dive this turn disarms with its unspent TP; 'parity' = A/B (odd = on)
+BOSS_PRE_DISARM = False      # pre-dive disarm with unspent TP: 8/18 vs 8/22 without (2026-10-18) - no effect, off
 BOSS_DISARM = True      # glowing saber on the King / scribe (puzzle after the dive, and combat): 10/11 wins with it vs 1/9 without (2026-10-18, p=0.0006)
 CLAIM_MSG = 13          # MESSAGE_CUSTOM: params [CLAIM_TAG, crystal entity id or -1]
 CLAIM_TAG = 7101
