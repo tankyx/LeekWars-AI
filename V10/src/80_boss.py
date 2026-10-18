@@ -13,6 +13,10 @@ BOSS_DISARM = 'parity'  # glowing saber on the King / scribe (puzzle after the d
 CLAIM_MSG = 13          # MESSAGE_CUSTOM: params [CLAIM_TAG, crystal entity id or -1]
 CLAIM_TAG = 7101
 BLOG = []
+# Fennel castle articulation cells (Tarjan on the map, 2026-09-07): an ally stopped on one walls the team out
+CORRIDOR = frozenset([109, 123, 126, 140, 143, 158, 160, 175, 193, 263, 266, 280, 283, 298, 300, 315, 333, 351, 354, 357, 369,
+                      372, 374, 387, 390, 391, 408, 418, 425, 435, 442, 452, 459, 461, 479, 497, 513, 516, 518, 520, 530, 531,
+                      549, 557, 567, 574, 585, 586, 587, 588, 589, 590, 591, 603, 604, 605, 606, 607, 608])
 _ARMY_RANK = {'fennel_scribe': 0, 'fennel_knight': 1, 'fennel_king': 2, 'fennel_squire': 3}
 
 
@@ -363,16 +367,25 @@ def try_solve_one():
         if (e.life or 0) > 8 or (e.absoluteShield or 0) > 0:
             bnote('%s tough %s' % (ename(e), e.life)); continue
         cc = e.cell.id
-        froms = [c for c in rc if dist(c, cc) <= sr]
         goals = goal_cells(axis)
-        if not froms or not goals:
+        cc_ = claim_cost(cid)
+        if cc_ is None or not goals:
             continue
-        g0 = goals[0]
-        for f in sorted(froms, key=lambda f: dist(f, g0) * 10 + rc[f])[:10]:
+        # direct walk-dive: a stand cell reachable now and within spark range - walk, spark, revive there
+        for g in goals:
+            for t in stand_cells(g):
+                if t in rc and dist(t, cc) <= sr and budget >= ccost('resurrection'):
+                    sc = threat_at(t) * 10 + rc[t] * 0.2 + cc_ - 1
+                    if sc < bs:
+                        bs, best = sc, (cid, (t, g, False), t)
+        froms = [c for c in rc if dist(c, cc) <= sr]
+        if not froms:
+            continue
+        for f in sorted(froms, key=lambda f: min(dist(f, g) for g in goals) * 10 + rc[f])[:10]:
             plan = revive_plan(cid, budget, f, rc[f])
             if plan is None:
                 continue
-            sc = threat_at(plan[0]) * 10 + (5 if plan[2] else 0) + rc[f] * 0.2 + claim_cost(cid)
+            sc = threat_at(plan[0]) * 10 + (5 if plan[2] else 0) + rc[f] * 0.2 + cc_
             if sc < bs:
                 bs, best = sc, (cid, plan, f)
             break
@@ -398,17 +411,21 @@ def try_solve_one():
     return True
 
 
-def tele_walk_options(cid, mp):
-    """(F, t, g, |F-t|): teleport to F within spark range of the crystal, walk to t, revive onto g."""
+def tele_walk_options(cid, mp, check=False):
+    """(F, t, g, |F-t|): teleport to F within spark range of the crystal, walk to t, revive onto g.
+    check=True (diving now): F must pass the engine's teleport check from here and t must be walkable
+    from F within mp - several landing cells are tried per revive cell, not only the closest."""
     out = []; m = me(); e, axis = BOSS['crystals'][cid]
     if e.cell is None:
         return out
     cc = e.cell.id
     sr = my_chips()['spark'].maxRange or 10
     tele = my_chips().get('teleportation'); tr = (tele.maxRange or 12) if tele else 0
+    if tele is None or (tele.currentCooldown or 0) > (0 if check else 1):
+        return out                  # no teleport now (check) / by next turn: no tele-walk dive
     for g in goal_cells(axis):
         for t in stand_cells(g):
-            tx, ty = cxy(t); bf = None; bd = 999
+            tx, ty = cxy(t); fs = []
             for dx in range(-mp, mp + 1):
                 for dy in range(-mp + abs(dx), mp - abs(dx) + 1):
                     f = cell_at(tx + dx, ty + dy)
@@ -417,11 +434,19 @@ def tele_walk_options(cid, mp):
                     dm = dist(m.cell.id, f.id)
                     if dm < 1 or dm > tr or dist(f.id, cc) > sr:
                         continue
-                    dt = dist(f.id, t)
-                    if dt < bd:
-                        bd, bf = dt, f.id
-            if bf is not None:
-                out.append((bf, t, g, bd))
+                    fs.append((dist(f.id, t), f))
+            fs.sort(key=lambda k: k[0])
+            for d_, f in fs[:6 if check else 1]:
+                if check:
+                    try:
+                        if tele is None or not m.canUseChipOnCell(tele, f):
+                            continue
+                    except Exception:
+                        continue
+                    if f.id != t and path_ok(f.id, t, mp) is None:
+                        continue
+                out.append((f.id, t, g, d_))
+                break
     return out
 
 
@@ -435,8 +460,11 @@ def tele_first(tp_avail):
     for cid, (e, axis) in BOSS['crystals'].items():
         if not e.alive or e.cell is None or solved(cid) or (e.life or 0) > 8 or (e.absoluteShield or 0) > 0:
             continue
-        for o in tele_walk_options(cid, m.mp or 0):
-            cands.append((threat_at(o[1]) * 10 + o[3] * 0.5 + dist(o[2], BOSS['gcell']) * 0.1 + claim_cost(cid), cid, o))
+        cc_ = claim_cost(cid)
+        if cc_ is None:
+            continue
+        for o in tele_walk_options(cid, m.mp or 0, True):
+            cands.append((threat_at(o[1]) * 10 + o[3] * 0.5 + dist(o[2], BOSS['gcell']) * 0.1 + cc_, cid, o))
     cands.sort(key=lambda k: k[0])
     for _, cid, (f, t, g, _d) in cands[:15]:
         if f != t and path_ok(f, t, m.mp or 0) is None:
@@ -494,16 +522,66 @@ def send_claim(cid):
 
 
 def claim_cost(cid):
-    """Solve preference: my crystal first, an ally's claimed crystal last (still solvable - solved is solved)."""
+    """Solve preference: my crystal first, then unclaimed ones; an ally's claimed crystal is never taken
+    (None) - stealing it sent the ally across the map in 3 of 10 local replays."""
     if cid == BOSS['mine']:
         return 0
     al = set(a.id for a in Fight.getAliveAllies())
-    return 6 if any(c == cid and a in al for a, c in BOSS['claims'].items()) else 2
+    if any(c == cid and a in al and a != me().id for a, c in BOSS['claims'].items()):
+        return None
+    return 2
 
 
 def _crystal_open(cid):
     c = BOSS['crystals'].get(cid)
     return c is not None and c[0].alive and c[0].cell is not None and not solved(cid)
+
+
+def eta(l, cid):
+    """Turns until leek l can solve crystal cid: one dive covers teleport (12) + spark (10) when its
+    teleport is ready, walk + spark otherwise; the rest is walked at its MP; teleport opens on turn 2."""
+    e = BOSS['crystals'][cid][0]
+    d = dist(l.cell.id, e.cell.id)
+    mp = max(3, l.maxMP or l.mp or 5)
+    tele = next((c for c in (l.chips or []) if c.name == 'teleportation'), None)
+    try:
+        tcd = (tele.currentCooldownOf(l) or 0) if tele is not None else 99
+    except Exception:
+        tcd = 0
+    reach = 22 if tcd <= 1 else mp + 10
+    walk = max(0, d - reach)
+    t = 1 + (walk + mp - 1) // mp
+    if Fight.turn == 1 and tcd <= 1 and walk == 0 and d > mp + 10:
+        t = 2                     # teleport still cooling down on turn 1
+    return t
+
+
+def assign(leeks, crys):
+    """Leek -> crystal minimizing the slowest solve (then the total), over every pairing (<= 4 x 4)."""
+    if not leeks or not crys:
+        return {}
+    E = {(l.id, c): eta(l, c) for l in leeks for c in crys}
+    ids = [l.id for l in leeks]
+    best = [None, None]
+
+    def rec(i, used, acc):
+        if i == len(ids):
+            key = (-len(acc), max([v for _, _, v in acc] or [0]), sum(v for _, _, v in acc))
+            if best[0] is None or key < best[0]:
+                best[0] = key; best[1] = list(acc)
+            return
+        rec(i + 1, used, acc)                      # this leek takes no crystal
+        for c in crys:
+            if c not in used:
+                rec(i + 1, used | {c}, acc + [(ids[i], c, E[(ids[i], c)])])
+
+    rec(0, frozenset(), [])
+    # every crystal must be covered when there are enough leeks: prefer pairings covering more crystals
+    out = {}
+    if best[1]:
+        for lid, c, _ in best[1]:
+            out[lid] = c
+    return out
 
 
 def my_crystal():
@@ -538,27 +616,10 @@ def my_crystal():
             except Exception:
                 pass
             leeks.append(a)
-        kc = king_cell(); tc = BOSS['tank_cell']; pairs = []
-        for l in leeks:
-            for cid, (e, axis) in BOSS['crystals'].items():
-                if cid in taken or not _crystal_open(cid):
-                    continue
-                d = dist(l.cell.id, e.cell.id)
-                cost = 0 if d <= 10 else d
-                if role_of(l) == 'buffer':
-                    gs = goal_cells(axis)
-                    if gs:
-                        cost += (dist(gs[0], tc) * 0.5 if tc is not None else 0) - (min(dist(gs[0], kc), 12) if kc is not None else 0)
-                pairs.append((cost, l.id, cid))
-        pairs.sort()
-        used_l = {}; used_c = set()
-        for cost, lid, cid in pairs:
-            if lid in used_l or cid in used_c:
-                continue
-            used_l[lid] = cid; used_c.add(cid)
-        cur = used_l.get(mid)
+        crys = [cid for cid in BOSS['crystals'] if cid not in taken and _crystal_open(cid)]
+        cur = assign(leeks, crys).get(mid)
         if cur is not None:
-            bnote('claim %s' % ename(BOSS['crystals'][cur][0]))
+            bnote('claim %s (eta %d)' % (ename(BOSS['crystals'][cur][0]), eta(me(), cur)))
     BOSS['mine'] = cur
     return cur
 
@@ -573,10 +634,71 @@ def go_to(dest):
     if (m.mp or 0) == mp0 and mp0 > 0:
         rc = reachable(m.cell.id, mp0); bc = m.cell.id; bd = dist(bc, dest)
         for c in rc:
-            if dist(c, dest) < bd:
+            if c not in CORRIDOR and dist(c, dest) < bd:
                 bd, bc = dist(c, dest), c
         if bc != m.cell.id:
             m.moveToward(Cell.get(bc))
+
+
+def unpark():
+    """Never end a turn on a corridor cell: step to the nearest reachable non-corridor cell."""
+    m = me()
+    if m.cell is None or m.cell.id not in CORRIDOR or (m.mp or 0) <= 0:
+        return
+    if not BOSS['combat'] and ready('resurrection'):
+        return                      # still on my way to a dive: corridors are the way through
+    rc = reachable(m.cell.id, m.mp or 0)
+    cand = [c for c in rc if c not in CORRIDOR]
+    if cand:
+        frm = m.cell.id
+        best = min(cand, key=lambda c: (rc[c], threat_at(c)))
+        m.moveToward(Cell.get(best))
+        bnote('unpark %d -> %d' % (frm, m.cell.id))
+
+
+def tele_stage(cid):
+    """No dive this turn and the walk is long: teleport (walls do not matter) to a cell from which NEXT
+    turn's walk-dive works - a stand cell t within spark range of the crystal reachable within my MP."""
+    if not ready('teleportation') or (me().tp or 0) < ccost('teleportation') or not has('spark'):
+        return False
+    m = me(); e, axis = BOSS['crystals'][cid]
+    if e.cell is None:
+        return False
+    cc = e.cell.id
+    tele = my_chips()['teleportation']; tr = tele.maxRange or 12
+    sr = my_chips()['spark'].maxRange or 10
+    mp = max(1, m.maxMP or m.mp or 5)
+    best = None; bs = 1e9
+    for g in goal_cells(axis):
+        for t in stand_cells(g):
+            if dist(t, cc) > sr:
+                continue
+            tx, ty = cxy(t)
+            for dx in range(-mp, mp + 1):
+                for dy in range(-mp + abs(dx), mp - abs(dx) + 1):
+                    f = cell_at(tx + dx, ty + dy)
+                    if f is None or f.obstacle or not f.empty or f.id in CORRIDOR:
+                        continue
+                    dm = dist(m.cell.id, f.id)
+                    if dm < 1 or dm > tr:
+                        continue
+                    sc = threat_at(f.id) * 10 + dist(f.id, t)
+                    if sc >= bs:
+                        continue
+                    try:
+                        if not m.canUseChipOnCell(tele, f):
+                            continue
+                    except Exception:
+                        continue
+                    if f.id != t and path_ok(f.id, t, max(0, mp - 2)) is None:
+                        continue            # 2 MP of slack: allies moving into the path broke the follow-up dive
+                    bs, best = sc, f.id
+    if best is None:
+        return False
+    if ok(m.useChipOnCell(tele, Cell.get(best))) and m.cell.id == best:
+        bnote('tele-stage %s -> %d' % (ename(e), best))
+        return True
+    return False
 
 
 def approach():
@@ -590,6 +712,8 @@ def approach():
         bnote('no revive cell for %s' % ename(e)); return
     if tele_walk_options(cid, me().maxMP or 0) and BOSS['in_reach'] < 1:
         BOSS['in_reach'] += 1; bnote('in reach %s' % ename(e)); return
+    if Fight.turn >= 2 and tele_stage(cid):
+        return
     if BOSS['in_reach'] >= 1:
         bnote('in reach but no dive, closing in on %d' % t); go_to(t); return
     cc = e.cell.id
@@ -714,7 +838,7 @@ def tank_step_back():
         return
     fa = fragile_ally(); best = m.cell.id; bs = -999
     for c in reachable(m.cell.id, m.mp or 0):
-        if fa is not None and dist(c, fa.cell.id) > 7:
+        if c in CORRIDOR or (fa is not None and dist(c, fa.cell.id) > 7):
             continue
         s = min(dist(c, kc), 9) * 3 - threat_at(c)
         if s > bs:
@@ -778,6 +902,8 @@ def striker_stage():
         return
     best = m.cell.id; bs = -9999
     for c, st in reachable(m.cell.id, m.mp or 0).items():
+        if c in CORRIDOR:
+            continue
         ds = dist(c, sc); dk = 20 if kc is None else dist(c, kc)
         v = (50 - abs(ds - 8) if ds <= 10 else -ds * 3) + min(dk, 9) * 4 - threat_at(c) * 2
         if v > bs:
@@ -790,6 +916,7 @@ def puzzle_turn():
     my_crystal()            # reads the allies' claims once per turn
     try:
         puzzle_play()
+        unpark()
     finally:
         cur = BOSS['mine']
         send_claim(cur if cur is not None and _crystal_open(cur) and ready('resurrection') else None)
@@ -805,13 +932,14 @@ def puzzle_play():
             approach()
         self_stack()
         return
-    shield_diver_first()
-    # the fragile buffer dives once the tank's shields are on her (fallback turn 3)
-    hold = my_role() == 'buffer' and Fight.turn < 3 and not has_effect_from(m, 'rampart') and \
-        not has_effect_from(m, 'carapace') and len(squad('tank')) > 0
-    solved_now = False if hold else try_solve_one()
-    if hold:
-        bnote('waiting for the tank shields')
+    # (the tank dives first when it can: its pre-dive shields on the fragile ally left it short of the
+    # 30 TP a dive needs, turn after turn)
+    solved_now = my_role() == 'tank' and try_solve_one()
+    if not solved_now:
+        shield_diver_first()
+    # (the old buffer hold - dive only once the tank's shields are on her - made her the late solver in
+    # 8 of 10 server fights; she dives as soon as she can)
+    solved_now = solved_now or try_solve_one()
     if not solved_now and ready('resurrection'):
         approach()
         if my_role() == 'buffer':
@@ -1170,6 +1298,8 @@ def tank_turn():
     if mates and (m.mp or 0) > 0:
         best = m.cell.id; bs = -999
         for c, st in reachable(m.cell.id, m.mp or 0).items():
+            if c in CORRIDOR:
+                continue
             cov = sum((3 if role_of(a) == 'striker' else 1) for a in mates if dist(c, a.cell.id) <= 3)
             s = cov * 10 - threat_at(c) * 2 - st * 0.1
             if s > bs:
@@ -1203,6 +1333,8 @@ def buffer_turn():
     if st and (m.mp or 0) > 0:
         best = m.cell.id; bs = -999
         for c in reachable(m.cell.id, m.mp or 0):
+            if c in CORRIDOR:
+                continue
             s = 0
             for a in st:
                 d = dist(c, a.cell.id); s += 10 if d <= 5 else -d
@@ -1306,6 +1438,7 @@ def boss_turn():
         if t is not None:
             attack(t)
         sustain()
+    unpark()
     return None
 
 
