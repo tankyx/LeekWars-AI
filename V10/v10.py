@@ -1872,7 +1872,8 @@ def threat_at(cell):
     for e in army():
         d = dist(cell, e.cell.id)
         if d <= 11:
-            n += (12 - d) / 6.0
+            # the King is half the army's damage (Excalibur ~750 + ~750 poison x2, chip 108 ~1000)
+            n += (12 - d) / 6.0 * (3 if ename(e) == 'fennel_king' else 1)
     return n
 
 
@@ -2301,7 +2302,8 @@ def unpark():
 
 
 def tele_stage(cid):
-    """No dive this turn and the walk is long: teleport (walls do not matter) to a cell from which NEXT
+    """(unused: 4 of 4 server fights where it fired put the leek next to the King - dead by T6, lost)
+    No dive this turn and the walk is long: teleport (walls do not matter) to a cell from which NEXT
     turn's walk-dive works - a stand cell t within spark range of the crystal reachable within my MP."""
     if not ready('teleportation') or (me().tp or 0) < ccost('teleportation') or not has('spark'):
         return False
@@ -2356,8 +2358,6 @@ def approach():
         bnote('no revive cell for %s' % ename(e)); return
     if tele_walk_options(cid, me().maxMP or 0) and BOSS['in_reach'] < 1:
         BOSS['in_reach'] += 1; bnote('in reach %s' % ename(e)); return
-    if Fight.turn >= 2 and tele_stage(cid):
-        return
     if BOSS['in_reach'] >= 1:
         bnote('in reach but no dive, closing in on %d' % t); go_to(t); return
     cc = e.cell.id
