@@ -1653,7 +1653,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
 AXIS = {'red_crystal': 'south', 'blue_crystal': 'east', 'yellow_crystal': 'west', 'green_crystal': 'north'}
 BOSS = {'on': None, 'combat': False, 'gcell': None, 'gx': 0, 'gy': 0, 'crystals': {}, 'regen': False,
         'in_reach': 0, 'fer': None, 'tank_cell': None, 'mine': None, 'claims': {}}
-BOSS_PZ_DISARM = 'parity'   # disarm also during the puzzle (after the dive); 'parity' = A/B by fight id (odd = on)
+BOSS_PZ_DISARM = True       # disarm also during the puzzle (after the dive): 15/20 wins with it vs 6/20 without (2026-10-18)
+BOSS_PRE_DISARM = 'parity'  # a leek that could not dive this turn disarms with its unspent TP; 'parity' = A/B (odd = on)
 BOSS_DISARM = True      # glowing saber on the King / scribe (puzzle after the dive, and combat): 10/11 wins with it vs 1/9 without (2026-10-18, p=0.0006)
 CLAIM_MSG = 13          # MESSAGE_CUSTOM: params [CLAIM_TAG, crystal entity id or -1]
 CLAIM_TAG = 7101
@@ -2587,6 +2588,8 @@ def puzzle_play():
     solved_now = solved_now or try_solve_one()
     if not solved_now and ready('resurrection'):
         approach()
+        if pre_disarm_on():
+            disarm()        # no dive this turn: the TP would go unspent - disarm the King if he is in reach
         if my_role() == 'buffer':
             cast_self('rage'); cast_self('seven_league_boots')
     sustain()
@@ -2758,6 +2761,15 @@ def attack(t):
         except Exception:
             continue
         m.useChip(ch, t)
+
+
+def pre_disarm_on():
+    if BOSS_PRE_DISARM == 'parity':
+        try:
+            return Fight.id % 2 == 1
+        except Exception:
+            return True
+    return bool(BOSS_PRE_DISARM)
 
 
 def pz_disarm_on():
@@ -3078,7 +3090,8 @@ def boss_turn():
     was played here)."""
     boss_scan()
     if Fight.turn == 1:
-        bnote('arm %s pz%s' % ('disarm' if disarm_on() else 'nodisarm', 'on' if pz_disarm_on() else 'off'))
+        bnote('arm %s pz%s pre%s' % ('disarm' if disarm_on() else 'nodisarm', 'on' if pz_disarm_on() else 'off',
+                                     'on' if pre_disarm_on() else 'off'))
     if not BOSS['combat']:
         puzzle_turn()
         return None
