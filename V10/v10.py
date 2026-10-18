@@ -1653,6 +1653,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
 AXIS = {'red_crystal': 'south', 'blue_crystal': 'east', 'yellow_crystal': 'west', 'green_crystal': 'north'}
 BOSS = {'on': None, 'combat': False, 'gcell': None, 'gx': 0, 'gy': 0, 'crystals': {}, 'regen': False,
         'in_reach': 0, 'fer': None, 'tank_cell': None, 'mine': None, 'claims': {}}
+BOSS_DISARM = 'parity'  # glowing saber on the King / scribe (puzzle after the dive, and combat); 'parity' = A/B by fight id (odd = on)
 CLAIM_MSG = 13          # MESSAGE_CUSTOM: params [CLAIM_TAG, crystal entity id or -1]
 CLAIM_TAG = 7101
 BLOG = []
@@ -2382,6 +2383,7 @@ def tank_shields_only():
             if cast_on(n, a):
                 break
     cast_self('wall'); cast_self('armor')
+    place_wall()
     tank_step_back()
 
 
@@ -2463,7 +2465,9 @@ def puzzle_play():
         role = my_role()
         if role == 'tank':
             tank_shields_only()
+            disarm(('fennel_king',))
         elif role == 'striker':
+            disarm()
             striker_stage()
         elif role == 'buffer' and BOSS['tank_cell'] is not None:
             if dist(m.cell.id, BOSS['tank_cell']) > 3:
@@ -2491,6 +2495,319 @@ def boss_focus():
     return order[0] if order else None
 
 
+# ---- combat: strikers + plants (fennel.lk) -------------------------------------------
+def focus_order():
+    cands = army()
+    if not cands:
+        cands = [e for e in Fight.getAliveEnemies() if ename(e) in AXIS and e.cell is not None]
+    if not cands:
+        cands = [e for e in Fight.getAliveEnemies() if e.cell is not None and ename(e) != 'graal']
+    return sorted(cands, key=lambda e: _ARMY_RANK.get(ename(e), 4) * 100000 + (e.life or 0) + (e.absoluteShield or 0))
+
+
+def area_hits_ally(cells):
+    if not cells:
+        return False
+    occ = set(a.cell.id for a in Fight.getAliveAllies() if a.cell is not None)
+    return any(c is not None and c.id in occ for c in cells)
+
+
+def offensive(item):
+    try:
+        return any(f.type in (E_DAMAGE, E_POISON, E_NOVA) for f in (item.features or []))
+    except Exception:
+        return False
+
+
+def weapon_reach(t):
+    """(cell, steps, weapon): shortest walk to a cell from which a weapon hits t, preferring cells
+    inside the tank's shield range (3); None when no weapon reaches this turn."""
+    m = me(); mp = m.mp or 0; tc = BOSS['tank_cell']
+    rc = reachable(m.cell.id, mp); best = None; bk = 1e9
+    for w in (m.weapons or []):
+        try:
+            cells = m.weaponCells(t, w) or []
+        except Exception:
+            cells = []
+        for c in cells:
+            d = rc.get(c.id)
+            if d is None:
+                continue
+            pen = 3 if (tc is not None and dist(c.id, tc) > 3) else 0
+            if d + pen < bk:
+                bk, best = d + pen, (c.id, d, w)
+    return best
+
+
+def pick_target():
+    """The squad focus if I can hit it this turn, else the first of the top 3 I can hit."""
+    order = focus_order()
+    m = me()
+    for e in order[:3]:
+        if dist(m.cell.id, e.cell.id) > (m.mp or 0) + 12:
+            continue
+        if weapon_reach(e) is not None:
+            return e
+    return order[0] if order else None
+
+
+def _held(m):
+    try:
+        return m.weapon.id if m.weapon is not None else None
+    except Exception:
+        return None
+
+
+def fire(w, t, n=8):
+    """Every shot of weapon w at t (switching costs 1 TP); never when the area hits an ally."""
+    m = me(); shots = 0
+    if (w.cost or 0) + (0 if _held(m) == w.id else 1) > (m.tp or 0):
+        return 0
+    try:
+        if not m.canUseWeapon(t, w) or area_hits_ally(w.effectiveArea(t.cell)):
+            return 0
+    except Exception:
+        return 0
+    if _held(m) != w.id:
+        m.setWeapon(w)
+    for _ in range(n):
+        if not t.alive or not m.canUseWeapon(t) or not ok(m.useWeapon(t)):
+            break
+        shots += 1
+    return shots
+
+
+def strip(t):
+    if ((t.absoluteShield or 0) > 100 or (t.relativeShield or 0) > 15) and ready('liberation'):
+        cast_on('liberation', t)
+
+
+def attack(t):
+    m = me()
+    cast_self('steroid'); cast_self('protein')
+    strip(t)
+    # hemorrhage (unhealable 1 turn): the army's remissions saved the scribe / knights 10-20k per fight
+    if ready('hemorrhage') and (m.tp or 0) >= ccost('hemorrhage') + 8 and _ARMY_RANK.get(ename(t), 4) <= 1:
+        if dist(m.cell.id, t.cell.id) > 2 and (m.mp or 0) > 0:
+            try:
+                hc = m.chipCells(my_chips()['hemorrhage'], t) or []
+            except Exception:
+                hc = []
+            rc = reachable(m.cell.id, m.mp or 0)
+            cand = [c.id for c in hc if c.id in rc]
+            if cand:
+                bh = min(cand, key=lambda c: rc[c])
+                if bh != m.cell.id:
+                    m.moveToward(Cell.get(bh))
+        if cast_on('hemorrhage', t):
+            bnote('hemorrhage %s' % ename(t))
+    r = weapon_reach(t)
+    if r is None:
+        m.moveToward(t)
+        strip(t)
+    else:
+        if r[0] != m.cell.id:
+            m.moveToward(Cell.get(r[0]))
+        fire(r[2], t)
+    for w in (m.weapons or []):
+        if not t.alive:
+            break
+        fire(w, t)
+    for ch in (m.chips or []):
+        if not t.alive:
+            break
+        if ch.name == 'spark' or not offensive(ch) or (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
+            continue
+        try:
+            if not m.canUseChip(ch, t) or area_hits_ally(ch.effectiveArea(t.cell)):
+                continue
+        except Exception:
+            continue
+        m.useChip(ch, t)
+
+
+def disarm_on():
+    if BOSS_DISARM == 'parity':
+        try:
+            return Fight.id % 2 == 1
+        except Exception:
+            return True
+    return bool(BOSS_DISARM)
+
+
+def amputated(e):
+    try:
+        return any(f.type == E_ADD_STATE and int(f.value or 0) == ST_AMPUTATED for f in (e.effects or []))
+    except Exception:
+        return False
+
+
+def saber():
+    for w in (me().weapons or []):
+        try:
+            if 'glowing_saber' in (w.name or ''):
+                return w
+        except Exception:
+            pass
+    return None
+
+
+def disarm(names=('fennel_king', 'fennel_scribe'), reserve=0):
+    """Glowing saber on the King (Excalibur: ~750 a swing + ~750 poison for 2 turns), else the scribe
+    (heavy sword): amputated, no weapon until my next turn. States are not damage, so it lands through
+    Divine Protection too. Melee: walk next to the target within MP; skip a target already disarmed."""
+    if not disarm_on():
+        return False
+    m = me(); w = saber()
+    if w is None:
+        return False
+    cost = (w.cost or 12) + (0 if _held(m) == w.id else 1)
+    if (m.tp or 0) - reserve < cost:
+        return False
+    rc = None
+    for n in names:
+        t = next((e for e in army() if ename(e) == n), None)
+        if t is None or amputated(t):
+            continue
+        try:
+            if t.weapon is None:
+                continue
+        except Exception:
+            continue
+        if rc is None:
+            rc = reachable(m.cell.id, m.mp or 0)
+        try:
+            cells = m.weaponCells(t, w) or []
+        except Exception:
+            cells = []
+        cand = [c.id for c in cells if c.id in rc]
+        if not cand:
+            continue
+        best = min(cand, key=lambda c: (rc[c], threat_at(c)))
+        if best != m.cell.id:
+            m.moveToward(Cell.get(best))
+        if _held(m) != w.id:
+            m.setWeapon(w)
+        try:
+            if m.canUseWeapon(t) and ok(m.useWeapon(t)):
+                bnote('DISARM %s' % n)
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def striker_turn():
+    """Shots first (inside the tank's dome radius when possible), then sustain, then back to the tank."""
+    cleanse()
+    m = me()
+    if (m.life or 0) < (m.maxLife or 1) * 0.35 and not BOSS['regen'] and cast_self('regeneration'):
+        BOSS['regen'] = True
+    disarm()
+    t = pick_target()
+    if t is not None:
+        bnote('focus %s %d' % (ename(t), t.life or 0))
+        attack(t)
+    sustain()
+    tk = squad('tank')
+    if tk and (m.mp or 0) > 0 and dist(m.cell.id, tk[0].cell.id) > 3:
+        m.moveToward(tk[0].cell, m.mp)
+
+
+def plant_ai():
+    """Summons (Corn heals, Prototaxite has no chips): heal the most hurt ally in range, else self."""
+    m = me(); best = None; bf = 1.0
+    for a in Fight.getAliveAllies():
+        if a.summoned:
+            continue
+        f = (a.life or 0) / max(1, a.maxLife or 1)
+        if f < bf:
+            bf, best = f, a
+    for ch in (m.chips or []):
+        if (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
+            continue
+        try:
+            if best is not None and m.canUseChip(ch, best):
+                m.useChip(ch, best)
+            elif m.canUseChip(ch, m):
+                m.useChip(ch, m)
+        except Exception:
+            pass
+
+
+def place_wall():
+    """Tank: a Prototaxite wall on the line between the king and the ally it threatens most."""
+    if not ready('prototaxite') or (me().tp or 0) < ccost('prototaxite'):
+        return False
+    kc = king_cell()
+    if kc is None:
+        return False
+    prot = None; bd = 99
+    for a in Fight.getAliveAllies():
+        if a.summoned or a.cell is None:
+            continue
+        d = dist(a.cell.id, kc) - (3 if (a.resistance or 0) < 200 else 0)
+        if d < bd:
+            bd, prot = d, a
+    if prot is None or dist(prot.cell.id, kc) > 12:
+        return False
+    pc = prot.cell.id; x, y = cxy(pc); best = None; bs = 999
+    chip = my_chips()['prototaxite']
+    for dx in range(-4, 5):
+        for dy in range(-4 + abs(dx), 5 - abs(dx)):
+            c = cell_at(x + dx, y + dy)
+            if c is None or c.obstacle or not c.empty:
+                continue
+            dp = dist(c.id, pc)
+            if dp < 1 or dp > 3:
+                continue
+            try:
+                if not me().canUseChipOnCell(chip, c):
+                    continue
+            except Exception:
+                continue
+            sc = dist(c.id, kc) + dp - dist(pc, kc)      # 0 when c sits on the king-ally line
+            if sc < bs:
+                bs, best = sc, c
+    if best is None:
+        return False
+    if ok(me().summon(chip, best, plant_ai)):
+        bnote('wall at %d for %s' % (best.id, ename(prot)))
+        return True
+    return False
+
+
+def place_corn():
+    """Buffer: a Corn where its popcorn (radius 3) covers the most allies."""
+    if not ready('corn') or (me().tp or 0) < ccost('corn'):
+        return False
+    m = me(); x, y = cxy(m.cell.id); best = None; bs = 0
+    chip = my_chips()['corn']
+    mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
+    for dx in range(-5, 6):
+        for dy in range(-5 + abs(dx), 6 - abs(dx)):
+            c = cell_at(x + dx, y + dy)
+            if c is None or c.obstacle or not c.empty:
+                continue
+            n = sum(1 for a in mates if dist(c.id, a.cell.id) <= 3)
+            if n < 2:
+                continue
+            sc = n * 10 - threat_at(c.id)
+            if sc > bs:
+                try:
+                    if not m.canUseChipOnCell(chip, c):
+                        continue
+                except Exception:
+                    continue
+                bs, best = sc, c
+    if best is None:
+        return False
+    if ok(m.summon(chip, best, plant_ai)):
+        bnote('corn at %d' % best.id)
+        return True
+    return False
+
+
 def tank_turn():
     cleanse()
     m = me(); mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.id != m.id and a.cell is not None]
@@ -2514,12 +2831,14 @@ def tank_turn():
             if cast_on(n, a):
                 break
     cast_self('wall'); cast_self('armor'); cast_self('shield')
+    place_wall()
     tank_step_back()
     if (m.life or 0) < (m.maxLife or 1) * 0.35 and not BOSS['regen'] and cast_self('regeneration'):
         BOSS['regen'] = True
-    tg = boss_focus()
+    tg = pick_target()
     if tg is not None and ready('liberation') and ((tg.absoluteShield or 0) > 100 or (tg.relativeShield or 0) > 15):
         cast_on('liberation', tg)
+    disarm(('fennel_king',))
 
 
 def buffer_turn():
@@ -2559,6 +2878,7 @@ def buffer_turn():
         for a in st:
             for n in ('steroid', 'protein', 'acceleration'):
                 cast_on(n, a)
+    place_corn()
     cast_self('wall'); cast_self('armor')
     if (m.life or 0) < (m.maxLife or 1) * 0.35 and not BOSS['regen'] and cast_self('regeneration'):
         BOSS['regen'] = True
@@ -2597,23 +2917,40 @@ def healer_turn():
         cast_on('wall', t2); cast_on('armor', t2)
     if army():
         cast_self('wall'); cast_self('fortress')
+    # leftover TP: whatever the weapons reach
+    tg = pick_target()
+    if tg is not None and (m.tp or 0) >= 4:
+        for w in (m.weapons or []):
+            fire(w, tg, 4)
 
 
 def boss_turn():
-    """Run the boss mode for this turn. Returns the focus enemy when V10's search should play the turn
-    (striker in the combat phase), None when the turn was played here."""
+    """Run the boss mode for this turn (fennel.lk doctrine, every role scripted). Returns None (the turn
+    was played here)."""
     boss_scan()
+    if Fight.turn == 1:
+        bnote('arm %s' % ('disarm' if disarm_on() else 'nodisarm'))
     if not BOSS['combat']:
         puzzle_turn()
         return None
     r = my_role()
     if r == 'tank':
-        tank_turn(); return None
-    if r == 'buffer':
-        buffer_turn(); return None
-    if not squad('tank') and is_healer():
-        healer_turn(); return None
-    return boss_focus()
+        tank_turn()
+    elif r == 'buffer':
+        buffer_turn()
+    elif squad('tank'):
+        striker_turn()
+    elif is_healer():
+        healer_turn()
+    else:
+        m = me()
+        if (m.life or 0) < (m.maxLife or 1) * 0.35 and not BOSS['regen'] and cast_self('regeneration'):
+            BOSS['regen'] = True
+        t = pick_target()
+        if t is not None:
+            attack(t)
+        sustain()
+    return None
 
 
 def boss_flush():

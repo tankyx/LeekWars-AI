@@ -26,12 +26,14 @@ BASE = ('life', 'strength', 'magic', 'wisdom', 'resistance', 'agility', 'science
 TOTAL = tuple('total_' + k for k in BASE)
 PUZZLE = ['resurrection', 'spark', 'teleportation', 'adrenaline', 'motivation', 'leather_boots']
 SELF = ['fortress', 'wall', 'armor', 'solidification', 'regeneration', 'remission', 'antidote', 'liberation']
-KITS = {   # priority order, trimmed to the leek's max_chips
-    'AL': PUZZLE + SELF + ['steroid', 'hemorrhage', 'elevation'],
-    'ED': PUZZLE + SELF + ['steroid', 'hemorrhage', 'elevation'],
-    'KG': PUZZLE + ['dome', 'rampart', 'carapace'] + SELF + ['serum', 'elevation'],
-    'MH': PUZZLE + ['ferocity', 'doping', 'bark', 'rage', 'seven_league_boots', 'steroid', 'protein'] + SELF +
-          ['serum', 'elevation', 'knowledge', 'shield'],
+KITS = {   # priority order, trimmed to the leek's max_chips (jump: fennel.lk's approach; plants: tank wall, buffer corn)
+    'AL': PUZZLE + ['jump', 'steroid', 'hemorrhage', 'liberation', 'antidote', 'regeneration', 'remission', 'fortress', 'wall',
+                    'armor', 'solidification'],
+    'ED': PUZZLE + ['jump', 'steroid', 'hemorrhage', 'liberation', 'antidote', 'regeneration', 'fortress', 'wall', 'armor',
+                    'remission', 'solidification'],
+    'KG': PUZZLE + ['jump', 'dome', 'rampart', 'carapace', 'prototaxite'] + SELF + ['serum', 'elevation'],
+    'MH': PUZZLE + ['jump', 'ferocity', 'doping', 'bark', 'rage', 'seven_league_boots', 'steroid', 'protein', 'corn'] + SELF +
+          ['serum', 'knowledge', 'elevation', 'shield'],
 }
 # boss weapons by name (None = keep the ladder weapons); glowing saber on the strikers: it disarms the
 # army (King Excalibur, knights' swords, scribe's heavy sword are 44-70% of their damage)
