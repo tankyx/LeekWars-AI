@@ -39,7 +39,7 @@ KITS = {   # priority order, trimmed to the leek's max_chips (jump: fennel.lk's 
 # army (King Excalibur, knights' swords, scribe's heavy sword are 44-70% of their damage)
 WEAPONS = {'AL': ['rhino', 'glowing_saber', 'heavy_sword', 'enhanced_lightninger'], 'ED': None, 'KG': None,
            'MH': ['glowing_saber', 'flame_thrower', 'gazor', 'plutonium_bazooka']}   # the 4th saber: disarm needs no STR
-KEEP_STATS = {'MH'}
+KEEP_STATS = {'AL', 'ED', 'KG', 'MH'}   # chip-only swaps by default (no restat potion); --boss-stats respecs AL/ED/KG
 STAT = [(0, 1, 2), (200, 1, 1), (400, 2, 1), (600, 3, 1)]
 LIFE = [(0, 1, 4), (1000, 1, 3), (2000, 1, 2)]
 
@@ -140,6 +140,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('action', choices=['snapshot', 'prepare', 'boss', 'restore', 'verify'])
     ap.add_argument('--force', action='store_true', help='snapshot over an existing snapshot')
+    ap.add_argument('--boss-stats', action='store_true', help='prepare: Boss loadouts keep their boss stats for AL/ED/KG '
+                    '(6 restat potions per session)')
     a = ap.parse_args()
     lw = LWSession('main')
     I = lw.get('/item/get-all'); I = I.get('items', I)
@@ -179,7 +181,11 @@ def main():
                 if len(kit) < sn['max_chips']:
                     kit.append(t); owned[t] -= 1
             weapons = [weap_id[n] for n in WEAPONS[s]] if WEAPONS[s] else sn['weapons']
-            stats = sn['capital'] if s in KEEP_STATS else los['%s Boss' % s]['stats']
+            stats = sn['capital']
+            if a.boss_stats and s != 'MH':          # the boss builds of tools/boss_build.py
+                import boss_build as bb
+                full = {'AL': 'AdaLovelace', 'ED': 'EdsgerDijkstra', 'KG': 'KurtGodel'}[s]
+                stats = bb.capital(bb.PLANS[full]['base'])
             update(lw, los['%s Boss' % s], weapons, kit, comps, stats)
             print('     boss kit %s: %s | weapons %s | stats %s' % (s, [names[t] for t in kit], [names[t] for t in weapons], stats))
         return
