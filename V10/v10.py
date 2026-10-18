@@ -1653,7 +1653,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
 AXIS = {'red_crystal': 'south', 'blue_crystal': 'east', 'yellow_crystal': 'west', 'green_crystal': 'north'}
 BOSS = {'on': None, 'combat': False, 'gcell': None, 'gx': 0, 'gy': 0, 'crystals': {}, 'regen': False,
         'in_reach': 0, 'fer': None, 'tank_cell': None, 'mine': None, 'claims': {}}
-BOSS_DISARM = 'parity'  # glowing saber on the King / scribe (puzzle after the dive, and combat); 'parity' = A/B by fight id (odd = on)
+BOSS_DISARM = True      # glowing saber on the King / scribe (puzzle after the dive, and combat): 10/11 wins with it vs 1/9 without (2026-10-18, p=0.0006)
 CLAIM_MSG = 13          # MESSAGE_CUSTOM: params [CLAIM_TAG, crystal entity id or -1]
 CLAIM_TAG = 7101
 BLOG = []
