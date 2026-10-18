@@ -2598,6 +2598,7 @@ def puzzle_play():
             disarm()
             striker_stage()
         elif role == 'buffer' and BOSS['tank_cell'] is not None:
+            disarm()
             if dist(m.cell.id, BOSS['tank_cell']) > 3:
                 go_to(BOSS['tank_cell'])
         else:
@@ -2956,6 +2957,7 @@ def tank_turn():
         bnote('flip DOME covers %d' % covered)
     keyed = sorted(mates, key=lambda a: -(protect_score(a) + (3 if role_of(a) == 'striker' else 0)))
     tank_self_first()
+    disarm(('fennel_king',))
     for n in ('rampart', 'carapace', 'fortress'):
         for a in keyed:
             if cast_on(n, a):
@@ -2973,6 +2975,7 @@ def tank_turn():
 
 def buffer_turn():
     cleanse()
+    disarm()                    # a disarmed King cannot Excalibur anyone (the army's poison source)
     m = me(); st = squad('striker'); tanks = squad('tank')
     if st and (m.mp or 0) > 0:
         best = m.cell.id; bs = -999

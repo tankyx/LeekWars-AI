@@ -37,7 +37,8 @@ KITS = {   # priority order, trimmed to the leek's max_chips (jump: fennel.lk's 
 }
 # boss weapons by name (None = keep the ladder weapons); glowing saber on the strikers: it disarms the
 # army (King Excalibur, knights' swords, scribe's heavy sword are 44-70% of their damage)
-WEAPONS = {'AL': ['rhino', 'glowing_saber', 'heavy_sword', 'enhanced_lightninger'], 'ED': None, 'KG': None, 'MH': None}
+WEAPONS = {'AL': ['rhino', 'glowing_saber', 'heavy_sword', 'enhanced_lightninger'], 'ED': None, 'KG': None,
+           'MH': ['glowing_saber', 'flame_thrower', 'gazor', 'plutonium_bazooka']}   # the 4th saber: disarm needs no STR
 KEEP_STATS = {'MH'}
 STAT = [(0, 1, 2), (200, 1, 1), (400, 2, 1), (600, 3, 1)]
 LIFE = [(0, 1, 4), (1000, 1, 3), (2000, 1, 2)]
