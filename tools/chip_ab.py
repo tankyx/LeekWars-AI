@@ -7,6 +7,8 @@ daily challenge allowance. The leek's chip and AI path are restored at the end.
 
     python3 tools/chip_ab.py --leek 129296 --a chip_superinfection --b chip_jump --ai 10.0/probe/v10_fix.py --pairs 40
     python3 tools/chip_ab.py --leek 20443 --a weapon_j_laser --b weapon_glowing_saber --track glowing_saber --pairs 50
+    python3 tools/chip_ab.py --leek 20443 --kind component --a soursop --b pear --pairs 50
+Components: arm A's equipped instance (with its alterations) is put back by instance id, at the same slot.
 """
 import argparse, csv, json, math, os, random, sqlite3, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE); sys.path.insert(0, HERE)
@@ -26,6 +28,7 @@ def main():
     ap.add_argument('--pairs', type=int, default=40); ap.add_argument('--band', type=int, default=150)
     ap.add_argument('--account', default='main'); ap.add_argument('--seed', type=int, default=7)
     ap.add_argument('--track', default='hemorr', help='substring counted in our AI logs (last CSV column, "hem" in the printout)')
+    ap.add_argument('--kind', default='auto', choices=['auto', 'chip', 'weapon', 'component'])
     a = ap.parse_args()
     lw = LWSession(a.account); I = lw.get('/item/get-all'); nm = lambda t: I.get(str(t), {}).get('name', t)
     rng = random.Random(a.seed)
@@ -46,7 +49,33 @@ def main():
                 opps.append({'id': oid, 'name': o.get('name'), 'talent': o.get('talent'), 'k': k})
     print('%s (talent %d): %d opponents within +-%d' % (me['name'], talent, len(opps), a.band), flush=True)
 
-    kind = 'weapons' if a.a.startswith('weapon_') else 'chips'      # both items must be of the same kind
+    kind = {'chip': 'chips', 'weapon': 'weapons', 'component': 'components'}.get(a.kind) or \
+        ('weapons' if a.a.startswith('weapon_') else 'chips')      # both items must be of the same kind
+    kept = {}                                                       # component name -> instance id it left the leek with
+
+    def comp_equip(want, other):
+        l = lw.leek(a.leek)
+        comps = [(i, nm(c['template']), c['id']) for i, c in enumerate(l.get('components') or []) if c]
+        if any(n == want for _, n, _ in comps):
+            return
+        slot = next(((i, cid) for i, n, cid in comps if n == other), None)
+        if slot is None:
+            raise RuntimeError('no %s equipped' % other)
+        idx, inst = slot
+        kept[other] = inst
+        lw.call('DELETE', '/leek/remove-component', leek_id=a.leek, component_id=inst)
+        f = lw.get('/farmer/get-from-token'); f = f.get('farmer', f)
+        inv = [x for x in f.get('components') or [] if nm(x['template']) == want]
+        stack = next((x['id'] for x in inv if x['id'] == kept.get(want)), None) or \
+            next((x['id'] for x in inv if not x.get('stats')), None) or (inv[0]['id'] if inv else None)
+        if stack is None:
+            raise RuntimeError('no %s in inventory' % want)
+        lw.post('/leek/add-component', leek_id=a.leek, component_id=stack, index=idx)
+        got = [(nm(c['template']), c['id']) for c in lw.leek(a.leek).get('components') or [] if c]
+        if not any(n == want for n, _ in got):
+            raise RuntimeError('could not equip %s: %s' % (want, got))
+        if want in kept and not any(cid == kept[want] for _, cid in got):
+            raise RuntimeError('%s came back as a different instance: %s' % (want, got))
 
     def chip_inv(name):
         f = lw.get('/farmer/get-from-token'); f = f.get('farmer', f)
@@ -57,6 +86,8 @@ def main():
         if path: lw.post('/leek/set-ai', leek_id=a.leek, ai_path=path)
 
     def equip(want, other):
+        if kind == 'components':
+            return comp_equip(want, other)
         l = lw.leek(a.leek)
         names = {nm(c['template']): c['id'] for c in l[kind]}
         if want in names: return
