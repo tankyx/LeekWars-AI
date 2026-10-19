@@ -3258,6 +3258,116 @@ def pk_provoke():
     return shots
 
 
+# ---- the pumpkin riddle (forum topic 11152, Pilow's hints: Glagolitic, Concatenation, Factorization) ----
+# The squashes announce the next resurrection cell in Glagolitic numerals, one part per mob, at the start
+# of their turns. Cell = max over the orderings of the last 3 numbers of the largest divisor <= 612 of
+# their concatenation (7643/7643 community triples, 320/320 of our resurrections, known before the
+# resurrecting mob's turn). Occupying the cell blocks the resurrection: the mob shouts "kopile!!"
+# ("bastard!!") and drops its Divine Protection (86% of the winners' drops).
+_GLAG = {}
+for _i in range(9):
+    _GLAG[0x2C00 + _i] = _i + 1
+_GLAG[0x2C09] = 10; _GLAG[0x2C0A] = 10
+for _i, _o in enumerate(range(0x2C0B, 0x2C13)):
+    _GLAG[_o] = (_i + 2) * 10
+for _i, _o in enumerate(range(0x2C13, 0x2C1A)):
+    _GLAG[_o] = (_i + 1) * 100
+_GLAG[0x2C1B] = 800; _GLAG[0x2C1C] = 900; _GLAG[0x2C1D] = 1000
+PK_STREAM = []
+
+
+def glag_num(txt):
+    try:
+        t = 0
+        for ch in txt:
+            o = ord(ch)
+            if 0x2C30 <= o <= 0x2C5E:
+                o -= 0x30
+            if o not in _GLAG:
+                return None
+            t += _GLAG[o]
+        return t if t > 0 else None
+    except Exception:
+        return None
+
+
+def _best_div(n, cap=612):
+    for c in range(min(cap, n), 0, -1):
+        if n % c == 0:
+            return c
+    return 0
+
+
+def _perms(xs):
+    if len(xs) <= 1:
+        return [list(xs)]
+    out = []
+    for i in range(len(xs)):
+        for rest in _perms(xs[:i] + xs[i + 1:]):
+            out.append([xs[i]] + rest)
+    return out
+
+
+def riddle_cell(nums):
+    best = 0
+    for p in _perms(list(nums)):
+        best = max(best, _best_div(int(''.join(str(x) for x in p))))
+    return best or None
+
+
+def pk_listen():
+    """Append the enemies' numeric says heard since my last turn to the shared stream."""
+    try:
+        heard = Fight.listen() or []
+    except Exception:
+        heard = []
+    foes = set(e.id for e in Fight.getEnemies())
+    for h in heard:
+        try:
+            who, msg = h[0], h[1]
+            wid = who.id if hasattr(who, 'id') else int(who)
+        except Exception:
+            continue
+        if wid not in foes or not isinstance(msg, str):
+            continue
+        v = glag_num(msg.strip())
+        if v:
+            PK_STREAM.append(v)
+
+
+def pk_block():
+    """Block the predicted resurrection cell: a summon on it if one reaches, else my own body."""
+    if len(PK_STREAM) < 1:
+        return False
+    c = riddle_cell(PK_STREAM[-3:])
+    if c is None:
+        return False
+    cell = Cell.get(c) if hasattr(Cell, 'get') else None
+    if cell is None or cell.obstacle:
+        return False
+    if not cell.empty:
+        bnote('rez cell %d already blocked' % c)
+        return False
+    m = me()
+    for n in ('puny_bulb', 'prototaxite', 'corn'):
+        if not ready(n) or (m.tp or 0) < ccost(n):
+            continue
+        try:
+            if m.canUseChipOnCell(my_chips()[n], cell) and ok(m.summon(my_chips()[n], cell, bulb_ai if n == 'puny_bulb' else plant_ai)):
+                bnote('BLOCK rez cell %d with %s' % (c, n))
+                return True
+        except Exception:
+            pass
+    rc = reachable(m.cell.id, m.mp or 0)
+    if c in rc:
+        m.moveToward(cell)
+        if m.cell.id == c:
+            bnote('BLOCK rez cell %d by standing on it' % c)
+            return True
+    bnote('rez cell %d out of reach (d=%d)' % (c, dist(m.cell.id, c)))
+    return False
+
+
 def pk_defend():
     """Every enemy invincible: shields on myself, rampart / carapace on the ally the pumpkin is closest
     to, heals, then out of the army's reach with the MP left."""
@@ -3290,7 +3400,9 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v3')
+        bnote('pumpkin v4')
+    pk_listen()
+    pk_block()
     if disarm(('evil_pumpkin',)):
         pass
     place_wall()
