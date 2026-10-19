@@ -3349,7 +3349,8 @@ def pk_block():
         bnote('rez cell %d already blocked' % c)
         return False
     m = me()
-    for n in ('puny_bulb', 'prototaxite', 'corn'):
+    # 1) a summon on it: Prototaxite reaches 10, a puny bulb 3
+    for n in ('prototaxite', 'puny_bulb', 'corn'):
         if not ready(n) or (m.tp or 0) < ccost(n):
             continue
         try:
@@ -3358,12 +3359,22 @@ def pk_block():
                 return True
         except Exception:
             pass
+    # 2) my own body: walk, else jump (3, no LoS), else teleport (12, no LoS)
     rc = reachable(m.cell.id, m.mp or 0)
     if c in rc:
         m.moveToward(cell)
         if m.cell.id == c:
-            bnote('BLOCK rez cell %d by standing on it' % c)
+            bnote('BLOCK rez cell %d by walking onto it' % c)
             return True
+    for n in ('jump', 'teleportation'):
+        if not ready(n) or (m.tp or 0) < ccost(n):
+            continue
+        try:
+            if m.canUseChipOnCell(my_chips()[n], cell) and ok(m.useChipOnCell(my_chips()[n], cell)) and m.cell.id == c:
+                bnote('BLOCK rez cell %d with %s' % (c, n))
+                return True
+        except Exception:
+            pass
     bnote('rez cell %d out of reach (d=%d)' % (c, dist(m.cell.id, c)))
     return False
 
@@ -3400,7 +3411,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v4')
+        bnote('pumpkin v5')
     pk_listen()
     pk_block()
     if disarm(('evil_pumpkin',)):
