@@ -129,6 +129,9 @@ def run_model(acct, leeks, cap, dump_at, min_ev, out, reroll_ev=None, reroll_aft
     print('%s: %d credits left' % (acct, credits(lw)), flush=True)
 
 
+XP_CHUNK = 15
+
+
 def run_xp(acct, leeks, out, inflight=2):
     """XP mode (Cure, levelling toward 300 for the Pumpkin): spend EVERY credit, best offer each
     time (no expected-talent floor), on the leeks still under level 300, then spend new capital
@@ -149,9 +152,23 @@ def run_xp(acct, leeks, out, inflight=2):
         model = None
     if model is None:
         print('%s: no garden model - XP mode needs one' % acct, flush=True); return
-    names = [n for n, _ in todo]; ids = dict(todo)
-    res = gf.run_alloc(names, ids, avail, inflight, gf.Bucket(4.5), acct, None, 30.0, None, model)
-    out[acct] = {n: (r[0], r[1]['W'], r[1]['L'], r[1]['D']) for n, r in res.items()}
+    # chunks of XP_CHUNK fights so the run stops as soon as every leek reaches 300 (owner 2026-10-19:
+    # DawnFall to 300, then the credits go to DuskHope's talent - see --focus)
+    agg = {}
+    while True:
+        avail = credits(lw)
+        left = [(n, lid) for n, lid in todo if (lw.leek(lid).get('level') or 0) < 300]
+        if avail <= 0 or not left:
+            break
+        res = gf.run_alloc([n for n, _ in left], dict(left), min(avail, XP_CHUNK), inflight, gf.Bucket(4.5), acct,
+                           None, 30.0, None, model)
+        played = 0
+        for n, r in res.items():
+            t = agg.setdefault(n, [0, 0, 0, 0])
+            t[0] += r[0]; t[1] += r[1]['W']; t[2] += r[1]['L']; t[3] += r[1]['D']; played += r[0]
+        if played == 0:
+            break                  # no fight went through (degraded server, no offers): stop here
+    out[acct] = {n: tuple(t) for n, t in agg.items()}
     xl = xf.Limited(lw, 4.0)
     for n, lid in todo:
         try:
@@ -281,7 +298,10 @@ def main():
                     help='XP mode fight type: farmer levels all leeks per credit; auto = farmer while 2+ leeks are under '
                          '300, solo on the last one, talent mode once all are 300')
     ap.add_argument('--no-team', action='store_true', help='skip the daily team fights')
-    ap.add_argument('--fennel', type=int, default=40,
+    ap.add_argument('--focus', default='cure:DuskHope',
+                    help='talent mode only on these leeks, "acct:Leek+Leek,acct2:..." (owner 2026-10-19: Cure talent on '
+                         'DuskHope); also where an XP account spends what is left once every leek is 300; "" = all leeks')
+    ap.add_argument('--fennel', type=int, default=0,             # owner 2026-10-19: off (DawnFall to 300, then DuskHope talent)
                     help='8-leek Fennel fights (main + Cure, tools/fennel_slot.py) before the garden; 0 = off')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
@@ -324,9 +344,30 @@ def main():
                     caps[x] = min(caps[x], int(v)); print('%s: cap override for %s -> %d' % (x, today, caps[x]), flush=True)
         except FileNotFoundError:
             pass
+        focus = {}
+        for item in (a.focus or '').split(','):
+            if ':' in item:
+                acc, nms = item.split(':', 1)
+                focus[acc.strip()] = [n.strip() for n in nms.split('+') if n.strip()]
+
+        def talent_leeks(x):
+            return [(n, lid) for n, lid in LEEKS[x] if not focus.get(x) or n in focus[x]]
+
+        def xp_then_talent(x):
+            # XP mode until every leek is 300, then the focus leeks' talent with the credits left
+            o1, o2 = {}, {}
+            runners[x](x, LEEKS[x], o1)
+            if focus.get(x) and credits(LWSession(x)) > 0:
+                print('%s: XP done - talent mode on %s with the credits left' % (x, focus[x]), flush=True)
+                run_model(x, talent_leeks(x), caps[x], a.dump_at, a.min_ev, o2, a.reroll_ev, a.reroll_after)
+            m = dict(o1.get(x, {}))
+            for n, t in o2.get(x, {}).items():
+                m[n] = tuple(u + v for u, v in zip(m.get(n, (0, 0, 0, 0)), t))
+            out[x] = m
+
         if a.selector == 'model':
-            th = [threading.Thread(target=runners[x], args=(x, LEEKS[x], out)) if runners[x] else
-                  threading.Thread(target=run_model, args=(x, LEEKS[x], caps[x], a.dump_at, a.min_ev, out,
+            th = [threading.Thread(target=xp_then_talent, args=(x,)) if runners[x] else
+                  threading.Thread(target=run_model, args=(x, talent_leeks(x), caps[x], a.dump_at, a.min_ev, out,
                                                            a.reroll_ev, a.reroll_after)) for x in accts]
         else:
             th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], caps[x], out)) for x in accts]
