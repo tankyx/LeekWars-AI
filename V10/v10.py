@@ -3214,6 +3214,50 @@ def place_decoy():
     return False
 
 
+PK_DEBUFF = (E_VULN, E_VULN_ABS, E_POISON, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI)
+
+
+def debuffing(item):
+    try:
+        return any(f.type in PK_DEBUFF for f in (item.features or []))
+    except Exception:
+        return False
+
+
+def pk_provoke():
+    """Divine Protection drops when the mob cleanses itself (exasperation), and the mobs cleanse the
+    debuffs players put on them: winners' mobs exasperate 54% of the turns after being hit (20% when
+    not), ours 0.5% - V10 never hit an invincible mob. Leftover TP: debuffing shots (neutrino
+    vulnerability, poisons, shackles) on the invincible mobs in reach, minions first."""
+    m = me()
+    tg = [e for e in army() if is_invincible(e)]
+    if not tg:
+        return 0
+    tg.sort(key=lambda e: (ename(e) == 'evil_pumpkin', dist(m.cell.id, e.cell.id)))
+    shots = 0
+    for w in (m.weapons or []):
+        if not debuffing(w):
+            continue
+        for t in tg:
+            n = fire(w, t)
+            if n:
+                shots += n
+                break
+    for ch in (m.chips or []):
+        if not debuffing(ch) or (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
+            continue
+        for t in tg:
+            try:
+                if m.canUseChip(ch, t) and not area_hits_ally(ch.effectiveArea(t.cell)) and ok(m.useChip(ch, t)):
+                    shots += 1
+                    break
+            except Exception:
+                pass
+    if shots:
+        bnote('provoke x%d' % shots)
+    return shots
+
+
 def pk_defend():
     """Every enemy invincible: shields on myself, rampart / carapace on the ally the pumpkin is closest
     to, heals, then out of the army's reach with the MP left."""
@@ -3228,6 +3272,7 @@ def pk_defend():
         cast_self(n)
     place_wall()
     place_decoy()
+    pk_provoke()
     pk = next((e for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
     mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
     if pk is not None and mates:
@@ -3245,7 +3290,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v2')
+        bnote('pumpkin v3')
     if disarm(('evil_pumpkin',)):
         pass
     place_wall()
