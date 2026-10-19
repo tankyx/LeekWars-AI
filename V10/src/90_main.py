@@ -191,6 +191,14 @@ LAMA = [False]             # lama() once per fight, with leftover TP only (cosme
 def turn():
     global LAST_LIVES
     boss = boss_on()
+    if not boss and pumpkin_on():
+        try:
+            r = pumpkin_turn()
+        except Exception as ex:
+            log('PUMPKIN error ' + str(ex)[:200]); r = 'search'
+        boss_flush()
+        if r is None:
+            return
     if boss:
         # Fennel boss: the puzzle and the tank / buffer / healer roles are played by 80_boss; strikers in
         # the combat phase get the boss focus and run the normal search below

@@ -3126,6 +3126,77 @@ def boss_flush():
         del BLOG[:]
 
 
+# ---- Evil Pumpkin (boss 3) ---------------------------------------------------------------------
+# The pumpkin and its minions open under Divine Protection (state 3, cast by the pumpkin, permanent);
+# a mob loses it when its own exasperation crits or when the mob that cast it dies, one target at a
+# time. The pumpkin teleports next to a leek and scythes it (~2.8k, the winners take it with 3.3k
+# life + T0 shields). Doctrine v1: disarm the pumpkin with the glowing saber whenever reachable (a
+# state lands through Divine Protection), shield/heal while every enemy is invincible, the V10
+# search on the vulnerable focus otherwise.
+PUMPKIN = {'on': None}
+PK_SHIELDS = ('solidification', 'fortress', 'wall', 'armor', 'helmet', 'shield', 'armoring', 'elevation')
+
+
+def pumpkin_on():
+    if PUMPKIN['on'] is None:
+        try:
+            PUMPKIN['on'] = any(ename(e) == 'evil_pumpkin' for e in Fight.getEnemies())
+        except Exception:
+            PUMPKIN['on'] = False
+    return PUMPKIN['on']
+
+
+def is_invincible(e):
+    try:
+        return any(f.type == E_ADD_STATE and int(f.value or 0) == ST_INVINCIBLE for f in (e.effects or []))
+    except Exception:
+        return False
+
+
+def pk_vulnerable():
+    return [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None and (e.life or 0) > 0
+            and not is_invincible(e)]
+
+
+def pk_defend():
+    """Every enemy invincible: shields on myself, rampart / carapace on the ally the pumpkin is closest
+    to, heals, then out of the army's reach with the MP left."""
+    m = me()
+    cleanse()
+    life = m.life or 0; tot = m.maxLife or 1
+    if life < tot * 0.5 and not BOSS['regen'] and cast_self('regeneration'):
+        BOSS['regen'] = True
+    if tot - life > 250:
+        cast_self('remission')
+    for n in PK_SHIELDS:
+        cast_self(n)
+    pk = next((e for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
+    mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
+    if pk is not None and mates:
+        mates.sort(key=lambda a: dist(a.cell.id, pk.cell.id))
+        for n in ('rampart', 'carapace'):
+            for a in mates:
+                if cast_on(n, a):
+                    break
+    a2 = army()
+    if a2 and (m.mp or 0) > 0:
+        m.moveAwayFromEntities(a2)
+
+
+def pumpkin_turn():
+    """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
+    (the turn was played here)."""
+    if Fight.turn == 1:
+        bnote('pumpkin v1')
+    if disarm(('evil_pumpkin',)):
+        pass
+    vul = pk_vulnerable()
+    if not vul:
+        pk_defend()
+        return None
+    return 'search'
+
+
 # ---- 90_main: turn loop -----------------------------------------------------
 def invincible(e):
     try:
@@ -3319,6 +3390,14 @@ LAMA = [False]             # lama() once per fight, with leftover TP only (cosme
 def turn():
     global LAST_LIVES
     boss = boss_on()
+    if not boss and pumpkin_on():
+        try:
+            r = pumpkin_turn()
+        except Exception as ex:
+            log('PUMPKIN error ' + str(ex)[:200]); r = 'search'
+        boss_flush()
+        if r is None:
+            return
     if boss:
         # Fennel boss: the puzzle and the tank / buffer / healer roles are played by 80_boss; strikers in
         # the combat phase get the boss focus and run the normal search below
