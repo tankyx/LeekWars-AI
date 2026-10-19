@@ -281,6 +281,8 @@ def main():
                     help='XP mode fight type: farmer levels all leeks per credit; auto = farmer while 2+ leeks are under '
                          '300, solo on the last one, talent mode once all are 300')
     ap.add_argument('--no-team', action='store_true', help='skip the daily team fights')
+    ap.add_argument('--fennel', type=int, default=40,
+                    help='8-leek Fennel fights (main + Cure, tools/fennel_slot.py) before the garden; 0 = off')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
@@ -288,6 +290,17 @@ def main():
     print('=== daily_garden %s (%s selector)' % (datetime.datetime.now().isoformat(timespec='seconds'), a.selector), flush=True)
     accts = [x for x in LEEKS if x in a.accounts.split(',')]
     out = {}
+    if not a.dry_run and a.fennel > 0 and 'main' in accts and 'cure' in accts:
+        # owner 2026-10-19: a fixed daily Fennel slot right after the refill, the garden gets the rest
+        try:
+            p = subprocess.run([sys.executable, '-u', os.path.join(HERE, 'fennel_slot.py'), '--n', str(a.fennel)],
+                               cwd=ROOT, timeout=5400)
+            if p.returncode == 2:
+                print('main is not on its ladder setup after the Fennel slot - main skipped today', flush=True)
+                accts = [x for x in accts if x != 'main']
+        except subprocess.TimeoutExpired:
+            print('Fennel slot timed out - main skipped today (check its loadouts)', flush=True)
+            accts = [x for x in accts if x != 'main']
     if not a.dry_run:
         xp = [x for x in a.xp_accounts.split(',') if x]
 
