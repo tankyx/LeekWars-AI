@@ -1813,6 +1813,7 @@ def pk_relay_plan(c):
     walks = {}
     plans = []
     jt = ccost('jump') if ready('jump') else None
+    tele = ccost('teleportation') if ready('teleportation') else None
     for bn in ('puny_bulb', 'wizard_bulb', 'savant_bulb', 'lightning_bulb', 'tactician_bulb'):
         if not ready(bn) or ccost(bn) > tp:
             continue
@@ -1823,6 +1824,10 @@ def pk_relay_plan(c):
             continue
         frm = _around(starts, lo, hi, freeme)
         hop = _around(frm, 1, 3, freeme) if jt is not None else set()
+        if tele is not None and ccost(bn) + tele <= tp:
+            land = [x for x in frm if 1 <= dist(mine, x) <= 12 and x != mine]
+            if land:
+                plans.append((ccost(bn) + tele, False, 0, bn, [], frm, starts, to_c, land))
         for bs in opts:
             cb = sum(ccost(n) for n, _ in bs); extra = sum(g for _, g in bs)
             if extra not in walks:
@@ -1834,17 +1839,31 @@ def pk_relay_plan(c):
                     continue
                 pool = hop if jump else frm
                 if any(x in pool for x in R):
-                    plans.append((cost, jump, len(bs), bn, bs, frm, starts, to_c))
+                    plans.append((cost, jump, len(bs), bn, bs, frm, starts, to_c, None))
                     break
     if not plans:
         return None
-    plans.sort(key=lambda p: (p[0], p[1], p[2]))
+    # a teleport (cooldown 10) only when walking can't make it
+    plans.sort(key=lambda p: (p[8] is not None, p[0], p[1], p[2]))
     return plans[0]
 
 
 def pk_relay(c, plan):
-    cost, jump, _, bn, bs, frm, starts, to_c = plan
+    cost, jump, _, bn, bs, frm, starts, to_c, land = plan
     m = me()
+    if land:
+        # teleport onto the landing cell farthest from the army (v7: a lone teleport into it cost the leek)
+        foes = [e.cell.id for e in army() if e.cell is not None]
+        mates = [a.cell.id for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
+        def safety(x):
+            return (min([dist(x, f) for f in foes] or [99]) + (2 if any(dist(x, a) <= 4 for a in mates) else 0), -dist(x, c))
+        for x in sorted(land, key=safety, reverse=True)[:4]:
+            if Cell.get(x).empty and ok(m.useChipOnCell(my_chips()['teleportation'], Cell.get(x))):
+                break
+        if m.cell.id not in frm:
+            bnote('rez cell %d: relay teleport failed' % c)
+            return False
+        jump = False
     for n, _ in bs:
         cast_self(n)
     free = _pk_free(); freeme = free | {m.cell.id}
@@ -1874,8 +1893,9 @@ def pk_relay(c, plan):
             continue
         PK_TARGET['cell'] = c if s != c else None
         if ok(m.summon(ch, cs, bulb_ai)):
-            bnote('BLOCK rez cell %d: %s at %d (walk %d)%s%s' % (c, bn, s, to_c[s], ' +jump' if jump else '',
-                                                              ' +' + '+'.join(n for n, _ in bs) if bs else ''))
+            bnote('BLOCK rez cell %d: %s at %d (walk %d)%s%s%s' % (c, bn, s, to_c[s], ' +jump' if jump else '',
+                                                                ' +' + '+'.join(n for n, _ in bs) if bs else '',
+                                                                ' +teleport' if land else ''))
             return True
         PK_TARGET['cell'] = None
     bnote('rez cell %d: no %s cell in sight from %d' % (c, bn, m.cell.id))
@@ -1991,11 +2011,28 @@ def pk_defend():
         m.moveAwayFromEntities(a2)
 
 
+PK_STRIKE = True
+
+
+def pk_strike(vul):
+    """A mob dropped its protection: focus the lowest-life vulnerable mob (distance breaks ties - far
+    ones cost turns of walking); buffs, approach, every weapon and offensive chip, then shields with
+    what's left. V10's search kept away from the army: 1.4k damage a fight vs the top teams' 40-46k."""
+    m = me()
+    t = min(vul, key=lambda e: ((e.life or 0) / 1500.0 + dist(m.cell.id, e.cell.id) / 3.0, e.id))
+    bnote('strike %s %d (d=%d)' % (ename(t), t.life or 0, dist(m.cell.id, t.cell.id)))
+    if weapon_reach(t) is None and dist(m.cell.id, t.cell.id) > (m.mp or 0) + 6:
+        for n in ('leather_boots', 'seven_league_boots'):
+            cast_self(n)
+    attack(t)
+    sustain()
+
+
 def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v10')
+        bnote('pumpkin v11')
     pk_listen()
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
     # but never eat the TP the due block needs
@@ -2014,5 +2051,8 @@ def pumpkin_turn():
     vul = pk_vulnerable()
     if not vul:
         pk_defend()
+        return None
+    if PK_STRIKE:
+        pk_strike(vul)
         return None
     return 'search'

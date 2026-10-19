@@ -13,6 +13,10 @@ from lw_api import LWSession
 
 # participant order = spawn slot (53581862): slot1 interior near the crystals, slot2 corridor front
 LEEKS = [129296, 129295, 20443, 129288]
+# Pumpkin: participant slot = spawn (0: 92, 1: 301, 2: 475, 3: 515); the pumpkin opens on 515 every fight
+# (plasma + lightning + flash, ~1.4k before anyone acts) - the tank Zoulman takes it, GTGabi (warty's
+# T0 blocker by frequency) starts on 301 (97% of warty's T0 cells still in relay reach)
+PK_LEEKS = [129296, 129288, 20443, 129295]
 OURS = {129296: 'MH', 129295: 'KG', 20443: 'AL', 129288: 'ED'}
 ARMY = ('fennel_scribe', 'fennel_knight', 'fennel_king', 'fennel_squire',
         'evil_pumpkin', 'hubbard', 'turban', 'warty', 'offspring')
@@ -111,7 +115,7 @@ def main():
     pend = []; started = 0; fails = 0
     while (started < a.n or pend) and fails < 10:
         while started < a.n and len(pend) < a.inflight:
-            r = lw.post('/garden/start-boss-fight', boss_id=a.boss, participants=json.dumps(LEEKS))
+            r = lw.post('/garden/start-boss-fight', boss_id=a.boss, participants=json.dumps(PK_LEEKS if a.boss == 3 else LEEKS))
             fid = r.get('fight') if isinstance(r, dict) else (r if isinstance(r, int) else None)
             if not fid:
                 print('start failed: %s' % str(r)[:200], flush=True); fails += 1; time.sleep(5)
