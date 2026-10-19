@@ -71,6 +71,8 @@ def apply_item(it, C, T, S, f=1.0):
             continue
         if nonstack and _replaces(it, t, T, S):
             continue
+        if T is not C and t in (E_DAMAGE, E_POISON, E_NOVA, E_SUPERINF) and T.get('invincible'):
+            continue                    # Divine Protection: no damage of any kind lands
         sid = int(a)                    # an add-state effect's value is the state id (never area-scaled)
         if scaled:
             a = a * f

@@ -14,7 +14,8 @@ from lw_api import LWSession
 # participant order = spawn slot (53581862): slot1 interior near the crystals, slot2 corridor front
 LEEKS = [129296, 129295, 20443, 129288]
 OURS = {129296: 'MH', 129295: 'KG', 20443: 'AL', 129288: 'ED'}
-ARMY = ('fennel_scribe', 'fennel_knight', 'fennel_king', 'fennel_squire')
+ARMY = ('fennel_scribe', 'fennel_knight', 'fennel_king', 'fennel_squire',
+        'evil_pumpkin', 'hubbard', 'turban', 'warty', 'offspring')
 OUT = os.path.join(ROOT, 'data', 'boss_fights')
 
 
@@ -98,6 +99,7 @@ def main():
     ap.add_argument('n', type=int, nargs='?', default=0)
     ap.add_argument('--ids', default='')
     ap.add_argument('--inflight', type=int, default=2)
+    ap.add_argument('--boss', type=int, default=2, help='2 = Fennel King, 3 = Evil Pumpkin')
     a = ap.parse_args()
     lw = LWSession('main')
     done = []
@@ -109,7 +111,7 @@ def main():
     pend = []; started = 0; fails = 0
     while (started < a.n or pend) and fails < 10:
         while started < a.n and len(pend) < a.inflight:
-            r = lw.post('/garden/start-boss-fight', boss_id=2, participants=json.dumps(LEEKS))
+            r = lw.post('/garden/start-boss-fight', boss_id=a.boss, participants=json.dumps(LEEKS))
             fid = r.get('fight') if isinstance(r, dict) else (r if isinstance(r, int) else None)
             if not fid:
                 print('start failed: %s' % str(r)[:200], flush=True); fails += 1; time.sleep(5)

@@ -82,7 +82,8 @@ E_RAW_MP, E_RAW_TP, E_RAW_ABS, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_AGI, E_RAW
 E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL = 44, 46, 47, 49, 51, 52, 54
 E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
 E_SUPERINF = 64    # superinfection: value1% of the target's per-turn poison sum now, every poison loses one turn
-E_ADD_STATE, ST_UNHEALABLE = 59, 2   # hemorrhage: state 2 = Unhealable (no heal, life steal, vitality, regen) for 1 turn
+E_ADD_STATE, ST_UNHEALABLE = 59, 2
+ST_INVINCIBLE = 3   # Divine Protection (bosses): damage, poison, nova and aftereffects do nothing (engine EffectDamage & co)   # hemorrhage: state 2 = Unhealable (no heal, life steal, vitality, regen) for 1 turn
 T_ENEMY, T_ALLY, T_CASTER, T_LEEK, T_SUMMON = 1, 2, 4, 8, 16   # effect target flags (engine Effect.TARGET_*)
 ST_AMPUTATED = 13   # glowing saber: the target drops its weapon and cannot use or re-equip one until the
                     # state ends (start of the caster's next turn); chips still work (engine State.useWeapon)
@@ -259,6 +260,7 @@ def snapshot(ent, team_alive):
     items = items_of(ent)
     # Amputated (glowing saber): no weapon can be used or re-equipped this turn, chips only
     amp = any(e.type == E_ADD_STATE and int(e.value or 0) == ST_AMPUTATED for e in effs)
+    inv = any(e.type == E_ADD_STATE and int(e.value or 0) == ST_INVINCIBLE for e in effs)
     if amp:
         items = [it for it in items if not it.weapon]
     summons = sum(1 for o in team_alive if o.summoned)
@@ -270,7 +272,7 @@ def snapshot(ent, team_alive):
             'groups': groups, 'pf': pf, 'burn': _burn.get(ent.id, 0), 'summons': summons,
             'items': items, 'kit': kit_of(items, st), 'pas': passives_of(ent),
             'tp_live': ent.maxTP, 'mp_live': ent.maxMP,
-            'weapon': (ent.weapon.id if ent.weapon is not None else -1), 'amputated': amp}
+            'weapon': (ent.weapon.id if ent.weapon is not None else -1), 'amputated': amp, 'invincible': inv}
 
 
 def bulb_side(ent):
@@ -362,6 +364,8 @@ def apply_item(it, C, T, S, f=1.0):
             continue
         if nonstack and _replaces(it, t, T, S):
             continue
+        if T is not C and t in (E_DAMAGE, E_POISON, E_NOVA, E_SUPERINF) and T.get('invincible'):
+            continue                    # Divine Protection: no damage of any kind lands
         sid = int(a)                    # an add-state effect's value is the state id (never area-scaled)
         if scaled:
             a = a * f
@@ -3123,9 +3127,18 @@ def boss_flush():
 
 
 # ---- 90_main: turn loop -----------------------------------------------------
+def invincible(e):
+    try:
+        return any(f.type == E_ADD_STATE and int(f.value or 0) == ST_INVINCIBLE for f in (e.effects or []))
+    except Exception:
+        return False
+
+
 def main_enemy():
     best = None; bd = 9999
-    for e in Fight.getAliveEnemies():
+    foes = [e for e in Fight.getAliveEnemies() if not e.summoned]
+    vul = [e for e in foes if not invincible(e)]
+    for e in (vul or foes):
         if e.summoned:
             continue
         d = me().distance(e)
@@ -3142,6 +3155,9 @@ def focus_enemy():
     (one leek on our side) are unchanged."""
     mine = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
     foes = [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None and (e.life or 0) > 0]
+    vul = [e for e in foes if not invincible(e)]     # boss phases: an invincible enemy is never the focus
+    if vul:
+        foes = vul
     if len(mine) <= 1 or len(foes) <= 1:
         return main_enemy()
     best = None; bs = None

@@ -1,7 +1,16 @@
 # ---- 90_main: turn loop -----------------------------------------------------
+def invincible(e):
+    try:
+        return any(f.type == E_ADD_STATE and int(f.value or 0) == ST_INVINCIBLE for f in (e.effects or []))
+    except Exception:
+        return False
+
+
 def main_enemy():
     best = None; bd = 9999
-    for e in Fight.getAliveEnemies():
+    foes = [e for e in Fight.getAliveEnemies() if not e.summoned]
+    vul = [e for e in foes if not invincible(e)]
+    for e in (vul or foes):
         if e.summoned:
             continue
         d = me().distance(e)
@@ -18,6 +27,9 @@ def focus_enemy():
     (one leek on our side) are unchanged."""
     mine = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
     foes = [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None and (e.life or 0) > 0]
+    vul = [e for e in foes if not invincible(e)]     # boss phases: an invincible enemy is never the focus
+    if vul:
+        foes = vul
     if len(mine) <= 1 or len(foes) <= 1:
         return main_enemy()
     best = None; bs = None
