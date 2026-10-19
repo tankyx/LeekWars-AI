@@ -65,8 +65,8 @@ PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger
               'ED': ['glowing_saber', 'neutrino', 'rifle', 'm_laser'],
               'KG': ['glowing_saber', 'neutrino', 'lightninger', 'quantum_rifle'],
               'MH': ['glowing_saber', 'flame_thrower', 'gazor', 'plutonium_bazooka']}
-PK_BASE = {'AL': dict(tp=20, mp=6, resistance=400, strength=400),
-           'ED': dict(tp=21, mp=7, resistance=300, strength=400),
+PK_BASE = {'AL': dict(tp=20, mp=6, resistance=320, strength=510),     # v8: the Fennel strikers' lines (damage once
+           'ED': dict(tp=20, mp=7, resistance=275, strength=500),     # protections drop early)
            'KG': dict(tp=20, mp=7, resistance=450),
            'MH': dict(tp=21, mp=6, resistance=400, magic=400)}
 

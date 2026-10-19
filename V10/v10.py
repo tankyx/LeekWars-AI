@@ -3406,9 +3406,12 @@ def pk_block():
         if m.cell.id == c:
             bnote('BLOCK rez cell %d by walking onto it' % c)
             return True
+    mates = [a.cell.id for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
     for n in ('jump', 'teleportation'):
         if not ready(n) or (m.tp or 0) < ccost(n):
             continue
+        if n == 'teleportation' and not any(dist(c, x) <= 5 for x in mates):
+            continue                # a lone teleport into the army cost the leek (v7)
         try:
             if m.canUseChipOnCell(my_chips()[n], cell) and ok(m.useChipOnCell(my_chips()[n], cell)) and m.cell.id == c:
                 bnote('BLOCK rez cell %d with %s' % (c, n))
@@ -3488,8 +3491,12 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v7')
+        bnote('pumpkin v8')
     pk_listen()
+    # v7 blocked first and died by T8 (median): the core shields go up first when the army is near
+    if any(dist(me().cell.id, e.cell.id) <= 10 for e in army()):
+        for n in ('solidification', 'fortress', 'wall'):
+            cast_self(n)
     pk_block()
     if disarm(('evil_pumpkin',)):
         pass
