@@ -1517,6 +1517,16 @@ def bulb_ai():
     spend their chips on summons in the winners' fights)."""
     m = me()
     tgt = PK_TARGET.get('cell')
+    if tgt is None and pumpkin_on() and PK_STREAM:
+        # a permanent blocker: I play right after my summoner, before the next mob - same stream
+        try:
+            if resurrection_due():
+                c = riddle_cell(PK_STREAM[-3:])
+                cc = Cell.get(c) if c else None
+                if cc is not None and cc.empty and c in reachable(m.cell.id, m.mp or 0):
+                    tgt = c
+        except Exception:
+            tgt = None
     if tgt is not None:
         PK_TARGET['cell'] = None
         try:
@@ -1741,6 +1751,14 @@ def pk_block():
         bnote('rez cell %d already blocked' % c)
         return False
     m = me()
+    # 0) one of my bulbs plays right after me and can walk onto it: leave it to the bulb
+    try:
+        for b in (m.summons or []):
+            if b.cell is not None and b.alive and c in reachable(b.cell.id, b.maxMP or b.mp or 0):
+                bnote('rez cell %d: my %s will take it' % (c, ename(b)))
+                return True
+    except Exception:
+        pass
     # 1) a summon on it: Prototaxite reaches 10, a puny bulb 3
     for n in ('prototaxite', 'puny_bulb', 'corn'):
         if not ready(n) or (m.tp or 0) < ccost(n):
@@ -1843,7 +1861,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v8')
+        bnote('pumpkin v9')
     pk_listen()
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near
     if any(dist(me().cell.id, e.cell.id) <= 10 for e in army()):
