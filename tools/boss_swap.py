@@ -53,8 +53,10 @@ def curve(c, amount):
 
 
 # ---- Evil Pumpkin set (2026-10-19): tanky strikers like the winners (life ~3.3k, RES ~400, TP 30) ----
-PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump', 'fortress', 'wall', 'helmet', 'shield', 'solidification',
-             'rampart', 'carapace', 'remission', 'antidote', 'armor', 'elevation', 'regeneration', 'liberation']   # blockers first (riddle)
+PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump',              # blockers first (riddle)
+             'knowledge', 'remission', 'regeneration', 'fortress', 'wall',     # v12: the winners heal ~16k a fight
+             'solidification', 'rampart', 'protein', 'carapace', 'antidote',   # (knowledge +250 WIS before the heals)
+             'armor', 'elevation', 'liberation', 'helmet', 'shield']
 PK_KITS = {
     'AL': ['wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],     # v10: boots for the bulb relay
     'ED': ['savant_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],

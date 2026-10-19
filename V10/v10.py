@@ -3636,11 +3636,7 @@ def pk_defend():
     to, heals, then out of the army's reach with the MP left."""
     m = me()
     cleanse()
-    life = m.life or 0; tot = m.maxLife or 1
-    if life < tot * 0.5 and not BOSS['regen'] and cast_self('regeneration'):
-        BOSS['regen'] = True
-    if tot - life > 250:
-        cast_self('remission')
+    pk_heal()
     for n in PK_SHIELDS:
         cast_self(n)
     place_wall()
@@ -3662,25 +3658,58 @@ def pk_defend():
 PK_STRIKE = True
 
 
+def pk_heal():
+    """Knowledge (+250 WIS, 2 turns) before a big heal, regeneration once under half life, remission
+    every turn I'm hurt - else remission on the most hurt ally in range (Jace's squad heals ~16k a fight,
+    ours 2k)."""
+    m = me(); life = m.life or 0; tot = m.maxLife or 1; hurt = tot - life
+    big = life < tot * 0.5 and not BOSS['regen'] and ready('regeneration')
+    if (big or hurt > 500) and ready('knowledge') and (m.tp or 0) >= ccost('knowledge') + 5:
+        cast_self('knowledge')
+    if big and cast_self('regeneration'):
+        BOSS['regen'] = True
+    if hurt > 150:
+        cast_self('remission')
+        return
+    worst = None; wf = 0.8
+    for a in Fight.getAliveAllies():
+        if a.id == m.id or a.summoned or a.cell is None:
+            continue
+        fr = (a.life or 0) / max(1, a.maxLife or 1)
+        if fr < wf:
+            try:
+                if ready('remission') and m.canUseChip(my_chips()['remission'], a):
+                    wf, worst = fr, a
+            except Exception:
+                pass
+    if worst is not None:
+        cast_on('remission', worst)
+
+
 def pk_strike(vul):
     """A mob dropped its protection: focus the lowest-life vulnerable mob (distance breaks ties - far
     ones cost turns of walking); buffs, approach, every weapon and offensive chip, then shields with
     what's left. V10's search kept away from the army: 1.4k damage a fight vs the top teams' 40-46k."""
     m = me()
     t = min(vul, key=lambda e: ((e.life or 0) / 1500.0 + dist(m.cell.id, e.cell.id) / 3.0, e.id))
+    # v11 charged from 15-25 cells and died by T3-T5 (median length 6 vs 9): engage only what I can hit
+    # this turn or next, else hold and defend - the army walks to us
+    near = weapon_reach(t) is not None or dist(m.cell.id, t.cell.id) <= (m.mp or 0) + 6
+    if not near or (m.life or 0) < (m.maxLife or 1) * 0.35:
+        return False
     bnote('strike %s %d (d=%d)' % (ename(t), t.life or 0, dist(m.cell.id, t.cell.id)))
-    if weapon_reach(t) is None and dist(m.cell.id, t.cell.id) > (m.mp or 0) + 6:
-        for n in ('leather_boots', 'seven_league_boots'):
-            cast_self(n)
+    pk_heal()
     attack(t)
-    sustain()
+    for n in ('fortress', 'wall', 'solidification', 'armor'):
+        cast_self(n)
+    return True
 
 
 def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v11')
+        bnote('pumpkin v12')
     pk_listen()
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
     # but never eat the TP the due block needs
@@ -3701,7 +3730,8 @@ def pumpkin_turn():
         pk_defend()
         return None
     if PK_STRIKE:
-        pk_strike(vul)
+        if not pk_strike(vul):
+            pk_defend()
         return None
     return 'search'
 
