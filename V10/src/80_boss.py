@@ -1834,8 +1834,10 @@ def pk_relay_plan(c):
                 walks[extra] = _walk(mine, mp + extra, freeme)
             R = walks[extra]
             for jump in (False, True):
+                if jump and jt is None:
+                    continue
                 cost = ccost(bn) + cb + (jt if jump else 0)
-                if (jump and jt is None) or cost > tp:
+                if cost > tp:
                     continue
                 pool = hop if jump else frm
                 if any(x in pool for x in R):
