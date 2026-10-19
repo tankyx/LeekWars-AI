@@ -301,12 +301,22 @@ def main():
             print('%s: leeks under 300: %s' % (acct, under or 'none - back to talent mode'), flush=True)
             return run_xp_farmer if len(under) >= 2 else (run_xp if under else None)
         runners = {x: xp_runner(x) if x in xp else None for x in accts}
+        # one-off per-day caps (owner 2026-10-19: free credits for Pumpkin tests while keeping the
+        # 300-credit reserve): data/ladder/garden_cap_override.json = {"<paris pool date>": {"main": 60}}
+        caps = {x: a.cap for x in accts}
+        try:
+            ov = json.load(open(os.path.join(ROOT, 'data', 'ladder', 'garden_cap_override.json'))).get(today) or {}
+            for x, v in ov.items():
+                if x in caps:
+                    caps[x] = min(caps[x], int(v)); print('%s: cap override for %s -> %d' % (x, today, caps[x]), flush=True)
+        except FileNotFoundError:
+            pass
         if a.selector == 'model':
             th = [threading.Thread(target=runners[x], args=(x, LEEKS[x], out)) if runners[x] else
-                  threading.Thread(target=run_model, args=(x, LEEKS[x], a.cap, a.dump_at, a.min_ev, out,
+                  threading.Thread(target=run_model, args=(x, LEEKS[x], caps[x], a.dump_at, a.min_ev, out,
                                                            a.reroll_ev, a.reroll_after)) for x in accts]
         else:
-            th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], a.cap, out)) for x in accts]
+            th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], caps[x], out)) for x in accts]
         team_out = {}
         if not a.no_team:
             th.append(threading.Thread(target=run_team, args=(accts, team_out)))
