@@ -3384,42 +3384,209 @@ def resurrection_due():
         return True
 
 
-def pk_block():
-    """Block the predicted resurrection cell: a summon on it if one reaches, else my own body - only
-    when the next mob to act is about to resurrect."""
-    if len(PK_STREAM) < 1 or not resurrection_due():
+_BULB_MP = {'puny_bulb': 5, 'wizard_bulb': 7, 'savant_bulb': 6, 'lightning_bulb': 6, 'tactician_bulb': 6}   # non-critical summons
+_PK_GRID = {}
+_DIAM = {}
+
+
+def pk_grid():
+    """(x, y) -> cell id of every walkable cell (built once per fight)."""
+    if not _PK_GRID:
+        for i in range(613):
+            try:
+                c = Cell.get(i)
+            except Exception:
+                c = None
+            if c is not None and not c.obstacle:
+                _XY[i] = (c.x, c.y)
+                _PK_GRID[(c.x, c.y)] = i
+    return _PK_GRID
+
+
+def _diamond(lo, hi):
+    k = (lo, hi)
+    if k not in _DIAM:
+        _DIAM[k] = [(dx, dy) for dx in range(-hi, hi + 1) for dy in range(abs(dx) - hi, hi - abs(dx) + 1)
+                    if abs(dx) + abs(dy) >= lo]
+    return _DIAM[k]
+
+
+def _around(cells, lo, hi, free):
+    """Cells of `free` at distance lo..hi from some cell of `cells`."""
+    G = pk_grid(); out = set()
+    for s in cells:
+        x, y = _XY[s]
+        for dx, dy in _diamond(lo, hi):
+            n = G.get((x + dx, y + dy))
+            if n is not None and n in free:
+                out.add(n)
+    return out
+
+
+def _walk(start, cap, free):
+    """BFS over `free` cells from start: {cell: steps <= cap}."""
+    G = pk_grid(); seen = {start: 0}; fr = [start]
+    for step in range(1, cap + 1):
+        nx = []
+        for c in fr:
+            x, y = _XY[c]
+            for n in (G.get((x + 1, y)), G.get((x - 1, y)), G.get((x, y + 1)), G.get((x, y - 1))):
+                if n is not None and n not in seen and n in free:
+                    seen[n] = step; nx.append(n)
+        fr = nx
+        if not fr:
+            break
+    return seen
+
+
+def _pk_free():
+    occ = set()
+    for e in list(Fight.getAliveAllies() or []) + list(Fight.getAliveEnemies() or []):
+        if e.cell is not None:
+            occ.add(e.cell.id)
+    return set(pk_grid().values()) - occ
+
+
+def pk_relay_plan(c):
+    """Hakuzu's first-turn block (the winners' T0 warty drop, 101 fights): boots, walk, maybe a jump, then
+    summon a bulb within its MP of the rez cell - the bulb plays right after me, before the mob, and
+    walks onto it. Reach ~ MP + boots + 3 (jump) + summon range + bulb MP. Cheapest plan by TP:
+    (tp, jump, boots, bulb, cast-from cells, bulb start cells) or None."""
+    m = me(); mine = m.cell.id
+    free = _pk_free(); freeme = free | {mine}
+    tp = m.tp or 0; mp = m.mp or 0
+    to_c = _walk(c, 8, freeme)
+    boots = [(n, g) for n, g in (('leather_boots', 2), ('seven_league_boots', 1)) if ready(n)]
+    opts = [[]] + [[x] for x in boots] + ([boots] if len(boots) > 1 else [])
+    walks = {}
+    plans = []
+    jt = ccost('jump') if ready('jump') else None
+    for bn in ('puny_bulb', 'wizard_bulb', 'savant_bulb', 'lightning_bulb', 'tactician_bulb'):
+        if not ready(bn) or ccost(bn) > tp:
+            continue
+        ch = my_chips()[bn]
+        lo, hi = (ch.minRange or 1), (ch.maxRange or 3)
+        starts = set(x for x, k in to_c.items() if k <= _BULB_MP[bn] and x in free)
+        if not starts:
+            continue
+        frm = _around(starts, lo, hi, freeme)
+        hop = _around(frm, 1, 3, freeme) if jt is not None else set()
+        for bs in opts:
+            cb = sum(ccost(n) for n, _ in bs); extra = sum(g for _, g in bs)
+            if extra not in walks:
+                walks[extra] = _walk(mine, mp + extra, freeme)
+            R = walks[extra]
+            for jump in (False, True):
+                cost = ccost(bn) + cb + (jt if jump else 0)
+                if (jump and jt is None) or cost > tp:
+                    continue
+                pool = hop if jump else frm
+                if any(x in pool for x in R):
+                    plans.append((cost, jump, len(bs), bn, bs, frm, starts, to_c))
+                    break
+    if not plans:
+        return None
+    plans.sort(key=lambda p: (p[0], p[1], p[2]))
+    return plans[0]
+
+
+def pk_relay(c, plan):
+    cost, jump, _, bn, bs, frm, starts, to_c = plan
+    m = me()
+    for n, _ in bs:
+        cast_self(n)
+    free = _pk_free(); freeme = free | {m.cell.id}
+    R = _walk(m.cell.id, m.mp or 0, freeme)
+    pool = _around(frm, 1, 3, freeme) if jump else frm
+    xs = [x for x in R if x in pool]
+    if not xs:
+        bnote('rez cell %d: relay walk failed (mp %d)' % (c, m.mp or 0))
         return False
+    x = min(xs, key=lambda x: (R[x], dist(x, c)))
+    if x != m.cell.id:
+        m.moveToward(Cell.get(x))
+    if jump and m.cell.id not in frm:
+        js = sorted((j for j in frm if 1 <= dist(m.cell.id, j) <= 3 and Cell.get(j).empty), key=lambda j: dist(j, c))
+        for j in js:
+            if ok(m.useChipOnCell(my_chips()['jump'], Cell.get(j))):
+                break
+    ch = my_chips()[bn]
+    for s in sorted(starts, key=lambda s: to_c[s]):
+        cs = Cell.get(s)
+        if not cs.empty:
+            continue
+        try:
+            if not m.canUseChipOnCell(ch, cs):
+                continue
+        except Exception:
+            continue
+        PK_TARGET['cell'] = c if s != c else None
+        if ok(m.summon(ch, cs, bulb_ai)):
+            bnote('BLOCK rez cell %d: %s at %d (walk %d)%s%s' % (c, bn, s, to_c[s], ' +jump' if jump else '',
+                                                              ' +' + '+'.join(n for n, _ in bs) if bs else ''))
+            return True
+        PK_TARGET['cell'] = None
+    bnote('rez cell %d: no %s cell in sight from %d' % (c, bn, m.cell.id))
+    return False
+
+
+def pk_block(dry=False):
+    """Block the predicted resurrection cell, only when the next mob to act is about to resurrect: my bulb
+    if one reaches, a summon on it, a bulb relay, else my own body. dry=True returns the TP the block
+    would cost (None: nothing to block, or no way to) without acting."""
+    no = None if dry else False
+    if len(PK_STREAM) < 1 or not resurrection_due():
+        return no
     c = riddle_cell(PK_STREAM[-3:])
     if c is None:
-        return False
+        return no
     cell = Cell.get(c) if hasattr(Cell, 'get') else None
     if cell is None or cell.obstacle:
-        return False
+        return no
     if not cell.empty:
-        bnote('rez cell %d already blocked' % c)
-        return False
+        if not dry:
+            bnote('rez cell %d already blocked' % c)
+        return no
     m = me()
     # 0) one of my bulbs plays right after me and can walk onto it: leave it to the bulb
     try:
         for b in (m.summons or []):
             if b.cell is not None and b.alive and c in reachable(b.cell.id, b.maxMP or b.mp or 0):
+                if dry:
+                    return 0
                 bnote('rez cell %d: my %s will take it' % (c, ename(b)))
                 return True
     except Exception:
         pass
-    # 1) a summon on it: Prototaxite reaches 10, a puny bulb 3
+    # 1) a summon straight on it: Prototaxite reaches 10, a puny bulb 3
     for n in ('prototaxite', 'puny_bulb', 'corn'):
         if not ready(n) or (m.tp or 0) < ccost(n):
             continue
         try:
-            if m.canUseChipOnCell(my_chips()[n], cell) and ok(m.summon(my_chips()[n], cell, bulb_ai if n == 'puny_bulb' else plant_ai)):
-                bnote('BLOCK rez cell %d with %s' % (c, n))
-                return True
+            if m.canUseChipOnCell(my_chips()[n], cell):
+                if dry:
+                    return ccost(n)
+                if ok(m.summon(my_chips()[n], cell, bulb_ai if n == 'puny_bulb' else plant_ai)):
+                    bnote('BLOCK rez cell %d with %s' % (c, n))
+                    return True
         except Exception:
             pass
-    # 2) my own body: walk, else jump (3, no LoS), else teleport (12, no LoS)
+    # 2) a bulb relay (boots, walk, jump, summon within the bulb's MP of the cell)
+    plan = None
+    try:
+        plan = pk_relay_plan(c)
+    except Exception as ex:
+        bnote('relay plan error %s' % str(ex)[:80])
+    if plan is not None:
+        if dry:
+            return plan[0]
+        if pk_relay(c, plan):
+            return True
+    # 3) my own body: walk, else jump (3, no LoS), else teleport (12, no LoS) next to an ally
     rc = reachable(m.cell.id, m.mp or 0)
     if c in rc:
+        if dry:
+            return 0
         m.moveToward(cell)
         if m.cell.id == c:
             bnote('BLOCK rez cell %d by walking onto it' % c)
@@ -3431,50 +3598,17 @@ def pk_block():
         if n == 'teleportation' and not any(dist(c, x) <= 5 for x in mates):
             continue                # a lone teleport into the army cost the leek (v7)
         try:
-            if m.canUseChipOnCell(my_chips()[n], cell) and ok(m.useChipOnCell(my_chips()[n], cell)) and m.cell.id == c:
-                bnote('BLOCK rez cell %d with %s' % (c, n))
-                return True
+            if m.canUseChipOnCell(my_chips()[n], cell):
+                if dry:
+                    return ccost(n)
+                if ok(m.useChipOnCell(my_chips()[n], cell)) and m.cell.id == c:
+                    bnote('BLOCK rez cell %d with %s' % (c, n))
+                    return True
         except Exception:
             pass
-    # 3) Jace's way: boots for MP, walk as close as possible, summon a bulb next to the cell - the bulb
-    #    plays right after me (before the mob) and walks onto it (its own 6-8 MP)
-    bulbs = [n for n in ('wizard_bulb', 'savant_bulb', 'lightning_bulb', 'puny_bulb', 'tactician_bulb') if ready(n)]
-    if not bulbs:
-        return False
-    for n in ('seven_league_boots', 'leather_boots'):
-        if dist(m.cell.id, c) > 4 and ready(n) and (m.tp or 0) >= ccost(n) + min(ccost(b) for b in bulbs):
-            cast_self(n)
-    rc = reachable(m.cell.id, m.mp or 0)
-    near = min(rc, key=lambda x: (dist(x, c), rc[x])) if rc else m.cell.id
-    if near != m.cell.id:
-        m.moveToward(Cell.get(near))
-    for n in bulbs:
-        if (m.tp or 0) < ccost(n):
-            continue
-        chip = my_chips()[n]
-        x, y = cxy(c); best = None; bd = 99
-        for dx in range(-3, 4):
-            for dy in range(-3 + abs(dx), 4 - abs(dx)):
-                cc = cell_at(x + dx, y + dy)
-                if cc is None or cc.obstacle or not cc.empty:
-                    continue
-                d = dist(cc.id, c)
-                if d < bd:
-                    try:
-                        if not m.canUseChipOnCell(chip, cc):
-                            continue
-                    except Exception:
-                        continue
-                    bd, best = d, cc
-        if best is None:
-            continue
-        PK_TARGET['cell'] = c if best.id != c else None
-        if ok(m.summon(chip, best, bulb_ai)):
-            bnote('BLOCK rez cell %d: %s at %d (d=%d), walks the rest' % (c, n, best.id, bd))
-            return True
-        PK_TARGET['cell'] = None
-    bnote('rez cell %d out of reach (d=%d)' % (c, dist(m.cell.id, c)))
-    return False
+    if not dry:
+        bnote('rez cell %d out of reach (d=%d, tp %d mp %d)' % (c, dist(m.cell.id, c), m.tp or 0, m.mp or 0))
+    return no
 
 
 def pk_defend():
@@ -3509,12 +3643,18 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v9')
+        bnote('pumpkin v10')
     pk_listen()
-    # v7 blocked first and died by T8 (median): the core shields go up first when the army is near
+    # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
+    # but never eat the TP the due block needs
     if any(dist(me().cell.id, e.cell.id) <= 10 for e in army()):
+        try:
+            need = pk_block(dry=True) or 0
+        except Exception:
+            need = 0
         for n in ('solidification', 'fortress', 'wall'):
-            cast_self(n)
+            if (me().tp or 0) - ccost(n) >= need:
+                cast_self(n)
     pk_block()
     if disarm(('evil_pumpkin',)):
         pass

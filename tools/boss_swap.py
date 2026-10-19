@@ -56,8 +56,8 @@ def curve(c, amount):
 PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump', 'fortress', 'wall', 'helmet', 'shield', 'solidification',
              'rampart', 'carapace', 'remission', 'antidote', 'armor', 'elevation', 'regeneration', 'liberation']   # blockers first (riddle)
 PK_KITS = {
-    'AL': ['wizard_bulb'] + PK_SHIELD + ['steroid', 'adrenaline'],
-    'ED': ['savant_bulb'] + PK_SHIELD + ['steroid', 'adrenaline'],
+    'AL': ['wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],     # v10: boots for the bulb relay
+    'ED': ['savant_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],
     'KG': ['prototaxite', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],
     'MH': ['prototaxite', 'wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
 }
@@ -65,8 +65,9 @@ PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger
               'ED': ['glowing_saber', 'neutrino', 'rifle', 'm_laser'],
               'KG': ['glowing_saber', 'neutrino', 'lightninger', 'quantum_rifle'],
               'MH': ['glowing_saber', 'flame_thrower', 'gazor', 'plutonium_bazooka']}
-PK_BASE = {'AL': dict(tp=20, mp=6, resistance=320, strength=510),     # v8: the Fennel strikers' lines (damage once
-           'ED': dict(tp=20, mp=7, resistance=275, strength=500),     # protections drop early)
+PK_BASE = {'AL': dict(tp=20, mp=7, resistance=320, strength=510),     # v8: the Fennel strikers' lines (damage once
+           'ED': dict(tp=20, mp=9, resistance=275, strength=440),     # protections drop early); v10: GTGabi plays right
+                                                                      # before warty's T0 rez - MP 9 reaches 93% of its cells
            'KG': dict(tp=20, mp=7, resistance=450),
            'MH': dict(tp=21, mp=6, resistance=400, magic=400)}
 
