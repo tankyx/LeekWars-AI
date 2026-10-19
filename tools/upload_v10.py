@@ -17,7 +17,7 @@ PATH = '10.0/V10/v10.py'
 
 
 def minify(src):
-    """Drop comments, docstrings (kept as a no-op `0`) and blank lines; compile-checked."""
+    """Drop comments, docstrings (kept as a no-op `pass`) and blank lines; compile-checked."""
     import io, tokenize
     toks = list(tokenize.generate_tokens(io.StringIO(src).readline)); res = []
     for i, t in enumerate(toks):
@@ -32,7 +32,7 @@ def minify(src):
                 while k < len(toks) and toks[k].type in (tokenize.NL, tokenize.COMMENT):
                     k += 1
                 if k < len(toks) and toks[k].type in (tokenize.NEWLINE, tokenize.ENDMARKER):
-                    res.append(t._replace(string='0'))
+                    res.append(t._replace(string='pass'))
                     continue
         res.append(t)
     out = '\n'.join(l.rstrip() for l in tokenize.untokenize(res).splitlines() if l.strip()) + '\n'

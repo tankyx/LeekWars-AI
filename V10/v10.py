@@ -2213,7 +2213,7 @@ def assign(leeks, crys):
         return {}
     E = {(l.id, c): eta(l, c) for l in leeks for c in crys}
     ids = [l.id for l in leeks]
-    best = [None, None]
+    best: list = [None, None]
 
     def rec(i, used, acc):
         if i == len(ids):
@@ -2823,7 +2823,7 @@ def disarm(names=('fennel_king', 'fennel_scribe'), reserve=0):
     cost = (w.cost or 12) + (0 if _held(m) == w.id else 1)
     if (m.tp or 0) - reserve < cost:
         return False
-    rc = None
+    rc = {}
     for n in names:
         t = next((e for e in army() if ename(e) == n), None)
         if t is None or amputated(t):
@@ -2833,7 +2833,7 @@ def disarm(names=('fennel_king', 'fennel_scribe'), reserve=0):
                 continue
         except Exception:
             continue
-        if rc is None:
+        if not rc:
             rc = reachable(m.cell.id, m.mp or 0)
         try:
             cells = m.weaponCells(t, w) or []
@@ -3135,7 +3135,7 @@ def boss_flush():
 # life + T0 shields). Doctrine v1: disarm the pumpkin with the glowing saber whenever reachable (a
 # state lands through Divine Protection), shield/heal while every enemy is invincible, the V10
 # search on the vulnerable focus otherwise.
-PUMPKIN = {'on': None}
+PUMPKIN: dict = {'on': None}
 PK_SHIELDS = ('solidification', 'fortress', 'wall', 'armor', 'helmet', 'shield', 'armoring', 'elevation')
 
 
@@ -3484,7 +3484,7 @@ def pk_relay_plan(c):
             for jump in (False, True):
                 if jump and jt is None:
                     continue
-                cost = ccost(bn) + cb + (jt if jump else 0)
+                cost = ccost(bn) + cb + ((jt or 0) if jump else 0)
                 if cost > tp:
                     continue
                 pool = hop if jump else frm
