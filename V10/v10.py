@@ -2213,26 +2213,20 @@ def assign(leeks, crys):
         return {}
     E = {(l.id, c): eta(l, c) for l in leeks for c in crys}
     ids = [l.id for l in leeks]
-    best: list = [None, None]
-
     def rec(i, used, acc):
+        """(key, pairing) of the best completion; the first one found wins ties."""
         if i == len(ids):
-            key = (-len(acc), max([v for _, _, v in acc] or [0]), sum(v for _, _, v in acc))
-            if best[0] is None or key < best[0]:
-                best[0] = key; best[1] = list(acc)
-            return
-        rec(i + 1, used, acc)                      # this leek takes no crystal
+            return (-len(acc), max([v for _, _, v in acc] or [0]), sum(v for _, _, v in acc)), list(acc)
+        best = rec(i + 1, used, acc)               # this leek takes no crystal
         for c in crys:
             if c not in used:
-                rec(i + 1, used | {c}, acc + [(ids[i], c, E[(ids[i], c)])])
+                r = rec(i + 1, used | {c}, acc + [(ids[i], c, E[(ids[i], c)])])
+                if r[0] < best[0]:
+                    best = r
+        return best
 
-    rec(0, frozenset(), [])
     # every crystal must be covered when there are enough leeks: prefer pairings covering more crystals
-    out = {}
-    if best[1]:
-        for lid, c, _ in best[1]:
-            out[lid] = c
-    return out
+    return {lid: c for lid, c, _ in rec(0, frozenset(), [])[1]}
 
 
 def my_crystal():
