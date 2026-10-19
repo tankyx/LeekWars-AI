@@ -1687,9 +1687,37 @@ def pk_listen():
             PK_STREAM.append(v)
 
 
+def resurrection_due():
+    """The next mob to act will resurrect: it carries awakening off cooldown and an enemy lies dead.
+    Blocking on any other turn wasted the teleports (188 useless blocks vs 80 missed resurrections)."""
+    try:
+        nxt = Fight.getNextPlayer()
+    except Exception:
+        return True
+    if nxt is None:
+        return False
+    foes = set(e.id for e in Fight.getEnemies())
+    if nxt.id not in foes:
+        return False
+    try:
+        dead = [e for e in Fight.getDeadEnemies() if not e.summoned]
+    except Exception:
+        dead = []
+    if not dead:
+        return False
+    awk = next((c for c in (nxt.chips or []) if c.name == 'awakening'), None)
+    if awk is None:
+        return False
+    try:
+        return (awk.currentCooldownOf(nxt) or 0) == 0
+    except Exception:
+        return True
+
+
 def pk_block():
-    """Block the predicted resurrection cell: a summon on it if one reaches, else my own body."""
-    if len(PK_STREAM) < 1:
+    """Block the predicted resurrection cell: a summon on it if one reaches, else my own body - only
+    when the next mob to act is about to resurrect."""
+    if len(PK_STREAM) < 1 or not resurrection_due():
         return False
     c = riddle_cell(PK_STREAM[-3:])
     if c is None:
@@ -1763,7 +1791,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v5')
+        bnote('pumpkin v6')
     pk_listen()
     pk_block()
     if disarm(('evil_pumpkin',)):
