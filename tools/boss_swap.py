@@ -53,13 +53,13 @@ def curve(c, amount):
 
 
 # ---- Evil Pumpkin set (2026-10-19): tanky strikers like the winners (life ~3.3k, RES ~400, TP 30) ----
-PK_SHIELD = ['teleportation', 'puny_bulb', 'jump', 'fortress', 'wall', 'helmet', 'shield', 'solidification', 'rampart',
-             'carapace', 'remission', 'antidote', 'armor', 'elevation', 'regeneration', 'liberation']   # blockers first (riddle)
+PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump', 'fortress', 'wall', 'helmet', 'shield', 'solidification',
+             'rampart', 'carapace', 'remission', 'antidote', 'armor', 'elevation', 'regeneration', 'liberation']   # blockers first (riddle)
 PK_KITS = {
-    'AL': PK_SHIELD + ['steroid', 'adrenaline'],
-    'ED': PK_SHIELD + ['steroid', 'adrenaline'],
+    'AL': ['wizard_bulb'] + PK_SHIELD + ['steroid', 'adrenaline'],
+    'ED': ['savant_bulb'] + PK_SHIELD + ['steroid', 'adrenaline'],
     'KG': ['prototaxite', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],
-    'MH': ['prototaxite'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
+    'MH': ['prototaxite', 'wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
 }
 PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger'],
               'ED': ['glowing_saber', 'neutrino', 'rifle', 'm_laser'],

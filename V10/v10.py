@@ -3164,6 +3164,17 @@ def bulb_ai():
     """Decoy bulbs: hit the nearest vulnerable enemy with whatever reaches, else stand (the minions
     spend their chips on summons in the winners' fights)."""
     m = me()
+    tgt = PK_TARGET.get('cell')
+    if tgt is not None:
+        PK_TARGET['cell'] = None
+        try:
+            c = Cell.get(tgt)
+            if c is not None and c.empty and (m.mp or 0) > 0:
+                m.moveToward(c)
+        except Exception:
+            pass
+        if m.cell is not None and m.cell.id == tgt:
+            return                  # standing on the rez cell: the resurrection fails, the mob drops its protection
     vul = pk_vulnerable() if pumpkin_on() else [e for e in Fight.getAliveEnemies() if e.cell is not None]
     if not vul:
         return
@@ -3274,6 +3285,7 @@ for _i, _o in enumerate(range(0x2C13, 0x2C1A)):
     _GLAG[_o] = (_i + 1) * 100
 _GLAG[0x2C1B] = 800; _GLAG[0x2C1C] = 900; _GLAG[0x2C1D] = 1000
 PK_STREAM = []
+PK_TARGET = {'cell': None}     # rez cell the bulb I just summoned must walk onto (its turn comes before the mob's)
 
 
 def glag_num(txt):
@@ -3403,6 +3415,43 @@ def pk_block():
                 return True
         except Exception:
             pass
+    # 3) Jace's way: boots for MP, walk as close as possible, summon a bulb next to the cell - the bulb
+    #    plays right after me (before the mob) and walks onto it (its own 6-8 MP)
+    bulbs = [n for n in ('wizard_bulb', 'savant_bulb', 'lightning_bulb', 'puny_bulb', 'tactician_bulb') if ready(n)]
+    if not bulbs:
+        return False
+    for n in ('seven_league_boots', 'leather_boots'):
+        if dist(m.cell.id, c) > 4 and ready(n) and (m.tp or 0) >= ccost(n) + min(ccost(b) for b in bulbs):
+            cast_self(n)
+    rc = reachable(m.cell.id, m.mp or 0)
+    near = min(rc, key=lambda x: (dist(x, c), rc[x])) if rc else m.cell.id
+    if near != m.cell.id:
+        m.moveToward(Cell.get(near))
+    for n in bulbs:
+        if (m.tp or 0) < ccost(n):
+            continue
+        chip = my_chips()[n]
+        x, y = cxy(c); best = None; bd = 99
+        for dx in range(-3, 4):
+            for dy in range(-3 + abs(dx), 4 - abs(dx)):
+                cc = cell_at(x + dx, y + dy)
+                if cc is None or cc.obstacle or not cc.empty:
+                    continue
+                d = dist(cc.id, c)
+                if d < bd:
+                    try:
+                        if not m.canUseChipOnCell(chip, cc):
+                            continue
+                    except Exception:
+                        continue
+                    bd, best = d, cc
+        if best is None:
+            continue
+        PK_TARGET['cell'] = c if best.id != c else None
+        if ok(m.summon(chip, best, bulb_ai)):
+            bnote('BLOCK rez cell %d: %s at %d (d=%d), walks the rest' % (c, n, best.id, bd))
+            return True
+        PK_TARGET['cell'] = None
     bnote('rez cell %d out of reach (d=%d)' % (c, dist(m.cell.id, c)))
     return False
 
@@ -3439,7 +3488,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v6')
+        bnote('pumpkin v7')
     pk_listen()
     pk_block()
     if disarm(('evil_pumpkin',)):
