@@ -2900,6 +2900,8 @@ def place_wall():
         return False
     kc = king_cell()
     if kc is None:
+        kc = next((e.cell.id for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
+    if kc is None:
         return False
     prot = None; bd = 99
     for a in Fight.getAliveAllies():
@@ -3158,6 +3160,60 @@ def pk_vulnerable():
             and not is_invincible(e)]
 
 
+def bulb_ai():
+    """Decoy bulbs: hit the nearest vulnerable enemy with whatever reaches, else stand (the minions
+    spend their chips on summons in the winners' fights)."""
+    m = me()
+    vul = pk_vulnerable() if pumpkin_on() else [e for e in Fight.getAliveEnemies() if e.cell is not None]
+    if not vul:
+        return
+    t = min(vul, key=lambda e: dist(m.cell.id, e.cell.id))
+    for ch in (m.chips or []):
+        if (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
+            continue
+        try:
+            if offensive(ch) and m.canUseChip(ch, t):
+                m.useChip(ch, t)
+        except Exception:
+            pass
+    if (m.mp or 0) > 0:
+        m.moveToward(t, m.mp)
+
+
+def place_decoy():
+    """A puny bulb on a free cell 2-4 from me, on the army's side."""
+    if not ready('puny_bulb') or (me().tp or 0) < ccost('puny_bulb'):
+        return False
+    m = me(); a = army()
+    if not a:
+        return False
+    ax = sum(cxy(e.cell.id)[0] for e in a) / len(a); ay = sum(cxy(e.cell.id)[1] for e in a) / len(a)
+    x, y = cxy(m.cell.id); chip = my_chips()['puny_bulb']; best = None; bs = 1e9
+    for dx in range(-4, 5):
+        for dy in range(-4 + abs(dx), 5 - abs(dx)):
+            c = cell_at(x + dx, y + dy)
+            if c is None or c.obstacle or not c.empty or c.id in CORRIDOR:
+                continue
+            d = dist(c.id, m.cell.id)
+            if d < 2:
+                continue
+            cx, cy = cxy(c.id)
+            sc = abs(cx - ax) + abs(cy - ay)
+            if sc < bs:
+                try:
+                    if not m.canUseChipOnCell(chip, c):
+                        continue
+                except Exception:
+                    continue
+                bs, best = sc, c
+    if best is None:
+        return False
+    if ok(m.summon(chip, best, bulb_ai)):
+        bnote('decoy at %d' % best.id)
+        return True
+    return False
+
+
 def pk_defend():
     """Every enemy invincible: shields on myself, rampart / carapace on the ally the pumpkin is closest
     to, heals, then out of the army's reach with the MP left."""
@@ -3170,6 +3226,8 @@ def pk_defend():
         cast_self('remission')
     for n in PK_SHIELDS:
         cast_self(n)
+    place_wall()
+    place_decoy()
     pk = next((e for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
     mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
     if pk is not None and mates:
@@ -3187,9 +3245,10 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v1')
+        bnote('pumpkin v2')
     if disarm(('evil_pumpkin',)):
         pass
+    place_wall()
     vul = pk_vulnerable()
     if not vul:
         pk_defend()

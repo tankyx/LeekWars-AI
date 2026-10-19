@@ -52,6 +52,39 @@ def curve(c, amount):
     return t
 
 
+# ---- Evil Pumpkin set (2026-10-19): tanky strikers like the winners (life ~3.3k, RES ~400, TP 30) ----
+PK_SHIELD = ['fortress', 'wall', 'armor', 'helmet', 'shield', 'solidification', 'rampart', 'carapace', 'elevation',
+             'remission', 'regeneration', 'antidote', 'liberation', 'puny_bulb']
+PK_KITS = {
+    'AL': PK_SHIELD + ['steroid', 'adrenaline'],
+    'ED': PK_SHIELD + ['steroid', 'adrenaline'],
+    'KG': ['dome', 'prototaxite'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],
+    'MH': PK_SHIELD + ['prototaxite', 'venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
+}
+PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger'],
+              'ED': ['glowing_saber', 'neutrino', 'rifle', 'm_laser'],
+              'KG': ['glowing_saber', 'neutrino', 'lightninger', 'quantum_rifle'],
+              'MH': ['glowing_saber', 'flame_thrower', 'gazor', 'plutonium_bazooka']}
+PK_BASE = {'AL': dict(tp=20, mp=6, resistance=400, strength=400),
+           'ED': dict(tp=21, mp=7, resistance=300, strength=400),
+           'KG': dict(tp=20, mp=7, resistance=450),
+           'MH': dict(tp=21, mp=6, resistance=400, magic=400)}
+
+
+def pk_capital(base, budget=1780):
+    """Capital per stat for the base values, the rest of the budget in life."""
+    out = {}
+    for k in ('strength', 'wisdom', 'agility', 'resistance', 'science', 'magic'):
+        if base.get(k):
+            out[k] = int(round(curve(STAT, base[k])))
+    out['tp'] = sum(30 + 5 * i for i in range(base['tp'] - 10))
+    out['mp'] = sum(20 * (i + 1) for i in range(base['mp'] - 3))
+    rest = budget - sum(out.values())
+    if rest > 0:
+        out['life'] = rest
+    return out
+
+
 def capital_map(l):
     """Capital spent per stat, from the leek's base values (same curve as the loadout stats maps)."""
     out = {}
@@ -140,6 +173,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('action', choices=['snapshot', 'prepare', 'boss', 'restore', 'verify'])
     ap.add_argument('--force', action='store_true', help='snapshot over an existing snapshot')
+    ap.add_argument('--set', default='boss', choices=['boss', 'pumpkin'], help='which loadout set prepare/boss use')
     ap.add_argument('--boss-stats', action='store_true', help='prepare: Boss loadouts keep their boss stats for AL/ED/KG '
                     '(6 restat potions per session)')
     a = ap.parse_args()
@@ -160,6 +194,37 @@ def main():
         print('saved', SNAP)
         return
     snap = json.load(open(SNAP))
+    if a.action == 'prepare' and a.set == 'pumpkin':
+        los = loadouts(lw)
+        owned = {}
+        f = lw.get('/farmer/get-from-token'); f = f.get('farmer', f)
+        for x in f.get('chips') or []:
+            owned[x['template']] = owned.get(x['template'], 0) + (x.get('quantity') or 0)
+        for s_ in LEEKS:
+            for t in snap[s_]['chips']:
+                owned[t] = owned.get(t, 0) + 1
+        for s_ in LEEKS:
+            sn = snap[s_]
+            comps = [{'index': i, 'template': c[0]} for i, c in enumerate(sn['components']) if c]
+            update(lw, los['%s Solo' % s_], sn['weapons'], sn['chips'], comps, sn['capital'])
+            kit = []
+            for n in PK_KITS[s_]:
+                t = chip_id[n]
+                if owned.get(t, 0) <= 0:
+                    print('  %s: no %s left to equip' % (s_, n)); continue
+                if len(kit) < sn['max_chips']:
+                    kit.append(t); owned[t] -= 1
+            weapons = [weap_id[n] for n in PK_WEAPONS[s_]]
+            stats = pk_capital(PK_BASE[s_])
+            name = '%s Pumpkin' % s_
+            if name in los:
+                update(lw, los[name], weapons, kit, comps, stats)
+            else:
+                r = call(lw, 'POST', '/loadout/create', name=name, icon='', weapons=json.dumps(weapons), chips=json.dumps(kit),
+                         components=json.dumps(comps), stats=json.dumps(stats))
+                print('  %s created: %s' % (name, str(r)[:120]))
+            print('     pumpkin kit %s: %s | weapons %s | stats %s' % (s_, [names[t] for t in kit], PK_WEAPONS[s_], stats))
+        return
     if a.action == 'prepare':
         los = loadouts(lw)
         owned = {}
@@ -190,7 +255,7 @@ def main():
             print('     boss kit %s: %s | weapons %s | stats %s' % (s, [names[t] for t in kit], [names[t] for t in weapons], stats))
         return
     if a.action == 'boss':
-        apply_all(lw, 'Boss', names)
+        apply_all(lw, 'Pumpkin' if a.set == 'pumpkin' else 'Boss', names)
         for s, lid in LEEKS.items():
             got = state(leek(lw, lid))
             if got['components'] != snap[s]['components']:
