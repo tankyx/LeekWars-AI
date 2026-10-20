@@ -60,8 +60,8 @@ PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump',             
 PK_KITS = {
     'AL': ['wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],     # v10: boots for the bulb relay
     'ED': ['savant_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],
-    'KG': ['prototaxite', 'wizard_bulb', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],   # 8-leek: warty's T0 blocker
-    'MH': ['prototaxite', 'wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
+    'KG': ['prototaxite', 'wizard_bulb', 'seven_league_boots', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],   # warty's T0 blocker; SCI 579: boots +3 MP on himself / the next blocker
+    'MH': ['prototaxite', 'wizard_bulb'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
 }
 PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger'],
               'ED': ['glowing_saber', 'neutrino', 'rifle', 'm_laser'],

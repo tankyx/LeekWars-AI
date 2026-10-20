@@ -1802,7 +1802,8 @@ def pk_relay_plan(c):
     free = _pk_free(); freeme = free | {mine}
     tp = m.tp or 0; mp = m.mp or 0
     to_c = _walk(c, 8, freeme)
-    boots = [(n, g) for n, g in (('leather_boots', 2), ('seven_league_boots', 1)) if ready(n)]
+    slb = max(1, int(round(0.5 * (1 + (m.science or 0) / 100.0))))   # +1 at SCI 0-57, +2 at 218, +3 at 460-580
+    boots = [(n, g) for n, g in (('leather_boots', 2), ('seven_league_boots', slb)) if ready(n)]
     opts = [[]] + [[x] for x in boots] + ([boots] if len(boots) > 1 else [])
     walks = {}
     plans = []
@@ -1819,7 +1820,18 @@ def pk_relay_plan(c):
         frm = _around(starts, lo, hi, freeme)
         hop = _around(frm, 1, 3, freeme) if jt is not None else set()
         if tele is not None and ccost(bn) + tele <= tp:
-            land = [x for x in frm if 1 <= dist(mine, x) <= 12 and x != mine]
+            # walk first, then teleport (12, no LoS) onto a cell the bulb can be summoned from: reach ~MP + 12 +
+            # summon range + bulb MP (replay of the 8-leek batch: 74/81 missed rezzes in reach vs 43 without)
+            if 0 not in walks:
+                walks[0] = _walk(mine, mp, freeme)
+            R0 = sorted(walks[0], key=lambda x: walks[0][x])
+            land = {}
+            for x in frm:
+                if x == mine:
+                    continue
+                w = next((w for w in R0 if 1 <= dist(w, x) <= 12), None)
+                if w is not None:
+                    land[x] = w
             if land:
                 plans.append((ccost(bn) + tele, False, 0, bn, [], frm, starts, to_c, land))
         for bs in opts:
@@ -1854,7 +1866,10 @@ def pk_relay(c, plan):
         def safety(x):
             return (min([dist(x, f) for f in foes] or [99]) + (2 if any(dist(x, a) <= 4 for a in mates) else 0), -dist(x, c))
         for x in sorted(land, key=safety, reverse=True)[:4]:
-            if Cell.get(x).empty and ok(m.useChipOnCell(my_chips()['teleportation'], Cell.get(x))):
+            w = land[x]
+            if w != m.cell.id:
+                m.moveToward(Cell.get(w))
+            if 1 <= dist(m.cell.id, x) <= 12 and Cell.get(x).empty and ok(m.useChipOnCell(my_chips()['teleportation'], Cell.get(x))):
                 break
         if m.cell.id not in frm:
             bnote('rez cell %d: relay teleport failed' % c)
@@ -2006,6 +2021,46 @@ def pk_defend():
 PK_STRIKE = True
 
 
+def _mp_buffed(a):
+    try:
+        return any(f.type in (E_BUFF_MP, 31) for f in (a.effects or []))     # 31 = raw MP buff (leather boots)
+    except Exception:
+        return False
+
+
+def pk_boost_blocker():
+    """A high-SCI leek's seven league boots (+MP x (1 + SCI/100), 3 turns, range 8) on the ally who blocks
+    next - the one playing right before a mob, in turn order after me (myself included, next round)."""
+    m = me()
+    if (m.science or 0) < 200 or not ready('seven_league_boots') or (m.tp or 0) < ccost('seven_league_boots'):
+        return False
+    try:
+        ents = sorted([e for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies()) if e.cell is not None],
+                      key=lambda e: e.turnOrder)
+    except Exception:
+        return False
+    foes = set(e.id for e in Fight.getEnemies())
+    pos = next((i for i, e in enumerate(ents) if e.id == m.id), None)
+    if pos is None:
+        return False
+    n = len(ents)
+    ch = my_chips()['seven_league_boots']
+    for k in range(1, n + 1):
+        a = ents[(pos + k) % n]
+        if a.id in foes or a.summoned:
+            continue
+        nxt = ents[(pos + k + 1) % n]
+        if nxt.id not in foes or nxt.summoned or _mp_buffed(a):
+            continue
+        try:
+            if dist(m.cell.id, a.cell.id) <= 8 and m.canUseChip(ch, a) and cast_on('seven_league_boots', a):
+                bnote('boots on %s (blocks %s)' % (ename(a), ename(nxt)))
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def pk_heal():
     """Knowledge (+250 WIS, 2 turns) before a big heal, regeneration once under half life, remission
     every turn I'm hurt - else remission on the most hurt ally in range (Jace's squad heals ~16k a fight,
@@ -2057,7 +2112,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v12')
+        bnote('pumpkin v13')
     pk_listen()
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
     # but never eat the TP the due block needs
@@ -2070,6 +2125,7 @@ def pumpkin_turn():
             if (me().tp or 0) - ccost(n) >= need:
                 cast_self(n)
     pk_block()
+    pk_boost_blocker()
     if disarm(('evil_pumpkin',)):
         pass
     place_wall()
