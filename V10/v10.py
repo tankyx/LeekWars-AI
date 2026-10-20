@@ -3473,6 +3473,15 @@ def pk_relay_plan(c):
             PK_DIAG[bn] = 's0'
             continue
         frm = _around(starts, lo, hi, freeme)
+        if bn == 'prototaxite':
+            # a plant goes straight onto the cell: keep the cast cells that see it (v14: 27 plans failed on LoS)
+            try:
+                frm = set(x for x in frm if Field.lineOfSight(x, c, [m]))
+            except Exception:
+                pass
+            if not frm:
+                PK_DIAG[bn] = 'los'
+                continue
         hop = _around(frm, 1, 3, freeme) if jt is not None else set()
         if tele is not None and ccost(bn) + tele <= tp:
             # walk first, then teleport (12, no LoS) onto a cell the bulb can be summoned from: reach ~MP + 12 +
@@ -3632,6 +3641,23 @@ def pk_block(dry=False):
             bnote('BLOCK rez cell %d by walking onto it' % c)
             return True
     mates = [a.cell.id for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
+    # v15: every summon on cooldown (v14: puny 98, wizard 62 of 118 misses) - walk, then teleport my own body
+    # onto the cell when I can afford the risk (a drop is the only way to hurt the mobs)
+    healthy = (m.life or 0) >= (m.maxLife or 1) * 0.6
+    if ready('teleportation') and (m.tp or 0) >= ccost('teleportation') and (healthy or any(dist(c, x) <= 5 for x in mates)):
+        rc2 = reachable(m.cell.id, m.mp or 0)
+        ws = sorted((x for x in rc2 if 1 <= dist(x, c) <= 12), key=lambda x: rc2[x])
+        if ws:
+            if dry:
+                return ccost('teleportation')
+            if ws[0] != m.cell.id:
+                m.moveToward(Cell.get(ws[0]))
+            try:
+                if 1 <= dist(m.cell.id, c) <= 12 and ok(m.useChipOnCell(my_chips()['teleportation'], cell)) and m.cell.id == c:
+                    bnote('BLOCK rez cell %d: walk + teleport onto it' % c)
+                    return True
+            except Exception:
+                pass
     for n in ('jump', 'teleportation'):
         if not ready(n) or (m.tp or 0) < ccost(n):
             continue
@@ -3768,7 +3794,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v14')
+        bnote('pumpkin v15')
     pk_listen()
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
     # but never eat the TP the due block needs

@@ -24,10 +24,11 @@ SNAP = os.path.join(ROOT, 'data', 'ladder', 'cure_kit_snapshot.json')
 PK_CORE = ['seven_league_boots', 'teleportation', 'puny_bulb', 'leather_boots', 'jump', 'knowledge', 'remission',
            'regeneration', 'fortress', 'wall', 'solidification', 'rampart', 'antidote', 'armor']
 KITS = {'pumpkin': {
-    'LeekRain': ['savant_bulb'] + PK_CORE + ['protein'],                          # 16 slots, STR/SCI (boots +2-3 MP)
-    'DawnFall': ['wizard_bulb'] + PK_CORE + ['covid', 'toxin', 'venom', 'elevation'],  # 19 slots, MAG
-    'DuskHope': ['wizard_bulb'] + PK_CORE + ['covid', 'toxin'],                   # 17 slots, MAG
-    'ProdigalSon': ['savant_bulb'] + PK_CORE,                                     # 15 slots, STR/RES
+    # a second bulb each (v14: one bulb of each kind can't cover a block duty every round)
+    'LeekRain': ['savant_bulb', 'wizard_bulb'] + PK_CORE,                         # 16 slots, STR/SCI (boots +3 MP)
+    'DawnFall': ['wizard_bulb', 'savant_bulb'] + PK_CORE + ['covid', 'toxin', 'elevation'],  # 19 slots, MAG
+    'DuskHope': ['wizard_bulb', 'savant_bulb'] + PK_CORE + ['covid'],             # 17 slots, MAG
+    'ProdigalSon': ['savant_bulb', 'wizard_bulb'] + [x for x in PK_CORE if x != 'armor'],   # 15 slots, STR/RES
 }}
 
 
