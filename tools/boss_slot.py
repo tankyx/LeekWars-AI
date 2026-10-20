@@ -85,6 +85,11 @@ def main():
         return 0
     say('%d fights (credits main %d, cure %d)' % (n, cm, cc))
     ids = []
+    # Cure's chips for this boss: its saved ladder chips for Fennel (12/15 as fighters while main's leeks
+    # solve the crystals), the Pumpkin kit for the Pumpkin
+    out = run([sys.executable, '-u', 'tools/cure_kit.py'] + (['apply', 'pumpkin'] if a.boss == 3 else ['restore']), 300)
+    if 'MISMATCH' in out or 'Traceback' in out:
+        say('Cure kit not set cleanly:\n' + out[-600:])
     out = run([sys.executable, '-u', 'tools/boss_swap.py', 'snapshot', '--force'], 180)
     if 'saved' not in out:
         say('snapshot failed - skipped, nothing changed:\n' + out[-500:])

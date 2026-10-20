@@ -301,7 +301,7 @@ def main():
     ap.add_argument('--focus', default='cure:DuskHope',
                     help='talent mode only on these leeks, "acct:Leek+Leek,acct2:..." (owner 2026-10-19: Cure talent on '
                          'DuskHope); also where an XP account spends what is left once every leek is 300; "" = all leeks')
-    ap.add_argument('--boss-slot', default='3:20',              # calibration batch, then 3:all (credits carry over)
+    ap.add_argument('--boss-slot', default='2:all',             # owner 2026-10-20: farm Fennel meanwhile (Pumpkin 0/100 so far)
                     help='8-leek boss fights (main + Cure, tools/boss_slot.py) before anything else: "<boss>:<n|all>" '
                          '(3 = Pumpkin, 2 = Fennel) or "off" (owner 2026-10-20: "Focus on bosses", every credit to the Pumpkin)')
     ap.add_argument('--talent', default='off', choices=['on', 'off'],
