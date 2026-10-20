@@ -1088,6 +1088,33 @@ def attack(t):
                     m.moveToward(Cell.get(bh))
         if cast_on('hemorrhage', t):
             bnote('hemorrhage %s' % ename(t))
+    mage = (m.magic or 0) > (m.strength or 0)
+
+    def poison_chips():
+        # MAG leeks: the poisons first (covid ~3.6k over 7 turns at MAG 600, plague, toxin, venom) - the
+        # 8-leek Pumpkin mages spent their TP on STR weapons (Payou ~200 damage a fight at MAG 696)
+        for ch in sorted(m.chips or [], key=lambda c: -(c.cost or 0)):
+            if not t.alive:
+                break
+            try:
+                if (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0) or \
+                        not any(f.type == E_POISON for f in (ch.features or [])):
+                    continue
+                if m.canUseChip(ch, t) and not area_hits_ally(ch.effectiveArea(t.cell)):
+                    m.useChip(ch, t)
+            except Exception:
+                pass
+
+    def useful(w):
+        if not mage:
+            return True
+        try:
+            return any(f.type in (E_POISON, E_DEBUFF) or f.type == 26 for f in (w.features or []))
+        except Exception:
+            return True
+
+    if mage:
+        poison_chips()
     r = weapon_reach(t)
     if r is None:
         m.moveToward(t)
@@ -1095,11 +1122,15 @@ def attack(t):
     else:
         if r[0] != m.cell.id:
             m.moveToward(Cell.get(r[0]))
-        fire(r[2], t)
+        if useful(r[2]):
+            fire(r[2], t)
+    if mage:
+        poison_chips()
     for w in (m.weapons or []):
         if not t.alive:
             break
-        fire(w, t)
+        if useful(w):
+            fire(w, t)
     for ch in (m.chips or []):
         if not t.alive:
             break
@@ -2146,7 +2177,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v15')
+        bnote('pumpkin v16')
     pk_listen()
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
     # but never eat the TP the due block needs
