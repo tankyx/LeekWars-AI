@@ -1730,7 +1730,9 @@ def resurrection_due():
         return True
 
 
-_BULB_MP = {'puny_bulb': 5, 'wizard_bulb': 7, 'savant_bulb': 6, 'lightning_bulb': 6, 'tactician_bulb': 6}   # non-critical summons
+_BULB_MP = {'prototaxite': 0, 'puny_bulb': 5, 'wizard_bulb': 7, 'savant_bulb': 6, 'lightning_bulb': 6, 'tactician_bulb': 6}
+# non-critical summons' MP; the prototaxite (range 10, a plant) is summoned straight onto the cell
+PK_DIAG = {}
 _PK_GRID = {}
 _DIAM = {}
 
@@ -1809,13 +1811,18 @@ def pk_relay_plan(c):
     plans = []
     jt = ccost('jump') if ready('jump') else None
     tele = ccost('teleportation') if ready('teleportation') else None
-    for bn in ('puny_bulb', 'wizard_bulb', 'savant_bulb', 'lightning_bulb', 'tactician_bulb'):
+    PK_DIAG.clear()
+    for bn in ('prototaxite', 'puny_bulb', 'wizard_bulb', 'savant_bulb', 'lightning_bulb', 'tactician_bulb'):
+        if bn not in my_chips():
+            continue
         if not ready(bn) or ccost(bn) > tp:
+            PK_DIAG[bn] = 'cd' if not ready(bn) else 'tp'
             continue
         ch = my_chips()[bn]
         lo, hi = (ch.minRange or 1), (ch.maxRange or 3)
         starts = set(x for x, k in to_c.items() if k <= _BULB_MP[bn] and x in free)
         if not starts:
+            PK_DIAG[bn] = 's0'
             continue
         frm = _around(starts, lo, hi, freeme)
         hop = _around(frm, 1, 3, freeme) if jt is not None else set()
@@ -1849,6 +1856,8 @@ def pk_relay_plan(c):
                 if any(x in pool for x in R):
                     plans.append((cost, jump, len(bs), bn, bs, frm, starts, to_c, None))
                     break
+        if bn not in PK_DIAG:
+            PK_DIAG[bn] = 'ok' if any(p[3] == bn for p in plans) else 'far f%d' % len(frm)
     if not plans:
         return None
     # a teleport (cooldown 10) only when walking can't make it
@@ -1903,7 +1912,7 @@ def pk_relay(c, plan):
         except Exception:
             continue
         PK_TARGET['cell'] = c if s != c else None
-        if ok(m.summon(ch, cs, bulb_ai)):
+        if ok(m.summon(ch, cs, plant_ai if bn == 'prototaxite' else bulb_ai)):
             bnote('BLOCK rez cell %d: %s at %d (walk %d)%s%s%s' % (c, bn, s, to_c[s], ' +jump' if jump else '',
                                                                 ' +' + '+'.join(n for n, _ in bs) if bs else '',
                                                                 ' +teleport' if land else ''))
@@ -1990,7 +1999,8 @@ def pk_block(dry=False):
         except Exception:
             pass
     if not dry:
-        bnote('rez cell %d out of reach (d=%d, tp %d mp %d)' % (c, dist(m.cell.id, c), m.tp or 0, m.mp or 0))
+        bnote('rez cell %d out of reach (d=%d, tp %d mp %d) %s' % (c, dist(m.cell.id, c), m.tp or 0, m.mp or 0,
+              ' '.join('%s:%s' % (k[:4], v) for k, v in PK_DIAG.items())))
     return no
 
 
@@ -2002,8 +2012,6 @@ def pk_defend():
     pk_heal()
     for n in PK_SHIELDS:
         cast_self(n)
-    place_wall()
-    place_decoy()
     pk_provoke()
     pk = next((e for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
     mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
@@ -2112,7 +2120,7 @@ def pumpkin_turn():
     """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
     (the turn was played here)."""
     if Fight.turn == 1:
-        bnote('pumpkin v13')
+        bnote('pumpkin v14')
     pk_listen()
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
     # but never eat the TP the due block needs
@@ -2128,7 +2136,6 @@ def pumpkin_turn():
     pk_boost_blocker()
     if disarm(('evil_pumpkin',)):
         pass
-    place_wall()
     vul = pk_vulnerable()
     if not vul:
         pk_defend()
