@@ -60,7 +60,7 @@ PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump',             
 PK_KITS = {
     'AL': ['wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],     # v10: boots for the bulb relay
     'ED': ['savant_bulb', 'seven_league_boots'] + PK_SHIELD + ['steroid', 'adrenaline'],
-    'KG': ['prototaxite', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],
+    'KG': ['prototaxite', 'wizard_bulb', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],   # 8-leek: warty's T0 blocker
     'MH': ['prototaxite', 'wizard_bulb', 'seven_league_boots'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
 }
 PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger'],
@@ -218,7 +218,8 @@ def main():
                 if len(kit) < sn['max_chips']:
                     kit.append(t); owned[t] -= 1
             weapons = [weap_id[n] for n in PK_WEAPONS[s_]]
-            stats = pk_capital(PK_BASE[s_])
+            # --boss-stats: the Pumpkin respec (8 restat potions a session); else chip-only on the ladder stats
+            stats = pk_capital(PK_BASE[s_]) if a.boss_stats else sn['capital']
             name = '%s Pumpkin' % s_
             if name in los:
                 update(lw, los[name], weapons, kit, comps, stats)

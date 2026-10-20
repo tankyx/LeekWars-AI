@@ -70,6 +70,11 @@ const send = (acc, m) => acc.ws.send(JSON.stringify(m))
 const engaged = (acc) => (acc.squad && acc.squad.engaged_leeks || []).length
 
 const main = await login('main'), cure = await login('cure')
+// Squad order = spawn slot (main 0-3: 92, 301, 475, 515). The pumpkin opens on 515 every fight and the leek
+// playing right before warty (Zoulman by frequency in 8-leek squads) reaches most of warty's T0 rez cells from
+// there: the tank Zoulman takes 515 (replay: 81% of the cells vs 73% from 475).
+const ORDER = { 3: [20443, 129288, 129296, 129295] }
+if (ORDER[BOSS]) main.leeks = ORDER[BOSS].filter(id => main.leeks.includes(id)).concat(main.leeks.filter(id => !ORDER[BOSS].includes(id)))
 const want = main.leeks.length + cure.leeks.length
 log(`boss ${BOSS}: main ${main.leeks.length} leeks + cure ${cure.leeks.length} leeks, ${DRY ? 'dry run' : N + ' fights'}`)
 const ids = []

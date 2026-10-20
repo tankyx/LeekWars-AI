@@ -301,8 +301,11 @@ def main():
     ap.add_argument('--focus', default='cure:DuskHope',
                     help='talent mode only on these leeks, "acct:Leek+Leek,acct2:..." (owner 2026-10-19: Cure talent on '
                          'DuskHope); also where an XP account spends what is left once every leek is 300; "" = all leeks')
-    ap.add_argument('--fennel', type=int, default=0,             # owner 2026-10-19: off (DawnFall to 300, then DuskHope talent)
-                    help='8-leek Fennel fights (main + Cure, tools/fennel_slot.py) before the garden; 0 = off')
+    ap.add_argument('--boss-slot', default='3:20',              # calibration batch, then 3:all (credits carry over)
+                    help='8-leek boss fights (main + Cure, tools/boss_slot.py) before anything else: "<boss>:<n|all>" '
+                         '(3 = Pumpkin, 2 = Fennel) or "off" (owner 2026-10-20: "Focus on bosses", every credit to the Pumpkin)')
+    ap.add_argument('--talent', default='off', choices=['on', 'off'],
+                    help='garden talent / XP fights after the boss slot (owner 2026-10-20: off - everything to bosses)')
     a = ap.parse_args()
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
@@ -310,16 +313,16 @@ def main():
     print('=== daily_garden %s (%s selector)' % (datetime.datetime.now().isoformat(timespec='seconds'), a.selector), flush=True)
     accts = [x for x in LEEKS if x in a.accounts.split(',')]
     out = {}
-    if not a.dry_run and a.fennel > 0 and 'main' in accts and 'cure' in accts:
-        # owner 2026-10-19: a fixed daily Fennel slot right after the refill, the garden gets the rest
+    if not a.dry_run and a.boss_slot != 'off' and 'main' in accts and 'cure' in accts:
+        boss, n = a.boss_slot.split(':')
         try:
-            p = subprocess.run([sys.executable, '-u', os.path.join(HERE, 'fennel_slot.py'), '--n', str(a.fennel)],
-                               cwd=ROOT, timeout=5400)
+            p = subprocess.run([sys.executable, '-u', os.path.join(HERE, 'boss_slot.py'), '--boss', boss, '--n', n],
+                               cwd=ROOT, timeout=6 * 3600)
             if p.returncode == 2:
-                print('main is not on its ladder setup after the Fennel slot - main skipped today', flush=True)
+                print('main is not on its ladder setup after the boss slot - main skipped today', flush=True)
                 accts = [x for x in accts if x != 'main']
         except subprocess.TimeoutExpired:
-            print('Fennel slot timed out - main skipped today (check its loadouts)', flush=True)
+            print('boss slot timed out - main skipped today (check its loadouts)', flush=True)
             accts = [x for x in accts if x != 'main']
     if not a.dry_run:
         xp = [x for x in a.xp_accounts.split(',') if x]
@@ -365,7 +368,10 @@ def main():
                 m[n] = tuple(u + v for u, v in zip(m.get(n, (0, 0, 0, 0)), t))
             out[x] = m
 
-        if a.selector == 'model':
+        if a.talent == 'off':
+            print('talent fights off (--talent off): credits stay for the boss slot', flush=True)
+            th = []
+        elif a.selector == 'model':
             th = [threading.Thread(target=xp_then_talent, args=(x,)) if runners[x] else
                   threading.Thread(target=run_model, args=(x, talent_leeks(x), caps[x], a.dump_at, a.min_ev, out,
                                                            a.reroll_ev, a.reroll_after)) for x in accts]

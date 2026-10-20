@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Nightly 8-leek Fennel slot. Owner 2026-10-19 chose a "fixed daily Fennel slot": after the
-midnight-Paris refill, before the garden spends the rest.
+"""Nightly 8-leek boss slot (main + Cure through tools/boss_squad.mjs). Owner 2026-10-19: a daily Fennel
+slot before the garden; 2026-10-20: "Focus on bosses" - 8-leek Pumpkin first, every credit to bosses.
 
-main's 4 leeks go on the chip-only Boss kits (no respec, no restat potion). Cure's 4 leeks stay on
-their ladder kits. Fights go through tools/boss_squad.mjs, at 1 credit per account per fight;
-8-leek chip-only won 7/10 on 2026-10-19. The script waits until every fight has been generated,
-then restores main's ladder loadouts and verifies them: main's garden must never run on boss kits.
-Appends a row to data/ladder/fennel_slot.csv (date, fights, wins, ids).
+main's 4 leeks go on the chip-only Boss (Fennel) or Pumpkin kits: no respec, no restat potion.
+Cure's 4 leeks keep the chips they carry (tools/cure_kit.py applies Cure's boss kit).
+Each fight costs 1 credit per account. 8-leek chip-only Fennel won 12/15 on 2026-10-19.
+The script waits until every fight has been generated, then restores main's ladder loadouts and
+verifies them: main must never be left on boss kits. Appends a row to data/ladder/boss_slot.csv
+(date, boss, fights, wins, ids).
 
-    python3 tools/fennel_slot.py [--n 40]
+    python3 tools/boss_slot.py --boss 3 --n all      # every credit pair on the Pumpkin
+    python3 tools/boss_slot.py --boss 2 --n 40       # 40 Fennel fights
+    python3 tools/boss_slot.py --boss 3 --dry        # apply + restore main's kits, no fight
 
 Exit 0: done, or skipped, with main on its ladder setup. Exit 2: main is NOT on its ladder setup
 (the garden must skip main).
@@ -21,12 +24,12 @@ sys.path.insert(0, HERE)
 from lw_api import LWSession
 
 MAIN = [20443, 129288, 129295, 129296]
-BOSS_ONLY = {'spark', 'resurrection'}      # in every Boss kit, in no ladder kit
-CSV = os.path.join(ROOT, 'data', 'ladder', 'fennel_slot.csv')
+BOSS_ONLY = {'spark', 'resurrection', 'puny_bulb', 'wizard_bulb', 'savant_bulb', 'prototaxite'}   # boss kits only
+CSV = os.path.join(ROOT, 'data', 'ladder', 'boss_slot.csv')
 
 
 def say(s):
-    print('%s fennel_slot: %s' % (time.strftime('%H:%M:%S', time.gmtime()), s), flush=True)
+    print('%s boss_slot: %s' % (time.strftime('%H:%M:%S', time.gmtime()), s), flush=True)
 
 
 def credits(lw):
@@ -64,15 +67,20 @@ def restore():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--n', type=int, default=40)
+    ap.add_argument('--boss', type=int, default=3, choices=[2, 3], help='2 = Fennel King, 3 = Evil Pumpkin')
+    ap.add_argument('--n', default='all', help='number of fights, or "all" (every credit pair)')
+    ap.add_argument('--dry', action='store_true', help='apply and restore main\'s kits, no fight')
     a = ap.parse_args()
+    setf = ['--set', 'pumpkin'] if a.boss == 3 else []
     lwm, lwc = LWSession('main'), LWSession('cure')
     if on_boss_kits(lwm):
         say('main is still on boss kits from an earlier slot - restoring from the existing snapshot, no fights')
         return 0 if restore() else 2
     cm, cc = credits(lwm), credits(lwc)
-    n = min(a.n, cm, cc)
-    if n < 5:
+    n = min(cm, cc) if a.n == 'all' else min(int(a.n), cm, cc)
+    if a.dry:
+        n = 0
+    elif n < 5:
         say('only %d main / %d cure credits - skipped' % (cm, cc))
         return 0
     say('%d fights (credits main %d, cure %d)' % (n, cm, cc))
@@ -82,12 +90,15 @@ def main():
         say('snapshot failed - skipped, nothing changed:\n' + out[-500:])
         return 0
     try:
-        out = run([sys.executable, '-u', 'tools/boss_swap.py', 'prepare'], 300)
-        out += run([sys.executable, '-u', 'tools/boss_swap.py', 'boss'], 300)
+        out = run([sys.executable, '-u', 'tools/boss_swap.py', 'prepare'] + setf, 300)
+        out += run([sys.executable, '-u', 'tools/boss_swap.py', 'boss'] + setf, 300)
         if 'WARNING' in out or 'Traceback' in out:
             say('boss kits not applied cleanly - no fights:\n' + out[-800:])
+        elif a.dry:
+            say('dry run: main on the %s kits:\n%s' % ('Pumpkin' if a.boss == 3 else 'Boss',
+                '\n'.join(l[:160] for l in out.splitlines() if 'kit' in l or 'missing' in l)))
         else:
-            out = run(['node', 'tools/boss_squad.mjs', '--boss', '2', '--n', str(n)], 20 * n + 120)
+            out = run(['node', 'tools/boss_squad.mjs', '--boss', str(a.boss), '--n', str(n)], 20 * n + 120)
             ids = [int(x) for x in re.findall(r'started (\d+)', out)]
             say('%d fights started%s' % (len(ids), '' if len(ids) == n else ' (stopped: %s)' % out.strip().splitlines()[-1][:200]))
             # the fights read the leeks' kits when they are generated: wait for all of them
@@ -104,7 +115,7 @@ def main():
         ok = restore()
     wins = 0
     if ids:
-        out = run([sys.executable, '-u', 'tools/boss_v10_batch.py', '0', '--ids', ','.join(map(str, ids)), '--boss', '2'], 1800)
+        out = run([sys.executable, '-u', 'tools/boss_v10_batch.py', '0', '--ids', ','.join(map(str, ids)), '--boss', str(a.boss)], 1800)
         m = re.search(r'== (\d+) fights: (\d+) wins.*', out)
         wins = int(m.group(2)) if m else 0
         say(m.group(0) if m else 'no summary')
@@ -112,8 +123,8 @@ def main():
         with open(CSV, 'a', newline='') as fh:
             w = csv.writer(fh)
             if new:
-                w.writerow(['date', 'fights', 'wins', 'ids'])
-            w.writerow([datetime.date.today().isoformat(), len(ids), wins, ' '.join(map(str, ids))])
+                w.writerow(['date', 'boss', 'fights', 'wins', 'ids'])
+            w.writerow([datetime.date.today().isoformat(), a.boss, len(ids), wins, ' '.join(map(str, ids))])
     return 0 if ok else 2
 
 
