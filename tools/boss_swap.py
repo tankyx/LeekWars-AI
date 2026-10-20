@@ -60,8 +60,8 @@ PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump',             
 PK_KITS = {
     # v15: a second summon per blocker - one bulb of each kind can't cover a duty every round (v14: puny on
     # cooldown in 98 of 118 misses, wizard in 62)
-    'AL': ['wizard_bulb', 'lightning_bulb', 'seven_league_boots'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid', 'adrenaline'],
-    'ED': ['savant_bulb', 'tactician_bulb', 'seven_league_boots'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid', 'adrenaline'],
+    'AL': ['prototaxite', 'wizard_bulb', 'lightning_bulb', 'seven_league_boots'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid', 'adrenaline'],
+    'ED': ['prototaxite', 'savant_bulb', 'tactician_bulb', 'seven_league_boots'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid', 'adrenaline'],
     'KG': ['prototaxite', 'wizard_bulb', 'seven_league_boots', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],   # warty's T0 blocker; SCI 579: boots +3 MP on himself / the next blocker
     'MH': ['prototaxite', 'wizard_bulb'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
 }
