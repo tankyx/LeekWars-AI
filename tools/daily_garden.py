@@ -19,7 +19,7 @@ It never uploads code or changes kits: the build under test stays fixed.
     python3 tools/daily_garden.py            # run (lasts until the dump, ~23 h)
     python3 tools/daily_garden.py --dry-run  # credits + talent only
 """
-import argparse, csv, datetime, json, os, re, subprocess, sys, time
+import argparse, collections, csv, datetime, json, os, re, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -180,7 +180,7 @@ def run_xp(acct, leeks, out, inflight=2):
     print('%s: %d credits left' % (acct, credits(lw)), flush=True)
 
 
-def run_xp_farmer(acct, leeks, out, inflight=2):
+def run_xp_farmer(acct, leeks, out, inflight=2, cap=None):
     """XP mode with FARMER fights: one credit levels all the account's leeks at once
     (main's farmer fights: ~33k XP per credit across 4 leeks, vs ~3.8k for a solo fight).
     Opponent = weakest offered farmer (safest win). Health probe + cut pause as in garden_fast.
@@ -188,15 +188,16 @@ def run_xp_farmer(acct, leeks, out, inflight=2):
     import garden_fast as gf
     import xp_farm as xf
     lw = LWSession(acct); ids = {lid for _, lid in leeks}
-    avail = credits(lw)
-    print('%s: XP mode (farmer fights), %d credits' % (acct, avail), flush=True)
+    avail = credits(lw) if cap is None else min(cap, credits(lw))
+    print('%s: farmer fights, %d credits%s' % (acct, avail, '' if cap is None else ' (cap %d)' % cap), flush=True)
     out[acct] = {}
     if avail <= 0:
         return
     if not gf.health_probe(lw, leeks[0][1]):
         print('%s: health probe DEGRADED - no farmer fights now' % acct, flush=True); return
     logf = open(os.path.join(ROOT, 'data', 'ladder', 'xp_farmer.jsonl'), 'a')
-    pend = {}; started = done = xp_tot = 0; rec = [0, 0, 0]; recent = []; fails = 0
+    pend = {}; started = done = xp_tot = 0; rec = [0, 0, 0]; recent = []; fails = 0; loot = collections.Counter()
+    names = {int(k): v.get('name') for k, v in (lw.get('/item/get-all') or {}).items() if str(k).isdigit()}
     while (started < avail or pend) and fails < 10:
         while started < avail and len(pend) < inflight:
             ops = (lw.get('/garden/get-farmer-opponents') or {}).get('opponents') or []
@@ -222,13 +223,23 @@ def run_xp_farmer(acct, leeks, out, inflight=2):
             rec['WLD'.index(res)] += 1
             xp = sum(l.get('xp') or 0 for side in ('leeks1', 'leeks2') for l in rp.get(side) or [] if l.get('id') in ids)
             xp_tot += xp; done += 1
+            got = collections.Counter()
+            for l in rp.get('leeks1') or []:
+                if l.get('id') in ids:
+                    res_ = l.get('resources') or {}
+                    if isinstance(res_, str):
+                        res_ = json.loads(res_.replace("'", '"'))
+                    for t, q in res_.items():
+                        got[names.get(int(t), str(t))] += q
+            loot.update(got)
             bad = gf.fight_degraded(lw.get, fid); recent = (recent + [bad])[-6:]
             logf.write(json.dumps({'fight': fid, 'opp': o.get('name'), 'opp_talent': o.get('talent'), 'result': res,
-                                   'xp': xp, 'degraded': bad}) + '\n'); logf.flush()
+                                   'xp': xp, 'degraded': bad, 'loot': dict(got)}) + '\n'); logf.flush()
             if sum(recent) >= 3:
                 print('  %s farmer fights degraded (3 of last 6) - stopping' % acct, flush=True)
                 avail = started
-    print('%s: %d farmer fights %dW/%dL/%dD, %.0f XP per fight' % (acct, done, rec[0], rec[1], rec[2], xp_tot / max(1, done)), flush=True)
+    print('%s: %d farmer fights %dW/%dL/%dD, %.0f XP per fight | loot %s' % (acct, done, rec[0], rec[1], rec[2], xp_tot / max(1, done),
+          dict(loot.most_common(12))), flush=True)
     out[acct] = {n: (done, rec[0], rec[1], rec[2]) for n, _ in leeks}
     xl = xf.Limited(lw, 4.0)
     for n, lid in leeks:
@@ -304,6 +315,11 @@ def main():
     ap.add_argument('--boss-slot', default='off',               # owner 2026-10-20 evening: back to normal ladder
                     help='8-leek boss fights (main + Cure, tools/boss_slot.py) before anything else: "<boss>:<n|all>" '
                          '(3 = Pumpkin, 2 = Fennel) or "off" (owner 2026-10-20: "Focus on bosses", every credit to the Pumpkin)')
+    ap.add_argument('--caps', default='cure:200', help='per-account caps overriding --cap, "acct:N,..." '
+                    '(owner 2026-10-21: Cure farms talent and resources with its bought credits)')
+    ap.add_argument('--farmer-after', default='cure:100',
+                    help='before an account\'s talent fights (runs first), up to N farmer fights for loot '
+                         '(4 rolls a credit, leek talent untouched): "acct:N,..."; "" = none')
     ap.add_argument('--talent', default='on', choices=['on', 'off'],
                     help='garden talent / XP fights after the boss slot (owner 2026-10-20: off - everything to bosses)')
     a = ap.parse_args()
@@ -340,6 +356,10 @@ def main():
         # one-off per-day caps (owner 2026-10-19: free credits for Pumpkin tests while keeping the
         # 300-credit reserve): data/ladder/garden_cap_override.json = {"<paris pool date>": {"main": 60}}
         caps = {x: a.cap for x in accts}
+        for item in (a.caps or '').split(','):
+            if ':' in item and item.split(':')[0] in caps:
+                caps[item.split(':')[0]] = int(item.split(':')[1])
+        farmer_after = {i.split(':')[0]: int(i.split(':')[1]) for i in (a.farmer_after or '').split(',') if ':' in i}
         try:
             ov = json.load(open(os.path.join(ROOT, 'data', 'ladder', 'garden_cap_override.json'))).get(today) or {}
             for x, v in ov.items():
@@ -372,9 +392,14 @@ def main():
             print('talent fights off (--talent off): credits stay for the boss slot', flush=True)
             th = []
         elif a.selector == 'model':
+            def farmer_then_talent(x):
+                # loot farmer fights first (~10 min; they don't touch leek talent), then the all-day talent run,
+                # so nothing runs into the next night's 22:17 start
+                if farmer_after.get(x):
+                    run_xp_farmer(x, LEEKS[x], {}, cap=farmer_after[x])
+                run_model(x, talent_leeks(x), caps[x], a.dump_at, a.min_ev, out, a.reroll_ev, a.reroll_after)
             th = [threading.Thread(target=xp_then_talent, args=(x,)) if runners[x] else
-                  threading.Thread(target=run_model, args=(x, talent_leeks(x), caps[x], a.dump_at, a.min_ev, out,
-                                                           a.reroll_ev, a.reroll_after)) for x in accts]
+                  threading.Thread(target=farmer_then_talent, args=(x,)) for x in accts]
         else:
             th = [threading.Thread(target=run_mcp, args=(x, LEEKS[x], caps[x], out)) for x in accts]
         team_out = {}
