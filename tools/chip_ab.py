@@ -29,6 +29,8 @@ def main():
     ap.add_argument('--account', default='main'); ap.add_argument('--seed', type=int, default=7)
     ap.add_argument('--track', default='hemorr', help='substring counted in our AI logs (last CSV column, "hem" in the printout)')
     ap.add_argument('--kind', default='auto', choices=['auto', 'chip', 'weapon', 'component'])
+    ap.add_argument('--b-chips', default='', help='components: chips equipped only while arm B is on (e.g. the slots '
+                    'a RAM-giving part opens), removed before arm A')
     a = ap.parse_args()
     lw = LWSession(a.account); I = lw.get('/item/get-all'); nm = lambda t: I.get(str(t), {}).get('name', t)
     rng = random.Random(a.seed)
@@ -102,6 +104,23 @@ def main():
         if not (isinstance(r, dict) and r.get('id')):
             raise RuntimeError('could not equip %s: %s' % (want, r))
 
+    bchips = [c if c.startswith('chip_') else 'chip_' + c for c in a.b_chips.split(',') if c]
+    chips0 = sorted(nm(c['template']) for c in lw.leek(a.leek)['chips'])
+
+    def bchips_set(on):
+        if not bchips:
+            return
+        have = {nm(c['template']): c['id'] for c in lw.leek(a.leek)['chips']}
+        for n in bchips:
+            if on and n not in have:
+                f = lw.get('/farmer/get-from-token'); f = f.get('farmer', f)
+                inv = next((x['id'] for x in f.get('chips') or [] if nm(x['template']) == n), None)
+                r = lw.post('/leek/add-chip', leek_id=a.leek, chip_id=inv) if inv else {'error': 'none in inventory'}
+                if not (isinstance(r, dict) and r.get('id')):
+                    raise RuntimeError('could not add %s: %s' % (n, r))
+            elif not on and n in have:
+                lw.call('DELETE', '/leek/remove-chip', leek_id=a.leek, chip_id=have[n])
+
     def challenge(o, seed):
         r = lw.post('/garden/start-solo-challenge', leek_id=a.leek, target_id=o['id'], seed=seed, side=0)
         fid = r.get('fight') if isinstance(r, dict) else (r if isinstance(r, int) else None)
@@ -128,7 +147,11 @@ def main():
             got = {}
             for arm in order:
                 chip, other = (a.a, a.b) if arm == 'A' else (a.b, a.a)
+                if arm == 'A':
+                    bchips_set(False)
                 equip(chip, other); set_ai(arm)
+                if arm == 'B':
+                    bchips_set(True)
                 out, err = challenge(o, seed)
                 if out is None:
                     print('stop: %s' % err[:120], flush=True); raise StopIteration
@@ -140,11 +163,14 @@ def main():
         pass
     finally:
         try:
+            bchips_set(False)
             equip(a.a, a.b)        # leave arm A's chip equipped (the deployed kit)
         except Exception as ex:
             print('restore chip failed: %s' % ex, flush=True)
         lw.post('/leek/set-ai', leek_id=a.leek, ai_path=ai0)
         print('restored %s + AI %s' % (a.a, ai0), flush=True)
+        now = sorted(nm(c['template']) for c in lw.leek(a.leek)['chips'])
+        print('chips %s the original kit' % ('match' if now == chips0 else 'DIFFER from (%s vs %s)' % (now, chips0)), flush=True)
     A, B = res['A'], res['B']
     if pairs:
         better = sum(1 for x, y in zip(A, B) if x > y); worse = sum(1 for x, y in zip(A, B) if x < y)
