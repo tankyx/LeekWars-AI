@@ -317,7 +317,7 @@ def main():
                          '(3 = Pumpkin, 2 = Fennel) or "off" (owner 2026-10-20: "Focus on bosses", every credit to the Pumpkin)')
     ap.add_argument('--caps', default='cure:200', help='per-account caps overriding --cap, "acct:N,..." '
                     '(owner 2026-10-21: Cure farms talent and resources with its bought credits)')
-    ap.add_argument('--farmer-after', default='cure:100',
+    ap.add_argument('--farmer-after', default='cure:20',       # owner 2026-10-23: cut from 100 (commons only; talent gets the rest)
                     help='before an account\'s talent fights (runs first), up to N farmer fights for loot '
                          '(4 rolls a credit, leek talent untouched): "acct:N,..."; "" = none')
     ap.add_argument('--talent', default='on', choices=['on', 'off'],
