@@ -1,0 +1,578 @@
+// Local Pumpkin simulator: the AI of the Evil Pumpkin and its brothers (hubbard, turban, warty, offspring).
+// Not the official AI (server-side, unpublished): a reconstruction from 708 real Pumpkin fights
+// (tools/pumpkin_fights.py, pumpkin_study.py).
+//
+// Riddle (exact on the logs):
+//   - the mobs speak in cycles of K 3-digit Glagolitic numbers, K = min(3, alive mobs) at the cycle's start;
+//   - the mob whose turn comes once K numbers are out holds the slot: a dead brother exists -> the cell is
+//     the riddle of the K numbers; taken -> "kopile!!" + exasperation on itself (its Divine Protection drops);
+//     free -> "privet brat!" + awakening there on a random dead brother; nobody dead -> "umri!";
+//   - the cycle's first number is said with a probability that depends on the alive leeks and mobs
+//     (PSTART); the 2nd and 3rd are always said; target cells are random free cells.
+// Combat (fitted on the same logs, tools/pumpkin_calibrate.py): attack what can be reached this turn, else
+// drift a little; steroid and jump whenever ready, adrenaline only to afford one more shot, liberation on
+// shielded targets, antidote when poisoned, hubbard's inversion on the nearest enemy, the pumpkin's scythe
+// (walk, jump or teleport next to the nearest reachable enemy).
+
+include('pumpkin_riddle.leek')
+
+global KOPILE = 'ⰽⱁⱂⰻⰾⰵ!!'
+global PRIVET = 'ⱂⱃⰻⰲⰵⱅ ⰱⱃⰰⱅ!'
+global UMRI = 'ⱆⰿⱃⰻ!'
+
+// item ids (generator data/chips.json, weapons.json)
+global C_LIGHTNING = 33
+global C_FLASH = 6
+global C_JUMP = 144
+global C_THUNDER = 416
+global C_PLASMA = 143
+global C_LIBERATION = 34
+global C_STEROID = 25
+global C_EXASPERATION = 425
+global C_TELEPORT = 59
+global C_DP = 419
+global C_ADRENALINE = 16
+global C_ANTIDOTE = 110
+global C_VENOM = 97
+global C_TOXIN = 98
+global C_PLAGUE = 99
+global C_INVERSION = 68
+global W_SCYTHE = 410
+
+global ME = getEntity()
+global NAME = getName()
+global CYCLE = []
+global KCYC = 3
+global SAID = 0
+global LAST_TURN = -1
+// decoded once from the compact strings of pumpkin_riddle.leek
+global R3 = []
+global R2 = []
+global S3 = []
+global S2 = []
+global S1 = []
+global NUMSTR = []
+global NUMOF = [:]
+global READY = false
+global PLAGUE_OK = true
+global ADRENALINE_OK = true
+
+function bestDiv(n) {
+	for (var c = 612; c > 0; c--) {
+		if (n % c == 0) {
+			return c
+		}
+	}
+	return 0
+}
+
+function initTables() {
+	for (var c = 0; c < 613; c++) {
+		push(S3, [])
+		push(S2, [])
+		push(S1, [])
+	}
+	for (var n = 0; n < 1000; n++) {
+		var a = number(substring(R3S, n * 9, 3))
+		var b = number(substring(R3S, n * 9 + 3, 3))
+		var c3 = number(substring(R3S, n * 9 + 6, 3))
+		if (c3 > 0) {
+			push(R3, [a, b, c3])
+			push(S3[c3], n)
+		} else {
+			push(R3, null)
+		}
+		var a2 = number(substring(R2S, n * 6, 3))
+		var c2 = number(substring(R2S, n * 6 + 3, 3))
+		if (c2 > 0) {
+			push(R2, [a2, c2])
+			push(S2[c2], n)
+		} else {
+			push(R2, null)
+		}
+		if (n >= 100) {
+			var s = GH[floor(n / 100)] + GT[floor(n / 10) % 10] + GU[n % 10]
+			push(NUMSTR, s)
+			NUMOF[s] = n
+			push(S1[bestDiv(n)], n)
+		} else {
+			push(NUMSTR, null)
+		}
+	}
+	READY = true
+}
+if (!READY) {
+	initTables()
+}
+
+// ---- helpers ----
+function aliveMobs() {
+	var out = []
+	for (var a in getAliveAllies()) {
+		if (!isSummon(a)) {
+			push(out, a)
+		}
+	}
+	return out
+}
+
+function deadBrothers() {
+	var out = []
+	for (var a in getDeadAllies()) {
+		if (!isSummon(a)) {
+			push(out, a)
+		}
+	}
+	return out
+}
+
+function aliveLeeks() {
+	var out = []
+	for (var e in getAliveEnemies()) {
+		if (!isSummon(e)) {
+			push(out, e)
+		}
+	}
+	return out
+}
+
+function riddleCell(nums) {
+	var k = count(nums)
+	if (k == 1) {
+		return bestDiv(nums[0])
+	}
+	if (k == 2) {
+		return max(bestDiv(nums[0] * 1000 + nums[1]), bestDiv(nums[1] * 1000 + nums[0]))
+	}
+	var a = nums[0], b = nums[1], c = nums[2]
+	var best = 0
+	for (var p in [[a, b, c], [a, c, b], [b, a, c], [b, c, a], [c, a, b], [c, b, a]]) {
+		best = max(best, bestDiv(p[0] * 1000000 + p[1] * 1000 + p[2]))
+	}
+	return best
+}
+
+function speak(msg) {
+	if (SAID < 2) {
+		say(msg)
+		SAID++
+	}
+}
+
+// ---- the riddle ----
+function hear(msg) {
+	if (msg == KOPILE || msg == PRIVET || msg == UMRI) {
+		CYCLE = []
+		KCYC = min(3, count(aliveMobs()))
+		return null
+	}
+	var n = NUMOF[msg]
+	if (n != null) {
+		push(CYCLE, n)
+	}
+}
+
+function sayNumber(n) {
+	speak(NUMSTR[n])
+	push(CYCLE, n)
+}
+
+function maybeStart() {
+	var L = count(aliveLeeks())
+	var M = count(aliveMobs())
+	if (L == 0 || M == 0) {
+		return null
+	}
+	var p = PSTART[min(L, 8) - 1][min(M, 8) - 1]
+	if (rand() >= p) {
+		return null
+	}
+	var table = KCYC >= 3 ? S3 : (KCYC == 2 ? S2 : S1)
+	for (var t = 0; t < 60; t++) {
+		var c = randInt(1, 613)
+		if (isObstacle(c) || !isEmptyCell(c)) {
+			continue
+		}
+		var firsts = table[c]
+		if (firsts == null || count(firsts) == 0) {
+			continue
+		}
+		sayNumber(firsts[randInt(0, count(firsts))])
+		return null
+	}
+}
+
+function riddleTurn() {
+	var k = count(CYCLE)
+	if (k >= KCYC && k > 0) {
+		var dead = deadBrothers()
+		if (count(dead) > 0) {
+			var cell = riddleCell(CYCLE)
+			if (getEntityOnCell(cell) != null && getEntityOnCell(cell) != -1) {
+				speak(KOPILE)
+				useChip(C_EXASPERATION, ME)
+			} else {
+				speak(PRIVET)
+				resurrect(dead[randInt(0, count(dead))], cell)
+			}
+		} else {
+			speak(UMRI)
+		}
+		CYCLE = []
+		KCYC = min(3, count(aliveMobs()))
+		maybeStart()
+	} else if (k == 0) {
+		maybeStart()
+	} else {
+		var n1 = CYCLE[0]
+		if (KCYC == 3) {
+			var r = R3[n1]
+			if (r != null) {
+				sayNumber(r[k - 1])
+			}
+		} else if (KCYC == 2) {
+			var r2 = R2[n1]
+			if (r2 != null) {
+				sayNumber(r2[0])
+			}
+		}
+	}
+}
+
+// ---- combat ----
+function hasChip(c) {
+	return inArray(getChips(), c)
+}
+
+function ready(c) {
+	return hasChip(c) && getCooldown(c) == 0
+}
+
+function enemiesByDistance() {
+	var me = getCell()
+	var arr = []
+	for (var e in getAliveEnemies()) {
+		var c = getCell(e)
+		if (c == null || c < 0) {
+			continue
+		}
+		var d = getPathLength(me, c)
+		if (d == null) {
+			d = getCellDistance(me, c) + 6
+		}
+		// the mobs hit leeks rather than bulbs (80-94% of their targets) and lean toward hurt ones (the top
+		// target of a round is the lowest-life leek 27% of the time)
+		var hp = getLife(e) / max(1, getTotalLife(e))
+		push(arr, [d + (isSummon(e) ? 4 : 0) + 4 * hp, e])
+	}
+	arr = arraySort(arr, function(x, y) {
+		return x[0] - y[0]
+	})
+	var out = []
+	for (var x in arr) {
+		push(out, x[1])
+	}
+	return out
+}
+
+// attack chips in priority order (fitted on the real chip counts per turn)
+function attackChips() {
+	if (NAME == 'evil_pumpkin') {
+		return [C_THUNDER, C_LIGHTNING, C_PLASMA, C_FLASH]
+	}
+	if (NAME == 'hubbard') {
+		return [C_LIGHTNING, C_PLASMA, C_FLASH]
+	}
+	if (NAME == 'turban') {
+		return [C_LIGHTNING, C_FLASH]
+	}
+	if (NAME == 'warty') {
+		return [C_VENOM, C_TOXIN, C_PLAGUE]
+	}
+	return [C_FLASH]
+}
+
+function hasPoison(e) {
+	for (var eff in getEffects(e)) {
+		if (eff[0] == EFFECT_POISON) {
+			return true
+		}
+	}
+	return false
+}
+
+// jump (1-3 cells, no line of sight) onto the cell of `cells` nearest to `goal`
+function jumpToward(goal) {
+	if (!ready(C_JUMP) || getTP() < getChipCost(C_JUMP)) {
+		return false
+	}
+	var me = getCell()
+	var best = null
+	var bd = getCellDistance(me, goal)
+	for (var c = 0; c < 613; c++) {
+		var d = getCellDistance(me, c)
+		if (d < 1 || d > 3 || isObstacle(c) || !isEmptyCell(c)) {
+			continue
+		}
+		var g = getCellDistance(c, goal)
+		if (g < bd) {
+			bd = g
+			best = c
+		}
+	}
+	if (best != null && canUseChipOnCell(C_JUMP, best)) {
+		return useChipOnCell(C_JUMP, best) > 0
+	}
+	return false
+}
+
+// one attack: the first (enemy, chip) pair usable from a cell within reach; true if a chip was cast
+function attackOnce(foes, chips) {
+	for (var e in foes) {
+		for (var chip in chips) {
+			if (getCooldown(chip) > 0 || (chip == C_PLAGUE && !PLAGUE_OK)) {
+				continue
+			}
+			if (getTP() < getChipCost(chip)) {
+				// adrenaline (+5 TP this turn) when it buys one more shot (real: ~0.05 casts a turn)
+				if (ADRENALINE_OK && ready(C_ADRENALINE) && getTP() + 5 - 1 >= getChipCost(chip) && getTP() >= 1) {
+					useChip(C_ADRENALINE, ME)
+				}
+				if (getTP() < getChipCost(chip)) {
+					continue
+				}
+			}
+			if (canUseChip(chip, e)) {
+				if (useChip(chip, e) > 0) {
+					return true
+				}
+				continue
+			}
+			var cell = getCellToUseChip(chip, e)
+			if (cell == null || cell < 0) {
+				continue
+			}
+			var d = getPathLength(getCell(), cell)
+			if (d == null) {
+				continue
+			}
+			if (d <= getMP()) {
+				moveTowardCell(cell)
+				if (canUseChip(chip, e) && useChip(chip, e) > 0) {
+					return true
+				}
+			} else if (d <= getMP() + 3 && ready(C_JUMP) && getTP() >= getChipCost(C_JUMP) + getChipCost(chip)) {
+				moveTowardCell(cell)
+				if (canUseChipOnCell(C_JUMP, cell)) {
+					useChipOnCell(C_JUMP, cell)
+					if (canUseChip(chip, e) && useChip(chip, e) > 0) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+function scythe(e) {
+	if (getWeapon() != W_SCYTHE) {
+		setWeapon(W_SCYTHE)
+	}
+	return canUseWeapon(W_SCYTHE, e) && useWeapon(e) > 0
+}
+
+// the pumpkin's scythe (300-350 x STR 1000): teleport next to the nearest enemy within 13 whenever teleport is
+// ready (real: on every cooldown), otherwise only with the TP the chips left, walking to an adjacent cell
+function pumpkinTeleport(foes) {
+	if (!ready(C_TELEPORT) || getTP() < 9 + 16) {
+		return false
+	}
+	for (var e in foes) {
+		var ce = getCell(e)
+		if (getCellDistance(getCell(), ce) > 13) {
+			continue
+		}
+		for (var n in [ce + 17, ce - 17, ce + 18, ce - 18]) {
+			if (n < 0 || n > 612 || isObstacle(n) || !isEmptyCell(n) || getCellDistance(n, ce) != 1) {
+				continue
+			}
+			if (canUseChipOnCell(C_TELEPORT, n)) {
+				useChipOnCell(C_TELEPORT, n)
+				scythe(e)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+function pumpkinScythe(foes) {
+	if (getTP() < 15 + (getWeapon() != W_SCYTHE ? 1 : 0)) {
+		return false
+	}
+	for (var e in foes) {
+		if (canUseWeapon(W_SCYTHE, e)) {
+			return scythe(e)
+		}
+		var cell = getCellToUseWeapon(W_SCYTHE, e)
+		if (cell == null || cell < 0) {
+			continue
+		}
+		var d = getPathLength(getCell(), cell)
+		if (d != null && d <= getMP()) {
+			moveTowardCell(cell)
+			return scythe(e)
+		}
+	}
+	return false
+}
+
+function holdBand(target) {
+	var me = getCell()
+	var mp = getMP()
+	var best = me
+	var bs = abs(getCellDistance(me, target) - 4) * 10
+	for (var c = 0; c < 613; c++) {
+		var dm = getCellDistance(me, c)
+		if (dm < 1 || dm > mp || isObstacle(c) || !isEmptyCell(c)) {
+			continue
+		}
+		var sc = abs(getCellDistance(c, target) - 4) * 10 + dm
+		if (sc < bs) {
+			var pl = getPathLength(me, c)
+			if (pl != null && pl <= mp) {
+				bs = sc
+				best = c
+			}
+		}
+	}
+	if (best != me) {
+		moveTowardCell(best)
+	}
+}
+
+function jumpAway(from) {
+	if (!ready(C_JUMP) || getTP() < getChipCost(C_JUMP)) {
+		return false
+	}
+	var me = getCell()
+	var best = null
+	var bd = getCellDistance(me, from)
+	for (var c = 0; c < 613; c++) {
+		var d = getCellDistance(me, c)
+		if (d < 1 || d > 3 || isObstacle(c) || !isEmptyCell(c)) {
+			continue
+		}
+		var g = getCellDistance(c, from)
+		if (g > bd) {
+			bd = g
+			best = c
+		}
+	}
+	if (best != null && canUseChipOnCell(C_JUMP, best)) {
+		return useChipOnCell(C_JUMP, best) > 0
+	}
+	return false
+}
+
+function combat() {
+	var foes = enemiesByDistance()
+	if (count(foes) == 0) {
+		return null
+	}
+	var near = getPathLength(getCell(), getCell(foes[0]))
+	if (near == null) {
+		near = 30
+	}
+	var chips = attackChips()
+	// self buffs whenever they are ready (real: steroid ~0.2 casts a turn = every cooldown, engaged or not)
+	if (hasPoison(ME) && ready(C_ANTIDOTE)) {
+		useChip(C_ANTIDOTE, ME)
+	}
+	if (ready(C_STEROID) && rand() < 0.45) {
+		useChip(C_STEROID, ME)
+	}
+	// hubbard swaps with the nearest enemy it can whenever inversion is ready (149/192 real inversions on the nearest)
+	if (NAME == 'hubbard' && ready(C_INVERSION)) {
+		for (var e in foes) {
+			if (canUseChip(C_INVERSION, e)) {
+				useChip(C_INVERSION, e)
+				break
+			}
+		}
+		foes = enemiesByDistance()
+	}
+	if (NAME == 'evil_pumpkin') {
+		if (!pumpkinScythe(foes)) {
+			pumpkinTeleport(foes)
+		}
+		foes = enemiesByDistance()
+	}
+	// liberation on a shielded enemy in range
+	if (ready(C_LIBERATION)) {
+		for (var e in foes) {
+			if ((getAbsoluteShield(e) > 0 || getRelativeShield(e) > 0) && canUseChip(C_LIBERATION, e)) {
+				useChip(C_LIBERATION, e)
+				break
+			}
+		}
+	}
+	var hits = 0
+	for (var k = 0; k < 8; k++) {
+		foes = enemiesByDistance()
+		if (count(foes) == 0) {
+			break
+		}
+		if (!attackOnce(foes, chips)) {
+			break
+		}
+		hits++
+	}
+	foes = enemiesByDistance()
+	if (count(foes) == 0) {
+		return null
+	}
+	// after attacking, the rest of the MP goes to holding 3-5 cells from the nearest enemy (real: adjacent mobs
+	// back off 1.5 cells, mobs 6-11 away close 2-3; turban / hubbard / warty use 5.4 / 4.5 / 3.2 MP a turn)
+	if (hits > 0 && getMP() > 0 && NAME != 'offspring') {
+		holdBand(getCell(foes[0]))
+	}
+	if (hits == 0 && getMP() > 0) {
+		// nothing in reach: close in (engaged range), else drift a little
+		moveToward(foes[0], near <= 15 ? getMP() : min(getMP(), 1 + randInt(0, 2)))
+	}
+	// jump whenever it is ready (real: pumpkin, turban and offspring jump on ~every cooldown): toward the
+	// nearest enemy, the offspring away from it after a hit
+	if (ready(C_JUMP) && getTP() >= getChipCost(C_JUMP)) {
+		if (NAME == 'offspring' && hits > 0) {
+			jumpAway(getCell(foes[0]))
+		} else {
+			jumpToward(getCell(foes[0]))
+		}
+	}
+	if (NAME == 'offspring' && getMP() > 0) {
+		moveAwayFrom(foes[0], getMP())
+	}
+}
+
+// ---- the turn ----
+SAID = 0
+PLAGUE_OK = rand() < 0.45
+ADRENALINE_OK = rand() < 0.3
+// back from the dead (or first turn): what was said meanwhile was not heard - start from a clean cycle
+if (LAST_TURN >= 0 && getTurn() - LAST_TURN > 1) {
+	{
+}
+	CYCLE = []
+	KCYC = min(3, count(aliveMobs()))
+}
+LAST_TURN = getTurn()
+for (var h in listen()) {
+	hear(h[1])
+}
+if (getTurn() == 1 && NAME == 'evil_pumpkin') {
+	useChipOnCell(C_DP, getCell())
+}
+riddleTurn()
+combat()

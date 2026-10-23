@@ -1,0 +1,57 @@
+diff --git a/src/main/java/com/leekwars/generator/scenario/EntityInfo.java b/src/main/java/com/leekwars/generator/scenario/EntityInfo.java
+index 65237e0..64e7871 100644
+--- a/src/main/java/com/leekwars/generator/scenario/EntityInfo.java
++++ b/src/main/java/com/leekwars/generator/scenario/EntityInfo.java
+@@ -27,7 +27,9 @@ public class EntityInfo {
+ 	static private final Class<?> classes[] = {
+ 		Leek.class,
+ 		Bulb.class,
+-		Turret.class
++		Turret.class,
++		Leek.class,   // TYPE_CHEST : pas de classe locale
++		com.leekwars.generator.mob.Mob.class
+ 	};
+ 
+ 	public int id;
+@@ -188,6 +190,17 @@ public class EntityInfo {
+ 		if (e.hasNonNull("cell")) {
+ 			cell = e.get("cell").intValue();
+ 		}
++		// Scénarios locaux de boss : type d'entité (4 = mob), apparence (le type de mob) et
++		// entité morte au départ (les frères du Potiron, ressuscités par awakening).
++		if (e.hasNonNull("type")) {
++			type = e.get("type").intValue();
++		}
++		if (e.hasNonNull("skin")) {
++			skin = e.get("skin").intValue();
++		}
++		if (e.hasNonNull("dead")) {
++			dead = e.get("dead").booleanValue();
++		}
+ 		ArrayNode loadouts = (ArrayNode) e.get("loadouts");
+ 		if (loadouts != null) {
+ 			for (var l : loadouts) {
+diff --git a/src/main/java/com/leekwars/generator/mob/Mob.java b/src/main/java/com/leekwars/generator/mob/Mob.java
+new file mode 100644
+index 0000000..f9f35b2
+--- /dev/null
++++ b/src/main/java/com/leekwars/generator/mob/Mob.java
+@@ -0,0 +1,18 @@
++package com.leekwars.generator.mob;
++
++import com.leekwars.generator.leek.Leek;
++import com.leekwars.generator.state.Entity;
++
++/**
++ * Mob de boss pour les scénarios locaux (Potiron et ses frères) : un poireau dont le type est
++ * TYPE_MOB, pour que getType()/getMobType() et les messages se comportent comme en ligne.
++ */
++public class Mob extends Leek {
++
++	public Mob() {}
++
++	@Override
++	public int getType() {
++		return Entity.TYPE_MOB;
++	}
++}
