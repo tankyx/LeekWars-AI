@@ -24,7 +24,8 @@ def r6(v):
 
 def value_data():
     m = json.load(open(MODEL))
-    assert m['names'] == vd.NAMES, 'value model / feature layout mismatch'
+    import value_dataset2 as vd2
+    assert m['names'] in (vd.NAMES, vd2.NAMES), 'value model / feature layout mismatch'
     (W1, b1), (W2, b2), (W3, b3) = m['layers']
     names = m['names']
     return '\n'.join([
