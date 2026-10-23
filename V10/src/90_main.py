@@ -219,7 +219,7 @@ def turn():
         return
     try:
         refresh_budget()
-        for c in (_ctx_cache, _GEO, _PL, _SPL, _PACKS, _LEAVES, _NETS):
+        for c in (_ctx_cache, _GEO, _PL, _SPL, _PACKS, _LEAVES, _NETS, _RK):
             c.clear()
         m = me()
         mine = [x for x in Fight.getAliveAllies()]

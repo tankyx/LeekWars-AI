@@ -23,9 +23,16 @@ def side_features(S, dist):
     return x
 
 
+READY_ON = len(VN_MU) >= 93     # a v2 model (value_dataset2: + 5 readiness features per side) is loaded
+_RK0 = [0.0] * 5
+
+
 def features(turn, dist, los, A, B):
     lf = los if isinstance(los, float) else (1.0 if los else 0.0)
-    return [turn / 30.0, dist / 20.0, lf] + side_features(A, dist) + side_features(B, dist)
+    x = [turn / 30.0, dist / 20.0, lf] + side_features(A, dist) + side_features(B, dist)
+    if READY_ON:
+        x += A.get('rk', _RK0) + B.get('rk', _RK0)
+    return x
 
 
 # transposed weights (one row per output unit) so each unit is one native

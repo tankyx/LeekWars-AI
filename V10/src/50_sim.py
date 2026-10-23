@@ -228,4 +228,5 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell
+    A['used'] = frozenset(sim['uses'])      # readiness at our next turn (value model v2)
     return A, B, cell, dealt, sim

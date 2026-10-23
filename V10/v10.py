@@ -291,6 +291,61 @@ def copy_side(s):
     return c
 
 
+# ---- readiness (value model v2, tools/value_dataset2.py): the kit READY for each side's next action ----
+_RK = {}       # (side id, role, used item ids) -> vector; cleared every turn with the search caches
+
+
+def ready_vec(S, used=frozenset(), role='me'):
+    """[direct, nova, poison per turn, best heal, best shield] / 1000 over the items ready for the side's next
+    action, seen from the start of OUR next turn: role 'me' = us (ready iff cooldown 0 then: base cooldown <= 1
+    if used this turn, else current <= 1), 'op' = the enemy (ready at its following turn: base <= 1 if used in
+    its reply, else current <= 2). Mirrors value_dataset2.ready_stats."""
+    k = (S['id'], role, used)
+    v = _RK.get(k)
+    if v is not None:
+        return v
+    lim = 1 if role == 'me' else 2
+    tp = max(1, S['tp'])
+    stre, mag, sci = max(0, S['strength']), max(0, S['magic']), max(0, S['science'])
+    wis, res = max(0, S['wisdom']), max(0, S['resistance'])
+    kd = kn = kp = heal = shield = 0.0
+    for it in S['items']:
+        if it.cost <= 0:
+            continue
+        if not it.weapon:
+            if it.id in used:
+                if it.cooldown < 0 or it.cooldown > 1:
+                    continue
+            elif it.current_cooldown() > lim:
+                continue
+        uses = min(it.max_uses, tp // it.cost)
+        if it.cooldown > 0:
+            uses = min(uses, 1)
+        dmg = nova = pois = hl = sh = 0.0
+        for e in it.effects:
+            t = e[0]
+            if t == E_DAMAGE:
+                dmg += avg(e)
+            elif t == E_NOVA:
+                nova += avg(e)
+            elif t == E_POISON:
+                pois += avg(e) * max(1, e[3] or 1)
+            elif t == E_HEAL:
+                hl += avg(e) * max(1, e[3] or 1)
+            elif t in (E_ABS_SHIELD, E_RAW_ABS):
+                sh += avg(e)
+            elif t in (E_REL_SHIELD, E_RAW_REL):
+                sh += 20.0 * avg(e)
+        kd = max(kd, dmg * (1 + stre / 100.0) * uses)
+        kn = max(kn, nova * (1 + sci / 100.0) * uses)
+        kp = max(kp, pois * (1 + mag / 100.0) * uses)
+        if uses > 0:
+            heal = max(heal, hl * (1 + wis / 100.0))
+            shield = max(shield, sh * (1 + res / 100.0))
+    v = _RK[k] = [kd / 1000.0, kn / 1000.0, kp / 1000.0, heal / 1000.0, shield / 1000.0]
+    return v
+
+
 # ---- 30_rules: expected effect of one item use (engine formulas) ----------
 # damage = (v1 + jet v2)(1 + STR/100)(1 + power/100) x crit, minus rel% and abs
 # shields, capped at life; erosion 5% (+10% on crit) of damage dealt; life
@@ -504,9 +559,16 @@ def side_features(S, dist):
     return x
 
 
+READY_ON = len(VN_MU) >= 93     # a v2 model (value_dataset2: + 5 readiness features per side) is loaded
+_RK0 = [0.0] * 5
+
+
 def features(turn, dist, los, A, B):
     lf = los if isinstance(los, float) else (1.0 if los else 0.0)
-    return [turn / 30.0, dist / 20.0, lf] + side_features(A, dist) + side_features(B, dist)
+    x = [turn / 30.0, dist / 20.0, lf] + side_features(A, dist) + side_features(B, dist)
+    if READY_ON:
+        x += A.get('rk', _RK0) + B.get('rk', _RK0)
+    return x
 
 
 # transposed weights (one row per output unit) so each unit is one native
@@ -782,6 +844,7 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell
+    A['used'] = frozenset(sim['uses'])      # readiness at our next turn (value model v2)
     return A, B, cell, dealt, sim
 
 
@@ -1136,6 +1199,7 @@ def enemy_reply(cx, A1, B1, our_cell):
         else:
             apply_item(it, b, b, s)
     b['cell'] = ec
+    b['used'] = frozenset(it.id for it in acts)
     return a, b, ec
 
 
@@ -1221,6 +1285,10 @@ def _leaf(cx, A1, B1, our_cell, turn):
     """Ply 2: enemy reply; ply 3: our follow-up attack; value at the start of
     the enemy's next turn (1 - their P(win))."""
     a, b, ec = enemy_reply(cx, A1, B1, our_cell)
+    if READY_ON:
+        # cooldowns at the start of our next turn: what our plan and their reply used
+        a['rk'] = ready_vec(cx.A0, A1.get('used', frozenset()), 'me')
+        b['rk'] = ready_vec(cx.B0, b.get('used', frozenset()), 'op')
     if b['life'] <= 0:
         cx.last_reply = A1['life'] - a['life']
         return 1.0
@@ -1614,7 +1682,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 v = 1.1
             else:
                 if sig is None:
-                    sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')), bool(B1.get('amputated')))
+                    sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')), bool(B1.get('amputated')),
+                           A1.get('used') if READY_ON else None)
                 v = leaf(cx, A1, B1, e, t, sig)
             # certain damage now is worth more than the model's uncertain future; lasting damage
             # counts too (queued poison at half - REMOVED poison (superinfection, liberation) is
@@ -4088,7 +4157,7 @@ def turn():
         return
     try:
         refresh_budget()
-        for c in (_ctx_cache, _GEO, _PL, _SPL, _PACKS, _LEAVES, _NETS):
+        for c in (_ctx_cache, _GEO, _PL, _SPL, _PACKS, _LEAVES, _NETS, _RK):
             c.clear()
         m = me()
         mine = [x for x in Fight.getAliveAllies()]

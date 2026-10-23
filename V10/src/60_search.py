@@ -349,6 +349,7 @@ def enemy_reply(cx, A1, B1, our_cell):
         else:
             apply_item(it, b, b, s)
     b['cell'] = ec
+    b['used'] = frozenset(it.id for it in acts)
     return a, b, ec
 
 
@@ -434,6 +435,10 @@ def _leaf(cx, A1, B1, our_cell, turn):
     """Ply 2: enemy reply; ply 3: our follow-up attack; value at the start of
     the enemy's next turn (1 - their P(win))."""
     a, b, ec = enemy_reply(cx, A1, B1, our_cell)
+    if READY_ON:
+        # cooldowns at the start of our next turn: what our plan and their reply used
+        a['rk'] = ready_vec(cx.A0, A1.get('used', frozenset()), 'me')
+        b['rk'] = ready_vec(cx.B0, b.get('used', frozenset()), 'op')
     if b['life'] <= 0:
         cx.last_reply = A1['life'] - a['life']
         return 1.0
@@ -827,7 +832,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 v = 1.1
             else:
                 if sig is None:
-                    sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')), bool(B1.get('amputated')))
+                    sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')), bool(B1.get('amputated')),
+                           A1.get('used') if READY_ON else None)
                 v = leaf(cx, A1, B1, e, t, sig)
             # certain damage now is worth more than the model's uncertain future; lasting damage
             # counts too (queued poison at half - REMOVED poison (superinfection, liberation) is

@@ -37,7 +37,9 @@ GOOD_FOR_OWNER = {'burned': -1, 'hp': +1, 'hpfrac': +1, 'maxhp': +1, 'summons': 
                   'eff_buf_str': +1, 'eff_buf_mag': +1, 'eff_buf_agi': +1, 'eff_buf_tp': +1, 'eff_buf_mp': +1,
                   'eff_buf_res': +1, 'eff_buf_wis': +1, 'eff_buf_pow': +1,
                   'eff_poison': -1, 'poison_future': -1, 'eff_shk_str': -1, 'eff_shk_mag': -1, 'eff_shk_tp': -1,
-                  'eff_shk_mp': -1, 'eff_shk_agi': -1, 'eff_vuln': -1, 'eff_vuln_abs': -1}
+                  'eff_shk_mp': -1, 'eff_shk_agi': -1, 'eff_vuln': -1, 'eff_vuln_abs': -1,
+                  # v2 (tools/value_dataset2.py): kit READY for the side's next action (cooldowns)
+                  'rdmg': +1, 'rnova': +1, 'rpois': +1, 'rheal': +1, 'rshield': +1}
 
 
 def split_features(names):
@@ -112,11 +114,15 @@ def main():
     ap.add_argument('--hidden', default='32,24', help='context net hidden sizes')
     ap.add_argument('--band', default='', help='talent band center,width,floor for relevance weights (e.g. 2050,700,0.3)')
     ap.add_argument('--out', default=OUT)
+    ap.add_argument('--ds', default=DS, help='dataset (value_dataset.py / value_dataset2.py output)')
+    ap.add_argument('--ours-weight', type=float, default=1.0, help='weight multiplier of our own fights (src == 1)')
     a = ap.parse_args()
     hid = tuple(int(v) for v in a.hidden.split(','))
-    d = np.load(DS)
+    d = np.load(a.ds)
     X, y, w, fid, turn = d['X'].astype(np.float32), d['y'].astype(np.float64), d['w'].astype(np.float64), d['fid'], d['turn']
     talent = d['talent'].astype(np.float64) if 'talent' in d.files else np.zeros(len(y))
+    if 'src' in d.files and a.ours_weight != 1.0:
+        w = w * np.where(d['src'] == 1, a.ours_weight, 1.0)
     inband = np.zeros(len(y), bool)
     if a.band:
         c, wd, fl = (float(v) for v in a.band.split(','))

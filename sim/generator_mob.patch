@@ -1,5 +1,5 @@
 diff --git a/src/main/java/com/leekwars/generator/scenario/EntityInfo.java b/src/main/java/com/leekwars/generator/scenario/EntityInfo.java
-index 65237e0..64e7871 100644
+index 65237e0..1bf5554 100644
 --- a/src/main/java/com/leekwars/generator/scenario/EntityInfo.java
 +++ b/src/main/java/com/leekwars/generator/scenario/EntityInfo.java
 @@ -27,7 +27,9 @@ public class EntityInfo {
@@ -13,14 +13,16 @@ index 65237e0..64e7871 100644
  	};
  
  	public int id;
-@@ -188,6 +190,17 @@ public class EntityInfo {
+@@ -188,6 +190,19 @@ public class EntityInfo {
  		if (e.hasNonNull("cell")) {
  			cell = e.get("cell").intValue();
  		}
 +		// Scénarios locaux de boss : type d'entité (4 = mob), apparence (le type de mob) et
 +		// entité morte au départ (les frères du Potiron, ressuscités par awakening).
-+		if (e.hasNonNull("type")) {
-+			type = e.get("type").intValue();
++		// seul le type mob (4) est lu : les configs de poireaux locales portent un "type" historique
++		// (1, 2...) que le générateur a toujours ignoré
++		if (e.hasNonNull("type") && e.get("type").intValue() == 4) {
++			type = 4;
 +		}
 +		if (e.hasNonNull("skin")) {
 +			skin = e.get("skin").intValue();

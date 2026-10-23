@@ -120,3 +120,58 @@ def copy_side(s):
     c['groups'] = s['groups'].copy()
     c['cur'] = s['cur'].copy()
     return c
+
+
+# ---- readiness (value model v2, tools/value_dataset2.py): the kit READY for each side's next action ----
+_RK = {}       # (side id, role, used item ids) -> vector; cleared every turn with the search caches
+
+
+def ready_vec(S, used=frozenset(), role='me'):
+    """[direct, nova, poison per turn, best heal, best shield] / 1000 over the items ready for the side's next
+    action, seen from the start of OUR next turn: role 'me' = us (ready iff cooldown 0 then: base cooldown <= 1
+    if used this turn, else current <= 1), 'op' = the enemy (ready at its following turn: base <= 1 if used in
+    its reply, else current <= 2). Mirrors value_dataset2.ready_stats."""
+    k = (S['id'], role, used)
+    v = _RK.get(k)
+    if v is not None:
+        return v
+    lim = 1 if role == 'me' else 2
+    tp = max(1, S['tp'])
+    stre, mag, sci = max(0, S['strength']), max(0, S['magic']), max(0, S['science'])
+    wis, res = max(0, S['wisdom']), max(0, S['resistance'])
+    kd = kn = kp = heal = shield = 0.0
+    for it in S['items']:
+        if it.cost <= 0:
+            continue
+        if not it.weapon:
+            if it.id in used:
+                if it.cooldown < 0 or it.cooldown > 1:
+                    continue
+            elif it.current_cooldown() > lim:
+                continue
+        uses = min(it.max_uses, tp // it.cost)
+        if it.cooldown > 0:
+            uses = min(uses, 1)
+        dmg = nova = pois = hl = sh = 0.0
+        for e in it.effects:
+            t = e[0]
+            if t == E_DAMAGE:
+                dmg += avg(e)
+            elif t == E_NOVA:
+                nova += avg(e)
+            elif t == E_POISON:
+                pois += avg(e) * max(1, e[3] or 1)
+            elif t == E_HEAL:
+                hl += avg(e) * max(1, e[3] or 1)
+            elif t in (E_ABS_SHIELD, E_RAW_ABS):
+                sh += avg(e)
+            elif t in (E_REL_SHIELD, E_RAW_REL):
+                sh += 20.0 * avg(e)
+        kd = max(kd, dmg * (1 + stre / 100.0) * uses)
+        kn = max(kn, nova * (1 + sci / 100.0) * uses)
+        kp = max(kp, pois * (1 + mag / 100.0) * uses)
+        if uses > 0:
+            heal = max(heal, hl * (1 + wis / 100.0))
+            shield = max(shield, sh * (1 + res / 100.0))
+    v = _RK[k] = [kd / 1000.0, kn / 1000.0, kp / 1000.0, heal / 1000.0, shield / 1000.0]
+    return v
