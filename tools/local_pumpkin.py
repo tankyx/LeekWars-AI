@@ -42,7 +42,10 @@ MOB_SKIN = {'evil_pumpkin': 3, 'turban': 9, 'warty': 10, 'hubbard': 11, 'offspri
 STATS = ('life', 'strength', 'magic', 'wisdom', 'agility', 'resistance', 'science', 'frequency', 'tp', 'mp', 'level')
 
 
-def kits():
+def kits(override=None):
+    """Chips / weapons per leek. override = {leek name: [chip names]} (--kits): that leek gets exactly
+    those chips, in that order, not cut to the leek_configs slot count (the caller checks slots and
+    ownership, e.g. tools/pumpkin_kit_opt.py); leeks not in it keep the default kit."""
     import boss_swap, cure_kit
     cfg = json.load(open(os.path.join(HERE, 'leek_configs.json')))
     cfg = cfg.get('leeks', cfg)
@@ -55,6 +58,11 @@ def kits():
             chips = boss_swap.PK_KITS[k]; weapons = [WEAPON_ID[w] for w in boss_swap.PK_WEAPONS[k] if w in WEAPON_ID]
         else:
             chips = cure_kit.KITS['pumpkin'][name]; weapons = list(c['weapons'])
+        if override and name in override:
+            unknown = [n for n in override[name] if n not in CHIP_ID]
+            if unknown:
+                raise ValueError('%s: chips unknown to the generator: %s' % (name, unknown))
+            chips = list(override[name]); slots = len(chips)
         ids = []
         for n in chips:
             if n in CHIP_ID and CHIP_ID[n] not in ids:
@@ -63,11 +71,11 @@ def kits():
     return out
 
 
-def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64):
+def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=None):
     """Our leeks' stats and frequencies come from the template fight: re-point it after any respec or
     component change (2026-10-23: the v16 template had DawnFall at frequency 190, today 169 - another turn order)."""
     d = next(d for _, fid, f, d in load('ours', ids={template}))
-    K = kits()
+    K = kits(kit_override)
     ours, mobs, farmers = [], [], [{'id': 1, 'name': 'Virus', 'country': 'fr'}, {'id': 2, 'name': 'Cure', 'country': 'fr'},
                                     {'id': 3, 'name': 'Leek Wars', 'country': 'fr'}]
     for e in d['leeks']:
@@ -150,7 +158,9 @@ def main():
     ap.add_argument('--max-turns', type=int, default=64)
     ap.add_argument('--template', type=int, default=TEMPLATE, help='real 8-leek fight whose geometry and our stats are cloned')
     ap.add_argument('--keep', action='store_true', help='keep the fight JSONs (default: yes for --n <= 40)')
+    ap.add_argument('--kits', help='JSON file {leek name: [chip names]}: per-leek chip overrides (default: the Pumpkin kits)')
     a = ap.parse_args()
+    override = json.load(open(a.kits)) if a.kits else None
     os.makedirs(OUT, exist_ok=True)
     for pat in ('*.class', '*.java', '*.lines', '*.sig'):   # the generator caches compiled LeekScript by root file
         for p in __import__('glob').glob(os.path.join(GEN, 'ai', pat)):
@@ -158,7 +168,7 @@ def main():
                 os.remove(p)
 
     def one(seed):
-        data = run(scenario(seed, a.ai, a.mob_ai, template=a.template, max_turns=a.max_turns))
+        data = run(scenario(seed, a.ai, a.mob_ai, template=a.template, max_turns=a.max_turns, kit_override=override))
         json.dump(data, open(os.path.join(OUT, '%s_%d.json' % (a.tag, seed)), 'w'))
         return seed, summary(data)
 
