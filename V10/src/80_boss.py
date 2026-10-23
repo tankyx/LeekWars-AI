@@ -1546,7 +1546,7 @@ def bulb_ai():
         # a permanent blocker: I play right after my summoner, before the next mob - same stream
         try:
             if resurrection_due():
-                c = riddle_cell(PK_STREAM[-3:])
+                c = pk_cycle_cell()
                 cc = Cell.get(c) if c else None
                 if cc is not None and cc.empty and c in reachable(m.cell.id, m.mp or 0):
                     tgt = c
@@ -1672,6 +1672,7 @@ for _i, _o in enumerate(range(0x2C13, 0x2C1A)):
     _GLAG[_o] = (_i + 1) * 100
 _GLAG[0x2C1B] = 800; _GLAG[0x2C1C] = 900; _GLAG[0x2C1D] = 1000
 PK_STREAM = []
+PK_CYCLE = {'nums': [], 'k': 3}   # numbers since the last slot word, and the cycle length K
 PK_TARGET = {'cell': None}     # rez cell the bulb I just summoned must walk onto (its turn comes before the mob's)
 
 
@@ -1715,7 +1716,10 @@ def riddle_cell(nums):
 
 
 def pk_listen():
-    """Append the enemies' numeric says heard since my last turn to the shared stream."""
+    """Append the enemies' numeric says heard since my last turn to the shared stream, and follow the
+    riddle's cycles (sim/README.md, 708 real fights): the mobs say K = min(3, alive mobs) numbers, then the
+    next mob holds the slot - "privet brat!" + awakening on the riddle cell of those K numbers, "kopile!!"
+    when it is taken, "umri!" when nobody is dead - and a new cycle starts."""
     try:
         heard = Fight.listen() or []
     except Exception:
@@ -1732,11 +1736,28 @@ def pk_listen():
         v = glag_num(msg.strip())
         if v:
             PK_STREAM.append(v)
+            PK_CYCLE['nums'].append(v)
+        elif msg.strip().endswith('!'):
+            # a slot word: the cycle closes; K for the next one from the mobs alive now
+            PK_CYCLE['nums'] = []
+            try:
+                PK_CYCLE['k'] = max(1, min(3, len([e for e in Fight.getAliveEnemies() if not e.summoned])))
+            except Exception:
+                PK_CYCLE['k'] = 3
+
+
+def pk_cycle_cell():
+    """The cell the next slot will resurrect on, once its cycle's K numbers are out (else None)."""
+    nums = PK_CYCLE['nums']
+    k = PK_CYCLE['k']
+    if len(nums) < k:
+        return None
+    return riddle_cell(nums[-k:])
 
 
 def resurrection_due():
-    """The next mob to act will resurrect: it carries awakening off cooldown and an enemy lies dead.
-    Blocking on any other turn wasted the teleports (188 useless blocks vs 80 missed resurrections)."""
+    """The next mob to act holds the riddle's slot: its cycle's K numbers are out and a brother lies dead.
+    (v16 used "awakening off cooldown", true on almost every mob turn: blocks on cells of half-said cycles.)"""
     try:
         nxt = Fight.getNextPlayer()
     except Exception:
@@ -1744,7 +1765,7 @@ def resurrection_due():
     if nxt is None:
         return False
     foes = set(e.id for e in Fight.getEnemies())
-    if nxt.id not in foes:
+    if nxt.id not in foes or getattr(nxt, 'summoned', False):
         return False
     try:
         dead = [e for e in Fight.getDeadEnemies() if not e.summoned]
@@ -1752,13 +1773,7 @@ def resurrection_due():
         dead = []
     if not dead:
         return False
-    awk = next((c for c in (nxt.chips or []) if c.name == 'awakening'), None)
-    if awk is None:
-        return False
-    try:
-        return (awk.currentCooldownOf(nxt) or 0) == 0
-    except Exception:
-        return True
+    return pk_cycle_cell() is not None
 
 
 _BULB_MP = {'prototaxite': 0, 'puny_bulb': 5, 'wizard_bulb': 7, 'savant_bulb': 6, 'lightning_bulb': 6, 'tactician_bulb': 6}
@@ -1969,7 +1984,7 @@ def pk_block(dry=False):
     no = None if dry else False
     if len(PK_STREAM) < 1 or not resurrection_due():
         return no
-    c = riddle_cell(PK_STREAM[-3:])
+    c = pk_cycle_cell()
     if c is None:
         return no
     cell = Cell.get(c) if hasattr(Cell, 'get') else None
