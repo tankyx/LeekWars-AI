@@ -193,6 +193,10 @@ function maybeStart() {
 		if (isObstacle(c) || !isEmptyCell(c)) {
 			continue
 		}
+		// real target cells avoid the edge: 15+ from the centre (306) 0.6-0.72x as often as random free cells
+		if (getCellDistance(c, 306) >= 15 && rand() > 0.65) {
+			continue
+		}
 		var firsts = table[c]
 		if (firsts == null || count(firsts) == 0) {
 			continue
@@ -278,7 +282,7 @@ function enemiesByDistance() {
 // attack chips in priority order (fitted on the real chip counts per turn)
 function attackChips() {
 	if (NAME == 'evil_pumpkin') {
-		return [C_THUNDER, C_LIGHTNING, C_PLASMA, C_FLASH]
+		return [C_THUNDER, C_PLASMA, C_LIGHTNING, C_FLASH]
 	}
 	if (NAME == 'hubbard') {
 		return [C_LIGHTNING, C_PLASMA, C_FLASH]
@@ -326,9 +330,203 @@ function jumpToward(goal) {
 	return false
 }
 
-// one attack: the first (enemy, chip) pair usable from a cell within reach; true if a chip was cast
+// ---- AoE-aware aiming (real: the pumpkin opens on empty cells to splash two leeks, hubbard hits the
+// lowest-life leek it can reach 83-88% of the time on T1). Area damage = 1 - 0.2 x distance to the aimed cell.
+function foeWeights() {
+	var out = []
+	for (var e in getAliveEnemies()) {
+		var c = getCell(e)
+		if (c == null || c < 0) {
+			continue
+		}
+		push(out, [e, c, isSummon(e) ? 0.25 : 1.0])
+	}
+	return out
+}
+
+function areaRadius(chip) {
+	if (chip == C_FLASH) {
+		return 1
+	}
+	if (chip == C_PLAGUE) {
+		return 3
+	}
+	if (chip == C_VENOM) {
+		return 0
+	}
+	return 2   // lightning, thunder, toxin (circle 2), plasma (plus 2)
+}
+
+function areaDist(chip, aim, c) {
+	var d = getCellDistance(aim, c)
+	if (d > areaRadius(chip)) {
+		return -1
+	}
+	if (chip == C_PLASMA && d > 0 && !isOnSameLine(aim, c)) {
+		return -1
+	}
+	return d
+}
+
+function aimScore(chip, aim, F, primary) {
+	var s = 0
+	for (var f in F) {
+		var d = areaDist(chip, aim, f[1])
+		if (d >= 0) {
+			s += f[2] * (f[0] == primary ? 3 : 1) * (1 - 0.2 * d)
+		}
+	}
+	return s
+}
+
+function cellsAround(c, lo, hi) {
+	var out = []
+	var x = getCellX(c)
+	var y = getCellY(c)
+	for (var dx = -hi; dx <= hi; dx++) {
+		for (var dy = abs(dx) - hi; dy <= hi - abs(dx); dy++) {
+			if (abs(dx) + abs(dy) < lo) {
+				continue
+			}
+			var n = getCellFromXY(x + dx, y + dy)
+			if (n != null && n >= 0) {
+				push(out, n)
+			}
+		}
+	}
+	return out
+}
+
+// where I can stand this turn: cell -> [cost, jump?, walk cell] (walk within MP; with jump ready, any free cell
+// 1-3 from a walk cell - the jump crosses obstacles, which is how the real pumpkin reaches 408 on T1)
+function reachMap(chipCost) {
+	var me = getCell()
+	var mp = getMP()
+	var R = [:]
+	R[me] = [0, 0, me]
+	for (var c in cellsAround(me, 1, mp)) {
+		if (isObstacle(c) || !isEmptyCell(c)) {
+			continue
+		}
+		var d = getPathLength(me, c)
+		if (d != null && d <= mp) {
+			R[c] = [d, 0, c]
+		}
+	}
+	if (ready(C_JUMP) && getTP() >= getChipCost(C_JUMP) + chipCost) {
+		for (var w in mapKeys(R)) {
+			if (R[w][1] != 0) {
+				continue
+			}
+			for (var c in cellsAround(w, 1, 3)) {
+				if (R[c] != null || isObstacle(c) || !isEmptyCell(c)) {
+					continue
+				}
+				R[c] = [R[w][0] + 0.5, 1, w]
+			}
+		}
+	}
+	return R
+}
+
+// [aim cell, cell to shoot from, [cost, jump?, walk cell]] for the best splash on target `e` I can reach
+function bestShotOn(chip, e, F, R) {
+	var me = getCell()
+	var tc = getCell(e)
+	var lo = getChipMinRange(chip)
+	var hi = getChipMaxRange(chip)
+	var los = chipNeedLos(chip)
+	var inl = isInlineChip(chip)
+	var r = areaRadius(chip)
+	var cands = []
+	for (var a in cellsAround(tc, 0, r)) {
+		if (isObstacle(a) || areaDist(chip, a, tc) < 0) {
+			continue
+		}
+		push(cands, [aimScore(chip, a, F, e), a])
+	}
+	cands = arraySort(cands, function(x, y) {
+		return y[0] - x[0]
+	})
+	for (var k = 0; k < min(5, count(cands)); k++) {
+		var aim = cands[k][1]
+		var best = null
+		var bc = 999
+		for (var c in mapKeys(R)) {
+			var d = getCellDistance(c, aim)
+			if (d < lo || d > hi || R[c][0] >= bc || (inl && !isOnSameLine(c, aim))) {
+				continue
+			}
+			if (los && !lineOfSight(c, aim, ME)) {
+				continue
+			}
+			best = c
+			bc = R[c][0]
+		}
+		if (best != null) {
+			return [aim, best, R[best]]
+		}
+	}
+	return null
+}
+
+// target order (real T1s, identical in all 20 v17 fights): the pumpkin and hubbard go for the lowest-life leek
+// they can reach (GTGabi 2481, Kirby 2924), turban, warty and offspring for the nearest
+function targetOrder() {
+	var near = enemiesByDistance()
+	if (NAME == 'warty') {
+		// warty poisons clusters (real T1: Kirby + ProdigalSon together, not the nearer lone DuskHope)
+		var cl = []
+		for (var e in near) {
+			var n = 0
+			for (var o in near) {
+				if (o != e && !isSummon(o) && getCellDistance(getCell(e), getCell(o)) <= 3) {
+					n++
+				}
+			}
+			var hurt = 1 - getLife(e) / max(1, getTotalLife(e))
+			push(cl, [-(n + hurt + (isSummon(e) ? -2 : 0)), getCellDistance(getCell(), getCell(e)), e])
+		}
+		cl = arraySort(cl, function(x, y) {
+			return x[0] != y[0] ? x[0] - y[0] : x[1] - y[1]
+		})
+		var out = []
+		for (var x in cl) {
+			push(out, x[2])
+		}
+		return out
+	}
+	if (NAME != 'evil_pumpkin' && NAME != 'hubbard') {
+		return near
+	}
+	var me = getCell()
+	var reach = getMP() + 8 + (ready(C_JUMP) ? 3 : 0)
+	var weak = []
+	for (var e in near) {
+		// grid distance: the jump (1-3, no line of sight) crosses obstacles a walking path goes around
+		if (!isSummon(e) && getCellDistance(me, getCell(e)) <= reach) {
+			push(weak, [getLife(e), e])
+		}
+	}
+	weak = arraySort(weak, function(x, y) {
+		return x[0] - y[0]
+	})
+	var out = []
+	for (var x in weak) {
+		push(out, x[1])
+	}
+	for (var e in near) {
+		if (!inArray(out, e)) {
+			push(out, e)
+		}
+	}
+	return out
+}
+
+// one attack: the first target (mob's order) and chip (priority order) with a shot in reach
 function attackOnce(foes, chips) {
-	for (var e in foes) {
+	var F = foeWeights()
+	for (var e in targetOrder()) {
 		for (var chip in chips) {
 			if (getCooldown(chip) > 0 || (chip == C_PLAGUE && !PLAGUE_OK)) {
 				continue
@@ -342,37 +540,44 @@ function attackOnce(foes, chips) {
 					continue
 				}
 			}
-			if (canUseChip(chip, e)) {
-				if (useChip(chip, e) > 0) {
-					return true
-				}
+			var shot = bestShotOn(chip, e, F, reachMap(getChipCost(chip)))
+			if (shot == null) {
 				continue
 			}
-			var cell = getCellToUseChip(chip, e)
-			if (cell == null || cell < 0) {
-				continue
-			}
-			var d = getPathLength(getCell(), cell)
-			if (d == null) {
-				continue
-			}
-			if (d <= getMP()) {
-				moveTowardCell(cell)
-				if (canUseChip(chip, e) && useChip(chip, e) > 0) {
-					return true
-				}
-			} else if (d <= getMP() + 3 && ready(C_JUMP) && getTP() >= getChipCost(C_JUMP) + getChipCost(chip)) {
-				moveTowardCell(cell)
-				if (canUseChipOnCell(C_JUMP, cell)) {
-					useChipOnCell(C_JUMP, cell)
-					if (canUseChip(chip, e) && useChip(chip, e) > 0) {
-						return true
+			if (shot[1] != getCell()) {
+				if (shot[2][1] == 0) {
+					moveTowardCell(shot[1])
+				} else {
+					if (shot[2][2] != getCell()) {
+						moveTowardCell(shot[2][2])
+					}
+					if (canUseChipOnCell(C_JUMP, shot[1])) {
+						useChipOnCell(C_JUMP, shot[1])
 					}
 				}
+			}
+			if (canUseChipOnCell(chip, shot[0]) && useChipOnCell(chip, shot[0]) > 0) {
+				return true
 			}
 		}
 	}
 	return false
+}
+
+// leeks sorted by current life (the pumpkin's teleport + scythe goes for the weakest it can reach)
+function weakestFirst(foes) {
+	var arr = []
+	for (var e in foes) {
+		push(arr, [getLife(e) + (isSummon(e) ? 100000 : 0), e])
+	}
+	arr = arraySort(arr, function(x, y) {
+		return x[0] - y[0]
+	})
+	var out = []
+	for (var x in arr) {
+		push(out, x[1])
+	}
+	return out
 }
 
 function scythe(e) {
@@ -388,7 +593,7 @@ function pumpkinTeleport(foes) {
 	if (!ready(C_TELEPORT) || getTP() < 9 + 16) {
 		return false
 	}
-	for (var e in foes) {
+	for (var e in weakestFirst(foes)) {
 		var ce = getCell(e)
 		if (getCellDistance(getCell(), ce) > 13) {
 			continue
@@ -490,8 +695,12 @@ function combat() {
 	if (hasPoison(ME) && ready(C_ANTIDOTE)) {
 		useChip(C_ANTIDOTE, ME)
 	}
-	if (ready(C_STEROID) && rand() < 0.45) {
+	// steroid: up front only when nothing is in reach (real: never on the pumpkin's T1 opening), else with
+	// the TP the attacks leave
+	var steroidLater = ready(C_STEROID) && rand() < 0.5
+	if (steroidLater && near > getMP() + 9) {
 		useChip(C_STEROID, ME)
+		steroidLater = false
 	}
 	// hubbard swaps with the nearest enemy it can whenever inversion is ready (149/192 real inversions on the nearest)
 	if (NAME == 'hubbard' && ready(C_INVERSION)) {
@@ -528,6 +737,9 @@ function combat() {
 			break
 		}
 		hits++
+	}
+	if (steroidLater && ready(C_STEROID) && getTP() >= getChipCost(C_STEROID)) {
+		useChip(C_STEROID, ME)
 	}
 	foes = enemiesByDistance()
 	if (count(foes) == 0) {

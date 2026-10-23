@@ -37,28 +37,33 @@ The official mob AI is server-side and unpublished. This one is rebuilt from 708
 - Target cells are random free cells: never an obstacle, never occupied when picked. They're no closer to our leeks and no more visible from them than random cells are.
 
 **Combat: fitted.**
-- Attack what can be reached this turn, otherwise drift 1–2 cells.
-- Hold 3–5 cells from the nearest enemy.
-- Steroid and jump when ready; adrenaline only to afford one more shot.
+- Each mob picks a primary target, then the aim cell that hits it hardest and splashes the most other leeks. Area damage is 1 − 0.2 × distance to the aimed cell.
+- Targets follow the real turn 1s, which were identical in all 20 v17 fights:
+  - the pumpkin and hubbard take the lowest-life leek they can reach (GTGabi, Kirby);
+  - turban and offspring take the nearest;
+  - warty poisons clusters (Kirby and ProdigalSon together, not the nearer lone DuskHope).
+- Reach includes jumps over obstacles: the pumpkin walks to 357 and jumps to 408 on turn 1, as on the server.
+- Steroid with the TP the attacks leave; jump when ready; adrenaline only to afford one more shot.
 - Hubbard's inversion on the nearest enemy.
-- The pumpkin's scythe: walking, or teleporting when teleport is ready.
-- Targets: by walking distance, leeks over bulbs, a lean toward hurt leeks.
+- The pumpkin's scythe: walking, or teleporting onto the weakest leek within 13 when teleport is ready.
 
-## Calibration (2026-10-23, c3: 20 sim vs 20 real v16 fights)
+## Calibration
 
-| Metric | Real | Sim |
+**2026-10-23, d2:** 20 sim fights vs the 20 real v17 fights. The template is real fight 54297638, so stats and turn order are current.
+
+| Metric | Real v17 | Sim |
 |---|---|---|
-| Damage dealt / fight | 11.2k | 10.8k |
-| Damage taken / fight | 41.7k | 43.9k |
-| Kopile drops / fight | 3.2 | 3.1 |
+| Our dead by round 4 / 8 / 12 | 1.4 / 3.9 / 6.3 | 1.4 / 4.3 / 6.6 |
+| Damage taken / fight | 41.5k | 41.5k |
+| Damage dealt / fight | 12.5k | 10.7k |
+| Kopile drops / fight | 6.7 | 5.0 |
 | Resurrections / fight | 4.2 | 4.5 |
-| Turn-1 warty blocked | 90% | 75% |
-| Our dead by round 8 / 12 / 20 | 4.5 / 6.5 / 7.5 | 3.5 / 5.8 / 7.3 |
-| Pumpkin damage / turn (rounds 1-8) | 1.6k | 1.3k |
-| Median length | 17.5 | 20 |
+| GTGabi's death round (median) | 4 | 4 |
+| Fight length | 25 | 17 |
 
-Known gaps:
-- The sim is about one death behind by round 8, and the pumpkin hits about 20% softer.
-- Chip ids in logs: older real logs use item ids, newer ones template ids (the parser detects which).
-- The local polyglot ops counter differs from prod.
-- Use the sim to rank V10 changes, then confirm on live fights.
+- Turn 1 matches move for move for all four mobs.
+- Known gaps:
+  - about 1.7 fewer drops a fight and 15% less damage dealt;
+  - the late game is shorter, because the last survivors hide better on the server.
+- **Re-point `--template` after any respec or component change.** Stats and frequencies set the turn order, and the v16 template (DawnFall frequency 190, today 169) put the mobs on the wrong leeks.
+- Older line, c3 vs v16: dealt 10.8k vs 11.2k, taken 43.9k vs 41.7k. The sim then predicted v17's damage at 16.0k; the server gave 12.5k, because our strikers lived too long in the sim.

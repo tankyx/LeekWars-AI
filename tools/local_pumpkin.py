@@ -3,7 +3,7 @@
 
 The army runs sim/pumpkin_mob.leek, a reconstruction of the mobs' AI from 708 real Pumpkin fights (the riddle
 and the resurrections are exact on the logs; combat is fitted). Geometry, map and our leeks' stats come from a
-real 8-leek fight of ours (the template); chips and weapons are the Pumpkin kits (boss_swap.PK_KITS for main,
+real 8-leek fight of ours (the template, --template); chips and weapons are the Pumpkin kits (boss_swap.PK_KITS for main,
 cure_kit.KITS for Cure) cut to each leek's chip slots.
 
     python3 tools/local_pumpkin.py --n 8 --parallel 4            # 8 seeds, summary per fight
@@ -24,7 +24,7 @@ from pumpkin_fights import load, CHIPS, WEAPONS, turns, MOBS  # noqa: E402
 GEN = '/home/ubuntu/leek-wars-generator'
 JAVA = '/usr/lib/jvm/java-25-openjdk-amd64/bin/java'
 OUT = os.path.join(ROOT, 'data', 'sim_pumpkin')
-TEMPLATE = 54241302            # our last 8-leek Pumpkin batch (v16, 2026-10-20)
+TEMPLATE = 54297638            # first fight of the v17 live batch (2026-10-23): current stats, spawns, turn order
 CHIP_ID = {v['name']: k for k, v in CHIPS.items()}
 WEAPON_ID = {v['name']: v['item'] for v in WEAPONS.values()}
 MAIN_KIT = {'Kirby54': 'AL', 'GTGabi': 'ED', 'Zoulman': 'KG', 'Payou': 'MH'}
@@ -64,6 +64,8 @@ def kits():
 
 
 def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64):
+    """Our leeks' stats and frequencies come from the template fight: re-point it after any respec or
+    component change (2026-10-23: the v16 template had DawnFall at frequency 190, today 169 - another turn order)."""
     d = next(d for _, fid, f, d in load('ours', ids={template}))
     K = kits()
     ours, mobs, farmers = [], [], [{'id': 1, 'name': 'Virus', 'country': 'fr'}, {'id': 2, 'name': 'Cure', 'country': 'fr'},
@@ -146,6 +148,7 @@ def main():
     ap.add_argument('--mob-ai', default='SIM/pumpkin_mob.leek')
     ap.add_argument('--tag', default='sim')
     ap.add_argument('--max-turns', type=int, default=64)
+    ap.add_argument('--template', type=int, default=TEMPLATE, help='real 8-leek fight whose geometry and our stats are cloned')
     ap.add_argument('--keep', action='store_true', help='keep the fight JSONs (default: yes for --n <= 40)')
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
@@ -155,7 +158,7 @@ def main():
                 os.remove(p)
 
     def one(seed):
-        data = run(scenario(seed, a.ai, a.mob_ai, max_turns=a.max_turns))
+        data = run(scenario(seed, a.ai, a.mob_ai, template=a.template, max_turns=a.max_turns))
         json.dump(data, open(os.path.join(OUT, '%s_%d.json' % (a.tag, seed)), 'w'))
         return seed, summary(data)
 

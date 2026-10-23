@@ -4,7 +4,7 @@
     python3 tools/pumpkin_ab.py abA abB
 
 Per arm: wins, fight length, kopile drops, resurrections, damage dealt / taken, our dead by rounds 8 and 12,
-V10's BLOCK notes (blocks attempted) and how many of them came right before a slot. Paired by seed: mean
+mob kills, V10's BLOCK notes (blocks attempted) and how many of them came right before a slot. Paired by seed: mean
 difference and a sign test on kopile drops and damage dealt.
 """
 import glob, json, math, os, re, statistics, sys
@@ -54,6 +54,7 @@ def fight_stats(path):
                 dealt=sum(v for r in T if r['team'] == 1 for k, v in r['dmg'].items() if teams.get(k) == 2),
                 taken=sum(v for r in T if r['team'] == 2 for k, v in r['dmg'].items() if teams.get(k) == 1),
                 dead8=sum(1 for x in dead if x <= 8), dead12=sum(1 for x in dead if x <= 12),
+                kills=sum(1 for a in d['actions'] if a[0] == 5 and teams.get(a[1]) == 2),
                 blocks=blocks, slots=slots)
 
 
@@ -78,12 +79,12 @@ def main():
     A, B = arm(a), arm(b)
     seeds = sorted(set(A) & set(B))
     print('%d paired seeds (%s: %d, %s: %d)' % (len(seeds), a, len(A), b, len(B)))
-    keys = ['win', 'turns', 'kopile', 'rez', 'dealt', 'taken', 'dead8', 'dead12', 'blocks', 'slots']
+    keys = ['win', 'turns', 'kopile', 'rez', 'kills', 'dealt', 'taken', 'dead8', 'dead12', 'blocks', 'slots']
     print('%-8s %10s %10s %10s' % ('', a, b, 'b - a'))
     for k in keys:
         ma = statistics.mean(A[s][k] for s in seeds); mb = statistics.mean(B[s][k] for s in seeds)
         print('%-8s %10.2f %10.2f %+10.2f' % (k, ma, mb, mb - ma))
-    for k in ('kopile', 'dealt', 'dead12'):
+    for k in ('kopile', 'kills', 'dealt', 'dead12'):
         pos = sum(1 for s in seeds if B[s][k] > A[s][k]); neg = sum(1 for s in seeds if B[s][k] < A[s][k])
         print('sign test %-7s b>a %d, b<a %d, p=%.3f' % (k, pos, neg, sign_p(pos, neg)))
 

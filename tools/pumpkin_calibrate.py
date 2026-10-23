@@ -23,6 +23,9 @@ def real_ids(which):
         p = line.strip().split(',')
         if len(p) >= 5 and p[1] == '3':
             ids += [int(x) for x in p[4].split()]
+    if which == 'v17':     # the 2026-10-23 live batch (last Pumpkin row)
+        rows = [l.strip().split(',') for l in open(os.path.join(ROOT, 'data', 'ladder', 'boss_slot.csv'))][1:]
+        return set(int(x) for x in [r for r in rows if r[1] == '3'][-1][4].split())
     return set(ids if which == 'all' else [i for i in ids if i in V16])
 
 
@@ -76,7 +79,7 @@ def fmt(xs):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--sim', required=True, help='glob of simulated fight JSONs')
-    ap.add_argument('--real', default='v16', choices=['v16', 'all'])
+    ap.add_argument('--real', default='v16', choices=['v16', 'v17', 'all'])
     a = ap.parse_args()
     ids = real_ids(a.real)
     real = [d for _, fid, f, d in load('ours') if fid in ids]
