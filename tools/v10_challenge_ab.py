@@ -18,7 +18,12 @@ from lw_api import LWSession
 
 def post(lw, path, data):
     for _ in range(8):
-        r = lw.s.post('https://leekwars.com/api' + path, data=data).json()
+        try:
+            r = lw.s.post('https://leekwars.com/api' + path, data=data, timeout=30).json()
+        except Exception as ex:          # 2026-10-24: an untimed request hung the run for 9.5 h
+            r = {'error': 'request_failed: %s' % ex}
+            time.sleep(3)
+            continue
         if isinstance(r, dict) and r.get('error') == 'rate_limit':
             time.sleep(1.5)
             continue
