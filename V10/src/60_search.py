@@ -95,8 +95,54 @@ def pack(cell, tcell, items, tp, weapon, vals, key, tag=None):
     return _pack(cell, tcell, items, tp, weapon, vals, key)
 
 
+def _cap(it):
+    return 1 if (not it.weapon and it.cooldown > 0) else it.rep_cap
+
+
+def _dp_pack(usable, tp, weapon, vals):
+    """Exact packing: per item a use count (0..cap; chips on a cooldown at most once), each weapon other
+    than the held one paying its +1 TP switch once, maximising the summed one-use values under `tp` (group
+    knapsack, ~items x TP x uses steps). None when greedy is already exact: one item, or everything fits."""
+    if len(usable) < 2:
+        return None
+    full = sum(it.cost * _cap(it) + (1 if it.weapon and it.id != weapon else 0) for it in usable)
+    if full <= tp:
+        return None
+    val = [0.0] * (tp + 1)
+    pick = [()] * (tp + 1)
+    for it in usable:
+        v = vals[it.id]; c = it.cost; cap = _cap(it)
+        f = 1 if (it.weapon and it.id != weapon) else 0
+        nv = val[:]; npk = pick[:]
+        for t in range(tp + 1):
+            for n in range(1, cap + 1):
+                k = n * c + f
+                if k > t:
+                    break
+                cand = val[t - k] + n * v
+                if cand > nv[t] + 1e-9:
+                    nv[t] = cand; npk[t] = pick[t - k] + ((it, n),)
+        val, pick = nv, npk
+    best = max(range(tp + 1), key=lambda t: val[t])
+    chosen = sorted(pick[best], key=lambda x: -vals[x[0].id] / max(1, x[0].cost))
+    # the held weapon fires before any switch, so each other weapon pays its switch exactly once
+    held_first = [x for x in chosen if x[0].weapon and x[0].id == weapon]
+    rest = [x for x in chosen if not (x[0].weapon and x[0].id == weapon)]
+    wi = next((i for i, x in enumerate(rest) if x[0].weapon), len(rest))
+    order = rest[:wi] + held_first + rest[wi:]
+    steps = []
+    for it, n in order:
+        steps += [it] * n
+    return steps
+
+
 def _pack(cell, tcell, items, tp, weapon, vals, key):
     usable = [it for it in usable_from(cell, tcell, items) if vals.get(it.id, 0) > 0]
+    if key == 'dp':
+        steps = _dp_pack(usable, tp, weapon, vals)
+        if steps is not None and acts_cost(steps, weapon) <= tp:
+            return steps
+        key = 'ratio'
     if key == 'ratio':
         order = sorted(usable, key=lambda it: -vals[it.id] / max(1, it.cost))
     elif key == 'raw':
@@ -630,7 +676,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
         for c in cells:
             if over(0.5):
                 break
-            for key in ('ratio', 'raw', 'weapons'):
+            for key in ('ratio', 'raw', 'weapons', 'dp'):
                 att = packed(c, key, tp0 - pre_cost)
                 base = pre + mv(c) + at(att, ecell)
                 add(base, gi)
