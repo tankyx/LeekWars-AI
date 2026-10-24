@@ -1394,6 +1394,17 @@ def end_cells(cx, from_cell, reach, ecell):
     return [from_cell] + [c for c in cx.ends if c != from_cell]
 
 
+def tp_gain(it, A):
+    """TP an item gives back the turn it is cast (raw TP buffs as they are, TP buffs science-scaled)."""
+    g = 0.0
+    for e in it.effects:
+        if e[0] == E_RAW_TP:
+            g += avg(e)
+        elif e[0] == E_BUFF_TP:
+            g += avg(e) * (1 + max(0, A['cur'].get('science', 0)) / 100.0)
+    return int(g)
+
+
 def useful_now(it, A, B, cx):
     """A self item is only offered when it can matter now: heals when HP is
     missing, antidote when poisoned, reflect / shields when the enemy can
@@ -1409,9 +1420,10 @@ def useful_now(it, A, B, cx):
         # a cleanse (manumission / liberation-style) only matters when shackled
         return sum(v for k, v in A['groups'].items() if k.startswith('shk_')) > 0
     if types <= {E_BUFF_TP, E_RAW_TP}:
-        # TP for this turn only is a loss unless it returns more than it costs
-        gain = sum(avg(e) for e in it.effects if (e[3] or 0) > 1)
-        return gain * 2 > it.cost
+        # v18: TP buffs pay out THIS turn (the engine adds the TP at once; adrenaline +5 for 1, motivation +2
+        # now and for 2 more turns for 4): offered when they return their cost now or over their duration
+        now = tp_gain(it, A)
+        return now >= it.cost or now * max([e[3] or 1 for e in it.effects] + [1]) > it.cost
     if types & {E_RETURN, E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL}:
         d = Field.cellDistance(A['cell'], B['cell']) or 0
         return d <= B['mp_live'] + cx.b_maxr or others_threat(cx, A, A['cell']) > 0
@@ -1467,13 +1479,18 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     prefixes = [[]]
     if buffs:
         prefixes.append([('use', it, cell0) for it in buffs])
+        if len(buffs) > 1:
+            # v18: each buff alone too (a 7-TP steroid with every TP buff is not always the best opener)
+            for it in buffs[:4]:
+                prefixes.append([('use', it, cell0)])
     if best_heal:
         prefixes.append([('use', it, cell0) for it in best_heal])
         if buffs:
             prefixes.append([('use', it, cell0) for it in best_heal + buffs])
     if shields:
         prefixes.append([('use', it, cell0) for it in shields[:2]])
-    pre_costs = [sum(st[1].cost for st in pre) for pre in prefixes]
+    # net TP: a TP buff in the prefix pays its TP back before the attack is packed
+    pre_costs = [sum(st[1].cost - tp_gain(st[1], A) for st in pre) for pre in prefixes]
     plans = []; groups = []
     pcache = {}
 
@@ -1557,6 +1574,28 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             rest_tp = tp0 - pre_cost - acts_cost([it], weapon0)
             att = [x for x in packed(c_, 'ratio', rest_tp) if x is not it]
             add(pre + mv(c_) + [('use', it, t_)] + at(att, ecell), 'far')
+    # v18 enabler-first plans: shield strip (liberation) or a vulnerability hit (neutrino, heavy sword, j_laser)
+    # BEFORE the damage it boosts, then the best pack of the other items with the TP left. Packing by value per
+    # TP puts the enabler wherever its own value lands (Kirby fired neutrino after his other weapons in 33% of
+    # the turns he fired both); the plan simulator scores the interaction exactly once the order is right.
+    enablers = [it for it in offensive if it.types & {E_DEBUFF, E_VULN, E_VULN_ABS} and vals.get(it.id, 0) > 0]
+    if enablers:
+        for gi, pre in enumerate(prefixes[:2]):
+            for c in cells[:12]:
+                if over(0.5):
+                    break
+                for en in enablers:
+                    if not usable_from(c, ecell, [en]):
+                        continue
+                    tp_left = tp0 - pre_costs[gi] - acts_cost([en], weapon0)
+                    if tp_left < 0:
+                        continue
+                    held = en.id if en.weapon else weapon0
+                    rest = [it for it in offensive if it is not en or _cap(en) > 1]
+                    att = pack(c, ecell, rest, tp_left, held, vals, 'dp', tag=('ena', en.id, held))
+                    extra = en.max_uses - 1                 # the enabler's own later uses this turn
+                    att = [it for it in att if it is not en or (extra := extra - 1) >= 0]
+                    add(pre + mv(c) + at([en] + att, ecell), 'enabler')
     # split plans: chips from one cell, weapons from another (ranges differ)
     chips_off = [it for it in offensive if not it.weapon]
     weap_off = [it for it in offensive if it.weapon]
