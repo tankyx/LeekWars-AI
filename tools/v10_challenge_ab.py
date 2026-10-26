@@ -82,6 +82,7 @@ def main():
     ap.add_argument('--seeds', type=int, default=4)
     ap.add_argument('--a', required=True); ap.add_argument('--b', required=True)
     ap.add_argument('--account', default='main')
+    ap.add_argument('--out', help='append one JSON line per pair (leek, opp, seed, A/B result, A/B HP lead, fight ids)')
     ap.add_argument('--interleave', action='store_true', help='A then B per (opponent, seed): pairs stay complete if the challenge allowance runs out')
     a = ap.parse_args()
     lw = LWSession(a.account)
@@ -149,7 +150,7 @@ def main():
     pairs = [(o, s, res.get(('A', o, s)), res.get(('B', o, s))) for o in opps for s in range(1, a.seeds + 1)]
     # paired end-of-fight HP lead (our HP fraction - theirs): every pair carries information, not only the
     # ~10% whose result flips (2026-10-24: 5 discordant pairs of 50 per A/B, too few to see a few points)
-    leads = []
+    leads = []; rows = []
     for o in opps:
         for s in range(1, a.seeds + 1):
             fa, fb = fights.get(('A', o, s)), fights.get(('B', o, s))
@@ -157,6 +158,12 @@ def main():
                 la, lb = hp_lead(lw, fa, a.leek), hp_lead(lw, fb, a.leek)
                 if la is not None and lb is not None:
                     leads.append(lb - la)
+                rows.append({'leek': a.leek, 'opp': o, 'seed': s, 'a': a.a, 'b': a.b, 'ra': res.get(('A', o, s)),
+                             'rb': res.get(('B', o, s)), 'la': la, 'lb': lb, 'fa': fa, 'fb': fb, 'date': int(time.time())})
+    if a.out:
+        with open(a.out, 'a') as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + '\n')
     ok = [p for p in pairs if p[2] is not None and p[3] is not None]
     print('\n%d pairs' % len(ok))
     for o in opps:
