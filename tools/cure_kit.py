@@ -26,9 +26,10 @@ PK_CORE = ['seven_league_boots', 'teleportation', 'puny_bulb', 'leather_boots', 
 KITS = {'pumpkin': {
     # a second bulb each (v14: one bulb of each kind can't cover a block duty every round)
     'LeekRain': ['savant_bulb', 'wizard_bulb'] + PK_CORE,                         # 16 slots, STR/SCI (boots +3 MP)
-    'DawnFall': ['wizard_bulb', 'savant_bulb'] + PK_CORE + ['covid', 'toxin', 'elevation'],  # 19 slots, MAG
+    # 2026-10-27: 2 crafted prototaxites (sim: the window leeks that let most rezzes through) instead of antidote
+    'DawnFall': ['wizard_bulb', 'savant_bulb'] + [x if x != 'antidote' else 'prototaxite' for x in PK_CORE] + ['covid', 'toxin', 'elevation'],  # 19 slots
     'DuskHope': ['wizard_bulb', 'savant_bulb'] + PK_CORE + ['covid'],             # 17 slots, MAG
-    'ProdigalSon': ['savant_bulb', 'wizard_bulb'] + [x for x in PK_CORE if x != 'armor'],   # 15 slots, STR/RES
+    'ProdigalSon': ['savant_bulb', 'wizard_bulb'] + [x if x != 'antidote' else 'prototaxite' for x in PK_CORE if x != 'armor'],   # 15 slots
 }}
 
 
