@@ -2100,6 +2100,10 @@ def pk_defend():
 
 PK_STRIKE = True
 PK_HEAL_AT = 0.6      # v19: remission only below 60% life (winners 0.06 casts a leek-turn, ours 0.44)
+# strike target = lowest life/1500 + distance/3; the pumpkin's life counts x PK_PUMPKIN_W. At 1.0 its ~24k never
+# beat a 12k brother: v19 hit the open pumpkin on 27 of 883 leek turns (winners 10.7 a fight, 30% of their damage)
+PK_PUMPKIN_W = 1.0
+PK_NEAR_FIRST = False  # pick among the mobs I can reach this turn or next (else a far pick means no strike at all)
 
 
 def _mp_buffed(a):
@@ -2175,10 +2179,18 @@ def pk_strike(vul):
     ones cost turns of walking); buffs, approach, every weapon and offensive chip, then shields with
     what's left. V10's search kept away from the army: 1.4k damage a fight vs the top teams' 40-46k."""
     m = me()
-    t = min(vul, key=lambda e: ((e.life or 0) / 1500.0 + dist(m.cell.id, e.cell.id) / 3.0, e.id))
+
+    def is_near(e):
+        return weapon_reach(e) is not None or dist(m.cell.id, e.cell.id) <= (m.mp or 0) + 6
+
+    pool = vul
+    if PK_NEAR_FIRST:
+        pool = [e for e in vul if is_near(e)] or vul
+    t = min(pool, key=lambda e: ((e.life or 0) * (PK_PUMPKIN_W if ename(e) == 'evil_pumpkin' else 1.0) / 1500.0 +
+                                 dist(m.cell.id, e.cell.id) / 3.0, e.id))
     # v11 charged from 15-25 cells and died by T3-T5 (median length 6 vs 9): engage only what I can hit
     # this turn or next, else hold and defend - the army walks to us
-    near = weapon_reach(t) is not None or dist(m.cell.id, t.cell.id) <= (m.mp or 0) + 6
+    near = is_near(t)
     if not near or (m.life or 0) < (m.maxLife or 1) * 0.35:
         return False
     bnote('strike %s %d (d=%d)' % (ename(t), t.life or 0, dist(m.cell.id, t.cell.id)))
