@@ -71,7 +71,7 @@ def kits(override=None):
     return out
 
 
-def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=None, stat_override=None):
+def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=None, stat_override=None, cell_override=None):
     """Our leeks' stats and frequencies come from the template fight: re-point it after any respec or
     component change (2026-10-23: the v16 template had DawnFall at frequency 190, today 169 - another turn order)."""
     d = next(d for _, fid, f, d in load('ours', ids={template}))
@@ -82,6 +82,8 @@ def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=Non
         if e.get('summon'):
             continue
         ent = {'id': e['id'], 'name': e['name'], 'team': e['team'], 'cell': e.get('cellPos')}
+        if e['team'] == 1 and cell_override and e['name'] in cell_override:   # squad order = spawn slot
+            ent['cell'] = cell_override[e['name']]
         for k in STATS:
             ent[k] = e.get(k) or 0
         if e['team'] == 1:
@@ -163,6 +165,7 @@ def main():
     ap.add_argument('--keep', action='store_true', help='keep the fight JSONs (default: yes for --n <= 40)')
     ap.add_argument('--stats', help='JSON file {leek name: {stat: value, "weapons": [names]}}: what-if builds')
     ap.add_argument('--kits', help='JSON file {leek name: [chip names]}: per-leek chip overrides (default: the Pumpkin kits)')
+    ap.add_argument('--cells', help='JSON {leek name: start cell}: another squad order (spawn slots 92 301 475 515 520 384 224 80)')
     a = ap.parse_args()
     override = json.load(open(a.kits)) if a.kits else None
     os.makedirs(OUT, exist_ok=True)
@@ -173,7 +176,8 @@ def main():
 
     def one(seed):
         data = run(scenario(seed, a.ai, a.mob_ai, template=a.template, max_turns=a.max_turns, kit_override=override,
-                                stat_override=json.load(open(a.stats)) if a.stats else None))
+                                stat_override=json.load(open(a.stats)) if a.stats else None,
+                                cell_override=json.load(open(a.cells)) if a.cells else None))
         json.dump(data, open(os.path.join(OUT, '%s_%d.json' % (a.tag, seed)), 'w'))
         return seed, summary(data)
 

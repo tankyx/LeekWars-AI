@@ -4137,6 +4137,8 @@ def pk_strike(vul):
 PK_PLAY = 'squad'        # 'squad': the playbook below
 PK_SQUAD_GAP = 4       # wanted distance to the nearest ally when picking a cell
 PK_SQUAD_RANGE = 7     # hold this far from the nearest mob while nothing is open
+PK_SQ_HEAL_FIRST = 0.55  # heal myself before attacking below this fraction of max life (0 = off)
+PK_SQ_RETREAT = 0.3     # below this fraction: no attack - shields, heals, step back (0 = off)
 PK_SQUAD_SUMMON = False  # summon spread bulbs ahead of time (sim: their cooldowns starve the relay blocks)
 SQUAD_FF = {'on': False}
 
@@ -4424,11 +4426,34 @@ def _sq_summon(reserve=0):
     return False
 
 
+def _sq_heal_self():
+    if ready('knowledge') and (me().tp or 0) >= ccost('knowledge') + 5:
+        cast_self('knowledge')
+    if not cast_self('regeneration'):
+        cast_self('remission')
+    pk_team_cast('serum')
+
+
+def _sq_retreat():
+    _sq_defend()
+    _sq_heal_self()
+    a2 = [e for e in Fight.getAliveEnemies() if e.cell is not None and not e.summoned]
+    if a2 and (me().mp or 0) > 0:
+        me().moveAwayFromEntities(a2)
+    bnote('retreat')
+
+
 def pk_squad_turn():
     _safe('block', pk_block)
     _safe('boost', pk_boost_blocker)
     _safe('open', _sq_open)
     t, reach, vul = _safe('target', _sq_target) or (None, None, [])
+    m = me(); frac = (m.life or 0) / max(1, m.maxLife or 1)
+    if PK_SQ_HEAL_FIRST and frac < PK_SQ_HEAL_FIRST:
+        _safe('healfirst', _sq_heal_self)
+    if PK_SQ_RETREAT and frac < PK_SQ_RETREAT:
+        _safe('retreat', _sq_retreat)
+        return
     if t is not None and reach is not None:
         # an open mob in reach: strength buffs, walk to the shooting cell, every shot - then the rest
         for n in ('steroid', 'protein'):
