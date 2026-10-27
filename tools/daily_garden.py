@@ -326,6 +326,15 @@ def main():
     # Label by the Paris day of the credit pool (pools open at midnight Paris).
     from zoneinfo import ZoneInfo
     today = datetime.datetime.now(ZoneInfo('Europe/Paris')).date().isoformat()
+    # dated focus override (owner 2026-10-27: the 6 leeks respecced for the Pumpkin sit out the ladder until the
+    # revert): data/ladder/garden_focus_override.json = {"until": "<paris date>", "focus": "acct:A+B,...", "no_team": true}
+    try:
+        fo = json.load(open(os.path.join(ROOT, 'data', 'ladder', 'garden_focus_override.json')))
+        if today <= fo['until'] and not a.focus:
+            a.focus = fo['focus']; a.no_team = a.no_team or bool(fo.get('no_team'))
+            print('focus override until %s: %s%s' % (fo['until'], a.focus, ', no team fights' if a.no_team else ''), flush=True)
+    except FileNotFoundError:
+        pass
     print('=== daily_garden %s (%s selector)' % (datetime.datetime.now().isoformat(timespec='seconds'), a.selector), flush=True)
     accts = [x for x in LEEKS if x in a.accounts.split(',')]
     out = {}

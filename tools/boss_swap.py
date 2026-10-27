@@ -68,7 +68,8 @@ PK_KITS = {
 PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger'],
               'ED': ['glowing_saber', 'neutrino', 'rifle', 'm_laser'],
               'KG': ['glowing_saber', 'neutrino', 'lightninger', 'quantum_rifle'],
-              'MH': ['glowing_saber', 'flame_thrower', 'gazor', 'plutonium_bazooka']}
+              # 2026-10-27 Pumpkin respec (tools/pk_respec.py): Payou MAG -> STR until the event ends
+              'MH': ['destroyer', 'grenade_launcher', 'laser', 'b_laser']}
 PK_BASE = {'AL': dict(tp=20, mp=7, resistance=320, strength=510),     # v8: the Fennel strikers' lines (damage once
            'ED': dict(tp=20, mp=9, resistance=275, strength=440),     # protections drop early); v10: GTGabi plays right
                                                                       # before warty's T0 rez - MP 9 reaches 93% of its cells

@@ -2099,6 +2099,7 @@ def pk_defend():
 
 
 PK_STRIKE = True
+PK_HEAL_AT = 0.6      # v19: remission only below 60% life (winners 0.06 casts a leek-turn, ours 0.44)
 
 
 def _mp_buffed(a):
@@ -2151,10 +2152,10 @@ def pk_heal():
         cast_self('knowledge')
     if big and cast_self('regeneration'):
         BOSS['regen'] = True
-    if hurt > 150:
+    if life < tot * PK_HEAL_AT:
         cast_self('remission')
         return
-    worst = None; wf = 0.8
+    worst = None; wf = PK_HEAL_AT
     for a in Fight.getAliveAllies():
         if a.id == m.id or a.summoned or a.cell is None:
             continue

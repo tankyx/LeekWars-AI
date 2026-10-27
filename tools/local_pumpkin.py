@@ -71,7 +71,7 @@ def kits(override=None):
     return out
 
 
-def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=None):
+def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=None, stat_override=None):
     """Our leeks' stats and frequencies come from the template fight: re-point it after any respec or
     component change (2026-10-23: the v16 template had DawnFall at frequency 190, today 169 - another turn order)."""
     d = next(d for _, fid, f, d in load('ours', ids={template}))
@@ -88,6 +88,9 @@ def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=Non
             kit = K[e['name']]
             ent.update(ai=ai, farmer=1 if e['name'] in MAIN_KIT else 2, chips=kit['chips'], weapons=kit['weapons'],
                        cores=kit['cores'], ram=kit['ram'], type=0)
+            # what-if builds: {leek: {stat: value, 'weapons': [names]}} (e.g. a mage respecced to STR)
+            for k, v in ((stat_override or {}).get(e['name']) or {}).items():
+                ent[k] = [WEAPON_ID[w] for w in v] if k == 'weapons' else v
             ours.append(ent)
         else:
             chips, weapons = MOB_KIT[e['name']]
@@ -158,6 +161,7 @@ def main():
     ap.add_argument('--max-turns', type=int, default=64)
     ap.add_argument('--template', type=int, default=TEMPLATE, help='real 8-leek fight whose geometry and our stats are cloned')
     ap.add_argument('--keep', action='store_true', help='keep the fight JSONs (default: yes for --n <= 40)')
+    ap.add_argument('--stats', help='JSON file {leek name: {stat: value, "weapons": [names]}}: what-if builds')
     ap.add_argument('--kits', help='JSON file {leek name: [chip names]}: per-leek chip overrides (default: the Pumpkin kits)')
     a = ap.parse_args()
     override = json.load(open(a.kits)) if a.kits else None
@@ -168,7 +172,8 @@ def main():
                 os.remove(p)
 
     def one(seed):
-        data = run(scenario(seed, a.ai, a.mob_ai, template=a.template, max_turns=a.max_turns, kit_override=override))
+        data = run(scenario(seed, a.ai, a.mob_ai, template=a.template, max_turns=a.max_turns, kit_override=override,
+                                stat_override=json.load(open(a.stats)) if a.stats else None))
         json.dump(data, open(os.path.join(OUT, '%s_%d.json' % (a.tag, seed)), 'w'))
         return seed, summary(data)
 
