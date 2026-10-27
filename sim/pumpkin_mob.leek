@@ -718,15 +718,6 @@ function combat() {
 		}
 		foes = enemiesByDistance()
 	}
-	// liberation on a shielded enemy in range
-	if (ready(C_LIBERATION)) {
-		for (var e in foes) {
-			if ((getAbsoluteShield(e) > 0 || getRelativeShield(e) > 0) && canUseChip(C_LIBERATION, e)) {
-				useChip(C_LIBERATION, e)
-				break
-			}
-		}
-	}
 	var hits = 0
 	for (var k = 0; k < 8; k++) {
 		foes = enemiesByDistance()
@@ -737,6 +728,17 @@ function combat() {
 			break
 		}
 		hits++
+	}
+	// liberation on a shielded enemy in range, with the TP the attacks left (recalibrated 2026-10-28 on the
+	// 60-fight squad-play batch: before the attacks it ate the pumpkin's lightning / thunder - sim R2-8 pumpkin
+	// 1.69k a turn vs 2.45k live)
+	if (ready(C_LIBERATION)) {
+		for (var e in enemiesByDistance()) {
+			if ((getAbsoluteShield(e) > 0 || getRelativeShield(e) > 0) && canUseChip(C_LIBERATION, e)) {
+				useChip(C_LIBERATION, e)
+				break
+			}
+		}
 	}
 	if (steroidLater && ready(C_STEROID) && getTP() >= getChipCost(C_STEROID)) {
 		useChip(C_STEROID, ME)
