@@ -2130,6 +2130,47 @@ PK_BLOCK_MODE = 0      # who blocks a due slot: 0 = only if the next player is t
 # shields cast before the block / strike whenever the army is within 10 (the winners cast wall / fortress /
 # solidification about half as often as v19 and fire twice the weapon shots)
 PK_PRE_SHIELDS = ('solidification', 'fortress', 'wall')
+PK_REZ_ALLY = False    # resurrection (18 TP, level 301) on a dead leek: the winners cast it ~4 times a fight
+
+
+def pk_rez_ally():
+    """Bring back the dead leek with the most max life on the free cell (1-2 away, in sight) farthest from
+    the army."""
+    m = me()
+    if not ready('resurrection') or (m.tp or 0) < ccost('resurrection'):
+        return False
+    try:
+        dead = [e for e in Fight.getDeadAllies() if not e.summoned]
+    except Exception:
+        return False
+    if not dead:
+        return False
+    e = max(dead, key=lambda x: (x.maxLife or 0, x.id))
+    foes = [a.cell.id for a in army()]
+    best = None; bs = -1
+    pk_grid()
+    for c in list(_XY):
+        d = dist(m.cell.id, c)
+        if d < 1 or d > 2:
+            continue
+        cell = Cell.get(c)
+        if cell is None or cell.obstacle or not cell.empty:
+            continue
+        try:
+            if not Field.lineOfSight(m.cell.id, c, [m]):
+                continue
+        except Exception:
+            pass
+        sc = min([dist(c, f) for f in foes] or [99])
+        if sc > bs:
+            bs, best = sc, c
+    if best is None:
+        return False
+    if ok(m.resurrect(e, best)):
+        bnote('REZ ally %s at %d' % (ename(e), best))
+        return True
+    bnote('rez ally %s failed at %d' % (ename(e), best))
+    return False
 
 
 def _mp_buffed(a):
@@ -2245,6 +2286,8 @@ def pumpkin_turn():
                 cast_self(n)
     pk_block()
     pk_boost_blocker()
+    if PK_REZ_ALLY:
+        pk_rez_ally()
     if disarm(('evil_pumpkin',)):
         pass
     vul = pk_vulnerable()
