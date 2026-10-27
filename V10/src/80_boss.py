@@ -1758,15 +1758,37 @@ def pk_cycle_cell():
 def resurrection_due():
     """The next mob to act holds the riddle's slot: its cycle's K numbers are out and a brother lies dead.
     (v16 used "awakening off cooldown", true on almost every mob turn: blocks on cells of half-said cycles.)"""
-    try:
-        nxt = Fight.getNextPlayer()
-    except Exception:
-        return True
-    if nxt is None:
-        return False
     foes = set(e.id for e in Fight.getEnemies())
-    if nxt.id not in foes or getattr(nxt, 'summoned', False):
-        return False
+    if PK_BLOCK_MODE == 0:
+        try:
+            nxt = Fight.getNextPlayer()
+        except Exception:
+            return True
+        if nxt is None:
+            return False
+        if nxt.id not in foes or getattr(nxt, 'summoned', False):
+            return False
+    else:
+        # walk the turn order after me: summons in between don't take the duty (v19: 75 missed rezzes had a
+        # bulb playing next); mode 2: every leek before the slot mob blocks, not only the last one (the
+        # winners block 90% of the slots with 2 of their leeks in between, v19 54%)
+        try:
+            ents = sorted([e for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies())], key=lambda e: e.turnOrder)
+            pos = next(i for i, e in enumerate(ents) if e.id == me().id)
+        except Exception:
+            return False
+        holder = None
+        for k in range(1, len(ents)):
+            e = ents[(pos + k) % len(ents)]
+            if getattr(e, 'summoned', False):
+                continue
+            if e.id in foes:
+                holder = e
+                break
+            if PK_BLOCK_MODE == 1:
+                return False
+        if holder is None:
+            return False
     try:
         dead = [e for e in Fight.getDeadEnemies() if not e.summoned]
     except Exception:
@@ -2104,6 +2126,10 @@ PK_HEAL_AT = 0.6      # v19: remission only below 60% life (winners 0.06 casts a
 # beat a 12k brother: v19 hit the open pumpkin on 27 of 883 leek turns (winners 10.7 a fight, 30% of their damage)
 PK_PUMPKIN_W = 1.0
 PK_NEAR_FIRST = False  # pick among the mobs I can reach this turn or next (else a far pick means no strike at all)
+PK_BLOCK_MODE = 0      # who blocks a due slot: 0 = only if the next player is the mob, 1 = skip summons, 2 = any leek before it
+# shields cast before the block / strike whenever the army is within 10 (the winners cast wall / fortress /
+# solidification about half as often as v19 and fire twice the weapon shots)
+PK_PRE_SHIELDS = ('solidification', 'fortress', 'wall')
 
 
 def _mp_buffed(a):
@@ -2214,7 +2240,7 @@ def pumpkin_turn():
             need = pk_block(dry=True) or 0
         except Exception:
             need = 0
-        for n in ('solidification', 'fortress', 'wall'):
+        for n in PK_PRE_SHIELDS:
             if (me().tp or 0) - ccost(n) >= need:
                 cast_self(n)
     pk_block()
