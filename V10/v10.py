@@ -2798,6 +2798,12 @@ def area_hits_ally(cells):
     if not cells:
         return False
     occ = set(a.cell.id for a in Fight.getAliveAllies() if a.cell is not None)
+    if SQUAD_FF['on']:
+        # squad play: an area shot is fine when it hits more mobs than leeks (bulbs don't count)
+        lk = set(a.cell.id for a in Fight.getAliveAllies() if a.cell is not None and not a.summoned)
+        foe = set(e.cell.id for e in Fight.getAliveEnemies() if e.cell is not None)
+        ids = set(c.id for c in cells if c is not None)
+        return len(ids & lk) > len(ids & foe)
     return any(c is not None and c.id in occ for c in cells)
 
 
@@ -3342,6 +3348,8 @@ def pk_vulnerable():
 def bulb_ai():
     """Decoy bulbs: hit the nearest vulnerable enemy with whatever reaches, else stand (the minions
     spend their chips on summons in the winners' fights)."""
+    if PK_PLAY == 'squad' and pumpkin_on():
+        return sq_bulb_ai()
     m = me()
     tgt = PK_TARGET.get('cell')
     if tgt is None and pumpkin_on() and PK_STREAM:
@@ -3560,15 +3568,37 @@ def pk_cycle_cell():
 def resurrection_due():
     """The next mob to act holds the riddle's slot: its cycle's K numbers are out and a brother lies dead.
     (v16 used "awakening off cooldown", true on almost every mob turn: blocks on cells of half-said cycles.)"""
-    try:
-        nxt = Fight.getNextPlayer()
-    except Exception:
-        return True
-    if nxt is None:
-        return False
     foes = set(e.id for e in Fight.getEnemies())
-    if nxt.id not in foes or getattr(nxt, 'summoned', False):
-        return False
+    if PK_BLOCK_MODE == 0:
+        try:
+            nxt = Fight.getNextPlayer()
+        except Exception:
+            return True
+        if nxt is None:
+            return False
+        if nxt.id not in foes or getattr(nxt, 'summoned', False):
+            return False
+    else:
+        # walk the turn order after me: summons in between don't take the duty (v19: 75 missed rezzes had a
+        # bulb playing next); mode 2: every leek before the slot mob blocks, not only the last one (the
+        # winners block 90% of the slots with 2 of their leeks in between, v19 54%)
+        try:
+            ents = sorted([e for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies())], key=lambda e: e.turnOrder)
+            pos = next(i for i, e in enumerate(ents) if e.id == me().id)
+        except Exception:
+            return False
+        holder = None
+        for k in range(1, len(ents)):
+            e = ents[(pos + k) % len(ents)]
+            if getattr(e, 'summoned', False):
+                continue
+            if e.id in foes:
+                holder = e
+                break
+            if PK_BLOCK_MODE == 1:
+                return False
+        if holder is None:
+            return False
     try:
         dead = [e for e in Fight.getDeadEnemies() if not e.summoned]
     except Exception:
@@ -3578,7 +3608,8 @@ def resurrection_due():
     return pk_cycle_cell() is not None
 
 
-_BULB_MP = {'prototaxite': 0, 'puny_bulb': 5, 'wizard_bulb': 7, 'savant_bulb': 6, 'lightning_bulb': 6, 'tactician_bulb': 6}
+_BULB_MP = {'prototaxite': 0, 'puny_bulb': 5, 'wizard_bulb': 7, 'savant_bulb': 6, 'lightning_bulb': 6, 'tactician_bulb': 6,
+            'rocky_bulb': 3, 'iced_bulb': 4, 'fire_bulb': 5, 'healer_bulb': 6, 'metallic_bulb': 2}   # summons.json max MP (level 300)
 # non-critical summons' MP; the prototaxite (range 10, a plant) is summoned straight onto the cell
 PK_DIAG = {}
 _PK_GRID = {}
@@ -3660,7 +3691,8 @@ def pk_relay_plan(c):
     jt = ccost('jump') if ready('jump') else None
     tele = ccost('teleportation') if ready('teleportation') else None
     PK_DIAG.clear()
-    for bn in ('prototaxite', 'puny_bulb', 'wizard_bulb', 'savant_bulb', 'lightning_bulb', 'tactician_bulb'):
+    for bn in ('prototaxite', 'puny_bulb', 'rocky_bulb', 'iced_bulb', 'fire_bulb', 'healer_bulb', 'wizard_bulb', 'savant_bulb',
+               'lightning_bulb', 'tactician_bulb', 'metallic_bulb'):
         if bn not in my_chips():
             continue
         if not ready(bn) or ccost(bn) > tp:
@@ -3895,6 +3927,8 @@ def pk_defend():
             for a in mates:
                 if cast_on(n, a):
                     break
+    if PK_SPEND_REST:
+        pk_spend_rest()
     a2 = army()
     if a2 and (m.mp or 0) > 0:
         m.moveAwayFromEntities(a2)
@@ -3902,6 +3936,101 @@ def pk_defend():
 
 PK_STRIKE = True
 PK_HEAL_AT = 0.6      # v19: remission only below 60% life (winners 0.06 casts a leek-turn, ours 0.44)
+# strike target = lowest life/1500 + distance/3; the pumpkin's life counts x PK_PUMPKIN_W. At 1.0 its ~24k never
+# beat a 12k brother: v19 hit the open pumpkin on 27 of 883 leek turns (winners 10.7 a fight, 30% of their damage)
+PK_PUMPKIN_W = 1.0
+PK_NEAR_FIRST = False  # pick among the mobs I can reach this turn or next (else a far pick means no strike at all)
+PK_BLOCK_MODE = 2      # who blocks a due slot: 0 = only if the next player is the mob, 1 = skip summons, 2 = any leek before it
+# shields cast before the block / strike whenever the army is within 10 (the winners cast wall / fortress /
+# solidification about half as often as v19 and fire twice the weapon shots)
+PK_PRE_SHIELDS = ('solidification', 'fortress', 'wall')
+PK_REZ_ALLY = False    # resurrection (18 TP, level 301) on a dead leek: the winners cast it ~4 times a fight
+# the TP a turn leaves: v19 uses 56% of its TP (sim 65%), the winners 91% - heals on the most hurt allies,
+# then shields on the allies nearest the army, then a decoy bulb
+PK_SPEND_REST = 0      # 1: heals + shields with the TP left, 2: + a decoy bulb
+
+
+def pk_spend_rest():
+    m = me()
+    mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
+    hurt = sorted([a for a in mates if (a.life or 0) < (a.maxLife or 1) * 0.85],
+                  key=lambda a: (a.life or 0) / max(1, a.maxLife or 1))
+    for n in ('regeneration', 'remission'):
+        for a in hurt:
+            if not ready(n) or (m.tp or 0) < ccost(n):
+                break
+            if cast_self(n) if a.id == m.id else cast_on(n, a):
+                break
+    a2 = army()
+    if a2:
+        mates.sort(key=lambda a: min(dist(a.cell.id, e.cell.id) for e in a2))
+    for n in ('rampart', 'carapace', 'armor', 'helmet', 'shield', 'elevation', 'solidification', 'fortress', 'wall'):
+        for a in mates:
+            if not ready(n) or (m.tp or 0) < ccost(n):
+                break
+            if cast_self(n) if a.id == m.id else cast_on(n, a):
+                break
+    if PK_SPEND_REST < 2:
+        return
+    pk_grid()
+    for n in ('wizard_bulb', 'savant_bulb', 'tactician_bulb', 'lightning_bulb'):
+        if not ready(n) or (m.tp or 0) < ccost(n):
+            continue
+        best = None; bd = 99
+        for c in list(_XY):
+            if dist(m.cell.id, c) > 7:
+                continue
+            cell = Cell.get(c)
+            if cell is None or cell.obstacle or not cell.empty:
+                continue
+            d = min([dist(c, e.cell.id) for e in a2] or [0])
+            try:
+                if d < bd and m.canUseChipOnCell(my_chips()[n], cell):
+                    bd, best = d, cell
+            except Exception:
+                pass
+        if best is not None and ok(m.summon(my_chips()[n], best, bulb_ai)):
+            break
+
+
+def pk_rez_ally():
+    """Bring back the dead leek with the most max life on the free cell (1-2 away, in sight) farthest from
+    the army."""
+    m = me()
+    if not ready('resurrection') or (m.tp or 0) < ccost('resurrection'):
+        return False
+    try:
+        dead = [e for e in Fight.getDeadAllies() if not e.summoned]
+    except Exception:
+        return False
+    if not dead:
+        return False
+    e = max(dead, key=lambda x: (x.maxLife or 0, x.id))
+    foes = [a.cell.id for a in army()]
+    best = None; bs = -1
+    pk_grid()
+    for c in list(_XY):
+        d = dist(m.cell.id, c)
+        if d < 1 or d > 2:
+            continue
+        cell = Cell.get(c)
+        if cell is None or cell.obstacle or not cell.empty:
+            continue
+        try:
+            if not Field.lineOfSight(m.cell.id, c, [m]):
+                continue
+        except Exception:
+            pass
+        sc = min([dist(c, f) for f in foes] or [99])
+        if sc > bs:
+            bs, best = sc, c
+    if best is None:
+        return False
+    if ok(m.resurrect(e, best)):
+        bnote('REZ ally %s at %d' % (ename(e), best))
+        return True
+    bnote('rez ally %s failed at %d' % (ename(e), best))
+    return False
 
 
 def _mp_buffed(a):
@@ -3977,10 +4106,18 @@ def pk_strike(vul):
     ones cost turns of walking); buffs, approach, every weapon and offensive chip, then shields with
     what's left. V10's search kept away from the army: 1.4k damage a fight vs the top teams' 40-46k."""
     m = me()
-    t = min(vul, key=lambda e: ((e.life or 0) / 1500.0 + dist(m.cell.id, e.cell.id) / 3.0, e.id))
+
+    def is_near(e):
+        return weapon_reach(e) is not None or dist(m.cell.id, e.cell.id) <= (m.mp or 0) + 6
+
+    pool = vul
+    if PK_NEAR_FIRST:
+        pool = [e for e in vul if is_near(e)] or vul
+    t = min(pool, key=lambda e: ((e.life or 0) * (PK_PUMPKIN_W if ename(e) == 'evil_pumpkin' else 1.0) / 1500.0 +
+                                 dist(m.cell.id, e.cell.id) / 3.0, e.id))
     # v11 charged from 15-25 cells and died by T3-T5 (median length 6 vs 9): engage only what I can hit
     # this turn or next, else hold and defend - the army walks to us
-    near = weapon_reach(t) is not None or dist(m.cell.id, t.cell.id) <= (m.mp or 0) + 6
+    near = is_near(t)
     if not near or (m.life or 0) < (m.maxLife or 1) * 0.35:
         return False
     bnote('strike %s %d (d=%d)' % (ename(t), t.life or 0, dist(m.cell.id, t.cell.id)))
@@ -3988,7 +4125,329 @@ def pk_strike(vul):
     attack(t)
     for n in ('fortress', 'wall', 'solidification', 'armor'):
         cast_self(n)
+    if PK_SPEND_REST:
+        pk_spend_rest()
     return True
+
+
+# ---- squad play (v20): the BlackBooks squad's playbook (153/153 Pumpkin wins; its leeks have our stats).
+# They stay ~4 cells from an ally and 6-7 from the nearest mob, spend 94-98% of their TP (v19: 56%):
+# rage (TP x (1 + SCI/100), circle 3), reflexes / doping / boots on the cluster, dome + rampart / carapace
+# from RES ~490 casters, then every weapon at the open mob, friendly fire accepted (~9% of their damage).
+PK_PLAY = 'squad'        # 'squad': the playbook below
+PK_SQUAD_GAP = 4       # wanted distance to the nearest ally when picking a cell
+PK_SQUAD_RANGE = 7     # hold this far from the nearest mob while nothing is open
+PK_SQUAD_SUMMON = False  # summon spread bulbs ahead of time (sim: their cooldowns starve the relay blocks)
+SQUAD_FF = {'on': False}
+
+
+def _mates(with_me=True):
+    m = me()
+    return [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and (with_me or a.id != m.id)]
+
+
+def _area_ids(ch, cell):
+    try:
+        return set(c.id for c in (ch.effectiveArea(cell) or []) if c is not None)
+    except Exception:
+        return set()
+
+
+def pk_team_cast(n, min_hits=1, who=None):
+    """Area chip n on the ally cell whose area covers the most allies (who: a filter on the allies)."""
+    m = me(); ch = my_chips().get(n)
+    if ch is None or (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
+        return False
+    al = [a for a in _mates() if who is None or who(a)]
+    if not al:
+        return False
+    best = None; bv = 0
+    for a in _mates():
+        cell = a.cell
+        try:
+            if not m.canUseChipOnCell(ch, cell):
+                continue
+        except Exception:
+            continue
+        ids = _area_ids(ch, cell)
+        v = sum(1 for b in al if b.cell.id in ids)
+        if v > bv:
+            bv, best = v, cell
+    if best is None or bv < min_hits:
+        return False
+    if ok(m.useChipOnCell(ch, best)):
+        bnote('%s x%d' % (n, bv))
+        return True
+    return False
+
+
+def pk_squad_cell(t):
+    """The reachable cell from which a weapon hits t (or, t None / out of reach: the cell nearest the mobs
+    at PK_SQUAD_RANGE), closest to the squad."""
+    m = me(); rc = reachable(m.cell.id, m.mp or 0)
+    others = [a.cell.id for a in _mates(False)]
+    mobs = [e.cell.id for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None]
+
+    def near_ally(c):
+        return min([dist(c, o) for o in others] or [0])
+
+    cands = {}
+    if t is not None:
+        for w in (m.weapons or []):
+            try:
+                for c in (m.weaponCells(t, w) or []):
+                    if c.id in rc:
+                        cands[c.id] = rc[c.id]
+            except Exception:
+                pass
+    if cands:
+        return min(cands, key=lambda c: (max(0, near_ally(c) - PK_SQUAD_GAP) * 2 + cands[c] * 0.2 +
+                                          threat_cells(c) * 0.5, c))
+    if not mobs:
+        return m.cell.id
+    if t is not None and t.cell is not None:
+        # the open mob is out of reach this turn: close in on it, with the squad
+        return min(rc, key=lambda c: (max(0, dist(c, t.cell.id) - PK_SQUAD_RANGE) +
+                                       max(0, near_ally(c) - PK_SQUAD_GAP) * 1.5 + rc[c] * 0.05, c))
+    return min(rc, key=lambda c: (abs(min(dist(c, x) for x in mobs) - PK_SQUAD_RANGE) +
+                                   max(0, near_ally(c) - PK_SQUAD_GAP) * 1.5 + rc[c] * 0.1, c))
+
+
+def threat_cells(c):
+    """Mobs within 7 of c (the army's chips reach 7-10)."""
+    return sum(1 for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None and dist(c, e.cell.id) <= 7)
+
+
+def _safe(tag, fn, *args):
+    try:
+        return fn(*args)
+    except Exception as ex:
+        bnote('squad %s: %s' % (tag, str(ex)[:80]))
+        return None
+
+
+def _sq_open():
+    cast_self('adrenaline')
+    pk_team_cast('rage')
+
+
+def _sq_defend():
+    """The winners' order: solidification (+180 raw RES) before the RES-scaled shields, knowledge (+250 raw WIS)
+    before the WIS-scaled vitality (elevation 80 x (1 + WIS/100), armoring) and heals."""
+    m = me()
+    threat = threat_cells(m.cell.id) > 0 or Fight.turn <= 2
+    if threat:
+        cast_self('solidification')
+        pk_team_cast('dome', min_hits=2)
+        cast_self('fortress'); cast_self('wall')
+    mates = _mates(False)
+    mates.sort(key=lambda a: (-threat_cells(a.cell.id), (a.life or 0) / max(1, a.maxLife or 1)))
+    for n in ('rampart', 'carapace'):
+        for a in mates[:3]:
+            if threat_cells(a.cell.id) > 0 or Fight.turn <= 2:
+                if cast_on(n, a):
+                    break
+    vit = (ready('elevation') and Fight.turn <= 3) or ready('armoring')
+    if vit and ready('knowledge') and (me().tp or 0) >= ccost('knowledge') + 5:
+        cast_self('knowledge')
+    if Fight.turn <= 3:
+        cast_self('elevation')
+    cast_self('armoring')
+
+
+def _sq_target():
+    """(target, reach, open mobs): the open mob I can shoot this turn (lowest life first, walking breaks
+    ties), else the nearest open mob with reach None."""
+    m = me(); vul = pk_vulnerable()
+    if not vul:
+        return None, None, []
+    best = None; bk = None
+    for e in vul:
+        try:
+            r = weapon_reach(e)
+        except Exception:
+            r = None
+        if r is None:
+            continue
+        k = ((e.life or 0) * (PK_PUMPKIN_W if ename(e) == 'evil_pumpkin' else 1.0) / 1500.0 + r[1] * 0.3, e.id)
+        if bk is None or k < bk:
+            bk, best = k, (e, r)
+    if best is not None:
+        return best[0], best[1], vul
+    t = min(vul, key=lambda e: (dist(m.cell.id, e.cell.id), e.id))
+    return t, None, vul
+
+
+def _sq_move(t, reach=None):
+    m = me()
+    c = reach[0] if reach is not None else pk_squad_cell(t)
+    if t is not None:
+        bnote('tgt %s d=%d tp=%d mp=%d reach=%s -> %s' % (ename(t), dist(m.cell.id, t.cell.id), m.tp or 0, m.mp or 0,
+                                                          reach is not None, c))
+    if c is not None and c != m.cell.id:
+        m.moveToward(Cell.get(c))
+
+
+def _sq_buffs():
+    pk_team_cast('reflexes')
+    pk_team_cast('doping')
+    pk_team_cast('seven_league_boots', who=lambda a: a.id != me().id)
+    pk_team_cast('acceleration', who=lambda a: a.id != me().id)
+
+
+def _sq_attack(t, vul):
+    SQUAD_FF['on'] = True
+    tp0 = me().tp or 0
+    try:
+        attack(t)
+        bnote('atk %s tp %d->%d%s' % (ename(t), tp0, me().tp or 0, '' if t.alive else ' KILLED'))
+        rest = [e for e in pk_vulnerable() if e.id != t.id]      # re-read: attack(t) may have killed some
+        for e in sorted(rest, key=lambda e: dist(me().cell.id, e.cell.id)):
+            if (me().tp or 0) < 2:
+                break
+            _safe('attack2', attack, e)
+    finally:
+        SQUAD_FF['on'] = False
+
+
+def _sq_heals():
+    life = me().life or 0; tot = me().maxLife or 1
+    hurt = [a for a in _mates() if (a.life or 0) < (a.maxLife or 1) * 0.75]
+    if hurt and ready('knowledge') and (me().tp or 0) >= ccost('knowledge') + 5:
+        cast_self('knowledge')
+    pk_team_cast('serum', who=lambda a: (a.life or 0) < (a.maxLife or 1) * 0.85)
+    if life < tot * 0.5:
+        cast_self('regeneration')
+    hurt.sort(key=lambda a: (a.life or 0) / max(1, a.maxLife or 1))
+    for a in hurt[:2]:
+        if (cast_self('remission') if a.id == me().id else cast_on('remission', a)):
+            break
+    if has('resurrection'):
+        pk_rez_ally()
+
+
+def _sq_close(t):
+    if threat_cells(me().cell.id) > 0:
+        for n in ('solidification', 'fortress', 'wall', 'armor', 'helmet', 'shield'):
+            cast_self(n)
+    for n in ('rampart', 'carapace'):
+        for a in _mates(False):
+            if threat_cells(a.cell.id) > 0 and cast_on(n, a):
+                break
+    if (me().mp or 0) > 0 and t is None:
+        _sq_move(None)
+
+
+def _blockers():
+    return [a.cell.id for a in Fight.getAliveAllies() if a.cell is not None]
+
+
+def _spread_cell(frm, cells):
+    """The cell farthest from the other blockers (allies, bulbs), not next to a mob."""
+    own = [c for c in _blockers() if c != frm]
+    mobs = [e.cell.id for e in Fight.getAliveEnemies() if e.cell is not None]
+    best = None; bs = -1e9
+    for c in cells:
+        sc = min([dist(c, o) for o in own] or [20]) - 3 * sum(1 for x in mobs if dist(c, x) <= 2)
+        if sc > bs:
+            bs, best = sc, c
+    return best
+
+
+def sq_bulb_ai():
+    """Squad bulbs (the winners block 9.7 slots a fight, 0.3 resurrections, mostly with bulbs): onto the
+    riddle cell once its cycle is out and a brother lies dead, else spread over the map."""
+    m = me()
+    try:
+        c = pk_cycle_cell() if PK_STREAM else None
+        dead = [e for e in Fight.getDeadEnemies() if not e.summoned]
+    except Exception:
+        c, dead = None, []
+    if c is not None and dead:
+        if m.cell.id == c:
+            return
+        cell = Cell.get(c)
+        if cell is not None and cell.empty and not cell.obstacle:
+            rc = reachable(m.cell.id, m.mp or 0)
+            if c in rc:
+                m.moveToward(cell)
+                bnote('bulb onto rez cell %d' % c)
+                return
+    vul = [e for e in pk_vulnerable()]
+    if vul:
+        t = min(vul, key=lambda e: dist(m.cell.id, e.cell.id))
+        for ch in (m.chips or []):
+            try:
+                if (ch.currentCooldown or 0) == 0 and (m.tp or 0) >= (ch.cost or 0) and offensive(ch) and m.canUseChip(ch, t):
+                    m.useChip(ch, t)
+            except Exception:
+                pass
+    if (m.mp or 0) > 0:
+        rc = reachable(m.cell.id, m.mp or 0)
+        b = _spread_cell(m.cell.id, list(rc))
+        if b is not None and b != m.cell.id:
+            m.moveToward(Cell.get(b))
+
+
+SQ_BULBS = ('puny_bulb', 'rocky_bulb', 'iced_bulb', 'fire_bulb', 'healer_bulb', 'wizard_bulb', 'lightning_bulb',
+            'savant_bulb', 'tactician_bulb', 'metallic_bulb')
+
+
+def _sq_summon(reserve=0):
+    """One bulb a turn when the TP allows: on the free cell in range farthest from the other blockers."""
+    m = me()
+    pk_grid()
+    for n in SQ_BULBS:
+        ch = my_chips().get(n)
+        if ch is None or (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0) + reserve:
+            continue
+        cells = []
+        for c in list(_XY):
+            d = dist(m.cell.id, c)
+            if d < 1 or d > (ch.maxRange or 3):
+                continue
+            cell = Cell.get(c)
+            if cell is None or cell.obstacle or not cell.empty:
+                continue
+            cells.append(c)
+        ok_cells = []
+        for c in sorted(cells, key=lambda c: -min([dist(c, o) for o in _blockers()] or [0]))[:12]:
+            try:
+                if m.canUseChipOnCell(ch, Cell.get(c)):
+                    ok_cells.append(c)
+            except Exception:
+                pass
+        b = _spread_cell(m.cell.id, ok_cells)
+        if b is not None and ok(m.summon(ch, Cell.get(b), bulb_ai)):
+            bnote('summon %s at %d' % (n, b))
+            return True
+    return False
+
+
+def pk_squad_turn():
+    _safe('block', pk_block)
+    _safe('boost', pk_boost_blocker)
+    _safe('open', _sq_open)
+    t, reach, vul = _safe('target', _sq_target) or (None, None, [])
+    if t is not None and reach is not None:
+        # an open mob in reach: strength buffs, walk to the shooting cell, every shot - then the rest
+        for n in ('steroid', 'protein'):
+            _safe(n, cast_self, n)
+        _safe('doping', pk_team_cast, 'doping')
+        _safe('move', _sq_move, t, reach)
+        _safe('attack', _sq_attack, t, vul)
+        _safe('defend', _sq_defend)
+        if PK_SQUAD_SUMMON:
+            _safe('summon', _sq_summon)
+        _safe('buffs', _sq_buffs)
+    else:
+        _safe('move', _sq_move, t)
+        _safe('defend', _sq_defend)
+        if PK_SQUAD_SUMMON:
+            _safe('summon', _sq_summon)
+        _safe('buffs', _sq_buffs)
+    _safe('heals', _sq_heals)
+    _safe('close', _sq_close, t if reach is not None else None)
 
 
 def pumpkin_turn():
@@ -3997,6 +4456,9 @@ def pumpkin_turn():
     if Fight.turn == 1:
         bnote('pumpkin v16')
     pk_listen()
+    if PK_PLAY == 'squad':
+        pk_squad_turn()
+        return None
     # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
     # but never eat the TP the due block needs
     if any(dist(me().cell.id, e.cell.id) <= 10 for e in army()):
@@ -4004,11 +4466,13 @@ def pumpkin_turn():
             need = pk_block(dry=True) or 0
         except Exception:
             need = 0
-        for n in ('solidification', 'fortress', 'wall'):
+        for n in PK_PRE_SHIELDS:
             if (me().tp or 0) - ccost(n) >= need:
                 cast_self(n)
     pk_block()
     pk_boost_blocker()
+    if PK_REZ_ALLY:
+        pk_rez_ally()
     if disarm(('evil_pumpkin',)):
         pass
     vul = pk_vulnerable()

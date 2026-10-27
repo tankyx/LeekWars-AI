@@ -2138,7 +2138,7 @@ PK_HEAL_AT = 0.6      # v19: remission only below 60% life (winners 0.06 casts a
 # beat a 12k brother: v19 hit the open pumpkin on 27 of 883 leek turns (winners 10.7 a fight, 30% of their damage)
 PK_PUMPKIN_W = 1.0
 PK_NEAR_FIRST = False  # pick among the mobs I can reach this turn or next (else a far pick means no strike at all)
-PK_BLOCK_MODE = 0      # who blocks a due slot: 0 = only if the next player is the mob, 1 = skip summons, 2 = any leek before it
+PK_BLOCK_MODE = 2      # who blocks a due slot: 0 = only if the next player is the mob, 1 = skip summons, 2 = any leek before it
 # shields cast before the block / strike whenever the army is within 10 (the winners cast wall / fortress /
 # solidification about half as often as v19 and fire twice the weapon shots)
 PK_PRE_SHIELDS = ('solidification', 'fortress', 'wall')
@@ -2332,9 +2332,10 @@ def pk_strike(vul):
 # They stay ~4 cells from an ally and 6-7 from the nearest mob, spend 94-98% of their TP (v19: 56%):
 # rage (TP x (1 + SCI/100), circle 3), reflexes / doping / boots on the cluster, dome + rampart / carapace
 # from RES ~490 casters, then every weapon at the open mob, friendly fire accepted (~9% of their damage).
-PK_PLAY = 'v19'        # 'squad': the playbook below
+PK_PLAY = 'squad'        # 'squad': the playbook below
 PK_SQUAD_GAP = 4       # wanted distance to the nearest ally when picking a cell
 PK_SQUAD_RANGE = 7     # hold this far from the nearest mob while nothing is open
+PK_SQUAD_SUMMON = False  # summon spread bulbs ahead of time (sim: their cooldowns starve the relay blocks)
 SQUAD_FF = {'on': False}
 
 
@@ -2634,12 +2635,14 @@ def pk_squad_turn():
         _safe('move', _sq_move, t, reach)
         _safe('attack', _sq_attack, t, vul)
         _safe('defend', _sq_defend)
-        _safe('summon', _sq_summon)
+        if PK_SQUAD_SUMMON:
+            _safe('summon', _sq_summon)
         _safe('buffs', _sq_buffs)
     else:
         _safe('move', _sq_move, t)
         _safe('defend', _sq_defend)
-        _safe('summon', _sq_summon)
+        if PK_SQUAD_SUMMON:
+            _safe('summon', _sq_summon)
         _safe('buffs', _sq_buffs)
     _safe('heals', _sq_heals)
     _safe('close', _sq_close, t if reach is not None else None)
