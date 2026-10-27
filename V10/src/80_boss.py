@@ -2115,6 +2115,8 @@ def pk_defend():
             for a in mates:
                 if cast_on(n, a):
                     break
+    if PK_SPEND_REST:
+        pk_spend_rest()
     a2 = army()
     if a2 and (m.mp or 0) > 0:
         m.moveAwayFromEntities(a2)
@@ -2131,6 +2133,52 @@ PK_BLOCK_MODE = 0      # who blocks a due slot: 0 = only if the next player is t
 # solidification about half as often as v19 and fire twice the weapon shots)
 PK_PRE_SHIELDS = ('solidification', 'fortress', 'wall')
 PK_REZ_ALLY = False    # resurrection (18 TP, level 301) on a dead leek: the winners cast it ~4 times a fight
+# the TP a turn leaves: v19 uses 56% of its TP (sim 65%), the winners 91% - heals on the most hurt allies,
+# then shields on the allies nearest the army, then a decoy bulb
+PK_SPEND_REST = 0      # 1: heals + shields with the TP left, 2: + a decoy bulb
+
+
+def pk_spend_rest():
+    m = me()
+    mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
+    hurt = sorted([a for a in mates if (a.life or 0) < (a.maxLife or 1) * 0.85],
+                  key=lambda a: (a.life or 0) / max(1, a.maxLife or 1))
+    for n in ('regeneration', 'remission'):
+        for a in hurt:
+            if not ready(n) or (m.tp or 0) < ccost(n):
+                break
+            if cast_self(n) if a.id == m.id else cast_on(n, a):
+                break
+    a2 = army()
+    if a2:
+        mates.sort(key=lambda a: min(dist(a.cell.id, e.cell.id) for e in a2))
+    for n in ('rampart', 'carapace', 'armor', 'helmet', 'shield', 'elevation', 'solidification', 'fortress', 'wall'):
+        for a in mates:
+            if not ready(n) or (m.tp or 0) < ccost(n):
+                break
+            if cast_self(n) if a.id == m.id else cast_on(n, a):
+                break
+    if PK_SPEND_REST < 2:
+        return
+    pk_grid()
+    for n in ('wizard_bulb', 'savant_bulb', 'tactician_bulb', 'lightning_bulb'):
+        if not ready(n) or (m.tp or 0) < ccost(n):
+            continue
+        best = None; bd = 99
+        for c in list(_XY):
+            if dist(m.cell.id, c) > 7:
+                continue
+            cell = Cell.get(c)
+            if cell is None or cell.obstacle or not cell.empty:
+                continue
+            d = min([dist(c, e.cell.id) for e in a2] or [0])
+            try:
+                if d < bd and m.canUseChipOnCell(my_chips()[n], cell):
+                    bd, best = d, cell
+            except Exception:
+                pass
+        if best is not None and ok(m.summon(my_chips()[n], best, bulb_ai)):
+            break
 
 
 def pk_rez_ally():
@@ -2265,6 +2313,8 @@ def pk_strike(vul):
     attack(t)
     for n in ('fortress', 'wall', 'solidification', 'armor'):
         cast_self(n)
+    if PK_SPEND_REST:
+        pk_spend_rest()
     return True
 
 
