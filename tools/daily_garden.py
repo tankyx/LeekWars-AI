@@ -332,7 +332,14 @@ def main():
         fo = json.load(open(os.path.join(ROOT, 'data', 'ladder', 'garden_focus_override.json')))
         if today <= fo['until'] and not a.focus:
             a.focus = fo['focus']; a.no_team = a.no_team or bool(fo.get('no_team'))
-            print('focus override until %s: %s%s' % (fo['until'], a.focus, ', no team fights' if a.no_team else ''), flush=True)
+            # owner 2026-10-27 "beat the pumpkin, whatever is necessary": the nightly 8-leek Pumpkin slot and no
+            # loot farmer fights, so the credits go to the Pumpkin
+            if 'boss_slot' in fo and a.boss_slot == 'off':
+                a.boss_slot = fo['boss_slot']
+            if 'farmer_after' in fo:
+                a.farmer_after = fo['farmer_after']
+            print('focus override until %s: %s%s, boss slot %s, farmer fights %r' % (
+                fo['until'], a.focus, ', no team fights' if a.no_team else '', a.boss_slot, a.farmer_after), flush=True)
     except FileNotFoundError:
         pass
     print('=== daily_garden %s (%s selector)' % (datetime.datetime.now().isoformat(timespec='seconds'), a.selector), flush=True)
