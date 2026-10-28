@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from pumpkin_fights import load, CHIPS, WEAPONS, turns, MOBS  # noqa: E402
 
-GEN = '/home/ubuntu/leek-wars-generator'
+GEN = os.environ.get('LW_GEN', '/home/ubuntu/leek-wars-generator')   # LW_GEN: another generator checkout
 JAVA = '/usr/lib/jvm/java-25-openjdk-amd64/bin/java'
 OUT = os.path.join(ROOT, 'data', 'sim_pumpkin')
 TEMPLATE = 54297638            # first fight of the v17 live batch (2026-10-23): current stats, spawns, turn order
@@ -93,7 +93,7 @@ def scenario(seed, ai, mob_ai, template=TEMPLATE, max_turns=64, kit_override=Non
                        cores=kit['cores'], ram=kit['ram'], type=0)
             # what-if builds: {leek: {stat: value, 'weapons': [names]}} (e.g. a mage respecced to STR)
             for k, v in ((stat_override or {}).get(e['name']) or {}).items():
-                ent[k] = [WEAPON_ID[w] for w in v] if k == 'weapons' else v
+                ent[k] = [WEAPON_ID[w] for w in v if w in WEAPON_ID] if k == 'weapons' else v
             ours.append(ent)
         else:
             chips, weapons = MOB_KIT[e['name']]
