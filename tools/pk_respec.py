@@ -18,7 +18,8 @@ from lw_api import LWSession
 import boss_swap as bs
 
 SNAP = os.path.join(ROOT, 'data', 'ladder', 'pk_respec_snapshot.json')
-TAG = {'Kirby54': 'AL', 'GTGabi': 'ED', 'Payou': 'MH', 'LeekRain': 'LR', 'DawnFall': 'DF', 'DuskHope': 'DH'}
+TAG = {'Kirby54': 'AL', 'GTGabi': 'ED', 'Payou': 'MH', 'LeekRain': 'LR', 'DawnFall': 'DF', 'DuskHope': 'DH',
+       'ProdigalSon': 'PS', 'Zoulman': 'KG'}   # PS / KG: step 2 (pk_respec_res.py)
 # capital per stat (boss_swap.curve); every map sums to the leek's whole budget
 RESPEC = {
     'Kirby54': {'strength': 560, 'wisdom': 200, 'agility': 120, 'resistance': 100, 'life': 300, 'tp': 380, 'mp': 120},
@@ -74,7 +75,11 @@ def main():
             lid = sn['id']
             comps = [{'index': i, 'template': c[0]} for i, c in enumerate(sn['components']) if c]
             want_w = [weap_id[w] for w in WEAPONS[n]] if n in WEAPONS else sn['weapons']
-            kinds = {'Ladder': (sn['weapons'], sn['capital']), 'PkRespec': (want_w, RESPEC[n])}
+            kinds = {'Ladder': (sn['weapons'], sn['capital'])}
+            if n in RESPEC:
+                kinds['PkRespec'] = (want_w, RESPEC[n])
+            if a.action == 'apply' and n not in RESPEC:
+                continue
             if a.action == 'apply':
                 assert sum(RESPEC[n].values()) == sum(sn['capital'].values()) + (sn.get('capital_left') or 0), n
             for kind, (w, st) in kinds.items():
