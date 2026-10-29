@@ -2879,6 +2879,21 @@ def strip(t):
 
 def attack(t):
     m = me()
+    if pinned():
+        # standing on the rez cell: every shot / chip from here, no step
+        cast_self('steroid'); cast_self('protein')
+        for w in (m.weapons or []):
+            if t.alive:
+                fire(w, t)
+        for ch in (m.chips or []):
+            if not t.alive or ch.name == 'spark' or not offensive(ch) or (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
+                continue
+            try:
+                if m.canUseChip(ch, t) and not area_hits_ally(ch.effectiveArea(t.cell)):
+                    m.useChip(ch, t)
+            except Exception:
+                pass
+        return
     cast_self('steroid'); cast_self('protein')
     strip(t)
     # hemorrhage (unhealable 1 turn): the army's remissions saved the scribe / knights 10-20k per fight
@@ -3674,7 +3689,47 @@ def _pk_free():
     return set(pk_grid().values()) - occ
 
 
-def pk_relay_plan(c):
+PK_PIN = {'id': None, 'turn': None, 'cell': None}   # my body blocks the rez cell: no move for the rest of the turn
+
+
+def pin_here(c):
+    try:
+        PK_PIN.update(id=me().id, turn=Fight.turn, cell=c)
+    except Exception:
+        pass
+
+
+def pinned():
+    """v22: live, 0.3 rezzes a fight came from leeks that walked / teleported onto the rez cell, then left it
+    to attack or regroup in the same turn."""
+    try:
+        m = me()
+        return PK_PIN['id'] == m.id and PK_PIN['turn'] == Fight.turn and m.cell is not None and m.cell.id == PK_PIN['cell']
+    except Exception:
+        return False
+
+
+def _summonable(x, bn, starts, to_c):
+    """A start cell of the bulb within the chip's range of x and in sight from x (summons need line of sight:
+    live, 50 of 172 'out of reach' had a relay plan that then found no cell in sight)."""
+    m = me(); ch = my_chips()[bn]
+    lo, hi = (ch.minRange or 1), (ch.maxRange or 3)
+    for s in sorted(starts, key=lambda s: to_c[s]):
+        cs = Cell.get(s)
+        if cs is None or not cs.empty:
+            continue
+        d = dist(x, s)
+        if d < lo or d > hi:
+            continue
+        try:
+            if Field.lineOfSight(x, s, [m]):
+                return True
+        except Exception:
+            return True
+    return False
+
+
+def pk_relay_plan(c, all_plans=False):
     """Hakuzu's first-turn block (the winners' T0 warty drop, 101 fights): boots, walk, maybe a jump, then
     summon a bulb within its MP of the rez cell - the bulb plays right after me, before the mob, and
     walks onto it. Reach ~ MP + boots + 3 (jump) + summon range + bulb MP. Cheapest plan by TP:
@@ -3751,7 +3806,7 @@ def pk_relay_plan(c):
         return None
     # a teleport (cooldown 10) only when walking can't make it
     plans.sort(key=lambda p: (p[8] is not None, p[0], p[1], p[2]))
-    return plans[0]
+    return plans if all_plans else plans[0]
 
 
 def pk_relay(c, plan):
@@ -3763,7 +3818,10 @@ def pk_relay(c, plan):
         mates = [a.cell.id for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
         def safety(x):
             return (min([dist(x, f) for f in foes] or [99]) + (2 if any(dist(x, a) <= 4 for a in mates) else 0), -dist(x, c))
-        for x in sorted(land, key=safety, reverse=True)[:4]:
+        cand = [x for x in sorted(land, key=safety, reverse=True) if bn == 'prototaxite' or _summonable(x, bn, starts, to_c)][:4]
+        if not cand:
+            return False
+        for x in cand:
             w = land[x]
             if w != m.cell.id:
                 m.moveToward(Cell.get(w))
@@ -3782,11 +3840,23 @@ def pk_relay(c, plan):
     if not xs:
         bnote('rez cell %d: relay walk failed (mp %d)' % (c, m.mp or 0))
         return False
-    x = min(xs, key=lambda x: (R[x], dist(x, c)))
+    xs.sort(key=lambda x: (R[x], dist(x, c)))
+    if bn != 'prototaxite':
+        if jump:
+            def landing_ok(x):
+                return any(1 <= dist(x, j) <= 3 and Cell.get(j).empty and _summonable(j, bn, starts, to_c) for j in frm)
+            good = [x for x in xs[:12] if landing_ok(x)]
+        else:
+            good = [x for x in xs[:20] if _summonable(x, bn, starts, to_c)]
+        if not good:
+            return False                    # nothing in sight: the caller tries the next plan, I haven't moved
+        xs = good
+    x = xs[0]
     if x != m.cell.id:
         m.moveToward(Cell.get(x))
     if jump and m.cell.id not in frm:
-        js = sorted((j for j in frm if 1 <= dist(m.cell.id, j) <= 3 and Cell.get(j).empty), key=lambda j: dist(j, c))
+        js = sorted((j for j in frm if 1 <= dist(m.cell.id, j) <= 3 and Cell.get(j).empty), key=lambda j: (
+            not (bn == 'prototaxite' or _summonable(j, bn, starts, to_c)), dist(j, c)))
         for j in js:
             if ok(m.useChipOnCell(my_chips()['jump'], Cell.get(j))):
                 break
@@ -3853,16 +3923,20 @@ def pk_block(dry=False):
         except Exception:
             pass
     # 2) a bulb relay (boots, walk, jump, summon within the bulb's MP of the cell)
-    plan = None
+    plans = []
     try:
-        plan = pk_relay_plan(c)
+        plans = pk_relay_plan(c, all_plans=True) or []
     except Exception as ex:
         bnote('relay plan error %s' % str(ex)[:80])
-    if plan is not None:
+    if plans:
         if dry:
-            return plan[0]
-        if pk_relay(c, plan):
-            return True
+            return plans[0][0]
+        for plan in plans[:5]:
+            c0, t0 = m.cell.id, m.tp or 0
+            if pk_relay(c, plan):
+                return True
+            if m.cell.id != c0 or (m.tp or 0) != t0:
+                break                       # this one moved / spent: no clean retry
     # 3) my own body: walk, else jump (3, no LoS), else teleport (12, no LoS) next to an ally
     rc = reachable(m.cell.id, m.mp or 0)
     if c in rc:
@@ -3871,6 +3945,7 @@ def pk_block(dry=False):
         m.moveToward(cell)
         if m.cell.id == c:
             bnote('BLOCK rez cell %d by walking onto it' % c)
+            pin_here(c)
             return True
     mates = [a.cell.id for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
     # v15: every summon on cooldown (v14: puny 98, wizard 62 of 118 misses) - walk, then teleport my own body
@@ -3887,6 +3962,7 @@ def pk_block(dry=False):
             try:
                 if 1 <= dist(m.cell.id, c) <= 12 and ok(m.useChipOnCell(my_chips()['teleportation'], cell)) and m.cell.id == c:
                     bnote('BLOCK rez cell %d: walk + teleport onto it' % c)
+                    pin_here(c)
                     return True
             except Exception:
                 pass
@@ -3901,6 +3977,7 @@ def pk_block(dry=False):
                     return ccost(n)
                 if ok(m.useChipOnCell(my_chips()[n], cell)) and m.cell.id == c:
                     bnote('BLOCK rez cell %d with %s' % (c, n))
+                    pin_here(c)
                     return True
         except Exception:
             pass
@@ -3930,7 +4007,7 @@ def pk_defend():
     if PK_SPEND_REST:
         pk_spend_rest()
     a2 = army()
-    if a2 and (m.mp or 0) > 0:
+    if a2 and (m.mp or 0) > 0 and not pinned():
         m.moveAwayFromEntities(a2)
 
 
@@ -4282,6 +4359,8 @@ def _sq_target():
 
 def _sq_move(t, reach=None):
     m = me()
+    if pinned():
+        return
     c = reach[0] if reach is not None else pk_squad_cell(t)
     if t is not None:
         bnote('tgt %s d=%d tp=%d mp=%d reach=%s -> %s' % (ename(t), dist(m.cell.id, t.cell.id), m.tp or 0, m.mp or 0,
@@ -4438,9 +4517,42 @@ def _sq_retreat():
     _sq_defend()
     _sq_heal_self()
     a2 = [e for e in Fight.getAliveEnemies() if e.cell is not None and not e.summoned]
-    if a2 and (me().mp or 0) > 0:
+    if a2 and (me().mp or 0) > 0 and not pinned():
         me().moveAwayFromEntities(a2)
     bnote('retreat')
+
+
+PK_SQ_SHACKLE = False   # MAG leeks shackle the pumpkin's TP (it lands 80% of the killing blows) before attacking
+
+
+def _sq_shackle():
+    """Shackles land through Divine Protection: soporific (TP, 3 turns, circle) on the mob cluster with the
+    pumpkin, tranquilizer (TP, cd 0) and fracture (STR) on the pumpkin. MAG-scaled: x(1 + MAG/100)."""
+    m = me()
+    if (m.magic or 0) < 300:
+        return
+    mobs = [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None]
+    pk = next((e for e in mobs if ename(e) == 'evil_pumpkin'), None)
+    ch = my_chips().get('soporific')
+    if ch is not None and (ch.currentCooldown or 0) == 0 and (m.tp or 0) >= (ch.cost or 0) and mobs:
+        best = None; bv = 0
+        for e in mobs:
+            try:
+                if not m.canUseChipOnCell(ch, e.cell):
+                    continue
+            except Exception:
+                continue
+            ids = _area_ids(ch, e.cell)
+            v = sum(3 if ename(x) == 'evil_pumpkin' else 1 for x in mobs if x.cell.id in ids)
+            if v > bv:
+                bv, best = v, e.cell
+        if best is not None and ok(m.useChipOnCell(ch, best)):
+            bnote('soporific x%d' % bv)
+    if pk is None:
+        return
+    for n in ('tranquilizer', 'fracture'):
+        if cast_on(n, pk):
+            bnote('%s on the pumpkin' % n)
 
 
 def pk_squad_turn():
@@ -4454,6 +4566,8 @@ def pk_squad_turn():
     if PK_SQ_RETREAT and frac < PK_SQ_RETREAT:
         _safe('retreat', _sq_retreat)
         return
+    if PK_SQ_SHACKLE:
+        _safe('shackle', _sq_shackle)
     if t is not None and reach is not None:
         # an open mob in reach: strength buffs, walk to the shooting cell, every shot - then the rest
         for n in ('steroid', 'protein'):
