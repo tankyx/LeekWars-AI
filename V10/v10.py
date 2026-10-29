@@ -3689,6 +3689,8 @@ def _pk_free():
     return set(pk_grid().values()) - occ
 
 
+PK_TELE_LIFE = 0.6     # body block by teleport needs this much life, or an ally within 5 of the cell
+PK_TELE_ALONE = False  # teleport onto the cell even with no ally near it
 PK_PIN = {'id': None, 'turn': None, 'cell': None}   # my body blocks the rez cell: no move for the rest of the turn
 
 
@@ -3950,7 +3952,7 @@ def pk_block(dry=False):
     mates = [a.cell.id for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
     # v15: every summon on cooldown (v14: puny 98, wizard 62 of 118 misses) - walk, then teleport my own body
     # onto the cell when I can afford the risk (a drop is the only way to hurt the mobs)
-    healthy = (m.life or 0) >= (m.maxLife or 1) * 0.6
+    healthy = (m.life or 0) >= (m.maxLife or 1) * PK_TELE_LIFE
     if ready('teleportation') and (m.tp or 0) >= ccost('teleportation') and (healthy or any(dist(c, x) <= 5 for x in mates)):
         rc2 = reachable(m.cell.id, m.mp or 0)
         ws = sorted((x for x in rc2 if 1 <= dist(x, c) <= 12), key=lambda x: rc2[x])
@@ -3969,7 +3971,7 @@ def pk_block(dry=False):
     for n in ('jump', 'teleportation'):
         if not ready(n) or (m.tp or 0) < ccost(n):
             continue
-        if n == 'teleportation' and not any(dist(c, x) <= 5 for x in mates):
+        if n == 'teleportation' and not PK_TELE_ALONE and not any(dist(c, x) <= 5 for x in mates):
             continue                # a lone teleport into the army cost the leek (v7)
         try:
             if m.canUseChipOnCell(my_chips()[n], cell):
@@ -4117,11 +4119,25 @@ def _mp_buffed(a):
         return False
 
 
+PK_BOOSTS = ('seven_league_boots',)   # SCI-scaled boosts a high-SCI leek casts on the next blockers (MP: boots,
+                                      # acceleration; TP: rage) - each once a turn, on a blocker without it
+
+
+def _tp_buffed(a):
+    try:
+        return any(f.type in (E_BUFF_TP, 32) for f in (a.effects or []))
+    except Exception:
+        return False
+
+
 def pk_boost_blocker():
-    """A high-SCI leek's seven league boots (+MP x (1 + SCI/100), 3 turns, range 8) on the ally who blocks
-    next - the one playing right before a mob, in turn order after me (myself included, next round)."""
+    """A high-SCI leek's MP / TP boosts (x (1 + SCI/100)) on the allies who block next - the ones playing right
+    before a mob, in turn order after me (myself included, next round): more reach for the relay."""
     m = me()
-    if (m.science or 0) < 200 or not ready('seven_league_boots') or (m.tp or 0) < ccost('seven_league_boots'):
+    if (m.science or 0) < 200:
+        return False
+    chips = [n for n in PK_BOOSTS if ready(n) and (m.tp or 0) >= ccost(n)]
+    if not chips:
         return False
     try:
         ents = sorted([e for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies()) if e.cell is not None],
@@ -4133,21 +4149,29 @@ def pk_boost_blocker():
     if pos is None:
         return False
     n = len(ents)
-    ch = my_chips()['seven_league_boots']
+    blockers = []
     for k in range(1, n + 1):
         a = ents[(pos + k) % n]
         if a.id in foes or a.summoned:
             continue
         nxt = ents[(pos + k + 1) % n]
-        if nxt.id not in foes or nxt.summoned or _mp_buffed(a):
-            continue
-        try:
-            if dist(m.cell.id, a.cell.id) <= 8 and m.canUseChip(ch, a) and cast_on('seven_league_boots', a):
-                bnote('boots on %s (blocks %s)' % (ename(a), ename(nxt)))
-                return True
-        except Exception:
-            pass
-    return False
+        if nxt.id in foes and not nxt.summoned:
+            blockers.append((a, nxt))
+    did = False
+    for name in chips:
+        for a, nxt in blockers:
+            if name == 'rage' and _tp_buffed(a):
+                continue
+            if name != 'rage' and _mp_buffed(a):
+                continue
+            try:
+                if m.canUseChip(my_chips()[name], a) and cast_on(name, a):
+                    bnote('%s on %s (blocks %s)' % ('boots' if name == 'seven_league_boots' else name, ename(a), ename(nxt)))
+                    did = True
+                    break
+            except Exception:
+                pass
+    return did
 
 
 def pk_heal():
@@ -4212,7 +4236,7 @@ def pk_strike(vul):
 # rage (TP x (1 + SCI/100), circle 3), reflexes / doping / boots on the cluster, dome + rampart / carapace
 # from RES ~490 casters, then every weapon at the open mob, friendly fire accepted (~9% of their damage).
 PK_PLAY = 'squad'        # 'squad': the playbook below
-PK_SQUAD_GAP = 4       # wanted distance to the nearest ally when picking a cell
+PK_SQUAD_GAP = 3       # wanted distance to the nearest ally when picking a cell
 PK_SQUAD_RANGE = 7     # hold this far from the nearest mob while nothing is open
 PK_SQ_HEAL_FIRST = 0.55  # heal myself before attacking below this fraction of max life (0 = off)
 PK_SQ_RETREAT = 0.3     # below this fraction: no attack - shields, heals, step back (0 = off)
@@ -4305,9 +4329,12 @@ def _safe(tag, fn, *args):
         return None
 
 
+PK_RAGE_MIN = 2          # rage (TP x (1 + SCI/100), circle 3, 3 turns) only where it covers this many leeks
+
+
 def _sq_open():
     cast_self('adrenaline')
-    pk_team_cast('rage')
+    pk_team_cast('rage', min_hits=PK_RAGE_MIN)
 
 
 def _sq_defend():

@@ -60,10 +60,12 @@ PK_SHIELD = ['teleportation', 'puny_bulb', 'leather_boots', 'jump',             
 PK_KITS = {
     # v15: a second summon per blocker - one bulb of each kind can't cover a duty every round (v14: puny on
     # cooldown in 98 of 118 misses, wizard in 62)
-    'AL': ['prototaxite', 'wizard_bulb', 'lightning_bulb', 'seven_league_boots'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid', 'adrenaline'],
-    'ED': ['prototaxite', 'savant_bulb', 'tactician_bulb', 'seven_league_boots'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid', 'adrenaline'],
-    'KG': ['prototaxite', 'wizard_bulb', 'seven_league_boots', 'dome'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],   # warty's T0 blocker; SCI 579: boots +3 MP on himself / the next blocker
-    'MH': ['prototaxite', 'wizard_bulb'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring', 'adrenaline'],
+    # v23 (2026-10-29): adrenaline on everyone, rage on the SCI leek (calibrated sim, 80 seeds: dealt +5.0k,
+    # dead by round 8 -0.39; +4 TP on every leek would be 16/80 wins vs 5)
+    'AL': ['prototaxite', 'wizard_bulb', 'lightning_bulb', 'seven_league_boots', 'adrenaline'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid'],
+    'ED': ['prototaxite', 'savant_bulb', 'tactician_bulb', 'seven_league_boots', 'adrenaline'] + [x for x in PK_SHIELD if x != 'carapace'] + ['steroid'],
+    'KG': ['prototaxite', 'wizard_bulb', 'seven_league_boots', 'dome', 'rage', 'adrenaline'] + PK_SHIELD + ['steroid', 'armoring', 'serum'],   # warty's T0 blocker; SCI 579: rage x6.8
+    'MH': ['prototaxite', 'wizard_bulb', 'adrenaline'] + PK_SHIELD + ['venom', 'toxin', 'covid', 'arsenic', 'plague', 'knowledge', 'serum', 'armoring'],
 }
 PK_WEAPONS = {'AL': ['glowing_saber', 'neutrino', 'rifle', 'enhanced_lightninger'],
               'ED': ['glowing_saber', 'neutrino', 'rifle', 'm_laser'],

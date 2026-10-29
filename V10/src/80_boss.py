@@ -2434,7 +2434,7 @@ def pk_strike(vul):
 # rage (TP x (1 + SCI/100), circle 3), reflexes / doping / boots on the cluster, dome + rampart / carapace
 # from RES ~490 casters, then every weapon at the open mob, friendly fire accepted (~9% of their damage).
 PK_PLAY = 'squad'        # 'squad': the playbook below
-PK_SQUAD_GAP = 4       # wanted distance to the nearest ally when picking a cell
+PK_SQUAD_GAP = 3       # wanted distance to the nearest ally when picking a cell
 PK_SQUAD_RANGE = 7     # hold this far from the nearest mob while nothing is open
 PK_SQ_HEAL_FIRST = 0.55  # heal myself before attacking below this fraction of max life (0 = off)
 PK_SQ_RETREAT = 0.3     # below this fraction: no attack - shields, heals, step back (0 = off)
@@ -2527,7 +2527,7 @@ def _safe(tag, fn, *args):
         return None
 
 
-PK_RAGE_MIN = 1          # rage (TP x (1 + SCI/100), circle 3, 3 turns) only where it covers this many leeks
+PK_RAGE_MIN = 2          # rage (TP x (1 + SCI/100), circle 3, 3 turns) only where it covers this many leeks
 
 
 def _sq_open():
