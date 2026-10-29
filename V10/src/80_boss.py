@@ -2527,9 +2527,12 @@ def _safe(tag, fn, *args):
         return None
 
 
+PK_RAGE_MIN = 1          # rage (TP x (1 + SCI/100), circle 3, 3 turns) only where it covers this many leeks
+
+
 def _sq_open():
     cast_self('adrenaline')
-    pk_team_cast('rage')
+    pk_team_cast('rage', min_hits=PK_RAGE_MIN)
 
 
 def _sq_defend():
