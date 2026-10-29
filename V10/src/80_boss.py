@@ -1887,6 +1887,8 @@ def _pk_free():
     return set(pk_grid().values()) - occ
 
 
+PK_TELE_LIFE = 0.6     # body block by teleport needs this much life, or an ally within 5 of the cell
+PK_TELE_ALONE = False  # teleport onto the cell even with no ally near it
 PK_PIN = {'id': None, 'turn': None, 'cell': None}   # my body blocks the rez cell: no move for the rest of the turn
 
 
@@ -2148,7 +2150,7 @@ def pk_block(dry=False):
     mates = [a.cell.id for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
     # v15: every summon on cooldown (v14: puny 98, wizard 62 of 118 misses) - walk, then teleport my own body
     # onto the cell when I can afford the risk (a drop is the only way to hurt the mobs)
-    healthy = (m.life or 0) >= (m.maxLife or 1) * 0.6
+    healthy = (m.life or 0) >= (m.maxLife or 1) * PK_TELE_LIFE
     if ready('teleportation') and (m.tp or 0) >= ccost('teleportation') and (healthy or any(dist(c, x) <= 5 for x in mates)):
         rc2 = reachable(m.cell.id, m.mp or 0)
         ws = sorted((x for x in rc2 if 1 <= dist(x, c) <= 12), key=lambda x: rc2[x])
@@ -2167,7 +2169,7 @@ def pk_block(dry=False):
     for n in ('jump', 'teleportation'):
         if not ready(n) or (m.tp or 0) < ccost(n):
             continue
-        if n == 'teleportation' and not any(dist(c, x) <= 5 for x in mates):
+        if n == 'teleportation' and not PK_TELE_ALONE and not any(dist(c, x) <= 5 for x in mates):
             continue                # a lone teleport into the army cost the leek (v7)
         try:
             if m.canUseChipOnCell(my_chips()[n], cell):
