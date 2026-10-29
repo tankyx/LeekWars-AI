@@ -2317,11 +2317,25 @@ def _mp_buffed(a):
         return False
 
 
+PK_BOOSTS = ('seven_league_boots',)   # SCI-scaled boosts a high-SCI leek casts on the next blockers (MP: boots,
+                                      # acceleration; TP: rage) - each once a turn, on a blocker without it
+
+
+def _tp_buffed(a):
+    try:
+        return any(f.type in (E_BUFF_TP, 32) for f in (a.effects or []))
+    except Exception:
+        return False
+
+
 def pk_boost_blocker():
-    """A high-SCI leek's seven league boots (+MP x (1 + SCI/100), 3 turns, range 8) on the ally who blocks
-    next - the one playing right before a mob, in turn order after me (myself included, next round)."""
+    """A high-SCI leek's MP / TP boosts (x (1 + SCI/100)) on the allies who block next - the ones playing right
+    before a mob, in turn order after me (myself included, next round): more reach for the relay."""
     m = me()
-    if (m.science or 0) < 200 or not ready('seven_league_boots') or (m.tp or 0) < ccost('seven_league_boots'):
+    if (m.science or 0) < 200:
+        return False
+    chips = [n for n in PK_BOOSTS if ready(n) and (m.tp or 0) >= ccost(n)]
+    if not chips:
         return False
     try:
         ents = sorted([e for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies()) if e.cell is not None],
@@ -2333,21 +2347,29 @@ def pk_boost_blocker():
     if pos is None:
         return False
     n = len(ents)
-    ch = my_chips()['seven_league_boots']
+    blockers = []
     for k in range(1, n + 1):
         a = ents[(pos + k) % n]
         if a.id in foes or a.summoned:
             continue
         nxt = ents[(pos + k + 1) % n]
-        if nxt.id not in foes or nxt.summoned or _mp_buffed(a):
-            continue
-        try:
-            if dist(m.cell.id, a.cell.id) <= 8 and m.canUseChip(ch, a) and cast_on('seven_league_boots', a):
-                bnote('boots on %s (blocks %s)' % (ename(a), ename(nxt)))
-                return True
-        except Exception:
-            pass
-    return False
+        if nxt.id in foes and not nxt.summoned:
+            blockers.append((a, nxt))
+    did = False
+    for name in chips:
+        for a, nxt in blockers:
+            if name == 'rage' and _tp_buffed(a):
+                continue
+            if name != 'rage' and _mp_buffed(a):
+                continue
+            try:
+                if m.canUseChip(my_chips()[name], a) and cast_on(name, a):
+                    bnote('%s on %s (blocks %s)' % ('boots' if name == 'seven_league_boots' else name, ename(a), ename(nxt)))
+                    did = True
+                    break
+            except Exception:
+                pass
+    return did
 
 
 def pk_heal():
