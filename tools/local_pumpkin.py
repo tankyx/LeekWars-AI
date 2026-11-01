@@ -39,7 +39,10 @@ MOB_KIT = {
     'offspring': (['flash', 'jump', 'exasperation', 'awakening'], []),
 }
 MOB_SKIN = {'evil_pumpkin': 3, 'turban': 9, 'warty': 10, 'hubbard': 11, 'offspring': 12}
-MOB_CAL = {'evil_pumpkin': {'strength': 1540}, 'hubbard': {'strength': 940}}
+# 2026-10-28 STR fudge (pumpkin 1540, hubbard 940) retired 2026-11-01: the real gap was target choice - the mobs
+# hit the leeks whose shields let damage through (sim/pumpkin_mob.leek effLife / shieldFactor); --mob-cal brings it back
+MOB_CAL = {}
+MOB_CAL_OLD = {'evil_pumpkin': {'strength': 1540}, 'hubbard': {'strength': 940}}
 STATS = ('life', 'strength', 'magic', 'wisdom', 'agility', 'resistance', 'science', 'frequency', 'tp', 'mp', 'level')
 
 
@@ -171,10 +174,11 @@ def main():
     ap.add_argument('--stats', help='JSON file {leek name: {stat: value, "weapons": [names]}}: what-if builds')
     ap.add_argument('--kits', help='JSON file {leek name: [chip names]}: per-leek chip overrides (default: the Pumpkin kits)')
     ap.add_argument('--cells', help='JSON {leek name: start cell}: another squad order (spawn slots 92 301 475 515 520 384 224 80)')
-    ap.add_argument('--no-mob-cal', action='store_true', help='mob stats as in the template (pre-2026-10-28 calibration)')
+    ap.add_argument('--no-mob-cal', action='store_true', help='(default now) mob stats as in the template')
+    ap.add_argument('--mob-cal', action='store_true', help='the retired 2026-10-28 STR fudge on pumpkin / hubbard')
     a = ap.parse_args()
-    if a.no_mob_cal:
-        MOB_CAL.clear()
+    if a.mob_cal:
+        MOB_CAL.update(MOB_CAL_OLD)
     override = json.load(open(a.kits)) if a.kits else None
     os.makedirs(OUT, exist_ok=True)
     for pat in ('*.class', '*.java', '*.lines', '*.sig'):   # the generator caches compiled LeekScript by root file

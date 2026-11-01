@@ -252,6 +252,17 @@ function ready(c) {
 	return hasChip(c) && getCooldown(c) == 0
 }
 
+// 2026-11-01 calibration: the real mobs hit the leeks whose shields let the most damage through (live, 14% of
+// the pumpkin / hubbard hits on shielded leeks land on 75%+ relative shields, the shield-blind sim 27%) -
+// with shield-aware targets the sim needs no STR fudge
+function shieldFactor(e) {
+	return max(0, 1 - min(100, getRelativeShield(e)) / 100)
+}
+
+function effLife(e) {
+	return getLife(e) / max(0.05, shieldFactor(e)) + getAbsoluteShield(e)
+}
+
 function enemiesByDistance() {
 	var me = getCell()
 	var arr = []
@@ -267,7 +278,7 @@ function enemiesByDistance() {
 		// the mobs hit leeks rather than bulbs (80-94% of their targets) and lean toward hurt ones (the top
 		// target of a round is the lowest-life leek 27% of the time)
 		var hp = getLife(e) / max(1, getTotalLife(e))
-		push(arr, [d + (isSummon(e) ? 4 : 0) + 4 * hp, e])
+		push(arr, [d + (isSummon(e) ? 4 : 0) + 4 * hp + 12 * (1 - shieldFactor(e)), e])
 	}
 	arr = arraySort(arr, function(x, y) {
 		return x[0] - y[0]
@@ -339,7 +350,7 @@ function foeWeights() {
 		if (c == null || c < 0) {
 			continue
 		}
-		push(out, [e, c, isSummon(e) ? 0.25 : 1.0])
+		push(out, [e, c, (isSummon(e) ? 0.25 : 1.0) * shieldFactor(e) * shieldFactor(e) + 0.02])
 	}
 	return out
 }
@@ -505,7 +516,7 @@ function targetOrder() {
 	for (var e in near) {
 		// grid distance: the jump (1-3, no line of sight) crosses obstacles a walking path goes around
 		if (!isSummon(e) && getCellDistance(me, getCell(e)) <= reach) {
-			push(weak, [getLife(e), e])
+			push(weak, [effLife(e), e])
 		}
 	}
 	weak = arraySort(weak, function(x, y) {

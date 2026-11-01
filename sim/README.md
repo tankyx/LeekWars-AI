@@ -67,3 +67,24 @@ The official mob AI is server-side and unpublished. This one is rebuilt from 708
   - the late game is shorter, because the last survivors hide better on the server.
 - **Re-point `--template` after any respec or component change.** Stats and frequencies set the turn order, and the v16 template (DawnFall frequency 190, today 169) put the mobs on the wrong leeks.
 - Older line, c3 vs v16: dealt 10.8k vs 11.2k, taken 43.9k vs 41.7k. The sim then predicted v17's damage at 16.0k; the server gave 12.5k, because our strikers lived too long in the sim.
+
+## Calibration 2026-11-01 (shield-aware mob targets, no stat fudge)
+
+The live pumpkin / hubbard / turban hits match the engine's damage formula exactly (unshielded and per
+relative-shield bucket); the old sim was too soft because its mobs ignored shields when choosing targets
+(live: 9% of mob hits land on leeks with 75%+ relative shield, shield-blind sim: 31%). pumpkin_mob.leek now
+targets by effective life (life / (1 - relative shield) + absolute shield) and weights area aims by the damage
+that gets through. Against the 400 live v23 fights (80 sim seeds, same AI, kits and builds):
+
+| | live | sim |
+|---|---|---|
+| damage dealt | 50.1k | 50.7k |
+| damage taken | 40.0k | 38.5k |
+| kills | 2.81 | 3.00 |
+| dead by round 8 / 12 | 4.62 / 6.64 | 4.29 / 6.55 |
+| fight length | 13.6 | 13.8 |
+| win rate | 12.8% | 13.8% |
+| mob resurrections | 1.0 | 2.2 |
+
+Known gap: late in a fight (3 leeks or fewer alive) the sim's mobs act back to back more often than live, so
+more slots have no leek of ours in the window - the sim is pessimistic about blocking.
