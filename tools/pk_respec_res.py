@@ -37,13 +37,48 @@ def plan(l):
     return new, need
 
 
+def reapply(only, dry):
+    """Back to the step-2 Pumpkin builds after a ladder revert (2026-11-01: the Pumpkin stayed open): the
+    "<tag> PkRes" loadout's stats and weapons, the leek's CURRENT components (quinces) and chips."""
+    bad = 0
+    for acct, leeks in LEEKS.items():
+        lw = LWSession(acct)
+        los = {x['name']: x for x in lw.get('/loadout/get-all')['loadouts']}
+        for n, lid in leeks.items():
+            name = '%s PkRes' % TAG[n]
+            if (only and n not in only) or name not in los:
+                continue
+            lo = los[name]; l = bs.leek(lw, lid); st = bs.state(l)
+            comps = [{'index': i, 'template': c[0]} for i, c in enumerate(st['components']) if c]
+            weapons = list(lo['weapons']) + list(lo.get('forgotten_weapons') or [])
+            exp = pr.base_from_capital(lo['stats'], l.get('level') or 301)
+            print('%-11s -> %s: RES %d STR %d life %d, weapons %s' % (n, name, exp['resistance'], exp['strength'], exp['life'], weapons))
+            if dry:
+                continue
+            bs.update(lw, lo, weapons, st['chips'], comps, lo['stats'])
+            r = bs.call(lw, 'POST', '/loadout/apply', set_id=lo['id'], leek_id=lid, use_restat='true')
+            got = bs.state(bs.leek(lw, lid))
+            diffs = {k: (exp[k], got['base'][k]) for k in exp if abs((got['base'][k] or 0) - exp[k]) > 4}
+            if got['components'] != st['components']:
+                diffs['components'] = 'changed'
+            if sorted(got['chips']) != sorted(st['chips']):
+                diffs['chips'] = 'changed'
+            bad += bool(diffs)
+            print('   %s | apply %s | total RES %s STR %s life %s TP %s' % ('OK' if not diffs else 'DIFF %s' % diffs, str(r)[:40] if r not in ({}, [], None) else 'ok',
+                  got['total']['total_resistance'], got['total']['total_strength'], got['total']['total_life'], got['total']['total_tp']))
+    if bad:
+        sys.exit(2)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('action', choices=['apply'])
+    ap.add_argument('action', choices=['apply', 'reapply'])
     ap.add_argument('--leeks', default='')
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args()
     only = set(x for x in a.leeks.split(',') if x)
+    if a.action == 'reapply':
+        return reapply(only, a.dry_run)
     snap1 = json.load(open(pr.SNAP))
     snap2 = json.load(open(SNAP2)) if os.path.exists(SNAP2) else {}
     cure_ladder = json.load(open(CURE_LADDER))
