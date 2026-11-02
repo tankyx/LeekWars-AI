@@ -118,6 +118,9 @@ def main():
                 say('%d fights still pending after 40 min - restoring anyway' % len(pend))
     finally:
         ok = restore()
+        # Cure back on its ladder chips too (2026-11-02: the team fights that follow the slot use them)
+        out_c = run([sys.executable, '-u', 'tools/cure_kit.py', 'restore'], 300)
+        say('Cure ladder chips %s' % ('restored' if 'MISMATCH' not in out_c and 'Traceback' not in out_c else 'NOT restored:\n' + out_c[-300:]))
     wins = 0
     if ids:
         out = run([sys.executable, '-u', 'tools/boss_v10_batch.py', '0', '--ids', ','.join(map(str, ids)), '--boss', str(a.boss)], 1800)
