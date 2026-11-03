@@ -2077,9 +2077,19 @@ PK_SHIELD_FIRST = True   # shooting from a cell a mob is within 7 of: solidifica
                          # shots (the winners take 69% of the mob damage behind 30%+ relative shields, v23 38%)
 PK_DISARM = False      # the glowing saber on the pumpkin whenever a leek reaches it (a state lands through Divine
                        # Protection): no scythe on its next turn
-PK_AREA_ANY = True     # team buffs (rage, doping, reflexes, boots...) on the cell in range whose area covers the most
+PK_AREA_ANY = False    # team buffs (rage, doping, reflexes, boots...) on the cell in range whose area covers the most
                        # leeks, not only on ally cells (rage +4 TP x 3 turns on each leek it covers)
+PK_VULN_FOCUS = False  # target choice on effective life: life / (1 + vulnerability) - exasperation adds +20% for a turn
+                       # (patch notes; the pumpkin exasperates ~8 times a fight)
 PK_DZ = {'v': None}
+
+
+def _vuln(e):
+    """Relative vulnerability (%) on e: E_VULN effects, e.g. exasperation's 20."""
+    try:
+        return sum(float(f.value or 0) for f in (e.effects or []) if f.type == E_VULN)
+    except Exception:
+        return 0.0
 SQUAD_FF = {'on': False}
 
 
@@ -2273,7 +2283,8 @@ def _sq_target():
             r = None
         if r is None:
             continue
-        k = ((e.life or 0) / 1500.0 + r[1] * 0.3 + (2 if PK_DZ['v'] is not None and in_danger(r[0]) else 0), e.id)
+        life = (e.life or 0) / (1.0 + _vuln(e) / 100.0) if PK_VULN_FOCUS else (e.life or 0)
+        k = (life / 1500.0 + r[1] * 0.3 + (2 if PK_DZ['v'] is not None and in_danger(r[0]) else 0), e.id)
         if bk is None or k < bk:
             bk, best = k, (e, r)
     if best is not None:
@@ -2450,7 +2461,7 @@ def pk_squad_turn():
 def pumpkin_turn():
     """Play the turn here (squad play). Returns None."""
     if Fight.turn == 1:
-        bnote('pumpkin v25')
+        bnote('pumpkin v26')
     pk_listen()
     pk_squad_turn()
     return None
