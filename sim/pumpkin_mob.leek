@@ -307,6 +307,18 @@ function attackChips() {
 	return [C_FLASH]
 }
 
+// the glowing saber (newer generators, LW_GEN=/home/ubuntu/lwg-new): state 13 = amputated, the weapon is dropped
+// until the end of the pumpkin's next turn - no scythe, so no walk / teleport to scythe (59 = EFFECT_ADD_STATE;
+// read through the effects so the older generator, without the state, still compiles)
+function amputated() {
+	for (var eff in getEffects(ME)) {
+		if (eff[0] == 59 && eff[1] == 13) {
+			return true
+		}
+	}
+	return false
+}
+
 function hasPoison(e) {
 	for (var eff in getEffects(e)) {
 		if (eff[0] == EFFECT_POISON) {
@@ -723,7 +735,7 @@ function combat() {
 		}
 		foes = enemiesByDistance()
 	}
-	if (NAME == 'evil_pumpkin') {
+	if (NAME == 'evil_pumpkin' && !amputated()) {
 		if (!pumpkinScythe(foes)) {
 			pumpkinTeleport(foes)
 		}

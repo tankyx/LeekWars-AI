@@ -13,7 +13,7 @@ data/chips.json / weapons.json ids.
 import glob, json, os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GEN = '/home/ubuntu/leek-wars-generator/data'
+GEN = os.path.join(os.environ.get('LW_GEN', '/home/ubuntu/leek-wars-generator'), 'data')   # LW_GEN: another generator checkout
 CHIPS = {int(k): v for k, v in json.load(open(os.path.join(GEN, 'chips.json'))).items()}
 WEAPONS = {int(k): v for k, v in json.load(open(os.path.join(GEN, 'weapons.json'))).items()}
 CN = {k: v['name'] for k, v in CHIPS.items()}                  # item id -> name (older fight logs)

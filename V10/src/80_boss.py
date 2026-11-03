@@ -952,7 +952,8 @@ def offensive(item):
 
 def weapon_reach(t):
     """(cell, steps, weapon): shortest walk to a cell from which a weapon hits t, preferring cells
-    inside the tank's shield range (3); None when no weapon reaches this turn."""
+    inside the tank's shield range (3) and (PK_SAFE) outside the pumpkin's next-turn reach; None when no
+    weapon reaches this turn."""
     m = me(); mp = m.mp or 0; tc = BOSS['tank_cell']
     rc = reachable(m.cell.id, mp); best = None; bk = 1e9
     for w in (m.weapons or []):
@@ -965,6 +966,8 @@ def weapon_reach(t):
             if d is None:
                 continue
             pen = 3 if (tc is not None and dist(c.id, tc) > 3) else 0
+            if PK_DZ['v'] is not None and in_danger(c.id):
+                pen += 50
             if d + pen < bk:
                 bk, best = d + pen, (c.id, d, w)
     return best
@@ -1013,7 +1016,8 @@ def strip(t):
         cast_on('liberation', t)
 
 
-def attack(t):
+def attack(t, stay=False):
+    """stay: shots from where I stand only (squad play's secondary targets with PK_NOCHASE)."""
     m = me()
     if pinned():
         # standing on the rez cell: every shot / chip from here, no step
@@ -1034,7 +1038,7 @@ def attack(t):
     strip(t)
     # hemorrhage (unhealable 1 turn): the army's remissions saved the scribe / knights 10-20k per fight
     if ready('hemorrhage') and (m.tp or 0) >= ccost('hemorrhage') + 8 and _ARMY_RANK.get(ename(t), 4) <= 1:
-        if dist(m.cell.id, t.cell.id) > 2 and (m.mp or 0) > 0:
+        if dist(m.cell.id, t.cell.id) > 2 and (m.mp or 0) > 0 and not stay:
             try:
                 hc = m.chipCells(my_chips()['hemorrhage'], t) or []
             except Exception:
@@ -1076,10 +1080,11 @@ def attack(t):
         poison_chips()
     r = weapon_reach(t)
     if r is None:
-        m.moveToward(t)
-        strip(t)
+        if not stay:
+            m.moveToward(t)
+            strip(t)
     else:
-        if r[0] != m.cell.id:
+        if r[0] != m.cell.id and not stay:
             m.moveToward(Cell.get(r[0]))
         if useful(r[2]):
             fire(r[2], t)
@@ -2061,7 +2066,65 @@ PK_SQUAD_GAP = 3       # wanted distance to the nearest ally when picking a cell
 PK_SQUAD_RANGE = 7     # hold this far from the nearest mob while nothing is open
 PK_SQ_HEAL_FIRST = 0.55  # heal myself before attacking below this fraction of max life (0 = off)
 PK_SQ_RETREAT = 0.3     # below this fraction: no attack - shields, heals, step back (0 = off)
+# the scythe (34% of our damage taken, 57% of the deaths in the calibrated sim): 84% of its hits come from the
+# pumpkin walking up to a leek that ended its turn 1-4 cells away, mostly with MP left (the winners end 74% of
+# their turns 8+ away, v23 56%)
+PK_NOCHASE = True      # secondary targets: shots from where I stand only (v23 walked at them with its MP and
+                       # fired nothing after 78% of those moves)
+PK_SAFE = 2            # 1: shooting / holding cells outside the pumpkin's next walk + scythe (MP + 1), and back
+                       # out of it with the MP the shots leave; 2: + its jump (3) when ready
+PK_SHIELD_FIRST = False  # shooting from a cell a mob is within 7 of: solidification + fortress + wall before the
+                         # shots (the winners take 69% of the mob damage behind 30%+ relative shields, v23 38%)
+PK_DISARM = False      # the glowing saber on the pumpkin whenever a leek reaches it (a state lands through Divine
+                       # Protection): no scythe on its next turn
+PK_AREA_ANY = False    # team buffs (rage, doping, reflexes, boots...) on the cell in range whose area covers the most
+                       # leeks, not only on ally cells (rage +4 TP x 3 turns on each leek it covers)
+PK_DZ = {'v': None}
 SQUAD_FF = {'on': False}
+
+
+def pk_danger_zone():
+    """(pumpkin cell, radius) its walk (+ jump) + scythe covers next turn, or None (PK_SAFE off, no pumpkin)."""
+    if not PK_SAFE:
+        return None
+    pk = next((e for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
+    if pk is None or amputated(pk):
+        return None             # disarmed: no scythe on its next turn
+    r = (pk.maxMP or pk.mp or 3) + 1
+    if PK_SAFE >= 2:
+        j = next((c for c in (pk.chips or []) if c.name == 'jump'), None)
+        try:
+            jcd = (j.currentCooldownOf(pk) or 0) if j is not None else 99
+        except Exception:
+            jcd = 0
+        if jcd <= 1:
+            r += 3
+    return pk.cell.id, r
+
+
+def in_danger(c):
+    dz = PK_DZ['v']
+    return dz is not None and dist(c, dz[0]) <= dz[1]
+
+
+def _sq_step_out():
+    """Out of the pumpkin's reach with the MP left: the safe cell nearest the squad, else the farthest."""
+    m = me()
+    if PK_DZ['v'] is None or (m.mp or 0) <= 0 or pinned() or not in_danger(m.cell.id):
+        return
+    rc = reachable(m.cell.id, m.mp or 0)
+    others = [a.cell.id for a in _mates(False)]
+    pc = PK_DZ['v'][0]
+    safe = [c for c in rc if not in_danger(c)]
+    if safe:
+        b = min(safe, key=lambda c: (max(0, min([dist(c, o) for o in others] or [0]) - PK_SQUAD_GAP) * 1.5 +
+                                     threat_cells(c) * 0.5 + rc[c] * 0.1, c))
+    else:
+        b = max(rc, key=lambda c: (dist(c, pc), -rc[c], -c))
+    if b != m.cell.id:
+        frm = m.cell.id
+        m.moveToward(Cell.get(b))
+        bnote('step out %d -> %d (pumpkin %d r%d)' % (frm, m.cell.id, pc, PK_DZ['v'][1]))
 
 
 def _mates(with_me=True):
@@ -2085,14 +2148,26 @@ def pk_team_cast(n, min_hits=1, who=None):
     if not al:
         return False
     best = None; bv = 0
-    for a in _mates():
-        cell = a.cell
+    cells = [a.cell for a in _mates()]
+    if PK_AREA_ANY:
+        # any cell in range near an ally, not only the allies' own cells (ally cells first: same pick on ties)
+        pk_grid()
+        seen = set(c.id for c in cells); rng = ch.maxRange or 8
+        for cid in list(_XY):
+            if cid in seen or dist(m.cell.id, cid) > rng or not any(dist(cid, b.cell.id) <= 3 for b in al):
+                continue
+            cc = Cell.get(cid)
+            if cc is not None and not cc.obstacle:
+                cells.append(cc)
+    for cell in cells:
+        ids = _area_ids(ch, cell)
+        if sum(1 for b in al if b.cell.id in ids) <= bv:
+            continue
         try:
             if not m.canUseChipOnCell(ch, cell):
                 continue
         except Exception:
             continue
-        ids = _area_ids(ch, cell)
         v = sum(1 for b in al if b.cell.id in ids)
         if v > bv:
             bv, best = v, cell
@@ -2123,17 +2198,20 @@ def pk_squad_cell(t):
                         cands[c.id] = rc[c.id]
             except Exception:
                 pass
+    def dz(c):
+        return 50 if PK_DZ['v'] is not None and in_danger(c) else 0
+
     if cands:
         return min(cands, key=lambda c: (max(0, near_ally(c) - PK_SQUAD_GAP) * 2 + cands[c] * 0.2 +
-                                          threat_cells(c) * 0.5, c))
+                                          threat_cells(c) * 0.5 + dz(c), c))
     if not mobs:
         return m.cell.id
     if t is not None and t.cell is not None:
         # the open mob is out of reach this turn: close in on it, with the squad
         return min(rc, key=lambda c: (max(0, dist(c, t.cell.id) - PK_SQUAD_RANGE) +
-                                       max(0, near_ally(c) - PK_SQUAD_GAP) * 1.5 + rc[c] * 0.05, c))
+                                       max(0, near_ally(c) - PK_SQUAD_GAP) * 1.5 + rc[c] * 0.05 + dz(c), c))
     return min(rc, key=lambda c: (abs(min(dist(c, x) for x in mobs) - PK_SQUAD_RANGE) +
-                                   max(0, near_ally(c) - PK_SQUAD_GAP) * 1.5 + rc[c] * 0.1, c))
+                                   max(0, near_ally(c) - PK_SQUAD_GAP) * 1.5 + rc[c] * 0.1 + dz(c), c))
 
 
 def threat_cells(c):
@@ -2195,7 +2273,7 @@ def _sq_target():
             r = None
         if r is None:
             continue
-        k = ((e.life or 0) / 1500.0 + r[1] * 0.3, e.id)
+        k = ((e.life or 0) / 1500.0 + r[1] * 0.3 + (2 if PK_DZ['v'] is not None and in_danger(r[0]) else 0), e.id)
         if bk is None or k < bk:
             bk, best = k, (e, r)
     if best is not None:
@@ -2233,7 +2311,7 @@ def _sq_attack(t, vul):
         for e in sorted(rest, key=lambda e: dist(me().cell.id, e.cell.id)):
             if (me().tp or 0) < 2:
                 break
-            _safe('attack2', attack, e)
+            _safe('attack2', attack, e, PK_NOCHASE)
     finally:
         SQUAD_FF['on'] = False
 
@@ -2264,6 +2342,7 @@ def _sq_close(t):
                 break
     if (me().mp or 0) > 0 and t is None:
         _sq_move(None)
+    _sq_step_out()
 
 
 def _blockers():
@@ -2335,8 +2414,11 @@ def _sq_retreat():
 
 
 def pk_squad_turn():
+    PK_DZ['v'] = _safe('danger', pk_danger_zone)
     _safe('block', pk_block)
     _safe('boost', pk_boost_blocker)
+    if PK_DISARM and not pinned() and _safe('disarm', disarm, ('evil_pumpkin',)):
+        PK_DZ['v'] = _safe('danger', pk_danger_zone)
     _safe('open', _sq_open)
     t, reach, vul = _safe('target', _sq_target) or (None, None, [])
     m = me(); frac = (m.life or 0) / max(1, m.maxLife or 1)
@@ -2351,6 +2433,9 @@ def pk_squad_turn():
             _safe(n, cast_self, n)
         _safe('doping', pk_team_cast, 'doping')
         _safe('move', _sq_move, t, reach)
+        if PK_SHIELD_FIRST and threat_cells(me().cell.id) > 0:
+            for n in ('solidification', 'fortress', 'wall'):
+                _safe(n, cast_self, n)
         _safe('attack', _sq_attack, t, vul)
         _safe('defend', _sq_defend)
         _safe('buffs', _sq_buffs)
@@ -2365,7 +2450,7 @@ def pk_squad_turn():
 def pumpkin_turn():
     """Play the turn here (squad play). Returns None."""
     if Fight.turn == 1:
-        bnote('pumpkin v23')
+        bnote('pumpkin v24')
     pk_listen()
     pk_squad_turn()
     return None
