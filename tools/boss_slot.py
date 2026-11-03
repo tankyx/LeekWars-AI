@@ -103,6 +103,8 @@ def main():
             say('dry run: main on the %s kits:\n%s' % ('Pumpkin' if a.boss == 3 else 'Boss',
                 '\n'.join(l[:160] for l in out.splitlines() if 'kit' in l or 'missing' in l)))
         else:
+            if a.boss == 3:     # drop tracking (owner 2026-11-03: farm the permanent Pumpkin for components)
+                run([sys.executable, '-u', 'tools/pk_progress.py', '--log', 'batch_start'], 120)
             out = run(['node', 'tools/boss_squad.mjs', '--boss', str(a.boss), '--n', str(n)], 20 * n + 120)
             ids = [int(x) for x in re.findall(r'started (\d+)', out)]
             say('%d fights started%s' % (len(ids), '' if len(ids) == n else ' (stopped: %s)' % out.strip().splitlines()[-1][:200]))
@@ -127,6 +129,8 @@ def main():
         m = re.search(r'== (\d+) fights: (\d+) wins.*', out)
         wins = int(m.group(2)) if m else 0
         say(m.group(0) if m else 'no summary')
+        if a.boss == 3:
+            run([sys.executable, '-u', 'tools/pk_progress.py', '--log', 'batch_end:%d' % len(ids)], 120)
         new = not os.path.exists(CSV)
         with open(CSV, 'a', newline='') as fh:
             w = csv.writer(fh)
