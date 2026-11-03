@@ -1805,14 +1805,13 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
 #   holding resurrection solves ONE crystal per turn: [adrenaline] -> spark the crystal -> teleport or
 #   walk next to a cell on its graal axis -> resurrect it there; dead crystals are revived first (the
 #   graal casts Apocalypse on a dead crystal). Never damages the (invulnerable) army.
-# COMBAT (graal dead): tank / buffer / healer keep their scripted roles; strikers run the V10 search on
-#   the boss focus (scribe -> knights -> king -> squires, lowest life first; crystals once the army is
-#   dead), the rest of the army feeding the danger map.
+# COMBAT (graal dead): every role scripted - tank / buffer / healer, strikers on the boss focus (scribe ->
+#   knights -> king -> squires, lowest life first; crystals once the army is dead). The V10 search only
+#   plays when boss_turn() raises (90_main: the boss focus, the rest of the army feeding the danger map).
 AXIS = {'red_crystal': 'south', 'blue_crystal': 'east', 'yellow_crystal': 'west', 'green_crystal': 'north'}
 BOSS = {'on': None, 'combat': False, 'gcell': None, 'gx': 0, 'gy': 0, 'crystals': {}, 'regen': False,
         'in_reach': 0, 'fer': None, 'tank_cell': None, 'mine': None, 'claims': {}}
 BOSS_PZ_DISARM = True       # disarm also during the puzzle (after the dive): 15/20 wins with it vs 6/20 without (2026-10-18)
-BOSS_PRE_DISARM = False      # pre-dive disarm with unspent TP: 8/18 vs 8/22 without (2026-10-18) - no effect, off
 BOSS_DISARM = True      # glowing saber on the King / scribe (puzzle after the dive, and combat): 10/11 wins with it vs 1/9 without (2026-10-18, p=0.0006)
 CLAIM_MSG = 13          # MESSAGE_CUSTOM: params [CLAIM_TAG, crystal entity id or -1]
 CLAIM_TAG = 7101
@@ -2455,52 +2454,6 @@ def unpark():
         bnote('unpark %d -> %d' % (frm, m.cell.id))
 
 
-def tele_stage(cid):
-    """(unused: 4 of 4 server fights where it fired put the leek next to the King - dead by T6, lost)
-    No dive this turn and the walk is long: teleport (walls do not matter) to a cell from which NEXT
-    turn's walk-dive works - a stand cell t within spark range of the crystal reachable within my MP."""
-    if not ready('teleportation') or (me().tp or 0) < ccost('teleportation') or not has('spark'):
-        return False
-    m = me(); e, axis = BOSS['crystals'][cid]
-    if e.cell is None:
-        return False
-    cc = e.cell.id
-    tele = my_chips()['teleportation']; tr = tele.maxRange or 12
-    sr = my_chips()['spark'].maxRange or 10
-    mp = max(1, m.maxMP or m.mp or 5)
-    best = None; bs = 1e9
-    for g in goal_cells(axis):
-        for t in stand_cells(g):
-            if dist(t, cc) > sr:
-                continue
-            tx, ty = cxy(t)
-            for dx in range(-mp, mp + 1):
-                for dy in range(-mp + abs(dx), mp - abs(dx) + 1):
-                    f = cell_at(tx + dx, ty + dy)
-                    if f is None or f.obstacle or not f.empty or f.id in CORRIDOR:
-                        continue
-                    dm = dist(m.cell.id, f.id)
-                    if dm < 1 or dm > tr:
-                        continue
-                    sc = threat_at(f.id) * 10 + dist(f.id, t)
-                    if sc >= bs:
-                        continue
-                    try:
-                        if not m.canUseChipOnCell(tele, f):
-                            continue
-                    except Exception:
-                        continue
-                    if f.id != t and path_ok(f.id, t, max(0, mp - 2)) is None:
-                        continue            # 2 MP of slack: allies moving into the path broke the follow-up dive
-                    bs, best = sc, f.id
-    if best is None:
-        return False
-    if ok(m.useChipOnCell(tele, Cell.get(best))) and m.cell.id == best:
-        bnote('tele-stage %s -> %d' % (ename(e), best))
-        return True
-    return False
-
-
 def approach():
     """Stage for next turn's solve: within teleport + walk reach of a revive cell of my crystal."""
     cid = my_crystal()
@@ -2608,19 +2561,6 @@ def fragile_ally():
         if s > bs:
             bs, best = s, a
     return best
-
-
-def has_effect_from(a, n):
-    c = my_chips().get(n)
-    if c is None:
-        return False
-    for f in (a.effects or []):
-        try:
-            if f.raw[5] == c.id:
-                return True
-        except Exception:
-            pass
-    return False
 
 
 def tank_self_first():
@@ -2740,8 +2680,6 @@ def puzzle_play():
     solved_now = solved_now or try_solve_one()
     if not solved_now and ready('resurrection'):
         approach()
-        if pre_disarm_on():
-            disarm()        # no dive this turn: the TP would go unspent - disarm the King if he is in reach
         if my_role() == 'buffer':
             cast_self('rage'); cast_self('seven_league_boots')
     sustain()
@@ -2967,15 +2905,6 @@ def attack(t):
         m.useChip(ch, t)
 
 
-def pre_disarm_on():
-    if BOSS_PRE_DISARM == 'parity':
-        try:
-            return Fight.id % 2 == 1
-        except Exception:
-            return True
-    return bool(BOSS_PRE_DISARM)
-
-
 def pz_disarm_on():
     if BOSS_PZ_DISARM == 'parity':
         try:
@@ -3011,7 +2940,7 @@ def saber():
     return None
 
 
-def disarm(names=('fennel_king', 'fennel_scribe'), reserve=0):
+def disarm(names=('fennel_king', 'fennel_scribe')):
     """Glowing saber on the King (Excalibur: ~750 a swing + ~750 poison for 2 turns), else the scribe
     (heavy sword): amputated, no weapon until my next turn. States are not damage, so it lands through
     Divine Protection too. Melee: walk next to the target within MP; skip a target already disarmed."""
@@ -3021,7 +2950,7 @@ def disarm(names=('fennel_king', 'fennel_scribe'), reserve=0):
     if w is None:
         return False
     cost = (w.cost or 12) + (0 if _held(m) == w.id else 1)
-    if (m.tp or 0) - reserve < cost:
+    if (m.tp or 0) < cost:
         return False
     rc = {}
     for n in names:
@@ -3099,8 +3028,6 @@ def place_wall():
     if not ready('prototaxite') or (me().tp or 0) < ccost('prototaxite'):
         return False
     kc = king_cell()
-    if kc is None:
-        kc = next((e.cell.id for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
     if kc is None:
         return False
     prot = None; bd = 99
@@ -3296,8 +3223,7 @@ def boss_turn():
     was played here)."""
     boss_scan()
     if Fight.turn == 1:
-        bnote('arm %s pz%s pre%s' % ('disarm' if disarm_on() else 'nodisarm', 'on' if pz_disarm_on() else 'off',
-                                     'on' if pre_disarm_on() else 'off'))
+        bnote('arm %s pz%s' % ('disarm' if disarm_on() else 'nodisarm', 'on' if pz_disarm_on() else 'off'))
     if not BOSS['combat']:
         puzzle_turn()
         return None
@@ -3332,11 +3258,9 @@ def boss_flush():
 # The pumpkin and its minions open under Divine Protection (state 3, cast by the pumpkin, permanent);
 # a mob loses it when its own exasperation crits or when the mob that cast it dies, one target at a
 # time. The pumpkin teleports next to a leek and scythes it (~2.8k, the winners take it with 3.3k
-# life + T0 shields). Doctrine v1: disarm the pumpkin with the glowing saber whenever reachable (a
-# state lands through Divine Protection), shield/heal while every enemy is invincible, the V10
-# search on the vulnerable focus otherwise.
+# life + T0 shields). Played by squad play below (pk_squad_turn); the V10 search only runs when
+# pumpkin_turn() raises.
 PUMPKIN: dict = {'on': None}
-PK_SHIELDS = ('solidification', 'fortress', 'wall', 'armor', 'helmet', 'shield', 'armoring', 'elevation')
 
 
 def pumpkin_on():
@@ -3360,127 +3284,6 @@ def pk_vulnerable():
             and not is_invincible(e)]
 
 
-def bulb_ai():
-    """Decoy bulbs: hit the nearest vulnerable enemy with whatever reaches, else stand (the minions
-    spend their chips on summons in the winners' fights)."""
-    if PK_PLAY == 'squad' and pumpkin_on():
-        return sq_bulb_ai()
-    m = me()
-    tgt = PK_TARGET.get('cell')
-    if tgt is None and pumpkin_on() and PK_STREAM:
-        # a permanent blocker: I play right after my summoner, before the next mob - same stream
-        try:
-            if resurrection_due():
-                c = pk_cycle_cell()
-                cc = Cell.get(c) if c else None
-                if cc is not None and cc.empty and c in reachable(m.cell.id, m.mp or 0):
-                    tgt = c
-        except Exception:
-            tgt = None
-    if tgt is not None:
-        PK_TARGET['cell'] = None
-        try:
-            c = Cell.get(tgt)
-            if c is not None and c.empty and (m.mp or 0) > 0:
-                m.moveToward(c)
-        except Exception:
-            pass
-        if m.cell is not None and m.cell.id == tgt:
-            return                  # standing on the rez cell: the resurrection fails, the mob drops its protection
-    vul = pk_vulnerable() if pumpkin_on() else [e for e in Fight.getAliveEnemies() if e.cell is not None]
-    if not vul:
-        return
-    t = min(vul, key=lambda e: dist(m.cell.id, e.cell.id))
-    for ch in (m.chips or []):
-        if (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
-            continue
-        try:
-            if offensive(ch) and m.canUseChip(ch, t):
-                m.useChip(ch, t)
-        except Exception:
-            pass
-    if (m.mp or 0) > 0:
-        m.moveToward(t, m.mp)
-
-
-def place_decoy():
-    """A puny bulb on a free cell 2-4 from me, on the army's side."""
-    if not ready('puny_bulb') or (me().tp or 0) < ccost('puny_bulb'):
-        return False
-    m = me(); a = army()
-    if not a:
-        return False
-    ax = sum(cxy(e.cell.id)[0] for e in a) / len(a); ay = sum(cxy(e.cell.id)[1] for e in a) / len(a)
-    x, y = cxy(m.cell.id); chip = my_chips()['puny_bulb']; best = None; bs = 1e9
-    for dx in range(-4, 5):
-        for dy in range(-4 + abs(dx), 5 - abs(dx)):
-            c = cell_at(x + dx, y + dy)
-            if c is None or c.obstacle or not c.empty or c.id in CORRIDOR:
-                continue
-            d = dist(c.id, m.cell.id)
-            if d < 2:
-                continue
-            cx, cy = cxy(c.id)
-            sc = abs(cx - ax) + abs(cy - ay)
-            if sc < bs:
-                try:
-                    if not m.canUseChipOnCell(chip, c):
-                        continue
-                except Exception:
-                    continue
-                bs, best = sc, c
-    if best is None:
-        return False
-    if ok(m.summon(chip, best, bulb_ai)):
-        bnote('decoy at %d' % best.id)
-        return True
-    return False
-
-
-PK_DEBUFF = (E_VULN, E_VULN_ABS, E_POISON, E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI)
-
-
-def debuffing(item):
-    try:
-        return any(f.type in PK_DEBUFF for f in (item.features or []))
-    except Exception:
-        return False
-
-
-def pk_provoke():
-    """Divine Protection drops when the mob cleanses itself (exasperation), and the mobs cleanse the
-    debuffs players put on them: winners' mobs exasperate 54% of the turns after being hit (20% when
-    not), ours 0.5% - V10 never hit an invincible mob. Leftover TP: debuffing shots (neutrino
-    vulnerability, poisons, shackles) on the invincible mobs in reach, minions first."""
-    m = me()
-    tg = [e for e in army() if is_invincible(e)]
-    if not tg:
-        return 0
-    tg.sort(key=lambda e: (ename(e) == 'evil_pumpkin', dist(m.cell.id, e.cell.id)))
-    shots = 0
-    for w in (m.weapons or []):
-        if not debuffing(w):
-            continue
-        for t in tg:
-            n = fire(w, t)
-            if n:
-                shots += n
-                break
-    for ch in (m.chips or []):
-        if not debuffing(ch) or (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0):
-            continue
-        for t in tg:
-            try:
-                if m.canUseChip(ch, t) and not area_hits_ally(ch.effectiveArea(t.cell)) and ok(m.useChip(ch, t)):
-                    shots += 1
-                    break
-            except Exception:
-                pass
-    if shots:
-        bnote('provoke x%d' % shots)
-    return shots
-
-
 # ---- the pumpkin riddle (forum topic 11152, Pilow's hints: Glagolitic, Concatenation, Factorization) ----
 # The squashes announce the next resurrection cell in Glagolitic numerals, one part per mob, at the start
 # of their turns. Cell = max over the orderings of the last 3 numbers of the largest divisor <= 612 of
@@ -3498,7 +3301,6 @@ for _i, _o in enumerate(range(0x2C13, 0x2C1A)):
 _GLAG[0x2C1B] = 800; _GLAG[0x2C1C] = 900; _GLAG[0x2C1D] = 1000
 PK_STREAM = []
 PK_CYCLE = {'nums': [], 'k': 3}   # numbers since the last slot word, and the cycle length K
-PK_TARGET = {'cell': None}     # rez cell the bulb I just summoned must walk onto (its turn comes before the mob's)
 
 
 def glag_num(txt):
@@ -3584,36 +3386,24 @@ def resurrection_due():
     """The next mob to act holds the riddle's slot: its cycle's K numbers are out and a brother lies dead.
     (v16 used "awakening off cooldown", true on almost every mob turn: blocks on cells of half-said cycles.)"""
     foes = set(e.id for e in Fight.getEnemies())
-    if PK_BLOCK_MODE == 0:
-        try:
-            nxt = Fight.getNextPlayer()
-        except Exception:
-            return True
-        if nxt is None:
-            return False
-        if nxt.id not in foes or getattr(nxt, 'summoned', False):
-            return False
-    else:
-        # walk the turn order after me: summons in between don't take the duty (v19: 75 missed rezzes had a
-        # bulb playing next); mode 2: every leek before the slot mob blocks, not only the last one (the
-        # winners block 90% of the slots with 2 of their leeks in between, v19 54%)
-        try:
-            ents = sorted([e for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies())], key=lambda e: e.turnOrder)
-            pos = next(i for i, e in enumerate(ents) if e.id == me().id)
-        except Exception:
-            return False
-        holder = None
-        for k in range(1, len(ents)):
-            e = ents[(pos + k) % len(ents)]
-            if getattr(e, 'summoned', False):
-                continue
-            if e.id in foes:
-                holder = e
-                break
-            if PK_BLOCK_MODE == 1:
-                return False
-        if holder is None:
-            return False
+    # walk the turn order after me: summons in between don't take the duty (v19: 75 missed rezzes had a
+    # bulb playing next), and every leek before the slot mob blocks, not only the last one (the winners
+    # block 90% of the slots with 2 of their leeks in between, v19 54%)
+    try:
+        ents = sorted([e for e in list(Fight.getAliveEnemies()) + list(Fight.getAliveAllies())], key=lambda e: e.turnOrder)
+        pos = next(i for i, e in enumerate(ents) if e.id == me().id)
+    except Exception:
+        return False
+    holder = None
+    for k in range(1, len(ents)):
+        e = ents[(pos + k) % len(ents)]
+        if getattr(e, 'summoned', False):
+            continue
+        if e.id in foes:
+            holder = e
+            break
+    if holder is None:
+        return False
     try:
         dead = [e for e in Fight.getDeadEnemies() if not e.summoned]
     except Exception:
@@ -3731,11 +3521,11 @@ def _summonable(x, bn, starts, to_c):
     return False
 
 
-def pk_relay_plan(c, all_plans=False):
+def pk_relay_plan(c):
     """Hakuzu's first-turn block (the winners' T0 warty drop, 101 fights): boots, walk, maybe a jump, then
     summon a bulb within its MP of the rez cell - the bulb plays right after me, before the mob, and
-    walks onto it. Reach ~ MP + boots + 3 (jump) + summon range + bulb MP. Cheapest plan by TP:
-    (tp, jump, boots, bulb, cast-from cells, bulb start cells) or None."""
+    walks onto it. Reach ~ MP + boots + 3 (jump) + summon range + bulb MP. The plans, cheapest by TP first
+    (walking before a teleport): (tp, jump, boots, bulb, cast-from cells, bulb start cells, ...), or None."""
     m = me(); mine = m.cell.id
     free = _pk_free(); freeme = free | {mine}
     tp = m.tp or 0; mp = m.mp or 0
@@ -3808,7 +3598,7 @@ def pk_relay_plan(c, all_plans=False):
         return None
     # a teleport (cooldown 10) only when walking can't make it
     plans.sort(key=lambda p: (p[8] is not None, p[0], p[1], p[2]))
-    return plans if all_plans else plans[0]
+    return plans
 
 
 def pk_relay(c, plan):
@@ -3872,41 +3662,34 @@ def pk_relay(c, plan):
                 continue
         except Exception:
             continue
-        PK_TARGET['cell'] = c if s != c else None
-        if ok(m.summon(ch, cs, plant_ai if bn == 'prototaxite' else bulb_ai)):
+        if ok(m.summon(ch, cs, plant_ai if bn == 'prototaxite' else sq_bulb_ai)):
             bnote('BLOCK rez cell %d: %s at %d (walk %d)%s%s%s' % (c, bn, s, to_c[s], ' +jump' if jump else '',
                                                                 ' +' + '+'.join(n for n, _ in bs) if bs else '',
                                                                 ' +teleport' if land else ''))
             return True
-        PK_TARGET['cell'] = None
     bnote('rez cell %d: no %s cell in sight from %d' % (c, bn, m.cell.id))
     return False
 
 
-def pk_block(dry=False):
+def pk_block():
     """Block the predicted resurrection cell, only when the next mob to act is about to resurrect: my bulb
-    if one reaches, a summon on it, a bulb relay, else my own body. dry=True returns the TP the block
-    would cost (None: nothing to block, or no way to) without acting."""
-    no = None if dry else False
+    if one reaches, a summon on it, a bulb relay, else my own body."""
     if len(PK_STREAM) < 1 or not resurrection_due():
-        return no
+        return False
     c = pk_cycle_cell()
     if c is None:
-        return no
+        return False
     cell = Cell.get(c) if hasattr(Cell, 'get') else None
     if cell is None or cell.obstacle:
-        return no
+        return False
     if not cell.empty:
-        if not dry:
-            bnote('rez cell %d already blocked' % c)
-        return no
+        bnote('rez cell %d already blocked' % c)
+        return False
     m = me()
     # 0) one of my bulbs plays right after me and can walk onto it: leave it to the bulb
     try:
         for b in (m.summons or []):
             if b.cell is not None and b.alive and c in reachable(b.cell.id, b.maxMP or b.mp or 0):
-                if dry:
-                    return 0
                 bnote('rez cell %d: my %s will take it' % (c, ename(b)))
                 return True
     except Exception:
@@ -3917,9 +3700,7 @@ def pk_block(dry=False):
             continue
         try:
             if m.canUseChipOnCell(my_chips()[n], cell):
-                if dry:
-                    return ccost(n)
-                if ok(m.summon(my_chips()[n], cell, bulb_ai if n == 'puny_bulb' else plant_ai)):
+                if ok(m.summon(my_chips()[n], cell, sq_bulb_ai if n == 'puny_bulb' else plant_ai)):
                     bnote('BLOCK rez cell %d with %s' % (c, n))
                     return True
         except Exception:
@@ -3927,23 +3708,18 @@ def pk_block(dry=False):
     # 2) a bulb relay (boots, walk, jump, summon within the bulb's MP of the cell)
     plans = []
     try:
-        plans = pk_relay_plan(c, all_plans=True) or []
+        plans = pk_relay_plan(c) or []
     except Exception as ex:
         bnote('relay plan error %s' % str(ex)[:80])
-    if plans:
-        if dry:
-            return plans[0][0]
-        for plan in plans[:5]:
-            c0, t0 = m.cell.id, m.tp or 0
-            if pk_relay(c, plan):
-                return True
-            if m.cell.id != c0 or (m.tp or 0) != t0:
-                break                       # this one moved / spent: no clean retry
+    for plan in plans[:5]:
+        c0, t0 = m.cell.id, m.tp or 0
+        if pk_relay(c, plan):
+            return True
+        if m.cell.id != c0 or (m.tp or 0) != t0:
+            break                           # this one moved / spent: no clean retry
     # 3) my own body: walk, else jump (3, no LoS), else teleport (12, no LoS) next to an ally
     rc = reachable(m.cell.id, m.mp or 0)
     if c in rc:
-        if dry:
-            return 0
         m.moveToward(cell)
         if m.cell.id == c:
             bnote('BLOCK rez cell %d by walking onto it' % c)
@@ -3957,8 +3733,6 @@ def pk_block(dry=False):
         rc2 = reachable(m.cell.id, m.mp or 0)
         ws = sorted((x for x in rc2 if 1 <= dist(x, c) <= 12), key=lambda x: rc2[x])
         if ws:
-            if dry:
-                return ccost('teleportation')
             if ws[0] != m.cell.id:
                 m.moveToward(Cell.get(ws[0]))
             try:
@@ -3975,101 +3749,17 @@ def pk_block(dry=False):
             continue                # a lone teleport into the army cost the leek (v7)
         try:
             if m.canUseChipOnCell(my_chips()[n], cell):
-                if dry:
-                    return ccost(n)
                 if ok(m.useChipOnCell(my_chips()[n], cell)) and m.cell.id == c:
                     bnote('BLOCK rez cell %d with %s' % (c, n))
                     pin_here(c)
                     return True
         except Exception:
             pass
-    if not dry:
-        bnote('rez cell %d out of reach (d=%d, tp %d mp %d) %s' % (c, dist(m.cell.id, c), m.tp or 0, m.mp or 0,
-              ' '.join('%s:%s' % (k[:4], v) for k, v in PK_DIAG.items())))
-    return no
+    bnote('rez cell %d out of reach (d=%d, tp %d mp %d) %s' % (c, dist(m.cell.id, c), m.tp or 0, m.mp or 0,
+          ' '.join('%s:%s' % (k[:4], v) for k, v in PK_DIAG.items())))
+    return False
 
 
-def pk_defend():
-    """Every enemy invincible: shields on myself, rampart / carapace on the ally the pumpkin is closest
-    to, heals, then out of the army's reach with the MP left."""
-    m = me()
-    cleanse()
-    pk_heal()
-    for n in PK_SHIELDS:
-        cast_self(n)
-    pk_provoke()
-    pk = next((e for e in Fight.getAliveEnemies() if ename(e) == 'evil_pumpkin' and e.cell is not None), None)
-    mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None and a.id != m.id]
-    if pk is not None and mates:
-        mates.sort(key=lambda a: dist(a.cell.id, pk.cell.id))
-        for n in ('rampart', 'carapace'):
-            for a in mates:
-                if cast_on(n, a):
-                    break
-    if PK_SPEND_REST:
-        pk_spend_rest()
-    a2 = army()
-    if a2 and (m.mp or 0) > 0 and not pinned():
-        m.moveAwayFromEntities(a2)
-
-
-PK_STRIKE = True
-PK_HEAL_AT = 0.6      # v19: remission only below 60% life (winners 0.06 casts a leek-turn, ours 0.44)
-# strike target = lowest life/1500 + distance/3; the pumpkin's life counts x PK_PUMPKIN_W. At 1.0 its ~24k never
-# beat a 12k brother: v19 hit the open pumpkin on 27 of 883 leek turns (winners 10.7 a fight, 30% of their damage)
-PK_PUMPKIN_W = 1.0
-PK_NEAR_FIRST = False  # pick among the mobs I can reach this turn or next (else a far pick means no strike at all)
-PK_BLOCK_MODE = 2      # who blocks a due slot: 0 = only if the next player is the mob, 1 = skip summons, 2 = any leek before it
-# shields cast before the block / strike whenever the army is within 10 (the winners cast wall / fortress /
-# solidification about half as often as v19 and fire twice the weapon shots)
-PK_PRE_SHIELDS = ('solidification', 'fortress', 'wall')
-PK_REZ_ALLY = False    # resurrection (18 TP, level 301) on a dead leek: the winners cast it ~4 times a fight
-# the TP a turn leaves: v19 uses 56% of its TP (sim 65%), the winners 91% - heals on the most hurt allies,
-# then shields on the allies nearest the army, then a decoy bulb
-PK_SPEND_REST = 0      # 1: heals + shields with the TP left, 2: + a decoy bulb
-
-
-def pk_spend_rest():
-    m = me()
-    mates = [a for a in Fight.getAliveAllies() if not a.summoned and a.cell is not None]
-    hurt = sorted([a for a in mates if (a.life or 0) < (a.maxLife or 1) * 0.85],
-                  key=lambda a: (a.life or 0) / max(1, a.maxLife or 1))
-    for n in ('regeneration', 'remission'):
-        for a in hurt:
-            if not ready(n) or (m.tp or 0) < ccost(n):
-                break
-            if cast_self(n) if a.id == m.id else cast_on(n, a):
-                break
-    a2 = army()
-    if a2:
-        mates.sort(key=lambda a: min(dist(a.cell.id, e.cell.id) for e in a2))
-    for n in ('rampart', 'carapace', 'armor', 'helmet', 'shield', 'elevation', 'solidification', 'fortress', 'wall'):
-        for a in mates:
-            if not ready(n) or (m.tp or 0) < ccost(n):
-                break
-            if cast_self(n) if a.id == m.id else cast_on(n, a):
-                break
-    if PK_SPEND_REST < 2:
-        return
-    pk_grid()
-    for n in ('wizard_bulb', 'savant_bulb', 'tactician_bulb', 'lightning_bulb'):
-        if not ready(n) or (m.tp or 0) < ccost(n):
-            continue
-        best = None; bd = 99
-        for c in list(_XY):
-            if dist(m.cell.id, c) > 7:
-                continue
-            cell = Cell.get(c)
-            if cell is None or cell.obstacle or not cell.empty:
-                continue
-            d = min([dist(c, e.cell.id) for e in a2] or [0])
-            try:
-                if d < bd and m.canUseChipOnCell(my_chips()[n], cell):
-                    bd, best = d, cell
-            except Exception:
-                pass
-        if best is not None and ok(m.summon(my_chips()[n], best, bulb_ai)):
-            break
 
 
 def pk_rez_ally():
@@ -4123,13 +3813,6 @@ PK_BOOSTS = ('seven_league_boots',)   # SCI-scaled boosts a high-SCI leek casts 
                                       # acceleration; TP: rage) - each once a turn, on a blocker without it
 
 
-def _tp_buffed(a):
-    try:
-        return any(f.type in (E_BUFF_TP, 32) for f in (a.effects or []))
-    except Exception:
-        return False
-
-
 def pk_boost_blocker():
     """A high-SCI leek's MP / TP boosts (x (1 + SCI/100)) on the allies who block next - the ones playing right
     before a mob, in turn order after me (myself included, next round): more reach for the relay."""
@@ -4160,9 +3843,7 @@ def pk_boost_blocker():
     did = False
     for name in chips:
         for a, nxt in blockers:
-            if name == 'rage' and _tp_buffed(a):
-                continue
-            if name != 'rage' and _mp_buffed(a):
+            if _mp_buffed(a):
                 continue
             try:
                 if m.canUseChip(my_chips()[name], a) and cast_on(name, a):
@@ -4174,73 +3855,14 @@ def pk_boost_blocker():
     return did
 
 
-def pk_heal():
-    """Knowledge (+250 WIS, 2 turns) before a big heal, regeneration once under half life, remission
-    every turn I'm hurt - else remission on the most hurt ally in range (Jace's squad heals ~16k a fight,
-    ours 2k)."""
-    m = me(); life = m.life or 0; tot = m.maxLife or 1; hurt = tot - life
-    big = life < tot * 0.5 and not BOSS['regen'] and ready('regeneration')
-    if (big or hurt > 500) and ready('knowledge') and (m.tp or 0) >= ccost('knowledge') + 5:
-        cast_self('knowledge')
-    if big and cast_self('regeneration'):
-        BOSS['regen'] = True
-    if life < tot * PK_HEAL_AT:
-        cast_self('remission')
-        return
-    worst = None; wf = PK_HEAL_AT
-    for a in Fight.getAliveAllies():
-        if a.id == m.id or a.summoned or a.cell is None:
-            continue
-        fr = (a.life or 0) / max(1, a.maxLife or 1)
-        if fr < wf:
-            try:
-                if ready('remission') and m.canUseChip(my_chips()['remission'], a):
-                    wf, worst = fr, a
-            except Exception:
-                pass
-    if worst is not None:
-        cast_on('remission', worst)
-
-
-def pk_strike(vul):
-    """A mob dropped its protection: focus the lowest-life vulnerable mob (distance breaks ties - far
-    ones cost turns of walking); buffs, approach, every weapon and offensive chip, then shields with
-    what's left. V10's search kept away from the army: 1.4k damage a fight vs the top teams' 40-46k."""
-    m = me()
-
-    def is_near(e):
-        return weapon_reach(e) is not None or dist(m.cell.id, e.cell.id) <= (m.mp or 0) + 6
-
-    pool = vul
-    if PK_NEAR_FIRST:
-        pool = [e for e in vul if is_near(e)] or vul
-    t = min(pool, key=lambda e: ((e.life or 0) * (PK_PUMPKIN_W if ename(e) == 'evil_pumpkin' else 1.0) / 1500.0 +
-                                 dist(m.cell.id, e.cell.id) / 3.0, e.id))
-    # v11 charged from 15-25 cells and died by T3-T5 (median length 6 vs 9): engage only what I can hit
-    # this turn or next, else hold and defend - the army walks to us
-    near = is_near(t)
-    if not near or (m.life or 0) < (m.maxLife or 1) * 0.35:
-        return False
-    bnote('strike %s %d (d=%d)' % (ename(t), t.life or 0, dist(m.cell.id, t.cell.id)))
-    pk_heal()
-    attack(t)
-    for n in ('fortress', 'wall', 'solidification', 'armor'):
-        cast_self(n)
-    if PK_SPEND_REST:
-        pk_spend_rest()
-    return True
-
-
 # ---- squad play (v20): the BlackBooks squad's playbook (153/153 Pumpkin wins; its leeks have our stats).
 # They stay ~4 cells from an ally and 6-7 from the nearest mob, spend 94-98% of their TP (v19: 56%):
 # rage (TP x (1 + SCI/100), circle 3), reflexes / doping / boots on the cluster, dome + rampart / carapace
 # from RES ~490 casters, then every weapon at the open mob, friendly fire accepted (~9% of their damage).
-PK_PLAY = 'squad'        # 'squad': the playbook below
 PK_SQUAD_GAP = 3       # wanted distance to the nearest ally when picking a cell
 PK_SQUAD_RANGE = 7     # hold this far from the nearest mob while nothing is open
 PK_SQ_HEAL_FIRST = 0.55  # heal myself before attacking below this fraction of max life (0 = off)
 PK_SQ_RETREAT = 0.3     # below this fraction: no attack - shields, heals, step back (0 = off)
-PK_SQUAD_SUMMON = False  # summon spread bulbs ahead of time (sim: their cooldowns starve the relay blocks)
 SQUAD_FF = {'on': False}
 
 
@@ -4375,7 +3997,7 @@ def _sq_target():
             r = None
         if r is None:
             continue
-        k = ((e.life or 0) * (PK_PUMPKIN_W if ename(e) == 'evil_pumpkin' else 1.0) / 1500.0 + r[1] * 0.3, e.id)
+        k = ((e.life or 0) / 1500.0 + r[1] * 0.3, e.id)
         if bk is None or k < bk:
             bk, best = k, (e, r)
     if best is not None:
@@ -4497,41 +4119,6 @@ def sq_bulb_ai():
             m.moveToward(Cell.get(b))
 
 
-SQ_BULBS = ('puny_bulb', 'rocky_bulb', 'iced_bulb', 'fire_bulb', 'healer_bulb', 'wizard_bulb', 'lightning_bulb',
-            'savant_bulb', 'tactician_bulb', 'metallic_bulb')
-
-
-def _sq_summon(reserve=0):
-    """One bulb a turn when the TP allows: on the free cell in range farthest from the other blockers."""
-    m = me()
-    pk_grid()
-    for n in SQ_BULBS:
-        ch = my_chips().get(n)
-        if ch is None or (ch.currentCooldown or 0) > 0 or (m.tp or 0) < (ch.cost or 0) + reserve:
-            continue
-        cells = []
-        for c in list(_XY):
-            d = dist(m.cell.id, c)
-            if d < 1 or d > (ch.maxRange or 3):
-                continue
-            cell = Cell.get(c)
-            if cell is None or cell.obstacle or not cell.empty:
-                continue
-            cells.append(c)
-        ok_cells = []
-        for c in sorted(cells, key=lambda c: -min([dist(c, o) for o in _blockers()] or [0]))[:12]:
-            try:
-                if m.canUseChipOnCell(ch, Cell.get(c)):
-                    ok_cells.append(c)
-            except Exception:
-                pass
-        b = _spread_cell(m.cell.id, ok_cells)
-        if b is not None and ok(m.summon(ch, Cell.get(b), bulb_ai)):
-            bnote('summon %s at %d' % (n, b))
-            return True
-    return False
-
-
 def _sq_heal_self():
     if ready('knowledge') and (me().tp or 0) >= ccost('knowledge') + 5:
         cast_self('knowledge')
@@ -4549,39 +4136,6 @@ def _sq_retreat():
     bnote('retreat')
 
 
-PK_SQ_SHACKLE = False   # MAG leeks shackle the pumpkin's TP (it lands 80% of the killing blows) before attacking
-
-
-def _sq_shackle():
-    """Shackles land through Divine Protection: soporific (TP, 3 turns, circle) on the mob cluster with the
-    pumpkin, tranquilizer (TP, cd 0) and fracture (STR) on the pumpkin. MAG-scaled: x(1 + MAG/100)."""
-    m = me()
-    if (m.magic or 0) < 300:
-        return
-    mobs = [e for e in Fight.getAliveEnemies() if not e.summoned and e.cell is not None]
-    pk = next((e for e in mobs if ename(e) == 'evil_pumpkin'), None)
-    ch = my_chips().get('soporific')
-    if ch is not None and (ch.currentCooldown or 0) == 0 and (m.tp or 0) >= (ch.cost or 0) and mobs:
-        best = None; bv = 0
-        for e in mobs:
-            try:
-                if not m.canUseChipOnCell(ch, e.cell):
-                    continue
-            except Exception:
-                continue
-            ids = _area_ids(ch, e.cell)
-            v = sum(3 if ename(x) == 'evil_pumpkin' else 1 for x in mobs if x.cell.id in ids)
-            if v > bv:
-                bv, best = v, e.cell
-        if best is not None and ok(m.useChipOnCell(ch, best)):
-            bnote('soporific x%d' % bv)
-    if pk is None:
-        return
-    for n in ('tranquilizer', 'fracture'):
-        if cast_on(n, pk):
-            bnote('%s on the pumpkin' % n)
-
-
 def pk_squad_turn():
     _safe('block', pk_block)
     _safe('boost', pk_boost_blocker)
@@ -4593,8 +4147,6 @@ def pk_squad_turn():
     if PK_SQ_RETREAT and frac < PK_SQ_RETREAT:
         _safe('retreat', _sq_retreat)
         return
-    if PK_SQ_SHACKLE:
-        _safe('shackle', _sq_shackle)
     if t is not None and reach is not None:
         # an open mob in reach: strength buffs, walk to the shooting cell, every shot - then the rest
         for n in ('steroid', 'protein'):
@@ -4603,53 +4155,22 @@ def pk_squad_turn():
         _safe('move', _sq_move, t, reach)
         _safe('attack', _sq_attack, t, vul)
         _safe('defend', _sq_defend)
-        if PK_SQUAD_SUMMON:
-            _safe('summon', _sq_summon)
         _safe('buffs', _sq_buffs)
     else:
         _safe('move', _sq_move, t)
         _safe('defend', _sq_defend)
-        if PK_SQUAD_SUMMON:
-            _safe('summon', _sq_summon)
         _safe('buffs', _sq_buffs)
     _safe('heals', _sq_heals)
     _safe('close', _sq_close, t if reach is not None else None)
 
 
 def pumpkin_turn():
-    """Returns the focus enemy when V10's search should play (a vulnerable enemy exists), else None
-    (the turn was played here)."""
+    """Play the turn here (squad play). Returns None."""
     if Fight.turn == 1:
-        bnote('pumpkin v16')
+        bnote('pumpkin v23')
     pk_listen()
-    if PK_PLAY == 'squad':
-        pk_squad_turn()
-        return None
-    # v7 blocked first and died by T8 (median): the core shields go up first when the army is near,
-    # but never eat the TP the due block needs
-    if any(dist(me().cell.id, e.cell.id) <= 10 for e in army()):
-        try:
-            need = pk_block(dry=True) or 0
-        except Exception:
-            need = 0
-        for n in PK_PRE_SHIELDS:
-            if (me().tp or 0) - ccost(n) >= need:
-                cast_self(n)
-    pk_block()
-    pk_boost_blocker()
-    if PK_REZ_ALLY:
-        pk_rez_ally()
-    if disarm(('evil_pumpkin',)):
-        pass
-    vul = pk_vulnerable()
-    if not vul:
-        pk_defend()
-        return None
-    if PK_STRIKE:
-        if not pk_strike(vul):
-            pk_defend()
-        return None
-    return 'search'
+    pk_squad_turn()
+    return None
 
 
 # ---- 90_main: turn loop -----------------------------------------------------
@@ -4854,8 +4375,8 @@ def turn():
         if r is None:
             return
     if boss:
-        # Fennel boss: the puzzle and the tank / buffer / healer roles are played by 80_boss; strikers in
-        # the combat phase get the boss focus and run the normal search below
+        # Fennel boss: every role is played by 80_boss (boss_turn returns None); if it raises, the combat
+        # phase falls back to the boss focus and the normal search below
         try:
             enemy = boss_turn()
         except Exception as ex:

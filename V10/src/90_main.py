@@ -200,8 +200,8 @@ def turn():
         if r is None:
             return
     if boss:
-        # Fennel boss: the puzzle and the tank / buffer / healer roles are played by 80_boss; strikers in
-        # the combat phase get the boss focus and run the normal search below
+        # Fennel boss: every role is played by 80_boss (boss_turn returns None); if it raises, the combat
+        # phase falls back to the boss focus and the normal search below
         try:
             enemy = boss_turn()
         except Exception as ex:
