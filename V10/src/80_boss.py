@@ -2073,11 +2073,11 @@ PK_NOCHASE = True      # secondary targets: shots from where I stand only (v23 w
                        # fired nothing after 78% of those moves)
 PK_SAFE = 2            # 1: shooting / holding cells outside the pumpkin's next walk + scythe (MP + 1), and back
                        # out of it with the MP the shots leave; 2: + its jump (3) when ready
-PK_SHIELD_FIRST = False  # shooting from a cell a mob is within 7 of: solidification + fortress + wall before the
+PK_SHIELD_FIRST = True   # shooting from a cell a mob is within 7 of: solidification + fortress + wall before the
                          # shots (the winners take 69% of the mob damage behind 30%+ relative shields, v23 38%)
 PK_DISARM = False      # the glowing saber on the pumpkin whenever a leek reaches it (a state lands through Divine
                        # Protection): no scythe on its next turn
-PK_AREA_ANY = False    # team buffs (rage, doping, reflexes, boots...) on the cell in range whose area covers the most
+PK_AREA_ANY = True     # team buffs (rage, doping, reflexes, boots...) on the cell in range whose area covers the most
                        # leeks, not only on ally cells (rage +4 TP x 3 turns on each leek it covers)
 PK_DZ = {'v': None}
 SQUAD_FF = {'on': False}
@@ -2450,7 +2450,7 @@ def pk_squad_turn():
 def pumpkin_turn():
     """Play the turn here (squad play). Returns None."""
     if Fight.turn == 1:
-        bnote('pumpkin v24')
+        bnote('pumpkin v25')
     pk_listen()
     pk_squad_turn()
     return None
