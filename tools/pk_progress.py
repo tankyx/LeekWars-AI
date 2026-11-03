@@ -6,8 +6,9 @@ components it needs). Targets: the slots a Pumpkin part improves (no TP / MP / R
     python3 tools/pk_progress.py --log batch_end # also append an inventory snapshot to data/ladder/pumpkin_inventory.jsonl
     python3 tools/pk_progress.py --rates         # drop rates per Pumpkin fight from the logged snapshots
 
-Recipes come from /scheme/get-all, sub-parts expanded (kirabo for a quince, motherboard -> motherboard2 for a
-motherboard3); crafting and equipping stay manual (each one replaces a named component on a named leek).
+Recipes come from /scheme/get-all; every ingredient short in stock is expanded through the schemes the farmer OWNS
+(kirabo, sand <- rock + pebble, orange <- apple <- leaf / branch / ice_cube, motherboard -> motherboard2, ...).
+Crafting + equipping: tools/pk_craft.py.
 """
 import argparse, csv, json, os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
@@ -22,7 +23,6 @@ TARGETS = {
              'motherboard3': [('DawnFall', 'amethyst_ring'), ('DuskHope', 'amethyst_ring')],
              'chestnut': [('ProdigalSon', 'nephelium')]},
 }
-SUBPARTS = {'quince': ['kirabo'], 'motherboard3': ['motherboard2', 'motherboard'], 'motherboard2': ['motherboard'], 'hokajin': ['quince']}
 WATCH = ('pumpkin_seeds', 'lantern', 'sand', 'orange', 'gold_nugget', 'obsidian', 'nephelium', 'acorn', 'kirabo',
          'aquamarine', 'topaze')
 
@@ -39,23 +39,41 @@ def inventory(lw, nm):
     return inv
 
 
+def owned_recipes(lw, nm, I=None):
+    """({result name: [(ingredient, qty)]}, {result name: scheme id}) for the schemes this farmer owns."""
+    if I is None:
+        I = lw.get('/item/get-all'); I = I.get('items', I)
+    s = lw.get('/scheme/get-all'); sc = s.get('schemes', s); sc = list(sc.values()) if isinstance(sc, dict) else sc
+    f = lw.get('/farmer/get-from-token'); f = f.get('farmer', f)
+    owned = set(x['template'] for x in f.get('schemes') or [])
+    item_of = {int(v['params']): int(k) for k, v in I.items() if v.get('type') == 9 and str(v.get('params', '')).isdigit()}
+    recipes, ids = {}, {}
+    for r in sc:
+        if item_of.get(r['id']) in owned:
+            n = nm.get(r['result'])
+            recipes[n] = [(nm.get(t), q) for t, q in (it for it in r['items'] if it)]
+            ids[n] = r['id']
+    return recipes, ids
+
+
 def needs(recipes, comp, n, inv):
-    """Total raw ingredients for n more `comp`, using sub-parts already in stock first."""
+    """Raw ingredients still missing for n more `comp`: stock first, then anything short is crafted through the
+    owned recipes (depth-limited)."""
     tot = {}
     stock = dict(inv)
 
-    def add(item, q):
+    def add(item, q, depth):
         have = stock.get(item, 0)
         use = min(have, q); stock[item] = have - use; q -= use
         if q <= 0:
             return
-        if item in recipes and item in sum(SUBPARTS.values(), []) + list(SUBPARTS):
+        if item in recipes and depth < 5:
             for ing, k in recipes[item]:
-                add(ing, k * q)
+                add(ing, k * q, depth + 1)
         else:
             tot[item] = tot.get(item, 0) + q
     for ing, k in recipes[comp]:
-        add(ing, k * n)
+        add(ing, k * n, 1)
     return tot
 
 
@@ -82,8 +100,7 @@ def main():
         lw = LWSession(acct)
         I = lw.get('/item/get-all'); I = I.get('items', I)
         nm = {int(k): v['name'] for k, v in I.items()}
-        s = lw.get('/scheme/get-all'); sc = s.get('schemes', s); sc = list(sc.values()) if isinstance(sc, dict) else sc
-        recipes = {nm.get(r['result']): [(nm.get(t), q) for t, q in (it for it in r['items'] if it)] for r in sc}
+        recipes, _ = owned_recipes(lw, nm, I)
         inv = inventory(lw, nm)
         if a.log:
             rec = {'time': int(time.time()), 'acct': acct, 'tag': a.log, 'inv': {k: inv.get(k, 0) for k in WATCH}}
@@ -95,8 +112,8 @@ def main():
         print('== %s  (%s)' % (acct, ', '.join('%s %d' % (k, inv.get(k, 0)) for k in WATCH)))
         for comp, slots in TARGETS.get(acct, {}).items():
             n = len(slots)
-            short = {k: v - inv.get(k, 0) for k, v in needs(recipes, comp, n, {}).items() if v > inv.get(k, 0)}
-            one = {k: v - inv.get(k, 0) for k, v in needs(recipes, comp, 1, {}).items() if v > inv.get(k, 0)}
+            short = needs(recipes, comp, n, inv)       # shortfall after the stock (sub-parts in stock count)
+            one = needs(recipes, comp, 1, inv)
             print('   %-13s x%d for %s' % (comp, n, ', '.join('%s (%s)' % s for s in slots)))
             print('       next one: %s' % ('CRAFTABLE NOW' if not one else 'short ' + ', '.join('%s %d' % kv for kv in one.items())))
             print('       all %d  : short %s' % (n, ', '.join('%s %d' % kv for kv in short.items()) or 'nothing'))
