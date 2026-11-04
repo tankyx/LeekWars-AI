@@ -131,6 +131,9 @@ def main():
         say(m.group(0) if m else 'no summary')
         if a.boss == 3:
             run([sys.executable, '-u', 'tools/pk_progress.py', '--log', 'batch_end:%d' % len(ids)], 120)
+            # craft + equip the target parts the drops now allow (owner 2026-11-03: "Craft everything we need")
+            out_k = run([sys.executable, '-u', 'tools/pk_craft.py'], 900)
+            say('pk_craft: ' + ' | '.join(l.strip() for l in out_k.splitlines() if 'equip' in l or 'FAILED' in l or 'crafted and equipped' in l)[:600])
         new = not os.path.exists(CSV)
         with open(CSV, 'a', newline='') as fh:
             w = csv.writer(fh)

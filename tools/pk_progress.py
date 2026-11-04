@@ -23,6 +23,8 @@ TARGETS = {
              'motherboard3': [('DawnFall', 'amethyst_ring'), ('DuskHope', 'amethyst_ring')],
              'chestnut': [('ProdigalSon', 'nephelium')]},
 }
+LEEK_IDS = {'main': {'Kirby54': 20443, 'GTGabi': 129288, 'Zoulman': 129295, 'Payou': 129296},
+            'cure': {'LeekRain': 19703, 'DawnFall': 21175, 'DuskHope': 129801, 'ProdigalSon': 130236}}
 WATCH = ('pumpkin_seeds', 'lantern', 'sand', 'orange', 'gold_nugget', 'obsidian', 'nephelium', 'acorn', 'kirabo',
          'aquamarine', 'topaze')
 
@@ -110,7 +112,16 @@ def main():
                 fh.write(json.dumps(rec) + '\n')
             continue
         print('== %s  (%s)' % (acct, ', '.join('%s %d' % (k, inv.get(k, 0)) for k in WATCH)))
+        worn = {}
+        for lid in LEEK_IDS.get(acct, {}).values():
+            l = lw.get('/leek/get/%d' % lid); l = l.get('leek', l)
+            worn[l['id']] = set(nm.get(c['template']) for c in (l.get('components') or []) if c)
+        name_id = LEEK_IDS.get(acct, {})
         for comp, slots in TARGETS.get(acct, {}).items():
+            slots = [s_ for s_ in slots if s_[1] in worn.get(name_id.get(s_[0]), {s_[1]})]   # still to do
+            if not slots:
+                print('   %-13s done' % comp)
+                continue
             n = len(slots)
             short = needs(recipes, comp, n, inv)       # shortfall after the stock (sub-parts in stock count)
             one = needs(recipes, comp, 1, inv)
