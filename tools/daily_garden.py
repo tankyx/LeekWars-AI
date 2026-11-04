@@ -345,6 +345,15 @@ def main():
     print('=== daily_garden %s (%s selector)' % (datetime.datetime.now().isoformat(timespec='seconds'), a.selector), flush=True)
     accts = [x for x in LEEKS if x in a.accounts.split(',')]
     out = {}
+    if not a.dry_run:
+        # godson accounts (owner 2026-11-04: Brocanteur2 / 3, sponsored by Virus): their own credits, in the
+        # background, independent of main / Cure - tools/godson_farm.py, log /tmp/godson_farm.log
+        try:
+            subprocess.Popen([sys.executable, '-u', os.path.join(HERE, 'godson_farm.py')], cwd=ROOT,
+                             stdout=open('/tmp/godson_farm.log', 'a'), stderr=subprocess.STDOUT, start_new_session=True)
+            print('godson farm started (log /tmp/godson_farm.log)', flush=True)
+        except Exception as ex:
+            print('godson farm not started: %s' % ex, flush=True)
     if not a.dry_run and a.boss_slot != 'off' and 'main' in accts and 'cure' in accts:
         boss, n = a.boss_slot.split(':')
         try:
