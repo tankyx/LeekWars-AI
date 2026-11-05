@@ -557,7 +557,7 @@ def tp_gain(it, A):
     return _n(g)
 
 
-FIX_LEFTOVER_MP = False  # 2026-11-05 (review): spend_leftover cast MP buffs (leather boots) after the last move -
+FIX_LEFTOVER_MP = True   # 2026-11-05 (review): spend_leftover cast MP buffs (leather boots) after the last move -
                          # wasted, and on cooldown when the superinfection combo needs the reach
 
 

@@ -355,8 +355,8 @@ def ready_vec(S, used=frozenset(), role='me'):
 # 2026-11-05 (review): the engine multiplies EVERY effect's value by the critical power (heals, poisons,
 # shields, buffs incl. TP / MP, shackles, vulnerability, return, nova - generator effect/*.java) and rounds it
 # to the nearest integer (Math.round); V10 applied the crit to direct damage only and truncated TP / MP buffs.
-FIX_CRIT_ALL = False
-FIX_TP_ROUND = False
+FIX_CRIT_ALL = True
+FIX_TP_ROUND = True
 
 
 def _n(v):
@@ -1423,7 +1423,7 @@ def tp_gain(it, A):
     return _n(g)
 
 
-FIX_LEFTOVER_MP = False  # 2026-11-05 (review): spend_leftover cast MP buffs (leather boots) after the last move -
+FIX_LEFTOVER_MP = True   # 2026-11-05 (review): spend_leftover cast MP buffs (leather boots) after the last move -
                          # wasted, and on cooldown when the superinfection combo needs the reach
 
 

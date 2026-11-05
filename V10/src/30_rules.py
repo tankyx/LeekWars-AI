@@ -7,8 +7,8 @@
 # 2026-11-05 (review): the engine multiplies EVERY effect's value by the critical power (heals, poisons,
 # shields, buffs incl. TP / MP, shackles, vulnerability, return, nova - generator effect/*.java) and rounds it
 # to the nearest integer (Math.round); V10 applied the crit to direct damage only and truncated TP / MP buffs.
-FIX_CRIT_ALL = False
-FIX_TP_ROUND = False
+FIX_CRIT_ALL = True
+FIX_TP_ROUND = True
 
 
 def _n(v):
