@@ -552,14 +552,22 @@ def tp_gain(it, A):
             g += avg(e)
         elif e[0] == E_BUFF_TP:
             g += avg(e) * (1 + max(0, A['cur'].get('science', 0)) / 100.0)
-    return int(g)
+    if FIX_CRIT_ALL:
+        g *= 1 + 0.3 * min(1.0, max(0, A['cur'].get('agility', 0)) / 1000.0)
+    return _n(g)
 
 
-def useful_now(it, A, B, cx):
+FIX_LEFTOVER_MP = False  # 2026-11-05 (review): spend_leftover cast MP buffs (leather boots) after the last move -
+                         # wasted, and on cooldown when the superinfection combo needs the reach
+
+
+def useful_now(it, A, B, cx, leftover=False):
     """A self item is only offered when it can matter now: heals when HP is
     missing, antidote when poisoned, reflect / shields when the enemy can
     reach our current cell next turn (their MP + range)."""
     types = it.types
+    if leftover and FIX_LEFTOVER_MP and types <= {E_BUFF_MP, E_RAW_MP}:
+        return False                # no move left this turn: an MP buff now is wasted
     missing = A['max'] - A['life']
     if E_HEAL in types and not (types - {E_HEAL}):
         amt = sum(avg(e) for e in it.effects if e[0] == E_HEAL) * (1 + max(0, A['cur']['wisdom']) / 100.0)
@@ -789,11 +797,12 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
         s_it = si_all[0]
         poisons = [it for it in offensive if E_POISON in it.types]
         boost = [it for it in ready_self if it.types & {E_BUFF_TP, E_RAW_TP, E_RAW_MAG}]
-        gain = sum(int(e[1]) for it in boost for e in it.fx if e[0] in (E_BUFF_TP, E_RAW_TP))
+        gain = sum(tp_gain(it, A) for it in boost) if FIX_TP_ROUND else \
+            sum(int(e[1]) for it in boost for e in it.fx if e[0] in (E_BUFF_TP, E_RAW_TP))
         # MP buffs extend "a cell in range can be reached" (leather boots: raw +2 MP)
         mp_boost = [it for it in ready_self if it.types & {E_BUFF_MP, E_RAW_MP}]
         sci = max(0, A['cur'].get('science', 0))
-        mp_gain = sum(int(e[1]) if e[0] == E_RAW_MP else int(e[1] * (1 + sci / 100.0))
+        mp_gain = sum(_n(e[1]) if e[0] == E_RAW_MP else _n(e[1] * (1 + sci / 100.0))
                       for it in mp_boost for e in it.fx if e[0] in (E_BUFF_MP, E_RAW_MP))
         mp_boost = mp_boost if mp_gain > 0 else []
         reach_b = reachable(cell0, mp0 + mp_gain) if mp_boost else reach

@@ -4,6 +4,18 @@
 # steal = dmg x WIS/1000; nova (1 + SCI/100) capped at max - life; poison
 # (1 + MAG/100); heal / vitality (1 + WIS/100); shields (1 + RES/100);
 # shackles (1 + MAG/100); non-raw buffs (1 + SCI/100); crit chance AGI/1000 x1.3.
+# 2026-11-05 (review): the engine multiplies EVERY effect's value by the critical power (heals, poisons,
+# shields, buffs incl. TP / MP, shackles, vulnerability, return, nova - generator effect/*.java) and rounds it
+# to the nearest integer (Math.round); V10 applied the crit to direct damage only and truncated TP / MP buffs.
+FIX_CRIT_ALL = False
+FIX_TP_ROUND = False
+
+
+def _n(v):
+    """An integer TP / MP gain: the engine's Math.round (FIX_TP_ROUND), else the old truncation."""
+    return int(v + 0.5) if FIX_TP_ROUND else int(v)
+
+
 NONRAW_BUFF = {E_BUFF_STR: 'strength', E_BUFF_AGI: 'agility', E_BUFF_RES: 'resistance', E_BUFF_WIS: 'wisdom'}
 RAW_BUFF = {E_RAW_STR: 'strength', E_RAW_MAG: 'magic', E_RAW_AGI: 'agility', E_RAW_RES: 'resistance',
             E_RAW_WIS: 'wisdom', E_RAW_SCI: 'science'}
@@ -61,6 +73,7 @@ def apply_item(it, C, T, S, f=1.0):
     cur = C['cur']; pw = 1 + C['power'] / 100.0
     crit_p = min(1.0, max(0, cur['agility']) / 1000.0)
     critf = 1 + 0.3 * crit_p
+    cf = critf if FIX_CRIT_ALL else 1.0     # the crit on the non-damage effects
     dealt = 0.0
     scaled = f != 1.0 and T is not C
     prev = 0.0                      # value of the previous effect (steal-shield copies it)
@@ -103,7 +116,7 @@ def apply_item(it, C, T, S, f=1.0):
             if back > 0:
                 C['life'] -= back; C['max'] -= back * 0.05; C['burn'] += back * 0.05
         elif t == E_POISON and T is not C:
-            p = a * (1 + max(0, cur['magic']) / 100.0) * pw
+            p = a * (1 + max(0, cur['magic']) / 100.0) * pw * cf
             g_add(T, t, p); T['pf'] += p * max(1, turns)
         elif t == E_ADD_STATE and T is not C:
             if sid == ST_UNHEALABLE:
@@ -122,10 +135,10 @@ def apply_item(it, C, T, S, f=1.0):
                 T['max'] -= d * 0.10; T['burn'] += d * 0.10
                 dealt += d
         elif t == E_NOVA and T is not C:
-            n = min(a * (1 + max(0, cur['science']) / 100.0) * pw, max(0, T['max'] - T['life']))
+            n = min(a * (1 + max(0, cur['science']) / 100.0) * pw * cf, max(0, T['max'] - T['life']))
             T['max'] -= n; T['burn'] += n
         elif t in (E_SHK_MP, E_SHK_TP, E_SHK_STR, E_SHK_MAG, E_SHK_AGI) and T is not C:
-            g_add(T, t, a * (1 + max(0, cur['magic']) / 100.0))
+            g_add(T, t, a * (1 + max(0, cur['magic']) / 100.0) * cf)
         elif t == E_DEBUFF and T is not C:
             # liberation: every effect on the target x (1 - value%): its shields,
             # buffs, damage return, heal over time, but also our poison / shackles
@@ -140,47 +153,50 @@ def apply_item(it, C, T, S, f=1.0):
                 if isinstance(base, (int, float)):
                     cur_t[key] = base + (cur_t[key] - base) * k
         elif t == E_VULN and T is not C:
+            a *= cf
             g_add(T, t, a); T['rel'] -= a
         elif t == E_VULN_ABS and T is not C:
+            a *= cf
             g_add(T, t, a); T['abs'] -= a; prev = a
         elif t == E_STEAL_ABS:
             # engine EffectStealAbsoluteShield: the caster gains the previous effect's value as abs shield
             if prev > 0:
                 C['abs'] += prev; C['groups']['abs_shield'] += prev
         elif t == E_HEAL:
-            h = a * (1 + max(0, cur['wisdom']) / 100.0)
+            h = a * (1 + max(0, cur['wisdom']) / 100.0) * cf
             if turns > 0:
                 g_add(C, t, h)
             else:
                 C['life'] = min(C['max'], C['life'] + h)
         elif t in (E_ABS_SHIELD, E_RAW_ABS):
-            v = a * (1 + max(0, cur['resistance']) / 100.0) if t == E_ABS_SHIELD else a
+            v = (a * (1 + max(0, cur['resistance']) / 100.0) if t == E_ABS_SHIELD else a) * cf
             g_add(C, t, v); C['abs'] += v
         elif t in (E_REL_SHIELD, E_RAW_REL):
-            v = a * (1 + max(0, cur['resistance']) / 100.0) if t == E_REL_SHIELD else a
+            v = (a * (1 + max(0, cur['resistance']) / 100.0) if t == E_REL_SHIELD else a) * cf
             g_add(C, t, v); C['rel'] += v
         elif t == E_VITALITY:
-            v = a * (1 + max(0, cur['wisdom']) / 100.0)
+            v = a * (1 + max(0, cur['wisdom']) / 100.0) * cf
             C['max'] += v; C['life'] += v
         elif t in NONRAW_BUFF or t in (E_BUFF_TP, E_BUFF_MP):
-            v = a * (1 + max(0, cur['science']) / 100.0)
+            v = a * (1 + max(0, cur['science']) / 100.0) * cf
             g_add(C, t, v)
             if t in NONRAW_BUFF:
                 cur[NONRAW_BUFF[t]] += v
             elif t == E_BUFF_TP:
-                S['tp'] += int(v)
+                S['tp'] += _n(v)
             else:
-                S['mp'] += int(v)
+                S['mp'] += _n(v)
         elif t in RAW_BUFF or t in (E_RAW_TP, E_RAW_MP, E_RAW_POW):
+            a *= cf
             g_add(C, t, a)
             if t in RAW_BUFF:
                 cur[RAW_BUFF[t]] += a
             elif t == E_RAW_TP:
-                S['tp'] += int(a)
+                S['tp'] += _n(a)
             elif t == E_RAW_MP:
-                S['mp'] += int(a)
+                S['mp'] += _n(a)
             else:
                 C['power'] += a
         elif t == E_RETURN:
-            g_add(C, t, a * (1 + max(0, cur['agility']) / 100.0))
+            g_add(C, t, a * (1 + max(0, cur['agility']) / 100.0) * cf)
     return dealt

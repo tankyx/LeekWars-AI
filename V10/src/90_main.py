@@ -158,7 +158,7 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
             if not done:
                 break
     for it in [i for i in items if i.self_cast and not i.special]:
-        if A is not None and not useful_now(it, A, B, cx):
+        if A is not None and not useful_now(it, A, B, cx, leftover=True):
             continue
         if it.cost <= m.tp and it.cooldown_now() == 0:
             r = m.useChipOnCell(it.obj, m.cell.id) if not it.weapon else None

@@ -22,7 +22,9 @@ from lw_decode import Decoder
 
 BOTS = {'domingo': -1, 'tuxo': -2, 'bibol': -3, 'jean': -4, 'hachess': -5, 'rex': -6}
 LEEKS = {'AdaLovelace': 20443, 'EdsgerDijkstra': 129288, 'KurtGodel': 129295, 'MargaretHamilton': 129296,
-         'LeekRain': 19703, 'DawnFall': 21175, 'DuskHope': 129801, 'ProdigalSon': 130236}   # main + cure
+         'LeekRain': 19703, 'DawnFall': 21175, 'DuskHope': 129801, 'ProdigalSon': 130236,   # main + cure
+         # current in-game names (renamed 2026-10-08) + the godson accounts' leeks (2026-11-04)
+         'Kirby54': 20443, 'GTGabi': 129288, 'Zoulman': 129295, 'Payou': 129296, 'WannaCrypt': 135764, 'NotPetya': 135765}
 
 
 def main():
