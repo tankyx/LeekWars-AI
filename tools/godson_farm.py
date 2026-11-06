@@ -15,8 +15,9 @@ from lw_api import LWSession
 import xp_farm as xf
 
 ACCTS = {'brocanteur2': 135764, 'brocanteur3': 135765}
-# total-stat targets in order (first unmet gets the capital): damage first, then life, alternating
-PLAN = [('strength', 200), ('life', 600), ('strength', 400), ('life', 1200), ('strength', 600), ('life', 99999)]
+# total-stat targets in order (first unmet gets the capital). Owner 2026-11-06: every new point into TP (10 TP was
+# the bottleneck - two shots a turn); the spender keeps the capital until the next TP point is affordable
+PLAN = [('strength', 200), ('tp', 99)]
 LOG = os.path.join(ROOT, 'data', 'ladder', 'godson_farm.csv')
 
 
