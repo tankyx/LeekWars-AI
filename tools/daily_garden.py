@@ -354,6 +354,15 @@ def main():
             print('godson farm started (log /tmp/godson_farm.log)', flush=True)
         except Exception as ex:
             print('godson farm not started: %s' % ex, flush=True)
+        # craft + equip the target parts the drops allow (owner 2026-11-03 "Craft everything we need"; the ladder
+        # drops topaze / acorn / gold nuggets now that the Pumpkin slot is off)
+        try:
+            p = subprocess.run([sys.executable, '-u', os.path.join(HERE, 'pk_craft.py')], cwd=ROOT, capture_output=True,
+                               text=True, timeout=900)
+            print('pk_craft: ' + ' | '.join(l.strip() for l in p.stdout.splitlines()
+                                            if 'equip' in l or 'FAILED' in l or 'crafted and equipped' in l)[:600], flush=True)
+        except Exception as ex:
+            print('pk_craft failed: %s' % ex, flush=True)
     if not a.dry_run and a.boss_slot != 'off' and 'main' in accts and 'cure' in accts:
         boss, n = a.boss_slot.split(':')
         try:
