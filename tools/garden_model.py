@@ -164,12 +164,14 @@ def build(a):
     leeks = ACCOUNTS[a.account]; names = list(leeks)
     lw = LWSession(a.account)
     rows = []; fetched = 0; missing = 0
+    # date ranges left out of the training rows (still in each opponent's history): fights on a non-ladder build
+    excl = [tuple(r.split('..')) for r in (a.exclude or '').split(',') if '..' in r]
     for n, lid in leeks.items():
         db = sqlite3.connect(os.path.join(HERE, 'fight_history_%d.db' % lid))
         hist = {}
         for fid, oid, res, ts in db.execute('SELECT fight_id, opponent_id, result, timestamp FROM fight_history ORDER BY timestamp'):
             h = hist.setdefault(oid, [])
-            if ts >= a.since:
+            if ts >= a.since and not any(lo <= ts[:10] <= hi for lo, hi in excl):
                 had = os.path.exists(os.path.join(CACHE, '%d.json' % fid))
                 f = load_fight(lw, fid)
                 if not had and f is not None:
@@ -219,8 +221,23 @@ def build(a):
         lo, lo + 0.2, m.sum(), p_cal[m].mean(), y[cut:][m].mean()) for lo in (0.0, 0.2, 0.4, 0.6, 0.8)
         for m in [(p_cal >= lo) & (p_cal < lo + 0.2)] if m.sum()))
     w = fit(Z, y, a.l2)
+    # recency calibration (2026-11-08): the leeks change (components, TP, AI fixes) faster than 7 weeks of history;
+    # shift the intercept so the mean prediction over the last --recent-days matches the real win rate there
+    last = rows[-1][0][:10]
+    import datetime as _dt
+    lo = (_dt.date.fromisoformat(last) - _dt.timedelta(days=a.recent_days)).isoformat()
+    rec = np.array([i for i, r in enumerate(rows) if r[0][:10] > lo])
+    shift = 0.0
+    if a.recent_days > 0 and len(rec) >= 100:
+        pr = 1 / (1 + np.exp(-(Z[rec] @ w)))
+        for _ in range(30):                     # solve mean(sigmoid(z + shift)) = real rate
+            m = (1 / (1 + np.exp(-(Z[rec] @ w + shift)))).mean()
+            shift += (y[rec].mean() - m) / max(1e-3, m * (1 - m))
+        w[0] += shift
+        print('recency calibration: last %d days (%d fights) real %.3f, model %.3f -> intercept %+.3f' % (
+            a.recent_days, len(rec), y[rec].mean(), pr.mean(), shift))
     json.dump({'w': w.tolist(), 'mu': mu.tolist(), 'sd': sd.tolist(), 'leeks': names, 'names': names_of(names),
-               'n': len(rows), 'since': a.since, 'l2': a.l2}, open(model_path(a.account), 'w'), indent=1)
+               'n': len(rows), 'since': a.since, 'l2': a.l2, 'exclude': a.exclude, 'recent_shift': shift}, open(model_path(a.account), 'w'), indent=1)
     top = sorted(zip(names_of(names), w), key=lambda t: -abs(t[1]))[:14]
     print('saved %s; strongest weights: %s' % (model_path(a.account), ', '.join('%s %+.2f' % t for t in top)))
 
@@ -231,6 +248,10 @@ def main():
     ap.add_argument('--account', default='main', choices=sorted(ACCOUNTS))
     ap.add_argument('--since', default='2026-09-20')
     ap.add_argument('--l2', type=float, default=10.0)
+    ap.add_argument('--recent-days', type=int, default=7, help='recency calibration window (0 = off)')
+    ap.add_argument('--exclude', default='2026-10-27..2026-11-04',
+                    help='date ranges "YYYY-MM-DD..YYYY-MM-DD,..." left out of training (default: the Pumpkin respec, '
+                         'when the leeks fought on boss builds - Payou 2W/23L on 2026-11-04)')
     a = ap.parse_args()
     build(a)
 
