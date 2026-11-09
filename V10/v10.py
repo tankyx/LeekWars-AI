@@ -871,6 +871,12 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
 # poison tick -> value model from OUR side at the start of our next turn.
 DMG_BUFFS = {E_BUFF_STR, E_RAW_STR, E_RAW_MAG, E_RAW_SCI, E_RAW_POW, E_BUFF_TP, E_RAW_TP}
 MAX_ATTACK_CELLS = 32
+# 2026-11-09 burst timing (owner: STR leeks should prep, then burst): damage buffs (STR / MAG / SCI / power / TP)
+# only on a turn with an attack in reach (the burst), or as prep when the enemy can be in reach next turn and the
+# buff still runs then (2+ turns); never with nothing coming (V10 fired every buff on T1, out of reach - Zoulman with
+# doping + whip lost 34-44 / 60 locally)
+BURST_TIMING = False
+BURST_SLACK = 2          # cells of margin on "in reach next turn" (our MP + their MP + our max range)
 MAX_ENEMY_CELLS = 40
 MAX_SPLASH_CELLS = 12   # cells per side tried for an area shot aimed next to the target
 ANTIDOTE_TRIGGER = 250   # queued poison (HP) at which a rational enemy spends its antidote
@@ -1434,6 +1440,14 @@ def useful_now(it, A, B, cx, leftover=False):
     types = it.types
     if leftover and FIX_LEFTOVER_MP and types <= {E_BUFF_MP, E_RAW_MP}:
         return False                # no move left this turn: an MP buff now is wasted
+    burst = getattr(cx, 'burst', None) if cx is not None else None
+    if BURST_TIMING and burst is not None and types & DMG_BUFFS:
+        now, nxt = burst
+        dur = max([e[3] or 1 for e in it.effects] + [1])
+        if leftover or not now:
+            # end of turn, or nothing in reach this turn: only a prep buff that still runs when they come
+            if not (nxt and dur >= 2):
+                return False
     missing = A['max'] - A['life']
     if E_HEAL in types and not (types - {E_HEAL}):
         amt = sum(avg(e) for e in it.effects if e[0] == E_HEAL) * (1 + max(0, A['cur']['wisdom']) / 100.0)
@@ -1497,6 +1511,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             cells.append(x[0])
     if cell0 not in cells:
         cells.insert(0, cell0)
+    if BURST_TIMING:
+        cx.burst = (bool(cand), dist(cell0, ecell) <= mp0 + B.get('mp_live', 0) + maxr + BURST_SLACK)
+        selfish = [it for it in selfish if useful_now(it, A, B, cx)]
+        buffs = [it for it in buffs if it in selfish]
     heals = [it for it in selfish if it.types & {E_HEAL, E_VITALITY}]
     shields = [it for it in selfish if it.types & {E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL, E_RETURN}]
     best_heal = sorted(heals, key=lambda i: -sum(avg(e) for e in i.effects if e[0] in (E_HEAL, E_VITALITY)) / max(1, i.cost))[:1]
