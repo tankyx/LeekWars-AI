@@ -906,6 +906,12 @@ AGGR = 0.3        # value of certain damage now, per full enemy HP bar
 # 48% of turns (they 71%), ended at distance 10 (they 8) and dealt half their damage - V10's leaf prices the reply
 # far above certain damage now. AGGRO multiplies the damage-now, anti-stall and engagement terms (1.0 = live V10)
 AGGRO = 1.0
+# 2026-11-09 edge discipline: in the live challenges vs 2900+ leeks we walked into their range on our round-2 turn
+# (-8.4 cells, 39% firing) and they struck first (78% firing, 1192 dmg) - the fight was lost by round 3. A turn that
+# deals nothing must not END inside their next-turn reach (their MP + their longest ready attack range): stop at
+# the edge and make them cross into ours. A large penalty, not a value-model term the leaf can outweigh
+EDGE = False
+EDGE_W = 0.5
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 # draw breaking: at turn 64 both alive = draw, so waiting loses value as the
 # fight drags on. Pressure multiplies the damage-now and anti-stall terms:
@@ -1864,6 +1870,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     b_max = max(1.0, B['max']); a_max = max(1.0, A['max'])
     stall = STALL_W * pr * AGGRO; ramp = min(1.0, t / 8.0)
     d_now = dist(cell0, ecell)
+    b_reach = B.get('mp_live', 0) + cx.b_maxr        # EDGE: their next-turn reach (distance only, LoS ignored)
     setup_reach = (A['mp_live'] + max([it.maxr for it in si_all] + [0])) if si_all else 0
     for _, _, gi, plan, r in order:
         if over():
@@ -1911,6 +1918,9 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             # anti-stall: ending far outside our attack range costs a little, more as the fight drags
             if de > maxr:
                 v -= stall * (de - maxr) * ramp
+            # edge discipline: dealing nothing this turn, never end inside their next-turn reach
+            if EDGE and dealt <= 0 and de <= b_reach:
+                v -= EDGE_W
             # standoff (nobody lost HP for 2+ turns): hiding without dealing damage costs more
             if IDLE[0] >= 2 and dealt <= 0 and not geo(e, ecell)[1]:
                 v -= STANDOFF_W * pr
