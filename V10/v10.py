@@ -822,6 +822,17 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             sim['mp'] -= pl; cell = st[1]
         else:
             it, tgt = st[1], st[2]
+            if E_TELEPORT in it.types:
+                # jump / teleportation (JUMP_REACH plans): the caster lands on a free walkable cell; no MP spent
+                if tgt == cell or not can_use(it, cell, tgt, sim):
+                    return None
+                n = Cell.get(tgt)
+                if n is None or n.obstacle or not n.empty:
+                    return None
+                sim['tp'] -= it.cost
+                sim['uses'][it.id] = sim['uses'].get(it.id, 0) + 1
+                cell = tgt
+                continue
             if not can_use(it, cell, tgt, sim):
                 return None
             if it.weapon and sim['weapon'] != it.id:
@@ -876,6 +887,15 @@ MAX_ATTACK_CELLS = 32
 # buff still runs then (2+ turns); never with nothing coming (V10 fired every buff on T1, out of reach - Zoulman with
 # doping + whip lost 34-44 / 60 locally)
 BURST_TIMING = False
+# 2026-11-09 jump / teleportation for reach (review blind spot; 77% of top-2900 STR leeks carry both): plans that walk,
+# jump or teleport onto a cell no walk reaches, then shoot. V10 left them out of the search ("special") - Kirby,
+# GTGabi and Zoulman carried teleportation and never used it on the ladder
+JUMP_REACH = False
+PREP_BURST = False       # prep plans (long damage buffs + a staging cell out of their reach, in ours next turn
+                         # with jump / teleport) and a follow-up that counts that reach
+PREP_CELLS = 4
+JUMP_CELLS = 5           # landing cells per teleport item (best attack value first)
+JUMP_LAUNCH = 4          # walk cells (nearest the enemy) a jump may start from, besides the current cell
 BURST_SLACK = 2          # cells of margin on "in reach next turn" (our MP + their MP + our max range)
 MAX_ENEMY_CELLS = 40
 MAX_SPLASH_CELLS = 12   # cells per side tried for an area shot aimed next to the target
@@ -1079,6 +1099,7 @@ class Ctx:
         self.replies = {}
         self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
         self.fu = {}           # (tp, need) -> our follow-up attack sequence
+        self.tele_next = []    # (range, cost) of jump / teleport ready next turn (set by choose_plan)
         self.last_reply = 0.0
         self.others = []       # (snapshot, offensive items) of the non-focus enemy leeks
         self.oth = {}          # (enemy index, distance, our abs, our rel) -> threat
@@ -1280,6 +1301,12 @@ def follow_up(cx, a, b, our_cell, ec):
     tp = max(0, int(A0['tp_live'] - d_tp)); mp = max(0, int(A0['mp_live'] - d_mp))
     d = dist(our_cell, ec)
     need = max(0, d - mp)
+    if PREP_BURST and need > 0 and cx.tele_next:
+        # jump / teleport next turn (ready by then): the landing closes the gap, its TP comes off the attack
+        for tr, tc in cx.tele_next:
+            if need <= tr + 0 and tp > tc:
+                need = 0; tp -= tc
+                break
     # the attack sequence only depends on (tp, need): cached per turn
     amp = bool(a.get('amputated'))   # their reply amputated us: our next turn has no weapon
     fk = (tp, need, amp)
@@ -1511,6 +1538,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             cells.append(x[0])
     if cell0 not in cells:
         cells.insert(0, cell0)
+    # jump / teleport ready at our next turn (cooldown <= 1): (range, cost), shortest first (PREP_BURST follow-up)
+    cx.tele_next = sorted((it.maxr, it.cost) for it in items if E_TELEPORT in it.types and it.current_cooldown() <= 1)
     if BURST_TIMING:
         cx.burst = (bool(cand), dist(cell0, ecell) <= mp0 + B.get('mp_live', 0) + maxr + BURST_SLACK)
         selfish = [it for it in selfish if useful_now(it, A, B, cx)]
@@ -1608,6 +1637,59 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                     rest_tp = tp0 - pre_cost - acts_cost(sp[2], weapon0)
                     att = [it for it in packed(c, 'ratio', rest_tp) if it not in sp[2]]
                     add(pre + mv(c) + at(sp[2], sp[0]) + at(att, ecell), gi)
+    if JUMP_REACH and offensive:
+        tele = [it for it in items if E_TELEPORT in it.types and it.current_cooldown() == 0 and it.cost < tp0]
+        walk_set = set(reach)
+        launches = [cell0] + [c for c, _ in sorted(reach.items(), key=lambda kv: (dist(kv[0], ecell), kv[1]))
+                              if c != cell0][:JUMP_LAUNCH]
+        for T in tele:
+            found = []; seen_l = set()
+            for lc in launches:
+                if over(0.45):
+                    break
+                lx, ly = cxy(lc)
+                for dx in range(-T.maxr, T.maxr + 1):
+                    for dy in range(-(T.maxr - abs(dx)), T.maxr - abs(dx) + 1):
+                        if abs(dx) + abs(dy) < max(1, T.minr):
+                            continue
+                        n = Field.cellFromXY(lx + dx, ly + dy)
+                        if n is None or n.obstacle or not n.empty:
+                            continue
+                        L = n.id
+                        if L in walk_set or L in seen_l or dist(L, ecell) > maxr:
+                            continue
+                        us = usable_from(L, ecell, offensive)
+                        if not us:
+                            continue
+                        g = geo(lc, L)
+                        if not launch_geo(T.launch, g[2], g[3]) or (T.los and not g[1]):
+                            continue
+                        seen_l.add(L)
+                        found.append((-max(vals.get(i.id, 0) for i in us), reach.get(lc, 0), lc, L))
+            found.sort()
+            for _, _, lc, L in found[:JUMP_CELLS]:
+                for gi, pre in enumerate(prefixes[:3]):
+                    rest = tp0 - pre_costs[gi] - T.cost
+                    if rest <= 0:
+                        continue
+                    for key in ('ratio', 'raw'):
+                        att = packed(L, key, rest)
+                        if att:
+                            add(pre + mv(lc) + [('use', T, L)] + at(att, ecell), 'jump')
+    if PREP_BURST and not cand:
+        # nothing in reach this turn: long damage buffs (still on next turn) + a staging cell they cannot hit next
+        # turn but we can reach (MP + jump / teleport + our range); the leaf's follow-up scores the burst
+        longb = [it for it in ready_self if it.types & DMG_BUFFS and max([e[3] or 1 for e in it.effects] + [1]) >= 2]
+        b_thr = B.get('mp_live', 0) + cx.b_maxr
+        our_next = mp0 + max([r for r, c in cx.tele_next] + [0]) + maxr
+        stage = sorted([c for c in reach if b_thr < dist(c, ecell) <= our_next], key=lambda c: (dist(c, ecell), reach[c]))
+        tp_ = tp0; pre = []
+        for it in sorted(longb, key=lambda i: -i.cost):
+            if it.cost <= tp_:
+                pre.append(('use', it, cell0)); tp_ -= it.cost
+        for c in stage[:PREP_CELLS]:
+            add(pre + mv(c), 'prep')
+            add(mv(c), 'prep')
     for c_, t_, it in far_shots:
         for gi, pre in enumerate(prefixes[:2]):
             pre_cost = pre_costs[gi]

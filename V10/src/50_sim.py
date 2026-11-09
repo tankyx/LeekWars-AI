@@ -190,6 +190,17 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             sim['mp'] -= pl; cell = st[1]
         else:
             it, tgt = st[1], st[2]
+            if E_TELEPORT in it.types:
+                # jump / teleportation (JUMP_REACH plans): the caster lands on a free walkable cell; no MP spent
+                if tgt == cell or not can_use(it, cell, tgt, sim):
+                    return None
+                n = Cell.get(tgt)
+                if n is None or n.obstacle or not n.empty:
+                    return None
+                sim['tp'] -= it.cost
+                sim['uses'][it.id] = sim['uses'].get(it.id, 0) + 1
+                cell = tgt
+                continue
             if not can_use(it, cell, tgt, sim):
                 return None
             if it.weapon and sim['weapon'] != it.id:
