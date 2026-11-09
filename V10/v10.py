@@ -902,6 +902,10 @@ MAX_SPLASH_CELLS = 12   # cells per side tried for an area shot aimed next to th
 ANTIDOTE_TRIGGER = 250   # queued poison (HP) at which a rational enemy spends its antidote
 CHASE_KILL = 0.95
 AGGR = 0.3        # value of certain damage now, per full enemy HP bar
+# 2026-11-09 aggression switch: vs real 2900+ leeks (96 challenges) we spent 74% of our TP (they 98%), attacked on
+# 48% of turns (they 71%), ended at distance 10 (they 8) and dealt half their damage - V10's leaf prices the reply
+# far above certain damage now. AGGRO multiplies the damage-now, anti-stall and engagement terms (1.0 = live V10)
+AGGRO = 1.0
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 # draw breaking: at turn 64 both alive = draw, so waiting loses value as the
 # fight drags on. Pressure multiplies the damage-now and anti-stall terms:
@@ -1856,9 +1860,9 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
         order += [v[k] for v in by_g.values() if k < len(v)]; k += 1
     best = (-1.0, None, None); evaluated = 0
     pr = pressure(t)
-    k_aggr = AGGR * pr
+    k_aggr = AGGR * pr * AGGRO
     b_max = max(1.0, B['max']); a_max = max(1.0, A['max'])
-    stall = STALL_W * pr; ramp = min(1.0, t / 8.0)
+    stall = STALL_W * pr * AGGRO; ramp = min(1.0, t / 8.0)
     d_now = dist(cell0, ecell)
     setup_reach = (A['mp_live'] + max([it.maxr for it in si_all] + [0])) if si_all else 0
     for _, _, gi, plan, r in order:
@@ -1912,8 +1916,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                 v -= STANDOFF_W * pr
             # engagement drive: a standoff that lasts (3+ idle turns) while we are
             # out of range is broken by closing in, more strongly as the fight drags on
-            if IDLE[0] >= 3 and d_now > maxr:
-                v += ENGAGE_W * pr * (d_now - de)
+            if IDLE[0] >= (3 if AGGRO <= 1.0 else 1) and d_now > maxr:
+                v += ENGAGE_W * pr * AGGRO * (d_now - de)
             evaluated += 1
             if dealt > 0:
                 cx.n_atk += 1
