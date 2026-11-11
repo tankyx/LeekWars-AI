@@ -20,7 +20,36 @@ def dist(a, b):
     return abs(p[0] - q[0]) + abs(p[1] - q[1])
 
 
+_EV = [None]    # enemy view: id of the entity whose body LoS ignores (REPLY_LOS: an enemy that walks to its
+                # firing cell has left its old cell; the default LoS only ignores OUR cell)
+_EV_OK = [True]
+_GEO_E = {}     # geo() in the enemy view; cleared every turn
+
+
+def geo_e(a, b):
+    g = _GEO_E.get((a, b))
+    if g is None:
+        p = _XY.get(a) or cxy(a); q = _XY.get(b) or cxy(b)
+        dx, dy = abs(p[0] - q[0]), abs(p[1] - q[1])
+        los = None
+        if a == b:
+            los = True
+        elif _EV_OK[0]:
+            try:
+                los = bool(Field.lineOfSight(a, b, [_EV[0]]))
+            except Exception as ex:
+                _EV_OK[0] = False
+                log('V10 LoS ignore list unsupported: ' + str(ex)[:120])
+        if los is None:
+            los = bool(Field.lineOfSight(a, b))
+        g = (dx + dy, los, dx == 0 or dy == 0, dx == dy)
+        _GEO_E[(a, b)] = g
+    return g
+
+
 def geo(a, b):
+    if _EV[0] is not None:
+        return geo_e(a, b)
     g = _GEO.get((a, b))
     if g is None:
         p = _XY.get(a) or cxy(a); q = _XY.get(b) or cxy(b)

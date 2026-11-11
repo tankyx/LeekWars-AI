@@ -115,7 +115,7 @@ def spend_leftover(enemy, items, A=None, B=None, cx=None, used=None):
     m = me(); trace = []
     if not alive(enemy):
         return 'enemy dead'
-    _GEO.clear()                       # we moved: LoS between cells may have changed
+    _GEO.clear(); _GEO_E.clear()       # we moved: LoS between cells may have changed
     # the main enemy first, then its summons (nearest first)
     targets = [enemy] + sorted([x for x in Fight.getAliveEnemies() if x.summoned and x.cell is not None],
                                key=lambda x: me().distance(x) or 99)
@@ -219,7 +219,7 @@ def turn():
         return
     try:
         refresh_budget()
-        for c in (_ctx_cache, _GEO, _PL, _SPL, _PACKS, _LEAVES, _NETS, _RK):
+        for c in (_ctx_cache, _GEO, _GEO_E, _PL, _SPL, _PACKS, _LEAVES, _NETS, _RK):
             c.clear()
         m = me()
         mine = [x for x in Fight.getAliveAllies()]
@@ -253,6 +253,17 @@ def turn():
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
         cxl = LAST_CX
+        if REPLY_LOG and cxl is not None:
+            try:
+                rr = run_plan(plan, A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1)
+                if rr is not None and rr[1]['life'] > 0:
+                    a2, b2, ec2 = enemy_reply(cxl, rr[0], rr[1], rr[2])
+                    g = cxl.dbg
+                    log('V10R T%d end %d them %d tp %d mp %d opts %d cells %d -> from %d f %.2f [%s] dmg %.0f amp %s ret %d over %s' % (
+                        Fight.turn, rr[2], B['cell'], g[0], g[1], g[2], len(cxl.enemy_cells(g[1])), g[3], g[4], g[5],
+                        rr[0]['life'] - a2['life'], g[6], g[7], over()))
+            except Exception as ex:
+                log('V10R error ' + str(ex)[:200])
         if cxl is not None:
             log('V10H T%d their heal capacity next turn %.0f' % (Fight.turn, cxl.b_heal_next))
         if cxl is not None and info and info[0] <= 0:

@@ -44,6 +44,30 @@ BUFF_SYNC = False
 # commitment: a prep buff only pays if we strike while it runs - with our STR / MAG buffed at the start of the
 # turn, the damage-now term is multiplied by 1 + BUFF_COMMIT (0 = off)
 BUFF_COMMIT = 0.0
+# 2026-11-10 review of the enemy-reply model (95 live fights vs 2900+ leeks, 554 garden fights, 56 instrumented local
+# fights): the predicted reply was 0 on 81% of our turns vs 2900+ while we took 847 HP per turn. Causes found, each
+# behind its own switch (all off = live V10):
+# TELE_REPLY  their jump / teleportation ready next turn: landing cells around our end cell (with LoS, per distinct
+#             range band and line / diagonal / other), their TP minus the chip; shields are offered inside that reach.
+#             46% of fights vs 2900+ had a teleport-then-shoot (mean 2213 HP, round 2), invisible to a walking BFS
+# REPLY_FULL  every geometry their walk reaches (distance / line / diagonal classes, LoS tried on the nearest cells
+#             of each class) instead of the 40 cells nearest in steps: a full-MP walk to a diagonal was cut
+# REPLY_LOS   their shots' LoS ignores their own current body (they have left that cell when they fire)
+# REPLY_RET_W weight of the HP they lose to our damage return / gain by life steal in THEIR choice (1 = live: with
+#             a mirror / thorn / bramble up the reply was "no attack"; real opponents shoot anyway)
+# REPLY_CUT   a leaf whose enemy options were cut by the budget is discarded (it was scored as "no reply", the
+#             most optimistic leaf of the turn) and the search stops there
+# END_LOCAL   end cells per firing cell: hidden cells within the MP left after the shot (the turn-wide list is
+#             built from the start cell; 29-36% of our firing turns ended exposed with a hidden cell in reach)
+TELE_REPLY = False
+REPLY_FULL = False
+REPLY_LOS = False
+REPLY_RET_W = 1.0
+REPLY_CUT = False
+END_LOCAL = False
+END_LOCAL_N = 4          # per firing cell: 2 nearest in steps + 2 farthest from the enemy
+END_LOCAL_SCAN = 30      # reachable cells checked for LoS per firing cell
+LOS_TRIES = 3            # REPLY_FULL: cells per geometry class tried for LoS
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 # draw breaking: at turn 64 both alive = draw, so waiting loses value as the
 # fight drags on. Pressure multiplies the damage-now and anti-stall terms:
@@ -65,6 +89,7 @@ FOLLOW_W = 0.3     # weight of the ply-3 follow-up (it is never answered: horizo
 OTHERS_W = 0.6
 MAX_SAFE_CELLS = 6
 LAST_CX = None     # Ctx of the last search (read by leftover spending)
+REPLY_LOG = False  # diagnostics: one 'V10R' line per turn with the reply predicted for the chosen plan
 
 
 def quick_value(it, C, T):
@@ -238,6 +263,13 @@ class Ctx:
         self.b_heal_full = sum(x[0] for x in self.b_heals)
         self.b_area = [it for it in self.b_off if it.splash]   # enemy items that splash
         self.b_reach = {}
+        self.b_xy = {}         # mp -> {(x, y): 1} of their walk cells (TELE_REPLY)
+        self.b_tele = sorted([it for it in B0['items'] if E_TELEPORT in it.types and it.current_cooldown() <= 1],
+                             key=lambda i: i.cost) if TELE_REPLY else []
+        self.b_tele_r = max([it.maxr for it in self.b_tele] + [0])
+        self.rings = {}        # amputated -> landing distances worth trying (TELE_REPLY)
+        self.cut = False       # an enemy_options call ran out of budget (REPLY_CUT)
+        self.lends = {}        # (cell, mp) -> hidden end cells near it (END_LOCAL)
         self.replies = {}
         self.b_opts = {}       # (our cell, tp, mp) -> enemy attack options
         self.fu = {}           # (tp, need) -> our follow-up attack sequence
@@ -270,6 +302,12 @@ class Ctx:
             r = reachable(self.B0['cell'], mp)
             self.b_reach[mp] = [(c,) + cxy(c) for c, st in sorted(r.items(), key=lambda kv: kv[1])]
         return self.b_reach[mp]
+
+    def walk_xy(self, mp):
+        r = self.b_xy.get(mp)
+        if r is None:
+            r = self.b_xy[mp] = {(x, y): 1 for c, x, y in self.enemy_cells(mp)}
+        return r
 
 
 def others_threat(cx, a, cell):
@@ -313,13 +351,34 @@ def enemy_options(cx, our_cell, tp, mp, amp=False):
     opts = cx.b_opts.get(ok)
     if opts is not None:
         return opts
-    opts = []; tried = {}; seen_geo = {}; n = 0; ns = 0
+    opts = []; tried = {}
     off = cx.b_off_nw if amp else cx.b_off
-    ox, oy = cxy(our_cell); maxr = max([it.maxr for it in off] + [0]) if amp else cx.b_maxr
+    maxr = max([it.maxr for it in off] + [0]) if amp else cx.b_maxr
     area = [it for it in cx.b_area if not it.weapon] if amp else cx.b_area
+    _EV[0] = cx.B0['id'] if REPLY_LOS else None
+    try:
+        if REPLY_FULL:
+            _options_full(cx, our_cell, tp, mp, amp, off, maxr, area, opts, tried)
+        else:
+            _options_near(cx, our_cell, tp, mp, amp, off, maxr, area, opts, tried)
+        if cx.b_tele and not cx.cut:
+            _options_tele(cx, our_cell, tp, mp, amp, off, maxr, opts, tried)
+    finally:
+        _EV[0] = None
+    cx.b_opts[ok] = opts
+    return opts
+
+
+def _options_near(cx, our_cell, tp, mp, amp, off, maxr, area, opts, tried):
+    """Live V10: the 40 cells nearest (in steps) the enemy within range of our cell."""
+    seen_geo = {}; n = 0; ns = 0
+    ox, oy = cxy(our_cell)
     reach = maxr + (2 if area else 0)
     for ec, ex, ey in cx.enemy_cells(mp):
-        if n >= MAX_ENEMY_CELLS or (n & 7 == 0 and over()):
+        if n >= MAX_ENEMY_CELLS:
+            break
+        if n & 7 == 0 and over():
+            cx.cut = True
             break
         d = abs(ex - ox) + abs(ey - oy)
         if d > reach:
@@ -344,8 +403,148 @@ def enemy_options(cx, our_cell, tp, mp, amp=False):
             continue
         tried[sig] = 1
         opts.append((sig, ec, acts, f))
-    cx.b_opts[ok] = opts
-    return opts
+
+
+def _options_full(cx, our_cell, tp, mp, amp, off, maxr, area, opts, tried):
+    """REPLY_FULL: every cell of their walk, grouped by geometry class (distance, line, diagonal - coordinates
+    only). Per class the nearest cells are tried for LoS (an engine call) until one sees us; a class without LoS
+    packs its no-LoS items once. Cells with no direct shot feed the area shots aimed next to us."""
+    cls = {}; n = 0; nos = []
+    ox, oy = cxy(our_cell)
+    reach = maxr + (2 if area else 0)
+    wpn = cx.B0['weapon']
+    if over():
+        cx.cut = True
+        return
+    for ec, ex, ey in cx.enemy_cells(mp):
+        dx = abs(ex - ox); dy = abs(ey - oy); d = dx + dy
+        if d > reach:
+            continue
+        if d <= maxr:
+            k = (d, dx == 0 or dy == 0, dx == dy)
+            st = cls.get(k, 0)
+            if st >= 9:
+                continue                   # this geometry already shoots us from a nearer cell
+            if st < LOS_TRIES:
+                n += 1
+                if n & 7 == 0 and over():
+                    cx.cut = True
+                    return
+                g = geo(ec, our_cell)
+                acts = None
+                if g[1]:
+                    cls[k] = 9
+                    acts = pack(ec, our_cell, off, tp, wpn, cx.b_vals, 'raw', tag=('enemy', amp))
+                else:
+                    cls[k] = st + 1
+                    if st == 0:
+                        acts = pack(ec, our_cell, off, tp, wpn, cx.b_vals, 'raw', tag=('enemy', amp))
+                if acts:
+                    sig = (1.0,) + tuple(it.id for it in acts)
+                    if sig not in tried:
+                        tried[sig] = 1
+                        opts.append((sig, ec, acts, 1.0))
+                    continue
+        nos.append(ec)
+    if area and nos:
+        step = max(1, len(nos) // MAX_SPLASH_CELLS)
+        for ec in nos[::step][:MAX_SPLASH_CELLS]:
+            if over():
+                cx.cut = True
+                return
+            sp = splash_pack(ec, our_cell, area, tp, wpn, cx.b_vals, 'raw', 'esplash')
+            if sp:
+                sig = (sp[1],) + tuple(it.id for it in sp[2])
+                if sig not in tried:
+                    tried[sig] = 1
+                    opts.append((sig, ec, sp[2], sp[1]))
+
+
+def _tele_rings(cx, off, maxr, amp):
+    """Landing distances worth trying: one per distinct set of their items in range (the middle of the band),
+    plus an even distance of the band (diagonal cells only exist at even distances: neutrino)."""
+    r = cx.rings.get(amp)
+    if r is None:
+        bands = {}; order = []
+        for d in range(1, maxr + 1):
+            k = tuple(it.id for it in off if it.minr <= d <= it.maxr)
+            if k:
+                if k not in bands:
+                    bands[k] = []; order.append(k)
+                bands[k].append(d)
+        r = []
+        for k in order:
+            ds = bands[k]; m = ds[len(ds) // 2]
+            r.append(m)
+            if m & 1:
+                ev = [d for d in ds if not d & 1]
+                if ev:
+                    r.append(min(ev, key=lambda d: abs(d - m)))
+        cx.rings[amp] = r
+    return r
+
+
+def _ring_cells(d):
+    """Offsets at distance d: (line cells, diagonal cells, other cells)."""
+    line = ((d, 0), (-d, 0), (0, d), (0, -d))
+    diag = ()
+    if not d & 1:
+        h = d // 2
+        diag = ((h, h), (h, -h), (-h, h), (-h, -h))
+    oth = ()
+    if d >= 3:
+        b = max(1, d // 3); a = d - b
+        oth = ((a, b), (a, -b), (-a, b), (-a, -b), (b, a), (b, -a), (-b, a), (-b, -a))
+    return (line, diag, oth)
+
+
+_DIAMONDS = {}
+
+
+def _tele_near(r):
+    dm = _DIAMONDS.get(r)
+    if dm is None:
+        dm = _DIAMONDS[r] = [(x, y) for x in range(-r, r + 1) for y in range(-(r - abs(x)), r - abs(x) + 1)]
+    return dm
+
+
+def _options_tele(cx, our_cell, tp, mp, amp, off, maxr, opts, tried):
+    """TELE_REPLY: they jump / teleport (ready next turn) onto a cell their walk does not reach, then shoot with
+    the TP left. Landing = a free cell within the chip's range of their walk (short chips: exact, against the
+    walk cells; long ones: their MP + the range from where they stand), with LoS on our cell."""
+    if over():
+        cx.cut = True
+        return
+    B0 = cx.B0; wpn = B0['weapon']
+    bx, by = cxy(B0['cell']); ox, oy = cxy(our_cell)
+    d0 = abs(bx - ox) + abs(by - oy)
+    wxy = cx.walk_xy(mp)
+    for T in cx.b_tele:
+        tpl = tp - T.cost
+        span = mp + T.maxr
+        if tpl <= 0 or d0 > span + maxr:
+            continue
+        near = _tele_near(T.maxr) if T.maxr <= 4 else None
+        for d in _tele_rings(cx, off, maxr, amp):
+            for cand in _ring_cells(d):
+                for dx, dy in cand:
+                    lx = ox + dx; ly = oy + dy
+                    if abs(lx - bx) + abs(ly - by) > span or (lx, ly) in wxy:
+                        continue
+                    if near is not None and not any((lx + ax, ly + ay) in wxy for ax, ay in near):
+                        continue
+                    c = Field.cellFromXY(lx, ly)
+                    if c is None or c.obstacle or not c.empty:
+                        continue
+                    if not geo(c.id, our_cell)[1]:
+                        continue
+                    acts = pack(c.id, our_cell, off, tpl, wpn, cx.b_vals, 'raw', tag=('enemy', amp))
+                    if acts:
+                        sig = (1.0,) + tuple(it.id for it in acts)
+                        if sig not in tried:       # the same attack on foot keeps the chip's TP
+                            tried[sig] = 1
+                            opts.append((sig, c.id, acts, 1.0))
+                    break                          # this class has its cell in sight
 
 
 def acts_cost(acts, weapon):
@@ -410,7 +609,9 @@ def enemy_reply(cx, A1, B1, our_cell):
                 for it in acts:
                     if it.offensive:
                         apply_item(it, tb, ta, ts, f)
-                net = (a['life'] - ta['life']) - (b['life'] - tb['life'])
+                net = (a['life'] - ta['life']) - REPLY_RET_W * (b['life'] - tb['life'])
+                if tb['life'] <= 0:
+                    net = -1.0                 # they never shoot themselves dead on our return
                 # poison they stack on us counts: the next tick lands at the START of our turn (certain), the rest
                 # of the queue at half. Without this a mage's 'best' reply was its direct damage only
                 # (2026-10-15 final 54138737: predicted 390, real ~1650 - three poisons + superinfection)
@@ -423,6 +624,9 @@ def enemy_reply(cx, A1, B1, our_cell):
         rep = (best[1], best[2], best[3])
         cx.replies[key] = rep
     ec, acts, f = rep
+    if REPLY_LOG:
+        o = cx.b_opts.get((our_cell, tp, mp, amp))
+        cx.dbg = (tp, mp, -1 if o is None else len(o), ec, f, ' '.join(it.name for it in acts), amp, ret)
     s = {'tp': 0, 'mp': 0}
     for it in acts:
         if it.offensive:
@@ -585,6 +789,27 @@ def end_cells(cx, from_cell, reach, ecell):
     return [from_cell] + [c for c in cx.ends if c != from_cell]
 
 
+def local_ends(cx, c1, mp, ecell):
+    """END_LOCAL: hidden cells (no LoS to the enemy) within `mp` steps of the firing cell `c1` - the 2 nearest
+    in steps and the 2 farthest from the enemy among the first END_LOCAL_SCAN reachable cells."""
+    k = (c1, mp)
+    r = cx.lends.get(k)
+    if r is None:
+        hid = []; n = 0
+        for c, st in sorted(reachable(c1, min(mp, 5)).items(), key=lambda kv: kv[1]):
+            if c == c1:
+                continue
+            n += 1
+            if n > END_LOCAL_SCAN:
+                break
+            if not geo(c, ecell)[1]:
+                hid.append(c)
+        h = END_LOCAL_N // 2
+        r = hid[:h] + sorted(hid[h:], key=lambda c: -dist(c, ecell))[:END_LOCAL_N - h]
+        cx.lends[k] = r
+    return r
+
+
 def tp_gain(it, A):
     """TP an item gives back the turn it is cast (raw TP buffs as they are, TP buffs science-scaled)."""
     g = 0.0
@@ -651,7 +876,7 @@ def useful_now(it, A, B, cx, leftover=False, cell=None):
         return now >= it.cost or now * max([e[3] or 1 for e in it.effects] + [1]) > it.cost
     if types & {E_RETURN, E_ABS_SHIELD, E_REL_SHIELD, E_RAW_ABS, E_RAW_REL}:
         d = Field.cellDistance(A['cell'], B['cell']) or 0
-        return d <= B['mp_live'] + cx.b_maxr or others_threat(cx, A, A['cell']) > 0
+        return d <= B['mp_live'] + cx.b_maxr + cx.b_tele_r or others_threat(cx, A, A['cell']) > 0
     return True
 
 
@@ -1027,7 +1252,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     setup_reach = (A['mp_live'] + max([it.maxr for it in si_all] + [0])) if si_all else 0
     a_reach = strike_reach(A, cx)                      # BUFF_SYNC: where a prep buff still pays next turn
     for _, _, gi, plan, r in order:
-        if over():
+        if over() or (REPLY_CUT and cx.cut):
             break
         A1, B1, c1, dealt, sim = r
         is_setup = groups[gi] == 'nuke_setup'
@@ -1046,7 +1271,10 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
         healable = 0.0 if B1.get('unheal') else min(dealt, cx.b_heal_next)
         self_lost = max(0.0, A['life'] - A1['life'])
         n_end = 0
-        for e in end_cells(cx, c1, reach, ecell):
+        ends = end_cells(cx, c1, reach, ecell)
+        if END_LOCAL and sim['mp'] > 0:
+            ends = ends + [c for c in local_ends(cx, c1, sim['mp'], ecell) if c not in ends]
+        for e in ends:
             n_end += 1
             if n_end & 3 == 0 and over():      # the budget check is an engine call: every 4th cell
                 break
@@ -1071,6 +1299,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                     sig = (state_sig(A1), state_sig(B1), B1['cell'], bool(B1.get('unheal')), bool(B1.get('amputated')),
                            A1.get('used') if READY_ON else None)
                 v = leaf(cx, A1, B1, e, t, sig)
+                if REPLY_CUT and cx.cut:
+                    break              # their options were cut by the budget: this leaf saw no reply
             # certain damage now is worth more than the model's uncertain future; lasting damage
             # counts too (queued poison at half - REMOVED poison (superinfection, liberation) is
             # lost future damage, so no clip at 0 -, max HP burned by nova / erosion in full);
