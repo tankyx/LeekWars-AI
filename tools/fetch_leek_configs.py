@@ -223,6 +223,14 @@ def main():
         },
     }
 
+    # The main leeks were renamed in-game (2026-10-08) but every local tool still names them by their code
+    # labels: keep those labels pointing at the live kit (they stayed frozen on old builds until 2026-11-11)
+    CODE_LABELS = {20443: 'AdaLovelace', 129288: 'EdsgerDijkstra', 129295: 'KurtGodel', 129296: 'MargaretHamilton'}
+    for cfg in list(leek_configs.values()):
+        label = CODE_LABELS.get(cfg.get('id'))
+        if label:
+            leek_configs[label] = dict(cfg)
+
     # Preserve existing opponents not in our dummy set (e.g. smart_* opponents)
     # and leeks from OTHER accounts (fetching main must not clobber cure leeks
     # and vice versa — DuskHope/ProdigalSon vanished this way once).

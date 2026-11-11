@@ -36,10 +36,16 @@ def hp_lead(lw, fid, lid):
     try:
         f = lw.get('/fight/get/%d' % fid); f = f.get('fight', f); d = f['data']
         d = json.loads(d) if isinstance(d, str) else d
-        life = {e['id']: e.get('life') or 0 for e in d['leeks']}; mx = dict(life)
+        life = {e['id']: e.get('life') or 0 for e in d['leeks']}; mx = dict(life); mx0 = dict(life)
         for x in d['actions']:
             if x[0] in (101, 107, 108, 110) and len(x) > 2 and x[1] in life:
                 life[x[1]] -= x[2]
+                if x[0] == 107:
+                    mx[x[1]] -= x[2]               # nova: max HP burned
+                elif len(x) > 3 and x[0] in (101, 110):
+                    mx[x[1]] -= x[3]               # erosion
+            elif x[0] == 104 and len(x) > 2 and x[1] in life:
+                life[x[1]] += x[2]; mx[x[1]] += x[2]   # vitality (elevation): life and max HP (was ignored: wins read 0.0)
             elif x[0] == 103 and len(x) > 2 and x[1] in life:
                 life[x[1]] = min(mx[x[1]], life[x[1]] + x[2])
             elif x[0] == 5 and x[1] in life:
@@ -48,7 +54,7 @@ def hp_lead(lw, fid, lid):
         mine = 1 if any(l['id'] == lid for l in f.get('leeks1') or []) else 2
         me = next(e for e in d['leeks'] if e.get('team') == mine and not e.get('summon') and e['name'] == team['name'])
         op = next(e for e in d['leeks'] if e.get('team') != mine and not e.get('summon'))
-        return max(0, life[me['id']]) / max(1, mx[me['id']]) - max(0, life[op['id']]) / max(1, mx[op['id']])
+        return max(0, life[me['id']]) / max(1, mx0[me['id']]) - max(0, life[op['id']]) / max(1, mx0[op['id']])
     except Exception:
         return None
 

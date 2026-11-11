@@ -60,6 +60,7 @@ BUFF_COMMIT = 0.0
 # END_LOCAL   end cells per firing cell: hidden cells within the MP left after the shot (the turn-wide list is
 #             built from the start cell; 29-36% of our firing turns ended exposed with a hidden cell in reach)
 TELE_REPLY = False
+TELE_W = 1.0             # power factor of a teleport-then-shoot reply (expected damage: they do not always jump)
 REPLY_FULL = False
 REPLY_LOS = False
 REPLY_RET_W = 1.0
@@ -540,10 +541,11 @@ def _options_tele(cx, our_cell, tp, mp, amp, off, maxr, opts, tried):
                         continue
                     acts = pack(c.id, our_cell, off, tpl, wpn, cx.b_vals, 'raw', tag=('enemy', amp))
                     if acts:
-                        sig = (1.0,) + tuple(it.id for it in acts)
-                        if sig not in tried:       # the same attack on foot keeps the chip's TP
+                        # the same attack on foot keeps the chip's TP; TELE_W < 1: expected damage
+                        sig = (TELE_W,) + tuple(it.id for it in acts)
+                        if sig not in tried:
                             tried[sig] = 1
-                            opts.append((sig, c.id, acts, 1.0))
+                            opts.append((sig, c.id, acts, TELE_W))
                     break                          # this class has its cell in sight
 
 
