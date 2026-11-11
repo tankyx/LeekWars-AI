@@ -236,6 +236,9 @@ def turn():
         B = snapshot(enemy, theirs)
         w = m.weapon
         bulbs = [bulb_side(x) for x in theirs if x.summoned and (x.life or 0) > 0 and x.cell is not None]
+        if SUMMON_W and bulbs:
+            log('V10S T%d summon weights %s' % (Fight.turn, ' '.join(
+                '%d:%s' % (bs['life'], 'flat' if bs.get('w') is None else '%.2f' % bs['w']) for bs in bulbs)))
         others = [snapshot(x, theirs) for x in theirs if not x.summoned and x.id != enemy.id and alive(x)
                   and (not boss or is_army(x))]        # boss: graal / crystals / chests do not attack
         best, n = choose_plan(A, B, A['cell'], m.tp, m.mp, w.id if w is not None else -1, A['items'], bulbs, others)

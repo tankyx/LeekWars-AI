@@ -106,13 +106,54 @@ def snapshot(ent, team_alive):
             'weapon': (ent.weapon.id if ent.weapon is not None else -1), 'amputated': amp, 'invincible': inv}
 
 
+# 2026-11-11 ladder autopsy (1330 fights, 594 with enemy summons): damage on ANY summon counted half. Lightning
+# bulbs (63 fights, 36% won) put 70% of our max life on us per fight and got 8% of our damage (54% killed);
+# prototaxite (a 1560 HP plant with no TP: 24 fights, 17% won) soaked 25% of our damage. SUMMON_W: the weight of
+# damage on a summon follows what it can do per turn (its direct / nova / poison damage and heals, from its own
+# kit and stats) over SUMMON_TURNS turns, per HP it has left: 0 for an inert plant, up to SUMMON_W_MAX. False = live
+SUMMON_W = False
+SUMMON_TURNS = 3.0
+SUMMON_W_MAX = 1.5
+SUMMON_W_SUPPORT = 0.25      # a summon that acts but neither hits nor heals (shields, buffs)
+
+
+def summon_weight(ent):
+    """Weight of damage on this summon (None = unknown: the flat BULB_W)."""
+    try:
+        tp = ent.maxTP or 0
+        if tp <= 0:
+            return 0.0
+        items = items_of(ent)
+        st = {'tp': tp, 'strength': ent.strength or 0, 'science': ent.science or 0, 'magic': ent.magic or 0}
+        _, kd, kn, kp = kit_of(items, st)
+        heal = 0.0
+        wis = 1 + max(0, ent.wisdom or 0) / 100.0
+        for it in items:
+            if it.cost <= 0:
+                continue
+            h = sum(avg(e) * max(1, e[3] or 1) for e in it.effects if e[0] == E_HEAL)
+            uses = min(it.max_uses, tp // it.cost)
+            if it.cooldown > 0:
+                uses = min(uses, 1)
+            heal = max(heal, h * wis * uses)
+        thr = kd + kn + kp + heal
+        if thr <= 0:
+            return SUMMON_W_SUPPORT if items else 0.0
+        return min(SUMMON_W_MAX, max(SUMMON_W_SUPPORT, SUMMON_TURNS * thr / max(1.0, ent.life or 1)))
+    except Exception:
+        return None
+
+
 def bulb_side(ent):
     """Light state of an enemy summon, as a target only (HP, shields, effect
-    groups); its own kit is not modelled."""
-    return {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life or 0, 'max': ent.maxLife or 1,
-            'abs': ent.absoluteShield or 0, 'rel': ent.relativeShield or 0,
-            'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0, 'pas': (0.0, 0.0, 0.0),
-            'bulb': True}
+    groups); its own kit is not modelled (SUMMON_W: only as the weight of damage on it)."""
+    s = {'id': ent.id, 'cell': ent.cell.id, 'life': ent.life or 0, 'max': ent.maxLife or 1,
+         'abs': ent.absoluteShield or 0, 'rel': ent.relativeShield or 0,
+         'groups': {g: 0.0 for g in VN_GROUPS}, 'cur': {}, 'pf': 0.0, 'burn': 0.0, 'power': 0, 'pas': (0.0, 0.0, 0.0),
+         'bulb': True}
+    if SUMMON_W:
+        s['w'] = summon_weight(ent)
+    return s
 
 
 def copy_side(s):

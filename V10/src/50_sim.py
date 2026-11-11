@@ -254,7 +254,10 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
                     return None            # already dead: the shot would be wasted
                 before = bs['life']
                 apply_item(it, A, bs, sim)
-                dealt += BULB_W * (before - bs['life'])
+                wb = bs.get('w')
+                if wb is not None and wb <= 0:
+                    return None            # SUMMON_W: an inert summon (plant) is not a target
+                dealt += (BULB_W if wb is None else wb) * (before - bs['life'])
                 if bs['life'] <= 0:
                     B['summons'] = max(0, B['summons'] - 1)
             elif it.offensive and it.splash:

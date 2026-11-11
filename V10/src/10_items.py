@@ -9,6 +9,12 @@ E_RAW_WIS, E_ATTRACT, E_SHK_AGI, E_REMOVE_SHK, E_PUSH, E_RAW_POW, E_RAW_REL = 44
 E_STEAL_ABS = 29   # caster gains, as absolute shield, the value of the item's previous effect (j_laser)
 E_SUPERINF = 64    # superinfection: value1% of the target's per-turn poison sum now, every poison loses one turn
 E_ADD_STATE, ST_UNHEALABLE = 59, 2
+# 2026-11-11 ladder autopsy (1330 fights): punishment (effect 28, "life damage": 25% of the CASTER's current life on
+# the target, then 75% on the caster itself, both cut by the receiver's shields) hit us in 68 fights for 25% of our
+# max life per cast - we won 23% of those against 54% elsewhere. V10 ignored the effect: the chip was not even
+# offensive, so their reply never contained it. False = live
+E_LIFE_DMG = 28
+LIFE_DMG = False
 ST_INVINCIBLE = 3   # Divine Protection (bosses): damage, poison, nova and aftereffects do nothing (engine EffectDamage & co)   # hemorrhage: state 2 = Unhealable (no heal, life steal, vitality, regen) for 1 turn
 T_ENEMY, T_ALLY, T_CASTER, T_LEEK, T_SUMMON = 1, 2, 4, 8, 16   # effect target flags (engine Effect.TARGET_*)
 ST_AMPUTATED = 13   # glowing saber: the target drops its weapon and cannot use or re-equip one until the
@@ -54,7 +60,7 @@ class Item:
         self.fx_self = [x for x, g in zip(self.fx, tg) if x[4] or (g & T_CASTER)]
         self.types = types = {e[0] for e in self.effects}
         self.unheal = any(e[0] == E_ADD_STATE and int(e[1] or 0) == ST_UNHEALABLE for e in self.effects)
-        self.offensive = bool(types & OFFENSIVE) or self.unheal
+        self.offensive = bool(types & OFFENSIVE) or self.unheal or (LIFE_DMG and E_LIFE_DMG in types)
         self.self_cast = bool(types) and types <= SELF_ONLY
         self.special = bool(types & MOVE_EFFECTS)
         # read once instead of re-scanning the effects in the hot loops
