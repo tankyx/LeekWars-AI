@@ -35,6 +35,15 @@ AGGRO = 1.0
 # the edge and make them cross into ours. A large penalty, not a value-model term the leaf can outweigh
 EDGE = False
 EDGE_W = 0.5
+# 2026-11-10 buff sync: in the 192 live challenges vs 2900+ leeks a STR buff was up on 40% of our hits (theirs 73%)
+# and 52-67% of our steroid / protein / motivation casts landed on an idle turn followed by another idle turn (theirs
+# 3-5%: they buff on the strike turn or the turn before it); per firing turn they had 2.6 TP more and dealt x1.6.
+# Damage buffs (STR / MAG / SCI / power / TP) only in a plan that deals damage now, or as prep (2+ turns) when the
+# turn ends within our strike reach next turn (our MP + longest range); the leftover spender follows the same rule
+BUFF_SYNC = False
+# commitment: a prep buff only pays if we strike while it runs - with our STR / MAG buffed at the start of the
+# turn, the damage-now term is multiplied by 1 + BUFF_COMMIT (0 = off)
+BUFF_COMMIT = 0.0
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 # draw breaking: at turn 64 both alive = draw, so waiting loses value as the
 # fight drags on. Pressure multiplies the damage-now and anti-stall terms:
@@ -593,13 +602,31 @@ FIX_LEFTOVER_MP = True   # 2026-11-05 (review): spend_leftover cast MP buffs (le
                          # wasted, and on cooldown when the superinfection combo needs the reach
 
 
-def useful_now(it, A, B, cx, leftover=False):
+def sync_buff(it):
+    """A damage buff BUFF_SYNC times (not a cleanse that also gives TP: manumission)."""
+    return it.self_cast and bool(it.types & DMG_BUFFS) and E_REMOVE_SHK not in it.types
+
+
+def buff_turns(it):
+    return max([e[3] or 1 for e in it.effects] + [1])
+
+
+def strike_reach(A, cx):
+    """Distance from which we can attack next turn: our MP + longest attack range."""
+    return A['mp_live'] + max([it.maxr for it in cx.a_off] + [0])
+
+
+def useful_now(it, A, B, cx, leftover=False, cell=None):
     """A self item is only offered when it can matter now: heals when HP is
     missing, antidote when poisoned, reflect / shields when the enemy can
     reach our current cell next turn (their MP + range)."""
     types = it.types
     if leftover and FIX_LEFTOVER_MP and types <= {E_BUFF_MP, E_RAW_MP}:
         return False                # no move left this turn: an MP buff now is wasted
+    if BUFF_SYNC and leftover and cx is not None and sync_buff(it):
+        # after the plan: only a buff still running next turn, with the enemy within our strike reach
+        if buff_turns(it) < 2 or dist(A['cell'] if cell is None else cell, B['cell']) > strike_reach(A, cx):
+            return False
     burst = getattr(cx, 'burst', None) if cx is not None else None
     if BURST_TIMING and burst is not None and types & DMG_BUFFS:
         now, nxt = burst
@@ -953,12 +980,13 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
                     continue
                 n += 1
                 add(mv(c) + at(att, bc), 'bulb')
-    if selfish:
-        tp = tp0; st = []
-        for it in sorted(selfish, key=lambda i: i.cost):
-            if it.cost <= tp:
-                st.append(('use', it, cell0)); tp -= it.cost
-        add(st, 'self')
+    for sel in ([selfish, [it for it in selfish if not sync_buff(it)]] if BUFF_SYNC else [selfish]):
+        if sel:
+            tp = tp0; st = []
+            for it in sorted(sel, key=lambda i: i.cost):
+                if it.cost <= tp:
+                    st.append(('use', it, cell0)); tp -= it.cost
+            add(st, 'self')
     add([], 'none')
     if t == 1:
         vit = [it for it in ready_self if E_VITALITY in it.types]
@@ -990,16 +1018,28 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     best = (-1.0, None, None); evaluated = 0
     pr = pressure(t)
     k_aggr = AGGR * pr * AGGRO
+    if BUFF_COMMIT and (A['cur'].get('strength', 0) > A['strength'] or A['cur'].get('magic', 0) > A['magic']):
+        k_aggr *= 1.0 + BUFF_COMMIT
     b_max = max(1.0, B['max']); a_max = max(1.0, A['max'])
     stall = STALL_W * pr * AGGRO; ramp = min(1.0, t / 8.0)
     d_now = dist(cell0, ecell)
     b_reach = B.get('mp_live', 0) + cx.b_maxr        # EDGE: their next-turn reach (distance only, LoS ignored)
     setup_reach = (A['mp_live'] + max([it.maxr for it in si_all] + [0])) if si_all else 0
+    a_reach = strike_reach(A, cx)                      # BUFF_SYNC: where a prep buff still pays next turn
     for _, _, gi, plan, r in order:
         if over():
             break
         A1, B1, c1, dealt, sim = r
         is_setup = groups[gi] == 'nuke_setup'
+        # buff sync: a plan that deals nothing may only carry damage buffs that last into next turn (prep),
+        # and must end within our strike reach (the nuke combo keeps the owner's own rules)
+        prep = False
+        if BUFF_SYNC and dealt <= 0 and groups[gi] not in ('nuke', 'nuke_setup'):
+            db = [s_[1] for s_ in plan if s_[0] == 'use' and sync_buff(s_[1])]
+            if db:
+                if min(buff_turns(it) for it in db) < 2:
+                    continue
+                prep = True
         sig = None                 # memo key part shared by the plan's end cells, built at the first leaf
         # plan-level terms: the same for every end cell of this plan
         lasting = 0.5 * (B1['pf'] - B['pf']) + max(0.0, B1['burn'] - B['burn'])
@@ -1013,6 +1053,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             de = dist(e, ecell)
             if is_setup and de > setup_reach:
                 continue           # a setup turn must leave the detonation reachable next turn
+            if prep and de > a_reach:
+                continue           # a prep buff with no strike next turn is wasted
             if e != c1:
                 if c1 == cell0:
                     pl = reach.get(e)
