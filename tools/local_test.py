@@ -126,11 +126,15 @@ def build_scenario(leek_cfg, opponent_cfg, seed=None, opponent_ai=None):
         return e
 
     our_entity = make_entity(leek_cfg, 1, 1, 1, our_ai)
+    if os.environ.get("LW_CORES"):       # diagnostics: lift OUR operation budget only (cores x 1M)
+        our_entity["cores"] = int(os.environ["LW_CORES"])
     opp_entity = make_entity(opponent_cfg, 2, 2, 2, opp_ai)
 
     # Set max_operations based on cores (1M per core)
     cores = leek_cfg.get("cores", 14)
     max_ops = max(cores * 1_000_000, 20_000_000)
+    if os.environ.get("LW_CORES"):
+        max_ops = max(max_ops, int(os.environ["LW_CORES"]) * 1_000_000)
 
     scenario = {
         "farmers": [
@@ -314,8 +318,8 @@ def run_fight(scenario, fight_index=0, verbose=False):
         # run identically on both paths.
         classpath_file = GENERATOR_DIR / "runtime_classpath.txt"
         if classpath_file.exists():
-            cmd = [java_bin, "-cp", classpath_file.read_text().strip(),
-                   "com.leekwars.Main", scenario_path]
+            cmd = [java_bin] + os.environ.get("LW_JVM_OPTS", "").split() + [
+                "-cp", classpath_file.read_text().strip(), "com.leekwars.Main", scenario_path]
         else:
             cmd = [java_bin, "-jar", str(GENERATOR_JAR), scenario_path]
 
@@ -323,7 +327,7 @@ def run_fight(scenario, fight_index=0, verbose=False):
             cmd,
             capture_output=True,
             text=True,
-            timeout=600,  # Python-AI fights run minutes, not seconds
+            timeout=int(os.environ.get("LW_TIMEOUT", 600)),  # Python-AI fights run minutes, not seconds
             cwd=str(GENERATOR_DIR),
             env=env,
         )
@@ -357,6 +361,18 @@ def run_fight(scenario, fight_index=0, verbose=False):
         fight = data.get("fight", {})
         actions = fight.get("actions", [])
         leeks = fight.get("leeks", [])
+        if os.environ.get("LW_DUMP"):          # keep the raw fight (bisecting two builds on one seed)
+            _p = os.environ["LW_DUMP"]
+            if os.path.isdir(_p):               # a directory: one file per fight, logs only
+                _e = scenario["entities"]
+                _p = os.path.join(_p, "%s_%s_%s_%s.json" % (os.path.basename(str(_e[0][0]["ai"]))[:-3], _e[0][0]["name"],
+                                                             _e[1][0]["name"], scenario.get("random_seed")))
+                with open(_p, "w") as _f:
+                    json.dump({"winner": data.get("winner"), "logs": data.get("logs"),
+                               "fight": data.get("fight") if os.environ.get("LW_DUMP_FULL") else None}, _f)
+            else:
+                with open(_p, "w") as _f:
+                    json.dump(data, _f)
         ops = fight.get("ops", {})
         winner_raw = data.get("winner", -1)
 

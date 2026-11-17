@@ -17,6 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from lw_api import LWSession
 LEEKS = {20443: 'Kirby54', 129288: 'GTGabi', 129295: 'Zoulman', 129296: 'Payou'}
+LABEL = {20443: 'AdaLovelace', 129288: 'EdsgerDijkstra', 129295: 'KurtGodel', 129296: 'MargaretHamilton'}   # garden_fast names
 
 
 def set_ai(lw, path):
@@ -59,7 +60,15 @@ def main():
     ap.add_argument('--a', required=True); ap.add_argument('--b', required=True)
     ap.add_argument('--blocks', type=int, default=10); ap.add_argument('--per-leek', type=int, default=12)
     ap.add_argument('--out', required=True); ap.add_argument('--stop-gap', type=float, default=200.0)
+    ap.add_argument('--leeks', default='', help='comma list of leek names (default: all four)')
+    ap.add_argument('--restore', default=None, help='AI path set on the leeks at the end (default: arm A)')
     a = ap.parse_args()
+    if a.leeks:
+        keep = set(a.leeks.split(','))
+        for lid in [l for l, n in LEEKS.items() if n not in keep]:
+            del LEEKS[lid]
+        if not LEEKS:
+            sys.exit('no such leek: ' + a.leeks)
     lw = LWSession('main')
     tot = {'A': [0, 0.0, 0.0], 'B': [0, 0.0, 0.0]}      # fights, wins, talent gain
     try:
@@ -68,7 +77,8 @@ def main():
             path = a.a if arm == 'A' else a.b
             set_ai(lw, path)
             since = {lid: last_id(lid) for lid in LEEKS}
-            r = subprocess.run([sys.executable, os.path.join(HERE, 'garden_fast.py'), '--per-leek', str(a.per_leek)],
+            r = subprocess.run([sys.executable, os.path.join(HERE, 'garden_fast.py'), '--per-leek', str(a.per_leek)]
+                               + (['--leeks', ','.join(LABEL[l] for l in LEEKS)] if a.leeks else []),
                                capture_output=True, text=True, cwd=ROOT, timeout=3600)
             tail = [l for l in r.stdout.splitlines() if l.strip()][-6:]
             time.sleep(20)
@@ -91,7 +101,7 @@ def main():
             if min(tot['A'][0], tot['B'][0]) >= 96 and tot['B'][2] - tot['A'][2] < -a.stop_gap:
                 print('arm B trails by more than %.0f talent - stopping' % a.stop_gap, flush=True); break
     finally:
-        set_ai(lw, a.a)
+        set_ai(lw, a.restore or a.a)
         print('leeks back on: ' + ', '.join('%s %s' % (n, (lw.leek(l).get('ai') or {}).get('path')) for l, n in LEEKS.items()), flush=True)
 
 

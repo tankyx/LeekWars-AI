@@ -47,9 +47,14 @@ def geo_e(a, b):
     return g
 
 
-def geo(a, b):
+def geo_ev(a, b):
+    """geo() with the enemy view (REPLY_LOS builds only: 60_search rebinds `geo` to this)."""
     if _EV[0] is not None:
         return geo_e(a, b)
+    return geo_plain(a, b)
+
+
+def geo(a, b):
     g = _GEO.get((a, b))
     if g is None:
         p = _XY.get(a) or cxy(a); q = _XY.get(b) or cxy(b)
@@ -57,6 +62,9 @@ def geo(a, b):
         g = (dx + dy, a == b or bool(Field.lineOfSight(a, b)), dx == 0 or dy == 0, dx == dy)
         _GEO[(a, b)] = g
     return g
+
+
+geo_plain = geo     # the hot path stays free of the enemy-view test unless REPLY_LOS is on
 
 
 # engine launch types: 1 line, 2 diagonal, 3 line or diagonal, 4 neither, 5 not diagonal, 6 not line, 7 any
@@ -76,8 +84,9 @@ def path_len(a, b):
     return pl
 
 
-def reachable(start, mp):
-    """BFS over walkable empty cells: {cell: steps} within mp steps."""
+def reachable(start, mp, free=None):
+    """BFS over walkable empty cells: {cell: steps} within mp steps. `free`: a cell counted as empty although an
+    entity stands on it now (REPLY_VACATE: the cell we leave during our turn)."""
     seen = {start: 0}
     frontier = [start]
     for step in range(1, mp + 1):
@@ -89,7 +98,7 @@ def reachable(start, mp):
                 if n is None:
                     continue
                 nid = n.id
-                if nid in seen or n.obstacle or not n.empty:
+                if nid in seen or n.obstacle or (not n.empty and nid != free):
                     continue
                 seen[nid] = step
                 nxt.append(nid)
@@ -219,17 +228,6 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
             sim['mp'] -= pl; cell = st[1]
         else:
             it, tgt = st[1], st[2]
-            if E_TELEPORT in it.types:
-                # jump / teleportation (JUMP_REACH plans): the caster lands on a free walkable cell; no MP spent
-                if tgt == cell or not can_use(it, cell, tgt, sim):
-                    return None
-                n = Cell.get(tgt)
-                if n is None or n.obstacle or not n.empty:
-                    return None
-                sim['tp'] -= it.cost
-                sim['uses'][it.id] = sim['uses'].get(it.id, 0) + 1
-                cell = tgt
-                continue
             if not can_use(it, cell, tgt, sim):
                 return None
             if it.weapon and sim['weapon'] != it.id:
@@ -268,6 +266,13 @@ def run_plan(plan, A0, B0, cell0, tp0, mp0, weapon0, bulbs=None):
                 dealt += apply_item(it, A, B, sim, f)
                 if A['life'] <= 0 and B['life'] > 0:
                     return None
+            elif E_TELEPORT in it.types:
+                # jump / teleportation (JUMP_REACH plans): the caster lands on a free walkable cell; no MP spent.
+                # Tested after the attack branches so that shots do not pay for it (operation budget)
+                n = Cell.get(tgt)
+                if tgt == cell or n is None or n.obstacle or not n.empty:
+                    return None
+                cell = tgt
             else:
                 apply_item(it, A, A, sim)
     A['cell'] = cell

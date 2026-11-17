@@ -255,6 +255,7 @@ def turn():
                 Fight.turn, len(others), others_threat(LAST_CX, A, A['cell']), others_threat(LAST_CX, A, end)))
         log('V10 T%d V=%.3f plans=%d ops=%d dealt=%.0f end_d=%s los=%s reply=%.0f | %s' % (
             Fight.turn, v, n, ops(), info[0], info[1], info[2], info[3] if len(info) > 3 else -1, desc))
+        k_search = cpu_ms()
         cxl = LAST_CX
         if REPLY_LOG and cxl is not None:
             try:
@@ -287,6 +288,8 @@ def turn():
             except Exception:
                 LAMA[0] = True          # not available here: never retry
         log('V10X T%d %s | cell %s tp %s mp %s' % (Fight.turn, tr, m.cell.id, m.tp, m.mp))
+        if CPU_STOP:
+            log('V10K T%d cpu search %d ms, turn %d ms, ops %d' % (Fight.turn, k_search, cpu_ms(), ops()))
     except Exception as ex:
         log('V10 error ' + type(ex).__name__ + ': ' + str(ex)[:300])
         fallback(enemy)

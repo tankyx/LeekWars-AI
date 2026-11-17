@@ -79,28 +79,6 @@ def apply_item(it, C, T, S, f=1.0):
     prev = 0.0                      # value of the previous effect (steal-shield copies it)
     fxs = it.fx_self if T is C else (it.fx_bulb if T.get('bulb') else it.fx_leek)   # target flags
     for t, a, turns, nonstack, on_caster in fxs:
-        if t == E_LIFE_DMG:
-            # engine EffectLifeDamage: value% of the caster's CURRENT life x power x crit, minus the receiver's
-            # shields; return on the raw value; 5% erosion; no life steal
-            if not LIFE_DMG or (T is C and not on_caster):
-                continue
-            raw = a / 100.0 * max(0.0, C['life']) * pw * critf
-            if on_caster:
-                d = min(max(0.0, raw - raw * C['rel'] / 100.0 - C['abs']), max(0.0, C['life']))
-                C['life'] -= d; C['max'] -= d * 0.05; C['burn'] += d * 0.05
-                continue
-            if T.get('invincible'):
-                continue
-            if scaled:
-                raw *= f
-            ret = T['groups'].get('dmg_return', 0)
-            back = min(max(0.0, C['life']), raw * ret / 100.0) if ret > 0 else 0.0
-            d = min(max(0.0, raw - raw * T['rel'] / 100.0 - T['abs']), max(0, T['life']))
-            T['life'] -= d; dealt += d
-            T['max'] -= d * 0.05; T['burn'] += d * 0.05
-            if back > 0:
-                C['life'] -= back; C['max'] -= back * 0.05; C['burn'] += back * 0.05
-            continue
         if on_caster and t in HOSTILE:
             self_harm(t, a, turns, C, pw, critf)
             continue
@@ -221,4 +199,26 @@ def apply_item(it, C, T, S, f=1.0):
                 C['power'] += a
         elif t == E_RETURN:
             g_add(C, t, a * (1 + max(0, cur['agility']) / 100.0) * cf)
+        elif LIFE_DMG and t == E_LIFE_DMG:
+            # engine EffectLifeDamage: value% of the caster's CURRENT life x power x crit, minus the receiver's
+            # shields; return on the raw value; 5% erosion; no life steal. Last in the chain: the test costs
+            # nothing on the common effects (the search stops on an operation budget, see 2026-11-13 bisect)
+            if T is C and not on_caster:
+                continue
+            raw = (a / f if scaled else a) / 100.0 * max(0.0, C['life']) * pw * critf
+            if on_caster:
+                d = min(max(0.0, raw - raw * C['rel'] / 100.0 - C['abs']), max(0.0, C['life']))
+                C['life'] -= d; C['max'] -= d * 0.05; C['burn'] += d * 0.05
+                continue
+            if T.get('invincible'):
+                continue
+            if scaled:
+                raw *= f
+            ret = T['groups'].get('dmg_return', 0)
+            back = min(max(0.0, C['life']), raw * ret / 100.0) if ret > 0 else 0.0
+            d = min(max(0.0, raw - raw * T['rel'] / 100.0 - T['abs']), max(0, T['life']))
+            T['life'] -= d; dealt += d
+            T['max'] -= d * 0.05; T['burn'] += d * 0.05
+            if back > 0:
+                C['life'] -= back; C['max'] -= back * 0.05; C['burn'] += back * 0.05
     return dealt

@@ -61,14 +61,21 @@ BUFF_COMMIT = 0.0
 #             built from the start cell; 29-36% of our firing turns ended exposed with a hidden cell in reach)
 TELE_REPLY = False
 TELE_W = 1.0             # power factor of a teleport-then-shoot reply (expected damage: they do not always jump)
+SHK_TP_W = 1.0           # weight of the TP we remove from the enemy (1.0 = as modelled: one reply with the TP gone)
 REPLY_FULL = False
 REPLY_LOS = False
 REPLY_RET_W = 1.0
+CHK_N = 1 if CPU_STOP else 7     # reply-cell loops: budget check every (CHK_N + 1) cells in range
+CHK_E = 0 if CPU_STOP else 3     # end-cell loop: every (CHK_E + 1) cells; the clock build checks more often
 REPLY_CUT = False
+REPLY_VACATE = False     # their walk may cross / stop on the cell we started our turn on, when our plan leaves it
+                         # (it was counted as blocked: 16% of the reply damage we failed to predict, ladder 2026-11-09..16)
 END_LOCAL = False
 END_LOCAL_N = 4          # per firing cell: 2 nearest in steps + 2 farthest from the enemy
 END_LOCAL_SCAN = 30      # reachable cells checked for LoS per firing cell
 LOS_TRIES = 3            # REPLY_FULL: cells per geometry class tried for LoS
+if REPLY_LOS:
+    geo = geo_ev         # only these builds pay the enemy-view test on every geometry lookup
 STALL_W = 0.01     # per cell beyond our attack range, ramping over the first 8 turns (draws are losses of talent)
 # draw breaking: at turn 64 both alive = draw, so waiting loses value as the
 # fight drags on. Pressure multiplies the damage-now and anti-stall terms:
@@ -107,7 +114,7 @@ def quick_value(it, C, T):
     per_tp = t_dpt / max(1.0, T.get('tp_live') or T.get('tp') or 1)
     d_tp = t['groups']['shk_tp'] - T['groups']['shk_tp']
     d_mp = t['groups']['shk_mp'] - T['groups']['shk_mp']
-    denied = turns * (per_tp * max(0.0, d_tp) + 0.25 * per_tp * max(0.0, d_mp))
+    denied = turns * (SHK_TP_W * per_tp * max(0.0, d_tp) + 0.25 * per_tp * max(0.0, d_mp))
     # shields / damage return taken off the target (liberation): abs shield blocks
     # each hit (~4 hits), rel % of ~2 turns of damage, return % of the same
     stripped = 4.0 * max(0.0, T['abs'] - t['abs']) + 20.0 * max(0.0, T['rel'] - t['rel']) \
@@ -297,18 +304,34 @@ class Ctx:
                 kd += direct[it.id]; tp -= it.cost; n += 1
         self.kill_dmg = kd
 
-    def enemy_cells(self, mp):
+    def enemy_cells(self, mp, our_cell=None):
         """[(cell, x, y)] the enemy reaches with `mp`, nearest (in steps) first."""
         if mp not in self.b_reach:
             r = reachable(self.B0['cell'], mp)
             self.b_reach[mp] = [(c,) + cxy(c) for c, st in sorted(r.items(), key=lambda kv: kv[1])]
         return self.b_reach[mp]
 
+    def enemy_cells_v(self, mp, our_cell=None):
+        """REPLY_VACATE: the same with the cell we started on free, for plans that end elsewhere."""
+        a0 = self.A0['cell']
+        if our_cell is None or our_cell == a0:
+            k = mp
+        else:
+            k = (mp, 1)
+        if k not in self.b_reach:
+            r = reachable(self.B0['cell'], mp, None if k == mp else a0)
+            self.b_reach[k] = [(c,) + cxy(c) for c, st in sorted(r.items(), key=lambda kv: kv[1])]
+        return self.b_reach[k]
+
     def walk_xy(self, mp):
         r = self.b_xy.get(mp)
         if r is None:
             r = self.b_xy[mp] = {(x, y): 1 for c, x, y in self.enemy_cells(mp)}
         return r
+
+
+if REPLY_VACATE:
+    Ctx.enemy_cells = Ctx.enemy_cells_v     # only these builds pay the extra test per reply lookup
 
 
 def others_threat(cx, a, cell):
@@ -375,10 +398,10 @@ def _options_near(cx, our_cell, tp, mp, amp, off, maxr, area, opts, tried):
     seen_geo = {}; n = 0; ns = 0
     ox, oy = cxy(our_cell)
     reach = maxr + (2 if area else 0)
-    for ec, ex, ey in cx.enemy_cells(mp):
+    for ec, ex, ey in cx.enemy_cells(mp, our_cell):
         if n >= MAX_ENEMY_CELLS:
             break
-        if n & 7 == 0 and over():
+        if n & CHK_N == 0 and over():
             cx.cut = True
             break
         d = abs(ex - ox) + abs(ey - oy)
@@ -417,7 +440,7 @@ def _options_full(cx, our_cell, tp, mp, amp, off, maxr, area, opts, tried):
     if over():
         cx.cut = True
         return
-    for ec, ex, ey in cx.enemy_cells(mp):
+    for ec, ex, ey in cx.enemy_cells(mp, our_cell):
         dx = abs(ex - ox); dy = abs(ey - oy); d = dx + dy
         if d > reach:
             continue
@@ -428,7 +451,7 @@ def _options_full(cx, our_cell, tp, mp, amp, off, maxr, area, opts, tried):
                 continue                   # this geometry already shoots us from a nearer cell
             if st < LOS_TRIES:
                 n += 1
-                if n & 7 == 0 and over():
+                if n & CHK_N == 0 and over():
                     cx.cut = True
                     return
                 g = geo(ec, our_cell)
@@ -581,7 +604,7 @@ def enemy_reply(cx, A1, B1, our_cell):
     d_tp = b['groups']['shk_tp'] - B0['groups']['shk_tp']
     d_mp = b['groups']['shk_mp'] - B0['groups']['shk_mp']
     d_str = b['groups']['shk_str'] - B0['groups']['shk_str']
-    tp = max(0, int(B0['tp_live'] - d_tp - anti_cost)); mp = max(0, int(B0['mp_live'] - d_mp))
+    tp = max(0, int(B0['tp_live'] - SHK_TP_W * max(0.0, d_tp) - min(0.0, d_tp) - anti_cost)); mp = max(0, int(B0['mp_live'] - d_mp))
     # a damaged enemy heals first (ready heal chips, best HP per TP, no overheal), with the TP
     # it would otherwise attack with; Unhealable (our hemorrhage) blocks it for this turn
     uh = bool(b.get('unheal'))
@@ -611,9 +634,8 @@ def enemy_reply(cx, A1, B1, our_cell):
                 for it in acts:
                     if it.offensive:
                         apply_item(it, tb, ta, ts, f)
-                net = (a['life'] - ta['life']) - REPLY_RET_W * (b['life'] - tb['life'])
-                if tb['life'] <= 0:
-                    net = -1.0                 # they never shoot themselves dead on our return
+                # they never shoot themselves dead on our return (one statement: this loop is hot)
+                net = -1.0 if tb['life'] <= 0 else (a['life'] - ta['life']) - REPLY_RET_W * (b['life'] - tb['life'])
                 # poison they stack on us counts: the next tick lands at the START of our turn (certain), the rest
                 # of the queue at half. Without this a mage's 'best' reply was its direct damage only
                 # (2026-10-15 final 54138737: predicted 390, real ~1650 - three poisons + superinfection)
@@ -694,6 +716,28 @@ def follow_up(cx, a, b, our_cell, ec):
     for it in fu[0]:
         apply_item(it, a, b, s)
     return fu[1]
+
+
+RISK_W = 0.0             # weight of the damage we take on turns where the reply model sees none (0 = live)
+_RISK = ((9, 200.0), (12, 140.0), (16, 95.0), (99, 55.0))    # (distance up to, HP): ladder 2026-11-09..16, 5360 turns
+                         # predicted at 0: hit 18% of the time for ~800 (walk-ins, teleports, buffs first)
+
+
+def enemy_reply_risk(cx, A1, B1, our_cell):
+    """RISK_W: the plain reply, plus the average damage of the replies the model does not see."""
+    a, b, ec = enemy_reply_plain(cx, A1, B1, our_cell)
+    if b['life'] > 0 and a['life'] >= A1['life']:
+        d = dist(our_cell, ec)
+        for lim, hp in _RISK:
+            if d <= lim:
+                a['life'] -= min(a['life'] - 1.0, RISK_W * hp)
+                break
+    return a, b, ec
+
+
+enemy_reply_plain = enemy_reply
+if RISK_W:
+    enemy_reply = enemy_reply_risk      # only these builds pay for it
 
 
 # fields the leaf reads (not our plan's cell or held weapon: the leaf uses the
@@ -1226,12 +1270,16 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     # so a tight budget still sees the best plan of every kind
     seen = {}; by_g = {}
     p1_stop = ops() + OPS_STOP * 0.2
+    p1_f = used_frac() + 0.2 if CPU_STOP else 0.0     # CPU_STOP: phase 1 also ends after 20% of the clock budget
+    p1_cut = False
     for i, plan in enumerate(plans):
         sig = tuple((s[0], s[1] if s[0] == 'move' else s[1].id) for s in plan)
         if sig in seen:
             continue
         seen[sig] = 1
-        if ops() > p1_stop and groups[i] != 'none':
+        if CPU_STOP and not p1_cut and i & 7 == 0 and over(p1_f):
+            p1_cut = True
+        if (p1_cut or ops() > p1_stop) and groups[i] != 'none':
             continue
         r = run_plan(plan, A, B, cell0, tp0, mp0, weapon0, bulb_map)
         if r is None:
@@ -1254,8 +1302,8 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
     setup_reach = (A['mp_live'] + max([it.maxr for it in si_all] + [0])) if si_all else 0
     a_reach = strike_reach(A, cx)                      # BUFF_SYNC: where a prep buff still pays next turn
     for _, _, gi, plan, r in order:
-        if over() or (REPLY_CUT and cx.cut):
-            break
+        if (over() and (not CPU_STOP or evaluated >= 2)) or (REPLY_CUT and cx.cut):
+            break                  # CPU_STOP: a stall before this loop must not leave the turn with no scored plan
         A1, B1, c1, dealt, sim = r
         is_setup = groups[gi] == 'nuke_setup'
         # buff sync: a plan that deals nothing may only carry damage buffs that last into next turn (prep),
@@ -1278,7 +1326,7 @@ def choose_plan(A, B, cell0, tp0, mp0, weapon0, items, bulbs=None, others=None):
             ends = ends + [c for c in local_ends(cx, c1, sim['mp'], ecell) if c not in ends]
         for e in ends:
             n_end += 1
-            if n_end & 3 == 0 and over():      # the budget check is an engine call: every 4th cell
+            if n_end & CHK_E == 0 and over():      # the budget check is an engine call: every 4th cell
                 break
             de = dist(e, ecell)
             if is_setup and de > setup_reach:
